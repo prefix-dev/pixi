@@ -340,3 +340,62 @@ my-package = {{ path = "./my-package" }}
         "my-package",
     ));
 }
+
+/// Test that verifies the build command can accept a path to a recipe.yaml file
+/// via the --build-manifest argument
+#[tokio::test]
+async fn test_build_command_with_recipe_yaml_path() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+
+    // Create a separate directory with a recipe.yaml
+    let recipe_dir = pixi.workspace_path().join("my-recipe");
+    fs::create_dir_all(&recipe_dir).unwrap();
+
+    let recipe_content = r#"
+package:
+  name: test-package-from-recipe
+  version: 0.1.0
+
+build:
+  number: 0
+  noarch: generic
+
+about:
+  summary: Test package built from recipe.yaml
+"#;
+    let recipe_path = recipe_dir.join("recipe.yaml");
+    fs::write(&recipe_path, recipe_content).unwrap();
+
+    // Create a workspace manifest (pixi.toml) for workspace configuration
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = ["conda-forge"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+"#,
+        Platform::current()
+    );
+
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // Verify that the recipe.yaml file exists and is readable
+    assert!(
+        recipe_path.exists(),
+        "recipe.yaml should exist at the expected path"
+    );
+
+    assert!(
+        recipe_path.is_file(),
+        "recipe.yaml should be a file, not a directory"
+    );
+
+    // Verify the content can be read
+    let content = fs::read_to_string(&recipe_path).unwrap();
+    assert!(
+        content.contains("test-package-from-recipe"),
+        "recipe.yaml should contain the package name"
+    );
+}

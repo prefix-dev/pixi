@@ -24,6 +24,7 @@ use crate::{
 
 const VALID_RECIPE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
 const VALID_RECIPE_DIRS: [&str; 2] = ["", "recipe"];
+const VALID_ROS_BACKEND_NAMES: [&str; 1] = ["package.xml"];
 
 /// Describes a backend discovered for a given source location.
 #[derive(Debug, Clone)]
@@ -72,6 +73,8 @@ pub struct BackendInitializationParams {
 pub struct EnabledProtocols {
     /// Enable the rattler-build protocol.
     pub enable_rattler_build: bool,
+    /// Enable the ROS protocol.
+    pub enable_ros: bool,
     /// Enable the pixi protocol.
     pub enable_pixi: bool,
 }
@@ -81,6 +84,7 @@ impl Default for EnabledProtocols {
     fn default() -> Self {
         Self {
             enable_rattler_build: true,
+            enable_ros: true,
             enable_pixi: true,
         }
     }
@@ -94,6 +98,9 @@ pub enum DiscoveryError {
 
     #[error("depending on a `{0}` file but the rattler-build protocol is not enabled")]
     UnsupportedRecipeYaml(String),
+
+    #[error("depending on a `{0}` file but the ros protocol is not enabled")]
+    UnsupportedPackageXml(String),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -140,6 +147,23 @@ impl DiscoveredBackend {
                     .expect("the recipe must live somewhere");
                 return Self::from_recipe(source_dir.to_path_buf(), source_path, channel_config);
             }
+
+            // If the user explicitly asked for a package.xml file
+            if VALID_ROS_BACKEND_NAMES.contains(&source_file_name) {
+                if !enabled_protocols.enable_ros {
+                    return Err(DiscoveryError::UnsupportedPackageXml(
+                        source_file_name.to_string(),
+                    ));
+                }
+                let source_dir = source_path
+                    .parent()
+                    .expect("the package.xml must live somewhere");
+                return Self::from_ros_package(
+                    source_dir.to_path_buf(),
+                    source_path,
+                    channel_config,
+                );
+            }
         }
 
         // Try to discover a pixi project.
@@ -153,6 +177,13 @@ impl DiscoveredBackend {
         if enabled_protocols.enable_rattler_build {
             if let Some(pixi) = Self::discover_rattler_build(source_path.clone(), channel_config)? {
                 return Ok(pixi);
+            }
+        }
+
+        // Try to discover as a ROS package.
+        if enabled_protocols.enable_ros {
+            if let Some(ros) = Self::discover_ros(source_path.clone(), channel_config)? {
+                return Ok(ros);
             }
         }
 
@@ -325,6 +356,49 @@ impl DiscoveredBackend {
                 return Ok(Some(Self::from_recipe(
                     source_dir,
                     recipe_path,
+                    channel_config,
+                )?));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Construct a new instance based on a specific `package.xml` file in the
+    /// source directory.
+    fn from_ros_package(
+        source_dir: PathBuf,
+        package_xml_absolute_path: PathBuf,
+        channel_config: &ChannelConfig,
+    ) -> Result<Self, DiscoveryError> {
+        debug_assert!(source_dir.is_absolute());
+        debug_assert!(package_xml_absolute_path.is_absolute());
+        Ok(Self {
+            backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_ros_build(
+                channel_config,
+            )),
+            init_params: BackendInitializationParams {
+                workspace_root: source_dir.clone(),
+                source: None,
+                source_anchor: source_dir,
+                manifest_path: package_xml_absolute_path,
+                project_model: Some(ProjectModelV1::default()),
+                configuration: None,
+                target_configuration: None,
+            },
+        })
+    }
+
+    /// Try to discover a ROS package.xml file in the repository.
+    fn discover_ros(
+        source_dir: PathBuf,
+        channel_config: &ChannelConfig,
+    ) -> Result<Option<Self>, DiscoveryError> {
+        for &package_file in VALID_ROS_BACKEND_NAMES.iter() {
+            let package_path = source_dir.join(package_file);
+            if package_path.is_file() {
+                return Ok(Some(Self::from_ros_package(
+                    source_dir,
+                    package_path,
                     channel_config,
                 )?));
             }

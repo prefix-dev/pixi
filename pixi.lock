@@ -20,6 +20,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/c-compiler-1.11.0-h4d9bdce_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.4.26-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/cargo-edit-0.13.7-hb17b654_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/cargo-insta-1.43.2-hb17b654_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/cargo-nextest-0.9.105-hb17b654_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/certifi-2025.4.26-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cffconvert-2.0.0-pyhd8ed1ab_1.conda
@@ -172,6 +173,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/c-compiler-1.11.0-hdceaead_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.4.26-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/cargo-edit-0.13.7-h069e38c_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-aarch64/cargo-insta-1.43.2-h069e38c_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/cargo-nextest-0.9.105-h069e38c_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/certifi-2025.4.26-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cffconvert-2.0.0-pyhd8ed1ab_1.conda
@@ -306,6 +308,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-64/c-compiler-1.11.0-h7a00415_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.4.26-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/cargo-edit-0.13.7-hd4f85ea_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-64/cargo-insta-1.43.2-h3c2ae71_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/cargo-nextest-0.9.105-h3c2ae71_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/cctools-1024.3-h67a6458_5.conda
       - conda: https://prefix.dev/conda-forge/osx-64/cctools_osx-64-1024.3-llvm19_1_h3b512aa_5.conda
@@ -450,6 +453,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/c-compiler-1.11.0-h61f9b84_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.4.26-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/cargo-edit-0.13.7-hcdef695_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-arm64/cargo-insta-1.43.2-h8d80559_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/cargo-nextest-0.9.105-h8d80559_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/cctools-1024.3-hd01ab73_5.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/cctools_osx-arm64-1024.3-llvm19_1_h8c76c84_5.conda
@@ -594,6 +598,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/c-compiler-1.11.0-h528c1b4_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.4.26-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/cargo-edit-0.13.7-h18a1a76_0.conda
+      - conda: https://prefix.dev/conda-forge/win-64/cargo-insta-1.43.2-h18a1a76_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/cargo-nextest-0.9.105-h18a1a76_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/certifi-2025.4.26-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cffconvert-2.0.0-pyhd8ed1ab_1.conda
@@ -2061,7 +2066,7 @@ environments:
     packages:
       linux-64:
       - conda: .
-        build: h24ff57e_0
+        subdir: linux-64
       linux-aarch64:
       - conda: .
         subdir: linux-aarch64
@@ -2084,6 +2089,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/bzip2-1.0.8-h4bc722e_7.conda
       - conda: https://prefix.dev/conda-forge/linux-64/c-ares-1.34.5-hb9d3cd8_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.4.26-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/cargo-insta-1.43.2-hb17b654_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/editables-0.5-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/git-2.51.0-pl5321h8305f47_1.conda
@@ -2134,6 +2140,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/bzip2-1.0.8-h68df207_7.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/c-ares-1.34.5-h86ecc28_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.4.26-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-aarch64/cargo-insta-1.43.2-h069e38c_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/editables-0.5-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/git-2.51.0-pl5321h1beed63_1.conda
@@ -2183,6 +2190,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-64/bzip2-1.0.8-hfdf4475_7.conda
       - conda: https://prefix.dev/conda-forge/osx-64/c-ares-1.34.5-hf13058a_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.4.26-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-64/cargo-insta-1.43.2-h3c2ae71_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/editables-0.5-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/osx-64/git-2.51.0-pl5321h110a47f_1.conda
@@ -2225,6 +2233,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-h99b78c6_7.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/c-ares-1.34.5-h5505292_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.4.26-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-arm64/cargo-insta-1.43.2-h8d80559_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/editables-0.5-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/git-2.51.0-pl5321h6ee1a4f_1.conda
@@ -2267,6 +2276,7 @@ environments:
       win-64:
       - conda: https://prefix.dev/conda-forge/win-64/bzip2-1.0.8-h2466b09_7.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.4.26-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/win-64/cargo-insta-1.43.2-h18a1a76_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/editables-0.5-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/git-2.51.0-h57928b3_1.conda
@@ -3526,6 +3536,64 @@ packages:
   license_family: MIT
   size: 2608404
   timestamp: 1754717586821
+- conda: https://prefix.dev/conda-forge/linux-64/cargo-insta-1.43.2-hb17b654_0.conda
+  sha256: 51f97cd9898e941ed29399f704e710db1be67534cae7fc9432a704f02a798526
+  md5: 8dc58665085a8f3b650c216544d127ed
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - libgcc >=14
+  constrains:
+  - __glibc >=2.17
+  license: Apache-2.0
+  license_family: APACHE
+  size: 1755616
+  timestamp: 1757053563013
+- conda: https://prefix.dev/conda-forge/linux-aarch64/cargo-insta-1.43.2-h069e38c_0.conda
+  sha256: 98e8015b6d46ca552ed10fe662abb2310db39001f922b16023f7182aff5bdf8e
+  md5: 2ed81e1122a8d42983a2a8109992b1d4
+  depends:
+  - libgcc >=14
+  constrains:
+  - __glibc >=2.17
+  license: Apache-2.0
+  license_family: APACHE
+  size: 1638586
+  timestamp: 1757053598775
+- conda: https://prefix.dev/conda-forge/osx-64/cargo-insta-1.43.2-h3c2ae71_0.conda
+  sha256: 35131bc9e10c8069a2771434f20c3afa84fa63c38259bcae62394deb77747b18
+  md5: e219005a3b539d2faa8944f7fa9b1f59
+  depends:
+  - __osx >=10.13
+  constrains:
+  - __osx >=10.13
+  license: Apache-2.0
+  size: 1725571
+  timestamp: 1757053616373
+- conda: https://prefix.dev/conda-forge/osx-arm64/cargo-insta-1.43.2-h8d80559_0.conda
+  sha256: b0788c3a6ca72516a563b48b047979204e56fc4db55e2ffce9a45e212bdea0ab
+  md5: 818640c87f3ad51f5774ef8093a81cbe
+  depends:
+  - __osx >=11.0
+  constrains:
+  - __osx >=11.0
+  license: Apache-2.0
+  license_family: APACHE
+  size: 1587020
+  timestamp: 1757053576018
+- conda: https://prefix.dev/conda-forge/win-64/cargo-insta-1.43.2-h18a1a76_0.conda
+  sha256: d659b1221d673a891827990dbf8c674a703db45cdbc743890dcedbe0f1c4d1c0
+  md5: 1626429b953f16c2d495e151bfa95cdf
+  depends:
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  license: Apache-2.0
+  license_family: APACHE
+  size: 1893847
+  timestamp: 1757053579226
 - conda: https://prefix.dev/conda-forge/linux-64/cargo-nextest-0.9.105-hb17b654_0.conda
   sha256: 79f67f1b405b9fcd94c1fe14ff01e427d98e268e44f2366b9a52f5c5aadea0cc
   md5: 848d070f2b9bfec2d3d8f9c06187e84c
@@ -9147,70 +9215,68 @@ packages:
   timestamp: 1758208682964
 - conda: .
   name: pixi
-  version: 0.56.0
-  build: h24ff57e_0
+  version: 0.57.0
+  build: hbf21a9e_0
   subdir: linux-64
-  depends:
-  - __glibc >=2.34,<3.0.a0
   constrains:
   - __glibc >=2.17
   license: BSD-3-Clause
   input:
-    hash: a6903542c089072c02969a62ebd498341d26cd11a5a01a9d3cdf504b1db3fd70
+    hash: 8ce1c40b2260394e6d161f6a07ba5ecd7abf843d2de7d638a5c82247cea04145
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml
     - Cargo.toml
 - conda: .
   name: pixi
-  version: 0.56.0
+  version: 0.57.0
   build: hbf21a9e_0
   subdir: linux-aarch64
   constrains:
   - __glibc >=2.17
   license: BSD-3-Clause
   input:
-    hash: a6903542c089072c02969a62ebd498341d26cd11a5a01a9d3cdf504b1db3fd70
+    hash: 8ce1c40b2260394e6d161f6a07ba5ecd7abf843d2de7d638a5c82247cea04145
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml
     - Cargo.toml
 - conda: .
   name: pixi
-  version: 0.56.0
+  version: 0.57.0
   build: hbf21a9e_0
   subdir: osx-64
   constrains:
   - __osx >=10.13
   license: BSD-3-Clause
   input:
-    hash: a6903542c089072c02969a62ebd498341d26cd11a5a01a9d3cdf504b1db3fd70
+    hash: 8ce1c40b2260394e6d161f6a07ba5ecd7abf843d2de7d638a5c82247cea04145
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml
     - Cargo.toml
 - conda: .
   name: pixi
-  version: 0.56.0
+  version: 0.57.0
   build: hbf21a9e_0
   subdir: osx-arm64
   constrains:
   - __osx >=11.0
   license: BSD-3-Clause
   input:
-    hash: a6903542c089072c02969a62ebd498341d26cd11a5a01a9d3cdf504b1db3fd70
+    hash: 8ce1c40b2260394e6d161f6a07ba5ecd7abf843d2de7d638a5c82247cea04145
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml
     - Cargo.toml
 - conda: .
   name: pixi
-  version: 0.56.0
+  version: 0.57.0
   build: hbf21a9e_0
   subdir: win-64
   license: BSD-3-Clause
   input:
-    hash: a6903542c089072c02969a62ebd498341d26cd11a5a01a9d3cdf504b1db3fd70
+    hash: 8ce1c40b2260394e6d161f6a07ba5ecd7abf843d2de7d638a5c82247cea04145
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml

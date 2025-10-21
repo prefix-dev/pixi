@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors = ["liquidcarbon <akscrps@gmail.com>"]
 channels = ["conda-forge"]
 name = "ctypes-examples"
