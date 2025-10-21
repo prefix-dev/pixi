@@ -1,9 +1,3 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    hash::{Hash, Hasher},
-    path::PathBuf,
-};
-
 use miette::Diagnostic;
 use pathdiff::diff_paths;
 use pixi_build_discovery::{CommandSpec, EnabledProtocols};
@@ -14,6 +8,12 @@ use pixi_record::{InputHash, PinnedSourceSpec};
 use pixi_spec::{SourceAnchor, SourceSpec};
 use rand::random;
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
+use std::sync::Once;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    hash::{Hash, Hasher},
+    path::PathBuf,
+};
 use thiserror::Error;
 use tracing::instrument;
 use xxhash_rust::xxh3::Xxh3;
@@ -145,10 +145,13 @@ impl BuildBackendMetadataSpec {
             let backend_name = match &discovered_backend.backend_spec {
                 BackendSpec::JsonRpc(spec) => &spec.name,
             };
-            tracing::warn!(
-                "metadata cache disabled for build backend '{}' (system/path-based backends always regenerate metadata)",
-                backend_name
-            );
+            static WARN_ONCE: Once = Once::new();
+            WARN_ONCE.call_once(|| {
+                tracing::warn!(
+                    "metadata cache disabled for build backend '{}' (system/path-based backends always regenerate metadata)",
+                    backend_name
+                );
+            });
         }
 
         // Instantiate the backend with the discovered information.
