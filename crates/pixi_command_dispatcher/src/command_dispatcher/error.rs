@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{borrow::Borrow, fmt::Display};
 
 use miette::{Diagnostic, LabeledSpan, Severity, SourceCode};
 use thiserror::Error;
@@ -132,5 +132,11 @@ impl<T, E> CommandDispatcherErrorResultExt<T, E> for Result<T, CommandDispatcher
 impl<E> From<simple_spawn_blocking::Cancelled> for CommandDispatcherError<E> {
     fn from(_: simple_spawn_blocking::Cancelled) -> Self {
         CommandDispatcherError::Cancelled
+    }
+}
+
+impl<E: Diagnostic + 'static> Borrow<dyn Diagnostic> for Box<CommandDispatcherError<E>> {
+    fn borrow(&self) -> &(dyn Diagnostic + 'static) {
+        self.as_ref()
     }
 }

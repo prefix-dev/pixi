@@ -86,10 +86,10 @@ impl Display for UrlSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.url)?;
         if let Some(md5) = &self.md5 {
-            write!(f, " md5={:x}", md5)?;
+            write!(f, " md5={md5:x}")?;
         }
         if let Some(sha256) = &self.sha256 {
-            write!(f, " sha256={:x}", sha256)?;
+            write!(f, " sha256={sha256:x}")?;
         }
         Ok(())
     }
@@ -117,10 +117,10 @@ impl Display for UrlSourceSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.url)?;
         if let Some(md5) = &self.md5 {
-            write!(f, " md5={:x}", md5)?;
+            write!(f, " md5={md5:x}")?;
         }
         if let Some(sha256) = &self.sha256 {
-            write!(f, " sha256={:x}", sha256)?;
+            write!(f, " sha256={sha256:x}")?;
         }
         Ok(())
     }

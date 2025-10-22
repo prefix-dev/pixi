@@ -604,7 +604,7 @@ pub async fn resolve_pypi(
         .await
         .into_diagnostic()
         .map_err(|e| SolveError::GeneralPanic {
-            message: format!("Failed to do lookahead resolution: {}", e),
+            message: format!("Failed to do lookahead resolution: {e}"),
         })?;
 
         // Move manifest and provider setup inside catch_unwind
@@ -667,7 +667,7 @@ pub async fn resolve_pypi(
         .into_diagnostic()
         .context("failed to resolve pypi dependencies")
         .map_err(|e| SolveError::GeneralPanic {
-            message: format!("Failed to create resolver: {}", e),
+            message: format!("Failed to create resolver: {e}"),
         })?
         .with_reporter(UvReporter::new_arc(
             UvReporterOptions::new().with_existing(pb.clone()),
@@ -686,7 +686,7 @@ pub async fn resolve_pypi(
             // Try to get the stored initialization error from the lazy build dispatch
             if let Some(stored_error) = lazy_build_dispatch.last_initialization_error() {
                 return Err(SolveError::BuildDispatchPanic {
-                    message: format!("{}", stored_error),
+                    message: format!("{stored_error}"),
                 }
                 .into());
             } else {

@@ -336,7 +336,7 @@ mod tests {
         let workspace = match Workspace::from_path(&path) {
             Ok(workspace) => workspace,
             Err(err) => {
-                panic!("Failed to load workspace: {:?}", err);
+                panic!("Failed to load workspace: {err:?}");
             }
         };
         let args = Args {

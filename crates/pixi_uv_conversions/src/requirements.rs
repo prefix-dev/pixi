@@ -30,7 +30,7 @@ fn create_uv_url(
     let url = url.to_string();
     let url = match url.strip_prefix("git+") {
         Some(_) => url,
-        None => format!("git+{}", url),
+        None => format!("git+{url}"),
     };
 
     // Add the tag or rev if it exists.
@@ -38,7 +38,7 @@ fn create_uv_url(
         || url.clone(),
         |tag_or_rev| {
             if !tag_or_rev.is_default() {
-                format!("{url}@{}", tag_or_rev)
+                format!("{url}@{tag_or_rev}")
             } else {
                 url.clone()
             }

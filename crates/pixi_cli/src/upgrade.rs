@@ -226,7 +226,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let json_diff =
                 LockFileJsonDiff::new(Some(workspace.workspace().named_environments()), diff);
             let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
-            println!("{}", json);
+            println!("{json}");
             // Revert changes after computing the diff in dry-run mode.
             let _ = workspace.revert().await.into_diagnostic()?;
         } else {
@@ -236,7 +236,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let diff = LockFileDiff::from_lock_files(&original_lock_file, &updated_lock_file);
             let json_diff = LockFileJsonDiff::new(Some(saved_workspace.named_environments()), diff);
             let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
-            println!("{}", json);
+            println!("{json}");
         }
         return Ok(());
     }

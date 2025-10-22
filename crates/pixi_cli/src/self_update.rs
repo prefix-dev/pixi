@@ -370,7 +370,7 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
         let mut archive = zip::ZipArchive::new(archived_tempfile.as_file()).into_diagnostic()?;
         archive.extract(binary_tempdir).into_diagnostic()?;
     } else {
-        let error_message = format!("Unsupported archive format: {}", archive_name);
+        let error_message = format!("Unsupported archive format: {archive_name}");
         Err(miette::miette!(error_message))?
     }
 

@@ -126,7 +126,8 @@ impl PixiEnvironmentSpec {
         let (source_specs, binary_specs) =
             Self::split_into_source_and_binary_requirements(self.dependencies);
 
-        Self::check_missing_channels(binary_specs.clone(), &self.channels, &self.channel_config)?;
+        Self::check_missing_channels(binary_specs.clone(), &self.channels, &self.channel_config)
+            .map_err(|err| CommandDispatcherError::Failed(*err))?;
 
         // Recursively collect the metadata of all the source specs.
         let CollectedSourceMetadata {
@@ -236,24 +237,26 @@ impl PixiEnvironmentSpec {
         binary_specs: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
         channels: &[ChannelUrl],
         channel_config: &ChannelConfig,
-    ) -> Result<(), CommandDispatcherError<SolvePixiEnvironmentError>> {
+    ) -> Result<(), Box<SolvePixiEnvironmentError>> {
         for (pkg, spec) in binary_specs.iter_specs() {
             if let BinarySpec::DetailedVersion(v) = spec {
                 if let Some(channel) = &v.channel {
-                    let base_url = channel
-                        .clone()
-                        .into_base_url(channel_config)
-                        .map_err(SolvePixiEnvironmentError::ParseChannelError)
-                        .map_err(CommandDispatcherError::Failed)?;
+                    let base_url =
+                        channel
+                            .clone()
+                            .into_base_url(channel_config)
+                            .map_err(|err| {
+                                Box::new(SolvePixiEnvironmentError::ParseChannelError(err))
+                            })?;
 
                     if !channels.iter().any(|c| c == &base_url) {
-                        return Err(CommandDispatcherError::Failed(
-                            SolvePixiEnvironmentError::MissingChannel(MissingChannelError {
+                        return Err(Box::new(SolvePixiEnvironmentError::MissingChannel(
+                            MissingChannelError {
                                 package: pkg.as_normalized().to_string(),
                                 channel: base_url,
                                 advice: None,
-                            }),
-                        ));
+                            },
+                        )));
                     }
                 }
             }

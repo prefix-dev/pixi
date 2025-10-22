@@ -56,9 +56,9 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
         let relative_path = if ups > 0 {
             format!("{}{}.md", "../".repeat(ups), parent)
         } else {
-            format!("{}.md", parent)
+            format!("{parent}.md")
         };
-        name_parts.push(format!("[{}]({}) ", parent, relative_path));
+        name_parts.push(format!("[{parent}]({relative_path}) "));
     }
 
     // Add current command without link
@@ -71,7 +71,7 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     if command.get_name() != "pixi" {
         if let Some(about) = command.get_about() {
             writeln!(buffer, "\n## About").unwrap();
-            writeln!(buffer, "{}", about).unwrap();
+            writeln!(buffer, "{about}").unwrap();
         }
     }
 
@@ -166,7 +166,7 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
             });
 
         for (header, opts) in sorted_header_options {
-            writeln!(buffer, "\n## {}", header).unwrap();
+            writeln!(buffer, "\n## {header}").unwrap();
             write!(buffer, "{}", arguments(opts, &parts)).unwrap();
         }
     }
@@ -202,7 +202,7 @@ fn process_subcommands(
     let command_file_path = output_dir.join(&command_file_name);
 
     fs::create_dir_all(command_file_path.parent().ok_or("Invalid path")?)
-        .map_err(|e| format!("Failed to create directories: {}", e))?;
+        .map_err(|e| format!("Failed to create directories: {e}"))?;
     fs::write(
         &command_file_path,
         subcommand_to_md(&current_path[..current_path.len() - 1], command),
@@ -245,9 +245,9 @@ fn subcommands_table(subcommands: Vec<&Command>, parent: &str) -> String {
         };
         // Create a link to the subcommand's Markdown file
         let command_name = subcommand.get_name();
-        let link = format!("{}/{}{}", parent, command_name, MD_EXTENSION);
-        let link_md = format!("[`{}`]({})", command_name, link);
-        writeln!(buffer, "| {} | {} |", link_md, about,).unwrap();
+        let link = format!("{parent}/{command_name}{MD_EXTENSION}");
+        let link_md = format!("[`{command_name}`]({link})");
+        writeln!(buffer, "| {link_md} | {about} |",).unwrap();
     }
     buffer
 }
@@ -264,7 +264,7 @@ fn arguments(options: &[&clap::Arg], parents: &[String]) -> String {
         }
 
         let long_name = if let Some(long) = opt.get_long() {
-            format!("--{}", long)
+            format!("--{long}")
         } else if let Some(value_names) = opt.get_value_names() {
             // No long name, but we have value names, assuming positional.
             format!("<{}>", value_names[0])
@@ -287,7 +287,7 @@ fn arguments(options: &[&clap::Arg], parents: &[String]) -> String {
             exit(1);
         }
 
-        let id = format!("arg-{}", long_name);
+        let id = format!("arg-{long_name}");
 
         // Write the option as a bullet point with a self-referential <a> tag
         write!(
@@ -297,7 +297,7 @@ fn arguments(options: &[&clap::Arg], parents: &[String]) -> String {
             id,
             long_name,
             if let Some(short) = opt.get_short() {
-                format!(" (-{})", short)
+                format!(" (-{short})")
             } else {
                 String::new()
             },
@@ -320,7 +320,7 @@ fn arguments(options: &[&clap::Arg], parents: &[String]) -> String {
 
         // Write the help text
         if let Some(help) = opt.get_help() {
-            writeln!(buffer, "  {}", help).unwrap();
+            writeln!(buffer, "  {help}").unwrap();
         } else {
             writeln!(buffer).unwrap();
         }

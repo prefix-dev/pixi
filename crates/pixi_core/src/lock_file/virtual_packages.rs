@@ -58,8 +58,7 @@ impl VirtualPackageNotFoundError {
 
         let help = override_var.map(|override_var| {
             format!(
-            " You can mock the virtual package by overriding the environment variable, e.g.: '{}'",
-            override_var
+            " You can mock the virtual package by overriding the environment variable, e.g.: '{override_var}'"
         )
         });
 
@@ -346,7 +345,7 @@ mod test {
             &EnvironmentName::default(),
             Some(overrides),
         );
-        assert!(result.is_ok(), "{:?}", result);
+        assert!(result.is_ok(), "{result:?}");
 
         // Override the virtual package to a version that is not available on the system
         let overrides = VirtualPackageOverrides {
@@ -383,7 +382,7 @@ mod test {
             &EnvironmentName::default(),
             Some(overrides),
         );
-        assert!(result.is_ok(), "{:?}", result);
+        assert!(result.is_ok(), "{result:?}");
 
         let overrides = VirtualPackageOverrides {
             // To low version for the wheel
@@ -401,12 +400,11 @@ mod test {
         if Platform::current().is_unix() {
             assert!(
                 matches!(result, Err(MachineValidationError::WheelTagsMismatch(_, _))),
-                "{:?}",
-                result
+                "{result:?}"
             );
         } else {
             // It's hard to make the wheels fail on windows
-            assert!(result.is_ok(), "{:?}", result);
+            assert!(result.is_ok(), "{result:?}");
         }
     }
 

@@ -364,7 +364,7 @@ pub fn to_requirements<'req>(
             } = requirement;
 
             let mut package_string = String::new();
-            write!(&mut package_string, "{}", name)?;
+            write!(&mut package_string, "{name}")?;
             if !extras.is_empty() {
                 write!(
                     package_string,
