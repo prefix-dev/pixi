@@ -468,13 +468,13 @@ impl CommandDispatcher {
         self.execute_task(spec).await
     }
 
-    /// Returns the metadata for development sources.
+    /// Returns the metadata for dev sources.
     ///
     /// This method queries the build backend for all outputs from a dev source
     /// and creates DevSourceRecords for each one. These records contain the
     /// combined dependencies (build, host, run) for each output.
     ///
-    /// Unlike `source_metadata`, this is specifically for development sources
+    /// Unlike `source_metadata`, this is specifically for dev sources
     /// where the dependencies are installed but the package itself is not built.
     ///
     /// # Requirements

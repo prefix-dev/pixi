@@ -22,7 +22,7 @@ pub struct TomlTarget {
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
-    pub develop: Option<IndexMap<PackageName, TomlLocationSpec>>,
+    pub dev_dependencies: Option<IndexMap<PackageName, TomlLocationSpec>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -70,11 +70,11 @@ impl TomlTarget {
             }
         }
 
-        // Convert develop dependencies from TomlLocationSpec to SourceSpec
-        let develop_dependencies = self
-            .develop
-            .map(|develop_map| {
-                develop_map
+        // Convert dev dependencies from TomlLocationSpec to SourceSpec
+        let dev_dependencies = self
+            .dev_dependencies
+            .map(|dev_map| {
+                dev_map
                     .into_iter()
                     .map(|(name, toml_loc)| {
                         toml_loc
@@ -86,7 +86,7 @@ impl TomlTarget {
             .transpose()
             .map_err(|e| {
                 TomlError::Generic(GenericError::new(format!(
-                    "failed to parse develop dependency: {}",
+                    "failed to parse dev dependency: {}",
                     e
                 )))
             })?;
@@ -105,7 +105,7 @@ impl TomlTarget {
                     // Convert IndexMap to DependencyMap
                     index_map.into_iter().collect()
                 }),
-                develop_dependencies,
+                dev_dependencies,
                 activation: self.activation,
                 tasks: self.tasks,
             },
@@ -146,8 +146,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlTarget {
         let pypi_dependencies = th
             .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
             .map(TomlIndexMap::into_inner);
-        let develop = th
-            .optional::<TomlIndexMap<_, _>>("develop")
+        let dev = th
+            .optional::<TomlIndexMap<_, _>>("dev")
             .map(TomlIndexMap::into_inner);
         let activation = th.optional("activation");
         let tasks = th
@@ -172,7 +172,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTarget {
             host_dependencies,
             build_dependencies,
             pypi_dependencies,
-            develop,
+            dev_dependencies: dev,
             activation,
             tasks,
             warnings,

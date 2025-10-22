@@ -519,7 +519,7 @@ class Target(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies for this target"
     )
-    develop: dict[CondaPackageName, SourceSpecTable] | None = Field(
+    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
         None,
         description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
     )
@@ -558,7 +558,7 @@ class Feature(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies of this feature"
     )
-    develop: dict[CondaPackageName, SourceSpecTable] | None = Field(
+    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
         None,
         description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
     )
@@ -835,7 +835,7 @@ class BaseManifest(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies"
     )
-    develop: dict[CondaPackageName, SourceSpecTable] | None = Field(
+    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
         None,
         description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
     )

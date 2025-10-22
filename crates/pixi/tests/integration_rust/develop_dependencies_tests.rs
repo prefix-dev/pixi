@@ -60,9 +60,9 @@ backend = {{ name = "in-memory", version = "0.1.0" }}
     package_dir
 }
 
-/// Test that develop dependencies are correctly expanded and included in the lock-file
+/// Test that dev dependencies are correctly expanded and included in the lock-file
 #[tokio::test]
-async fn test_develop_dependencies_basic() {
+async fn test_dev_dependencies_basic() {
     setup_tracing();
 
     // Create a package database with common dependencies
@@ -94,7 +94,7 @@ python = ">=3.8"
 "#,
     );
 
-    // Create a manifest with develop dependencies
+    // Create a manifest with dev dependencies
     let manifest_content = format!(
         r#"
 [workspace]
@@ -102,7 +102,7 @@ channels = ["{}"]
 platforms = ["{}"]
 preview = ["pixi-build"]
 
-[develop]
+[dev]
 my-package = {{ path = "./my-package" }}
 "#,
         channel.url(),
@@ -122,7 +122,7 @@ my-package = {{ path = "./my-package" }}
             Platform::current(),
             "cmake",
         ),
-        "cmake should be in the lock-file (build dependency of develop package)"
+        "cmake should be in the lock-file (build dependency of dev package)"
     );
 
     assert!(
@@ -131,7 +131,7 @@ my-package = {{ path = "./my-package" }}
             Platform::current(),
             "openssl",
         ),
-        "openssl should be in the lock-file (host dependency of develop package)"
+        "openssl should be in the lock-file (host dependency of dev package)"
     );
 
     assert!(
@@ -140,7 +140,7 @@ my-package = {{ path = "./my-package" }}
             Platform::current(),
             "python",
         ),
-        "python should be in the lock-file (run dependency of develop package)"
+        "python should be in the lock-file (run dependency of dev package)"
     );
 
     assert!(
@@ -149,13 +149,13 @@ my-package = {{ path = "./my-package" }}
             Platform::current(),
             "my-package",
         ),
-        "my-package itself should NOT be in the lock-file (it's a develop dependency)"
+        "my-package itself should NOT be in the lock-file (it's a dev dependency)"
     );
 }
 
-/// Test that source dependencies of develop packages are correctly expanded
+/// Test that source dependencies of dev packages are correctly expanded
 #[tokio::test]
-async fn test_develop_dependencies_with_source_dependencies() {
+async fn test_dev_dependencies_with_source_dependencies() {
     setup_tracing();
 
     // Create a package database
@@ -197,7 +197,7 @@ requests = ">=2.0"
         ),
     );
 
-    // Create a manifest with package-a as a develop dependency
+    // Create a manifest with package-a as a dev dependency
     let manifest_content = format!(
         r#"
 [workspace]
@@ -205,7 +205,7 @@ channels = ["{}"]
 platforms = ["{}"]
 preview = ["pixi-build"]
 
-[develop]
+[dev]
 package-a = {{ path = "./package-a" }}
 "#,
         channel.url(),
@@ -247,19 +247,19 @@ package-a = {{ path = "./package-a" }}
         "numpy should be in the lock-file (run dependency of package-b, which is a source dependency of package-a)"
     );
 
-    // Verify that package-a is NOT built (it's a develop dependency)
+    // Verify that package-a is NOT built (it's a dev dependency)
     assert!(
         !lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
             Platform::current(),
             "package-a",
         ),
-        "package-a should NOT be in the lock-file (it's a develop dependency)"
+        "package-a should NOT be in the lock-file (it's a dev dependency)"
     );
 
     // Note: package-b WILL be in the lock-file because it's a source dependency
     // of package-a. Source dependencies need to be built to extract their dependencies.
-    // This is expected behavior - only the direct develop dependencies are not built.
+    // This is expected behavior - only the direct dev dependencies are not built.
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
@@ -270,9 +270,9 @@ package-a = {{ path = "./package-a" }}
     );
 }
 
-/// Test that when multiple develop dependencies reference each other, they are correctly filtered
+/// Test that when multiple dev dependencies reference each other, they are correctly filtered
 #[tokio::test]
-async fn test_develop_dependencies_with_cross_references() {
+async fn test_dev_dependencies_with_cross_references() {
     setup_tracing();
 
     let package_database = create_test_package_database();
@@ -312,7 +312,7 @@ package-y = {{ path = "{}" }}
         ),
     );
 
-    // Add BOTH as develop dependencies
+    // Add BOTH as dev dependencies
     let manifest_content = format!(
         r#"
 [workspace]
@@ -320,7 +320,7 @@ channels = ["{}"]
 platforms = ["{}"]
 preview = ["pixi-build"]
 
-[develop]
+[dev]
 package-x = {{ path = "./package-x" }}
 package-y = {{ path = "{}" }}
 "#,
@@ -355,14 +355,14 @@ package-y = {{ path = "{}" }}
 
     // Verify that neither package-x nor package-y are in the lock-file
     // This is the key test: package-y is referenced by package-x, but since both are
-    // develop dependencies, package-y should be filtered out from package-x's dependencies
+    // dev dependencies, package-y should be filtered out from package-x's dependencies
     assert!(
         !lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
             Platform::current(),
             "package-x",
         ),
-        "package-x should NOT be in the lock-file (it's a develop dependency)"
+        "package-x should NOT be in the lock-file (it's a dev dependency)"
     );
 
     assert!(
@@ -371,13 +371,13 @@ package-y = {{ path = "{}" }}
             Platform::current(),
             "package-y",
         ),
-        "package-y should NOT be in the lock-file (it's a develop dependency)"
+        "package-y should NOT be in the lock-file (it's a dev dependency)"
     );
 }
 
-/// Test that feature-specific develop dependencies work correctly
+/// Test that feature-specific dev dependencies work correctly
 #[tokio::test]
-async fn test_develop_dependencies_in_features() {
+async fn test_dev_dependencies_in_features() {
     setup_tracing();
 
     let package_database = create_test_package_database();
@@ -400,7 +400,7 @@ zlib = ">=1.0"
 "#,
     );
 
-    // Create a manifest with feature-specific develop dependencies
+    // Create a manifest with feature-specific dev dependencies
     let manifest_content = format!(
         r#"
 [workspace]
@@ -411,7 +411,7 @@ preview = ["pixi-build"]
 [environments]
 test = ["test-feature"]
 
-[feature.test-feature.develop]
+[feature.test-feature.dev]
 feature-package = {{ path = "./feature-package" }}
 "#,
         channel.url(),
@@ -441,15 +441,15 @@ feature-package = {{ path = "./feature-package" }}
     // Verify that feature-package itself is not built
     assert!(
         !lock_file.contains_conda_package("test", Platform::current(), "feature-package",),
-        "feature-package should NOT be in the lock-file (it's a develop dependency)"
+        "feature-package should NOT be in the lock-file (it's a dev dependency)"
     );
 }
 
-/// Test that a source package can be listed both in [develop] and in dependencies
-/// without causing conflicts (the package is essentially included twice, once as a develop dep
+/// Test that a source package can be listed both in [dev] and in dependencies
+/// without causing conflicts (the package is essentially included twice, once as a dev dep
 /// and once as a regular source dep)
 #[tokio::test]
-async fn test_develop_and_regular_dependency_same_package() {
+async fn test_dev_and_regular_dependency_same_package() {
     setup_tracing();
 
     let package_database = create_test_package_database();
@@ -461,7 +461,7 @@ async fn test_develop_and_regular_dependency_same_package() {
         .unwrap()
         .with_backend_override(backend_override);
 
-    // Create a shared package that will be both a develop dependency and a regular dependency
+    // Create a shared package that will be both a dev dependency and a regular dependency
     let shared_package_path = create_source_package(
         pixi.workspace_path(),
         "shared-package",
@@ -488,9 +488,9 @@ numpy = ">=1.0"
     );
 
     // Create a manifest that:
-    // 1. Lists shared-package as a develop dependency
+    // 1. Lists shared-package as a dev dependency
     // 2. Lists dependent-package as a regular source dependency
-    // This means shared-package appears both as a develop dep and as a transitive source dep
+    // This means shared-package appears both as a dev dep and as a transitive source dep
     let manifest_content = format!(
         r#"
 [workspace]
@@ -501,7 +501,7 @@ preview = ["pixi-build"]
 [dependencies]
 dependent-package = {{ path = "./dependent-package" }}
 
-[develop]
+[dev]
 shared-package = {{ path = "{}" }}
 "#,
         channel.url(),
@@ -546,9 +546,9 @@ shared-package = {{ path = "{}" }}
 
     // Key assertion: shared-package WILL appear in the lock-file as a built package
     // because it's a source dependency of dependent-package.
-    // The fact that it's also in [develop] doesn't prevent it from being built when
+    // The fact that it's also in [dev] doesn't prevent it from being built when
     // it's needed as a dependency of another package.
-    // This is correct behavior - [develop] means "install my dependencies without building me",
+    // This is correct behavior - [dev] means "install my dependencies without building me",
     // but if another package needs it built, it will be built.
     assert!(
         lock_file.contains_conda_package(
@@ -560,9 +560,9 @@ shared-package = {{ path = "{}" }}
     );
 }
 
-/// Test that platform-specific develop dependencies work correctly
+/// Test that platform-specific dev dependencies work correctly
 #[tokio::test]
-async fn test_develop_dependencies_platform_specific() {
+async fn test_dev_dependencies_platform_specific() {
     setup_tracing();
 
     let package_database = create_test_package_database();
@@ -585,7 +585,7 @@ make = ">=4.0"
 "#,
     );
 
-    // Create a manifest with platform-specific develop dependencies
+    // Create a manifest with platform-specific dev dependencies
     let manifest_content = format!(
         r#"
 [workspace]
@@ -593,7 +593,7 @@ channels = ["{}"]
 platforms = ["{}"]
 preview = ["pixi-build"]
 
-[target.{}.develop]
+[target.{}.dev]
 platform-package = {{ path = "./platform-package" }}
 "#,
         channel.url(),
@@ -623,14 +623,14 @@ platform-package = {{ path = "./platform-package" }}
             Platform::current(),
             "platform-package",
         ),
-        "platform-package should NOT be in the lock-file (it's a develop dependency)"
+        "platform-package should NOT be in the lock-file (it's a dev dependency)"
     );
 }
 
 /// Test that variant selection chooses the highest matching version
 /// When python = "*" with variants [3.10, 3.12], should select 3.12 even though 3.13 exists
 #[tokio::test]
-async fn test_develop_dependency_variant_selection() {
+async fn test_dev_dependency_variant_selection() {
     setup_tracing();
     let package_database = create_test_package_database();
 
@@ -653,7 +653,7 @@ python = "*"
         "#,
     );
 
-    // Create a manifest with develop dependencies and variants
+    // Create a manifest with dev dependencies and variants
     let manifest_content = format!(
         r#"
 [workspace]
@@ -663,7 +663,7 @@ preview = ["pixi-build"]
 
 [dependencies]
 
-[develop]
+[dev]
 variant-python-package = {{ path = "./variant-python-package" }}
 
 [workspace.build-variants]
@@ -692,7 +692,7 @@ python = ["3.10", "3.12"]
 /// Test that variant selection is constrained by regular dependencies
 /// When python = "*" with variants [3.10, 3.12], but dependencies require <3.12, should select 3.10
 #[tokio::test]
-async fn test_develop_dependency_variant_constrained_by_dependencies() {
+async fn test_dev_dependency_variant_constrained_by_dependencies() {
     setup_tracing();
     let package_database = create_test_package_database();
 
@@ -715,7 +715,7 @@ python = "*"
         "#,
     );
 
-    // Create a manifest with develop dependencies, variants, and a constraining dependency
+    // Create a manifest with dev dependencies, variants, and a constraining dependency
     let manifest_content = format!(
         r#"
 [workspace]
@@ -726,7 +726,7 @@ preview = ["pixi-build"]
 [dependencies]
 python = "<3.12"
 
-[develop]
+[dev]
 variant-python-package = {{ path = "./variant-python-package" }}
 
 [workspace.build-variants]

@@ -833,6 +833,7 @@ pub async fn test_dev_source_metadata_with_variants() {
             "Numpy should be in dependencies"
         );
     }
+}
 
 /// Tests that forcing a rebuild of a package will ignore UpToDate cache status from previous builds.
 #[tokio::test]

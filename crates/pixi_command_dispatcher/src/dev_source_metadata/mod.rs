@@ -11,20 +11,20 @@ use crate::{
     CommandDispatcherErrorResultExt, build::source_metadata_cache::MetadataKind,
 };
 
-/// A specification for retrieving development source metadata.
+/// A specification for retrieving dev source metadata.
 ///
 /// This queries the build backend for all outputs from a source and creates
 /// DevSourceRecords for each one.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
 pub struct DevSourceMetadataSpec {
-    /// The development source specification
+    /// The dev source specification
     pub package_name: PackageName,
 
     /// Information about the build backend to request the information from
     pub backend_metadata: BuildBackendMetadataSpec,
 }
 
-/// The result of querying development source metadata.
+/// The result of querying dev source metadata.
 #[derive(Debug, Clone)]
 pub struct DevSourceMetadata {
     /// Information about the source checkout that was used
@@ -42,13 +42,13 @@ pub enum DevSourceMetadataError {
     BuildBackendMetadata(#[from] BuildBackendMetadataError),
 
     #[error(
-        "the build backend does not support the `conda/outputs` procedure, which is required for development sources"
+        "the build backend does not support the `conda/outputs` procedure, which is required for dev sources"
     )]
     UnsupportedProtocol,
 }
 
 impl DevSourceMetadataSpec {
-    /// Retrieves development source metadata by querying the build backend.
+    /// Retrieves dev source metadata by querying the build backend.
     ///
     /// This method:
     /// 1. Gets metadata from the build backend

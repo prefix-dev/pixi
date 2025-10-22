@@ -124,18 +124,18 @@ impl<'p> GroupedEnvironment<'p> {
         self.workspace().channel_config()
     }
 
-    /// Returns the combined develop dependencies for this grouped environment.
+    /// Returns the combined dev dependencies for this grouped environment.
     ///
-    /// Develop dependencies from all features in the group are collected and
-    /// merged. If multiple features define the same develop dependency, the
+    /// Dev dependencies from all features in the group are collected and
+    /// merged. If multiple features define the same dev dependency, the
     /// last one wins (later features override earlier ones).
-    pub fn combined_develop_dependencies(
+    pub fn combined_dev_dependencies(
         &self,
         platform: Option<Platform>,
     ) -> IndexMap<PackageName, SourceSpec> {
         let mut result = IndexMap::new();
         for feature in self.features().rev() {
-            if let Some(deps) = feature.develop_dependencies(platform) {
+            if let Some(deps) = feature.dev_dependencies(platform) {
                 result.extend(deps.into_owned());
             }
         }

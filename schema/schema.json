@@ -55,8 +55,8 @@
         "minLength": 1
       }
     },
-    "develop": {
-      "title": "Develop",
+    "dev": {
+      "title": "Dev",
       "description": "Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
       "type": "object",
       "additionalProperties": {
@@ -741,8 +741,8 @@
             "minLength": 1
           }
         },
-        "develop": {
-          "title": "Develop",
+        "dev": {
+          "title": "Dev",
           "description": "Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
           "type": "object",
           "additionalProperties": {
@@ -1929,8 +1929,8 @@
             "minLength": 1
           }
         },
-        "develop": {
-          "title": "Develop",
+        "dev": {
+          "title": "Dev",
           "description": "Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
           "type": "object",
           "additionalProperties": {

@@ -52,7 +52,7 @@ pub struct PixiEnvironmentSpec {
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]
     pub constraints: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
 
-    /// Development sources whose dependencies should be installed without
+    /// Dev sources whose dependencies should be installed without
     /// building the packages themselves.
     #[serde(skip_serializing_if = "IndexMap::is_empty")]
     pub dev_sources: IndexMap<rattler_conda_types::PackageName, pixi_spec::DevSourceSpec>,

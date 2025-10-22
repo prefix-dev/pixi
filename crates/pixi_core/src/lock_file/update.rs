@@ -1912,8 +1912,8 @@ async fn spawn_solve_conda_environment_task(
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
 
-    // Get the develop dependencies for this platform
-    let develop_dependencies = group.combined_develop_dependencies(Some(platform));
+    // Get the dev dependencies for this platform
+    let dev_dependencies = group.combined_dev_dependencies(Some(platform));
 
     // Get solve options
     let exclude_newer = group.exclude_newer();
@@ -1922,8 +1922,8 @@ async fn spawn_solve_conda_environment_task(
     // Get the environment name
     let group_name = group.name();
 
-    // Early out if there are no dependencies to solve and no develop dependencies to expand.
-    if dependencies.is_empty() && develop_dependencies.is_empty() {
+    // Early out if there are no dependencies to solve and no dev dependencies to expand.
+    if dependencies.is_empty() && dev_dependencies.is_empty() {
         return Ok(TaskResult::CondaGroupSolved(
             group_name,
             platform,
@@ -1963,8 +1963,8 @@ async fn spawn_solve_conda_environment_task(
         variant_files,
     } = group.workspace().variants(platform)?;
 
-    // Convert develop dependencies to DevSourceSpecs
-    let dev_sources: IndexMap<_, _> = develop_dependencies
+    // Convert dev dependencies to DevSourceSpecs
+    let dev_sources: IndexMap<_, _> = dev_dependencies
         .into_iter()
         .map(|(name, source_spec)| {
             (

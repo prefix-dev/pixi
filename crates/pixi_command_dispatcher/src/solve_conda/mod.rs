@@ -41,7 +41,7 @@ pub struct SolveCondaEnvironmentSpec {
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]
     pub constraints: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
 
-    /// Development source records whose dependencies should be installed.
+    /// Dev source records whose dependencies should be installed.
     #[serde(skip)]
     pub dev_source_records: Vec<pixi_record::DevSourceRecord>,
 

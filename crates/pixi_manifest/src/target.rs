@@ -31,9 +31,9 @@ pub struct WorkspaceTarget {
     /// Specific python dependencies
     pub pypi_dependencies: Option<PyPiDependencies>,
 
-    /// Develop dependencies - source packages whose dependencies should be
+    /// Dev dependencies - source packages whose dependencies should be
     /// installed without building the packages themselves
-    pub develop_dependencies: Option<IndexMap<PackageName, SourceSpec>>,
+    pub dev_dependencies: Option<IndexMap<PackageName, SourceSpec>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,

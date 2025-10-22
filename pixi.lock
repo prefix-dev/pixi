@@ -8801,21 +8801,21 @@ packages:
   timestamp: 1758208682964
 - conda: .
   name: pixi
-  version: 0.57.0
+  version: 0.58.0
   build: hbf21a9e_0
   subdir: linux-64
   constrains:
   - __glibc >=2.17
   license: BSD-3-Clause
   input:
-    hash: da7bf4b3f26d5acc8499f9b3ba3d109affe9ce420d29be71ea9e3e3c35f080c6
+    hash: 175455bfcbbe1ff9670a53d50e023eb72b8193fe880e54ce2675a23da46fe866
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml
     - Cargo.toml
 - conda: .
   name: pixi
-  version: 0.57.0
+  version: 0.58.0
   build: hbf21a9e_0
   subdir: linux-aarch64
   constrains:
@@ -8829,7 +8829,7 @@ packages:
     - Cargo.toml
 - conda: .
   name: pixi
-  version: 0.57.0
+  version: 0.58.0
   build: hbf21a9e_0
   subdir: osx-64
   constrains:
@@ -8843,7 +8843,7 @@ packages:
     - Cargo.toml
 - conda: .
   name: pixi
-  version: 0.57.0
+  version: 0.58.0
   build: hbf21a9e_0
   subdir: osx-arm64
   constrains:
@@ -8857,7 +8857,7 @@ packages:
     - Cargo.toml
 - conda: .
   name: pixi
-  version: 0.57.0
+  version: 0.58.0
   build: hbf21a9e_0
   subdir: win-64
   license: BSD-3-Clause

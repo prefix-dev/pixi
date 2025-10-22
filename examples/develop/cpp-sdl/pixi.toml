@@ -6,7 +6,7 @@ preview = ["pixi-build"]
 # --------------------------
 # Specify that the package in this directory is part of the default environment so we can start developing it.
 # --------------------------
-[develop]
+[dev]
 sdl_example = { path = "." }
 
 # --------------------------

@@ -18,7 +18,7 @@ use crate::SourceSpec;
 ///
 /// In `pixi.toml`:
 /// ```toml
-/// [develop]
+/// [dev]
 /// my-package = { path = "../my-package" }
 /// ```
 ///
