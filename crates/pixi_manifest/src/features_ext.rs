@@ -94,8 +94,12 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             .map(Into::into)
     }
 
-    /// Returns the strategy for solving packages, resorting to the
-    /// default value of [`SolveStrategy`] when not set.
+    /// Returns the strategy for solving packages.
+    ///
+    /// The chosen strategy is the first explicitly declared one in a feature
+    /// as they are provided by the [`HasFeaturesIter::features`] iterator.
+    ///
+    /// If no feature declares a strategy, the default value of [`SolveStrategy`] is used.
     fn solve_strategy(&self) -> SolveStrategy {
         self.features()
             .flat_map(|feature| feature.solve_strategy)
