@@ -79,7 +79,7 @@ impl CommandDispatcherProcessor {
                     .map(move |result| {
                         TaskResult::BackendSourceBuild(
                             backend_source_build_id,
-                            result.unwrap_or(Err(CommandDispatcherError::Cancelled)),
+                            Box::new(result.unwrap_or(Err(CommandDispatcherError::Cancelled))),
                         )
                     })
                     .boxed_local(),

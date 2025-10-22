@@ -102,9 +102,11 @@ impl CommandDispatcherProcessor {
                 .map(move |result| {
                     TaskResult::BuildBackendMetadata(
                         build_backend_metadata_id,
-                        result.map_or(Err(CommandDispatcherError::Cancelled), |result| {
-                            result.map(Arc::new)
-                        }),
+                        Box::new(
+                            result.map_or(Err(CommandDispatcherError::Cancelled), |result| {
+                                result.map(Arc::new)
+                            }),
+                        ),
                     )
                 })
                 .boxed_local(),

@@ -178,7 +178,7 @@ enum TaskResult {
     ),
     QuerySourceBuildCache(
         SourceBuildCacheStatusId,
-        BoxedDispatcherResult<Box<SourceBuildCacheEntry>, SourceBuildCacheStatusError>,
+        BoxedDispatcherResult<Arc<SourceBuildCacheEntry>, SourceBuildCacheStatusError>,
     ),
     BackendSourceBuild(
         BackendSourceBuildId,

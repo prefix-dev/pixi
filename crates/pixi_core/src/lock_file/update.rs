@@ -227,7 +227,7 @@ pub enum SolveCondaEnvironmentError {
         platform: Platform,
         #[source]
         #[diagnostic_source]
-        source: CommandDispatcherError<SolvePixiEnvironmentError>,
+        source: Box<CommandDispatcherError<SolvePixiEnvironmentError>>,
     },
 
     #[error(transparent)]
@@ -1984,7 +1984,7 @@ async fn spawn_solve_conda_environment_task(
         .map_err(|source| SolveCondaEnvironmentError::SolveFailed {
             environment_name: group_name.clone(),
             platform,
-            source,
+            source: Box::new(source),
         })?;
 
     // Add purl's for the conda packages that are also available as pypi packages if

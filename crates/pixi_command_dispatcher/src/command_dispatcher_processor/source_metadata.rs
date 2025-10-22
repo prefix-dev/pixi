@@ -115,9 +115,11 @@ impl CommandDispatcherProcessor {
                 .map(move |result| {
                     TaskResult::SourceMetadata(
                         source_metadata_id,
-                        result.map_or(Err(CommandDispatcherError::Cancelled), |result| {
-                            result.map(Arc::new)
-                        }),
+                        Box::new(
+                            result.map_or(Err(CommandDispatcherError::Cancelled), |result| {
+                                result.map(Arc::new)
+                            }),
+                        ),
                     )
                 })
                 .boxed_local(),

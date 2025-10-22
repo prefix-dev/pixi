@@ -59,7 +59,7 @@ impl CommandDispatcherProcessor {
                 .map(move |result| {
                     TaskResult::SolvePixiEnvironment(
                         pending_env_id,
-                        result.unwrap_or(Err(CommandDispatcherError::Cancelled)),
+                        Box::new(result.unwrap_or(Err(CommandDispatcherError::Cancelled))),
                     )
                 })
                 .boxed_local(),
