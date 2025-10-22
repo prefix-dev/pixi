@@ -4619,7 +4619,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4886,6 +4886,7 @@ dependencies = [
  "uv-pypi-types",
  "uv-requirements-txt",
  "uv-types",
+ "which",
  "zip 2.4.2",
 ]
 
@@ -4906,6 +4907,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
+ "once_cell",
  "ordermap",
  "pathdiff",
  "pin-project-lite",

@@ -127,6 +127,7 @@ uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
 uv-requirements-txt = { workspace = true }
 uv-types = { workspace = true }
+which = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 
 [dev-dependencies]

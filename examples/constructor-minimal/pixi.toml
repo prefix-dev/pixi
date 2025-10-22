@@ -1,4 +1,4 @@
-[project]
+[workspace]
 channels = ["conda-forge"]
 name = "my installer"
 platforms = [

@@ -1,12 +1,7 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    hash::{Hash, Hasher},
-    path::PathBuf,
-};
-
 use miette::Diagnostic;
+use once_cell::sync::Lazy;
 use pathdiff::diff_paths;
-use pixi_build_discovery::EnabledProtocols;
+use pixi_build_discovery::{CommandSpec, EnabledProtocols};
 use pixi_build_frontend::Backend;
 use pixi_build_types::{ProjectModelV1, procedures::conda_outputs::CondaOutputsParams};
 use pixi_glob::GlobHashKey;
@@ -14,6 +9,12 @@ use pixi_record::{InputHash, PinnedSourceSpec};
 use pixi_spec::{SourceAnchor, SourceSpec};
 use rand::random;
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    hash::{Hash, Hasher},
+    path::PathBuf,
+    sync::Mutex,
+};
 use thiserror::Error;
 use tracing::instrument;
 use xxhash_rust::xxh3::Xxh3;
@@ -26,6 +27,20 @@ use crate::{
         source_metadata_cache::{self, CachedCondaMetadata, MetadataKind, SourceMetadataKey},
     },
 };
+use pixi_build_discovery::BackendSpec;
+use pixi_build_frontend::BackendOverride;
+
+static WARNED_BACKENDS: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(HashSet::new()));
+
+fn warn_once_per_backend(backend_name: &str) {
+    let mut warned = WARNED_BACKENDS.lock().unwrap();
+    if warned.insert(backend_name.to_string()) {
+        tracing::warn!(
+            "metadata cache disabled for build backend '{}' (system/path-based backends always regenerate metadata)",
+            backend_name
+        );
+    }
+}
 
 /// Represents a request for metadata from a build backend for a particular
 /// source location. The result of this request is the metadata for that
@@ -108,6 +123,12 @@ impl BuildBackendMetadataSpec {
             &self.variants,
         );
 
+        // Check if we should skip the metadata cache for this backend
+        let skip_cache = Self::should_skip_metadata_cache(
+            &discovered_backend.backend_spec,
+            command_dispatcher.build_backend_overrides(),
+        );
+
         // Check the source metadata cache, short circuit if there is a cache hit that
         // is still fresh.
         let cache_key = self.cache_key();
@@ -117,19 +138,27 @@ impl BuildBackendMetadataSpec {
             .await
             .map_err(BuildBackendMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
-        if let Some(metadata) = Self::verify_cache_freshness(
-            &source_checkout,
-            &command_dispatcher,
-            metadata,
-            &additional_glob_hash,
-        )
-        .await?
-        {
-            return Ok(BuildBackendMetadata {
+
+        if !skip_cache {
+            if let Some(metadata) = Self::verify_cache_freshness(
+                &source_checkout,
+                &command_dispatcher,
                 metadata,
-                cache_entry,
-                source: source_checkout.pinned,
-            });
+                &additional_glob_hash,
+            )
+            .await?
+            {
+                return Ok(BuildBackendMetadata {
+                    metadata,
+                    cache_entry,
+                    source: source_checkout.pinned,
+                });
+            }
+        } else {
+            let backend_name = match &discovered_backend.backend_spec {
+                BackendSpec::JsonRpc(spec) => &spec.name,
+            };
+            warn_once_per_backend(backend_name);
         }
 
         // Instantiate the backend with the discovered information.
@@ -181,6 +210,59 @@ impl BuildBackendMetadataSpec {
             cache_entry,
             source,
         })
+    }
+
+    /// Checks if we should skip the metadata cache for this backend.
+    /// Returns true if:
+    /// 1. There's a System backend override (either for this specific backend or all backends)
+    /// 2. OR the original backend spec is System or mutable (path-based non-binary)
+    fn should_skip_metadata_cache(
+        backend_spec: &BackendSpec,
+        backend_override: &BackendOverride,
+    ) -> bool {
+        let BackendSpec::JsonRpc(json_rpc_spec) = backend_spec;
+
+        // Check if there's a System backend override for this backend
+        // In-memory overrides are deterministic and can use cached metadata
+        let has_system_override = match backend_override {
+            BackendOverride::System(overridden_backends) => overridden_backends
+                .named_backend_override(&json_rpc_spec.name)
+                .is_some(),
+            BackendOverride::InMemory(_) => false,
+        };
+
+        let (command_kind, command_requires_skip) = match &json_rpc_spec.command {
+            CommandSpec::System(_) => ("system", true),
+            CommandSpec::EnvironmentSpec(env_spec) => {
+                let mutable = env_spec.requirement.1.is_mutable();
+                (
+                    if mutable {
+                        "mutable-environment"
+                    } else {
+                        "environment"
+                    },
+                    mutable,
+                )
+            }
+        };
+
+        let skip_cache = has_system_override || command_requires_skip;
+
+        if skip_cache {
+            let reason = if has_system_override {
+                "override"
+            } else {
+                command_kind
+            };
+            tracing::debug!(
+                backend = %json_rpc_spec.name,
+                reason,
+                command_kind,
+                "metadata cache disabled for backend",
+            );
+        }
+
+        skip_cache
     }
 
     async fn verify_cache_freshness(
@@ -237,6 +319,7 @@ impl BuildBackendMetadataSpec {
         backend: Backend,
         additional_glob_hash: Vec<u8>,
     ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
+        let backend_identifier = backend.identifier().to_string();
         let params = CondaOutputsParams {
             channels: self.channels,
             host_platform: self.build_environment.host_platform,
@@ -249,7 +332,7 @@ impl BuildBackendMetadataSpec {
                         checkout: source_checkout.clone(),
                     },
                     host_platform: self.build_environment.host_platform,
-                    build_backend: backend.identifier().to_string(),
+                    build_backend: backend_identifier.clone(),
                 }
                 .key(),
             ),
@@ -260,11 +343,28 @@ impl BuildBackendMetadataSpec {
             .map_err(BuildBackendMetadataError::Communication)
             .map_err(CommandDispatcherError::Failed)?;
 
+        for output in &outputs.outputs {
+            tracing::debug!(
+                backend = %backend_identifier,
+                package = ?output.metadata.name,
+                version = %output.metadata.version,
+                build = %output.metadata.build,
+                subdir = %output.metadata.subdir,
+                "received metadata output from backend",
+            );
+        }
+
         // Compute the input globs for the mutable source checkouts.
         let input_globs = extend_input_globs_with_variant_files(
             outputs.input_globs.clone(),
             &self.variant_files,
             &source_checkout,
+        );
+        tracing::debug!(
+            backend = %backend_identifier,
+            source = %source_checkout.pinned,
+            glob_count = input_globs.len(),
+            "computing metadata input hash",
         );
         let input_hash = Self::compute_input_hash(
             command_dispatcher,

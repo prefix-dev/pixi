@@ -1,5 +1,4 @@
-[project]
-authors = ["Ruben Arts <ruben@prefix.dev>"]
+[workspace]
 channels = ["https://prefix.dev/conda-forge"]
 name = "ros2-nav2"
 platforms = ["linux-64", "osx-arm64", "osx-64"]
