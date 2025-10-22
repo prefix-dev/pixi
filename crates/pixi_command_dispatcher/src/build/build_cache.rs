@@ -209,14 +209,14 @@ impl BuildCache {
 }
 
 /// Cached result of calling `conda/getMetadata` on a build backend.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CachedBuild {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<CachedBuildSourceInfo>,
     pub record: RepoDataRecord,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CachedBuildSourceInfo {
     /// The files that were used during the build process. If any of these
     /// change, the build should be considered stale.
@@ -235,14 +235,14 @@ pub struct CachedBuildSourceInfo {
 }
 
 #[serde_as]
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct BuildHostEnvironment {
     /// Describes the packages that were installed in the host environment.
     pub packages: Vec<BuildHostPackage>,
 }
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BuildHostPackage {
     /// The repodata record of the package.
     #[serde(flatten)]
