@@ -172,8 +172,6 @@ pub struct Workspace {
     /// The concurrent request semaphore
     concurrent_downloads_semaphore: OnceCell<Arc<Semaphore>>,
 
-    variants: OnceCell<VariantConfig>,
-
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
 }
@@ -246,7 +244,6 @@ impl Workspace {
             s3_config,
             repodata_gateway: Default::default(),
             concurrent_downloads_semaphore: OnceCell::default(),
-            variants: OnceCell::default(),
             backend_override: None,
         }
     }
@@ -488,43 +485,39 @@ impl Workspace {
 
     /// Returns the resolved variant configuration for a given platform.
     pub fn variants(&self, platform: Platform) -> Result<VariantConfig, VariantsError> {
-        self.variants
-            .get_or_try_init(|| {
-                // Get inline variants for all targets
-                let mut variants = BTreeMap::new();
-                // Resolves from most specific to least specific.
-                for build_variants in self
-                    .workspace
-                    .value
-                    .workspace
-                    .build_variants
-                    .resolve(Some(platform))
-                    .flatten()
-                {
-                    // Update the hash map, but only items that are not already in the map.
-                    for (key, value) in build_variants {
-                        variants.entry(key.clone()).or_insert_with(|| value.clone());
-                    }
-                }
+        // Get inline variants for all targets
+        let mut variants = BTreeMap::new();
+        // Resolves from most specific to least specific.
+        for build_variants in self
+            .workspace
+            .value
+            .workspace
+            .build_variants
+            .resolve(Some(platform))
+            .flatten()
+        {
+            // Update the hash map, but only items that are not already in the map.
+            for (key, value) in build_variants {
+                variants.entry(key.clone()).or_insert_with(|| value.clone());
+            }
+        }
 
-                // Collect absolute variant file paths without reading their content.
-                let variant_files = self
-                    .workspace
-                    .value
-                    .workspace
-                    .build_variant_files
-                    .iter()
-                    .map(|source| match source {
-                        BuildVariantSource::File(path) => self.root.join(path),
-                    })
-                    .collect();
-
-                Ok(VariantConfig {
-                    variants,
-                    variant_files,
-                })
+        // Collect absolute variant file paths without reading their content.
+        let variant_files = self
+            .workspace
+            .value
+            .workspace
+            .build_variant_files
+            .iter()
+            .map(|source| match source {
+                BuildVariantSource::File(path) => self.root.join(path),
             })
-            .cloned()
+            .collect();
+
+        Ok(VariantConfig {
+            variants,
+            variant_files,
+        })
     }
 
     // /// Returns the reqwest client used for http networking

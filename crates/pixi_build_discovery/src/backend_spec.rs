@@ -1,10 +1,6 @@
-use std::str::FromStr;
-
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor};
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl};
-use url::Url;
-
+use rattler_conda_types::ChannelUrl;
 /// Describes how a backend should be instantiated.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
@@ -149,13 +145,8 @@ impl EnvironmentSpec {
 
 impl JsonRpcBackendSpec {
     /// Constructs a new default instance for spawning a recipe build backend.
-    pub fn default_rattler_build(channel_config: &ChannelConfig) -> Self {
+    pub fn default_rattler_build(channels: Vec<ChannelUrl>) -> Self {
         const DEFAULT_BUILD_TOOL: &str = "pixi-build-rattler-build";
-
-        let conda_forge_channel = Channel::from_name("conda-forge", channel_config).base_url;
-        let backends_channel = Url::from_str("https://prefix.dev/pixi-build-backends")
-            .unwrap()
-            .into();
 
         Self {
             name: DEFAULT_BUILD_TOOL.to_string(),
@@ -163,7 +154,23 @@ impl JsonRpcBackendSpec {
                 requirement: (DEFAULT_BUILD_TOOL.parse().unwrap(), PixiSpec::any()),
                 additional_requirements: Default::default(),
                 constraints: Default::default(),
-                channels: vec![conda_forge_channel, backends_channel],
+                channels,
+                command: None,
+            })),
+        }
+    }
+
+    /// Constructs a new default instance for spawning a ROS build backend.
+    pub fn default_ros_build(channels: Vec<ChannelUrl>) -> Self {
+        const DEFAULT_BUILD_TOOL: &str = "pixi-build-ros";
+
+        Self {
+            name: DEFAULT_BUILD_TOOL.to_string(),
+            command: CommandSpec::EnvironmentSpec(Box::new(EnvironmentSpec {
+                requirement: (DEFAULT_BUILD_TOOL.parse().unwrap(), PixiSpec::any()),
+                additional_requirements: Default::default(),
+                constraints: Default::default(),
+                channels,
                 command: None,
             })),
         }

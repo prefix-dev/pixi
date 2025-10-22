@@ -7,6 +7,7 @@ use rattler_shell::{
     activation::PathModificationBehavior,
     shell::{Bash, CmdExe, PowerShell, Shell, ShellEnum, ShellScript},
 };
+use which::which;
 
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 use pixi_core::{
@@ -188,7 +189,8 @@ fn start_winbash(
     // close the file handle, but keep the path (needed for Windows)
     let temp_path = temp_file.into_temp_path();
 
-    let mut command = std::process::Command::new(bash.executable());
+    let bash_path = which(bash.executable()).into_diagnostic()?;
+    let mut command = std::process::Command::new(bash_path);
     command.arg("--init-file");
     command.arg(&temp_path);
     command.arg("-i");

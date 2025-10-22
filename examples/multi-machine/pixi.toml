@@ -1,4 +1,4 @@
-[project]
+[workspace]
 channels = ["conda-forge", "pytorch"]
 description = "A mock project that does ML stuff"
 name = "multi-machine"

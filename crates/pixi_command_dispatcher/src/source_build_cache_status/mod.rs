@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{fmt, path::PathBuf};
 
 use chrono::Utc;
 use itertools::chain;
@@ -50,21 +50,62 @@ pub struct SourceBuildCacheStatusSpec {
     pub enabled_protocols: EnabledProtocols,
 }
 
+#[derive(Debug)]
 pub enum CachedBuildStatus {
     /// The build was found in the cache but is stale.
     Stale(CachedBuild),
 
-    /// The build was found in the cache and is up to date.
+    /// The build was found in the cache from previous session and is up to date.
     UpToDate(CachedBuild),
+
+    /// The build was build during the running session.
+    New(CachedBuild),
 
     /// The build was not found in the cache.
     Missing,
 }
 
+impl fmt::Display for CachedBuildStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CachedBuildStatus::Stale(build) => fmt_cached_build_status("stale", build, f),
+            CachedBuildStatus::UpToDate(build) => fmt_cached_build_status("up-to-date", build, f),
+            CachedBuildStatus::New(build) => fmt_cached_build_status("new", build, f),
+            CachedBuildStatus::Missing => f.write_str("missing"),
+        }
+    }
+}
+
+fn fmt_cached_build_status(
+    state: &str,
+    build: &CachedBuild,
+    f: &mut fmt::Formatter<'_>,
+) -> fmt::Result {
+    write!(f, "{state} {}", build.record.package_record)?;
+
+    if let Some(channel) = &build.record.channel {
+        if !channel.is_empty() {
+            write!(f, " @ {channel}")?;
+            let subdir = build.record.package_record.subdir.as_str();
+            if !subdir.is_empty() {
+                write!(f, "/{subdir}")?;
+            }
+            return Ok(());
+        }
+    }
+
+    let subdir = build.record.package_record.subdir.as_str();
+    if !subdir.is_empty() {
+        write!(f, " @ {subdir}")?;
+    }
+
+    Ok(())
+}
+
 pub struct SourceBuildCacheEntry {
     /// The information stored in the build cache. Or `None` if the build did
     /// not exist in the cache.
-    pub cached_build: CachedBuildStatus,
+    pub cached_build: Mutex<CachedBuildStatus>,
 
     /// A reference to the build entry in the cache. Not that as long as this
     /// entry exists a lock is retained on the cache entry.
@@ -100,6 +141,10 @@ impl SourceBuildCacheStatusSpec {
             .map_err(CommandDispatcherError::Failed)?;
 
         // Check the staleness of the cached entry
+        tracing::debug!(
+            "determining cache status for package '{}' from source build cache",
+            self.package,
+        );
         let cached_build = match cached_build {
             Some(cached_build) => {
                 self.determine_cache_status(&command_dispatcher, cached_build)
@@ -108,8 +153,14 @@ impl SourceBuildCacheStatusSpec {
             None => CachedBuildStatus::Missing,
         };
 
+        tracing::debug!(
+            "status of cached build for package '{}' is '{}'",
+            self.package,
+            &cached_build
+        );
+
         Ok(SourceBuildCacheEntry {
-            cached_build,
+            cached_build: Mutex::new(cached_build),
             cache_dir: build_cache_entry.cache_dir().to_path_buf(),
             entry: Mutex::new(build_cache_entry),
         })
@@ -134,7 +185,9 @@ impl SourceBuildCacheStatusSpec {
             .check_package_configuration_changed(command_dispatcher, cached_build, source)
             .await?
         {
-            CachedBuildStatus::UpToDate(cached_build) => cached_build,
+            CachedBuildStatus::UpToDate(cached_build) | CachedBuildStatus::New(cached_build) => {
+                cached_build
+            }
             CachedBuildStatus::Stale(cached_build) => {
                 return Ok(CachedBuildStatus::Stale(cached_build));
             }
@@ -146,7 +199,9 @@ impl SourceBuildCacheStatusSpec {
             .check_source_out_of_date(command_dispatcher, cached_build, source)
             .await?
         {
-            CachedBuildStatus::UpToDate(cached_build) => cached_build,
+            CachedBuildStatus::UpToDate(cached_build) | CachedBuildStatus::New(cached_build) => {
+                cached_build
+            }
             CachedBuildStatus::Stale(cached_build) => {
                 return Ok(CachedBuildStatus::Stale(cached_build));
             }
@@ -205,14 +260,15 @@ impl SourceBuildCacheStatusSpec {
                     return Err(CommandDispatcherError::Failed(err));
                 }
                 Ok(entry) => {
-                    match &entry.cached_build {
+                    match &*entry.cached_build.lock().await {
                         CachedBuildStatus::Missing | CachedBuildStatus::Stale(_) => {
                             tracing::debug!(
                                 "package is stale because its build dependency '{identifier}' is missing or stale",
                             );
                             return Ok(CachedBuildStatus::Stale(cached_build));
                         }
-                        CachedBuildStatus::UpToDate(dependency_cached_build) => {
+                        CachedBuildStatus::UpToDate(dependency_cached_build)
+                        | CachedBuildStatus::New(dependency_cached_build) => {
                             // Is this version of the package also what we expect?
                             //
                             // Maybe the package that we previously used was actually updated

@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors = ["Bas Zalmstra <bas@prefix.dev>"]
 channels = ["conda-forge"]
 description = "Showcases how to create a simple C++ executable with Pixi"

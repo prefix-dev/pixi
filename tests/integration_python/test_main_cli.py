@@ -1294,6 +1294,27 @@ If you get here you know all commands that *are* supported correctly listen to -
 
 
 @pytest.mark.slow
+def test_quiet_flag_with_rust_log_env(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    """
+    Test that the --quiet flag works correctly even when RUST_LOG environment
+    variable is set. This ensures CLI flags take precedence over env vars.
+    """
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", dummy_channel_1, tmp_pixi_workspace])
+
+    # Run pixi add with --quiet and RUST_LOG=info set
+    # With --quiet, we should NOT see INFO level logs even though RUST_LOG=info is set
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest_path, "--no-install", "--quiet", "dummy-a"],
+        env={"RUST_LOG": "info"},
+        stderr_excludes="INFO",  # Should not see INFO logs with --quiet
+    )
+
+
 def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """
     Check that a helpful error message is raised when attempting to

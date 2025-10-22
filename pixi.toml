@@ -19,6 +19,7 @@ c_stdlib_version = ["2.34"]
 
 
 [dependencies]
+cargo-insta = "*"
 git = ">=2.51.0,<3"
 python = ">=3.13.5,<3.15"
 
@@ -27,6 +28,7 @@ build-debug = "cargo build"
 build-release = "cargo build --release"
 bump = "tbump --only-patch $RELEASE_VERSION"
 generate-cli-docs = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml"
+insta = "cargo insta"
 install = { cmd = "cargo install --path crates/pixi --locked", description = "Install pixi itself locally using cargo" }
 install-as = { cmd = "python scripts/install.py", depends-on = [
   "build-release",

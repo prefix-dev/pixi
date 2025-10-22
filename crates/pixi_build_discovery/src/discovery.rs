@@ -8,6 +8,7 @@ use miette::Diagnostic;
 use ordermap::OrderMap;
 use pixi_build_type_conversions::{to_project_model_v1, to_target_selector_v1};
 use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
+use pixi_config::Config;
 use pixi_manifest::{
     DiscoveryStart, ExplicitManifestError, PackageManifest, PrioritizedChannel, WithProvenance,
     WorkspaceDiscoverer, WorkspaceDiscoveryError, WorkspaceManifest,
@@ -22,8 +23,9 @@ use crate::{
     backend_spec::{CommandSpec, EnvironmentSpec, JsonRpcBackendSpec},
 };
 
-const VALID_RECIPE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
-const VALID_RECIPE_DIRS: [&str; 2] = ["", "recipe"];
+const RATTLER_BUILD_FILE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
+const RATTLER_BUILD_DIRS: [&str; 2] = ["", "recipe"];
+const ROS_BACKEND_FILE_NAMES: [&str; 1] = ["package.xml"];
 
 /// Describes a backend discovered for a given source location.
 #[derive(Debug, Clone)]
@@ -72,6 +74,8 @@ pub struct BackendInitializationParams {
 pub struct EnabledProtocols {
     /// Enable the rattler-build protocol.
     pub enable_rattler_build: bool,
+    /// Enable the ROS protocol.
+    pub enable_ros: bool,
     /// Enable the pixi protocol.
     pub enable_pixi: bool,
 }
@@ -81,6 +85,7 @@ impl Default for EnabledProtocols {
     fn default() -> Self {
         Self {
             enable_rattler_build: true,
+            enable_ros: true,
             enable_pixi: true,
         }
     }
@@ -94,6 +99,9 @@ pub enum DiscoveryError {
 
     #[error("depending on a `{0}` file but the rattler-build protocol is not enabled")]
     UnsupportedRecipeYaml(String),
+
+    #[error("depending on a `{0}` file but the ros protocol is not enabled")]
+    UnsupportedPackageXml(String),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -126,10 +134,11 @@ impl DiscoveredBackend {
             return Err(DiscoveryError::NotFound(source_path.to_path_buf()));
         };
 
-        // If the user explicitly asked for a recipe.yaml file
+        // If the user explicitly asked for a specific file,
+        // check if one of our backends support it
         let source_file_name = source_path.file_name().and_then(OsStr::to_str);
         if let Some(source_file_name) = source_file_name {
-            if VALID_RECIPE_NAMES.contains(&source_file_name) {
+            if RATTLER_BUILD_FILE_NAMES.contains(&source_file_name) {
                 if !enabled_protocols.enable_rattler_build {
                     return Err(DiscoveryError::UnsupportedRecipeYaml(
                         source_file_name.to_string(),
@@ -139,6 +148,23 @@ impl DiscoveredBackend {
                     .parent()
                     .expect("the recipe must live somewhere");
                 return Self::from_recipe(source_dir.to_path_buf(), source_path, channel_config);
+            }
+
+            // If the user explicitly asked for a package.xml file
+            if ROS_BACKEND_FILE_NAMES.contains(&source_file_name) {
+                if !enabled_protocols.enable_ros {
+                    return Err(DiscoveryError::UnsupportedPackageXml(
+                        source_file_name.to_string(),
+                    ));
+                }
+                let source_dir = source_path
+                    .parent()
+                    .expect("the recipe must live somewhere");
+                return Self::from_ros_package(
+                    source_dir.to_path_buf(),
+                    source_path,
+                    channel_config,
+                );
             }
         }
 
@@ -170,10 +196,10 @@ impl DiscoveredBackend {
     ) -> Result<Self, DiscoveryError> {
         debug_assert!(source_dir.is_absolute());
         debug_assert!(recipe_absolute_path.is_absolute());
+        let channels = retrieve_channels(&source_dir, channel_config)?;
+
         Ok(Self {
-            backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_rattler_build(
-                channel_config,
-            )),
+            backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_rattler_build(channels)),
             init_params: BackendInitializationParams {
                 workspace_root: source_dir.clone(),
                 source: None,
@@ -316,9 +342,9 @@ impl DiscoveredBackend {
         source_dir: PathBuf,
         channel_config: &ChannelConfig,
     ) -> Result<Option<Self>, DiscoveryError> {
-        for (&recipe_dir, &recipe_file) in VALID_RECIPE_DIRS
+        for (&recipe_dir, &recipe_file) in RATTLER_BUILD_DIRS
             .iter()
-            .cartesian_product(VALID_RECIPE_NAMES.iter())
+            .cartesian_product(RATTLER_BUILD_FILE_NAMES.iter())
         {
             let recipe_path = source_dir.join(recipe_dir).join(recipe_file);
             if recipe_path.is_file() {
@@ -331,4 +357,66 @@ impl DiscoveredBackend {
         }
         Ok(None)
     }
+
+    /// Construct a new instance based on a specific `package.xml` file in the
+    /// source directory.
+    fn from_ros_package(
+        source_dir: PathBuf,
+        package_xml_absolute_path: PathBuf,
+        channel_config: &ChannelConfig,
+    ) -> Result<Self, DiscoveryError> {
+        debug_assert!(source_dir.is_absolute());
+        debug_assert!(package_xml_absolute_path.is_absolute());
+
+        let channels = retrieve_channels(&source_dir, channel_config)?;
+
+        Ok(Self {
+            backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_ros_build(channels)),
+            init_params: BackendInitializationParams {
+                workspace_root: source_dir.clone(),
+                source: None,
+                source_anchor: source_dir,
+                manifest_path: package_xml_absolute_path,
+                project_model: Some(ProjectModelV1::default()),
+                configuration: None,
+                target_configuration: None,
+            },
+        })
+    }
+}
+
+/// Retrieves channels from the workspace manifest
+/// if there's no workspace manifest, it will take the default channels from the Pixi config instead
+fn retrieve_channels(
+    source_dir: &Path,
+    channel_config: &ChannelConfig,
+) -> Result<Vec<rattler_conda_types::ChannelUrl>, DiscoveryError> {
+    let named_channels =
+        match WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(source_dir.to_path_buf()))
+            .discover()
+        {
+            Err(e) => return Err(DiscoveryError::FailedToDiscoverPackage(e)),
+            Ok(None) => Config::load_global().default_channels(),
+            Ok(Some(workspace)) => PrioritizedChannel::sort_channels_by_priority(
+                &workspace.value.workspace.value.workspace.channels,
+            )
+            .cloned()
+            .collect(),
+        };
+
+    let channels = named_channels
+        .into_iter()
+        .map(|channel| {
+            channel
+                .clone()
+                .into_base_url(channel_config)
+                .map_err(|err| {
+                    DiscoveryError::SpecConversionError(SpecConversionError::InvalidChannel(
+                        channel.to_string(),
+                        err,
+                    ))
+                })
+        })
+        .collect::<Result<_, _>>()?;
+    Ok(channels)
 }
