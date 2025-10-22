@@ -12,6 +12,7 @@ use pixi_command_dispatcher::{
 use pixi_progress::ProgressBarPlacement;
 use rattler::{install::Transaction, package_cache::CacheReporter};
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
+use rattler_repodata_gateway::RunExportsReporter;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{
@@ -44,6 +45,8 @@ impl SyncReporter {
         let mut inner = self.combined_inner.lock();
         inner.preparing_progress_bar.clear();
         inner.install_progress_bar.clear();
+        inner.build_output_receiver = None;
+        inner.active_run_exports_reporter = None;
     }
 
     /// Creates a new InstallReporter that shares this SyncReporter instance
@@ -154,15 +157,55 @@ impl SourceBuildReporter for SyncReporter {
         SourceBuildId(id)
     }
 
-    fn on_started(&mut self, id: SourceBuildId) {
+    fn on_started(
+        &mut self,
+        id: SourceBuildId,
+        mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
+        run_exports_reporter: Option<Arc<dyn RunExportsReporter>>,
+    ) {
         // Notify the progress bar that the build has started.
-        let mut inner = self.combined_inner.lock();
-        inner.preparing_progress_bar.on_build_start(id.0);
+        let print_backend_output = tracing::event_enabled!(tracing::Level::WARN);
+        let progress_bar = self.multi_progress.clone();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+
+        {
+            let mut inner = self.combined_inner.lock();
+            inner.preparing_progress_bar.on_build_start(id.0);
+            inner.active_run_exports_reporter = run_exports_reporter;
+            if !print_backend_output {
+                inner.build_output_receiver = Some(rx);
+            }
+        }
+
+        tokio::spawn(async move {
+            while let Some(line) = backend_output_stream.next().await {
+                if print_backend_output {
+                    progress_bar.suspend(|| eprintln!("{line}"));
+                } else if tx.send(line).is_err() {
+                    break;
+                }
+            }
+        });
     }
 
-    fn on_finished(&mut self, id: SourceBuildId) {
-        let mut inner = self.combined_inner.lock();
-        inner.preparing_progress_bar.on_build_finished(id.0);
+    fn on_finished(&mut self, id: SourceBuildId, failed: bool) {
+        let build_output_receiver = {
+            let mut inner = self.combined_inner.lock();
+            inner.preparing_progress_bar.on_build_finished(id.0);
+            inner.active_run_exports_reporter = None;
+            inner.build_output_receiver.take()
+        };
+
+        if failed {
+            let progress_bar = self.multi_progress.clone();
+            if let Some(mut build_output_receiver) = build_output_receiver {
+                tokio::spawn(async move {
+                    while let Some(line) = build_output_receiver.recv().await {
+                        progress_bar.suspend(|| eprintln!("{line}"));
+                    }
+                });
+            }
+        }
     }
 }
 
@@ -176,6 +219,7 @@ pub struct CombinedInstallReporterInner {
     install_progress_bar: MainProgressBar<PackageWithSize>,
 
     build_output_receiver: Option<UnboundedReceiver<String>>,
+    active_run_exports_reporter: Option<Arc<dyn RunExportsReporter>>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -229,6 +273,7 @@ impl CombinedInstallReporterInner {
             operation_link_id: HashMap::new(),
             cache_entry_id: HashMap::new(),
             build_output_receiver: None,
+            active_run_exports_reporter: None,
         }
     }
 
