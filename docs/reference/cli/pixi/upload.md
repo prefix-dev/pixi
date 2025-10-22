@@ -8,21 +8,20 @@ Upload a conda package
 
 ## Usage
 ```
-pixi upload <HOST> <PACKAGE_FILE>
+pixi upload [ARGS]...
 ```
 
 ## Arguments
-- <a id="arg-<HOST>" href="#arg-<HOST>">`<HOST>`</a>
-:  The host + channel to upload to
-<br>**required**: `true`
-- <a id="arg-<PACKAGE_FILE>" href="#arg-<PACKAGE_FILE>">`<PACKAGE_FILE>`</a>
-:  The file to upload
-<br>**required**: `true`
+- <a id="arg-<ARGS>" href="#arg-<ARGS>">`<ARGS>`</a>
+:  Arguments for the upload command
+<br>May be provided more than once.
 
 ## Description
 Upload a conda package
 
-With this command, you can upload a conda package to a channel. Example: `pixi upload https://prefix.dev/api/v1/upload/my_channel my_package.conda`
+With this command, you can upload a conda package to a channel.
+
+Examples: pixi upload prefix --channel my_channel my_package.conda pixi upload <https://prefix.dev/api/v1/upload/my_channel> my_package.conda  (legacy)
 
 Use `pixi auth login` to authenticate with the server.
 

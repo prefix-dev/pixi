@@ -11,7 +11,7 @@ use url::Url;
 ///
 /// Examples:
 ///   pixi upload prefix --channel my_channel my_package.conda
-///   pixi upload https://prefix.dev/api/v1/upload/my_channel my_package.conda  (legacy)
+///   pixi upload <https://prefix.dev/api/v1/upload/my_channel> my_package.conda  (legacy)
 ///
 /// Use `pixi auth login` to authenticate with the server.
 #[derive(Parser, Debug)]
