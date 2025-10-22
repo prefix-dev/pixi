@@ -695,7 +695,7 @@ async fn add_git_deps() {
 
     let pixi = PixiControl::from_manifest(
         r#"
-[project]
+[workspace]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64"]
@@ -750,7 +750,7 @@ async fn add_git_deps_with_creds() {
 
     let pixi = PixiControl::from_manifest(
         r#"
-[project]
+[workspace]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64"]
@@ -805,10 +805,10 @@ async fn add_git_with_specific_commit() {
 
     let pixi = PixiControl::from_manifest(
         r#"
-[project]
+[workspace]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["win-64"]
+platforms = ["linux-64"]
 preview = ['pixi-build']"#,
     )
     .unwrap();
@@ -826,7 +826,7 @@ preview = ['pixi-build']"#,
     let git_package = lock
         .default_environment()
         .unwrap()
-        .packages(Platform::Win64)
+        .packages(Platform::Linux64)
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
@@ -857,7 +857,7 @@ async fn add_git_with_tag() {
 
     let pixi = PixiControl::from_manifest(
         r#"
-[project]
+[workspace]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64"]
@@ -910,7 +910,7 @@ async fn add_plain_ssh_url() {
 
     let pixi = PixiControl::from_manifest(
         r#"
-[project]
+[workspace]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64"]
@@ -947,7 +947,7 @@ async fn add_pypi_git() {
     let pixi = PixiControl::from_manifest(
         format!(
             r#"
-[project]
+[workspace]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["{platform}"]
