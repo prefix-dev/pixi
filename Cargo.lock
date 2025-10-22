@@ -4773,6 +4773,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
+ "once_cell",
  "ordermap",
  "pathdiff",
  "pin-project-lite",
