@@ -109,8 +109,8 @@ winget install prefix-dev.pixi
 
 ### Autocompletion
 
-To get autocompletion follow the instructions for your shell.
-Afterwards, restart the shell or source the shell config file.
+To get autocompletion, follow the instructions for your shell.
+Afterward, restart the shell or source the shell config file.
 
 #### Bash (default on most Linux systems)
 
@@ -194,7 +194,7 @@ apk add pixi
 
 ## Build/install from source
 
-`pixi` is 100% written in Rust and therefore it can be installed, built and tested with cargo.
+`pixi` is 100% written in Rust and therefore it can be installed, built, and tested with cargo.
 To start using `pixi` from a source build run:
 
 ```shell
@@ -202,16 +202,16 @@ cargo install --locked --git https://github.com/prefix-dev/pixi.git pixi
 ```
 
 We don't publish to `crates.io` anymore, so you need to install it from the repository.
-The reason for this is that we depend on some unpublished crates which disallows us to publish to `crates.io`.
+The reason for this is that we depend on some unpublished crates which disallow us to publish to `crates.io`.
 
-or when you want to make changes use:
+Or when you want to make changes, use:
 
 ```shell
 cargo build
 cargo test
 ```
 
-If you have any issues building because of the dependency on `rattler` checkout
+If you have any issues building because of the dependency on `rattler`, checkout
 it's [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try)
 
 ## Uninstall
@@ -219,7 +219,7 @@ it's [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try)
 To uninstall, the Pixi binary should be removed.
 Delete `pixi` from the `$PIXI_DIR` which is default to `~/.pixi/bin/pixi`
 
-So on Linux its:
+So on Linux it's:
 
 ```shell
 rm ~/.pixi/bin/pixi
@@ -231,8 +231,8 @@ and on Windows:
 $PIXI_BIN = "$Env:LocalAppData\pixi\bin\pixi"; Remove-Item -Path $PIXI_BIN
 ```
 
-After this command you can still use the tools you installed with `pixi`.
-To remove these as well just remove the whole `~/.pixi` directory and remove the directory from your path.
+After this command, you can still use the tools you installed with `pixi`.
+To remove these as well, just remove the whole `~/.pixi` directory and remove the directory from your path.
 
 # Usage
 
@@ -277,7 +277,7 @@ Commands:
   init         Creates a new workspace
   import       Imports a file into an environment in an existing workspace.
   install      Install an environment, both updating the lockfile and installing the environment [aliases: i]
-  list         List workspace's packages [aliases: ls]
+  list         List packages of the current workspace [aliases: ls]
   lock         Solve environment and update the lock file without installing the environments
   reinstall    Re-install an environment, both updating the lockfile and re-installing the environment
   remove       Removes dependencies from the workspace [aliases: rm]
@@ -369,7 +369,7 @@ If you're just getting started with our project or stepping into the Rust
 ecosystem for the first time, we've got your back!
 We recommend beginning with issues labeled as `good first issue`.
 These are carefully chosen tasks that provide a smooth entry point into
-contributing.These issues are typically more straightforward and are a great way
+contributing. These issues are typically more straightforward and are a great way
 to get familiar with the project.
 
 Got questions or ideas, or just want to chat? Join our lively conversations on
