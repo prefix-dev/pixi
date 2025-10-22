@@ -92,7 +92,9 @@ impl CommandDispatcherProcessor {
                 .map(move |result| {
                     TaskResult::QuerySourceBuildCache(
                         source_build_cache_status_id,
-                        result.unwrap_or(Err(CommandDispatcherError::Cancelled)),
+                        result
+                            .unwrap_or(Err(CommandDispatcherError::Cancelled))
+                            .map(Box::new),
                     )
                 })
                 .boxed_local(),
@@ -107,12 +109,15 @@ impl CommandDispatcherProcessor {
     pub(crate) fn on_source_build_cache_status_result(
         &mut self,
         id: SourceBuildCacheStatusId,
-        result: Result<SourceBuildCacheEntry, CommandDispatcherError<SourceBuildCacheStatusError>>,
+        result: Result<
+            Box<SourceBuildCacheEntry>,
+            CommandDispatcherError<SourceBuildCacheStatusError>,
+        >,
     ) {
         self.parent_contexts.remove(&id.into());
         self.source_build_cache_status
             .get_mut(&id)
             .expect("cannot find pending task")
-            .on_pending_result(result.map(Arc::new));
+            .on_pending_result(result.map(|entry| Arc::new(*entry)));
     }
 }

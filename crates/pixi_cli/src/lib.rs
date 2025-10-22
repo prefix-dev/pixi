@@ -307,8 +307,7 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         EnvFilter::builder()
             .with_default_directive(level_filter.into())
             .parse(format!(
-                "apple_codesign=off,pixi={},pixi_command_dispatcher={},resolvo={}",
-                pixi_level, pixi_level, low_level_filter
+                "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},resolvo={low_level_filter}"
             ))
             .into_diagnostic()?
     } else {
@@ -321,14 +320,14 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         // Add default directives
         builder
             .add_directive("apple_codesign=off".parse().into_diagnostic()?)
-            .add_directive(format!("pixi={}", pixi_level).parse().into_diagnostic()?)
+            .add_directive(format!("pixi={pixi_level}").parse().into_diagnostic()?)
             .add_directive(
-                format!("pixi_command_dispatcher={}", pixi_level)
+                format!("pixi_command_dispatcher={pixi_level}")
                     .parse()
                     .into_diagnostic()?,
             )
             .add_directive(
-                format!("resolvo={}", low_level_filter)
+                format!("resolvo={low_level_filter}")
                     .parse()
                     .into_diagnostic()?,
             )
@@ -495,11 +494,11 @@ fn print_installed_commands() {
         if use_colors {
             println!(
                 "    {} {}",
-                console::style(format!("{:<20}", name)).bright().cyan(),
+                console::style(format!("{name:<20}")).bright().cyan(),
                 summary
             );
         } else {
-            println!("    {:<20} {}", name, summary);
+            println!("    {name:<20} {summary}");
         }
     }
 
@@ -509,15 +508,15 @@ fn print_installed_commands() {
     external_names.sort();
 
     for name in external_names {
-        let via = format!("(via pixi-{})", name);
+        let via = format!("(via pixi-{name})");
         if use_colors {
             println!(
                 "    {} {}",
-                console::style(format!("{:<20}", name)).bright().cyan(),
+                console::style(format!("{name:<20}")).bright().cyan(),
                 via
             );
         } else {
-            println!("    {:<20} {}", name, via);
+            println!("    {name:<20} {via}");
         }
     }
 }

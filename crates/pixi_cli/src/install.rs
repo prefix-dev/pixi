@@ -147,7 +147,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
             // When only is set, also print the number of packages that will be installed
             if args.only.as_ref().is_some_and(|v| !v.is_empty()) {
-                write!(&mut message, ", including {} packages", num_retained).unwrap();
+                write!(&mut message, ", including {num_retained} packages").unwrap();
             }
 
             // Create set of unmatched packages, that matches the skip filter
@@ -187,7 +187,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         )
                         .unwrap()
                     } else {
-                        write!(&mut message, " excluding {} other packages", num_skipped).unwrap()
+                        write!(&mut message, " excluding {num_skipped} other packages").unwrap()
                     }
                 } else {
                     write!(
@@ -218,7 +218,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .unwrap()
     }
 
-    eprintln!("{}.", message);
+    eprintln!("{message}.");
 
     Ok(())
 }

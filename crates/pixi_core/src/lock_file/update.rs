@@ -235,7 +235,7 @@ pub enum SolveCondaEnvironmentError {
     PypiMappingFailed(Box<dyn Diagnostic + Send + Sync + 'static>),
 
     #[error(transparent)]
-    ParseChannels(#[from] ParseChannelError),
+    ParseChannels(#[from] Box<ParseChannelError>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -1952,7 +1952,8 @@ async fn spawn_solve_conda_environment_task(
     let channels = channels
         .iter()
         .map(|c| c.clone().into_base_url(&channel_config))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Box::new)?;
 
     // Determine the build variants
     let VariantConfig {

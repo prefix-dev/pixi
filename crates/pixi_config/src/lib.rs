@@ -1960,7 +1960,7 @@ UNUSED = "unused"
     #[case("latest-up", PinningStrategy::LatestUp)]
     #[case("no-pin", PinningStrategy::NoPin)]
     fn test_config_parse_pinning_strategy(#[case] input: &str, #[case] expected: PinningStrategy) {
-        let toml = format!("pinning-strategy = \"{}\"", input);
+        let toml = format!("pinning-strategy = \"{input}\"");
         let (config, _) = Config::from_toml(&toml, None).unwrap();
         assert_eq!(config.pinning_strategy, Some(expected));
     }
@@ -2265,7 +2265,7 @@ UNUSED = "unused"
         merged = merged.merge_config(config_2);
         assert!(merged.s3_options.contains_key("bucket1"));
 
-        let debug = format!("{:#?}", merged);
+        let debug = format!("{merged:#?}");
         let debug = debug.replace("\\\\", "/");
         // replace the path with a placeholder
         let debug = debug.replace(&d.to_str().unwrap().replace('\\', "/"), "path");

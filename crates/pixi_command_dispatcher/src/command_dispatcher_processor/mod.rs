@@ -10,15 +10,15 @@ use std::{
 };
 
 use crate::{
-    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
-    CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult, Reporter,
-    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher,
+    CommandDispatcherError, CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult,
+    Reporter, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
     SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceBuildError, SourceBuildResult,
     SourceBuildSpec, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
-        BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcher, CommandDispatcherChannel,
-        CommandDispatcherContext, CommandDispatcherData, CommandDispatcherError, ForegroundMessage,
+        BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcherChannel,
+        CommandDispatcherContext, CommandDispatcherData, ForegroundMessage,
         InstallPixiEnvironmentId, InstantiatedToolEnvId, SolveCondaEnvironmentId,
         SolvePixiEnvironmentId, SourceBuildCacheStatusId, SourceBuildId, SourceMetadataId,
     },
@@ -142,51 +142,47 @@ pub(crate) struct CommandDispatcherProcessor {
     reporter: Option<Box<dyn Reporter>>,
 }
 
+type BoxedDispatcherResult<T, E> = Box<Result<T, CommandDispatcherError<E>>>;
+
 /// A result of a task that was executed by the command_dispatcher background
 /// task.
 enum TaskResult {
     SolveCondaEnvironment(
         SolveCondaEnvironmentId,
-        Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>>,
+        BoxedDispatcherResult<Vec<PixiRecord>, SolveCondaEnvironmentError>,
     ),
     SolvePixiEnvironment(
         SolvePixiEnvironmentId,
-        Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>>,
+        BoxedDispatcherResult<Vec<PixiRecord>, SolvePixiEnvironmentError>,
     ),
     BuildBackendMetadata(
         BuildBackendMetadataId,
-        Result<Arc<BuildBackendMetadata>, CommandDispatcherError<BuildBackendMetadataError>>,
+        BoxedDispatcherResult<Arc<BuildBackendMetadata>, BuildBackendMetadataError>,
     ),
     SourceMetadata(
         SourceMetadataId,
-        Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
+        BoxedDispatcherResult<Arc<SourceMetadata>, SourceMetadataError>,
     ),
-    GitCheckedOut(
-        RepositoryReference,
-        Result<Fetch, CommandDispatcherError<GitError>>,
-    ),
+    GitCheckedOut(RepositoryReference, BoxedDispatcherResult<Fetch, GitError>),
     InstallPixiEnvironment(
         InstallPixiEnvironmentId,
-        Result<InstallPixiEnvironmentResult, CommandDispatcherError<InstallPixiEnvironmentError>>,
+        BoxedDispatcherResult<InstallPixiEnvironmentResult, InstallPixiEnvironmentError>,
     ),
     InstantiateToolEnv(
         InstantiatedToolEnvId,
-        Result<
-            InstantiateToolEnvironmentResult,
-            CommandDispatcherError<InstantiateToolEnvironmentError>,
-        >,
+        BoxedDispatcherResult<InstantiateToolEnvironmentResult, InstantiateToolEnvironmentError>,
     ),
     SourceBuild(
         SourceBuildId,
-        Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>>,
+        BoxedDispatcherResult<SourceBuildResult, SourceBuildError>,
     ),
     QuerySourceBuildCache(
         SourceBuildCacheStatusId,
-        Result<SourceBuildCacheEntry, CommandDispatcherError<SourceBuildCacheStatusError>>,
+        BoxedDispatcherResult<Box<SourceBuildCacheEntry>, SourceBuildCacheStatusError>,
     ),
     BackendSourceBuild(
         BackendSourceBuildId,
-        Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>>,
+        BoxedDispatcherResult<BackendBuiltSource, BackendSourceBuildError>,
     ),
 }
 
@@ -403,28 +399,28 @@ impl CommandDispatcherProcessor {
     fn on_result(&mut self, result: TaskResult) {
         match result {
             TaskResult::SolveCondaEnvironment(id, result) => {
-                self.on_solve_conda_environment_result(id, result)
+                self.on_solve_conda_environment_result(id, *result)
             }
             TaskResult::SolvePixiEnvironment(id, result) => {
-                self.on_solve_pixi_environment_result(id, result)
+                self.on_solve_pixi_environment_result(id, *result)
             }
             TaskResult::InstallPixiEnvironment(id, result) => {
-                self.on_install_pixi_environment_result(id, result)
+                self.on_install_pixi_environment_result(id, *result)
             }
             TaskResult::BuildBackendMetadata(id, result) => {
-                self.on_build_backend_metadata_result(id, result)
+                self.on_build_backend_metadata_result(id, *result)
             }
-            TaskResult::GitCheckedOut(url, result) => self.on_git_checked_out(url, result),
+            TaskResult::GitCheckedOut(url, result) => self.on_git_checked_out(url, *result),
             TaskResult::InstantiateToolEnv(id, result) => {
-                self.on_instantiate_tool_environment_result(id, result)
+                self.on_instantiate_tool_environment_result(id, *result)
             }
-            TaskResult::SourceBuild(id, result) => self.on_source_build_result(id, result),
-            TaskResult::SourceMetadata(id, result) => self.on_source_metadata_result(id, result),
+            TaskResult::SourceBuild(id, result) => self.on_source_build_result(id, *result),
+            TaskResult::SourceMetadata(id, result) => self.on_source_metadata_result(id, *result),
             TaskResult::BackendSourceBuild(id, result) => {
-                self.on_backend_source_build_result(id, result)
+                self.on_backend_source_build_result(id, *result)
             }
             TaskResult::QuerySourceBuildCache(id, result) => {
-                self.on_source_build_cache_status_result(id, result)
+                self.on_source_build_cache_status_result(id, *result)
             }
         }
     }

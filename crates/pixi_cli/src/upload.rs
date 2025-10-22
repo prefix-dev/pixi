@@ -78,7 +78,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             progress_bar.inc(bytes.len() as u64);
         })
         .inspect_err(|e| {
-            println!("Error while uploading: {}", e);
+            println!("Error while uploading: {e}");
         });
 
     let body = reqwest::Body::wrap_stream(reader_stream);

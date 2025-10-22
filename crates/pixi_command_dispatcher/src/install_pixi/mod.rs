@@ -147,7 +147,10 @@ impl InstallPixiEnvironmentSpec {
                 self.build_from_source(&command_dispatcher, &source_record)
                     .await
                     .map_err_with(move |build_err| {
-                        InstallPixiEnvironmentError::BuildSourceError(source_record, build_err)
+                        InstallPixiEnvironmentError::BuildSourceError(
+                            Box::new(source_record),
+                            build_err,
+                        )
                     })
             });
         }
@@ -247,7 +250,7 @@ pub enum InstallPixiEnvironmentError {
         .0.package_record.name.as_source(),
         .0.source)]
     BuildSourceError(
-        SourceRecord,
+        Box<SourceRecord>,
         #[diagnostic_source]
         #[source]
         SourceBuildError,

@@ -219,7 +219,7 @@ impl MockedSitePackages {
         opts: InstalledDistOptions,
     ) -> PathBuf {
         // Create the dist-info directory
-        let dist_info = format!("{}-{}.dist-info", name, version);
+        let dist_info = format!("{name}-{version}.dist-info");
         let dist_info = self.fake_site_packages.path().join(dist_info);
         fs_err::create_dir_all(&dist_info).expect("should create dist-info");
 
@@ -233,7 +233,7 @@ impl MockedSitePackages {
             .replace("{name}", name)
             .replace("{version}", version);
         if let Some(requires_python) = opts.requires_python() {
-            let requires_python = format!("\nRequires-Python: {}", requires_python);
+            let requires_python = format!("\nRequires-Python: {requires_python}");
             minimal_metadata.push_str(&requires_python);
         }
         let mut file = std::fs::OpenOptions::new()
@@ -382,7 +382,7 @@ impl PyPIPackageDataBuilder {
     fn url<S: AsRef<str>>(name: S, version: S, url: Url, url_type: UrlType) -> PypiPackageData {
         // Create new url with direct+ in the scheme
         let url = if matches!(url_type, UrlType::Direct) {
-            Url::parse(&format!("direct+{}", url)).unwrap()
+            Url::parse(&format!("direct+{url}")).unwrap()
         } else {
             url
         };
@@ -570,7 +570,7 @@ pub fn fake_pyproject_toml(
 /// Generate an empty wheel file in a temp dir
 pub fn empty_wheel(name: &str) -> (TempDir, std::fs::File, PathBuf) {
     let temp_dir = tempfile::tempdir().unwrap();
-    let wheel_path = temp_dir.path().join(format!("{}.whl", name));
+    let wheel_path = temp_dir.path().join(format!("{name}.whl"));
     let wheel = std::fs::File::create(wheel_path.clone()).unwrap();
     (temp_dir, wheel, wheel_path)
 }

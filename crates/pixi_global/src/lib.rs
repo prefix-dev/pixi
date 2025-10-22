@@ -31,7 +31,7 @@ pub fn find_executables_for_many_records(
     prefix: &Prefix,
     prefix_packages: &[PrefixRecord],
 ) -> Vec<Executable> {
-    let executables = prefix_packages
+    prefix_packages
         .iter()
         .flat_map(|record| {
             record
@@ -40,8 +40,7 @@ pub fn find_executables_for_many_records(
                 .filter(|relative_path| is_executable(prefix, relative_path))
                 .map(|path| Executable::new(executable_from_path(path), path.clone()))
         })
-        .collect();
-    executables
+        .collect()
 }
 
 fn is_executable(prefix: &Prefix, relative_path: &Path) -> bool {

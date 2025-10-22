@@ -37,7 +37,7 @@ impl CommandDispatcherProcessor {
         // Add to the list of pending tasks
         self.pending_backend_source_builds.push_back((
             pending_id,
-            task.spec,
+            *task.spec,
             task.cancellation_token,
         ));
 

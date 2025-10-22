@@ -73,7 +73,7 @@ mod tests {
             .unwrap();
 
         let err = &workspace.load_lock_file().await.unwrap_err();
-        let dbg_err = format!("{:?}", err);
+        let dbg_err = format!("{err:?}");
         // Test that the error message contains the correct information.
         assert!(
             dbg_err.contains("The lock file version is 9999, but only up to including version")

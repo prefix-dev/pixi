@@ -108,7 +108,7 @@ impl TaskNode<'_> {
                 // Pass each additional argument varbatim by wrapping it in single quotes
                 let formatted_args = format!(" {}", self.format_additional_args());
                 cmd = match cmd {
-                    Some(Cow::Borrowed(s)) => Some(Cow::Owned(format!("{}{}", s, formatted_args))),
+                    Some(Cow::Borrowed(s)) => Some(Cow::Owned(format!("{s}{formatted_args}"))),
                     Some(Cow::Owned(mut s)) => {
                         s.push_str(&formatted_args);
                         Some(Cow::Owned(s))
@@ -127,7 +127,7 @@ impl TaskNode<'_> {
             Box::new(
                 additional_args
                     .iter()
-                    .format_with(" ", |arg, f| f(&format_args!("'{}'", arg))),
+                    .format_with(" ", |arg, f| f(&format_args!("'{arg}'"))),
             )
         } else {
             Box::new("".to_string())

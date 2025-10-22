@@ -383,7 +383,7 @@ impl WorkspaceMut {
                 {
                     *advice = Some(format!(
                         "To add the missing channel to a workspace, use:\n\n  {}",
-                        console::style(format!("pixi workspace channel add {}", channel)).bold(),
+                        console::style(format!("pixi workspace channel add {channel}")).bold(),
                     ));
                 }
                 e

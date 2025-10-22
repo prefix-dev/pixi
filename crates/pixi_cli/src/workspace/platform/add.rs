@@ -69,7 +69,7 @@ pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
             console::style(console::Emoji("✔ ", "")).green(),
             &feature_name.non_default().map_or_else(
                 || platform.to_string(),
-                |name| format!("{} to the feature {}", platform, name)
+                |name| format!("{platform} to the feature {name}")
             )
         );
     }

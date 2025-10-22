@@ -879,7 +879,7 @@ mod tests {
         let serialized = serde_json::to_string(&targets).unwrap();
 
         for platform in platform_strs {
-            assert!(serialized.contains(platform), "Missing: {}", platform);
+            assert!(serialized.contains(platform), "Missing: {platform}");
         }
     }
 

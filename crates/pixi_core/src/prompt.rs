@@ -13,7 +13,7 @@ pub fn zsh_hook() -> &'static str {
 
 /// Sets default pixi prompt for posix shells
 pub fn posix_prompt(env_name: &str) -> String {
-    format!("export PS1=\"({}) ${{PS1:-}}\"", env_name)
+    format!("export PS1=\"({env_name}) ${{PS1:-}}\"")
 }
 
 /// Sets default pixi prompt for the fish shell
@@ -22,7 +22,7 @@ pub fn fish_prompt(env_name: &str) -> String {
         r#"
         function __pixi_add_prompt
             set_color -o green
-            echo -n "({}) "
+            echo -n "({env_name}) "
             set_color normal
         end
 
@@ -60,8 +60,7 @@ pub fn fish_prompt(env_name: &str) -> String {
             end
             __fish_right_prompt_orig
         end
-        "#,
-        env_name
+        "#
     )
 }
 
@@ -75,8 +74,7 @@ pub fn xonsh_prompt() -> String {
 pub fn powershell_prompt(env_name: &str) -> String {
     format!(
         "$old_prompt = $function:prompt\n\
-         function prompt {{\"({}) $($old_prompt.Invoke())\"}}",
-        env_name
+         function prompt {{\"({env_name}) $($old_prompt.Invoke())\"}}"
     )
 }
 
@@ -84,14 +82,13 @@ pub fn powershell_prompt(env_name: &str) -> String {
 pub fn nu_prompt(env_name: &str) -> String {
     format!(
         "let old_prompt = $env.PROMPT_COMMAND; \
-         $env.PROMPT_COMMAND = {{|| echo $\"\\({}\\) (do $old_prompt)\"}}",
-        env_name
+         $env.PROMPT_COMMAND = {{|| echo $\"\\({env_name}\\) (do $old_prompt)\"}}"
     )
 }
 
 /// Sets default pixi prompt for the cmd.exe command prompt
 pub fn cmd_prompt(env_name: &str) -> String {
-    format!(r"@PROMPT ({}) $P$G", env_name)
+    format!(r"@PROMPT ({env_name}) $P$G")
 }
 
 /// Returns appropriate hook function for configured shell
@@ -120,6 +117,6 @@ pub fn shell_prompt(shell: &ShellEnum, prompt_name: &str) -> String {
 pub fn prompt_name(project_name: &str, environment_name: &EnvironmentName) -> String {
     match environment_name {
         EnvironmentName::Default => project_name.to_string(),
-        EnvironmentName::Named(name) => format!("{}:{}", project_name, name),
+        EnvironmentName::Named(name) => format!("{project_name}:{name}"),
     }
 }

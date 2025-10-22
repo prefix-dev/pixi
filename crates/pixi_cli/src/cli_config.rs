@@ -428,18 +428,18 @@ fn build_vcs_requirement(
     } else {
         "git+"
     };
-    let mut vcs_req = format!("{} @ {}{}", package_name, scheme, git);
+    let mut vcs_req = format!("{package_name} @ {scheme}{git}");
     if let Some(revision) = rev {
         if let Some(rev_str) = revision.as_str().map(|s| s.to_string()) {
-            vcs_req.push_str(&format!("@{}", rev_str));
+            vcs_req.push_str(&format!("@{rev_str}"));
 
             if let Some(rev_type) = revision.reference_type() {
-                vcs_req.push_str(&format!("?{GIT_URL_QUERY_REV_TYPE}={}", rev_type));
+                vcs_req.push_str(&format!("?{GIT_URL_QUERY_REV_TYPE}={rev_type}"));
             }
         }
     }
     if let Some(subdir) = subdir {
-        vcs_req.push_str(&format!("#subdirectory={}", subdir));
+        vcs_req.push_str(&format!("#subdirectory={subdir}"));
     }
 
     vcs_req

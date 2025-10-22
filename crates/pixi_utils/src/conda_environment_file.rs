@@ -303,7 +303,7 @@ mod tests {
 
         let entries = match fs_err::read_dir(test_files_path) {
             Ok(entries) => entries,
-            Err(e) => panic!("Failed to read directory: {}", e),
+            Err(e) => panic!("Failed to read directory: {e}"),
         };
 
         let mut paths = Vec::new();
