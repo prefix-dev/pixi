@@ -942,7 +942,7 @@ impl FromStr for PackageFormatAndCompression {
         let archive_type = match package_format.to_lowercase().as_str() {
             "tarbz2" => ArchiveType::TarBz2,
             "conda" => ArchiveType::Conda,
-            _ => return Err(format!("Unknown package format: {}", package_format)),
+            _ => return Err(format!("Unknown package format: {package_format}")),
         };
 
         let compression_level = match compression {
@@ -968,7 +968,7 @@ impl FromStr for PackageFormatAndCompression {
                 }
                 CompressionLevel::Numeric(number)
             }
-            _ => return Err(format!("Unknown compression level: {}", compression)),
+            _ => return Err(format!("Unknown compression level: {compression}")),
         };
 
         Ok(PackageFormatAndCompression {
@@ -994,7 +994,7 @@ impl Serialize for PackageFormatAndCompression {
             CompressionLevel::Numeric(level) => &level.to_string(),
         };
 
-        serializer.serialize_str(format!("{}:{}", package_format, compression_level).as_str())
+        serializer.serialize_str(format!("{package_format}:{compression_level}").as_str())
     }
 }
 

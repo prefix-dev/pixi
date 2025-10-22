@@ -215,7 +215,7 @@ impl LockFileDiff {
 
             // Print the common changes.
             for (_, line) in common_changes.iter().sorted_by_key(|(name, _)| name) {
-                writeln!(writer, "  {}", line)?;
+                writeln!(writer, "  {line}")?;
             }
 
             // Print the per-platform changes.
@@ -234,7 +234,7 @@ impl LockFileDiff {
                         consts::PLATFORM_STYLE.apply_to(platform),
                     )?;
                     for (_, line) in changes {
-                        writeln!(writer, "  {}", line)?;
+                        writeln!(writer, "  {line}")?;
                     }
                 }
             }

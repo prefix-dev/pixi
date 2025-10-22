@@ -80,7 +80,7 @@ pub(crate) fn source_checkout_cache_key(source: &PinnedSourceSpec) -> String {
             path.path.hash(&mut hasher);
             let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
             if let Some(file_name) = path.path.file_name() {
-                format!("{}-{}", file_name, unique_key)
+                format!("{file_name}-{unique_key}")
             } else {
                 unique_key
             }

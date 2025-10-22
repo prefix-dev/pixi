@@ -67,7 +67,7 @@ fn create_unsupported_selector_warning(
     matching_platforms: &[Platform],
 ) -> GenericError {
     let (feature_or_workspace, span) = match platform_span {
-        PlatformSpan::Feature(name, span) => (Cow::Owned(format!("feature '{}'", name)), span),
+        PlatformSpan::Feature(name, span) => (Cow::Owned(format!("feature '{name}'")), span),
         PlatformSpan::Workspace(span) => (Cow::Borrowed("workspace"), span),
     };
 
@@ -79,8 +79,7 @@ fn create_unsupported_selector_warning(
     .with_span_label("target selector specified here")
     .with_label(LabeledSpan::new_with_span(
         Some(format!(
-            "the platforms supported by the {} are defined here",
-            feature_or_workspace
+            "the platforms supported by the {feature_or_workspace} are defined here"
         )),
         Range::<usize>::from(span),
     ))

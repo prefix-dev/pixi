@@ -155,7 +155,7 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
             CondaEnvDep::Conda(d) => {
                 let match_spec = MatchSpec::from_str(&d, Lenient)
                     .into_diagnostic()
-                    .wrap_err(format!("Can't parse '{}' as conda dependency", d))?;
+                    .wrap_err(format!("Can't parse '{d}' as conda dependency"))?;
                 if let Some(channel) = &match_spec.channel {
                     picked_up_channels.push(
                         // named channels are given a url with default channel config in `MatchSpec::from_str`
@@ -173,7 +173,7 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
                         .map(|dep| {
                             pep508_rs::Requirement::from_str(dep)
                                 .into_diagnostic()
-                                .wrap_err(format!("Can't parse '{}' as pypi dependency", dep))
+                                .wrap_err(format!("Can't parse '{dep}' as pypi dependency"))
                         })
                         .collect::<miette::Result<Vec<_>>>()?,
                 )

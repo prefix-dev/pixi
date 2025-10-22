@@ -94,39 +94,39 @@ impl Display for DetailedSpec {
         let mut parts = Vec::new();
 
         if let Some(version) = &self.version {
-            parts.push(format!("version={}", version));
+            parts.push(format!("version={version}"));
         }
 
         if let Some(build) = &self.build {
-            parts.push(format!("build={}", build));
+            parts.push(format!("build={build}"));
         }
 
         if let Some(build_number) = &self.build_number {
-            parts.push(format!("build_number={}", build_number));
+            parts.push(format!("build_number={build_number}"));
         }
 
         if let Some(file_name) = &self.file_name {
-            parts.push(format!("file_name={}", file_name));
+            parts.push(format!("file_name={file_name}"));
         }
 
         if let Some(channel) = &self.channel {
-            parts.push(format!("channel={}", channel));
+            parts.push(format!("channel={channel}"));
         }
 
         if let Some(subdir) = &self.subdir {
-            parts.push(format!("subdir={}", subdir));
+            parts.push(format!("subdir={subdir}"));
         }
 
         if let Some(license) = &self.license {
-            parts.push(format!("license={}", license));
+            parts.push(format!("license={license}"));
         }
 
         if let Some(md5) = &self.md5 {
-            parts.push(format!("md5={:x}", md5));
+            parts.push(format!("md5={md5:x}"));
         }
 
         if let Some(sha256) = &self.sha256 {
-            parts.push(format!("sha256={:x}", sha256));
+            parts.push(format!("sha256={sha256:x}"));
         }
 
         if parts.is_empty() {
