@@ -147,7 +147,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.workspace]' table
             if pyproject.has_pixi_table() {
                 interface.info("Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace]' section.").await;
-                let workspace = Workspace::from_path(&pyproject_manifest_path)?;
+                let workspace = Workspace::from_path(&pyproject_manifest_path, false)?;
                 return Ok(workspace);
             }
 
@@ -202,7 +202,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
                 }
             }
 
-            Workspace::from_path(&pyproject_manifest_path)?
+            Workspace::from_path(&pyproject_manifest_path, false)?
 
             // Create a 'pyproject.toml' manifest
         } else if pyproject {
@@ -254,7 +254,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
                 }
             };
 
-            Workspace::from_path(&pyproject_manifest_path)?
+            Workspace::from_path(&pyproject_manifest_path, false)?
         // Create a 'pixi.toml' manifest
         } else {
             let path = if options.format == Some(ManifestFormat::Mojoproject) {
@@ -282,7 +282,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
                 None,
             );
             save_manifest_file(interface, &path, rv).await?;
-            Workspace::from_path(&path)?
+            Workspace::from_path(&path, false)?
         }
     };
 

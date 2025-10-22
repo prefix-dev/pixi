@@ -250,20 +250,30 @@ impl Workspace {
 
     /// Loads a project from manifest file. The `manifest_path` is expected to
     /// be a workspace manifest.
-    pub fn from_path(manifest_path: &Path) -> Result<Self, LoadManifestsError> {
+    pub fn from_path(
+        manifest_path: &Path,
+        non_pixi_manifests: bool,
+    ) -> Result<Self, LoadManifestsError> {
         let WithWarnings {
             value: manifests, ..
-        } = Manifests::from_workspace_manifest_path(manifest_path.to_path_buf())?;
+        } = Manifests::from_workspace_manifest_path(
+            manifest_path.to_path_buf(),
+            non_pixi_manifests,
+        )?;
         Ok(Self::from_manifests(manifests))
     }
 
     /// Constructs a workspace from source loaded from a specific location.
-    pub fn from_str(manifest_path: &Path, content: &str) -> Result<Self, LoadManifestsError> {
+    pub fn from_str(
+        manifest_path: &Path,
+        content: &str,
+        non_pixi_manifests: bool,
+    ) -> Result<Self, LoadManifestsError> {
         let WithWarnings {
             value: manifests, ..
-        } = Manifests::from_workspace_source(
-            content.with_provenance(ManifestProvenance::from_path(manifest_path.to_path_buf())?),
-        )?;
+        } = Manifests::from_workspace_source(content.with_provenance(
+            ManifestProvenance::from_path(manifest_path.to_path_buf(), non_pixi_manifests)?,
+        ))?;
         Ok(Self::from_manifests(manifests))
     }
 

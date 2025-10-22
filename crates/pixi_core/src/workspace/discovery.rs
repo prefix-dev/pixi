@@ -52,6 +52,7 @@ pub struct WorkspaceLocator {
     emit_warnings: bool,
     consider_environment: bool,
     ignore_pixi_version_check: bool,
+    non_pixi_manifests: bool,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -148,6 +149,14 @@ impl WorkspaceLocator {
         }
     }
 
+    /// Whether to search for non-pixi manifests.
+    pub fn with_non_pixi_manifests(self, non_pixi_manifests: bool) -> Self {
+        Self {
+            non_pixi_manifests,
+            ..self
+        }
+    }
+
     /// Called to locate the workspace or error out if none could be located.
     pub fn locate(self) -> Result<Workspace, WorkspaceLocatorError> {
         // Determine the search root
@@ -167,6 +176,7 @@ impl WorkspaceLocator {
         // Discover the workspace manifest for the current path.
         let workspace_manifests = match pixi_manifest::WorkspaceDiscoverer::new(discovery_start)
             .with_closest_package(self.with_closest_package)
+            .with_non_pixi_manifests(self.non_pixi_manifests)
             .discover()
         {
             Ok(manifests) => manifests,
@@ -196,9 +206,11 @@ impl WorkspaceLocator {
             if let Some(WithWarnings {
                 value: manifests,
                 warnings: mut env_warnings,
-            }) =
-                Self::apply_environment_overrides(workspace_manifests.take(), self.emit_warnings)?
-            {
+            }) = Self::apply_environment_overrides(
+                workspace_manifests.take(),
+                self.emit_warnings,
+                self.non_pixi_manifests,
+            )? {
                 warnings.append(&mut env_warnings);
                 workspace_manifests = Some(manifests);
             }
@@ -247,6 +259,7 @@ impl WorkspaceLocator {
     fn apply_environment_overrides(
         discovered_workspace: Option<Manifests>,
         emit_warnings: bool,
+        non_pixi_manifests: bool,
     ) -> Result<Option<WithWarnings<Manifests, WarningWithSource>>, WorkspaceLocatorError> {
         let env_manifest_path = std::env::var("PIXI_PROJECT_MANIFEST")
             .map(PathBuf::from)
@@ -268,7 +281,10 @@ impl WorkspaceLocator {
         // Else, if we didn't find a workspace manifest, but we there is an
         // active one set in the environment, we try to use that instead.
         } else if let Some(env_manifest_path) = env_manifest_path {
-            match Manifests::from_workspace_manifest_path(env_manifest_path.clone()) {
+            match Manifests::from_workspace_manifest_path(
+                env_manifest_path.clone(),
+                non_pixi_manifests,
+            ) {
                 Ok(workspace) => return Ok(Some(workspace)),
                 Err(LoadManifestsError::Io(err)) => return Err(WorkspaceLocatorError::Io(err)),
                 Err(LoadManifestsError::Toml(err)) => return Err(WorkspaceLocatorError::Toml(err)),

@@ -7,6 +7,7 @@ pub enum ManifestSource<S> {
     PyProjectToml(S),
     PixiToml(S),
     MojoProjectToml(S),
+    PackageXml(S),
 }
 
 impl<S> AsRef<S> for ManifestSource<S> {
@@ -15,6 +16,7 @@ impl<S> AsRef<S> for ManifestSource<S> {
             ManifestSource::PyProjectToml(source) => source,
             ManifestSource::PixiToml(source) => source,
             ManifestSource::MojoProjectToml(source) => source,
+            ManifestSource::PackageXml(source) => source,
         }
     }
 }
@@ -26,6 +28,7 @@ impl<S> ManifestSource<S> {
             ManifestSource::PyProjectToml(source) => source,
             ManifestSource::PixiToml(source) => source,
             ManifestSource::MojoProjectToml(source) => source,
+            ManifestSource::PackageXml(source) => source,
         }
     }
 
@@ -35,6 +38,7 @@ impl<S> ManifestSource<S> {
             ManifestSource::PyProjectToml(_) => ManifestKind::Pyproject,
             ManifestSource::PixiToml(_) => ManifestKind::Pixi,
             ManifestSource::MojoProjectToml(_) => ManifestKind::MojoProject,
+            ManifestSource::PackageXml(_) => ManifestKind::PackageXml,
         }
     }
 
@@ -44,6 +48,7 @@ impl<S> ManifestSource<S> {
             ManifestSource::PyProjectToml(source) => ManifestSource::PyProjectToml(f(source)),
             ManifestSource::PixiToml(source) => ManifestSource::PixiToml(f(source)),
             ManifestSource::MojoProjectToml(source) => ManifestSource::MojoProjectToml(f(source)),
+            ManifestSource::PackageXml(source) => ManifestSource::PackageXml(f(source)),
         }
     }
 

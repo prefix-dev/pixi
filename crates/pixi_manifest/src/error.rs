@@ -138,11 +138,7 @@ impl Display for TomlError {
             TomlError::Error(err) => write!(f, "{}", err.message()),
             TomlError::TomlError(err) => write!(f, "{}", err),
             TomlError::NoPixiTable(manifest_kind, detail) => {
-                let filename = match manifest_kind {
-                    ManifestKind::Pyproject => "pyproject.toml",
-                    ManifestKind::Pixi => "pixi.toml",
-                    ManifestKind::MojoProject => "mojoproject.toml",
-                };
+                let filename = manifest_kind.file_name();
                 if let Some(detail) = detail {
                     write!(f, "Missing table in manifest {filename}:\n{detail}")
                 } else {

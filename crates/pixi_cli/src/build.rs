@@ -54,6 +54,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_locator.clone())
         .with_closest_package(false)
+        .with_non_pixi_manifests(true)
         .locate()?
         .with_cli_config(args.config_cli);
 

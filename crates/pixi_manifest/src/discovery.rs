@@ -34,6 +34,9 @@ pub struct WorkspaceDiscoverer {
 
     /// Also discover the package closest to the current directory.
     discover_package: bool,
+
+    /// Also consider non-pixi manifests.
+    non_pixi_manifests: bool,
 }
 
 /// A workspace discovered by calling [`WorkspaceDiscoverer::discover`].
@@ -70,8 +73,10 @@ impl Manifests {
     /// Constructs a new instance from a specific workspace manifest.
     pub fn from_workspace_manifest_path(
         workspace_manifest_path: PathBuf,
+        non_pixi_manifests: bool,
     ) -> Result<WithWarnings<Self, WarningWithSource>, LoadManifestsError> {
-        let provenance = ManifestProvenance::from_path(workspace_manifest_path)?;
+        let provenance =
+            ManifestProvenance::from_path(workspace_manifest_path, non_pixi_manifests)?;
         let contents = provenance.read()?;
         Self::from_workspace_source(contents.into_inner().with_provenance(provenance))
     }
@@ -119,6 +124,7 @@ impl Manifests {
             ManifestKind::Pyproject => PyProjectManifest::deserialize(&mut toml)
                 .map_err(TomlError::from)
                 .and_then(|manifest| manifest.into_workspace_manifest(Some(manifest_dir))),
+            ManifestKind::PackageXml => todo!(),
         };
 
         // Handle any errors that occurred during parsing.
@@ -235,6 +241,7 @@ impl WorkspaceDiscoverer {
         Self {
             start,
             discover_package: false,
+            non_pixi_manifests: false,
         }
     }
 
@@ -247,6 +254,17 @@ impl WorkspaceDiscoverer {
     pub fn with_closest_package(self, discover_package: bool) -> Self {
         Self {
             discover_package,
+            ..self
+        }
+    }
+
+    /// Also discover non-pixi-manifest packages if `closest_package` is specified as well.
+    ///
+    /// If set to `true`, the discoverer will also try to find the closest non-pixi
+    /// package manifest on the way to the workspace. Or
+    pub fn with_non_pixi_manifests(self, non_pixi_manifest: bool) -> Self {
+        Self {
+            non_pixi_manifests: non_pixi_manifest,
             ..self
         }
     }
@@ -283,19 +301,23 @@ impl WorkspaceDiscoverer {
                         );
                     }
                     if explicit.is_file() {
-                        let provenance = ManifestProvenance::from_path(explicit.clone())
-                            .map_err(ExplicitManifestError::InvalidManifest)?;
+                        let provenance = ManifestProvenance::from_path(
+                            explicit.clone(),
+                            self.non_pixi_manifests,
+                        )
+                        .map_err(ExplicitManifestError::InvalidManifest)?;
                         let next_dir = explicit
                             .parent()
                             .expect("the manifest itself must have a parent directory")
                             .parent();
                         (next_dir.map(ToOwned::to_owned), Some(provenance))
                     } else {
-                        let provenance = Self::provenance_from_dir(explicit).ok_or(
-                            ExplicitManifestError::InvalidManifest(
-                                ProvenanceError::UnrecognizedManifestFormat,
-                            ),
-                        )?;
+                        let provenance =
+                            Self::provenance_from_dir(explicit, self.non_pixi_manifests).ok_or(
+                                ExplicitManifestError::InvalidManifest(
+                                    ProvenanceError::UnrecognizedManifestFormat,
+                                ),
+                            )?;
                         tracing::trace!(
                             "Found manifest in directory: {:?}, continuing further.",
                             provenance.path
@@ -305,7 +327,8 @@ impl WorkspaceDiscoverer {
                 }
                 SearchPath::Directory(ref manifest_dir_path) => {
                     // Check if a pixi.toml file exists in the current directory.
-                    let provenance = Self::provenance_from_dir(manifest_dir_path);
+                    let provenance =
+                        Self::provenance_from_dir(manifest_dir_path, self.non_pixi_manifests);
                     if provenance.is_some() {
                         tracing::trace!(
                             "Found manifest in directory: {:?}, continuing further.",
@@ -465,6 +488,9 @@ impl WorkspaceDiscoverer {
                         continue;
                     }
                 }
+                ManifestKind::PackageXml => {
+                    todo!();
+                }
             };
 
             let (workspace_manifest, package_manifest, workspace_warnings) = match parsed_manifest {
@@ -537,10 +563,11 @@ impl WorkspaceDiscoverer {
     }
 
     /// Discover the workspace manifest in a directory.
-    fn provenance_from_dir(dir: &Path) -> Option<ManifestProvenance> {
+    fn provenance_from_dir(dir: &Path, non_pixi_manifests: bool) -> Option<ManifestProvenance> {
         let pixi_toml_path = dir.join(consts::WORKSPACE_MANIFEST);
         let pyproject_toml_path = dir.join(consts::PYPROJECT_MANIFEST);
         let mojoproject_toml_path = dir.join(consts::MOJOPROJECT_MANIFEST);
+        let package_xml_path = dir.join(consts::PACKAGE_XML_MANIFEST);
         if pixi_toml_path.is_file() {
             Some(ManifestProvenance::new(pixi_toml_path, ManifestKind::Pixi))
         } else if pyproject_toml_path.is_file() {
@@ -553,6 +580,8 @@ impl WorkspaceDiscoverer {
                 mojoproject_toml_path,
                 ManifestKind::Pixi,
             ))
+        } else if non_pixi_manifests && package_xml_path.is_file() {
+            todo!()
         } else {
             None
         }

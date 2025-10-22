@@ -13,6 +13,7 @@ pub const PYPROJECT_PIXI_PREFIX: &str = "tool.pixi";
 
 pub const WORKSPACE_MANIFEST: &str = "pixi.toml";
 pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
+pub const PACKAGE_XML_MANIFEST: &str = "package.xml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
