@@ -27,6 +27,11 @@ pub struct Args {
     #[clap(flatten)]
     pub config_cli: ConfigCli,
 
+    /// The path to the manifest file to build (e.g., recipe.yaml, package.xml, pixi.toml).
+    /// If not specified, defaults to the workspace manifest.
+    #[clap(long)]
+    pub build_manifest: Option<PathBuf>,
+
     /// The target platform to build for (defaults to the current platform)
     #[clap(long, short, default_value_t = Platform::current())]
     pub target_platform: Platform,
@@ -102,8 +107,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Query any and all information we can acquire about the package we're
     // attempting to build.
-    let Ok(manifest_path) = workspace_locator.path() else {
-        miette::bail!("could not determine the current working directory to locate the workspace");
+    // Use the explicit build manifest if provided, otherwise use the workspace manifest.
+    let manifest_path = if let Some(build_manifest) = &args.build_manifest {
+        build_manifest.clone()
+    } else {
+        let Ok(path) = workspace_locator.path() else {
+            miette::bail!(
+                "could not determine the current working directory to locate the workspace"
+            );
+        };
+        path
     };
     let manifest_path_canonical = dunce::canonicalize(&manifest_path)
         .into_diagnostic()

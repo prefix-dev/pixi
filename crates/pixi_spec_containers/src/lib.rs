@@ -48,6 +48,16 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Extend<(N, D)> for DependencyMa
     }
 }
 
+impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Extend<DependencyMap<N, D>>
+    for DependencyMap<N, D>
+{
+    fn extend<T: IntoIterator<Item = DependencyMap<N, D>>>(&mut self, iter: T) {
+        for other in iter {
+            Extend::<(N, D)>::extend(self, other.into_specs());
+        }
+    }
+}
+
 impl<'a, M, N: Hash + Eq + Clone + 'a, D: Hash + Eq + Clone + 'a> From<M> for DependencyMap<N, D>
 where
     M: IntoIterator<Item = Cow<'a, IndexMap<N, D>>>,

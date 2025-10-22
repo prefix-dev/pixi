@@ -14,6 +14,7 @@ file_url = { workspace = true }
 miette = { workspace = true }
 pixi_git = { workspace = true }
 pixi_spec = { workspace = true, features = ["rattler_lock"] }
+pixi_spec_containers = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true, features = ["serde"] }
 rattler_lock = { workspace = true }
