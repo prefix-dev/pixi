@@ -312,25 +312,23 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
             .into_diagnostic()?
     } else {
         // No CLI flags - use RUST_LOG if set
-        let builder = EnvFilter::builder()
-            .with_default_directive(level_filter.into())
-            .from_env()
-            .into_diagnostic()?;
+        // Parse RUST_LOG because we need to set it other our other directives
+        let env_directives = env::var("RUST_LOG").unwrap_or_default();
+        let original_directives = format!(
+            "apple_codesign=off,pixi={},pixi_command_dispatcher={},resolvo={}",
+            pixi_level, pixi_level, low_level_filter
+        );
+        // Concatenate both directives where the LOG overrides the potential original directives
+        let final_directives = if env_directives.is_empty() {
+            original_directives
+        } else {
+            format!("{original_directives},{env_directives}")
+        };
 
-        // Add default directives
-        builder
-            .add_directive("apple_codesign=off".parse().into_diagnostic()?)
-            .add_directive(format!("pixi={pixi_level}").parse().into_diagnostic()?)
-            .add_directive(
-                format!("pixi_command_dispatcher={pixi_level}")
-                    .parse()
-                    .into_diagnostic()?,
-            )
-            .add_directive(
-                format!("resolvo={low_level_filter}")
-                    .parse()
-                    .into_diagnostic()?,
-            )
+        EnvFilter::builder()
+            .with_default_directive(level_filter.into())
+            .parse(&final_directives)
+            .into_diagnostic()?
     };
 
     // Set up the tracing subscriber

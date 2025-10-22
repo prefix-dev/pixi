@@ -35,7 +35,7 @@ use pixi_record::PixiRecord;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
-mod backend_build_source;
+mod backend_source_build;
 mod build_backend_metadata;
 mod git;
 mod install_pixi;
