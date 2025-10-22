@@ -19,7 +19,7 @@ use crate::cli_interface::CliInterface;
 /// If you don't provide an environment, the `default` environment will be re-installed.
 ///
 /// If you want to re-install all environments, you can use the `--all` flag.
-#[derive(Parser, Debug, Clone)]
+#[derive(Parser, Debug)]
 pub struct Args {
     /// Specifies the package that should be reinstalled.
     /// If no package is given, the whole environment will be reinstalled.
@@ -78,7 +78,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let lock_file_usage = args.lock_file_usage.to_usage();
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
     workspace_ctx
-        .reinstall(args.clone().into(), lock_file_usage)
+        .reinstall(args.into(), lock_file_usage)
         .await?;
 
     Ok(())
