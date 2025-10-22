@@ -962,8 +962,10 @@ mod tests {
         lowest = ["lowest"]
         highest = ["highest"]
         combined-declared = ["lowest", "highest"]
-        combined-undeclared = ["no_strategy", "lowest"]
-        implicit = ["no_strategy"]
+        combined-undeclared-first = ["no_strategy", "lowest"]
+        combined-undeclared-last = ["lowest", "no_strategy"]
+        undeclared-default = ["no_strategy"]
+        undeclared-no-default = { features = ["no_strategy"], no-default-feature = true }
         "#;
 
         let temp_dir = tempfile::tempdir().unwrap();
@@ -994,15 +996,34 @@ mod tests {
 
         assert_eq!(
             workspace
-                .environment("combined-undeclared")
+                .environment("combined-undeclared-first")
                 .unwrap()
                 .solve_strategy(),
             pixi_manifest::SolveStrategy::Lowest
         );
 
         assert_eq!(
-            workspace.environment("implicit").unwrap().solve_strategy(),
+            workspace
+                .environment("combined-undeclared-last")
+                .unwrap()
+                .solve_strategy(),
+            pixi_manifest::SolveStrategy::Lowest
+        );
+
+        assert_eq!(
+            workspace
+                .environment("undeclared-default")
+                .unwrap()
+                .solve_strategy(),
             pixi_manifest::SolveStrategy::LowestDirect
+        );
+
+        assert_eq!(
+            workspace
+                .environment("undeclared-no-default")
+                .unwrap()
+                .solve_strategy(),
+            pixi_manifest::SolveStrategy::Highest
         );
     }
 }
