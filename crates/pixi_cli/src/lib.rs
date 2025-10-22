@@ -315,8 +315,7 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         // Parse RUST_LOG because we need to set it other our other directives
         let env_directives = env::var("RUST_LOG").unwrap_or_default();
         let original_directives = format!(
-            "apple_codesign=off,pixi={},pixi_command_dispatcher={},resolvo={}",
-            pixi_level, pixi_level, low_level_filter
+            "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},resolvo={low_level_filter}",
         );
         // Concatenate both directives where the LOG overrides the potential original directives
         let final_directives = if env_directives.is_empty() {
