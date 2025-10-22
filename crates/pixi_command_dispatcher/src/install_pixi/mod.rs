@@ -206,6 +206,10 @@ impl InstallPixiEnvironmentSpec {
         source_record: &SourceRecord,
     ) -> Result<RepoDataRecord, CommandDispatcherError<SourceBuildError>> {
         // Build the source package.
+        // Verify if we need to force the build even if the cache is up to date.
+        let force = self
+            .force_reinstall
+            .contains(&source_record.package_record.name);
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
                 source: source_record.source.clone(),
@@ -219,6 +223,8 @@ impl InstallPixiEnvironmentSpec {
                 output_directory: None,
                 work_directory: None,
                 clean: false,
+                // Should we force the build even if the cache is up to date?
+                force,
                 // When we install a pixi environment we always build in development mode.
                 build_profile: BuildProfile::Development,
             })

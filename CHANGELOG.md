@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.58.0] - 2025-10-22
+#### ✨ Highlights
+
+
+This release adds important bugfixes and changes in the discovery logic.
+Pixi Build already had the ability to directly depend on `recipe.yaml` files backed by `pixi-build-rattler-build` without the need to specify a separate package manifest.
+So the following code just works:
+
+```toml
+[dependencies]
+package = { path = "/path/to/recipe.yaml" }
+```
+
+This still works, but we stopped hardcoding the channel for the backends.
+Now, it will first try to find a workspace manifest and extract its channels.
+If that doesn't work, it will fallback to the default channels in your Pixi config.
+
+#### Added
+
+- Add some more debug-logging if rebuilds are acting up by @tdejager in [#4794](https://github.com/prefix-dev/pixi/pull/4794)
+
+
+#### Changed
+
+- Automatic detection of ros backend for package.xml files by @ruben-arts in [#4782](https://github.com/prefix-dev/pixi/pull/4782)
+
+
+#### Documentation
+
+- Fix link to boost package by @h-vetinari in [#4793](https://github.com/prefix-dev/pixi/pull/4793)
+
+
+#### Fixed
+
+- Fix testsuite tests configuration by @remimimimimi in [#4795](https://github.com/prefix-dev/pixi/pull/4795)
+- Target specific inline variants by @Hofer-Julian in [#4803](https://github.com/prefix-dev/pixi/pull/4803)
+- Reinstall should rebuild a source package by @nichmor in [#4809](https://github.com/prefix-dev/pixi/pull/4809)
+
+
+#### New Contributors
+* @h-vetinari made their first contribution in [#4793](https://github.com/prefix-dev/pixi/pull/4793)
+
 ### [0.57.0] - 2025-10-20
 #### ✨ Highlights
 

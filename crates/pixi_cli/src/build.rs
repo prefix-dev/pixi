@@ -190,6 +190,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 enabled_protocols: Default::default(),
                 work_directory: None,
                 clean: args.clean,
+                force: false,
                 build_profile: BuildProfile::Release,
             })
             .await?;

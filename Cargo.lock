@@ -4486,7 +4486,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4604,6 +4604,7 @@ dependencies = [
  "pixi_build_discovery",
  "pixi_build_type_conversions",
  "pixi_build_types",
+ "pixi_config",
  "pixi_manifest",
  "pixi_spec",
  "pixi_spec_containers",
@@ -4612,7 +4613,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.17",
- "url",
 ]
 
 [[package]]
@@ -4774,6 +4774,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
+ "once_cell",
  "ordermap",
  "pathdiff",
  "pin-project-lite",

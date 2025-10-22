@@ -1,1 +1,0 @@
-This test case checks if discovery works for a ROS package with only a package.xml file and no pixi.toml

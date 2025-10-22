@@ -17,12 +17,12 @@ ordermap = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-url = { workspace = true }
 
 rattler_conda_types = { workspace = true }
 
 pixi_build_type_conversions = { workspace = true }
 pixi_build_types = { workspace = true }
+pixi_config = { workspace = true }
 pixi_manifest = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }

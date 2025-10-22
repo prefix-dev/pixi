@@ -12,8 +12,7 @@ backend-spec:
       - pixi-build-rattler-build
       - "*"
     channels:
-      - "https://conda.anaconda.org/conda-forge"
-      - "https://prefix.dev/pixi-build-backends"
+      - "https://prefix.dev/conda-forge"
 init-params:
   workspace-root: "file://<ROOT>/recipe_yml"
   source: ~
