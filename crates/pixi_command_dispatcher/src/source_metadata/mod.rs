@@ -7,7 +7,9 @@ use futures::TryStreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
-use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord, SourceRecordWithMetadata};
+use pixi_record::{
+    InputHash, PinnedSourceSpec, PixiRecord, SourceRecord, SourceRecordWithMetadata,
+};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{

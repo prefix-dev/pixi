@@ -108,43 +108,41 @@ pub(crate) fn package_metadata_to_source_records(
     packages
         .iter()
         .filter(|pkg| pkg.name == *package)
-        .map(|p| {
-            SourceRecordWithMetadata {
-                source_record: SourceRecord {
-                    name: p.name.clone(),
-                    source: source.clone(),
-                    variants: Default::default(),
-                    depends: p.depends.iter().map(|c| c.to_string()).collect(),
-                    constrains: p.constraints.iter().map(|c| c.to_string()).collect(),
-                    experimental_extra_depends: Default::default(),
-                    license: p.license.clone(),
-                    purls: None,
-                    input_hash: input_hash.clone(),
-                    sources: p
-                        .sources
-                        .iter()
-                        .map(|(name, source)| (name.clone(), from_source_spec_v1(source.clone())))
-                        .collect(),
-                    python_site_packages_path: None,
-                },
-                version: p.version.clone(),
-                build: p.build.clone(),
-                build_number: p.build_number,
-                subdir: p.subdir.to_string(),
-                arch: p.subdir.arch().as_ref().map(ToString::to_string),
-                platform: p.subdir.only_platform().map(ToString::to_string),
-                md5: None,
-                sha256: None,
-                size: None,
-                track_features: vec![],
-                features: None,
-                license_family: p.license_family.clone(),
-                timestamp: None,
-                run_exports: None,
-                noarch: p.noarch,
-                legacy_bz2_md5: None,
-                legacy_bz2_size: None,
-            }
+        .map(|p| SourceRecordWithMetadata {
+            source_record: SourceRecord {
+                name: p.name.clone(),
+                source: source.clone(),
+                variants: Default::default(),
+                depends: p.depends.iter().map(|c| c.to_string()).collect(),
+                constrains: p.constraints.iter().map(|c| c.to_string()).collect(),
+                experimental_extra_depends: Default::default(),
+                license: p.license.clone(),
+                purls: None,
+                input_hash: input_hash.clone(),
+                sources: p
+                    .sources
+                    .iter()
+                    .map(|(name, source)| (name.clone(), from_source_spec_v1(source.clone())))
+                    .collect(),
+                python_site_packages_path: None,
+            },
+            version: p.version.clone(),
+            build: p.build.clone(),
+            build_number: p.build_number,
+            subdir: p.subdir.to_string(),
+            arch: p.subdir.arch().as_ref().map(ToString::to_string),
+            platform: p.subdir.only_platform().map(ToString::to_string),
+            md5: None,
+            sha256: None,
+            size: None,
+            track_features: vec![],
+            features: None,
+            license_family: p.license_family.clone(),
+            timestamp: None,
+            run_exports: None,
+            noarch: p.noarch,
+            legacy_bz2_md5: None,
+            legacy_bz2_size: None,
         })
         .collect()
 }

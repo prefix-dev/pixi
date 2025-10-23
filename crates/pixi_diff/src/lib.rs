@@ -333,9 +333,15 @@ impl LockFileDiff {
                                     console::style("~").yellow(),
                                     consts::CondaEmoji,
                                     name,
-                                    choose_style(&previous.version.as_str(), &current.version.as_str()),
+                                    choose_style(
+                                        &previous.version.as_str(),
+                                        &current.version.as_str()
+                                    ),
                                     choose_style(previous.build.as_str(), current.build.as_str()),
-                                    choose_style(&current.version.as_str(), &previous.version.as_str()),
+                                    choose_style(
+                                        &current.version.as_str(),
+                                        &previous.version.as_str()
+                                    ),
                                     choose_style(current.build.as_str(), previous.build.as_str()),
                                 )
                             }

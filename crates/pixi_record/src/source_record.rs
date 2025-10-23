@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{
-    package::RunExportsJson, MatchSpec, Matches, NoArchType, PackageName, PackageRecord,
-    PackageUrl, VersionWithSource,
+    MatchSpec, Matches, NoArchType, PackageName, PackageRecord, PackageUrl, VersionWithSource,
+    package::RunExportsJson,
 };
 use rattler_digest::{Md5Hash, Sha256, Sha256Hash};
 use rattler_lock::{CondaPackageData, CondaSourceData, VariantValue};

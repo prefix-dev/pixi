@@ -210,9 +210,7 @@ impl InstallPixiEnvironmentSpec {
     ) -> Result<RepoDataRecord, CommandDispatcherError<SourceBuildError>> {
         // Build the source package.
         // Verify if we need to force the build even if the cache is up to date.
-        let force = self
-            .force_reinstall
-            .contains(&source_record.name);
+        let force = self.force_reinstall.contains(&source_record.name);
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
                 source: source_record.source.clone(),

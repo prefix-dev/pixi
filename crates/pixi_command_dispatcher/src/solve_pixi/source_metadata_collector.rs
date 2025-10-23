@@ -123,7 +123,8 @@ impl SourceMetadataCollector {
             // Process transitive dependencies
             for record in &source_metadata.records {
                 chain.push(record.source_record.name.clone());
-                let anchor = SourceAnchor::from(SourceSpec::from(record.source_record.source.clone()));
+                let anchor =
+                    SourceAnchor::from(SourceSpec::from(record.source_record.source.clone()));
                 for depend in &record.source_record.depends {
                     if let Ok(spec) = MatchSpec::from_str(depend, ParseStrictness::Lenient) {
                         if let Some((name, source_spec)) = spec.name.as_ref().and_then(|name| {
