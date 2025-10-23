@@ -47,14 +47,14 @@ test-slow = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all
 [feature.pytest.dependencies]
 dirty-equals = ">=0.10.0,<0.11"
 filelock = ">=3.19.1,<4"
-inline-snapshot = ">=0.29.3,<0.30"
+inline-snapshot = ">=0.30.1,<0.31"
 py-rattler = ">=0.16.0,<0.17"
 pytest = ">=8.4.2,<9"
 pytest-rerunfailures = ">=16.0.1,<17"
 pytest-timeout = ">=2.4.0,<3"
 pytest-xdist = ">=3.8.0,<4"
 pyyaml = ">=6.0.3,<7"
-rattler-build = ">=0.47.1,<0.48"
+rattler-build = ">=0.48.1,<0.49"
 rich = ">=14.1.0,<15"
 tomli-w = ">=1.2.0,<2"
 types-pyyaml = ">=6.0.12.20250915,<7"
@@ -130,7 +130,7 @@ cmd = "pytest --inline-snapshot=fix -k '{{ expression }}'"
 [feature.lint.dependencies]
 actionlint = ">=1.7.7,<2"
 basedpyright = ">=1.31.6,<2"
-cargo-deny = ">=0.18,<0.18.5" # 0.18.5 breaks license checking for uv crates
+cargo-deny = ">=0.18,<0.18.6" # 0.18.5 breaks license checking for uv crates
 dprint = ">=0.49.1,<0.51"
 go-shfmt = ">=3.12.0,<4"
 lefthook = ">=1.13.6,<2"
@@ -240,7 +240,7 @@ description = "Build the trampolines"
 # Feature to build recipes
 #
 [feature.recipes.dependencies]
-rattler-build = ">=0.47.1,<0.48"
+rattler-build = ">=0.48.1,<0.49"
 
 [feature.recipes.tasks.build-backends]
 cmd = "rattler-build build --recipe-dir empty --output-dir ."
