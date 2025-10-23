@@ -71,7 +71,7 @@ jobs:
 
       # Use fork of dist to allow for binaries in the root of the tarball
       - name: Install cargo-dist from git
-        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
+        uses: baptiste0928/cargo-install@b687c656bda5733207e629b50a22bf68974a0305 # v3
         with:
           crate: dist
           git: https://github.com/ruben-arts/cargo-dist.git
@@ -149,7 +149,7 @@ jobs:
 
       # Use fork of dist to allow for binaries in the root of the tarball
       - name: Install cargo-dist from git
-        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
+        uses: baptiste0928/cargo-install@b687c656bda5733207e629b50a22bf68974a0305 # v3
         with:
           crate: dist
           git: https://github.com/ruben-arts/cargo-dist.git
@@ -158,7 +158,7 @@ jobs:
       - name: Install cargo-zigbuild
         # Only install on non windows platforms
         if: ${{ contains(matrix.runner, 'windows') == false }}
-        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
+        uses: baptiste0928/cargo-install@b687c656bda5733207e629b50a22bf68974a0305 # v3
         with:
           crate: cargo-zigbuild
           version: "0.20.1"
