@@ -3,7 +3,7 @@ use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::to_uv_normalize;
 use pypi_modifiers::pypi_tags::is_python_record;
-use rattler_conda_types::{PackageName, RepoDataRecord, VersionWithSource};
+use rattler_conda_types::RepoDataRecord;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::hash::Hash;
@@ -12,64 +12,72 @@ pub type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;
 pub type PixiRecordsByName = DependencyRecordsByName<PixiRecord>;
 
 /// A trait required from the dependencies stored in DependencyRecordsByName
-pub trait HasNameVersion {
+pub trait HasName {
     // Name type of the dependency
     type N: Hash + Eq + Clone;
-    // Version type of the dependency
-    type V: PartialOrd + ToString;
 
     /// Returns the name of the dependency
     fn name(&self) -> &Self::N;
+}
+
+/// A trait required from the dependencies stored in DependencyRecordsByName
+pub trait HasVersion {
+    // Version type of the dependency
+    type V: PartialOrd + ToString;
+
     /// Returns the version of the dependency
     fn version(&self) -> &Self::V;
 }
 
-impl HasNameVersion for PypiRecord {
+impl HasName for PypiRecord {
     type N = pep508_rs::PackageName;
-    type V = pep440_rs::Version;
 
     fn name(&self) -> &pep508_rs::PackageName {
         &self.0.name
     }
+}
+
+impl HasVersion for PypiRecord {
+    type V = pep440_rs::Version;
+
     fn version(&self) -> &Self::V {
         &self.0.version
     }
 }
 
-impl HasNameVersion for RepoDataRecord {
+impl HasName for RepoDataRecord {
     type N = rattler_conda_types::PackageName;
-    type V = VersionWithSource;
 
     fn name(&self) -> &rattler_conda_types::PackageName {
         &self.package_record.name
     }
+}
+
+impl HasVersion for RepoDataRecord {
+    type V = rattler_conda_types::Version;
+
     fn version(&self) -> &Self::V {
         &self.package_record.version
     }
 }
 
-impl HasNameVersion for PixiRecord {
-    type N = PackageName;
-    type V = VersionWithSource;
+impl HasName for PixiRecord {
+    type N = rattler_conda_types::PackageName;
 
-    fn name(&self) -> &Self::N {
-        &self.package_record().name
-    }
-
-    fn version(&self) -> &Self::V {
-        &self.package_record().version
+    fn name(&self) -> &rattler_conda_types::PackageName {
+        self.name()
     }
 }
 
 /// A struct that holds both a ``Vec` of `DependencyRecord` and a mapping from
 /// name to index.
 #[derive(Clone, Debug)]
-pub struct DependencyRecordsByName<D: HasNameVersion> {
+pub struct DependencyRecordsByName<D: HasName> {
     pub records: Vec<D>,
     by_name: HashMap<D::N, usize>,
 }
 
-impl<D: HasNameVersion> Default for DependencyRecordsByName<D> {
+impl<D: HasName> Default for DependencyRecordsByName<D> {
     fn default() -> Self {
         Self {
             records: Vec::new(),
@@ -78,7 +86,7 @@ impl<D: HasNameVersion> Default for DependencyRecordsByName<D> {
     }
 }
 
-impl<D: HasNameVersion> From<Vec<D>> for DependencyRecordsByName<D> {
+impl<D: HasName> From<Vec<D>> for DependencyRecordsByName<D> {
     fn from(records: Vec<D>) -> Self {
         let by_name = records
             .iter()
@@ -89,7 +97,20 @@ impl<D: HasNameVersion> From<Vec<D>> for DependencyRecordsByName<D> {
     }
 }
 
-impl<D: HasNameVersion> DependencyRecordsByName<D> {
+impl<D: HasName, S> From<HashMap<D::N, D, S>> for DependencyRecordsByName<D> {
+    fn from(iter: HashMap<D::N, D, S>) -> Self {
+        let mut records = Vec::new();
+        let mut by_name = HashMap::new();
+        for (name, record) in iter {
+            let idx = records.len();
+            records.push(record);
+            by_name.insert(name, idx);
+        }
+        Self { records, by_name }
+    }
+}
+
+impl<D: HasName> DependencyRecordsByName<D> {
     /// Returns the record with the given name or `None` if no such record
     /// exists.
     pub(crate) fn by_name(&self, key: &D::N) -> Option<&D> {
@@ -145,33 +166,36 @@ impl<D: HasNameVersion> DependencyRecordsByName<D> {
         Ok(Self { records, by_name })
     }
 
-    /// Constructs a new instance from an iterator of repodata records. The
-    /// records are deduplicated where the record with the highest version
-    /// wins.
-    pub(crate) fn from_iter<I: IntoIterator<Item = D>>(iter: I) -> Self {
-        let iter = iter.into_iter();
-        let min_size = iter.size_hint().0;
-        let mut by_name = HashMap::with_capacity(min_size);
-        let mut records = Vec::with_capacity(min_size);
-        for record in iter {
-            match by_name.entry(record.name().clone()) {
-                Entry::Vacant(entry) => {
-                    let idx = records.len();
-                    records.push(record);
-                    entry.insert(idx);
-                }
-                Entry::Occupied(entry) => {
-                    // Use the entry with the highest version or otherwise the first we encounter.
-                    let idx = *entry.get();
-                    if records[idx].version() < record.version() {
-                        records[idx] = record;
-                    }
-                }
-            }
-        }
+    // /// Constructs a new instance from an iterator of repodata records. The
+    // /// records are deduplicated where the record with the highest version
+    // /// wins.
+    // pub(crate) fn from_iter<I: IntoIterator<Item = D>>(iter: I) -> Self
+    // where
+    //     D: HasVersion,
+    // {
+    //     let iter = iter.into_iter();
+    //     let min_size = iter.size_hint().0;
+    //     let mut by_name = HashMap::with_capacity(min_size);
+    //     let mut records = Vec::with_capacity(min_size);
+    //     for record in iter {
+    //         match by_name.entry(record.name().clone()) {
+    //             Entry::Vacant(entry) => {
+    //                 let idx = records.len();
+    //                 records.push(record);
+    //                 entry.insert(idx);
+    //             }
+    //             Entry::Occupied(entry) => {
+    //                 // Use the entry with the highest version or otherwise the first we encounter.
+    //                 let idx = *entry.get();
+    //                 if records[idx].version() < record.version() {
+    //                     records[idx] = record;
+    //                 }
+    //             }
+    //         }
+    //     }
 
-        Self { records, by_name }
-    }
+    //     Self { records, by_name }
+    // }
 }
 
 impl PixiRecordsByName {
@@ -201,10 +225,12 @@ impl PixiRecordsByName {
                         .ok()
                         .map(move |identifiers| (idx, record, identifiers))
                 }
-                PixiRecord::Source(source_record) => {
-                    PypiPackageIdentifier::from_package_record(&source_record.package_record)
-                        .ok()
-                        .map(move |identifiers| (idx, record, identifiers))
+                PixiRecord::Source(_source_record) => {
+                    // TODO: We dont have a source record so we cannot extract pypi identifiers for source records.
+                    // PypiPackageIdentifier::from_package_record(&source_record.package_record)
+                    //     .ok()
+                    //     .map(move |identifiers| (idx, record, identifiers))
+                    None
                 }
             })
             .flat_map(|(idx, record, identifiers)| {
@@ -214,5 +240,42 @@ impl PixiRecordsByName {
                 })
             })
             .collect::<Result<HashMap<_, _>, ConversionError>>()
+    }
+
+    pub(crate) fn from_iter<I: IntoIterator<Item = PixiRecord>>(iter: I) -> Self {
+        let iter = iter.into_iter();
+        let min_size = iter.size_hint().0;
+        let mut by_name = HashMap::with_capacity(min_size);
+        let mut records = Vec::with_capacity(min_size);
+        for record in iter {
+            match by_name.entry(record.name().clone()) {
+                Entry::Vacant(entry) => {
+                    let idx = records.len();
+                    records.push(record);
+                    entry.insert(idx);
+                }
+                Entry::Occupied(entry) => {
+                    // Use the entry with the highest version or otherwise the first we encounter.
+                    let idx = *entry.get();
+                    let a = &records[idx];
+                    let b = &record;
+                    match (a, b) {
+                        (PixiRecord::Binary(a_rec), PixiRecord::Binary(b_rec)) => {
+                            if a_rec.package_record.version < b_rec.package_record.version {
+                                records[idx] = record;
+                            }
+                        }
+                        (PixiRecord::Binary(_), PixiRecord::Source(_)) => {
+                            // Source overwrites binary
+                            records[idx] = record;
+                        }
+                        // Otherwise ignore
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        Self { records, by_name }
     }
 }

@@ -4,6 +4,7 @@ mod channel_configuration;
 mod conda_package_metadata;
 pub mod procedures;
 mod project_model;
+mod variant;
 
 use std::{fmt::Display, sync::LazyLock};
 
@@ -20,6 +21,7 @@ use rattler_conda_types::{
     version_spec::{LogicalOperator, RangeOperator},
 };
 use serde::{Deserialize, Serialize};
+pub use variant::VariantValue;
 
 // Version 0: Initial version (removed)
 // Version 1: Added conda/outputs and conda/build_v1

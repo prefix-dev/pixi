@@ -36,7 +36,7 @@ pub struct SourceBuildCacheStatusSpec {
     pub package_name: rattler_conda_types::PackageName,
 
     /// The specific variant of the package to query (from the lock file)
-    pub package_variant: BTreeMap<String, VariantValue>,
+    pub package_variant: crate::SelectedVariant,
 
     /// Describes the source location of the package to query.
     pub source: PinnedSourceSpec,
@@ -233,7 +233,7 @@ impl SourceBuildCacheStatusSpec {
 
         // Check if any of the transitive source dependencies have changed.
         for dep in chain!(&source_info.host.packages, &source_info.build.packages) {
-            let BuildHostPackage::Source(source) = &dep else {
+            let Some(source) = &dep.source else {
                 continue;
             };
 
@@ -241,7 +241,7 @@ impl SourceBuildCacheStatusSpec {
             match command_dispatcher
                 .source_build_cache_status(SourceBuildCacheStatusSpec {
                     source: source.source.clone(),
-                    package_name: source.name.clone(),
+                    package_name: dep.repodata_record.package_record.name.clone(),
                     package_variant: source.package_variant.clone(),
                     channels: self.channels.clone(),
                     build_environment: self.build_environment.clone(),
@@ -265,6 +265,7 @@ impl SourceBuildCacheStatusSpec {
                         CachedBuildStatus::Missing | CachedBuildStatus::Stale(_) => {
                             tracing::debug!(
                                 "package is stale because its build dependency '{identifier}' is missing or stale",
+                                identifier = &source
                             );
                             return Ok(CachedBuildStatus::Stale(cached_build));
                         }
@@ -276,10 +277,11 @@ impl SourceBuildCacheStatusSpec {
                             // without also updating this package, or the build of this package
                             // failed previously.
                             if dependency_cached_build.record.package_record.sha256
-                                != Some(source.sha256)
+                                != dep.repodata_record.package_record.sha256
                             {
                                 tracing::debug!(
                                     "package is stale because its build dependency '{identifier}' has changed",
+                                    identifier = &source
                                 );
                                 return Ok(CachedBuildStatus::Stale(cached_build));
                             }

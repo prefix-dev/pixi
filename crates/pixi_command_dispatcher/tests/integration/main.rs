@@ -14,7 +14,7 @@ use pixi_build_backend_passthrough::PassthroughBackend;
 use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
-    InstantiateToolEnvironmentSpec, PackageIdentifier, PixiEnvironmentSpec,
+    InstantiateToolEnvironmentSpec, PackageIdentifier, PixiEnvironmentSpec, SelectedVariant,
     SourceBuildCacheStatusSpec,
 };
 use pixi_config::default_channel_config;
@@ -492,8 +492,8 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
     let rebuild_packages = second_events
         .iter()
         .filter_map(|event| match event {
-            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized())
+            event_reporter::Event::BackendSourceBuildQueued { package_name, .. } => {
+                Some(package_name.as_normalized())
             }
             _ => None,
         })
@@ -562,7 +562,8 @@ async fn source_build_cache_status_clear_works() {
     };
 
     let spec = SourceBuildCacheStatusSpec {
-        package: pkg,
+        package_name: pkg.name,
+        package_variant: SelectedVariant::default(),
         source: PinnedPathSpec {
             path: tmp_dir.path().to_string_lossy().into_owned().into(),
         }
@@ -690,8 +691,8 @@ pub async fn test_force_rebuild() {
     let rebuild_packages = second_events
         .iter()
         .filter_map(|event| match event {
-            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized())
+            event_reporter::Event::BackendSourceBuildQueued { package_name, .. } => {
+                Some(package_name.as_normalized())
             }
             _ => None,
         })
@@ -722,8 +723,8 @@ pub async fn test_force_rebuild() {
     let rebuild_packages = second_events
         .iter()
         .filter_map(|event| match event {
-            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized())
+            event_reporter::Event::BackendSourceBuildQueued { package_name, .. } => {
+                Some(package_name.as_normalized())
             }
             _ => None,
         })
@@ -750,8 +751,8 @@ pub async fn test_force_rebuild() {
     let rebuild_packages = last_events
         .iter()
         .filter_map(|event| match event {
-            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized())
+            event_reporter::Event::BackendSourceBuildQueued { package_name, .. } => {
+                Some(package_name.as_normalized())
             }
             _ => None,
         })

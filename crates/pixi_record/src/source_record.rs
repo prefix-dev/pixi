@@ -6,10 +6,10 @@ use rattler_conda_types::{
     package::RunExportsJson,
 };
 use rattler_digest::{Md5Hash, Sha256, Sha256Hash};
-use rattler_lock::{CondaPackageData, CondaSourceData, VariantValue};
+use rattler_lock::{CondaPackageData, CondaSourceData};
 use serde::{Deserialize, Serialize};
 
-use crate::{ParseLockFileError, PinnedSourceSpec};
+use crate::{ParseLockFileError, PinnedSourceSpec, SelectedVariant};
 
 /// A record of a conda package that still requires building.
 /// This is stored in the lock file and doesn't include version/build information.
@@ -23,7 +23,7 @@ pub struct SourceRecord {
 
     /// Conda-build variants used to disambiguate between multiple source packages
     /// at the same location.
-    pub variants: BTreeMap<String, VariantValue>,
+    pub variants: SelectedVariant,
 
     /// Specification of packages this package depends on
     pub depends: Vec<String>,

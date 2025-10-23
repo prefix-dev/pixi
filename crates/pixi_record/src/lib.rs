@@ -11,6 +11,10 @@ use serde::Serialize;
 pub use source_record::{InputHash, SourceRecord, SourceRecordWithMetadata};
 // Re-export VariantValue for convenience
 pub use rattler_lock::VariantValue;
+
+/// A map of variant keys to their selected values.
+/// Used to uniquely identify which output variant of a source package to build.
+pub type SelectedVariant = std::collections::BTreeMap<String, VariantValue>;
 use thiserror::Error;
 
 /// A record of a conda package that is either something installable from a
@@ -29,6 +33,20 @@ impl PixiRecord {
         match self {
             PixiRecord::Binary(record) => &record.package_record.name,
             PixiRecord::Source(record) => &record.name,
+        }
+    }
+
+    pub fn depends(&self) -> &[String] {
+        match self {
+            PixiRecord::Binary(record) => &record.package_record.depends,
+            PixiRecord::Source(record) => &record.depends,
+        }
+    }
+
+    pub fn constrains(&self) -> &[String] {
+        match self {
+            PixiRecord::Binary(record) => &record.package_record.constrains,
+            PixiRecord::Source(record) => &record.constrains,
         }
     }
 

@@ -16,6 +16,8 @@ use rattler_conda_types::{
 use serde::{Deserialize, Serialize};
 use serde_with::{DefaultOnError, DisplayFromStr, serde_as};
 
+use crate::variant::VariantValue;
+
 pub const METHOD_NAME: &str = "conda/build_v1";
 
 /// Parameters for the `conda/build_v1` request.
@@ -174,7 +176,7 @@ pub struct CondaBuildV1Output {
     pub subdir: Platform,
 
     /// The variant configuration for the package.
-    pub variant: BTreeMap<String, String>,
+    pub variant: BTreeMap<String, VariantValue>,
 }
 
 /// Contains the result of the `conda/build_v1` request.

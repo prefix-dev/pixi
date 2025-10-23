@@ -40,8 +40,11 @@ pub struct BackendSourceBuildSpec {
     #[serde(skip)]
     pub backend: Backend,
 
-    /// The package that we are building.
-    pub package: PackageIdentifier,
+    /// The name of the package to build
+    pub package_name: PackageName,
+
+    /// The platform to build the package for
+    pub platform: Platform,
 
     /// The source location of the package that we are building.
     pub source: PinnedSourceSpec,
@@ -82,7 +85,7 @@ pub struct BackendSourceBuildV1Method {
     /// TODO: This should move to the `SourceRecord` in the future. The variant
     /// is an essential part to identity a particular output of a source
     /// package.
-    pub variant: BTreeMap<String, String>,
+    pub variant: crate::SelectedVariant,
 
     /// The directory where to place the built package. This is used as a hint
     /// for the backend, it may still place the package elsewhere.
@@ -128,7 +131,8 @@ impl BackendSourceBuildSpec {
             BackendSourceBuildMethod::BuildV1(params) => {
                 Self::build_v1(
                     self.backend,
-                    self.package,
+                    self.package_name,
+                    self.platform,
                     params,
                     self.work_directory,
                     self.channels,
@@ -142,7 +146,8 @@ impl BackendSourceBuildSpec {
 
     async fn build_v1(
         backend: Backend,
-        record: PackageIdentifier,
+        package_name: PackageName,
+        platform: Platform,
         params: BackendSourceBuildV1Method,
         work_directory: PathBuf,
         channels: Vec<ChannelUrl>,
@@ -244,14 +249,11 @@ impl BackendSourceBuildSpec {
                             .collect(),
                     }),
                     output: CondaBuildV1Output {
-                        name: record.name.clone(),
-                        version: Some(record.version.clone()),
-                        build: Some(record.build.clone()),
-                        subdir: record
-                            .subdir
-                            .parse()
-                            .expect("found a package record with an unparsable subdir"),
-                        variant: params.variant,
+                        name: package_name,
+                        version: None,
+                        build: None,
+                        subdir: platform,
+                        variant: params.variant.into(),
                     },
                     work_directory: work_directory.clone(),
                     output_directory: params.output_directory,
@@ -264,25 +266,6 @@ impl BackendSourceBuildSpec {
             .await
             .map_err(BackendSourceBuildError::BuildError)
             .map_err(CommandDispatcherError::Failed)?;
-
-        // Make sure that the built package matches the expected output.
-        if v1_built_package_matches_requested(&built_package, &record) {
-            return Err(CommandDispatcherError::Failed(
-                BackendSourceBuildError::UnexpectedPackage(UnexpectedPackageError {
-                    subdir: record.subdir.clone(),
-                    name: record.name.as_normalized().to_string(),
-                    version: record.version.to_string(),
-                    build: record.build.clone(),
-                    packages: vec![format!(
-                        "{}/{}={}={}",
-                        built_package.subdir,
-                        built_package.name,
-                        built_package.version,
-                        built_package.build
-                    )],
-                }),
-            ));
-        };
 
         Ok(BackendBuiltSource {
             input_globs: built_package.input_globs,
@@ -370,44 +353,4 @@ pub enum BackendSourceBuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     BuildError(#[from] CommunicationError),
-
-    #[error(transparent)]
-    UnexpectedPackage(UnexpectedPackageError),
-}
-
-/// An error that can occur when the build backend did not return the expected
-/// package.
-#[derive(Debug, Error)]
-pub struct UnexpectedPackageError {
-    pub subdir: String,
-    pub name: String,
-    pub version: String,
-    pub build: String,
-    pub packages: Vec<String>,
-}
-
-impl Display for UnexpectedPackageError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.packages.len() {
-            0 => write!(
-                f,
-                "The build backend did not return any packages for {}/{}={}={}.",
-                self.subdir, self.name, self.version, self.build
-            ),
-            1 => write!(
-                f,
-                "The build backend did not return the expected package: {}/{}={}={}. Instead the build backend returned {}.",
-                self.subdir, self.name, self.version, self.build, self.packages[0]
-            ),
-            _ => write!(
-                f,
-                "The build backend did not return the expected package: {}/{}={}={}. Instead the following packages were returned:\n- {}",
-                self.subdir,
-                self.name,
-                self.version,
-                self.build,
-                self.packages.iter().format("\n- ")
-            ),
-        }
-    }
 }

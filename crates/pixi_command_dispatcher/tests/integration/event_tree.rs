@@ -162,7 +162,7 @@ impl EventTree {
                 Event::SourceBuildQueued { id, context, spec } => {
                     source_build_label.insert(
                         *id,
-                        format!("{} @ {}", spec.package.name.as_source(), spec.source),
+                        format!("{} @ {}", spec.package_name.as_source(), spec.source),
                     );
                     builder.set_event_parent((*id).into(), *context);
                 }
@@ -175,10 +175,10 @@ impl EventTree {
                 Event::SourceBuildFinished { .. } => {}
                 Event::BackendSourceBuildQueued {
                     id,
-                    package,
+                    package_name,
                     context,
                 } => {
-                    backend_source_build_labels.insert(*id, package.name.as_source().to_owned());
+                    backend_source_build_labels.insert(*id, package_name.as_source().to_owned());
                     builder.set_event_parent((*id).into(), *context);
                 }
                 Event::BackendSourceBuildStarted { id } => {

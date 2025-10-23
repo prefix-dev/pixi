@@ -498,7 +498,7 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let (ignored_conda, ignored_pypi): (HashSet<_>, HashSet<_>) =
                     ignored.into_iter().partition_map(|p| match p {
-                        LockedPackageRef::Conda(data) => Either::Left(data.record().name.clone()),
+                        LockedPackageRef::Conda(data) => Either::Left(data.name().clone()),
                         LockedPackageRef::Pypi(data, _) => Either::Right(data.name.clone()),
                     });
 
@@ -2121,7 +2121,7 @@ async fn spawn_extract_environment_task(
         match record {
             PackageRecord::Conda(record) => {
                 // Find all dependencies in the record and add them to the queue.
-                for dependency in record.package_record().depends.iter() {
+                for dependency in record.depends().iter() {
                     let dependency_name =
                         PackageName::Conda(rattler_conda_types::PackageName::new_unchecked(
                             dependency.split_once(' ').unwrap_or((dependency, "")).0,
@@ -2181,9 +2181,10 @@ async fn spawn_extract_environment_task(
     Ok(TaskResult::ExtractedRecordsSubset(
         environment.name().clone(),
         platform,
-        Arc::new(PixiRecordsByName::from_iter(
-            pixi_records.into_iter().cloned(),
-        )),
+        Arc::new(
+            PixiRecordsByName::from_unique_iter(pixi_records.into_iter().cloned())
+                .expect("solver should never return multiple entries for a single package name"),
+        ),
         Arc::new(PypiRecordsByName::from_iter(
             pypi_records.into_values().cloned(),
         )),

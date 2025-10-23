@@ -415,18 +415,16 @@ fn find_inconsistent_solve_groups<'p>(
 
             for package in locked_env.packages(platform).into_iter().flatten() {
                 match package {
-                    LockedPackageRef::Conda(pkg) => {
-                        match conda_packages_by_name.get(&pkg.record().name) {
-                            None => {
-                                conda_packages_by_name
-                                    .insert(pkg.record().name.clone(), pkg.location().clone());
-                            }
-                            Some(url) if pkg.location() != url => {
-                                conda_package_mismatch = true;
-                            }
-                            _ => {}
+                    LockedPackageRef::Conda(pkg) => match conda_packages_by_name.get(pkg.name()) {
+                        None => {
+                            conda_packages_by_name
+                                .insert(pkg.name().clone(), pkg.location().clone());
                         }
-                    }
+                        Some(url) if pkg.location() != url => {
+                            conda_package_mismatch = true;
+                        }
+                        _ => {}
+                    },
                     LockedPackageRef::Pypi(pkg, _) => match pypi_packages_by_name.get(&pkg.name) {
                         None => {
                             pypi_packages_by_name.insert(pkg.name.clone(), pkg.location.clone());

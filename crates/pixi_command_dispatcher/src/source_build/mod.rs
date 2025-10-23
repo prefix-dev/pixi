@@ -11,8 +11,8 @@ use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_record::{PinnedSourceSpec, PixiRecord};
 use pixi_spec::{SourceAnchor, SourceSpec};
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageRecord,
-    Platform, RepoDataRecord, prefix::Prefix,
+    ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageName,
+    PackageRecord, Platform, RepoDataRecord, prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
 use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
@@ -30,11 +30,10 @@ use crate::{
     SolvePixiEnvironmentError, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec,
     SourceCheckoutError,
     build::{
-        BuildCacheError, BuildHostEnvironment, BuildHostPackage, CachedBuild,
-        CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, PackageBuildInputHash,
-        PixiRunExports, SourceRecordOrCheckout, WorkDirKey, move_file,
+        BuildCacheError, BuildHostEnvironment, BuildHostPackage, BuildHostSourcePackage,
+        CachedBuild, CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError,
+        PackageBuildInputHash, PixiRunExports, SourceRecordOrCheckout, WorkDirKey, move_file,
     },
-    package_identifier::PackageIdentifier,
 };
 
 /// Describes all parameters required to build a conda package from a pixi
@@ -51,7 +50,7 @@ pub struct SourceBuildSpec {
     pub package_name: PackageName,
 
     /// The specific variant of the package to build (from the lock file)
-    pub package_variant: BTreeMap<String, pixi_record::VariantValue>,
+    pub package_variant: crate::SelectedVariant,
 
     /// The location of the source code to build.
     pub source: PinnedSourceSpec,
@@ -123,7 +122,7 @@ impl SourceBuildSpec {
         name = "source-build",
         fields(
             source= %self.source,
-            package = %self.package_name,
+            package = %self.package_name.as_normalized(),
         )
     )]
     pub(crate) async fn build(
@@ -179,7 +178,7 @@ impl SourceBuildSpec {
             if let CachedBuildStatus::New(cached_build) = &*build_cache.cached_build.lock().await {
                 tracing::debug!(
                     "source build for {} is already built and marked as new, reusing the cache entry",
-                    self.package.name.as_normalized()
+                    self.package_name.as_normalized()
                 );
                 tracing::debug!(
                     source = %self.source,
@@ -436,12 +435,12 @@ impl SourceBuildSpec {
             .into_iter()
             .find(|output| {
                 output.metadata.name == self.package_name
-                    && output.metadata.variant == self.package_variant
+                    && self.package_variant == output.metadata.variant
             })
             .ok_or_else(|| {
                 CommandDispatcherError::Failed(SourceBuildError::MissingOutput {
                     name: self.package_name.as_normalized().to_string(),
-                    variant: self.package_variant.clone(),
+                    variant: self.package_variant.clone().into(),
                 })
             })?;
 
@@ -493,7 +492,7 @@ impl SourceBuildSpec {
             .extend_with_run_exports_from_build(&build_run_exports);
         let mut host_records = self
             .solve_dependencies(
-                format!("{} (host)", self.package.name.as_source()),
+                format!("{} (host)", self.package_name.as_source()),
                 &command_dispatcher,
                 host_dependencies.clone(),
                 self.build_environment.clone(),
@@ -519,7 +518,7 @@ impl SourceBuildSpec {
             Some(
                 command_dispatcher
                     .install_pixi_environment(InstallPixiEnvironmentSpec {
-                        name: format!("{} (build)", self.package_name.name.as_source()),
+                        name: format!("{} (build)", self.package_name.as_source()),
                         records: build_records.clone(),
                         prefix: Prefix::create(&directories.build_prefix)
                             .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
@@ -552,7 +551,7 @@ impl SourceBuildSpec {
             Some(
                 command_dispatcher
                     .install_pixi_environment(InstallPixiEnvironmentSpec {
-                        name: format!("{} (host)", self.package_name.name.as_source()),
+                        name: format!("{} (host)", self.package_name.as_source()),
                         records: host_records.clone(),
                         prefix: host_prefix_directory,
                         installed: None,
@@ -619,11 +618,12 @@ impl SourceBuildSpec {
                             .map(|p| p.repodata_record.clone())
                             .collect(),
                     },
-                    variant: output.metadata.variant,
+                    variant: output.metadata.variant.into(),
                     output_directory: self.output_directory,
                 }),
                 backend,
-                package: self.package_name,
+                package_name: self.package_name,
+                platform: output.metadata.subdir,
                 source: self.source,
                 work_directory,
                 channels: self.channels,
@@ -672,7 +672,10 @@ impl SourceBuildSpec {
                         .expect("the source record should be present in the result sources");
                     BuildHostPackage {
                         repodata_record,
-                        source: Some(source.source),
+                        source: Some(BuildHostSourcePackage {
+                            source: source.source,
+                            package_variant: source.variants.into(),
+                        }),
                     }
                 }
             })
@@ -824,7 +827,7 @@ pub enum SourceBuildError {
     )]
     MissingOutput {
         name: String,
-        variant: BTreeMap<String, pixi_record::VariantValue>,
+        variant: crate::SelectedVariant,
     },
 
     #[error(

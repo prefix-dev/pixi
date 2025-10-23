@@ -215,7 +215,7 @@ impl InstallPixiEnvironmentSpec {
             .source_build(SourceBuildSpec {
                 source: source_record.source.clone(),
                 package_name: source_record.name.clone(),
-                package_variant: source_record.variants.clone(),
+                package_variant: source_record.variants.clone().into(),
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
                 build_environment: self.build_environment.clone(),

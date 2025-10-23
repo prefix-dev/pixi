@@ -15,7 +15,7 @@ pub use pixi_python_status::PythonStatus;
 use pixi_spec::{GitSpec, PixiSpec};
 use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, LockedPackageRef};
+use rattler_lock::{CondaPackageData, LockFile, LockedPackageRef};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
@@ -183,12 +183,17 @@ impl LockedEnvironmentHash {
 
                 match package {
                     // A select set of fields are used to hash the package
-                    LockedPackageRef::Conda(pack) => {
-                        if let Some(sha) = pack.record().sha256 {
+                    LockedPackageRef::Conda(CondaPackageData::Binary(data)) => {
+                        if let Some(sha) = data.package_record.sha256 {
                             sha.hash(&mut hasher);
-                        } else if let Some(md5) = pack.record().md5 {
+                        } else if let Some(md5) = data.package_record.md5 {
                             md5.hash(&mut hasher);
                         }
+                    }
+                    LockedPackageRef::Conda(CondaPackageData::Source(data)) => {
+                        data.location.hash(&mut hasher);
+                        data.variants.hash(&mut hasher);
+                        data.name.hash(&mut hasher);
                     }
                     LockedPackageRef::Pypi(pack, env) => {
                         pack.editable.hash(&mut hasher);

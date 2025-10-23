@@ -47,7 +47,7 @@ pub struct BuildInput {
     pub name: String,
 
     /// The specific variant of the package (from the lock file)
-    pub package_variant: std::collections::BTreeMap<String, pixi_record::VariantValue>,
+    pub package_variant: crate::SelectedVariant,
 
     /// The host platform
     pub host_platform: Platform,
@@ -234,32 +234,28 @@ pub struct BuildHostEnvironment {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum BuildHostPackage {
-    Source(BuildHostSourcePackage),
-    Binary(RepoDataRecord),
+pub struct BuildHostPackage {
+    #[serde(flatten)]
+    pub repodata_record: RepoDataRecord,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<BuildHostSourcePackage>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BuildHostSourcePackage {
-    pub name: rattler_conda_types::PackageName,
-
     /// The location of the source code.
     pub source: PinnedSourceSpec,
 
     /// The package variant to build the package
-    pub package_variant: BTreeMap<String, VariantValue>,
-
-    /// The hash of the package that was build and include in the build/host environment.
-    pub sha256: Sha256Hash,
+    pub package_variant: crate::SelectedVariant,
 }
 
 impl Display for BuildHostSourcePackage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}{}({})",
-            self.name.as_normalized(),
+            "{}({})",
             self.source,
             self.package_variant
                 .iter()
