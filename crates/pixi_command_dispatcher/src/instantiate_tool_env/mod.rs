@@ -224,8 +224,9 @@ impl InstantiateToolEnvironmentSpec {
         // Ensure that the solution contains matching api version package
         let Some(api_version) = solved_environment
             .iter()
-            .find(|r| r.package_record().name == *PIXI_BUILD_API_VERSION_NAME)
-            .map(|r| r.package_record().version.as_ref())
+            .find(|r| r.name() == &*PIXI_BUILD_API_VERSION_NAME)
+            .and_then(|r| r.package_record())
+            .map(|pr| pr.version.as_ref())
             .and_then(PixiBuildApiVersion::from_version)
         else {
             return Err(CommandDispatcherError::Failed(
@@ -238,9 +239,10 @@ impl InstantiateToolEnvironmentSpec {
         // Extract the version of the main requirement package.
         let version = solved_environment
             .iter()
-            .find(|r| r.package_record().name == self.requirement.0)
+            .find(|r| r.name() == &self.requirement.0)
             .expect("The solved environment should always contain the main requirement package")
             .package_record()
+            .expect("The main requirement should be a binary package")
             .version
             .clone();
 

@@ -31,8 +31,11 @@ use crate::{
 /// 2. A build dependency changed.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct SourceBuildCacheStatusSpec {
-    /// Describes the package to query in the source build cache.
-    pub package: PackageIdentifier,
+    /// The name of the package to query in the source build cache.
+    pub package_name: rattler_conda_types::PackageName,
+
+    /// The specific variant of the package to query (from the lock file)
+    pub package_variant: std::collections::BTreeMap<String, pixi_record::VariantValue>,
 
     /// Describes the source location of the package to query.
     pub source: PinnedSourceSpec,

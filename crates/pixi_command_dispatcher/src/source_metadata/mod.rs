@@ -7,7 +7,7 @@ use futures::TryStreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
-use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
+use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord, SourceRecordWithMetadata};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
@@ -45,8 +45,8 @@ pub struct SourceMetadata {
     /// package.
     pub source: PinnedSourceSpec,
 
-    /// All the source records for this particular package.
-    pub records: Vec<SourceRecord>,
+    /// All the source records with metadata for this particular package.
+    pub records: Vec<SourceRecordWithMetadata>,
 
     /// All package names that where skipped but the backend could provide.
     pub skipped_packages: Vec<PackageName>,
@@ -125,7 +125,7 @@ impl SourceMetadataSpec {
         input_hash: Option<InputHash>,
         source: PinnedSourceSpec,
         reporter: Option<Arc<dyn RunExportsReporter>>,
-    ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
+    ) -> Result<SourceRecordWithMetadata, CommandDispatcherError<SourceMetadataError>> {
         let source_anchor = SourceAnchor::from(SourceSpec::from(source.clone()));
 
         // Solve the build environment for the output.
@@ -287,65 +287,53 @@ impl SourceMetadataSpec {
             strong_constrains: binary_specs_to_match_spec(run_exports.strong_constrains)?,
         };
 
-        Ok(SourceRecord {
-            package_record: PackageRecord {
-                // We cannot now these values from the metadata because no actual package
-                // was built yet.
-                size: None,
-                sha256: None,
-                md5: None,
-
-                // TODO(baszalmstra): Decide if it makes sense to include the current
-                //  timestamp here.
-                timestamp: None,
-
-                // These values are derived from the build backend values.
-                platform: output
-                    .metadata
-                    .subdir
-                    .only_platform()
-                    .map(ToString::to_string),
-                arch: output
-                    .metadata
-                    .subdir
-                    .arch()
-                    .as_ref()
-                    .map(ToString::to_string),
-
-                // These values are passed by the build backend
+        Ok(SourceRecordWithMetadata {
+            source_record: SourceRecord {
                 name: output.metadata.name.clone(),
-                build: output.metadata.build.clone(),
-                version: output.metadata.version.clone(),
-                build_number: output.metadata.build_number,
-                license: output.metadata.license.clone(),
-                subdir: output.metadata.subdir.to_string(),
-                license_family: output.metadata.license_family.clone(),
-                noarch: output.metadata.noarch,
-                constrains,
+                source,
+                variants: Default::default(), // TODO: extract variants from build metadata
                 depends,
-                run_exports: Some(run_exports),
+                constrains,
+                experimental_extra_depends: Default::default(),
+                license: output.metadata.license.clone(),
                 purls: output
                     .metadata
                     .purls
                     .as_ref()
                     .map(|purls| purls.iter().cloned().collect()),
+                input_hash,
+                sources: sources
+                    .into_iter()
+                    .map(|(name, source)| (name.as_source().to_string(), source))
+                    .collect(),
                 python_site_packages_path: output.metadata.python_site_packages_path.clone(),
-
-                // These are deprecated and no longer used.
-                features: None,
-                track_features: vec![],
-                legacy_bz2_md5: None,
-                legacy_bz2_size: None,
-
-                // These are not important at this point.
-                experimental_extra_depends: Default::default(),
             },
-            source,
-            input_hash,
-            sources: sources
-                .into_iter()
-                .map(|(name, source)| (name.as_source().to_string(), source))
-                .collect(),
+            version: output.metadata.version.clone(),
+            build: output.metadata.build.clone(),
+            build_number: output.metadata.build_number,
+            subdir: output.metadata.subdir.to_string(),
+            arch: output
+                .metadata
+                .subdir
+                .arch()
+                .as_ref()
+                .map(ToString::to_string),
+            platform: output
+                .metadata
+                .subdir
+                .only_platform()
+                .map(ToString::to_string),
+            md5: None,
+            sha256: None,
+            size: None,
+            track_features: vec![],
+            features: None,
+            license_family: output.metadata.license_family.clone(),
+            timestamp: None,
+            run_exports: Some(run_exports),
+            noarch: output.metadata.noarch,
+            legacy_bz2_md5: None,
+            legacy_bz2_size: None,
         })
     }
 

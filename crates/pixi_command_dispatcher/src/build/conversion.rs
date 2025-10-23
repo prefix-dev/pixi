@@ -1,7 +1,7 @@
 use pixi_build_types::{
     BinaryPackageSpecV1, CondaPackageMetadata, PackageSpecV1, SourcePackageSpecV1,
 };
-use pixi_record::{InputHash, PinnedSourceSpec, SourceRecord};
+use pixi_record::{InputHash, PinnedSourceSpec, SourceRecord, SourceRecordWithMetadata};
 use pixi_spec::{BinarySpec, DetailedSpec, SourceLocationSpec, UrlBinarySpec};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, PackageRecord};
 
@@ -102,62 +102,48 @@ pub(crate) fn package_metadata_to_source_records(
     packages: &[CondaPackageMetadata],
     package: &PackageName,
     input_hash: &Option<InputHash>,
-) -> Vec<SourceRecord> {
-    // Convert the metadata to repodata
+) -> Vec<SourceRecordWithMetadata> {
+    // Convert the metadata to source records with metadata
 
     packages
         .iter()
         .filter(|pkg| pkg.name == *package)
         .map(|p| {
-            SourceRecord {
-                input_hash: input_hash.clone(),
-                source: source.clone(),
-                sources: p
-                    .sources
-                    .iter()
-                    .map(|(name, source)| (name.clone(), from_source_spec_v1(source.clone())))
-                    .collect(),
-                package_record: PackageRecord {
-                    // We cannot now these values from the metadata because no actual package
-                    // was built yet.
-                    size: None,
-                    sha256: None,
-                    md5: None,
-
-                    // TODO(baszalmstra): Decide if it makes sense to include the current
-                    // timestamp here.
-                    timestamp: None,
-
-                    // These values are derived from the build backend values.
-                    platform: p.subdir.only_platform().map(ToString::to_string),
-                    arch: p.subdir.arch().as_ref().map(ToString::to_string),
-
-                    // These values are passed by the build backend
+            SourceRecordWithMetadata {
+                source_record: SourceRecord {
                     name: p.name.clone(),
-                    build: p.build.clone(),
-                    version: p.version.clone(),
-                    build_number: p.build_number,
-                    license: p.license.clone(),
-                    subdir: p.subdir.to_string(),
-                    license_family: p.license_family.clone(),
-                    noarch: p.noarch,
-                    constrains: p.constraints.iter().map(|c| c.to_string()).collect(),
+                    source: source.clone(),
+                    variants: Default::default(),
                     depends: p.depends.iter().map(|c| c.to_string()).collect(),
-
-                    // These are deprecated and no longer used.
-                    features: None,
-                    track_features: vec![],
-                    legacy_bz2_md5: None,
-                    legacy_bz2_size: None,
-                    python_site_packages_path: None,
-
-                    // TODO(baszalmstra): Add support for these.
-                    purls: None,
-
-                    // These are not important at this point.
-                    run_exports: None,
+                    constrains: p.constraints.iter().map(|c| c.to_string()).collect(),
                     experimental_extra_depends: Default::default(),
+                    license: p.license.clone(),
+                    purls: None,
+                    input_hash: input_hash.clone(),
+                    sources: p
+                        .sources
+                        .iter()
+                        .map(|(name, source)| (name.clone(), from_source_spec_v1(source.clone())))
+                        .collect(),
+                    python_site_packages_path: None,
                 },
+                version: p.version.clone(),
+                build: p.build.clone(),
+                build_number: p.build_number,
+                subdir: p.subdir.to_string(),
+                arch: p.subdir.arch().as_ref().map(ToString::to_string),
+                platform: p.subdir.only_platform().map(ToString::to_string),
+                md5: None,
+                sha256: None,
+                size: None,
+                track_features: vec![],
+                features: None,
+                license_family: p.license_family.clone(),
+                timestamp: None,
+                run_exports: None,
+                noarch: p.noarch,
+                legacy_bz2_md5: None,
+                legacy_bz2_size: None,
             }
         })
         .collect()

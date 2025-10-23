@@ -226,10 +226,10 @@ impl Dependencies {
         let mut relevant_records = records
             .iter_mut()
             // Only record run exports for packages that are direct dependencies.
-            .filter(|r| self.dependencies.contains_key(&r.package_record().name))
+            .filter(|r| self.dependencies.contains_key(r.name()))
             // Filter based on whether we want to ignore run exports for a particular
             // package.
-            .filter(|r| !ignore.from_package.contains(&r.package_record().name))
+            .filter(|r| !ignore.from_package.contains(r.name()))
             .collect::<Vec<_>>();
 
         // Determine the records that have missing run exports.
@@ -246,21 +246,22 @@ impl Dependencies {
 
         for record in relevant_records {
             // Only record run exports for packages that are direct dependencies.
-            if !self
-                .dependencies
-                .contains_key(&record.package_record().name)
-            {
+            if !self.dependencies.contains_key(record.name()) {
                 continue;
             }
 
             // Filter based on whether we want to ignore run exports for a particular
             // package.
-            if ignore.from_package.contains(&record.package_record().name) {
+            if ignore.from_package.contains(record.name()) {
                 continue;
             }
 
             // Make sure we have valid run exports.
-            let Some(run_exports) = &record.package_record().run_exports else {
+            // Only binary packages have run_exports
+            let Some(package_record) = record.package_record() else {
+                continue;
+            };
+            let Some(run_exports) = &package_record.run_exports else {
                 // No run-exports found
                 continue;
             };

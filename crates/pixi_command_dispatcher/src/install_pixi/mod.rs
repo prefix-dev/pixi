@@ -139,7 +139,7 @@ impl InstallPixiEnvironmentSpec {
             if self
                 .ignore_packages
                 .as_ref()
-                .is_some_and(|ignore| ignore.contains(&source_record.package_record.name))
+                .is_some_and(|ignore| ignore.contains(&source_record.name))
             {
                 continue;
             }
@@ -212,15 +212,16 @@ impl InstallPixiEnvironmentSpec {
         // Verify if we need to force the build even if the cache is up to date.
         let force = self
             .force_reinstall
-            .contains(&source_record.package_record.name);
+            .contains(&source_record.name);
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
                 source: source_record.source.clone(),
-                package: source_record.into(),
+                package_name: source_record.name.clone(),
+                package_variant: source_record.variants.clone(),
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
                 build_environment: self.build_environment.clone(),
-                variants: self.variants.clone(),
+                variant_config: self.variants.clone(),
                 variant_files: self.variant_files.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 output_directory: None,
@@ -247,7 +248,7 @@ pub enum InstallPixiEnvironmentError {
     Installer(InstallerError),
 
     #[error("failed to build '{}' from '{}'",
-        .0.package_record.name.as_source(),
+        .0.name.as_source(),
         .0.source)]
     BuildSourceError(
         Box<SourceRecord>,

@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
-use pixi_record::{PixiRecord, SourceRecord};
+use pixi_record::{PixiRecord, SourceRecord, SourceRecordWithMetadata};
 use pixi_spec::{BinarySpec, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
@@ -144,14 +144,15 @@ impl SolveCondaEnvironmentSpec {
             for source_metadata in &self.source_repodata {
                 for record in &source_metadata.records {
                     let url = unique_url(record);
+                    let package_record = record.as_package_record();
                     let repodata_record = RepoDataRecord {
-                        package_record: record.package_record.clone(),
+                        package_record: package_record.clone(),
                         url: url.clone(),
                         file_name: format!(
                             "{}-{}-{}.source",
-                            record.package_record.name.as_normalized(),
-                            &record.package_record.version,
-                            &record.package_record.build
+                            package_record.name.as_normalized(),
+                            &package_record.version,
+                            &package_record.build
                         ),
                         channel: None,
                     };
@@ -201,8 +202,8 @@ impl SolveCondaEnvironmentSpec {
                     .map(|record| {
                         url_to_source_package.remove(&record.url).map_or_else(
                             || PixiRecord::Binary(record),
-                            |(source_record, _repodata_record)| {
-                                PixiRecord::Source(source_record.clone())
+                            |(resolved_source_record, _repodata_record)| {
+                                PixiRecord::Source(resolved_source_record.source_record.clone())
                             },
                         )
                     })
@@ -222,15 +223,15 @@ impl SolveCondaEnvironmentSpec {
 }
 
 /// Generates a unique URL for a source record.
-fn unique_url(source: &SourceRecord) -> Url {
-    let mut url = source.source.identifiable_url();
+fn unique_url(source: &SourceRecordWithMetadata) -> Url {
+    let mut url = source.source_record.source.identifiable_url();
 
     // Add unique identifiers to the URL.
     url.query_pairs_mut()
-        .append_pair("name", source.package_record.name.as_source())
-        .append_pair("version", &source.package_record.version.as_str())
-        .append_pair("build", &source.package_record.build)
-        .append_pair("subdir", &source.package_record.subdir);
+        .append_pair("name", source.source_record.name.as_source())
+        .append_pair("version", &source.version.as_str())
+        .append_pair("build", &source.build)
+        .append_pair("subdir", &source.subdir);
 
     url
 }

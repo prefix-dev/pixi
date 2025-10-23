@@ -47,8 +47,11 @@ use crate::{
 /// be done serially.
 #[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash)]
 pub struct SourceBuildSpec {
-    /// The source to build
-    pub package: PackageIdentifier,
+    /// The name of the package to build
+    pub package_name: PackageName,
+
+    /// The specific variant of the package to build (from the lock file)
+    pub package_variant: BTreeMap<String, pixi_record::VariantValue>,
 
     /// The location of the source code to build.
     pub source: PinnedSourceSpec,
@@ -71,8 +74,8 @@ pub struct SourceBuildSpec {
     /// The build profile to use for the build.
     pub build_profile: BuildProfile,
 
-    /// Build variants to use during the build
-    pub variants: Option<BTreeMap<String, Vec<String>>>,
+    /// Build variant configuration to use during the build
+    pub variant_config: Option<BTreeMap<String, Vec<String>>>,
 
     /// Build variant file contents to use during the build
     pub variant_files: Option<Vec<PathBuf>>,
@@ -138,7 +141,8 @@ impl SourceBuildSpec {
             // Query the source build cache.
             let build_cache = command_dispatcher
                 .source_build_cache_status(SourceBuildCacheStatusSpec {
-                    package: self.package.clone(),
+                    package_name: self.package_name.clone(),
+                    package_variant: self.package_variant.clone(),
                     build_environment: self.build_environment.clone(),
                     source: self.source.clone(),
                     channels: self.channels.clone(),
@@ -253,7 +257,7 @@ impl SourceBuildSpec {
                 WorkDirKey {
                     source: SourceRecordOrCheckout::Record {
                         pinned: self.source.clone(),
-                        package_name: self.package.name.clone(),
+                        package_name: self.package_name.clone(),
                     },
                     host_platform: self.build_environment.host_platform,
                     build_backend: backend.identifier().to_string(),
@@ -416,7 +420,7 @@ impl SourceBuildSpec {
             .conda_outputs(CondaOutputsParams {
                 host_platform,
                 build_platform,
-                variant_configuration: self.variants.clone(),
+                variant_configuration: self.variant_config.clone(),
                 variant_files: self.variant_files.clone(),
                 work_directory: work_directory.clone(),
                 channels: self.channels.clone(),
@@ -426,22 +430,18 @@ impl SourceBuildSpec {
             .map_err(SourceBuildError::from)
             .map_err(CommandDispatcherError::Failed)?;
 
-        // Find the output that we want to build.
+        // Find the output that we want to build by matching name and variants.
         let output = outputs
             .outputs
             .into_iter()
             .find(|output| {
-                output.metadata.name == self.package.name
-                    && output.metadata.version == self.package.version
-                    && output.metadata.build == self.package.build
-                    && output.metadata.subdir.as_str() == self.package.subdir
+                output.metadata.name == self.package_name
+                    && output.metadata.variant == self.package_variant
             })
             .ok_or_else(|| {
                 CommandDispatcherError::Failed(SourceBuildError::MissingOutput {
-                    subdir: self.package.subdir.clone(),
-                    name: self.package.name.as_normalized().to_string(),
-                    version: self.package.version.to_string(),
-                    build: self.package.build.clone(),
+                    name: self.package_name.as_normalized().to_string(),
+                    variant: self.package_variant.clone(),
                 })
             })?;
 
@@ -667,7 +667,7 @@ impl SourceBuildSpec {
                 PixiRecord::Source(source) => {
                     let repodata_record = prefix
                         .resolved_source_records
-                        .get(&source.package_record.name)
+                        .get(&source.name)
                         .cloned()
                         .expect("the source record should be present in the result sources");
                     BuildHostPackage {
@@ -820,13 +820,11 @@ pub enum SourceBuildError {
     InstallHostEnvironment(#[source] Box<InstallPixiEnvironmentError>),
 
     #[error(
-        "The build backend does not provide the requested output: {subdir}/{name}={version}={build}."
+        "The build backend does not provide the requested output for package '{name}' with variant {variant:?}."
     )]
     MissingOutput {
-        subdir: String,
         name: String,
-        version: String,
-        build: String,
+        variant: BTreeMap<String, pixi_record::VariantValue>,
     },
 
     #[error(
