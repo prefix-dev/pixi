@@ -37,7 +37,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Err(e) => {
                 // If parsing fails, check if it might be legacy format without http(s)
                 if !args.args.is_empty() {
-                    eprintln!("Failed to parse upload command: {}", e);
+                    eprintln!("Failed to parse upload command: {e}");
                     eprintln!();
                     eprintln!("Note: The upload command format has changed. Examples:");
                     eprintln!("  pixi upload prefix --channel my_channel my_package.conda");
@@ -86,16 +86,14 @@ fn parse_legacy_format(args: Vec<String>) -> miette::Result<UploadOpts> {
 
     let url = Url::parse(url_str)
         .into_diagnostic()
-        .map_err(|e| miette::miette!("Failed to parse URL '{}': {}", url_str, e))?;
+        .map_err(|e| miette::miette!("Failed to parse URL '{url_str}': {e}"))?;
 
     // Try to detect the server type and extract the channel from the URL
     let (server_type, detected_url, channel) = detect_server_type_from_url(&url)?;
 
     eprintln!("Using legacy upload format. Consider using the new format:");
     eprintln!(
-        "  pixi upload {} --channel {} {}",
-        server_type,
-        channel,
+        "  pixi upload {server_type} --channel {channel} {}",
         package_files
             .iter()
             .map(|p| p.display().to_string())
