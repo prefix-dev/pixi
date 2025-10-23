@@ -4848,7 +4848,6 @@ dependencies = [
  "pypi_modifiers",
  "rattler",
  "rattler_conda_types",
- "rattler_digest",
  "rattler_lock",
  "rattler_networking",
  "rattler_repodata_gateway",
