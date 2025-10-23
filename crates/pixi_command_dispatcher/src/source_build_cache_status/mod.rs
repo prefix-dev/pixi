@@ -265,7 +265,6 @@ impl SourceBuildCacheStatusSpec {
                         CachedBuildStatus::Missing | CachedBuildStatus::Stale(_) => {
                             tracing::debug!(
                                 "package is stale because its build dependency '{identifier}' is missing or stale",
-                                identifier = source.name.as_source()
                             );
                             return Ok(CachedBuildStatus::Stale(cached_build));
                         }
@@ -281,7 +280,6 @@ impl SourceBuildCacheStatusSpec {
                             {
                                 tracing::debug!(
                                     "package is stale because its build dependency '{identifier}' has changed",
-                                    identifier = source.name.as_source()
                                 );
                                 return Ok(CachedBuildStatus::Stale(cached_build));
                             }
