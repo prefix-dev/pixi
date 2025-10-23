@@ -356,7 +356,7 @@ impl<'a> From<&'a DiscoveredBackend> for PackageBuildInputHash {
 
             // These fields are not relevant for the package build input hash
             workspace_root: _,
-            source: _,
+            build_source: _,
             source_anchor: _,
             manifest_path: _,
         } = &value.init_params;

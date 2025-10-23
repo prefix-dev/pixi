@@ -14,7 +14,7 @@ backend-spec:
       - "https://prefix.dev/conda-forge"
 init-params:
   workspace-root: "file://<ROOT>/recipe_yaml"
-  source: ~
+  build-source: ~
   source-anchor: "file://<ROOT>/recipe_yaml"
   manifest-path: "file://<ROOT>/recipe_yaml/recipe.yaml"
   project-model: ~

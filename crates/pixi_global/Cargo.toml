@@ -46,6 +46,7 @@ rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
 rstest = { workspace = true }
 serde = { workspace = true }
+serde_derive = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
 tempfile = { workspace = true }

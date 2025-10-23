@@ -16,7 +16,7 @@ use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use tempfile::tempdir;
 
-use crate::cli_config::WorkspaceConfig;
+use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
@@ -26,6 +26,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub config_cli: ConfigCli,
+
+    #[clap(flatten)]
+    pub lock_and_install_config: LockAndInstallConfig,
 
     /// The target platform to build for (defaults to the current platform)
     #[clap(long, short, default_value_t = Platform::current())]
@@ -124,20 +127,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()?;
 
     // Determine the source of the package.
-    let source: PinnedSourceSpec = PinnedPathSpec {
-        path: manifest_spec_path.to_string_lossy().into_owned().into(),
+    let manifest_path_dir = if manifest_spec_path.is_file() {
+        if let Some(parent) = manifest_spec_path.parent() {
+            parent
+        } else {
+            miette::bail!(
+                "explicit manifest path: {} doesn't have a parent",
+                manifest_spec_path.display()
+            );
+        }
+    } else {
+        manifest_spec_path.as_ref()
+    };
+    let manifest_source: PinnedSourceSpec = PinnedPathSpec {
+        path: manifest_path_dir.to_string_lossy().into_owned().into(),
     }
     .into();
 
     // Create the build backend metadata specification.
     let backend_metadata_spec = BuildBackendMetadataSpec {
-        source: source.clone(),
+        manifest_source: manifest_source.clone(),
         channels: channels.clone(),
         channel_config: channel_config.clone(),
         build_environment: build_environment.clone(),
         variants: Some(variants.clone()),
         variant_files: Some(variant_files.clone()),
         enabled_protocols: Default::default(),
+        pin_override: None,
     };
     let backend_metadata = command_dispatcher
         .build_backend_metadata(backend_metadata_spec.clone())
@@ -168,7 +184,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 package,
                 // Build into a temporary directory first
                 output_directory: Some(temp_output_dir.path().to_path_buf()),
-                source: source.clone(),
+                manifest_source: manifest_source.clone(),
+                build_source: None,
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),

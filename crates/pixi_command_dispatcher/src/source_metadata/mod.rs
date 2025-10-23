@@ -1,6 +1,9 @@
 mod cycle;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 pub use cycle::{Cycle, CycleEnvironment};
 use futures::TryStreamExt;
@@ -45,6 +48,8 @@ pub struct SourceMetadata {
     /// package.
     pub source: PinnedSourceSpec,
 
+    pub pinned_build_source: Option<PinnedSourceSpec>,
+
     /// All the source records for this particular package.
     pub records: Vec<SourceRecord>,
 
@@ -57,7 +62,7 @@ impl SourceMetadataSpec {
         skip_all,
         name = "source-metadata",
         fields(
-            source= %self.backend_metadata.source,
+            source= %self.backend_metadata.manifest_source,
             name = %self.package.as_source(),
             platform = %self.backend_metadata.build_environment.host_platform,
         )
@@ -79,17 +84,18 @@ impl SourceMetadataSpec {
             MetadataKind::GetMetadata { packages } => {
                 // Convert the metadata to source records.
                 let records = conversion::package_metadata_to_source_records(
-                    &build_backend_metadata.source,
+                    &build_backend_metadata.manifest_source,
                     packages,
                     &self.package,
                     &build_backend_metadata.metadata.input_hash,
                 );
 
                 Ok(SourceMetadata {
-                    source: build_backend_metadata.source.clone(),
+                    source: build_backend_metadata.manifest_source.clone(),
                     records,
                     // As the GetMetadata kind returns all records at once and we don't solve them we can skip this.
                     skipped_packages: Default::default(),
+                    pinned_build_source: None,
                 })
             }
             MetadataKind::Outputs { outputs } => {
@@ -104,15 +110,16 @@ impl SourceMetadataSpec {
                         &command_dispatcher,
                         output,
                         build_backend_metadata.metadata.input_hash.clone(),
-                        build_backend_metadata.source.clone(),
+                        build_backend_metadata.manifest_source.clone(),
                         reporter.clone(),
                     ));
                 }
 
                 Ok(SourceMetadata {
-                    source: build_backend_metadata.source.clone(),
+                    source: build_backend_metadata.manifest_source.clone(),
                     records: futures.try_collect().await?,
                     skipped_packages,
+                    pinned_build_source: build_backend_metadata.build_source.clone(),
                 })
             }
         }
@@ -287,6 +294,8 @@ impl SourceMetadataSpec {
             strong_constrains: binary_specs_to_match_spec(run_exports.strong_constrains)?,
         };
 
+        let pinned_source_spec = None;
+
         Ok(SourceRecord {
             package_record: PackageRecord {
                 // We cannot now these values from the metadata because no actual package
@@ -342,6 +351,7 @@ impl SourceMetadataSpec {
             },
             source,
             input_hash,
+            pinned_source_spec,
             sources: sources
                 .into_iter()
                 .map(|(name, source)| (name.as_source().to_string(), source))
@@ -360,6 +370,12 @@ impl SourceMetadataSpec {
         if dependencies.dependencies.is_empty() {
             return Ok(vec![]);
         }
+        let pin_overrides = self
+            .backend_metadata
+            .pin_override
+            .as_ref()
+            .map(|pinned| BTreeMap::from([(pkg_name.clone(), pinned.clone())]))
+            .unwrap_or_default();
         match command_dispatcher
             .solve_pixi_environment(PixiEnvironmentSpec {
                 name: Some(format!("{} ({})", pkg_name.as_source(), env_type)),
@@ -383,6 +399,7 @@ impl SourceMetadataSpec {
                 variants: self.backend_metadata.variants.clone(),
                 variant_files: self.backend_metadata.variant_files.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
+                pin_overrides,
             })
             .await
         {

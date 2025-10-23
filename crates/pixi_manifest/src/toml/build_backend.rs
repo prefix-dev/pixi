@@ -169,7 +169,7 @@ static BOTH_ADDITIONAL_DEPS_WARNING: Once = Once::new();
 fn spec_from_spanned_toml_location(
     spanned_toml: Spanned<TomlLocationSpec>,
 ) -> Result<SourceLocationSpec, DeserError> {
-    spanned_toml
+    let source_location_spec = spanned_toml
         .value
         .into_source_location_spec()
         .map_err(|err| {
@@ -178,7 +178,9 @@ fn spec_from_spanned_toml_location(
                 span: spanned_toml.span,
                 line_info: None,
             })
-        })
+        })?;
+
+    Ok(source_location_spec)
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
