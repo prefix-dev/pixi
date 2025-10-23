@@ -8,20 +8,45 @@ Upload a conda package
 
 ## Usage
 ```
-pixi upload [ARGS]...
+pixi upload [OPTIONS] [PACKAGE_FILES]... <COMMAND>
 ```
 
+## Subcommands
+| Command | Description |
+|---------|-------------|
+| [`quetz`](upload/quetz.md) | Upload to a Quetz server. Authentication is used from the keychain / auth-file |
+| [`artifactory`](upload/artifactory.md) | Options for uploading to a Artifactory channel. Authentication is used from the keychain / auth-file |
+| [`prefix`](upload/prefix.md) | Options for uploading to a prefix.dev server. Authentication is used from the keychain / auth-file |
+| [`anaconda`](upload/anaconda.md) | Options for uploading to a Anaconda.org server |
+| [`s3`](upload/s3.md) | Options for uploading to S3 |
+
+
 ## Arguments
-- <a id="arg-<ARGS>" href="#arg-<ARGS>">`<ARGS>`</a>
-:  Arguments for the upload command
+- <a id="arg-<PACKAGE_FILES>" href="#arg-<PACKAGE_FILES>">`<PACKAGE_FILES>`</a>
+:  The package file to upload
 <br>May be provided more than once.
+
+## Options
+- <a id="arg---experimental" href="#arg---experimental">`--experimental`</a>
+:  Enable experimental features
+<br>**env**: `RATTLER_BUILD_EXPERIMENTAL`
+- <a id="arg---allow-insecure-host" href="#arg---allow-insecure-host">`--allow-insecure-host <ALLOW_INSECURE_HOST>`</a>
+:  List of hosts for which SSL certificate verification should be skipped
+<br>May be provided more than once.
+- <a id="arg---channel-priority" href="#arg---channel-priority">`--channel-priority <CHANNEL_PRIORITY>`</a>
+:  Channel priority to use when solving
+
+## Modifying result
+- <a id="arg---output-dir" href="#arg---output-dir">`--output-dir <OUTPUT_DIR>`</a>
+:  Output directory for build artifacts.
+<br>**env**: `CONDA_BLD_PATH`
 
 ## Description
 Upload a conda package
 
-With this command, you can upload a conda package to a channel.
+With this command, you can upload a conda package to a channel. Supported servers are Prefix.dev, Quetz, Anaconda.org, Artifactory, and S3 buckets.
 
-Examples: pixi upload prefix --channel my_channel my_package.conda pixi upload <https://prefix.dev/api/v1/upload/my_channel> my_package.conda  (legacy)
+Examples: pixi upload prefix --channel my_channel my_package.conda pixi upload quetz --url https://quetz.example.com --channel my_channel my_package.conda pixi upload anaconda --owner my_user my_package.conda pixi upload s3 --bucket my-bucket --prefix my-prefix my_package.conda
 
 Use `pixi auth login` to authenticate with the server.
 
