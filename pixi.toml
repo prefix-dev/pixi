@@ -138,6 +138,7 @@ ruff = ">=0.14.0,<0.15"
 shellcheck = ">=0.10.0,<0.11"
 taplo = ">=0.10.0,<0.11"
 typos = ">=1.38.1,<2"
+zizmor = ">=1.14.1,<2"
 
 [feature.lint.tasks]
 actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" } }

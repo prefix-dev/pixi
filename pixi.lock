@@ -1554,6 +1554,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025b-h78e105d_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/yaml-0.2.5-h7f98852_2.tar.bz2
       - conda: https://prefix.dev/conda-forge/noarch/zipp-3.22.0-pyhd8ed1ab_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/zizmor-1.14.1-py313h5c7d99a_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/zstd-1.5.7-hb8e6e7a_2.conda
       linux-aarch64:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/_openmp_mutex-4.5-2_gnu.tar.bz2
@@ -1683,6 +1684,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025b-h78e105d_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/yaml-0.2.5-hf897c2e_2.tar.bz2
       - conda: https://prefix.dev/conda-forge/noarch/zipp-3.22.0-pyhd8ed1ab_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-aarch64/zizmor-1.14.1-py313he77ad87_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/zstd-1.5.7-hbcf94c1_2.conda
       osx-64:
       - conda: https://prefix.dev/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_2.conda
@@ -1816,6 +1818,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025b-h78e105d_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/yaml-0.2.5-h0d85af4_2.tar.bz2
       - conda: https://prefix.dev/conda-forge/noarch/zipp-3.22.0-pyhd8ed1ab_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-64/zizmor-1.14.1-py313ha265c4a_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/zlib-1.3.1-hd23fc13_2.conda
       - conda: https://prefix.dev/conda-forge/osx-64/zstd-1.5.7-h8210216_2.conda
       osx-arm64:
@@ -1951,6 +1954,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025b-h78e105d_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/yaml-0.2.5-h3422bc3_2.tar.bz2
       - conda: https://prefix.dev/conda-forge/noarch/zipp-3.22.0-pyhd8ed1ab_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-arm64/zizmor-1.14.1-py313h0b74987_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-1.3.1-h8359307_2.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-h6491c7d_2.conda
       win-64:
@@ -2059,6 +2063,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/vswhere-3.1.7-h40126e0_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/yaml-0.2.5-h8ffe710_2.tar.bz2
       - conda: https://prefix.dev/conda-forge/noarch/zipp-3.22.0-pyhd8ed1ab_0.conda
+      - conda: https://prefix.dev/conda-forge/win-64/zizmor-1.14.1-py313hf61f64f_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-hbeecb71_2.conda
   pypi-gen:
     channels:
@@ -11757,6 +11762,74 @@ packages:
   - pkg:pypi/zipp?source=hash-mapping
   size: 22691
   timestamp: 1748277499928
+- conda: https://prefix.dev/conda-forge/linux-64/zizmor-1.14.1-py313h5c7d99a_0.conda
+  sha256: 690e45bade088bd43995195ad8c904640901fe8ac8a7f9e064a6e4673172016c
+  md5: 708503104848c38b6dba5baee1efaa79
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - libgcc >=14
+  - python >=3.13,<3.14.0a0
+  - python_abi 3.13.* *_cp313
+  constrains:
+  - __glibc >=2.17
+  license: MIT
+  license_family: MIT
+  size: 4888158
+  timestamp: 1758927533053
+- conda: https://prefix.dev/conda-forge/linux-aarch64/zizmor-1.14.1-py313he77ad87_0.conda
+  sha256: 4ef27207809b692878cb86200e3a9ac33e29e141d1c0aab61bf4acae69903eb2
+  md5: 8740f6ca1794273cce02f03ae787a453
+  depends:
+  - libgcc >=14
+  - python >=3.13,<3.14.0a0
+  - python >=3.13,<3.14.0a0 *_cp313
+  - python_abi 3.13.* *_cp313
+  constrains:
+  - __glibc >=2.17
+  license: MIT
+  license_family: MIT
+  size: 4652529
+  timestamp: 1758927824057
+- conda: https://prefix.dev/conda-forge/osx-64/zizmor-1.14.1-py313ha265c4a_0.conda
+  sha256: 9840df51e6fe5e6e3e03ededa53e60d69a35271b17abd4bbf1fea89c5533c700
+  md5: da271cc6f3b993f46f8233a4447f8adc
+  depends:
+  - __osx >=10.13
+  - python >=3.13,<3.14.0a0
+  - python_abi 3.13.* *_cp313
+  constrains:
+  - __osx >=10.13
+  license: MIT
+  license_family: MIT
+  size: 4750051
+  timestamp: 1758928071721
+- conda: https://prefix.dev/conda-forge/osx-arm64/zizmor-1.14.1-py313h0b74987_0.conda
+  sha256: 6c17ac7d398d8e79200a7076e767e75b96b194b90ce99977bf21f0bfe70c6a75
+  md5: 809944d44e09390b2456853ae9a80e35
+  depends:
+  - __osx >=11.0
+  - python >=3.13,<3.14.0a0
+  - python >=3.13,<3.14.0a0 *_cp313
+  - python_abi 3.13.* *_cp313
+  constrains:
+  - __osx >=11.0
+  license: MIT
+  license_family: MIT
+  size: 4469942
+  timestamp: 1758928186604
+- conda: https://prefix.dev/conda-forge/win-64/zizmor-1.14.1-py313hf61f64f_0.conda
+  sha256: 6cf16dd3cf358761efd70c89bfdd55dd770686d706dc4401ad823efb04ac1752
+  md5: 79a85ca5455729763afe5a7694dba218
+  depends:
+  - python >=3.13,<3.14.0a0
+  - python_abi 3.13.* *_cp313
+  - ucrt >=10.0.20348.0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  license: MIT
+  license_family: MIT
+  size: 5007028
+  timestamp: 1758928256045
 - conda: https://prefix.dev/conda-forge/osx-64/zlib-1.3.1-hd23fc13_2.conda
   sha256: 219edbdfe7f073564375819732cbf7cc0d7c7c18d3f546a09c2dfaf26e4d69f3
   md5: c989e0295dcbdc08106fe5d9e935f0b9
