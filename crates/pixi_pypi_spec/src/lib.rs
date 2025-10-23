@@ -11,7 +11,7 @@ use std::{
 
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::ExtraName;
-use pixi_spec::GitSpec;
+use pixi_spec::{GitSpec, Verbatim};
 use serde::Serialize;
 use thiserror::Error;
 use url::Url;
@@ -29,13 +29,13 @@ pub enum PixiPypiSpec {
         extras: Vec<ExtraName>,
     },
     Path {
-        path: PathBuf,
+        path: Verbatim<PathBuf>,
         editable: Option<bool>,
         #[serde(default)]
         extras: Vec<ExtraName>,
     },
     Url {
-        url: Url,
+        url: Verbatim<Url>,
         subdirectory: Option<String>,
         #[serde(default)]
         extras: Vec<ExtraName>,

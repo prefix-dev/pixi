@@ -489,7 +489,6 @@ pub(crate) async fn initialize_env_variables(
 mod tests {
     use super::*;
     use std::path::Path;
-    use std::str::FromStr;
 
     #[test]
     fn test_metadata_env() {
@@ -703,7 +702,7 @@ packages:
 "#,
             platform = Platform::current()
         );
-        let lock_file = LockFile::from_str(mock_lock).unwrap();
+        let lock_file = LockFile::from_str_with_base_directory(mock_lock, None).unwrap();
         let env = run_activation(
             &default_env,
             &CurrentEnvVarBehavior::Include,
