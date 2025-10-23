@@ -240,8 +240,8 @@ async fn try_fetch_mapping(
     sha256: &Sha256Hash,
     cache_metrics: &CacheMetrics,
 ) -> Result<Option<PackagePypiMapping>, HashMappingClientError> {
-    let hash_str = format!("{:x}", sha256);
-    let url = format!("{STORAGE_URL}/{HASH_DIR}/{}", hash_str);
+    let hash_str = format!("{sha256:x}");
+    let url = format!("{STORAGE_URL}/{HASH_DIR}/{hash_str}");
 
     // Fetch the mapping from the server
     let response = client.client().get(&url).send().await?;

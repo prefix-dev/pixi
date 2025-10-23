@@ -93,7 +93,7 @@ impl BinDir {
         let exposed_name = if cfg!(windows) {
             // Not using `.set_extension()` because it will break the `.` in the name for
             // cases like `python3.9.1`
-            format!("{}.exe", exposed_name)
+            format!("{exposed_name}.exe")
         } else {
             exposed_name.to_string()
         };
@@ -375,7 +375,7 @@ pub enum StateChange {
     AddedExposed(ExposedName),
     RemovedExposed(ExposedName),
     UpdatedExposed(ExposedName),
-    AddedPackage(PackageRecord),
+    AddedPackage(Box<PackageRecord>),
     AddedEnvironment,
     RemovedEnvironment,
     UpdatedEnvironment(EnvironmentUpdate),
@@ -444,7 +444,9 @@ impl StateChanges {
                 if let Ok(prefix_record) = prefix.find_designated_package(&package_name).await {
                     self.insert_change(
                         env_name,
-                        StateChange::AddedPackage(prefix_record.repodata_record.package_record),
+                        StateChange::AddedPackage(Box::new(
+                            prefix_record.repodata_record.package_record,
+                        )),
                     );
                 }
             }
@@ -1042,10 +1044,7 @@ pub fn check_all_exposed(
         .map(|mapping| mapping.executable_name())
         .collect();
 
-    let auto_exposed =
-        env_binaries_names_iter.all(|name| exposed_binaries_names.contains(&name.as_str()));
-
-    auto_exposed
+    env_binaries_names_iter.all(|name| exposed_binaries_names.contains(&name.as_str()))
 }
 
 pub(crate) fn get_install_changes<
@@ -1207,7 +1206,7 @@ mod tests {
         let executable_script_path = bin_dir.executable_trampoline_path(&exposed_name);
 
         if cfg!(windows) {
-            let expected = format!("{}.exe", exposed_name);
+            let expected = format!("{exposed_name}.exe");
             assert_eq!(executable_script_path, path.join(expected));
         } else {
             assert_eq!(executable_script_path, path.join(exposed_name.to_string()));

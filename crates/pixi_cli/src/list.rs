@@ -391,7 +391,7 @@ fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {
     }
     .expect("Cannot serialize packages to JSON");
 
-    println!("{}", json_string);
+    println!("{json_string}");
 }
 
 /// Return the size and source location of the pypi package

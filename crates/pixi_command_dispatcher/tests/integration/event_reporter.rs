@@ -521,7 +521,7 @@ impl BackendSourceBuildReporter for EventReporter {
         tokio::spawn(async move {
             let mut output_stream = backend_output_stream;
             while let Some(line) = output_stream.next().await {
-                eprintln!("{}", line);
+                eprintln!("{line}");
             }
         });
     }

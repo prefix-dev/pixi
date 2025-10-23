@@ -55,7 +55,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let diff = LockFileDiff::from_lock_files(&original_lock_file, &lock_file);
         let json_diff = LockFileJsonDiff::new(Some(workspace.named_environments()), diff);
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
-        println!("{}", json);
+        println!("{json}");
     } else if lock_updated {
         eprintln!(
             "{}Updated lock-file",

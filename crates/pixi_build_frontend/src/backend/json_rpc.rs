@@ -93,7 +93,7 @@ pub enum InitializeError {
     ),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Communication(#[from] CommunicationError),
+    Communication(#[from] Box<CommunicationError>),
 }
 
 impl CommunicationError {
@@ -238,13 +238,13 @@ impl JsonRpcBackend {
             )
             .await
             .map_err(|err| {
-                CommunicationError::from_client_error(
+                Box::new(CommunicationError::from_client_error(
                     backend_identifier.clone(),
                     err,
                     procedures::negotiate_capabilities::METHOD_NAME,
                     manifest_path.parent().unwrap_or(&manifest_path),
                     None,
-                )
+                ))
             })?;
 
         // Invoke the initialize method on the backend to establish the connection.
@@ -263,13 +263,13 @@ impl JsonRpcBackend {
             )
             .await
             .map_err(|err| {
-                CommunicationError::from_client_error(
+                Box::new(CommunicationError::from_client_error(
                     backend_identifier.clone(),
                     err,
                     procedures::initialize::METHOD_NAME,
                     manifest_path.parent().unwrap_or(&manifest_path),
                     None,
-                )
+                ))
             })?;
 
         Ok(Self {

@@ -371,20 +371,20 @@ impl WorkspaceMut {
             .update()
             .await
             .map_err(|mut e| {
-                if let Some(SolveCondaEnvironmentError::SolveFailed {
-                    source:
-                        CommandDispatcherError::Failed(MissingChannel(MissingChannelError {
-                            package: _,
-                            channel,
-                            advice,
-                        })),
-                    ..
-                }) = e.downcast_mut::<SolveCondaEnvironmentError>()
+                if let Some(SolveCondaEnvironmentError::SolveFailed { source, .. }) =
+                    e.downcast_mut::<SolveCondaEnvironmentError>()
                 {
-                    *advice = Some(format!(
-                        "To add the missing channel to a workspace, use:\n\n  {}",
-                        console::style(format!("pixi workspace channel add {}", channel)).bold(),
-                    ));
+                    if let CommandDispatcherError::Failed(MissingChannel(MissingChannelError {
+                        package: _,
+                        channel,
+                        advice,
+                    })) = source.as_mut()
+                    {
+                        *advice = Some(format!(
+                            "To add the missing channel to a workspace, use:\n\n  {}",
+                            console::style(format!("pixi workspace channel add {channel}")).bold(),
+                        ));
+                    }
                 }
                 e
             })?;

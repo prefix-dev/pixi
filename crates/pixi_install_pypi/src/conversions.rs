@@ -35,20 +35,20 @@ pub fn locked_data_to_file(
         match hash {
             rattler_lock::PackageHashes::Md5(md5) => vec![HashDigest {
                 algorithm: HashAlgorithm::Md5,
-                digest: format!("{:x}", md5).into(),
+                digest: format!("{md5:x}").into(),
             }],
             rattler_lock::PackageHashes::Sha256(sha256) => vec![HashDigest {
                 algorithm: HashAlgorithm::Sha256,
-                digest: format!("{:x}", sha256).into(),
+                digest: format!("{sha256:x}").into(),
             }],
             rattler_lock::PackageHashes::Md5Sha256(md5, sha256) => vec![
                 HashDigest {
                     algorithm: HashAlgorithm::Md5,
-                    digest: format!("{:x}", md5).into(),
+                    digest: format!("{md5:x}").into(),
                 },
                 HashDigest {
                     algorithm: HashAlgorithm::Sha256,
-                    digest: format!("{:x}", sha256).into(),
+                    digest: format!("{sha256:x}").into(),
                 },
             ],
         }
@@ -244,7 +244,7 @@ mod tests {
     fn convert_special_chars_wheelname_to_dist() {
         // Create url with special characters
         let wheel = "torch-2.3.0%2Bcu121-cp312-cp312-win_amd64.whl";
-        let url = format!("https://example.com/{}", wheel).parse().unwrap();
+        let url = format!("https://example.com/{wheel}").parse().unwrap();
         // Pass into locked data
         let locked = PypiPackageData {
             name: "torch".parse().unwrap(),

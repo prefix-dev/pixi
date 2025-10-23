@@ -91,7 +91,7 @@ impl ManifestParsingError {
                         "Unexpected keys, expected only {}",
                         expected
                             .iter()
-                            .format_with(", ", |key, f| f(&format_args!("'{}'", key)))
+                            .format_with(", ", |key, f| f(&format_args!("'{key}'")))
                     )
                 }
                 toml_span::ErrorKind::UnexpectedValue { expected, .. } => {
@@ -99,7 +99,7 @@ impl ManifestParsingError {
                         "Expected one of {}",
                         expected
                             .iter()
-                            .format_with(", ", |key, f| f(&format_args!("'{}'", key)))
+                            .format_with(", ", |key, f| f(&format_args!("'{key}'")))
                     )
                 }
                 _ => err.to_string(),

@@ -159,8 +159,7 @@ impl CommandDispatcher {
         tracing::info!(
             "Instantiated backend {}{}, negotiated API version {}",
             tool.executable(),
-            tool.version()
-                .map_or_else(String::new, |v| format!("@{}", v)),
+            tool.version().map_or_else(String::new, |v| format!("@{v}")),
             api_version,
         );
 
@@ -204,7 +203,7 @@ pub enum InstantiateBackendError {
     /// The command dispatcher could not be initialized.
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InMemoryError(CommunicationError),
+    InMemoryError(Box<CommunicationError>),
 
     /// Could not detect the virtual packages for the system
     #[error(transparent)]

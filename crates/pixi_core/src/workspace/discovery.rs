@@ -230,7 +230,7 @@ impl WorkspaceLocator {
                 warnings
                     .into_iter()
                     .map(Report::from)
-                    .format_with("\n", |w, f| f(&format_args!("{:?}", w)))
+                    .format_with("\n", |w, f| f(&format_args!("{w:?}")))
             );
         }
 

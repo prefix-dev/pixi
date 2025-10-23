@@ -1034,8 +1034,7 @@ impl Project {
             })
             .collect::<miette::Result<Vec<_>>>()
             .wrap_err(format!(
-                "Failed to add executables for environment: {}",
-                env_name
+                "Failed to add executables for environment: {env_name}"
             ))?;
 
         tracing::debug!(
