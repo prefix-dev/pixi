@@ -161,7 +161,7 @@ impl SourceBuildSpec {
                 if !self.force {
                     // If the build is up to date, we can return the cached build.
                     tracing::debug!(
-                        source = %self.source,
+                        source = %self.manifest_source,
                         package = ?cached_build.record.package_record.name,
                         build = %cached_build.record.package_record.build,
                         output = %cached_build.record.file_name,
@@ -183,7 +183,7 @@ impl SourceBuildSpec {
                     self.package.name.as_normalized()
                 );
                 tracing::debug!(
-                    source = %self.source,
+                    source = %self.manifest_source,
                     package = ?cached_build.record.package_record.name,
                     build = %cached_build.record.package_record.build,
                     output = %cached_build.record.file_name,
@@ -199,7 +199,7 @@ impl SourceBuildSpec {
             match &*build_cache.cached_build.lock().await {
                 CachedBuildStatus::Stale(existing) => {
                     tracing::debug!(
-                        source = %self.source,
+                        source = %self.manifest_source,
                         package = ?existing.record.package_record.name,
                         build = %existing.record.package_record.build,
                         "rebuilding stale source build",
@@ -207,7 +207,7 @@ impl SourceBuildSpec {
                 }
                 CachedBuildStatus::Missing => {
                     tracing::debug!(
-                        source = %self.source,
+                        source = %self.manifest_source,
                         "no cached source build; starting fresh build",
                     );
                 }
@@ -304,7 +304,7 @@ impl SourceBuildSpec {
             ),
         };
         tracing::debug!(
-            source = %self.source,
+            source = %self.manifest_source,
             work_directory = %work_directory.display(),
             backend = backend.identifier(),
             "using work directory for source build",
@@ -320,7 +320,7 @@ impl SourceBuildSpec {
         }
 
         // Build the package using the v1 build method.
-        let source_for_logging = self.source.clone();
+        let source_for_logging = self.manifest_source.clone();
         let mut built_source = self
             .build_v1(
                 command_dispatcher,
@@ -413,7 +413,7 @@ impl SourceBuildSpec {
             // so on the next run we can distinguish between up to date ( was already saved from previous session)
             // and new that was just build now
             let cached_build = CachedBuild {
-                source: source_checkout
+                source: manifest_source_checkout
                     .pinned
                     .is_mutable()
                     .then_some(built_source.metadata.clone()),

@@ -185,7 +185,7 @@ impl BuildBackendMetadataSpec {
                     metadata,
                     cache_entry,
                     manifest_source: manifest_source_checkout.pinned,
-                    package_build_source,
+                    build_source,
                 });
             }
         } else {
@@ -212,7 +212,7 @@ impl BuildBackendMetadataSpec {
                 .map_err_with(BuildBackendMetadataError::Initialize)?;
 
         // Call the conda_outputs method to get metadata.
-        let source = source_checkout.pinned.clone();
+        let manifest_source = manifest_source_checkout.pinned.clone();
         if !backend.capabilities().provides_conda_outputs() {
             return Err(CommandDispatcherError::Failed(
                 BuildBackendMetadataError::BackendMissingCapabilities(
@@ -228,7 +228,7 @@ impl BuildBackendMetadataSpec {
         let metadata = self
             .call_conda_outputs(
                 command_dispatcher,
-                source_checkout,
+                build_source_checkout,
                 backend,
                 additional_glob_hash,
             )
