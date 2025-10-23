@@ -6,11 +6,15 @@ use rattler_upload::upload::opt::UploadOpts;
 /// With this command, you can upload a conda package to a channel.
 /// Supported servers are Prefix.dev, Quetz, Anaconda.org, Artifactory, and S3 buckets.
 ///
-/// Examples:
-///   pixi upload prefix --channel my_channel my_package.conda
-///   pixi upload quetz --url <https://quetz.example.com> --channel my_channel my_package.conda
-///   pixi upload anaconda --owner my_user my_package.conda
-///   pixi upload s3 --bucket my-bucket --prefix my-prefix my_package.conda
+/// ## Examples:
+///
+///   1. `pixi upload prefix --channel my_channel my_package.conda`
+///
+///   2. `pixi upload quetz --url <https://quetz.example.com> --channel my_channel my_package.conda`
+///
+///   3. `pixi upload anaconda --owner my_user my_package.conda`
+///
+///   4. `pixi upload s3 --bucket my-bucket --prefix my-prefix my_package.conda`
 ///
 /// Use `pixi auth login` to authenticate with the server.
 #[derive(Parser, Debug)]
