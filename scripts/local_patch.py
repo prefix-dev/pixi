@@ -9,7 +9,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 # Library configurations
@@ -41,8 +41,8 @@ def get_local_versions(local_path: str) -> dict[str, str]:
             check=True,
         )
 
-        metadata = json.loads(result.stdout)
-        versions = {}
+        metadata: dict[str, Any] = json.loads(result.stdout)
+        versions: dict[str, str] = {}
 
         # Extract name and version for workspace members
         workspace_member_ids = set(metadata.get("workspace_members", []))
@@ -85,9 +85,9 @@ def get_current_workspace_dependency_versions(
 ) -> dict[str, str]:
     """Extract current version numbers from [workspace.dependencies] for matching dependencies."""
     config = LIBRARY_CONFIGS[library]
-    pattern = config["pattern"]
+    pattern: str = config["pattern"]
     lines = cargo_toml_content.split("\n")
-    versions = {}
+    versions: dict[str, str] = {}
     in_workspace_deps = False
 
     for line in lines:
@@ -128,9 +128,9 @@ def update_workspace_dependency_versions(
 ) -> str:
     """Update version numbers in [workspace.dependencies] for matching dependencies."""
     config = LIBRARY_CONFIGS[library]
-    pattern = config["pattern"]
+    pattern: str = config["pattern"]
     lines = cargo_toml_content.split("\n")
-    result_lines = []
+    result_lines: list[str] = []
     in_workspace_deps = False
 
     for line in lines:
@@ -190,7 +190,7 @@ def has_patch_section(cargo_toml_content: str, library: str) -> bool:
 
 def extract_original_versions_from_patch(
     cargo_toml_content: str, library: str
-) -> Optional[dict[str, str]]:
+) -> dict[str, str] | None:
     """Extract original versions from the patch section comment."""
     lines = cargo_toml_content.split("\n")
     marker_start = f"# pixi-{library}-patches - START"
@@ -206,7 +206,8 @@ def extract_original_versions_from_patch(
             # Extract the JSON from the comment
             json_str = line.strip()[len(version_marker) :].strip()
             try:
-                return json.loads(json_str)
+                result: dict[str, str] = json.loads(json_str)
+                return result
             except json.JSONDecodeError as e:
                 print(f"Warning: Could not parse original versions from comment: {e}")
                 return None
