@@ -1,12 +1,12 @@
-use std::{fmt, path::PathBuf};
+use std::{collections::BTreeMap, fmt, path::PathBuf};
 
 use chrono::Utc;
 use itertools::chain;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_glob::GlobModificationTime;
-use pixi_record::PinnedSourceSpec;
-use rattler_conda_types::{ChannelConfig, ChannelUrl};
+use pixi_record::{PinnedSourceSpec, VariantValue};
+use rattler_conda_types::{ChannelConfig, ChannelUrl, HasArtifactIdentificationRefs};
 use tokio::sync::Mutex;
 use tracing::instrument;
 
@@ -14,7 +14,8 @@ use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     PackageIdentifier, SourceCheckoutError,
     build::{
-        BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, PackageBuildInputHashBuilder,
+        BuildCacheEntry, BuildCacheError, BuildHostPackage, BuildInput, CachedBuild,
+        PackageBuildInputHashBuilder,
     },
 };
 
@@ -35,7 +36,7 @@ pub struct SourceBuildCacheStatusSpec {
     pub package_name: rattler_conda_types::PackageName,
 
     /// The specific variant of the package to query (from the lock file)
-    pub package_variant: std::collections::BTreeMap<String, pixi_record::VariantValue>,
+    pub package_variant: BTreeMap<String, VariantValue>,
 
     /// Describes the source location of the package to query.
     pub source: PinnedSourceSpec,
@@ -120,7 +121,7 @@ pub struct SourceBuildCacheEntry {
 
 impl SourceBuildCacheStatusSpec {
     /// Creates a new query for the source build cache.
-    #[instrument(skip_all, fields(package = %self.package, source = %self.source))]
+    #[instrument(skip_all, fields(package = %self.package_name.as_source(), source = %self.source))]
     pub async fn query(
         self,
         command_dispatcher: CommandDispatcher,
@@ -128,10 +129,8 @@ impl SourceBuildCacheStatusSpec {
         // Query the build cache directly.
         let build_input = BuildInput {
             channel_urls: self.channels.clone(),
-            name: self.package.name.as_source().to_string(),
-            version: self.package.version.to_string(),
-            build: self.package.build.to_string(),
-            subdir: self.package.subdir.clone(),
+            name: self.package_name.as_source().to_string(),
+            package_variant: self.package_variant.clone(),
             host_platform: self.build_environment.host_platform,
             host_virtual_packages: self.build_environment.host_virtual_packages.clone(),
             build_virtual_packages: self.build_environment.build_virtual_packages.clone(),
@@ -146,7 +145,7 @@ impl SourceBuildCacheStatusSpec {
         // Check the staleness of the cached entry
         tracing::debug!(
             "determining cache status for package '{}' from source build cache",
-            self.package,
+            self.package_name.as_source(),
         );
         let cached_build = match cached_build {
             Some(cached_build) => {
@@ -158,7 +157,7 @@ impl SourceBuildCacheStatusSpec {
 
         tracing::debug!(
             "status of cached build for package '{}' is '{}'",
-            self.package,
+            self.package_name.as_source(),
             &cached_build
         );
 
@@ -234,17 +233,16 @@ impl SourceBuildCacheStatusSpec {
 
         // Check if any of the transitive source dependencies have changed.
         for dep in chain!(&source_info.host.packages, &source_info.build.packages) {
-            let Some(source) = &dep.source else {
+            let BuildHostPackage::Source(source) = &dep else {
                 continue;
             };
-
-            let identifier = PackageIdentifier::from(&dep.repodata_record.package_record);
 
             // Check the build cache to see if the source of that package is still fresh.
             match command_dispatcher
                 .source_build_cache_status(SourceBuildCacheStatusSpec {
-                    package: identifier.clone(),
-                    source: source.clone(),
+                    source: source.source.clone(),
+                    package_name: source.name.clone(),
+                    package_variant: source.package_variant.clone(),
                     channels: self.channels.clone(),
                     build_environment: self.build_environment.clone(),
                     channel_config: self.channel_config.clone(),
@@ -267,6 +265,7 @@ impl SourceBuildCacheStatusSpec {
                         CachedBuildStatus::Missing | CachedBuildStatus::Stale(_) => {
                             tracing::debug!(
                                 "package is stale because its build dependency '{identifier}' is missing or stale",
+                                identifier = source.name.as_source()
                             );
                             return Ok(CachedBuildStatus::Stale(cached_build));
                         }
@@ -278,10 +277,11 @@ impl SourceBuildCacheStatusSpec {
                             // without also updating this package, or the build of this package
                             // failed previously.
                             if dependency_cached_build.record.package_record.sha256
-                                != dep.repodata_record.package_record.sha256
+                                != Some(source.sha256)
                             {
                                 tracing::debug!(
                                     "package is stale because its build dependency '{identifier}' has changed",
+                                    identifier = source.name.as_source()
                                 );
                                 return Ok(CachedBuildStatus::Stale(cached_build));
                             }

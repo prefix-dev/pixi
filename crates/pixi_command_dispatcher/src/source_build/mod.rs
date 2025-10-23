@@ -123,7 +123,7 @@ impl SourceBuildSpec {
         name = "source-build",
         fields(
             source= %self.source,
-            package = %self.package,
+            package = %self.package_name,
         )
     )]
     pub(crate) async fn build(
@@ -173,7 +173,7 @@ impl SourceBuildSpec {
                 }
                 tracing::debug!(
                     "source build for {} is up to date, but force rebuild is set, rebuilding anyway",
-                    self.package.name.as_normalized()
+                    self.package_name.as_normalized()
                 );
             }
             if let CachedBuildStatus::New(cached_build) = &*build_cache.cached_build.lock().await {
@@ -459,7 +459,7 @@ impl SourceBuildSpec {
             .unwrap_or_default();
         let mut build_records = self
             .solve_dependencies(
-                format!("{} (build)", self.package.name.as_source()),
+                format!("{} (build)", self.package_name.as_source()),
                 &command_dispatcher,
                 build_dependencies.clone(),
                 self.build_environment.to_build_from_build(),
@@ -519,7 +519,7 @@ impl SourceBuildSpec {
             Some(
                 command_dispatcher
                     .install_pixi_environment(InstallPixiEnvironmentSpec {
-                        name: format!("{} (build)", self.package.name.as_source()),
+                        name: format!("{} (build)", self.package_name.name.as_source()),
                         records: build_records.clone(),
                         prefix: Prefix::create(&directories.build_prefix)
                             .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
@@ -530,7 +530,7 @@ impl SourceBuildSpec {
                         force_reinstall: Default::default(),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
-                        variants: self.variants.clone(),
+                        variants: self.variant_config.clone(),
                         variant_files: self.variant_files.clone(),
                         enabled_protocols: self.enabled_protocols.clone(),
                     })
@@ -552,7 +552,7 @@ impl SourceBuildSpec {
             Some(
                 command_dispatcher
                     .install_pixi_environment(InstallPixiEnvironmentSpec {
-                        name: format!("{} (host)", self.package.name.as_source()),
+                        name: format!("{} (host)", self.package_name.name.as_source()),
                         records: host_records.clone(),
                         prefix: host_prefix_directory,
                         installed: None,
@@ -561,7 +561,7 @@ impl SourceBuildSpec {
                         force_reinstall: Default::default(),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
-                        variants: self.variants.clone(),
+                        variants: self.variant_config.clone(),
                         variant_files: self.variant_files.clone(),
                         enabled_protocols: self.enabled_protocols.clone(),
                     })
@@ -623,7 +623,7 @@ impl SourceBuildSpec {
                     output_directory: self.output_directory,
                 }),
                 backend,
-                package: self.package,
+                package: self.package_name,
                 source: self.source,
                 work_directory,
                 channels: self.channels,
@@ -709,7 +709,7 @@ impl SourceBuildSpec {
                 channel_priority: Default::default(),
                 exclude_newer: None,
                 channel_config: self.channel_config.clone(),
-                variants: self.variants.clone(),
+                variants: self.variant_config.clone(),
                 variant_files: self.variant_files.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
             })

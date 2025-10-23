@@ -1,5 +1,6 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
+    fmt::Display,
     hash::{Hash, Hasher},
     io::SeekFrom,
     path::{Path, PathBuf},
@@ -7,12 +8,14 @@ use std::{
 
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use itertools::Itertools;
 use ordermap::OrderMap;
 use pixi_build_discovery::{BackendInitializationParams, DiscoveredBackend};
 use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
-use pixi_record::PinnedSourceSpec;
+use pixi_record::{PinnedSourceSpec, VariantValue};
 use pixi_stable_hash::{StableHashBuilder, json::StableJson, map::StableMap};
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
+use rattler_digest::Sha256Hash;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
@@ -43,14 +46,8 @@ pub struct BuildInput {
     /// The name of the package
     pub name: String,
 
-    /// The version of the package to build
-    pub version: String,
-
-    /// The build string of the package to build
-    pub build: String,
-
-    /// The platform for which the metadata was computed.
-    pub subdir: String,
+    /// The specific variant of the package (from the lock file)
+    pub package_variant: std::collections::BTreeMap<String, pixi_record::VariantValue>,
 
     /// The host platform
     pub host_platform: Platform,
@@ -70,9 +67,7 @@ impl BuildInput {
         let BuildInput {
             channel_urls,
             name,
-            version,
-            build,
-            subdir,
+            package_variant,
             host_platform,
             host_virtual_packages,
             build_virtual_packages,
@@ -80,14 +75,14 @@ impl BuildInput {
 
         // Hash some of the keys
         let mut hasher = Xxh3::new();
-        build.hash(&mut hasher);
+        package_variant.hash(&mut hasher);
         channel_urls.hash(&mut hasher);
         host_platform.hash(&mut hasher);
         host_virtual_packages.hash(&mut hasher);
         build_virtual_packages.hash(&mut hasher);
         let hash = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
 
-        format!("{name}-{version}-{subdir}-{hash}",)
+        format!("{name}-{hash}",)
     }
 }
 
@@ -118,10 +113,8 @@ impl BuildCache {
             source = %source,
             input_key = %input_key,
             name = %input.name,
-            version = %input.version,
-            subdir = %input.subdir,
+            package_variant = ?input.package_variant,
             host_platform = %input.host_platform,
-            build = %input.build,
             channel_urls = ?input.channel_urls,
             host_virtual_packages = ?input.host_virtual_packages,
             build_virtual_packages = ?input.build_virtual_packages,
@@ -234,22 +227,45 @@ pub struct CachedBuildSourceInfo {
     pub package_build_input_hash: Option<PackageBuildInputHash>,
 }
 
-#[serde_as]
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct BuildHostEnvironment {
     /// Describes the packages that were installed in the host environment.
     pub packages: Vec<BuildHostPackage>,
 }
 
-#[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BuildHostPackage {
-    /// The repodata record of the package.
-    #[serde(flatten)]
-    pub repodata_record: RepoDataRecord,
+#[serde(untagged)]
+pub enum BuildHostPackage {
+    Source(BuildHostSourcePackage),
+    Binary(RepoDataRecord),
+}
 
-    /// The source location from which the package was built.
-    pub source: Option<PinnedSourceSpec>,
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BuildHostSourcePackage {
+    pub name: rattler_conda_types::PackageName,
+
+    /// The location of the source code.
+    pub source: PinnedSourceSpec,
+
+    /// The package variant to build the package
+    pub package_variant: BTreeMap<String, VariantValue>,
+
+    /// The hash of the package that was build and include in the build/host environment.
+    pub sha256: Sha256Hash,
+}
+
+impl Display for BuildHostSourcePackage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}({})",
+            self.name.as_normalized(),
+            self.source,
+            self.package_variant
+                .iter()
+                .format_with(",", |(key, value), f| f(&format_args!("{key}={value}")))
+        )
+    }
 }
 
 /// A cache entry returned by [`BuildCache::entry`] which enables
