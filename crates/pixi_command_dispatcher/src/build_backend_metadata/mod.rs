@@ -1,3 +1,11 @@
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    hash::{Hash, Hasher},
+    path::PathBuf,
+    sync::Mutex,
+};
+
+use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use miette::Diagnostic;
 use once_cell::sync::Lazy;
 use pathdiff::diff_paths;
@@ -9,12 +17,6 @@ use pixi_record::{InputHash, PinnedSourceSpec};
 use pixi_spec::{SourceAnchor, SourceSpec};
 use rand::random;
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    hash::{Hash, Hasher},
-    path::PathBuf,
-    sync::Mutex,
-};
 use thiserror::Error;
 use tracing::instrument;
 use xxhash_rust::xxh3::Xxh3;
@@ -100,6 +102,7 @@ impl BuildBackendMetadataSpec {
     pub(crate) async fn request(
         self,
         command_dispatcher: CommandDispatcher,
+        log_sink: UnboundedSender<String>,
     ) -> Result<BuildBackendMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
         // Ensure that the source is checked out before proceeding.
         let source_checkout = command_dispatcher
@@ -195,6 +198,7 @@ impl BuildBackendMetadataSpec {
                 source_checkout,
                 backend,
                 additional_glob_hash,
+                log_sink,
             )
             .await?;
 
@@ -318,6 +322,7 @@ impl BuildBackendMetadataSpec {
         source_checkout: SourceCheckout,
         backend: Backend,
         additional_glob_hash: Vec<u8>,
+        mut log_sink: UnboundedSender<String>,
     ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
         let backend_identifier = backend.identifier().to_string();
         let params = CondaOutputsParams {
@@ -338,7 +343,9 @@ impl BuildBackendMetadataSpec {
             ),
         };
         let outputs = backend
-            .conda_outputs(params)
+            .conda_outputs(params, move |line| {
+                let _err = futures::executor::block_on(log_sink.send(line));
+            })
             .await
             .map_err(BuildBackendMetadataError::Communication)
             .map_err(CommandDispatcherError::Failed)?;

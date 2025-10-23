@@ -4,6 +4,7 @@ use std::{
     sync::Arc,
 };
 
+use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::Backend;
@@ -127,6 +128,7 @@ impl SourceBuildSpec {
         mut self,
         command_dispatcher: CommandDispatcher,
         reporter: Option<Arc<dyn RunExportsReporter>>,
+        log_sink: UnboundedSender<String>,
     ) -> Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>> {
         // If the output directory is not set, we want to use the build cache. Read the
         // build cache in that case.
@@ -286,6 +288,7 @@ impl SourceBuildSpec {
                 work_directory,
                 package_build_input_hash,
                 reporter,
+                log_sink,
             )
             .await?;
 
@@ -405,6 +408,7 @@ impl SourceBuildSpec {
         work_directory: PathBuf,
         package_build_input_hash: PackageBuildInputHash,
         reporter: Option<Arc<dyn RunExportsReporter>>,
+        mut log_sink: UnboundedSender<String>,
     ) -> Result<BuiltPackage, CommandDispatcherError<SourceBuildError>> {
         let source_anchor = SourceAnchor::from(SourceSpec::from(self.source.clone()));
         let host_platform = self.build_environment.host_platform;
@@ -413,14 +417,19 @@ impl SourceBuildSpec {
         // Request the metadata from the backend.
         // TODO: Can we somehow cache this metadata?
         let outputs = backend
-            .conda_outputs(CondaOutputsParams {
-                host_platform,
-                build_platform,
-                variant_configuration: self.variants.clone(),
-                variant_files: self.variant_files.clone(),
-                work_directory: work_directory.clone(),
-                channels: self.channels.clone(),
-            })
+            .conda_outputs(
+                CondaOutputsParams {
+                    host_platform,
+                    build_platform,
+                    variant_configuration: self.variants.clone(),
+                    variant_files: self.variant_files.clone(),
+                    work_directory: work_directory.clone(),
+                    channels: self.channels.clone(),
+                },
+                move |line| {
+                    let _err = futures::executor::block_on(log_sink.send(line));
+                },
+            )
             .await
             .map_err(BackendSourceBuildError::BuildError)
             .map_err(SourceBuildError::from)

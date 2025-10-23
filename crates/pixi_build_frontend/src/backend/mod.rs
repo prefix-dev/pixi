@@ -152,19 +152,22 @@ impl Backend {
     }
 
     /// Returns the outputs that this backend can produce.
-    pub async fn conda_outputs(
+    pub async fn conda_outputs<W: BackendOutputStream + Send + 'static>(
         &self,
         params: CondaOutputsParams,
+        output_stream: W,
     ) -> Result<CondaOutputsResult, CommunicationError> {
         assert!(
             self.inner.capabilities().provides_conda_outputs(),
             "This backend does not support the conda outputs procedure"
         );
         match &self.inner {
-            BackendImplementation::JsonRpc(json_rpc) => json_rpc.conda_outputs(params).await,
-            BackendImplementation::InMemory(in_memory) => {
-                in_memory.conda_outputs(params).map_err(|e| *e)
+            BackendImplementation::JsonRpc(json_rpc) => {
+                json_rpc.conda_outputs(params, output_stream).await
             }
+            BackendImplementation::InMemory(in_memory) => in_memory
+                .conda_outputs(params, &output_stream)
+                .map_err(|e| *e),
         }
     }
 }

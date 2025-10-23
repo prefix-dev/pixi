@@ -17,6 +17,7 @@ use pixi_command_dispatcher::{
     },
 };
 use pixi_git::resolver::RepositoryReference;
+use rattler_repodata_gateway::RunExportsReporter;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -381,13 +382,23 @@ impl BuildBackendMetadataReporter for EventReporter {
         next_id
     }
 
-    fn on_started(&mut self, id: BuildBackendMetadataId) {
+    fn on_started(
+        &mut self,
+        id: BuildBackendMetadataId,
+        mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
+    ) {
         let event = Event::BuildBackendMetadataStarted { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
+
+        tokio::spawn(async move {
+            while let Some(line) = backend_output_stream.next().await {
+                eprintln!("{line}");
+            }
+        });
     }
 
-    fn on_finished(&mut self, id: BuildBackendMetadataId) {
+    fn on_finished(&mut self, id: BuildBackendMetadataId, _failed: bool) {
         let event = Event::BuildBackendMetadataFinished { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
@@ -477,13 +488,25 @@ impl SourceBuildReporter for EventReporter {
         next_id
     }
 
-    fn on_started(&mut self, id: SourceBuildId) {
+    fn on_started(
+        &mut self,
+        id: SourceBuildId,
+        backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
+        _run_exports_reporter: Option<Arc<dyn RunExportsReporter>>,
+    ) {
         let event = Event::SourceBuildStarted { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
+
+        tokio::spawn(async move {
+            let mut output_stream = backend_output_stream;
+            while let Some(line) = output_stream.next().await {
+                eprintln!("{line}");
+            }
+        });
     }
 
-    fn on_finished(&mut self, id: SourceBuildId) {
+    fn on_finished(&mut self, id: SourceBuildId, _failed: bool) {
         let event = Event::SourceBuildFinished { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);

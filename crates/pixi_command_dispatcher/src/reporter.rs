@@ -143,10 +143,14 @@ pub trait BuildBackendMetadataReporter {
     ) -> BuildBackendMetadataId;
 
     /// Called when the operation has started.
-    fn on_started(&mut self, id: BuildBackendMetadataId);
+    fn on_started(
+        &mut self,
+        id: BuildBackendMetadataId,
+        backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
+    );
 
     /// Called when the operation has finished.
-    fn on_finished(&mut self, id: BuildBackendMetadataId);
+    fn on_finished(&mut self, id: BuildBackendMetadataId, failed: bool);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
@@ -183,10 +187,15 @@ pub trait SourceBuildReporter {
     ) -> SourceBuildId;
 
     /// Called when the operation has started.
-    fn on_started(&mut self, id: SourceBuildId);
+    fn on_started(
+        &mut self,
+        id: SourceBuildId,
+        backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
+        run_exports_reporter: Option<Arc<dyn RunExportsReporter>>,
+    );
 
     /// Called when the operation has finished.
-    fn on_finished(&mut self, id: SourceBuildId);
+    fn on_finished(&mut self, id: SourceBuildId, failed: bool);
 }
 
 /// A trait that is used to report the progress of a source build performed by
