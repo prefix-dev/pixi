@@ -710,7 +710,7 @@ pub async fn verify_platform_satisfiability(
         Ok(pixi_records) => pixi_records,
         Err(duplicate) => {
             return Err(Box::new(PlatformUnsat::DuplicateEntry(
-                duplicate.package_record().name.as_source().to_string(),
+                duplicate.name().as_source().to_string(),
             )));
         }
     };
@@ -1306,7 +1306,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 }
 
                 let record = &locked_pixi_records.records[idx.0];
-                for depends in &record.package_record().depends {
+                for depends in record.depends() {
                     let spec = MatchSpec::from_str(depends.as_str(), Lenient)
                         .map_err(|e| PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e))?;
 
@@ -1316,11 +1316,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             SourceAnchor::Workspace,
                         ),
                         PixiRecord::Source(record) => (
-                            Cow::Owned(format!(
-                                "{} @ {}",
-                                record.package_record.name.as_source(),
-                                &record.source
-                            )),
+                            Cow::Owned(format!("{} @ {}", record.name.as_source(), &record.source)),
                             SourceSpec::from(record.source.clone()).into(),
                         ),
                     };
@@ -1478,9 +1474,9 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .iter()
         .filter_map(PixiRecord::as_source)
     {
-        if !expected_conda_source_dependencies.contains(&record.package_record.name) {
+        if !expected_conda_source_dependencies.contains(&record.name) {
             return Err(Box::new(PlatformUnsat::RequiredBinaryIsSource(
-                record.package_record.name.as_source().to_string(),
+                record.name.as_source().to_string(),
             )));
         }
     }

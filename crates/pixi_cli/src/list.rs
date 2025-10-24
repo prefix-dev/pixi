@@ -111,7 +111,7 @@ impl FancyDisplay for KindPackage {
 #[derive(Serialize)]
 struct PackageToOutput {
     name: String,
-    version: String,
+    version: Option<String>,
     build: Option<String>,
     size_bytes: Option<u64>,
     kind: KindPackage,
@@ -161,16 +161,16 @@ impl PackageExt {
     /// Returns the name of the package.
     pub fn name(&self) -> Cow<'_, str> {
         match self {
-            Self::Conda(value) => value.record().name.as_normalized().into(),
+            Self::Conda(value) => value.name().as_normalized().into(),
             Self::PyPI(value, _) => value.name.as_dist_info_name(),
         }
     }
 
     /// Returns the version string of the package
-    pub fn version(&self) -> Cow<'_, str> {
+    pub fn version(&self) -> Option<Cow<'_, str>> {
         match self {
-            Self::Conda(value) => value.record().version.as_str(),
-            Self::PyPI(value, _) => value.version.to_string().into(),
+            Self::Conda(value) => Some(value.version()?.as_str()),
+            Self::PyPI(value, _) => Some(value.version.to_string().into()),
         }
     }
 }
@@ -214,10 +214,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()?;
 
     // Get the python record from the lock file
-    let mut conda_records = locked_deps_ext.iter().filter_map(|d| d.as_conda());
+    let conda_records = locked_deps_ext.iter().filter_map(|d| d.as_conda());
 
     // Construct the registry index if we have a python record
-    let python_record = conda_records.find(|r| is_python_record(r));
+    let python_record = conda_records
+        .filter_map(CondaPackageData::as_binary)
+        .find(|r| is_python_record(&r.package_record));
     let tags;
     let uv_context;
     let index_locations;
@@ -231,7 +233,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             tags = get_pypi_tags(
                 platform,
                 &environment.system_requirements(),
-                python_record.record(),
+                &python_record.package_record,
             )?;
             Some(RegistryWheelIndex::new(
                 &uv_context.cache,
@@ -367,7 +369,7 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
         writeln!(
             writer,
             "\t{}\t{}\t{}\t{}\t{}{}",
-            &package.version,
+            package.version.as_deref().unwrap_or(""),
             package.build.as_deref().unwrap_or(""),
             size_human,
             &package.kind.fancy_display(),
@@ -411,22 +413,22 @@ fn create_package_to_output<'a, 'b>(
     registry_index: Option<&'a mut RegistryWheelIndex<'b>>,
 ) -> miette::Result<PackageToOutput> {
     let name = package.name().to_string();
-    let version = package.version().into_owned();
+    let version = package.version().map(|v| v.into_owned());
     let kind = KindPackage::from(package);
 
     let build = match package {
-        PackageExt::Conda(pkg) => Some(pkg.record().build.clone()),
+        PackageExt::Conda(pkg) => pkg.build().map(ToOwned::to_owned),
         PackageExt::PyPI(_, _) => None,
     };
 
     let (size_bytes, source) = match package {
-        PackageExt::Conda(pkg) => (
-            pkg.record().size,
-            match pkg {
-                CondaPackageData::Source(source) => Some(source.location.to_string()),
-                CondaPackageData::Binary(binary) => binary.channel.as_ref().map(|c| c.to_string()),
-            },
-        ),
+        PackageExt::Conda(pkg) => match pkg {
+            CondaPackageData::Source(source) => (None, Some(source.location.to_string())),
+            CondaPackageData::Binary(binary) => (
+                binary.package_record.size,
+                binary.channel.as_ref().map(|c| c.to_string()),
+            ),
+        },
         PackageExt::PyPI(p, name) => {
             // Check the hash to avoid non index packages to be handled by the registry
             // index as wheels

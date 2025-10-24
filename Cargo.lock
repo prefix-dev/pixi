@@ -1317,6 +1317,7 @@ checksum = "a1d728cc89cf3aee9ff92b05e62b19ee65a02b5702cff7d5a377e32c6ae29d8d"
 [[package]]
 name = "coalesced_map"
 version = "0.1.2"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "dashmap",
  "tokio",
@@ -2124,6 +2125,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.6"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -4323,6 +4325,7 @@ checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
 [[package]]
 name = "path_resolver"
 version = "0.2.1"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "fs-err",
  "fxhash",
@@ -5969,6 +5972,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.38.2"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "anyhow",
  "clap",
@@ -6012,6 +6016,7 @@ dependencies = [
 [[package]]
 name = "rattler_cache"
 version = "0.3.41"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -6043,6 +6048,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.40.3"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "chrono",
  "core-foundation 0.10.1",
@@ -6083,6 +6089,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.1.7"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "blake2",
  "digest",
@@ -6100,6 +6107,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.25.3"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "chrono",
  "file_url",
@@ -6124,6 +6132,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.11"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "quote",
  "syn",
@@ -6132,6 +6141,7 @@ dependencies = [
 [[package]]
 name = "rattler_menuinst"
 version = "0.2.32"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "chrono",
  "configparser",
@@ -6160,6 +6170,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.25.20"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "anyhow",
  "async-once-cell",
@@ -6190,6 +6201,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.23.11"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "bzip2 0.6.1",
  "chrono",
@@ -6218,6 +6230,7 @@ dependencies = [
 [[package]]
 name = "rattler_pty"
 version = "0.2.7"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "libc",
  "nix 0.30.1",
@@ -6228,6 +6241,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.12"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "reqwest",
  "reqwest-middleware",
@@ -6237,6 +6251,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.24.12"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -6295,6 +6310,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.25.5"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -6314,6 +6330,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "3.0.8"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "chrono",
  "futures",
@@ -6330,6 +6347,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "2.2.4"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "archspec",
  "libloading",
@@ -7381,6 +7399,7 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
+source = "git+https://github.com/baszalmstra/rattler?branch=rattler-lock%2Fv7#774cc5b82bd7b9100a585122d066750ef80d45f6"
 dependencies = [
  "tokio",
 ]

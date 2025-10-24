@@ -30,7 +30,7 @@ use pixi_install_pypi::{
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PixiRecord};
+use pixi_record::{ParseLockFileError, PixiPackageRecord, PixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
@@ -1994,7 +1994,9 @@ async fn spawn_solve_conda_environment_task(
         mapping_client
             .amend_purls(
                 &pypi_name_mapping_location,
-                records.iter_mut().filter_map(PixiRecord::as_binary_mut),
+                records
+                    .iter_mut()
+                    .filter_map(PixiPackageRecord::as_binary_mut),
                 None,
             )
             .await
@@ -2002,7 +2004,9 @@ async fn spawn_solve_conda_environment_task(
     }
 
     // Turn the records into a map by name
-    let records_by_name = PixiRecordsByName::from(records);
+    let records_by_name =
+        PixiRecordsByName::from_unique_iter(records.into_iter().map(PixiRecord::from))
+            .expect("records returned by solve must have unique names");
 
     let end = Instant::now();
 

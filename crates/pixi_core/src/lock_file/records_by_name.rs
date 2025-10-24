@@ -1,6 +1,6 @@
 use super::package_identifier::ConversionError;
 use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
-use pixi_record::PixiRecord;
+use pixi_record::{PixiPackageRecord, PixiRecord};
 use pixi_uv_conversions::to_uv_normalize;
 use pypi_modifiers::pypi_tags::is_python_record;
 use rattler_conda_types::RepoDataRecord;
@@ -66,6 +66,22 @@ impl HasName for PixiRecord {
 
     fn name(&self) -> &rattler_conda_types::PackageName {
         self.name()
+    }
+}
+
+impl HasName for PixiPackageRecord {
+    type N = rattler_conda_types::PackageName;
+
+    fn name(&self) -> &rattler_conda_types::PackageName {
+        self.name()
+    }
+}
+
+impl HasVersion for PixiPackageRecord {
+    type V = rattler_conda_types::Version;
+
+    fn version(&self) -> &Self::V {
+        self.version().as_ref()
     }
 }
 
@@ -166,36 +182,32 @@ impl<D: HasName> DependencyRecordsByName<D> {
         Ok(Self { records, by_name })
     }
 
-    // /// Constructs a new instance from an iterator of repodata records. The
-    // /// records are deduplicated where the record with the highest version
-    // /// wins.
-    // pub(crate) fn from_iter<I: IntoIterator<Item = D>>(iter: I) -> Self
-    // where
-    //     D: HasVersion,
-    // {
-    //     let iter = iter.into_iter();
-    //     let min_size = iter.size_hint().0;
-    //     let mut by_name = HashMap::with_capacity(min_size);
-    //     let mut records = Vec::with_capacity(min_size);
-    //     for record in iter {
-    //         match by_name.entry(record.name().clone()) {
-    //             Entry::Vacant(entry) => {
-    //                 let idx = records.len();
-    //                 records.push(record);
-    //                 entry.insert(idx);
-    //             }
-    //             Entry::Occupied(entry) => {
-    //                 // Use the entry with the highest version or otherwise the first we encounter.
-    //                 let idx = *entry.get();
-    //                 if records[idx].version() < record.version() {
-    //                     records[idx] = record;
-    //                 }
-    //             }
-    //         }
-    //     }
+    pub(crate) fn from_iter_cmp<I: IntoIterator<Item = D>, F: Fn(&D, &D) -> std::cmp::Ordering>(
+        iter: I,
+        cmp: F,
+    ) -> Self {
+        let iter = iter.into_iter();
+        let min_size = iter.size_hint().0;
+        let mut by_name = HashMap::with_capacity(min_size);
+        let mut records = Vec::with_capacity(min_size);
+        for record in iter {
+            match by_name.entry(record.name().clone()) {
+                Entry::Vacant(entry) => {
+                    let idx = records.len();
+                    records.push(record);
+                    entry.insert(idx);
+                }
+                Entry::Occupied(entry) => {
+                    let idx = *entry.get();
+                    if cmp(&records[idx], &record) == std::cmp::Ordering::Less {
+                        records[idx] = record;
+                    }
+                }
+            }
+        }
 
-    //     Self { records, by_name }
-    // }
+        Self { records, by_name }
+    }
 }
 
 impl PixiRecordsByName {
@@ -242,40 +254,24 @@ impl PixiRecordsByName {
             .collect::<Result<HashMap<_, _>, ConversionError>>()
     }
 
-    pub(crate) fn from_iter<I: IntoIterator<Item = PixiRecord>>(iter: I) -> Self {
-        let iter = iter.into_iter();
-        let min_size = iter.size_hint().0;
-        let mut by_name = HashMap::with_capacity(min_size);
-        let mut records = Vec::with_capacity(min_size);
-        for record in iter {
-            match by_name.entry(record.name().clone()) {
-                Entry::Vacant(entry) => {
-                    let idx = records.len();
-                    records.push(record);
-                    entry.insert(idx);
+    pub fn from_iter<I: IntoIterator<Item = PixiRecord>>(iter: I) -> Self {
+        Self::from_iter_cmp(iter, |a, b| {
+            match (a, b) {
+                (PixiRecord::Binary(a_record), PixiRecord::Binary(b_record)) => {
+                    a_record.version().cmp(b_record.version())
                 }
-                Entry::Occupied(entry) => {
-                    // Use the entry with the highest version or otherwise the first we encounter.
-                    let idx = *entry.get();
-                    let a = &records[idx];
-                    let b = &record;
-                    match (a, b) {
-                        (PixiRecord::Binary(a_rec), PixiRecord::Binary(b_rec)) => {
-                            if a_rec.package_record.version < b_rec.package_record.version {
-                                records[idx] = record;
-                            }
-                        }
-                        (PixiRecord::Binary(_), PixiRecord::Source(_)) => {
-                            // Source overwrites binary
-                            records[idx] = record;
-                        }
-                        // Otherwise ignore
-                        _ => {}
-                    }
-                }
+                // Prefer source packages over binary packages
+                (PixiRecord::Binary(_), PixiRecord::Source(_)) => std::cmp::Ordering::Less,
+                (PixiRecord::Source(_), PixiRecord::Binary(_)) => std::cmp::Ordering::Greater,
+                // Both are source records, consider them equal
+                (PixiRecord::Source(_), PixiRecord::Source(_)) => std::cmp::Ordering::Equal,
             }
-        }
+        })
+    }
+}
 
-        Self { records, by_name }
+impl PypiRecordsByName {
+    pub fn from_iter<I: IntoIterator<Item = PypiRecord>>(iter: I) -> Self {
+        Self::from_iter_cmp(iter, |a, b| a.version().cmp(b.version()))
     }
 }

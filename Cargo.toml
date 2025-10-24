@@ -214,22 +214,23 @@ version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "06ec5a5f
 
 # pixi-rattler-patches - START
 # pixi-rattler-original-versions: {"coalesced_map": "0.1.1", "file_url": "0.2.6", "rattler": "0.38.2", "rattler_cache": "0.3.41", "rattler_conda_types": "0.40.3", "rattler_digest": "1.1.7", "rattler_lock": "0.25.3", "rattler_menuinst": "0.2.23", "rattler_networking": "0.25.20", "rattler_package_streaming": "0.23.11", "rattler_repodata_gateway": "0.24.12", "rattler_shell": "0.25.5", "rattler_solve": "3.0.8", "rattler_virtual_packages": "2.2.4", "simple_spawn_blocking": "1.1.0"}
-coalesced_map = { path = "../rattler/crates/coalesced_map" }
-file_url = { path = "../rattler/crates/file_url" }
-rattler = { path = "../rattler/crates/rattler" }
-rattler_cache = { path = "../rattler/crates/rattler_cache" }
-rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
-rattler_digest = { path = "../rattler/crates/rattler_digest" }
-rattler_lock = { path = "../rattler/crates/rattler_lock" }
-rattler_menuinst = { path = "../rattler/crates/rattler_menuinst" }
-rattler_networking = { path = "../rattler/crates/rattler_networking" }
-rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
-rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
-rattler_shell = { path = "../rattler/crates/rattler_shell" }
-rattler_solve = { path = "../rattler/crates/rattler_solve" }
-rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
-simple_spawn_blocking = { path = "../rattler/crates/simple_spawn_blocking" }
+coalesced_map = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+file_url = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_cache = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_lock = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_menuinst = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_networking = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_package_streaming = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_shell = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_solve = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+simple_spawn_blocking = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
 # pixi-rattler-patches - END
+#
 [profile.ci]
 codegen-units = 16
 inherits = "release"

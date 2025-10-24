@@ -23,10 +23,7 @@ use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
     SolvePixiEnvironmentError,
-    build::{
-        Dependencies, DependenciesError, PixiRunExports, conversion,
-        source_metadata_cache::MetadataKind,
-    },
+    build::{Dependencies, DependenciesError, PixiRunExports},
     executor::ExecutorFutures,
 };
 
@@ -76,47 +73,28 @@ impl SourceMetadataSpec {
 
         let build_backend_metadata = build_backend_metadata?;
 
-        match &build_backend_metadata.metadata.metadata {
-            MetadataKind::GetMetadata { packages } => {
-                // Convert the metadata to source records.
-                let records = conversion::package_metadata_to_source_records(
-                    &build_backend_metadata.source,
-                    packages,
-                    &self.package,
-                    &build_backend_metadata.metadata.input_hash,
-                );
-
-                Ok(SourceMetadata {
-                    source: build_backend_metadata.source.clone(),
-                    records,
-                    // As the GetMetadata kind returns all records at once and we don't solve them we can skip this.
-                    skipped_packages: Default::default(),
-                })
+        let outputs = &build_backend_metadata.metadata.outputs;
+        let mut skipped_packages = vec![];
+        let mut futures = ExecutorFutures::new(command_dispatcher.executor());
+        for output in outputs {
+            if output.metadata.name != self.package {
+                skipped_packages.push(output.metadata.name.clone());
+                continue;
             }
-            MetadataKind::Outputs { outputs } => {
-                let mut skipped_packages = vec![];
-                let mut futures = ExecutorFutures::new(command_dispatcher.executor());
-                for output in outputs {
-                    if output.metadata.name != self.package {
-                        skipped_packages.push(output.metadata.name.clone());
-                        continue;
-                    }
-                    futures.push(self.resolve_output(
-                        &command_dispatcher,
-                        output,
-                        build_backend_metadata.metadata.input_hash.clone(),
-                        build_backend_metadata.source.clone(),
-                        reporter.clone(),
-                    ));
-                }
-
-                Ok(SourceMetadata {
-                    source: build_backend_metadata.source.clone(),
-                    records: futures.try_collect().await?,
-                    skipped_packages,
-                })
-            }
+            futures.push(self.resolve_output(
+                &command_dispatcher,
+                output,
+                build_backend_metadata.metadata.input_hash.clone(),
+                build_backend_metadata.source.clone(),
+                reporter.clone(),
+            ));
         }
+
+        Ok(SourceMetadata {
+            source: build_backend_metadata.source.clone(),
+            records: futures.try_collect().await?,
+            skipped_packages,
+        })
     }
 
     async fn resolve_output(
@@ -291,6 +269,12 @@ impl SourceMetadataSpec {
         Ok(SourcePackageRecord {
             source_record: SourceRecord {
                 name: output.metadata.name.clone(),
+                version: if source.is_immutable() {
+                    // Only record the version if the source code is immutable.
+                    Some(output.metadata.version.clone())
+                } else {
+                    None
+                },
                 source,
                 variants: output
                     .metadata

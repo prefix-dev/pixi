@@ -36,6 +36,9 @@ pub struct SourceRecord {
     /// at the same location.
     pub variants: SelectedVariant,
 
+    /// Optionally the version of the package
+    pub version: Option<VersionWithSource>,
+
     /// Specification of packages this package depends on
     pub depends: Vec<String>,
 
@@ -201,6 +204,7 @@ impl From<SourceRecord> for CondaPackageData {
             name: value.name,
             location: value.source.into(),
             variants: value.variants,
+            version: value.version,
             depends: value.depends,
             constrains: value.constrains,
             experimental_extra_depends: value.experimental_extra_depends,
@@ -228,6 +232,7 @@ impl TryFrom<CondaSourceData> for SourceRecord {
         Ok(Self {
             name: value.name,
             source: value.location.try_into()?,
+            version: value.version,
             variants: value.variants,
             depends: value.depends,
             constrains: value.constrains,

@@ -26,10 +26,7 @@ use pixi_uv_conversions::{
     to_exclude_newer, to_index_strategy,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
-use pypi_modifiers::{
-    Tags,
-    pypi_tags::{get_pypi_tags, is_python_record},
-};
+use pypi_modifiers::{Tags, pypi_tags::get_pypi_tags};
 use rattler_conda_types::Platform;
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rayon::prelude::*;

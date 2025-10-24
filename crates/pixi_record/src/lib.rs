@@ -40,6 +40,15 @@ impl PixiRecord {
         }
     }
 
+    /// Returns the version of the package if it is known.
+    pub fn version(&self) -> Option<&VersionWithSource> {
+        match self {
+            PixiRecord::Binary(record) => Some(&record.package_record.version),
+            PixiRecord::Source(record) => record.version.as_ref(),
+        }
+    }
+
+    /// The dependencies of the package
     pub fn depends(&self) -> &[String] {
         match self {
             PixiRecord::Binary(record) => &record.package_record.depends,
@@ -47,6 +56,7 @@ impl PixiRecord {
         }
     }
 
+    /// The constraints of the package
     pub fn constrains(&self) -> &[String] {
         match self {
             PixiRecord::Binary(record) => &record.package_record.constrains,
@@ -179,6 +189,7 @@ impl Matches<PixiRecord> for MatchSpec {
 /// is persisted).
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 pub enum PixiPackageRecord {
     Binary(RepoDataRecord),
     Source(SourcePackageRecord),

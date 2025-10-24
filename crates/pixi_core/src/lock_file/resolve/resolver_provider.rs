@@ -42,7 +42,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
     ) -> impl Future<Output = uv_resolver::PackageVersionsResult> + 'io {
         if let Some((repodata_record, identifier)) = self.conda_python_identifiers.get(package_name)
         {
-            let version = repodata_record.package_record().version.to_string();
+            let version = &identifier.version.to_string();
 
             tracing::debug!(
                 "overriding PyPI package version request {}=={}",

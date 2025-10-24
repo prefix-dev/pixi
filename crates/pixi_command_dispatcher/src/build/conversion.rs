@@ -1,9 +1,6 @@
-use pixi_build_types::{
-    BinaryPackageSpecV1, CondaPackageMetadata, PackageSpecV1, SourcePackageSpecV1,
-};
-use pixi_record::{InputHash, PinnedSourceSpec, SourcePackageRecord, SourceRecord};
+use pixi_build_types::{BinaryPackageSpecV1, PackageSpecV1, SourcePackageSpecV1};
 use pixi_spec::{BinarySpec, DetailedSpec, SourceLocationSpec, UrlBinarySpec};
-use rattler_conda_types::{NamedChannelOrUrl, PackageName};
+use rattler_conda_types::NamedChannelOrUrl;
 
 /// Converts a [`SourcePackageSpecV1`] to a [`pixi_spec::SourceSpec`].
 pub fn from_source_spec_v1(source: SourcePackageSpecV1) -> pixi_spec::SourceSpec {
@@ -95,54 +92,4 @@ pub fn from_package_spec_v1(source: PackageSpecV1) -> pixi_spec::PixiSpec {
         PackageSpecV1::Source(source) => from_source_spec_v1(source).into(),
         PackageSpecV1::Binary(binary) => from_binary_spec_v1(*binary).into(),
     }
-}
-
-pub(crate) fn package_metadata_to_source_records(
-    source: &PinnedSourceSpec,
-    packages: &[CondaPackageMetadata],
-    package: &PackageName,
-    input_hash: &Option<InputHash>,
-) -> Vec<SourcePackageRecord> {
-    // Convert the metadata to source records with metadata
-
-    packages
-        .iter()
-        .filter(|pkg| pkg.name == *package)
-        .map(|p| SourcePackageRecord {
-            source_record: SourceRecord {
-                name: p.name.clone(),
-                source: source.clone(),
-                variants: Default::default(),
-                depends: p.depends.iter().map(|c| c.to_string()).collect(),
-                constrains: p.constraints.iter().map(|c| c.to_string()).collect(),
-                experimental_extra_depends: Default::default(),
-                license: p.license.clone(),
-                purls: None,
-                input_hash: input_hash.clone(),
-                sources: p
-                    .sources
-                    .iter()
-                    .map(|(name, source)| (name.clone(), from_source_spec_v1(source.clone())))
-                    .collect(),
-                python_site_packages_path: None,
-            },
-            version: p.version.clone(),
-            build: p.build.clone(),
-            build_number: p.build_number,
-            subdir: p.subdir.to_string(),
-            arch: p.subdir.arch().as_ref().map(ToString::to_string),
-            platform: p.subdir.only_platform().map(ToString::to_string),
-            md5: None,
-            sha256: None,
-            size: None,
-            track_features: vec![],
-            features: None,
-            license_family: p.license_family.clone(),
-            timestamp: None,
-            run_exports: None,
-            noarch: p.noarch,
-            legacy_bz2_md5: None,
-            legacy_bz2_size: None,
-        })
-        .collect()
 }
