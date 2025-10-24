@@ -193,7 +193,6 @@ pub enum WorkspaceDiscoveryError {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug)]
 enum EitherManifest {
     Pixi(TomlManifest),
     Pyproject(PyProjectManifest),
@@ -418,8 +417,6 @@ impl WorkspaceDiscoverer {
                             Some(manifest_dir),
                         )
                     } else {
-                        tracing::trace!("continue searching for workspace manifest");
-                        dbg!(self.discover_package);
                         if self.discover_package {
                             // Otherwise store the manifest for later to parse as the closest
                             // package manifest.
@@ -484,8 +481,6 @@ impl WorkspaceDiscoverer {
                         source: source.clone(),
                     }),
             );
-            tracing::trace!("closest package manifest: {:?}", &closest_package_manifest);
-
             // Incorporate the workspace information into the package manifest.
             let closest_package_manifest = match closest_package_manifest {
                 None => {
