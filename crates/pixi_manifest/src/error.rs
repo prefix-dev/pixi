@@ -136,7 +136,7 @@ impl Display for TomlError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TomlError::Error(err) => write!(f, "{}", err.message()),
-            TomlError::TomlError(err) => write!(f, "{}", err),
+            TomlError::TomlError(err) => write!(f, "{err}"),
             TomlError::NoPixiTable(manifest_kind, detail) => {
                 let filename = manifest_kind.file_name();
                 if let Some(detail) = detail {

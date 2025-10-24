@@ -132,25 +132,23 @@ impl LockFileExt for LockFile {
         let Some(env) = self.environment(environment) else {
             return false;
         };
-        let package_found = env
-            .packages(platform)
+
+        env.packages(platform)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_conda)
-            .any(|package| package.record().name.as_normalized() == name);
-        package_found
+            .any(|package| package.record().name.as_normalized() == name)
     }
     fn contains_pypi_package(&self, environment: &str, platform: Platform, name: &str) -> bool {
         let Some(env) = self.environment(environment) else {
             return false;
         };
-        let package_found = env
-            .packages(platform)
+
+        env.packages(platform)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_pypi)
-            .any(|(data, _)| data.name.as_ref() == name);
-        package_found
+            .any(|(data, _)| data.name.as_ref() == name)
     }
 
     fn contains_match_spec(
@@ -163,13 +161,12 @@ impl LockFileExt for LockFile {
         let Some(env) = self.environment(environment) else {
             return false;
         };
-        let package_found = env
-            .packages(platform)
+
+        env.packages(platform)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_conda)
-            .any(move |p| p.satisfies(&match_spec));
-        package_found
+            .any(move |p| p.satisfies(&match_spec))
     }
 
     fn contains_pep508_requirement(
@@ -179,16 +176,15 @@ impl LockFileExt for LockFile {
         requirement: pep508_rs::Requirement,
     ) -> bool {
         let Some(env) = self.environment(environment) else {
-            eprintln!("environment not found: {}", environment);
+            eprintln!("environment not found: {environment}");
             return false;
         };
-        let package_found = env
-            .packages(platform)
+
+        env.packages(platform)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_pypi)
-            .any(move |(data, _)| data.satisfies(&requirement));
-        package_found
+            .any(move |(data, _)| data.satisfies(&requirement))
     }
 
     fn get_pypi_package_version(

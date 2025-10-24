@@ -59,7 +59,7 @@ test = ["recursive-optional-groups[np]", "pytest", {{include-group = "docs"}}]
 
 [tool.pixi.project]
 channels = ["{channel_url}"]
-platforms = ["{platform}"]
+platforms = ["{platform_str}"]
 
 [tool.pixi.dependencies]
 python = "==3.11.0"
@@ -72,9 +72,6 @@ np = {{features = ["np"]}}
 all = {{features = ["all"]}}
 test = {{features = ["test"]}}
 "#,
-        platform = platform_str,
-        channel_url = channel_url,
-        index_url = index_url,
     );
 
     let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
@@ -339,7 +336,7 @@ async fn pin_torch() {
     let platform = Platform::current();
     let platforms = match platform {
         Platform::Linux64 => "\"linux-64\"".to_string(),
-        _ => format!("\"{platform}\", \"linux-64\"", platform = platform),
+        _ => format!("\"{platform}\", \"linux-64\""),
     };
 
     let pixi = PixiControl::from_manifest(&format!(
@@ -355,7 +352,6 @@ async fn pin_torch() {
         [target.linux-64.pypi-dependencies]
         torch = {{ version = "*", index = "https://download.pytorch.org/whl/cu124" }}
         "#,
-        platforms = platforms,
     ));
 
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();

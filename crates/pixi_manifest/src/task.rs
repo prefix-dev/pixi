@@ -679,12 +679,12 @@ impl Display for Task {
         let env = self.env();
         if let Some(env) = env {
             if !env.is_empty() {
-                write!(f, ", env = {:?}", env)?;
+                write!(f, ", env = {env:?}")?;
             }
         }
         let description = self.description();
         if let Some(description) = description {
-            write!(f, ", description = {:?}", description)?;
+            write!(f, ", description = {description:?}")?;
         }
 
         Ok(())

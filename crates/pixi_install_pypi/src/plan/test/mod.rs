@@ -317,7 +317,7 @@ fn test_ignored_packages_not_extraneous() {
         .iter()
         .map(|d| d.name().to_string())
         .collect();
-    assert_eq!(names.len(), 1, "unexpected extraneous: {:?}", names);
+    assert_eq!(names.len(), 1, "unexpected extraneous: {names:?}");
     assert!(names.contains(&"requests".to_string()));
 }
 

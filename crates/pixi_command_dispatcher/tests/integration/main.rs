@@ -732,7 +732,7 @@ pub async fn test_force_rebuild() {
 
     eprintln!("Events after restart:\n");
     let event_tree = EventTree::new(second_events.iter()).to_string();
-    eprintln!("{}", event_tree);
+    eprintln!("{event_tree}");
 
     assert_eq!(
         rebuild_packages,

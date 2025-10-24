@@ -748,7 +748,7 @@ impl Directories {
                 [0..PLACEHOLDER_LENGTH - work_directory.join(HOST_ENV_DIR).as_os_str().len()]
                 .to_string();
 
-            work_directory.join(format!("{HOST_ENV_DIR}{}", placeholder))
+            work_directory.join(format!("{HOST_ENV_DIR}{placeholder}"))
         };
         Self {
             host_prefix,

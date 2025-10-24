@@ -110,7 +110,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     match apply_changes(env_name, specs.as_slice(), &mut project)
         .await
-        .wrap_err(format!("Couldn't remove packages from {}", env_name))
+        .wrap_err(format!("Couldn't remove packages from {env_name}"))
     {
         Ok(state_changes) => {
             state_changes.report();

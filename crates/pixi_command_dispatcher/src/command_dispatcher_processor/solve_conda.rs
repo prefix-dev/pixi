@@ -74,7 +74,7 @@ impl CommandDispatcherProcessor {
                     .map(move |result| {
                         TaskResult::SolveCondaEnvironment(
                             environment_id,
-                            result.unwrap_or(Err(CommandDispatcherError::Cancelled)),
+                            Box::new(result.unwrap_or(Err(CommandDispatcherError::Cancelled))),
                         )
                     })
                     .boxed_local(),

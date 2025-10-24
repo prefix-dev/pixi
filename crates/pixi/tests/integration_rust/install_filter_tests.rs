@@ -192,14 +192,13 @@ async fn install_subset_e2e_skip_with_deps() {
         r#"
         [project]
         name = "e2e-install-filter-hard-skip"
-        channels = ["{channel}"]
+        channels = ["{channel_url}"]
         platforms = ["{platform}"]
 
         [dependencies]
         dummy-g = "*"
         dummy-a = "*"
         "#,
-        channel = channel_url,
     );
 
     let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");

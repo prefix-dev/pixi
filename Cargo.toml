@@ -115,23 +115,23 @@ pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
 pyproject-toml = "0.13.7"
 rand = { version = "0.9.1", default-features = false }
-rattler = { version = "0.37.6", default-features = false }
-rattler_cache = { version = "0.3.36", default-features = false }
-rattler_conda_types = { version = "0.40.0", default-features = false, features = [
+rattler = { version = "0.38.2", default-features = false }
+rattler_cache = { version = "0.3.41", default-features = false }
+rattler_conda_types = { version = "0.40.3", default-features = false, features = [
   "rayon",
 ] }
-rattler_digest = { version = "1.1.5", default-features = false }
-rattler_lock = { version = "0.25.0", default-features = false }
+rattler_digest = { version = "1.1.7", default-features = false }
+rattler_lock = { version = "0.25.3", default-features = false }
 rattler_menuinst = { version = "0.2.23", default-features = false }
-rattler_networking = { version = "0.25.15", default-features = false, features = [
+rattler_networking = { version = "0.25.20", default-features = false, features = [
   "dirs",
   "google-cloud-auth",
 ] }
-rattler_package_streaming = { version = "0.23.0", default-features = false }
-rattler_repodata_gateway = { version = "0.24.7", default-features = false }
-rattler_shell = { version = "0.25.2", default-features = false }
-rattler_solve = { version = "3.0.5", default-features = false }
-rattler_virtual_packages = { version = "2.1.7", default-features = false }
+rattler_package_streaming = { version = "0.23.11", default-features = false }
+rattler_repodata_gateway = { version = "0.24.12", default-features = false }
+rattler_shell = { version = "0.25.5", default-features = false }
+rattler_solve = { version = "3.0.8", default-features = false }
+rattler_virtual_packages = { version = "2.2.4", default-features = false }
 rayon = "1.10.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", default-features = false }
@@ -227,12 +227,12 @@ opt-level = 3
 strip = "symbols"
 
 [profile.profiling]
-debug = 2            # full debug info
+debug = 2                    # full debug info
 inherits = "release"
-opt-level = 1        # less inlining, easier stepping/backtraces
-# macOS only:
-codegen-units = 1            # better line info (slower build, clearer profiles)
 lto = false                  # avoid over-inlining across crates
+opt-level = 1                # less inlining, easier stepping/backtraces
 panic = "unwind"             # needed for backtraces
 split-debuginfo = "unpacked"
 strip = "none"               # or "debuginfo" to separate
+# macOS only:
+codegen-units = 1 # better line info (slower build, clearer profiles)

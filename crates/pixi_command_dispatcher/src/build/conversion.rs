@@ -104,7 +104,8 @@ pub(crate) fn package_metadata_to_source_records(
     input_hash: &Option<InputHash>,
 ) -> Vec<SourceRecord> {
     // Convert the metadata to repodata
-    let packages = packages
+
+    packages
         .iter()
         .filter(|pkg| pkg.name == *package)
         .map(|p| {
@@ -159,6 +160,5 @@ pub(crate) fn package_metadata_to_source_records(
                 },
             }
         })
-        .collect();
-    packages
+        .collect()
 }

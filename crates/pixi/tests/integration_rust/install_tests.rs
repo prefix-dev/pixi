@@ -370,7 +370,7 @@ async fn install_frozen_skip() {
         channels = ["conda-forge"]
         description = "Add a short description here"
         name = "pyproject"
-        platforms = ["{platform}"]
+        platforms = ["{current_platform}"]
         preview = ["pixi-build"]
         version = "0.1.0"
 
@@ -381,7 +381,6 @@ async fn install_frozen_skip() {
         [pypi-dependencies]
         no-build-editable = {{ path = "./no-build-editable" }}
         "#,
-        platform = current_platform,
     );
 
     let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
@@ -773,7 +772,7 @@ setup(
     [project]
     name = "no-build-isolation"
     channels = ["https://prefix.dev/conda-forge"]
-    platforms = ["{platform}"]
+    platforms = ["{current_platform}"]
 
     [pypi-options]
     no-build-isolation = ["my-pkg"]
@@ -786,7 +785,6 @@ setup(
     [pypi-dependencies.my-pkg]
     path = "./my-pkg"
     "#,
-        platform = current_platform,
     );
 
     let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
@@ -862,7 +860,7 @@ dependencies = []
         [project]
         name = "no-build-isolation-deps"
         channels = ["https://prefix.dev/conda-forge"]
-        platforms = ["{platform}"]
+        platforms = ["{current_platform}"]
 
         [pypi-options]
         no-build-isolation = ["package-b"]
@@ -878,7 +876,6 @@ dependencies = []
         path = "./package-tdjager"
 
         "#,
-        platform = current_platform,
     );
 
     let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
@@ -1181,9 +1178,8 @@ async fn test_multiple_prefix_update() {
     [project]
     name = "test-channel-change"
     channels = ["https://prefix.dev/conda-forge"]
-    platforms = ["{platform}"]
-    "#,
-            platform = current_platform
+    platforms = ["{current_platform}"]
+    "#
         )
         .as_str(),
     )
@@ -1337,13 +1333,12 @@ async fn install_s3() {
     {{
         "s3://rattler-s3-testing/channel": {{
             "S3Credentials": {{
-                "access_key_id": "{}",
-                "secret_access_key": "{}"
+                "access_key_id": "{r2_access_key_id}",
+                "secret_access_key": "{r2_secret_access_key}"
             }}
         }}
     }}
-    "#,
-        r2_access_key_id, r2_secret_access_key
+    "#
     );
     let temp_dir = tempdir().unwrap();
     let credentials_path = temp_dir.path().join("credentials.json");

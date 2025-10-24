@@ -449,7 +449,7 @@ impl TargetSelector {
 impl std::fmt::Display for TargetSelector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TargetSelector::Platform(p) => write!(f, "{}", p),
+            TargetSelector::Platform(p) => write!(f, "{p}"),
             TargetSelector::Linux => write!(f, "linux"),
             TargetSelector::Unix => write!(f, "unix"),
             TargetSelector::Win => write!(f, "win"),

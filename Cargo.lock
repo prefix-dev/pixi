@@ -5974,9 +5974,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.37.9"
+version = "0.38.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e98380b0c8a0d6d4ce632efb4b96b7a6547ff8a2ffd310a41a2e0e791fed856"
+checksum = "2c8abb6e11a8e0377010bca2f761102bbd9a944cf8a589c4e5726459499f0c48"
 dependencies = [
  "anyhow",
  "clap",
@@ -6019,9 +6019,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.3.39"
+version = "0.3.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5c48d937001e268f04a3299dd71cc6d45d43daa858707e0737ab5dd7fe645c4"
+checksum = "8e9eea243b0d877fe0bbb9a421fb9d8cace8039cfdfbda3d7c0384ff5818d382"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -6052,9 +6052,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.40.1"
+version = "0.40.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef45140ce845c50c4d141b425b1de858f5e008af7b3c088520d73c746e4f81d6"
+checksum = "c6fa6244d54b84269d3121d463db4e154c5664936e98817ef44e4fba1f575c3a"
 dependencies = [
  "chrono",
  "core-foundation 0.10.1",
@@ -6094,9 +6094,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_digest"
-version = "1.1.6"
+version = "1.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f9cc663342e34ff125bb1d9df863ca5e03b58b8bb275b56f2903efec6ce2234"
+checksum = "886e9a6254e74a830c2b8555e14862d6b2f4cc498b43767d4adf1c71421a4796"
 dependencies = [
  "blake2",
  "digest",
@@ -6104,6 +6104,7 @@ dependencies = [
  "hex",
  "md-5",
  "serde",
+ "serde_bytes",
  "serde_with",
  "sha2",
  "tokio",
@@ -6112,9 +6113,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.25.1"
+version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7738b9ddb3a65ca03907c5f78eea2cb8465f2cc48b6275e12d3c5c3ff6e1d5e8"
+checksum = "c4e0ba96eefd8186a3bd0a603b4b00bb7faa2d6488ea38eae0da198647fe4712"
 dependencies = [
  "chrono",
  "file_url",
@@ -6148,9 +6149,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_menuinst"
-version = "0.2.30"
+version = "0.2.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e92a1b0f27a18a36caa404ce22d11013ea807617fe462f07f9d66e651c031c9f"
+checksum = "2685a4f23eca7d46249d6775e534a7ff4adffc53af6e702eafe6168282ae0eeb"
 dependencies = [
  "chrono",
  "configparser",
@@ -6178,9 +6179,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.25.18"
+version = "0.25.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "735a30402dbc0f3657da601c3e61ec0d421eb9c2dc3c06d273ad35074a7cf26b"
+checksum = "de790ad7985f3ee85bae3175b203af2152c1c86d9efe1249ac8ff1863466d2e6"
 dependencies = [
  "anyhow",
  "async-once-cell",
@@ -6210,9 +6211,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.23.9"
+version = "0.23.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "936b6716d2e27a05bdcfdef42aa26726d6537244ac773f840a8652788148d674"
+checksum = "ed3dfb861d216425ddb768857b7d50bf548c2b1fe9421caa7071ca655b0423af"
 dependencies = [
  "bzip2 0.6.1",
  "chrono",
@@ -6240,13 +6241,14 @@ dependencies = [
 
 [[package]]
 name = "rattler_pty"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76a7edbf8f23a099ccb32cc4f024886e35a873c462ca83f86c286556c275bf06"
+checksum = "86a84e6b351c46c7588bb8f5c90994be23d5c3c31cf87f9ec903cd91d9fc4246"
 dependencies = [
  "libc",
  "nix 0.30.1",
  "signal-hook",
+ "tokio",
 ]
 
 [[package]]
@@ -6262,9 +6264,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.24.10"
+version = "0.24.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb06130dbeca7f05ac182dafc55617ce0b5e511d969d4065efdf60948d3500c7"
+checksum = "b063b5db3804ea80d0cf991c69d27fd3b1f3be6f8ce4601731ec2583825bb73a"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -6322,9 +6324,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.25.3"
+version = "0.25.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c0ce8b08385050ee95c5fda28651bd03116d9ad9d3cf449778c1526aa3b1be0"
+checksum = "4d3c4475de6e4e22fde5a29e0957622c1665231bc00f1a32be0b8404b412e66c"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -6343,9 +6345,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "3.0.6"
+version = "3.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cee4c050664c55eda15dedfbbc425b5ad3446a5698d59ff00030f29a4e7b242d"
+checksum = "071ca80c7cf13b742f7b08c6199f441cb613db9acc92d5625efc1e4ce84e546d"
 dependencies = [
  "chrono",
  "futures",
@@ -6361,9 +6363,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "2.2.2"
+version = "2.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e545db8940e522ad37465144d10cafd86148d9c852f805f4235e923b9f47c7e"
+checksum = "6f31e64364d38962c914d91ea00e1d735884dcad285da0082820ea18af611454"
 dependencies = [
  "archspec",
  "libloading",
@@ -7116,6 +7118,16 @@ checksum = "f3a1a3341211875ef120e117ea7fd5228530ae7e7036a779fdc9117be6b3282c"
 dependencies = [
  "ordered-float",
  "serde",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d440709e79d88e51ac01c4b72fc6cb7314017bb7da9eeff678aa94c10e3ea8"
+dependencies = [
+ "serde",
+ "serde_core",
 ]
 
 [[package]]

@@ -221,7 +221,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 console::style("): ").bold(),
                 display_command,
                 if let Some(description) = executable_task.task().description() {
-                    console::style(format!(": ({})", description)).yellow()
+                    console::style(format!(": ({description})")).yellow()
                 } else {
                     console::style("".to_string()).yellow()
                 }

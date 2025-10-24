@@ -175,7 +175,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             if out.is_empty() {
                 eprintln!("Configuration not set");
             }
-            writeln!(std::io::stdout(), "{}", out)
+            writeln!(std::io::stdout(), "{out}")
                 .map_err(|e| {
                     if e.kind() == std::io::ErrorKind::BrokenPipe {
                         std::process::exit(0);

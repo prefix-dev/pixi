@@ -286,9 +286,9 @@ impl TaskSpec for SourceBuildSpec {
     type Error = SourceBuildError;
 }
 
-pub(crate) type BackendSourceBuildTask = Task<BackendSourceBuildSpec>;
+pub(crate) type BackendSourceBuildTask = Task<Box<BackendSourceBuildSpec>>;
 
-impl TaskSpec for BackendSourceBuildSpec {
+impl TaskSpec for Box<BackendSourceBuildSpec> {
     type Output = BackendBuiltSource;
     type Error = BackendSourceBuildError;
 }
@@ -490,7 +490,7 @@ impl CommandDispatcher {
         &self,
         spec: BackendSourceBuildSpec,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
-        self.execute_task(spec).await
+        self.execute_task(Box::new(spec)).await
     }
 
     /// Solves a particular pixi environment specified by `PixiEnvironmentSpec`.
