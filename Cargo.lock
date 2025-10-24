@@ -4800,7 +4800,6 @@ dependencies = [
  "rattler_virtual_packages",
  "serde",
  "serde_json",
- "serde_with",
  "simple_spawn_blocking",
  "slotmap",
  "strsim",
