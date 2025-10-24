@@ -479,7 +479,6 @@ impl WorkspaceDiscoverer {
                         source: source.clone(),
                     }),
             );
-
             // Incorporate the workspace information into the package manifest.
             let closest_package_manifest = match closest_package_manifest {
                 None => {
