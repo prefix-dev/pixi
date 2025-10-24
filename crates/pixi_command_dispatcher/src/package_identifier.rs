@@ -1,6 +1,6 @@
 use std::{fmt::Display, hash::Hash};
 
-use pixi_record::{SourceRecord, SourceRecordWithMetadata};
+use pixi_record::SourcePackageRecord;
 use rattler_conda_types::{PackageName, PackageRecord, VersionWithSource};
 use serde::{Deserialize, Serialize};
 
@@ -57,8 +57,8 @@ impl<'a> From<&'a PackageRecord> for PackageIdentifier {
     }
 }
 
-impl From<SourceRecordWithMetadata> for PackageIdentifier {
-    fn from(record: SourceRecordWithMetadata) -> Self {
+impl From<SourcePackageRecord> for PackageIdentifier {
+    fn from(record: SourcePackageRecord) -> Self {
         Self {
             name: record.source_record.name,
             version: record.version,
@@ -68,8 +68,8 @@ impl From<SourceRecordWithMetadata> for PackageIdentifier {
     }
 }
 
-impl<'a> From<&'a SourceRecordWithMetadata> for PackageIdentifier {
-    fn from(record: &'a SourceRecordWithMetadata) -> Self {
+impl<'a> From<&'a SourcePackageRecord> for PackageIdentifier {
+    fn from(record: &'a SourcePackageRecord) -> Self {
         Self {
             name: record.source_record.name.clone(),
             version: record.version.clone(),

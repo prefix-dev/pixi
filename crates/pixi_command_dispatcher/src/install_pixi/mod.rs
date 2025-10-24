@@ -95,14 +95,14 @@ pub struct InstallPixiEnvironmentResult {
 }
 
 impl InstallPixiEnvironmentSpec {
-    pub fn new(records: Vec<PixiRecord>, prefix: Prefix) -> Self {
+    pub fn new<R: Into<PixiRecord>>(records: Vec<R>, prefix: Prefix) -> Self {
         InstallPixiEnvironmentSpec {
             name: prefix
                 .file_name()
                 .map(OsStr::to_string_lossy)
                 .map(Cow::into_owned)
                 .unwrap_or_default(),
-            records,
+            records: records.into_iter().map(Into::into).collect(),
             prefix,
             installed: None,
             ignore_packages: None,

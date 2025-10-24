@@ -8,13 +8,12 @@ use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_record::{
-    InputHash, PinnedSourceSpec, PixiRecord, SourceRecord, SourceRecordWithMetadata,
+    InputHash, PinnedSourceSpec, PixiPackageRecord, SourcePackageRecord, SourceRecord,
 };
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, PackageRecord,
-    package::RunExportsJson,
+    ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, package::RunExportsJson,
 };
 use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
 use thiserror::Error;
@@ -48,7 +47,7 @@ pub struct SourceMetadata {
     pub source: PinnedSourceSpec,
 
     /// All the source records with metadata for this particular package.
-    pub records: Vec<SourceRecordWithMetadata>,
+    pub records: Vec<SourcePackageRecord>,
 
     /// All package names that where skipped but the backend could provide.
     pub skipped_packages: Vec<PackageName>,
@@ -127,7 +126,7 @@ impl SourceMetadataSpec {
         input_hash: Option<InputHash>,
         source: PinnedSourceSpec,
         reporter: Option<Arc<dyn RunExportsReporter>>,
-    ) -> Result<SourceRecordWithMetadata, CommandDispatcherError<SourceMetadataError>> {
+    ) -> Result<SourcePackageRecord, CommandDispatcherError<SourceMetadataError>> {
         let source_anchor = SourceAnchor::from(SourceSpec::from(source.clone()));
 
         // Solve the build environment for the output.
@@ -289,11 +288,16 @@ impl SourceMetadataSpec {
             strong_constrains: binary_specs_to_match_spec(run_exports.strong_constrains)?,
         };
 
-        Ok(SourceRecordWithMetadata {
+        Ok(SourcePackageRecord {
             source_record: SourceRecord {
                 name: output.metadata.name.clone(),
                 source,
-                variants: Default::default(), // TODO: extract variants from build metadata
+                variants: output
+                    .metadata
+                    .variant
+                    .iter()
+                    .map(|(k, v)| (k.clone(), crate::VariantValue::from(v.clone()).into()))
+                    .collect(),
                 depends,
                 constrains,
                 experimental_extra_depends: Default::default(),
@@ -346,7 +350,7 @@ impl SourceMetadataSpec {
         command_dispatcher: &CommandDispatcher,
         dependencies: Dependencies,
         build_environment: BuildEnvironment,
-    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SourceMetadataError>> {
+    ) -> Result<Vec<PixiPackageRecord>, CommandDispatcherError<SourceMetadataError>> {
         if dependencies.dependencies.is_empty() {
             return Ok(vec![]);
         }

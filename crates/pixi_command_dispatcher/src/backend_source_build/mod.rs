@@ -1,19 +1,15 @@
 //! See [`BackendSourceBuildSpec`]
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt::Display,
-    path::PathBuf,
-};
+use std::{collections::BTreeSet, path::PathBuf};
 
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
-use itertools::{Either, Itertools};
+use itertools::Either;
 use miette::Diagnostic;
 use pixi_build_frontend::{Backend, json_rpc::CommunicationError};
 use pixi_build_types::procedures::conda_build_v1::{
     CondaBuildV1Dependency, CondaBuildV1DependencyRunExportSource, CondaBuildV1DependencySource,
     CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Prefix, CondaBuildV1PrefixPackage,
-    CondaBuildV1Result, CondaBuildV1RunExports,
+    CondaBuildV1RunExports,
 };
 use pixi_record::PinnedSourceSpec;
 use pixi_spec::{BinarySpec, PixiSpec, SpecConversionError};
@@ -21,10 +17,9 @@ use rattler_conda_types::{
     ChannelConfig, ChannelUrl, MatchSpec, PackageName, Platform, RepoDataRecord,
 };
 use serde::Serialize;
-use thiserror::Error;
 
 use crate::{
-    CommandDispatcherError, PackageIdentifier,
+    CommandDispatcherError,
     build::{Dependencies, DependencySource, PixiRunExports, WithSource},
 };
 
@@ -144,6 +139,7 @@ impl BackendSourceBuildSpec {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn build_v1(
         backend: Backend,
         package_name: PackageName,
@@ -272,18 +268,6 @@ impl BackendSourceBuildSpec {
             output_file: built_package.output_file,
         })
     }
-}
-
-/// Returns true if the requested package matches the one that was built by a
-/// backend.
-fn v1_built_package_matches_requested(
-    built_package: &CondaBuildV1Result,
-    record: &PackageIdentifier,
-) -> bool {
-    built_package.name != record.name.as_normalized()
-        || built_package.version != record.version
-        || built_package.build != record.build
-        || built_package.subdir.as_str() != record.subdir
 }
 
 fn dependencies_to_protocol(

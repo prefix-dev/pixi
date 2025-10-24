@@ -11,8 +11,19 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ParseLockFileError, PinnedSourceSpec, SelectedVariant};
 
-/// A record of a conda package that still requires building.
-/// This is stored in the lock file and doesn't include version/build information.
+/// A minimal record of a source package stored in the lock file.
+///
+/// This contains only the essential information needed to identify and locate
+/// a source package (name, source location, variants, dependencies). Notably,
+/// it does **not** include version or build information, which is only known
+/// after the package has been built or its metadata has been resolved.
+///
+/// This minimal representation is sufficient to perform an install (build the
+/// package from source), but not to perform a solve (which requires version
+/// and build information).
+///
+/// For the complete package information with version/build details, see
+/// [`SourcePackageRecord`].
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SourceRecord {
     /// The name of the package
@@ -56,11 +67,19 @@ pub struct SourceRecord {
     pub python_site_packages_path: Option<String>,
 }
 
-/// A source record with full metadata contains the complete package information after it has been
-/// resolved/built, including version and build information.
-/// This is used during solving and building, but not stored in the lock file.
+/// A complete source package record with full metadata after resolution or building.
+///
+/// This extends [`SourceRecord`] with complete package metadata including version,
+/// build string, build number, timestamp, and hashes. This information is obtained
+/// after building the package or resolving its metadata from the recipe.
+///
+/// Unlike [`SourceRecord`], this contains all the information needed to perform
+/// dependency solving. It is **only** used during solve operations; for install
+/// operations, [`SourceRecord`] contains sufficient information.
+///
+/// This is **not** stored in the lock file (only the minimal [`SourceRecord`] is persisted).
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct SourceRecordWithMetadata {
+pub struct SourcePackageRecord {
     /// The base source record
     pub source_record: SourceRecord,
 
@@ -116,8 +135,14 @@ pub struct SourceRecordWithMetadata {
     pub legacy_bz2_size: Option<u64>,
 }
 
-impl From<SourceRecordWithMetadata> for PackageRecord {
-    fn from(value: SourceRecordWithMetadata) -> Self {
+impl From<SourcePackageRecord> for SourceRecord {
+    fn from(value: SourcePackageRecord) -> Self {
+        value.source_record
+    }
+}
+
+impl From<SourcePackageRecord> for PackageRecord {
+    fn from(value: SourcePackageRecord) -> Self {
         PackageRecord {
             name: value.source_record.name,
             version: value.version,
@@ -147,9 +172,9 @@ impl From<SourceRecordWithMetadata> for PackageRecord {
     }
 }
 
-impl SourceRecordWithMetadata {
+impl SourcePackageRecord {
     /// Convert to a PackageRecord
-    pub fn as_package_record(&self) -> PackageRecord {
+    pub fn package_record(&self) -> PackageRecord {
         self.clone().into()
     }
 }

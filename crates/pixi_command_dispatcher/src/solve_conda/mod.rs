@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
-use pixi_record::{PixiRecord, SourceRecord, SourceRecordWithMetadata};
+use pixi_record::{PixiPackageRecord, PixiRecord, SourcePackageRecord};
 use pixi_spec::{BinarySpec, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
@@ -105,7 +105,7 @@ impl SolveCondaEnvironmentSpec {
     /// Solves this environment
     pub async fn solve(
         self,
-    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>> {
+    ) -> Result<Vec<PixiPackageRecord>, CommandDispatcherError<SolveCondaEnvironmentError>> {
         // Solving is a CPU-intensive task, we spawn this on a background task to allow
         // for more concurrency.
         let solve_result = tokio::task::spawn_blocking(move || {
@@ -144,7 +144,7 @@ impl SolveCondaEnvironmentSpec {
             for source_metadata in &self.source_repodata {
                 for record in &source_metadata.records {
                     let url = unique_url(record);
-                    let package_record = record.as_package_record();
+                    let package_record = record.package_record();
                     let repodata_record = RepoDataRecord {
                         package_record: package_record.clone(),
                         url: url.clone(),
@@ -194,16 +194,16 @@ impl SolveCondaEnvironmentSpec {
 
             let solver_result = rattler_solve::resolvo::Solver.solve(task)?;
 
-            // Convert the results back into pixi records.
+            // Convert the results back into pixi records with metadata.
             Ok::<_, SolveCondaEnvironmentError>(
                 solver_result
                     .records
                     .into_iter()
                     .map(|record| {
                         url_to_source_package.remove(&record.url).map_or_else(
-                            || PixiRecord::Binary(record),
+                            || PixiPackageRecord::Binary(record),
                             |(resolved_source_record, _repodata_record)| {
-                                PixiRecord::Source(resolved_source_record.source_record.clone())
+                                PixiPackageRecord::Source(resolved_source_record.clone())
                             },
                         )
                     })
@@ -223,7 +223,7 @@ impl SolveCondaEnvironmentSpec {
 }
 
 /// Generates a unique URL for a source record.
-fn unique_url(source: &SourceRecordWithMetadata) -> Url {
+fn unique_url(source: &SourcePackageRecord) -> Url {
     let mut url = source.source_record.source.identifiable_url();
 
     // Add unique identifiers to the URL.

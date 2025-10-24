@@ -7,7 +7,7 @@ use pixi_build_types::{
         CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputRunExports,
     },
 };
-use pixi_record::PixiRecord;
+use pixi_record::PixiPackageRecord;
 use pixi_spec::{BinarySpec, DetailedSpec, PixiSpec, SourceAnchor, UrlBinarySpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
@@ -215,7 +215,7 @@ impl Dependencies {
     /// Extract run exports from the solved environments.
     pub async fn extract_run_exports(
         &self,
-        records: &mut [PixiRecord],
+        records: &mut [PixiPackageRecord],
         ignore: &CondaOutputIgnoreRunExports,
         gateway: &Gateway,
         reporter: Option<Arc<dyn RunExportsReporter>>,
@@ -235,10 +235,7 @@ impl Dependencies {
         // Determine the records that have missing run exports.
         let records_missing_run_exports = relevant_records
             .iter_mut()
-            .flat_map(|r| match *r {
-                PixiRecord::Binary(repo_data_record) => Some(repo_data_record),
-                PixiRecord::Source(_source_record) => None,
-            })
+            .flat_map(|r| r.as_binary_mut())
             .filter(|r| r.package_record.run_exports.is_none());
         gateway
             .ensure_run_exports(records_missing_run_exports.into_iter(), reporter)
@@ -257,11 +254,7 @@ impl Dependencies {
             }
 
             // Make sure we have valid run exports.
-            // Only binary packages have run_exports
-            let Some(package_record) = record.package_record() else {
-                continue;
-            };
-            let Some(run_exports) = &package_record.run_exports else {
+            let Some(run_exports) = record.run_exports() else {
                 // No run-exports found
                 continue;
             };

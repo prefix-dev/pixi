@@ -1,9 +1,9 @@
 use pixi_build_types::{
     BinaryPackageSpecV1, CondaPackageMetadata, PackageSpecV1, SourcePackageSpecV1,
 };
-use pixi_record::{InputHash, PinnedSourceSpec, SourceRecord, SourceRecordWithMetadata};
+use pixi_record::{InputHash, PinnedSourceSpec, SourcePackageRecord, SourceRecord};
 use pixi_spec::{BinarySpec, DetailedSpec, SourceLocationSpec, UrlBinarySpec};
-use rattler_conda_types::{NamedChannelOrUrl, PackageName, PackageRecord};
+use rattler_conda_types::{NamedChannelOrUrl, PackageName};
 
 /// Converts a [`SourcePackageSpecV1`] to a [`pixi_spec::SourceSpec`].
 pub fn from_source_spec_v1(source: SourcePackageSpecV1) -> pixi_spec::SourceSpec {
@@ -102,13 +102,13 @@ pub(crate) fn package_metadata_to_source_records(
     packages: &[CondaPackageMetadata],
     package: &PackageName,
     input_hash: &Option<InputHash>,
-) -> Vec<SourceRecordWithMetadata> {
+) -> Vec<SourcePackageRecord> {
     // Convert the metadata to source records with metadata
 
     packages
         .iter()
         .filter(|pkg| pkg.name == *package)
-        .map(|p| SourceRecordWithMetadata {
+        .map(|p| SourcePackageRecord {
             source_record: SourceRecord {
                 name: p.name.clone(),
                 source: source.clone(),

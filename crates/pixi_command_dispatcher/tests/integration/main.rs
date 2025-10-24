@@ -18,7 +18,7 @@ use pixi_command_dispatcher::{
     SourceBuildCacheStatusSpec,
 };
 use pixi_config::default_channel_config;
-use pixi_record::PinnedPathSpec;
+use pixi_record::{PinnedPathSpec, PixiRecord};
 use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
@@ -112,10 +112,10 @@ pub async fn simple_test() {
         .await
         .unwrap();
 
-    dispatcher
+    if let Err(err) = dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
             name: "test-env".to_owned(),
-            records: records.clone(),
+            records: records.iter().cloned().map(PixiRecord::from).collect(),
             prefix: Prefix::create(&prefix_dir).unwrap(),
             installed: None,
             build_environment: build_env,
@@ -132,7 +132,9 @@ pub async fn simple_test() {
             enabled_protocols: Default::default(),
         })
         .await
-        .unwrap();
+    {
+        panic!("{}", format_diagnostic(&err))
+    }
 
     println!(
         "Built the environment successfully: {}",

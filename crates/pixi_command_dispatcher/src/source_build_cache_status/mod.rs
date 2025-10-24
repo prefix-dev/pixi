@@ -1,21 +1,20 @@
-use std::{collections::BTreeMap, fmt, path::PathBuf};
+use std::{fmt, path::PathBuf};
 
 use chrono::Utc;
 use itertools::chain;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_glob::GlobModificationTime;
-use pixi_record::{PinnedSourceSpec, VariantValue};
-use rattler_conda_types::{ChannelConfig, ChannelUrl, HasArtifactIdentificationRefs};
+use pixi_record::PinnedSourceSpec;
+use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use tokio::sync::Mutex;
 use tracing::instrument;
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    PackageIdentifier, SourceCheckoutError,
+    SourceCheckoutError,
     build::{
-        BuildCacheEntry, BuildCacheError, BuildHostPackage, BuildInput, CachedBuild,
-        PackageBuildInputHashBuilder,
+        BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, PackageBuildInputHashBuilder,
     },
 };
 

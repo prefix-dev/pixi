@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_record::PixiRecord;
+use pixi_record::{PixiPackageRecord, PixiRecord};
 use pixi_spec::{BinarySpec, PixiSpec, SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, ParseChannelError, Platform};
@@ -121,7 +121,7 @@ impl PixiEnvironmentSpec {
         self,
         command_queue: CommandDispatcher,
         gateway_reporter: Option<Box<dyn rattler_repodata_gateway::Reporter>>,
-    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>> {
+    ) -> Result<Vec<PixiPackageRecord>, CommandDispatcherError<SolvePixiEnvironmentError>> {
         // Split the requirements into source and binary requirements.
         let (source_specs, binary_specs) =
             Self::split_into_source_and_binary_requirements(self.dependencies);

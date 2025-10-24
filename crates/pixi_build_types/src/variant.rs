@@ -44,9 +44,9 @@ impl Ord for VariantValue {
 impl Display for VariantValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VariantValue::String(s) => write!(f, "{}", s),
-            VariantValue::Int(i) => write!(f, "{}", i),
-            VariantValue::Bool(b) => write!(f, "{}", b),
+            VariantValue::String(s) => write!(f, "{s}"),
+            VariantValue::Int(i) => write!(f, "{i}"),
+            VariantValue::Bool(b) => write!(f, "{b}"),
         }
     }
 }

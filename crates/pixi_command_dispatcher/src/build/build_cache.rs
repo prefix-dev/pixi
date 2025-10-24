@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeSet,
     fmt::Display,
     hash::{Hash, Hasher},
     io::SeekFrom,
@@ -12,12 +12,10 @@ use itertools::Itertools;
 use ordermap::OrderMap;
 use pixi_build_discovery::{BackendInitializationParams, DiscoveredBackend};
 use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
-use pixi_record::{PinnedSourceSpec, VariantValue};
+use pixi_record::PinnedSourceSpec;
 use pixi_stable_hash::{StableHashBuilder, json::StableJson, map::StableMap};
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
-use rattler_digest::Sha256Hash;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use xxhash_rust::xxh3::Xxh3;

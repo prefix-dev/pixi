@@ -5,10 +5,13 @@ pub use pinned_source::{
     LockedGitUrl, MutablePinnedSourceSpec, ParseError, PinnedGitCheckout, PinnedGitSpec,
     PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec, SourceMismatchError,
 };
-use rattler_conda_types::{MatchSpec, Matches, PackageName, PackageRecord, RepoDataRecord};
+use rattler_conda_types::{
+    MatchSpec, Matches, PackageName, PackageRecord, RepoDataRecord, VersionWithSource,
+    package::RunExportsJson,
+};
 use rattler_lock::{CondaPackageData, ConversionError, UrlOrPath};
 use serde::Serialize;
-pub use source_record::{InputHash, SourceRecord, SourceRecordWithMetadata};
+pub use source_record::{InputHash, SourcePackageRecord, SourceRecord};
 // Re-export VariantValue for convenience
 pub use rattler_lock::VariantValue;
 
@@ -23,6 +26,7 @@ use thiserror::Error;
 /// This is basically a superset of a regular [`RepoDataRecord`].
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 pub enum PixiRecord {
     Binary(RepoDataRecord),
     Source(SourceRecord),
@@ -161,6 +165,115 @@ impl Matches<PixiRecord> for MatchSpec {
         match record {
             PixiRecord::Binary(record) => self.matches(record),
             PixiRecord::Source(record) => self.matches(record),
+        }
+    }
+}
+
+/// A conda package record with complete metadata for both binary and source packages.
+///
+/// This is the fully-resolved version of [`PixiRecord`], where source packages include
+/// complete package metadata (version, build, timestamp, etc.) via [`SourcePackageRecord`].
+///
+/// Unlike [`PixiRecord`], this type contains all information needed for dependency solving.
+/// It is used during solve operations but **not** stored in lock files (only [`PixiRecord`]
+/// is persisted).
+#[derive(Debug, Clone, Serialize)]
+#[serde(untagged)]
+pub enum PixiPackageRecord {
+    Binary(RepoDataRecord),
+    Source(SourcePackageRecord),
+}
+
+impl PixiPackageRecord {
+    /// The name of the package
+    pub fn name(&self) -> &PackageName {
+        match self {
+            PixiPackageRecord::Binary(record) => &record.package_record.name,
+            PixiPackageRecord::Source(record) => &record.source_record.name,
+        }
+    }
+
+    /// The version of the package
+    pub fn version(&self) -> &VersionWithSource {
+        match self {
+            PixiPackageRecord::Binary(record) => &record.package_record.version,
+            PixiPackageRecord::Source(record) => &record.version,
+        }
+    }
+
+    pub fn run_exports(&self) -> Option<&RunExportsJson> {
+        match self {
+            PixiPackageRecord::Binary(record) => record.package_record.run_exports.as_ref(),
+            PixiPackageRecord::Source(record) => record.run_exports.as_ref(),
+        }
+    }
+
+    /// Returns a reference to the binary record if it is a binary record.
+    pub fn as_binary(&self) -> Option<&RepoDataRecord> {
+        match self {
+            PixiPackageRecord::Binary(record) => Some(record),
+            PixiPackageRecord::Source(_) => None,
+        }
+    }
+
+    /// Returns a reference to the binary record if it is a binary record.
+    pub fn as_binary_mut(&mut self) -> Option<&mut RepoDataRecord> {
+        match self {
+            PixiPackageRecord::Binary(record) => Some(record),
+            PixiPackageRecord::Source(_) => None,
+        }
+    }
+
+    /// Converts this instance into a binary record if it is a binary record.
+    pub fn into_binary(self) -> Option<RepoDataRecord> {
+        match self {
+            PixiPackageRecord::Binary(record) => Some(record),
+            PixiPackageRecord::Source(_) => None,
+        }
+    }
+
+    /// Returns a reference to the source record if it is a source record.
+    pub fn as_source(&self) -> Option<&SourcePackageRecord> {
+        match self {
+            PixiPackageRecord::Binary(_) => None,
+            PixiPackageRecord::Source(record) => Some(record),
+        }
+    }
+
+    /// Converts this instance into a source record if it is a source record.
+    pub fn into_source(self) -> Option<SourcePackageRecord> {
+        match self {
+            PixiPackageRecord::Binary(_) => None,
+            PixiPackageRecord::Source(record) => Some(record),
+        }
+    }
+
+    /// Returns the package record.
+    pub fn package_record(&self) -> PackageRecord {
+        match self {
+            PixiPackageRecord::Binary(record) => record.package_record.clone(),
+            PixiPackageRecord::Source(record) => record.package_record(),
+        }
+    }
+}
+
+impl From<SourcePackageRecord> for PixiPackageRecord {
+    fn from(value: SourcePackageRecord) -> Self {
+        PixiPackageRecord::Source(value)
+    }
+}
+
+impl From<RepoDataRecord> for PixiPackageRecord {
+    fn from(value: RepoDataRecord) -> Self {
+        PixiPackageRecord::Binary(value)
+    }
+}
+
+impl From<PixiPackageRecord> for PixiRecord {
+    fn from(value: PixiPackageRecord) -> Self {
+        match value {
+            PixiPackageRecord::Binary(record) => PixiRecord::Binary(record),
+            PixiPackageRecord::Source(record) => PixiRecord::Source(record.into()),
         }
     }
 }

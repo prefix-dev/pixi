@@ -34,6 +34,10 @@ impl SelectedVariant {
     pub fn iter(&self) -> impl Iterator<Item = (&String, &VariantValue)> {
         self.0.iter()
     }
+
+    pub fn get(&self, key: &str) -> Option<&VariantValue> {
+        self.0.get(key)
+    }
 }
 
 impl PartialEq<BTreeMap<String, pixi_build_types::VariantValue>> for SelectedVariant {
@@ -54,6 +58,17 @@ impl PartialEq<BTreeMap<String, pixi_build_types::VariantValue>> for SelectedVar
 impl std::fmt::Debug for SelectedVariant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_map().entries(self.0.iter()).finish()
+    }
+}
+
+impl std::fmt::Display for SelectedVariant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0.is_empty() {
+            write!(f, "{{ }}")
+        } else {
+            let str = serde_json::to_string(&self.0).unwrap_or_default();
+            write!(f, "{str}")
+        }
     }
 }
 
@@ -97,10 +112,34 @@ impl Ord for VariantValue {
 impl Display for VariantValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VariantValue::String(s) => write!(f, "{}", s),
-            VariantValue::Int(i) => write!(f, "{}", i),
-            VariantValue::Bool(b) => write!(f, "{}", b),
+            VariantValue::String(s) => write!(f, "{s}"),
+            VariantValue::Int(i) => write!(f, "{i}"),
+            VariantValue::Bool(b) => write!(f, "{b}"),
         }
+    }
+}
+
+impl From<bool> for VariantValue {
+    fn from(value: bool) -> Self {
+        VariantValue::Bool(value)
+    }
+}
+
+impl From<i64> for VariantValue {
+    fn from(value: i64) -> Self {
+        VariantValue::Int(value)
+    }
+}
+
+impl From<String> for VariantValue {
+    fn from(value: String) -> Self {
+        VariantValue::String(value)
+    }
+}
+
+impl From<&str> for VariantValue {
+    fn from(value: &str) -> Self {
+        VariantValue::String(value.to_string())
     }
 }
 

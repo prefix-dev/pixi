@@ -6,9 +6,9 @@ use std::{
 use futures::{Stream, StreamExt};
 use pixi_command_dispatcher::{
     BackendSourceBuildSpec, BuildBackendMetadataSpec, CondaSolveReporter, GitCheckoutReporter,
-    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PackageIdentifier,
-    PixiEnvironmentSpec, PixiInstallReporter, PixiSolveReporter, Reporter, ReporterContext,
-    SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec,
+    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PixiEnvironmentSpec,
+    PixiInstallReporter, PixiSolveReporter, Reporter, ReporterContext, SolveCondaEnvironmentSpec,
+    SourceBuildSpec, SourceMetadataSpec,
     reporter::{
         BackendSourceBuildId, BackendSourceBuildReporter, BuildBackendMetadataId,
         BuildBackendMetadataReporter, CondaSolveId, GitCheckoutId, InstantiateToolEnvId,
