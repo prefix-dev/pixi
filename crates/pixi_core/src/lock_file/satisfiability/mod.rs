@@ -1847,7 +1847,7 @@ mod tests {
     use insta::Settings;
     use miette::{IntoDiagnostic, NarratableReportHandler};
     use pep440_rs::{Operator, Version};
-    use rattler_lock::LockFile;
+    use rattler_lock::{FileFormatVersion, LockFile};
     use rstest::rstest;
 
     use super::*;
@@ -1870,6 +1870,11 @@ mod tests {
             "solve group '{0}' does not satisfy the requirements of the project for platform '{1}'"
         )]
         SolveGroupUnsat(String, Platform, #[source] SolveGroupUnsat),
+
+        #[error(
+            "source packages for lockfile version {0} do not contain variants which makes the lockfile unusable"
+        )]
+        PreV7SourceDependencies(FileFormatVersion),
     }
 
     async fn verify_lockfile_satisfiability(
@@ -1877,6 +1882,20 @@ mod tests {
         lock_file: &LockFile,
     ) -> Result<(), LockfileUnsat> {
         let mut individual_verified_envs = HashMap::new();
+
+        // If there are pre-v7 source dependencies present, the lock-file must be invalidated.
+        if lock_file.version() < FileFormatVersion::V7 {
+            for (_, env) in lock_file.environments() {
+                for package in env
+                    .conda_packages_by_platform()
+                    .flat_map(|(_, packages)| packages)
+                {
+                    if let rattler_lock::CondaPackageData::Source(_) = package {
+                        return Err(LockfileUnsat::PreV7SourceDependencies(lock_file.version()));
+                    }
+                }
+            }
+        }
 
         // Verify individual environment satisfiability
         for env in project.environments() {
@@ -1934,6 +1953,8 @@ mod tests {
     async fn test_good_satisfiability(
         #[files("../../tests/data/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
+        eprintln!("Path to pixi.toml: {}", manifest_path.display());
+
         // TODO: skip this test on windows
         // Until we can figure out how to handle unix file paths with pep508_rs url
         // parsing correctly
@@ -1946,6 +1967,7 @@ mod tests {
         }
 
         let project = Workspace::from_path(&manifest_path).unwrap();
+        eprintln!("Path to pixi.lock: {}", project.lock_file_path().display());
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file)
             .await
