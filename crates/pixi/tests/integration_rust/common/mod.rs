@@ -137,7 +137,7 @@ impl LockFileExt for LockFile {
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_conda)
-            .any(|package| package.record().name.as_normalized() == name)
+            .any(|package| package.name().as_normalized() == name)
     }
     fn contains_pypi_package(&self, environment: &str, platform: Platform, name: &str) -> bool {
         let Some(env) = self.environment(environment) else {

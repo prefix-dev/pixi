@@ -152,7 +152,7 @@ pub struct CondaOutputMetadata {
     pub python_site_packages_path: Option<String>,
 
     /// The variants that were used for this output.
-    pub variant: BTreeMap<String, String>,
+    pub variant: BTreeMap<String, crate::VariantValue>,
 }
 
 /// Describes dependencies, constraints and source dependencies for a particular

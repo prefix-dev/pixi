@@ -117,8 +117,8 @@ async fn test_purl_are_added_for_pypi() {
         .packages(Platform::current())
         .unwrap()
         .for_each(|dep| {
-            if dep.as_conda().unwrap().record().name == PackageName::from_str("boltons").unwrap() {
-                assert!(dep.as_conda().unwrap().record().purls.is_none());
+            if dep.as_conda().unwrap().name() == &PackageName::from_str("boltons").unwrap() {
+                assert!(dep.as_conda().unwrap().purls().is_none());
             }
         });
 
@@ -138,13 +138,11 @@ async fn test_purl_are_added_for_pypi() {
         .packages(Platform::current())
         .unwrap()
         .for_each(|dep| {
-            if dep.as_conda().unwrap().record().name == PackageName::from_str("boltons").unwrap() {
+            if dep.as_conda().unwrap().name() == &PackageName::from_str("boltons").unwrap() {
                 assert_eq!(
                     dep.as_conda()
                         .unwrap()
-                        .record()
-                        .purls
-                        .as_ref()
+                        .purls()
                         .unwrap()
                         .first()
                         .unwrap()

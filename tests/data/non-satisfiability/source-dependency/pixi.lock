@@ -1,4 +1,4 @@
-version: 6
+version: 7
 environments:
   default:
     channels:
@@ -11,22 +11,15 @@ packages:
 - conda: child-package
   name: child-package
   version: 0.1.0
-  build: pyhbf21a9e_0
-  subdir: noarch
   depends:
   - python
   input:
-    # This should cause the lock-file to be invalid because the hash is
-    # not the same as the expected one.
     hash: b67010bf5bc5608db89c0399e726852b07a7ef4fb26b3aa18171f1d0f6a19c89
     globs:
     - pixi.toml
 - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.12.0-h2628c8c_0_cpython.conda
   sha256: 90553586879bf328f2f9efb8d8faa958ecba822faf379f0a20c3461467b9b955
   md5: defd5d375853a2caff36a19d2d81a28e
-  arch: x86_64
-  platform: win
-  channel: https://conda.anaconda.org/conda-forge/
   license: Python-2.0
   size: 16140836
   timestamp: 1696321871976

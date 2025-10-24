@@ -73,7 +73,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Determine the variant configuration for the build.
     let VariantConfig {
-        variants,
+        variants: variant_config,
         variant_files,
     } = workspace.variants(args.target_platform)?;
 
@@ -135,7 +135,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         channels: channels.clone(),
         channel_config: channel_config.clone(),
         build_environment: build_environment.clone(),
-        variants: Some(variants.clone()),
+        variants: Some(variant_config.clone()),
         variant_files: Some(variant_files.clone()),
         enabled_protocols: Default::default(),
     };
@@ -162,17 +162,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .context("failed to create temporary output directory for build artifacts")?;
 
     // Build the individual packages
-    for package in packages {
+    for (package_name, package_variant) in packages {
         let built_package = command_dispatcher
             .source_build(SourceBuildSpec {
-                package,
+                package_name,
+                package_variant,
+                source: source.clone(),
                 // Build into a temporary directory first
                 output_directory: Some(temp_output_dir.path().to_path_buf()),
-                source: source.clone(),
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),
-                variants: Some(variants.clone()),
+                variant_config: Some(variant_config.clone()),
                 variant_files: Some(variant_files.clone()),
                 enabled_protocols: Default::default(),
                 work_directory: None,

@@ -59,7 +59,6 @@ use crate::{
     lock_file::{
         CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
         PypiRecord,
-        records_by_name::HasNameVersion,
         resolve::{
             build_dispatch::{
                 LazyBuildDispatch, LazyBuildDispatchDependencies, UvBuildDispatchParams,
@@ -293,8 +292,13 @@ pub async fn resolve_pypi(
                 PixiRecord::Binary(repodata_record) => {
                     PypiPackageIdentifier::from_repodata_record(repodata_record)
                 }
-                PixiRecord::Source(source_record) => {
-                    PypiPackageIdentifier::from_package_record(&source_record.package_record)
+                PixiRecord::Source(_source_record) => {
+                    // TODO(baszalmstra): We dont have access to the version here yet because we
+                    // only have access to `PixiRecord`. We have to figure out how to get the
+                    // version here or create the identifier purely based on the purl. This should
+                    // be possible if the purl also contains a version.
+                    Ok(Vec::new())
+                    // PypiPackageIdentifier::from_package_record(&source_record.package_record)
                 }
             };
 
@@ -343,11 +347,14 @@ pub async fn resolve_pypi(
 
     // Determine the python interpreter that is installed as part of the conda
     // packages.
+    //
+    // TODO(baszalmstra): Currently this only supports binary records. In the future it would be
+    // great to also support source records to allow building and using python from source.
     let python_record = locked_pixi_records
         .iter()
-        .find(|r| match r {
-            PixiRecord::Binary(r) => is_python_record(r),
-            _ => false,
+        .find_map(|r| match r {
+            PixiRecord::Binary(r) if is_python_record(r) => Some(r),
+            _ => None,
         })
         .ok_or_else(|| {
             miette::miette!(
@@ -368,7 +375,8 @@ pub async fn resolve_pypi(
     // wheel. So make sure the interpreter does not touch the solve parts of
     // this function
     let interpreter_version = python_record
-        .version()
+        .package_record
+        .version
         .as_major_minor()
         .ok_or_else(|| miette::miette!("conda python record missing major.minor version"))?;
     let pep_version = uv_pep440::Version::from_str(&format!(

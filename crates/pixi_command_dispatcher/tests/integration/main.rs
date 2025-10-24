@@ -14,11 +14,11 @@ use pixi_build_backend_passthrough::PassthroughBackend;
 use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
-    InstantiateToolEnvironmentSpec, PackageIdentifier, PixiEnvironmentSpec,
+    InstantiateToolEnvironmentSpec, PackageIdentifier, PixiEnvironmentSpec, SelectedVariant,
     SourceBuildCacheStatusSpec,
 };
 use pixi_config::default_channel_config;
-use pixi_record::PinnedPathSpec;
+use pixi_record::{PinnedPathSpec, PixiRecord};
 use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
@@ -112,10 +112,10 @@ pub async fn simple_test() {
         .await
         .unwrap();
 
-    dispatcher
+    if let Err(err) = dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
             name: "test-env".to_owned(),
-            records: records.clone(),
+            records: records.iter().cloned().map(PixiRecord::from).collect(),
             prefix: Prefix::create(&prefix_dir).unwrap(),
             installed: None,
             build_environment: build_env,
@@ -132,7 +132,9 @@ pub async fn simple_test() {
             enabled_protocols: Default::default(),
         })
         .await
-        .unwrap();
+    {
+        panic!("{}", format_diagnostic(&err))
+    }
 
     println!(
         "Built the environment successfully: {}",
@@ -492,8 +494,8 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
     let rebuild_packages = second_events
         .iter()
         .filter_map(|event| match event {
-            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized())
+            event_reporter::Event::BackendSourceBuildQueued { package_name, .. } => {
+                Some(package_name.as_normalized())
             }
             _ => None,
         })
@@ -562,7 +564,8 @@ async fn source_build_cache_status_clear_works() {
     };
 
     let spec = SourceBuildCacheStatusSpec {
-        package: pkg,
+        package_name: pkg.name,
+        package_variant: SelectedVariant::default(),
         source: PinnedPathSpec {
             path: tmp_dir.path().to_string_lossy().into_owned().into(),
         }
@@ -690,8 +693,8 @@ pub async fn test_force_rebuild() {
     let rebuild_packages = second_events
         .iter()
         .filter_map(|event| match event {
-            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized())
+            event_reporter::Event::BackendSourceBuildQueued { package_name, .. } => {
+                Some(package_name.as_normalized())
             }
             _ => None,
         })
@@ -722,8 +725,8 @@ pub async fn test_force_rebuild() {
     let rebuild_packages = second_events
         .iter()
         .filter_map(|event| match event {
-            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized())
+            event_reporter::Event::BackendSourceBuildQueued { package_name, .. } => {
+                Some(package_name.as_normalized())
             }
             _ => None,
         })
@@ -750,8 +753,8 @@ pub async fn test_force_rebuild() {
     let rebuild_packages = last_events
         .iter()
         .filter_map(|event| match event {
-            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized())
+            event_reporter::Event::BackendSourceBuildQueued { package_name, .. } => {
+                Some(package_name.as_normalized())
             }
             _ => None,
         })
