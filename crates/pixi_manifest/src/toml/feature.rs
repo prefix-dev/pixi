@@ -16,7 +16,7 @@ use crate::{
     },
     utils::{PixiSpanned, package_map::UniquePackageMap},
     warning::Deprecation,
-    workspace::ChannelPriority,
+    workspace::{ChannelPriority, SolveStrategy},
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 
@@ -27,6 +27,7 @@ pub struct TomlFeature {
     pub channel_priority: Option<ChannelPriority>,
     pub system_requirements: SystemRequirements,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlTarget>,
+    pub solve_strategy: Option<SolveStrategy>,
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
@@ -115,6 +116,7 @@ impl TomlFeature {
                 .channels
                 .map(|channels| channels.into_iter().map(|channel| channel.into()).collect()),
             channel_priority: self.channel_priority,
+            solve_strategy: self.solve_strategy,
             system_requirements: self.system_requirements,
             pypi_options: self.pypi_options,
             targets: Targets::from_default_and_user_defined(default_target, targets),
@@ -133,6 +135,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             .map(TomlWith::into_inner);
         let channels = th.optional("channels");
         let channel_priority = th.optional("channel-priority");
+        let solve_strategy = th.optional("solve-strategy");
         let target = th
             .optional::<TomlIndexMap<_, _>>("target")
             .map(TomlIndexMap::into_inner)
@@ -192,6 +195,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             platforms,
             channels,
             channel_priority,
+            solve_strategy,
             system_requirements,
             target,
             dependencies,

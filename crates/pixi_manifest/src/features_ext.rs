@@ -10,8 +10,10 @@ use rattler_conda_types::{
 
 use crate::{
     CondaDependencies, PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
-    has_features_iter::HasFeaturesIter, has_manifest_ref::HasWorkspaceManifest,
-    pypi::pypi_options::PypiOptions, workspace::ChannelPriority,
+    has_features_iter::HasFeaturesIter,
+    has_manifest_ref::HasWorkspaceManifest,
+    pypi::pypi_options::PypiOptions,
+    workspace::{ChannelPriority, SolveStrategy},
 };
 
 /// ChannelPriorityCombination error, thrown when multiple channel priorities
@@ -93,8 +95,16 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     }
 
     /// Returns the strategy for solving packages.
-    fn solve_strategy(&self) -> rattler_solve::SolveStrategy {
-        rattler_solve::SolveStrategy::default()
+    ///
+    /// The chosen strategy is the first explicitly declared one in a feature
+    /// as they are provided by the [`HasFeaturesIter::features`] iterator.
+    ///
+    /// If no feature declares a strategy, the default value of [`SolveStrategy`] is used.
+    fn solve_strategy(&self) -> SolveStrategy {
+        self.features()
+            .flat_map(|feature| feature.solve_strategy)
+            .next()
+            .unwrap_or_default()
     }
 
     /// Returns the platforms that this collection is compatible with.

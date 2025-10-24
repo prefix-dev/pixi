@@ -102,6 +102,14 @@ class ChannelPriority(str, Enum):
     strict = "strict"
 
 
+class SolveStrategy(str, Enum):
+    """The strategy used to solve packages."""
+
+    highest = "highest"
+    lowest = "lowest"
+    lowest_direct = "lowest-direct"
+
+
 PixiBuildFeature = Annotated[
     Literal["pixi-build"], Field(description="Enables building of source records")
 ]
@@ -137,6 +145,14 @@ class Workspace(StrictBaseModel):
         description="""The type of channel priority that is used in the solve.
 - 'strict': only take the package from the channel it exist in first.
 - 'disabled': group all dependencies together as if there is no channel difference.""",
+    )
+    solve_strategy: SolveStrategy | None = Field(
+        None,
+        examples=["lowest", "lowest-direct", "highest"],
+        description="""The strategy that is used in the solve.
+- 'highest': solve all packages to the highest compatible version.
+- 'lowest': solve all packages to the lowest compatible version.
+- 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.""",
     )
     exclude_newer: ExcludeNewer | None = Field(
         None,
@@ -527,6 +543,14 @@ class Feature(StrictBaseModel):
         description="""The type of channel priority that is used in the solve.
 - 'strict': only take the package from the channel it exist in first.
 - 'disabled': group all dependencies together as if there is no channel difference.""",
+    )
+    solve_strategy: SolveStrategy | None = Field(
+        None,
+        examples=["lowest", "lowest-direct", "highest"],
+        description="""The strategy that is used in the solve.
+- 'highest': solve all packages to the highest compatible version.
+- 'lowest': solve all packages to the lowest compatible version.
+- 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.""",
     )
     platforms: list[Platform] | None = Field(
         None,

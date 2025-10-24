@@ -488,10 +488,11 @@ pub fn verify_environment_satisfiability(
     }
 
     // Verify solver options
-    if locked_environment.solve_options().strategy != environment.solve_strategy() {
+    let expected_solve_strategy = environment.solve_strategy().into();
+    if locked_environment.solve_options().strategy != expected_solve_strategy {
         return Err(EnvironmentUnsat::SolveStrategyMismatch {
             locked_strategy: locked_environment.solve_options().strategy,
-            expected_strategy: environment.solve_strategy(),
+            expected_strategy: expected_solve_strategy,
         });
     }
 

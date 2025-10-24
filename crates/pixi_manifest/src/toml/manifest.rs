@@ -198,6 +198,7 @@ impl TomlManifest {
             channels: None,
 
             channel_priority: workspace.value.channel_priority,
+            solve_strategy: workspace.value.solve_strategy,
 
             system_requirements: self
                 .system_requirements

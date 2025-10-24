@@ -800,6 +800,15 @@
           "$ref": "#/$defs/PyPIOptions",
           "description": "Options related to PyPI indexes for this feature"
         },
+        "solve-strategy": {
+          "$ref": "#/$defs/SolveStrategy",
+          "description": "The strategy that is used in the solve.\n- 'highest': solve all packages to the highest compatible version.\n- 'lowest': solve all packages to the lowest compatible version.\n- 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.",
+          "examples": [
+            "lowest",
+            "lowest-direct",
+            "highest"
+          ]
+        },
         "system-requirements": {
           "$ref": "#/$defs/SystemRequirements",
           "description": "The system requirements of this feature"
@@ -1696,6 +1705,16 @@
         }
       }
     },
+    "SolveStrategy": {
+      "title": "SolveStrategy",
+      "description": "The strategy used to solve packages.",
+      "type": "string",
+      "enum": [
+        "highest",
+        "lowest",
+        "lowest-direct"
+      ]
+    },
     "SourceLocation": {
       "title": "SourceLocation",
       "description": "The location of a package's source code.",
@@ -2319,6 +2338,15 @@
           "additionalProperties": {
             "$ref": "#/$defs/S3Options"
           }
+        },
+        "solve-strategy": {
+          "$ref": "#/$defs/SolveStrategy",
+          "description": "The strategy that is used in the solve.\n- 'highest': solve all packages to the highest compatible version.\n- 'lowest': solve all packages to the lowest compatible version.\n- 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.",
+          "examples": [
+            "lowest",
+            "lowest-direct",
+            "highest"
+          ]
         },
         "target": {
           "title": "Target",
