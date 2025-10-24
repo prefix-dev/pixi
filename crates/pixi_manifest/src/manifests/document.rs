@@ -136,7 +136,6 @@ impl ManifestDocument {
             ManifestKind::Pyproject => Ok(ManifestDocument::PyProjectToml(toml)),
             ManifestKind::Pixi => Ok(ManifestDocument::PixiToml(toml)),
             ManifestKind::MojoProject => Ok(ManifestDocument::MojoProjectToml(toml)),
-            ManifestKind::PackageXml => Ok(todo!()),
         }
     }
 

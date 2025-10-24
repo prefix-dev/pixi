@@ -110,7 +110,6 @@ impl WorkspaceMut {
             ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
             ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
             ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
-            ManifestKind::PackageXml => todo!(),
         };
 
         Ok(Self {
@@ -144,13 +143,12 @@ impl WorkspaceMut {
         };
 
         // Parse the content into a workspace
-        let workspace = Workspace::from_str(&manifest_path, &contents, false)?;
+        let workspace = Workspace::from_str(&manifest_path, &contents)?;
 
         let workspace_manifest_document = match workspace.workspace.provenance.kind {
             ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
             ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
             ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
-            ManifestKind::PackageXml => todo!(),
         };
 
         Ok(Self {

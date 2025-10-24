@@ -42,8 +42,8 @@ impl ManifestProvenance {
     }
 
     /// Load the manifest from a path
-    pub fn from_path(path: PathBuf, non_pixi_manifests: bool) -> Result<Self, ProvenanceError> {
-        let Some(kind) = ManifestKind::try_from_path(&path, non_pixi_manifests) else {
+    pub fn from_path(path: PathBuf) -> Result<Self, ProvenanceError> {
+        let Some(kind) = ManifestKind::try_from_path(&path) else {
             return Err(ProvenanceError::UnrecognizedManifestFormat);
         };
 
@@ -57,7 +57,6 @@ impl ManifestProvenance {
             ManifestKind::Pixi => Ok(ManifestSource::PixiToml(contents)),
             ManifestKind::Pyproject => Ok(ManifestSource::PyProjectToml(contents)),
             ManifestKind::MojoProject => Ok(ManifestSource::MojoProjectToml(contents)),
-            ManifestKind::PackageXml => Ok(ManifestSource::PackageXml(contents)),
         }
     }
 
@@ -78,17 +77,15 @@ pub enum ManifestKind {
     Pixi,
     Pyproject,
     MojoProject,
-    PackageXml,
 }
 
 impl ManifestKind {
     /// Try to determine the type of manifest from a path
-    pub fn try_from_path(path: &Path, non_pixi_manifest: bool) -> Option<Self> {
+    pub fn try_from_path(path: &Path) -> Option<Self> {
         match path.file_name().and_then(OsStr::to_str)? {
             consts::WORKSPACE_MANIFEST => Some(Self::Pixi),
             consts::PYPROJECT_MANIFEST => Some(Self::Pyproject),
             consts::MOJOPROJECT_MANIFEST => Some(Self::MojoProject),
-            consts::PACKAGE_XML_MANIFEST if non_pixi_manifest => Some(Self::PackageXml),
             _ => None,
         }
     }
@@ -99,7 +96,6 @@ impl ManifestKind {
             ManifestKind::Pixi => consts::WORKSPACE_MANIFEST,
             ManifestKind::Pyproject => consts::PYPROJECT_MANIFEST,
             ManifestKind::MojoProject => consts::MOJOPROJECT_MANIFEST,
-            ManifestKind::PackageXml => consts::PACKAGE_XML_MANIFEST,
         }
     }
 

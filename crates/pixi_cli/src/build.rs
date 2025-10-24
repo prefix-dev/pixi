@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{ffi::OsStr, path::PathBuf};
 
 use clap::Parser;
 use indicatif::ProgressBar;
@@ -7,6 +7,7 @@ use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
 };
 use pixi_config::ConfigCli;
+use pixi_consts::consts::{RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES, WORKSPACE_MANIFEST};
 use pixi_core::WorkspaceLocator;
 use pixi_manifest::FeaturesExt;
 use pixi_progress::global_multi_progress;
@@ -46,6 +47,50 @@ pub struct Args {
     /// Whether to clean the build directory before building.
     #[clap(long, short)]
     pub clean: bool,
+
+    /// The path to `package.xml`, `recipe.yaml`, or `pixi.toml` that can be built.
+    #[arg(long)]
+    pub build_manifest: Option<PathBuf>,
+}
+
+/// Validate that the full path of build manifest exists and is a supported format.
+fn validate_build_manifest(path: &PathBuf) -> miette::Result<()> {
+    if path.is_dir() {
+        miette::bail!(
+            "the build manifest path '{}' is a directory, please provide the path to the manifest file",
+            path.display()
+        );
+    }
+
+    let filename = path
+        .file_name()
+        .and_then(OsStr::to_str)
+        .ok_or_else(|| miette::miette!("Failed to extract file name from {:?}", path))?;
+
+    let supported_file_names: Vec<&str> = [
+        &ROS_BACKEND_FILE_NAMES[..],
+        &RATTLER_BUILD_FILE_NAMES[..],
+        // manifest that can contain a package section in it
+        &[WORKSPACE_MANIFEST],
+    ]
+    .concat();
+
+    if !supported_file_names
+        .iter()
+        .any(|names| names.contains(filename))
+    {
+        miette::bail!(
+            "the build manifest file '{}' is not a supported format.\n Supported formats are: {}",
+            path.display(),
+            supported_file_names
+                .iter()
+                .map(|name| format!("'{}'", name))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+
+    Ok(())
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -54,7 +99,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_locator.clone())
         .with_closest_package(false)
-        .with_non_pixi_manifests(true)
         .locate()?
         .with_cli_config(args.config_cli);
 
@@ -106,18 +150,27 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let Ok(manifest_path) = workspace_locator.path() else {
         miette::bail!("could not determine the current working directory to locate the workspace");
     };
-    let manifest_path_canonical = dunce::canonicalize(&manifest_path)
+
+    let build_manifest_path = match args.build_manifest {
+        Some(path) => {
+            validate_build_manifest(&path)?;
+            path
+        }
+        None => manifest_path.clone(),
+    };
+
+    let build_manifest_path_canonical = dunce::canonicalize(&build_manifest_path)
         .into_diagnostic()
         .with_context(|| {
             format!(
                 "failed to canonicalize manifest path '{}'",
-                manifest_path.display()
+                build_manifest_path.display()
             )
         })?;
     // Store the manifest location relative to the workspace root when possible to
     // keep the pinned path relocatable and avoid double-prefixing during resolution.
-    let manifest_spec_path = pathdiff::diff_paths(&manifest_path_canonical, workspace.root())
-        .unwrap_or(manifest_path_canonical.clone());
+    let manifest_spec_path = pathdiff::diff_paths(&build_manifest_path_canonical, workspace.root())
+        .unwrap_or(build_manifest_path_canonical.clone());
     let channel_config = workspace.channel_config();
     let channels = workspace
         .default_environment()
