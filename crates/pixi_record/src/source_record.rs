@@ -262,6 +262,12 @@ impl Matches<SourceRecord> for MatchSpec {
             }
         }
 
+        if let (Some(version_spec), Some(version)) = (&self.version, &pkg.version) {
+            if !version_spec.matches(version) {
+                return false;
+            }
+        }
+
         if self.channel.is_some() {
             // We don't have a channel in a source record. So if a matchspec requires that
             // information it can't match.

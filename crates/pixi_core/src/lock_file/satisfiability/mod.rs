@@ -1995,6 +1995,8 @@ mod tests {
     async fn test_failing_satisiability(
         #[files("../../tests/data/non-satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
+        eprintln!("Path to pixi.toml: {}", manifest_path.display());
+
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
         let project = Workspace::from_path(&manifest_path).unwrap();
