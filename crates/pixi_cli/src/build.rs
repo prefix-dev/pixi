@@ -84,7 +84,7 @@ fn validate_build_manifest(path: &PathBuf) -> miette::Result<()> {
             path.display(),
             supported_file_names
                 .iter()
-                .map(|name| format!("'{}'", name))
+                .map(|name| format!("'{name}'"))
                 .collect::<Vec<_>>()
                 .join(", ")
         );

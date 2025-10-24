@@ -25,6 +25,8 @@ pixi build [OPTIONS]
 :  The directory to use for incremental builds artifacts
 - <a id="arg---clean" href="#arg---clean">`--clean (-c)`</a>
 :  Whether to clean the build directory before building
+- <a id="arg---build-manifest" href="#arg---build-manifest">`--build-manifest <BUILD_MANIFEST>`</a>
+:  The path to `package.xml`, `recipe.yaml`, or `pixi.toml` that can be built
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
