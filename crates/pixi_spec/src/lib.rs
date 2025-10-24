@@ -98,11 +98,11 @@ impl Default for PixiSpec {
 impl Display for PixiSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PixiSpec::Version(version) => write!(f, "{}", version),
-            PixiSpec::DetailedVersion(detailed) => write!(f, "{}", detailed),
-            PixiSpec::Url(url) => write!(f, "{}", url),
-            PixiSpec::Git(git) => write!(f, "{}", git),
-            PixiSpec::Path(path) => write!(f, "{}", path),
+            PixiSpec::Version(version) => write!(f, "{version}"),
+            PixiSpec::DetailedVersion(detailed) => write!(f, "{detailed}"),
+            PixiSpec::Url(url) => write!(f, "{url}"),
+            PixiSpec::Git(git) => write!(f, "{git}"),
+            PixiSpec::Path(path) => write!(f, "{path}"),
         }
     }
 }
@@ -386,9 +386,9 @@ pub enum SourceLocationSpec {
 impl Display for SourceSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.location {
-            SourceLocationSpec::Url(url) => write!(f, "{}", url),
-            SourceLocationSpec::Git(git) => write!(f, "{}", git),
-            SourceLocationSpec::Path(path) => write!(f, "{}", path),
+            SourceLocationSpec::Url(url) => write!(f, "{url}"),
+            SourceLocationSpec::Git(git) => write!(f, "{git}"),
+            SourceLocationSpec::Path(path) => write!(f, "{path}"),
         }
     }
 }

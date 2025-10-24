@@ -336,7 +336,7 @@ impl WorkspaceDiscoverer {
                     || matches!(search_path.clone(), SearchPath::Explicit(_)))
                     && !Self::REQUIRED_SECTIONS
                         .iter()
-                        .any(|section| source.contains(&format!("[tool.pixi.{}", section)))
+                        .any(|section| source.contains(&format!("[tool.pixi.{section}")))
                 {
                     return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
                         error: TomlError::NoPixiTable(
@@ -344,7 +344,7 @@ impl WorkspaceDiscoverer {
                             Some(format!(
                                 "Any of the following sections is required:\n{}",
                                 Self::REQUIRED_SECTIONS
-                                    .map(|s| format!("* tool.pixi.{}", s))
+                                    .map(|s| format!("* tool.pixi.{s}"))
                                     .join("\n")
                             )),
                         ),
@@ -356,16 +356,14 @@ impl WorkspaceDiscoverer {
                 if !Self::REQUIRED_SECTIONS.iter().any(|section| {
                     source
                         .lines()
-                        .any(|line| line.trim_start().starts_with(&format!("[{}", section)))
+                        .any(|line| line.trim_start().starts_with(&format!("[{section}")))
                 }) {
                     return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
                         error: TomlError::NoPixiTable(
                             ManifestKind::Pixi,
                             Some(format!(
                                 "Any of the following sections is required:\n{}",
-                                Self::REQUIRED_SECTIONS
-                                    .map(|s| format!("* {}", s))
-                                    .join("\n")
+                                Self::REQUIRED_SECTIONS.map(|s| format!("* {s}")).join("\n")
                             )),
                         ),
                         source: contents.into_named(provenance.absolute_path().to_string_lossy()),

@@ -37,7 +37,7 @@ impl CommandDispatcherProcessor {
         // Add to the list of pending tasks
         self.pending_backend_source_builds.push_back((
             pending_id,
-            task.spec,
+            *task.spec,
             task.cancellation_token,
         ));
 
@@ -79,7 +79,7 @@ impl CommandDispatcherProcessor {
                     .map(move |result| {
                         TaskResult::BackendSourceBuild(
                             backend_source_build_id,
-                            result.unwrap_or(Err(CommandDispatcherError::Cancelled)),
+                            Box::new(result.unwrap_or(Err(CommandDispatcherError::Cancelled))),
                         )
                     })
                     .boxed_local(),

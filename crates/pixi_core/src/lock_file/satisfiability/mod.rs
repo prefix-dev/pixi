@@ -184,12 +184,12 @@ impl Display for SourceTreeHashMismatch {
         let computed_hash = self
             .computed
             .sha256()
-            .map(|hash| format!("{:x}", hash))
-            .or(self.computed.md5().map(|hash| format!("{:x}", hash)));
+            .map(|hash| format!("{hash:x}"))
+            .or(self.computed.md5().map(|hash| format!("{hash:x}")));
         let locked_hash = self.locked.as_ref().and_then(|hash| {
             hash.sha256()
-                .map(|hash| format!("{:x}", hash))
-                .or(hash.md5().map(|hash| format!("{:x}", hash)))
+                .map(|hash| format!("{hash:x}"))
+                .or(hash.md5().map(|hash| format!("{hash:x}")))
         });
 
         match (computed_hash, locked_hash) {
@@ -197,19 +197,16 @@ impl Display for SourceTreeHashMismatch {
             (Some(computed), None) => {
                 write!(
                     f,
-                    "the computed source tree hash is '{}', but the lock-file does not contain a hash",
-                    computed
+                    "the computed source tree hash is '{computed}', but the lock-file does not contain a hash"
                 )
             }
             (Some(computed), Some(locked)) => write!(
                 f,
-                "the computed source tree hash is '{}', but the lock-file contains '{}'",
-                computed, locked
+                "the computed source tree hash is '{computed}', but the lock-file contains '{locked}'"
             ),
             (None, Some(locked)) => write!(
                 f,
-                "could not compute a source tree hash, but the lock-file contains '{}'",
-                locked
+                "could not compute a source tree hash, but the lock-file contains '{locked}'"
             ),
         }
     }
@@ -1828,7 +1825,7 @@ impl Display for EditablePackagesMismatch {
                 } else if idx > 0 {
                     write!(f, ", ")?;
                 }
-                write!(f, "{}", package)?;
+                write!(f, "{package}")?;
             }
 
             Ok(())

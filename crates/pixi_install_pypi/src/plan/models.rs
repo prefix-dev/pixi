@@ -93,15 +93,14 @@ impl std::fmt::Display for NeedReinstall {
                 locked_version,
             } => write!(
                 f,
-                "Installed version {} does not match locked version {}",
-                installed_version, locked_version
+                "Installed version {installed_version} does not match locked version {locked_version}"
             ),
             NeedReinstall::MissingDirectUrl => write!(f, "Missing direct_url.json"),
             NeedReinstall::SourceDirectoryNewerThanCache => {
                 write!(f, "Source directory is newer than the cache")
             }
             NeedReinstall::UnableToParseFileUrl { url } => {
-                write!(f, "Unable to parse file url: {}", url)
+                write!(f, "Unable to parse file url: {url}")
             }
             NeedReinstall::EditableStatusChanged {
                 locked_editable,
@@ -109,12 +108,11 @@ impl std::fmt::Display for NeedReinstall {
             } => {
                 write!(
                     f,
-                    "Editable status changed, editable status is: {} installed editable is: {}",
-                    locked_editable, installed_editable
+                    "Editable status changed, editable status is: {locked_editable} installed editable is: {installed_editable}"
                 )
             }
             NeedReinstall::UnableToParseInstalledDistUrl { url } => {
-                write!(f, "Unable to parse installed dist url: {}", url)
+                write!(f, "Unable to parse installed dist url: {url}")
             }
             NeedReinstall::ArchiveDistNewerThanCache => {
                 write!(f, "Archive dist is newer than the cache")
@@ -125,14 +123,13 @@ impl std::fmt::Display for NeedReinstall {
                 locked_rev: locked_commit,
             } => write!(
                 f,
-                "Git commits mismatch, installed commit: {}, locked commit: {}",
-                installed_commit, locked_commit
+                "Git commits mismatch, installed commit: {installed_commit}, locked commit: {locked_commit}"
             ),
             NeedReinstall::UnableToParseGitUrl { url } => {
-                write!(f, "Unable to parse git url: {}", url)
+                write!(f, "Unable to parse git url: {url}")
             }
             NeedReinstall::UnableToGetInstalledDistMetadata { cause } => {
-                write!(f, "Unable to get installed dist metadata: {}", cause)
+                write!(f, "Unable to get installed dist metadata: {cause}")
             }
             NeedReinstall::RequiredPythonChanged {
                 installed_python_require: installed_python_version,
@@ -140,15 +137,13 @@ impl std::fmt::Display for NeedReinstall {
             } => {
                 write!(
                     f,
-                    "Installed requires-python {} does not contain locked python version {}",
-                    installed_python_version, locked_python_version
+                    "Installed requires-python {installed_python_version} does not contain locked python version {locked_python_version}"
                 )
             }
             NeedReinstall::InstallerMismatch { previous_installer } => {
                 write!(
                     f,
-                    "Installer mismatch, previous installer: {}",
-                    previous_installer
+                    "Installer mismatch, previous installer: {previous_installer}"
                 )
             }
             NeedReinstall::UrlMismatch {
@@ -161,7 +156,7 @@ impl std::fmt::Display for NeedReinstall {
                 locked_url.clone().unwrap_or_else(|| "None".to_string())
             ),
             NeedReinstall::UnableToConvertLockedPath { path } => {
-                write!(f, "Unable to convert locked path to url: {}", path)
+                write!(f, "Unable to convert locked path to url: {path}")
             }
             NeedReinstall::SourceMismatch {
                 locked_location,

@@ -291,8 +291,7 @@ impl TomlPackage {
                 match workspace_value {
                     Some(value) => Ok(Some(value)),
                     None => Err(GenericError::new(format!(
-                        "the workspace does not define a '{}'",
-                        field_name
+                        "the workspace does not define a '{field_name}'"
                     ))
                     .with_span(span.into())
                     .into()),

@@ -108,7 +108,7 @@ impl BackendSourceBuildReporter for SyncReporter {
             while let Some(line) = backend_output_stream.next().await {
                 if print_backend_output {
                     // Suspend the main progress bar while we print the line.
-                    progress_bar.suspend(|| eprintln!("{}", line));
+                    progress_bar.suspend(|| eprintln!("{line}"));
                 } else {
                     // Send the line to the receiver
                     if tx.send(line).is_err() {
@@ -135,7 +135,7 @@ impl BackendSourceBuildReporter for SyncReporter {
                 tokio::spawn(async move {
                     while let Some(line) = build_output_receiver.recv().await {
                         // Suspend the main progress bar while we print the line.
-                        progress_bar.suspend(|| eprintln!("{}", line));
+                        progress_bar.suspend(|| eprintln!("{line}"));
                     }
                 });
             }

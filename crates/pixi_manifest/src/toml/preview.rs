@@ -80,7 +80,7 @@ impl TomlPreview {
                         format!("The preview feature{s}: {} {are} defined in the manifest but un-used in pixi",
                                 unknown_features.iter().map(|(name, _)| name).format(", ")))
                         .with_labels(unknown_features.into_iter().map(|(name, span)| {
-                            LabeledSpan::new_with_span(Some(format!("'{}' is unknown", name)), Range::<usize>::from(span))
+                            LabeledSpan::new_with_span(Some(format!("'{name}' is unknown")), Range::<usize>::from(span))
                         }));
                     preview.with_warnings(vec![warning.into()])
                 }

@@ -1,6 +1,5 @@
 use fs_err::File;
 use miette::{Context, IntoDiagnostic};
-use pixi_utils::executable_from_path;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
@@ -9,6 +8,8 @@ use std::ops::Not;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+mod executable_from_path;
+use executable_from_path::executable_from_path;
 
 // trampoline configuration folder name
 pub const TRAMPOLINE_CONFIGURATION: &str = "trampoline_configuration";

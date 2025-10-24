@@ -50,7 +50,7 @@ impl TomlTarget {
                         .with_span_label("host-dependencies specified here")
                         .with_help(match target {
                             None => "Did you mean [package.host-dependencies]?".to_string(),
-                            Some(selector) => format!("Did you mean [package.target.{}.host-dependencies]?", selector),
+                            Some(selector) => format!("Did you mean [package.target.{selector}.host-dependencies]?"),
                         })
                         .with_opt_label("pixi-build is enabled here", preview.get_span(KnownPreviewFeature::PixiBuild))));
             }
@@ -62,7 +62,7 @@ impl TomlTarget {
                         .with_span_label("build-dependencies specified here")
                         .with_help(match target {
                             None => "Did you mean [package.build-dependencies]?".to_string(),
-                            Some(selector) => format!("Did you mean [package.target.{}.build-dependencies]?", selector),
+                            Some(selector) => format!("Did you mean [package.target.{selector}.build-dependencies]?"),
                         })
                         .with_opt_label("pixi-build is enabled here", preview.get_span(KnownPreviewFeature::PixiBuild))
                 ));

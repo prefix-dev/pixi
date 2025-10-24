@@ -204,7 +204,7 @@ impl uv_installer::PrepareReporter for UvReporter {
         } else {
             dist.to_string()
         };
-        self.start(format!("building {}", name))
+        self.start(format!("building {name}"))
     }
 
     fn on_build_complete(&self, _dist: &BuildableSource, id: usize) {
@@ -215,7 +215,7 @@ impl uv_installer::PrepareReporter for UvReporter {
         if url.scheme().eq("ssh") {
             self.on_checkout_start_warning_pb();
         }
-        self.start(format!("cloning {}", url))
+        self.start(format!("cloning {url}"))
     }
 
     fn on_checkout_complete(&self, url: &uv_redacted::DisplaySafeUrl, _rev: &str, index: usize) {
@@ -228,7 +228,7 @@ impl uv_installer::PrepareReporter for UvReporter {
 
     // TODO: figure out how to display this nicely
     fn on_download_start(&self, name: &PackageName, _size: Option<u64>) -> usize {
-        self.start(format!("downloading {}", name))
+        self.start(format!("downloading {name}"))
     }
 
     fn on_download_progress(&self, _index: usize, _bytes: u64) {}
@@ -253,12 +253,11 @@ impl uv_installer::InstallReporter for UvReporter {
 
 impl uv_resolver::ResolverReporter for UvReporter {
     fn on_progress(&self, name: &PackageName, version: &VersionOrUrlRef) {
-        self.pb
-            .set_message(format!("resolving {}{}", name, version));
+        self.pb.set_message(format!("resolving {name}{version}"));
     }
 
     fn on_build_start(&self, dist: &BuildableSource) -> usize {
-        self.start(format!("building {}", dist,))
+        self.start(format!("building {dist}",))
     }
 
     fn on_build_complete(&self, _dist: &BuildableSource, id: usize) {
@@ -269,7 +268,7 @@ impl uv_resolver::ResolverReporter for UvReporter {
         if url.scheme().eq("ssh") {
             self.on_checkout_start_warning_pb();
         }
-        self.start(format!("cloning {}", url))
+        self.start(format!("cloning {url}"))
     }
 
     fn on_checkout_complete(&self, url: &uv_redacted::DisplaySafeUrl, _rev: &str, index: usize) {
@@ -285,7 +284,7 @@ impl uv_resolver::ResolverReporter for UvReporter {
 
     // TODO: figure out how to display this nicely
     fn on_download_start(&self, name: &PackageName, _size: Option<u64>) -> usize {
-        self.start(format!("downloading {}", name))
+        self.start(format!("downloading {name}"))
     }
 
     fn on_download_progress(&self, _id: usize, _bytes: u64) {}
@@ -297,7 +296,7 @@ impl uv_resolver::ResolverReporter for UvReporter {
 
 impl uv_distribution::Reporter for UvReporter {
     fn on_build_start(&self, dist: &BuildableSource) -> usize {
-        self.start(format!("building {}", dist,))
+        self.start(format!("building {dist}",))
     }
 
     fn on_build_complete(&self, _dist: &BuildableSource, id: usize) {
@@ -308,7 +307,7 @@ impl uv_distribution::Reporter for UvReporter {
         if url.scheme().eq("ssh") {
             self.on_checkout_start_warning_pb();
         }
-        self.start(format!("cloning {}", url))
+        self.start(format!("cloning {url}"))
     }
 
     fn on_checkout_complete(&self, url: &uv_redacted::DisplaySafeUrl, _rev: &str, index: usize) {
@@ -320,7 +319,7 @@ impl uv_distribution::Reporter for UvReporter {
 
     // TODO: figure out how to display this nicely
     fn on_download_start(&self, name: &PackageName, _size: Option<u64>) -> usize {
-        self.start(format!("downloading {}", name))
+        self.start(format!("downloading {name}"))
     }
 
     fn on_download_progress(&self, _id: usize, _bytes: u64) {}

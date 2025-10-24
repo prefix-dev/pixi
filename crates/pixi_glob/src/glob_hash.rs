@@ -191,12 +191,12 @@ mod test {
             "Globs:\n{}\nHash: {:x}\nMatched files:\n{}",
             globs
                 .iter()
-                .format_with("\n", |glob, f| f(&format_args!("- {}", glob))),
+                .format_with("\n", |glob, f| f(&format_args!("- {glob}"))),
             glob_hash.hash,
             glob_hash
                 .matching_files
                 .iter()
-                .format_with("\n", |glob, f| f(&format_args!("- {}", glob)))
+                .format_with("\n", |glob, f| f(&format_args!("- {glob}")))
         );
         insta::assert_snapshot!(testname, snapshot);
     }

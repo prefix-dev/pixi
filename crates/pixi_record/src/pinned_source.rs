@@ -338,7 +338,7 @@ impl PinnedGitSpec {
         let url = if !url.scheme().starts_with("git+") {
             let url_str = url.to_string();
 
-            let git_prefix = format!("git+{}", url_str);
+            let git_prefix = format!("git+{url_str}");
 
             Url::parse(&git_prefix).expect("url should be valid")
         } else {
@@ -629,11 +629,12 @@ impl PinnedUrlSpec {
         }
         if let Some(sha256) = &spec.sha256 {
             if *sha256 != self.sha256 {
+                let locked_sha256 = self.sha256;
                 return Err(SourceMismatchError::UrlHashMismatch {
                     hash: "sha256",
                     url: self.url.clone(),
-                    locked: format!("{:x}", self.sha256),
-                    requested: format!("{:x}", sha256),
+                    locked: format!("{locked_sha256:x}"),
+                    requested: format!("{sha256:x}"),
                 });
             }
         }
@@ -644,8 +645,8 @@ impl PinnedUrlSpec {
                     url: self.url.clone(),
                     locked: self
                         .md5
-                        .map_or("None".to_string(), |md5| format!("{:x}", md5)),
-                    requested: format!("{:x}", md5),
+                        .map_or("None".to_string(), |md5| format!("{md5:x}")),
+                    requested: format!("{md5:x}"),
                 });
             }
         }

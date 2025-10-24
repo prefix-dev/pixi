@@ -22,7 +22,10 @@ use crate::{BackendOutputStream, json_rpc::CommunicationError};
 pub trait InMemoryBackendInstantiator {
     type Backend: InMemoryBackend;
 
-    fn initialize(&self, params: InitializeParams) -> Result<Self::Backend, CommunicationError>;
+    fn initialize(
+        &self,
+        params: InitializeParams,
+    ) -> Result<Self::Backend, Box<CommunicationError>>;
 
     fn identifier(&self) -> &str;
 
@@ -44,7 +47,7 @@ pub trait InMemoryBackend: Send {
         &self,
         params: CondaBuildV1Params,
         output_stream: &(dyn BackendOutputStream + Send + 'static),
-    ) -> Result<CondaBuildV1Result, CommunicationError> {
+    ) -> Result<CondaBuildV1Result, Box<CommunicationError>> {
         unimplemented!()
     }
 
@@ -52,14 +55,15 @@ pub trait InMemoryBackend: Send {
     fn conda_outputs(
         &self,
         params: CondaOutputsParams,
-    ) -> Result<CondaOutputsResult, CommunicationError> {
+    ) -> Result<CondaOutputsResult, Box<CommunicationError>> {
         unimplemented!()
     }
 }
 
 type ErasedInMemoryBackend = Box<dyn InMemoryBackend + 'static>;
-type ErasedInitializationFn =
-    dyn Fn(InitializeParams) -> Result<ErasedInMemoryBackend, CommunicationError> + Send + Sync;
+type ErasedInitializationFn = dyn Fn(InitializeParams) -> Result<ErasedInMemoryBackend, Box<CommunicationError>>
+    + Send
+    + Sync;
 
 /// A helper type that erases the type of the in-memory build backend.
 #[derive(Clone)]
@@ -74,7 +78,7 @@ impl BoxedInMemoryBackend {
     pub fn initialize(
         &self,
         params: InitializeParams,
-    ) -> Result<Box<dyn InMemoryBackend>, CommunicationError> {
+    ) -> Result<Box<dyn InMemoryBackend>, Box<CommunicationError>> {
         (self.initialize)(params)
     }
 

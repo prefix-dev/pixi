@@ -186,8 +186,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
                 // the workspace
                 interface
                     .success(&format!(
-                        "Added package '{}' as an editable dependency.",
-                        name
+                        "Added package '{name}' as an editable dependency."
                     ))
                     .await;
                 // Inform about the addition of environments from optional dependencies
@@ -342,7 +341,7 @@ fn render_workspace(
         extra_index_urls,
         s3 => relevant_s3_options(s3_options, channels),
         env_vars => {if let Some(env_vars) = env_vars {
-            env_vars.iter().map(|(k, v)| format!("{} = \"{}\"", k, v)).collect::<Vec<String>>().join(", ")
+            env_vars.iter().map(|(k, v)| format!("{k} = \"{v}\"")).collect::<Vec<String>>().join(", ")
         } else {String::new()}},
     };
 

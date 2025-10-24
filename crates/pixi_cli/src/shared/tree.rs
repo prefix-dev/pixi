@@ -121,7 +121,7 @@ pub fn print_dependency_tree(
             print_dependency_node(
                 handle,
                 pkg,
-                format!("{} ", prefix),
+                format!("{prefix} "),
                 dep_map,
                 &mut visited_pkgs,
                 direct_deps,

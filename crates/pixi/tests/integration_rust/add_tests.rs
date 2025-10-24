@@ -1086,10 +1086,9 @@ async fn add_dependency_dont_create_project() {
 [workspace]
 name = "some-workspace"
 platforms = []
-channels = ['{local_channel}']
+channels = ['{local_channel_str}']
 preview = ['pixi-build']
-"#,
-        local_channel = local_channel_str
+"#
     ))
     .unwrap();
 

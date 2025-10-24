@@ -392,8 +392,7 @@ impl TomlManifest {
 
             warnings.push(Warning::from(
                 GenericError::new(format!(
-                    "The feature '{}' is defined but not used in any environment. Dependencies of unused features are not resolved or checked, and use wildcard (*) version specifiers by default, disregarding any set `pinning-strategy`",
-                    feature_name
+                    "The feature '{feature_name}' is defined but not used in any environment. Dependencies of unused features are not resolved or checked, and use wildcard (*) version specifiers by default, disregarding any set `pinning-strategy`"
                 ))
                 .with_opt_span(span)
                 .with_help("Remove the feature from the manifest or add it to an environment"),

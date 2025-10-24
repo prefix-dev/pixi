@@ -65,6 +65,6 @@ pub fn print_package_table(packages: Vec<PackageToOutput>) -> Result<(), std::io
         )?;
     }
 
-    writeln!(writer, "{}\n", header)?;
+    writeln!(writer, "{header}\n")?;
     writer.flush()
 }

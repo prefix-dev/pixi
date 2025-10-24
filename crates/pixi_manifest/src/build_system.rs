@@ -270,13 +270,12 @@ mod tests {
             let toml = format!(
                 r#"
                 backend = {{ name = "pixi-build-rattler-build", version = "0.1.*" }}
-                source = {{ path = "{}" }}
-                "#,
-                path
+                source = {{ path = "{path}" }}
+                "#
             );
 
             let build = PackageBuild::from_toml_str(&toml).unwrap();
-            assert!(build.value.source.is_some(), "Failed for path: {}", path);
+            assert!(build.value.source.is_some(), "Failed for path: {path}");
 
             if let Some(source) = &build.value.source {
                 match &source {
@@ -285,8 +284,7 @@ mod tests {
                         assert_eq!(
                             path_spec.path.as_str(),
                             path,
-                            "Path mismatch for input: {}",
-                            path
+                            "Path mismatch for input: {path}"
                         );
 
                         // Verify it can be resolved (using a dummy workspace root)
@@ -306,7 +304,7 @@ mod tests {
                             resolved.display()
                         );
                     }
-                    _ => panic!("Expected a path source spec for: {}", path),
+                    _ => panic!("Expected a path source spec for: {path}"),
                 }
             }
         }
