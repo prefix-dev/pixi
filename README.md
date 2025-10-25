@@ -277,7 +277,7 @@ Commands:
   init         Creates a new workspace
   import       Imports a file into an environment in an existing workspace.
   install      Install an environment, both updating the lockfile and installing the environment [aliases: i]
-  list         List workspace's packages [aliases: ls]
+  list         List the packages of the current workspace [aliases: ls]
   lock         Solve environment and update the lock file without installing the environments
   reinstall    Re-install an environment, both updating the lockfile and re-installing the environment
   remove       Removes dependencies from the workspace [aliases: rm]
