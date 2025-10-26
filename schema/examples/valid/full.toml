@@ -15,6 +15,7 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 preview = ["pixi-build"]
 readme = "README.md"
 repository = "https://github.com/author/project"
+solve-strategy = "lowest"
 version = "0.1.0"
 
 [project.pypi-options]
@@ -137,10 +138,12 @@ no-build = true
 [feature.prod]
 activation = { scripts = ["activate.sh", "deactivate.sh"] }
 channel-priority = "disabled"
+solve-strategy = "lowest-direct"
 
 [feature.lint]
 channel-priority = "strict"
 dependencies = { flake8 = "3.7.9", black = "19.10b0" }
+solve-strategy = "highest"
 
 [environments]
 prod = { features = ["test2"], solve-group = "test" }
