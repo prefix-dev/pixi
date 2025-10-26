@@ -56,9 +56,6 @@ pre-commit:
     - name: typos
       stage_fixed: true
       run: pixi {run} typos
-    - name: zizmor
-      glob: ".github/*.{yaml,yml}"
-      run: pixi {run} zizmor {staged_files}
 
 pre-push:
   jobs:
@@ -74,3 +71,6 @@ pre-push:
       run: pixi {run} cargo-deny
     - name: check-openssl
       run: pixi {run} check-openssl
+    - name: zizmor
+      glob: ".github/*.{yaml,yml}"
+      run: pixi {run} zizmor {staged_files}
