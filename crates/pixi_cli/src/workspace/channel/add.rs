@@ -5,6 +5,8 @@ use pixi_core::{
     lock_file::{ReinstallPackages, UpdateMode},
 };
 
+use crate::workspace::channel::ReportOperation;
+
 use super::AddRemoveArgs;
 
 pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
@@ -15,7 +17,7 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
         .modify()?;
 
     // Add the channels to the manifest
-    workspace.manifest().add_channels(
+    let added_channels = workspace.manifest().add_channels(
         args.prioritized_channels(),
         &args.feature_name(),
         args.prepend,
@@ -38,7 +40,12 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
     let workspace = workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
-    args.report("Added", &workspace.channel_config())?;
+    let operation = if added_channels.is_empty() {
+        ReportOperation::AlreadyExists
+    } else {
+        ReportOperation::Add
+    };
+    args.report(&operation, &workspace.channel_config())?;
 
     Ok(())
 }

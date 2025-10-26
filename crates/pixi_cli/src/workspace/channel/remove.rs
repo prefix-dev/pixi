@@ -5,6 +5,8 @@ use pixi_core::{
     lock_file::{ReinstallPackages, UpdateMode},
 };
 
+use crate::workspace::channel::ReportOperation;
+
 use super::AddRemoveArgs;
 
 pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
@@ -35,7 +37,7 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
     let workspace = workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
-    args.report("Removed", &workspace.channel_config())?;
+    args.report(&ReportOperation::Remove, &workspace.channel_config())?;
 
     Ok(())
 }

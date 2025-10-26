@@ -48,6 +48,26 @@ pub struct AddRemoveArgs {
     pub feature: Option<String>,
 }
 
+#[derive(strum::Display, strum::EnumString)]
+enum ReportOperation {
+    #[strum(to_string = "Added")]
+    Add,
+    #[strum(to_string = "Removed")]
+    Remove,
+    #[strum(to_string = "already exists")]
+    AlreadyExists,
+}
+
+impl ReportOperation {
+    fn operation_text(&self, channel_name: &str) -> String {
+        match self {
+            ReportOperation::Add => format!("{self} {channel_name}"),
+            ReportOperation::Remove => format!("{self} {channel_name}"),
+            ReportOperation::AlreadyExists => format!("{channel_name} {self}"),
+        }
+    }
+}
+
 impl AddRemoveArgs {
     fn prioritized_channels(&self) -> impl IntoIterator<Item = PrioritizedChannel> + '_ {
         self.channel
@@ -62,13 +82,17 @@ impl AddRemoveArgs {
             .map_or_else(FeatureName::default, FeatureName::from)
     }
 
-    fn report(self, operation: &str, channel_config: &ChannelConfig) -> miette::Result<()> {
+    fn report(
+        self,
+        operation: &ReportOperation,
+        channel_config: &ChannelConfig,
+    ) -> miette::Result<()> {
         for channel in self.channel {
+            let operation_text = operation.operation_text(channel.as_str());
             match channel {
-                NamedChannelOrUrl::Name(ref name) => eprintln!(
-                    "{}{operation} {} ({}){}",
+                NamedChannelOrUrl::Name(_) => eprintln!(
+                    "{}{operation_text} ({}){}",
                     console::style(console::Emoji("✔ ", "")).green(),
-                    name,
                     channel
                         .clone()
                         .into_base_url(channel_config)
@@ -76,17 +100,15 @@ impl AddRemoveArgs {
                     self.priority
                         .map_or_else(|| "".to_string(), |p| format!(" at priority {p}"))
                 ),
-                NamedChannelOrUrl::Url(url) => eprintln!(
-                    "{}{operation} {}{}",
+                NamedChannelOrUrl::Url(_) => eprintln!(
+                    "{}{operation_text}{}",
                     console::style(console::Emoji("✔ ", "")).green(),
-                    url,
                     self.priority
                         .map_or_else(|| "".to_string(), |p| format!(" at priority {p}")),
                 ),
-                NamedChannelOrUrl::Path(path) => eprintln!(
-                    "{}{operation} {}",
+                NamedChannelOrUrl::Path(_) => eprintln!(
+                    "{}{operation_text}",
                     console::style(console::Emoji("✔ ", "")).green(),
-                    path
                 ),
             }
         }
