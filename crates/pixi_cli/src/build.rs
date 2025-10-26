@@ -1,13 +1,17 @@
 use std::{ffi::OsStr, path::PathBuf};
 
 use clap::Parser;
+use fs_err::tokio as tokio_fs;
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
 };
 use pixi_config::ConfigCli;
-use pixi_consts::consts::{RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES, WORKSPACE_MANIFEST};
+use pixi_consts::consts::{
+    MOJOPROJECT_MANIFEST, PYPROJECT_MANIFEST, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES,
+    WORKSPACE_MANIFEST,
+};
 use pixi_core::WorkspaceLocator;
 use pixi_manifest::FeaturesExt;
 use pixi_progress::global_multi_progress;
@@ -48,18 +52,43 @@ pub struct Args {
     #[clap(long, short)]
     pub clean: bool,
 
-    /// The path to `package.xml`, `recipe.yaml`, or `pixi.toml` that can be built.
+    /// The path to `package.xml`, `recipe.yaml`, `pixi.toml`, `pyproject.toml` or `mojoproject.toml` that can be built.
     #[arg(long)]
-    pub build_manifest: Option<PathBuf>,
+    pub package_manifest: Option<PathBuf>,
 }
 
-/// Validate that the full path of build manifest exists and is a supported format.
-fn validate_build_manifest(path: &PathBuf) -> miette::Result<()> {
+/// Validate that the full path of package manifest exists and is a supported format.
+async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
+    let supported_file_names: Vec<&str> = [
+        // backend-specific build files
+        // that will be autodiscovered
+        &ROS_BACKEND_FILE_NAMES[..],
+        &RATTLER_BUILD_FILE_NAMES[..],
+        // manifests that can contain a package section in it
+        &[WORKSPACE_MANIFEST],
+        &[PYPROJECT_MANIFEST],
+        &[MOJOPROJECT_MANIFEST],
+    ]
+    .concat();
+
     if path.is_dir() {
-        miette::bail!(
-            "the build manifest path '{}' is a directory, please provide the path to the manifest file",
-            path.display()
-        );
+        // Iterate over the files in the directory to provide a more helpful error
+        // of what manifests were found.
+
+        let mut entries = tokio_fs::read_dir(&path).await.into_diagnostic()?;
+
+        while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
+            let path = entry.path();
+            if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
+                if supported_file_names.contains(&filename) {
+                    return Err(miette::diagnostic!(
+                        help = format!("did you mean {filename}?"),
+                        "the build manifest path '{}' is a directory, please provide the path to the manifest file",
+                        path.display(),
+                    ).into());
+                }
+            }
+        }
     }
 
     let filename = path
@@ -67,27 +96,22 @@ fn validate_build_manifest(path: &PathBuf) -> miette::Result<()> {
         .and_then(OsStr::to_str)
         .ok_or_else(|| miette::miette!("Failed to extract file name from {:?}", path))?;
 
-    let supported_file_names: Vec<&str> = [
-        &ROS_BACKEND_FILE_NAMES[..],
-        &RATTLER_BUILD_FILE_NAMES[..],
-        // manifest that can contain a package section in it
-        &[WORKSPACE_MANIFEST],
-    ]
-    .concat();
-
     if !supported_file_names
         .iter()
         .any(|names| names.contains(filename))
     {
-        miette::bail!(
-            "the build manifest file '{}' is not a supported format.\n Supported formats are: {}",
+        let supported_names = supported_file_names
+            .iter()
+            .map(|name| name.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        return Err(miette::diagnostic!(
+            help = format!("Supported formats are: {supported_names}"),
+            "the build manifest file '{}' is not a supported format.",
             path.display(),
-            supported_file_names
-                .iter()
-                .map(|name| format!("'{name}'"))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
+        )
+        .into());
     }
 
     Ok(())
@@ -151,26 +175,27 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         miette::bail!("could not determine the current working directory to locate the workspace");
     };
 
-    let build_manifest_path = match args.build_manifest {
+    let package_manifest_path = match args.package_manifest {
         Some(path) => {
-            validate_build_manifest(&path)?;
+            validate_package_manifest(&path).await?;
             path
         }
         None => manifest_path.clone(),
     };
 
-    let build_manifest_path_canonical = dunce::canonicalize(&build_manifest_path)
+    let package_manifest_path_canonical = dunce::canonicalize(&package_manifest_path)
         .into_diagnostic()
         .with_context(|| {
             format!(
                 "failed to canonicalize manifest path '{}'",
-                build_manifest_path.display()
+                package_manifest_path.display()
             )
         })?;
     // Store the manifest location relative to the workspace root when possible to
     // keep the pinned path relocatable and avoid double-prefixing during resolution.
-    let manifest_spec_path = pathdiff::diff_paths(&build_manifest_path_canonical, workspace.root())
-        .unwrap_or(build_manifest_path_canonical.clone());
+    let manifest_spec_path =
+        pathdiff::diff_paths(&package_manifest_path_canonical, workspace.root())
+            .unwrap_or(package_manifest_path_canonical.clone());
     let channel_config = workspace.channel_config();
     let channels = workspace
         .default_environment()
