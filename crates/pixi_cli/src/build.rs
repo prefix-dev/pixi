@@ -116,31 +116,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 manifest_path.display()
             )
         })?;
-    // Store the manifest location relative to the workspace root when possible to
+    // Determine the directory that contains the manifest.
+    let manifest_dir_canonical = if manifest_path_canonical.is_file() {
+        manifest_path_canonical.parent().ok_or_else(|| {
+            miette::miette!(
+                "explicit manifest path: {} doesn't have a parent",
+                manifest_path.display()
+            )
+        })?
+    } else {
+        manifest_path_canonical.as_path()
+    };
+
+    // Store the manifest directory relative to the workspace root when possible to
     // keep the pinned path relocatable and avoid double-prefixing during resolution.
-    let manifest_spec_path = pathdiff::diff_paths(&manifest_path_canonical, workspace.root())
-        .unwrap_or(manifest_path_canonical.clone());
+    let manifest_dir_spec = pathdiff::diff_paths(manifest_dir_canonical, workspace.root())
+        .unwrap_or_else(|| manifest_dir_canonical.to_path_buf());
     let channel_config = workspace.channel_config();
     let channels = workspace
         .default_environment()
         .channel_urls(&channel_config)
         .into_diagnostic()?;
 
-    // Determine the source of the package.
-    let manifest_path_dir = if manifest_spec_path.is_file() {
-        if let Some(parent) = manifest_spec_path.parent() {
-            parent
-        } else {
-            miette::bail!(
-                "explicit manifest path: {} doesn't have a parent",
-                manifest_spec_path.display()
-            );
-        }
-    } else {
-        manifest_spec_path.as_ref()
-    };
     let manifest_source: PinnedSourceSpec = PinnedPathSpec {
-        path: manifest_path_dir.to_string_lossy().into_owned().into(),
+        path: manifest_dir_spec.to_string_lossy().into_owned().into(),
     }
     .into();
 
