@@ -266,6 +266,7 @@ mod tests {
             platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            name: None,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -276,6 +277,7 @@ mod tests {
             &platform,
             &environment,
             workspace.config().global_channel_config(),
+            None,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml",
@@ -292,6 +294,7 @@ mod tests {
             platform: None,
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            name: None,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -302,6 +305,7 @@ mod tests {
             &platform,
             &environment,
             workspace.config().global_channel_config(),
+            None,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_pip_extras",
@@ -319,6 +323,7 @@ mod tests {
             platform: None,
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            name: None,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -329,6 +334,7 @@ mod tests {
             &platform,
             &environment,
             workspace.config().global_channel_config(),
+            None,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_source_editable",
@@ -351,6 +357,7 @@ mod tests {
             platform: None,
             environment: Some("alternative".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            name : None,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -361,6 +368,7 @@ mod tests {
             &platform,
             &environment,
             workspace.config().global_channel_config(),
+            None,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_pip_custom_registry",
@@ -378,6 +386,7 @@ mod tests {
             platform: None,
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            name : None,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -388,6 +397,7 @@ mod tests {
             &platform,
             &environment,
             workspace.config().global_channel_config(),
+            None,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_pip_find_links",
@@ -404,6 +414,7 @@ mod tests {
             platform: Some(Platform::OsxArm64),
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            name : None,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -414,6 +425,7 @@ mod tests {
             &platform,
             &environment,
             workspace.config().global_channel_config(),
+            None,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_pyproject_panic",
@@ -438,6 +450,7 @@ mod tests {
             platform: Some(Platform::Osx64),
             environment: None,
             workspace_config: WorkspaceConfig::default(),
+            name : None,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -448,6 +461,7 @@ mod tests {
             &platform,
             &environment,
             workspace.config().global_channel_config(),
+            None,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_defaults",
@@ -469,6 +483,35 @@ mod tests {
                 NamedChannelOrUrl::Name("conda-forge".to_string()),
                 NamedChannelOrUrl::Name("nodefaults".to_string())
             ]
+        );
+    }
+
+    #[test]
+    fn test_specify_output_name() {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
+            .join("tests/data/mock-projects/test-project-export/pixi.toml");
+        let workspace = Workspace::from_path(&path).unwrap();
+        let args = Args {
+            output_path: None,
+            platform: Some(Platform::Osx64),
+            environment: Some("default".to_string()),
+            workspace_config: WorkspaceConfig::default(),
+            name: Some("custom_env_name".to_string()),
+        };
+        let environment = workspace
+            .environment_from_name_or_env_var(args.environment)
+            .unwrap();
+        let platform = args.platform.unwrap_or_else(|| environment.best_platform());
+
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            workspace.config().global_channel_config(),
+            args.name,
+        );
+        insta::assert_snapshot!(
+            "test_export_conda_env_yaml_custom_name",
+            env_yaml.unwrap().to_yaml_string()
         );
     }
 }
