@@ -32,7 +32,7 @@ pub struct Args {
     #[arg(short, long)]
     pub environment: Option<String>,
 
-    /// The name to use for the rendered conda environment. 
+    /// The name to use for the rendered conda environment.
     /// Defaults to the environment name.
     #[arg(short, long)]
     pub name: Option<String>,
@@ -133,12 +133,12 @@ fn build_env_yaml(
     platform: &Platform,
     environment: &Environment,
     config: &ChannelConfig,
-    name: Option<String>,
+    name: String,
 ) -> miette::Result<EnvironmentYaml> {
     let channels =
         channels_with_nodefaults(environment.channels().into_iter().cloned().collect_vec());
     let mut env_yaml = rattler_conda_types::EnvironmentYaml {
-        name: Some(name.unwrap_or_else(|| environment.name().as_str().to_string())),
+        name: Some(name),
         channels,
         ..Default::default()
     };
@@ -234,9 +234,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
     let platform = args.platform.unwrap_or_else(|| environment.best_platform());
     let config = workspace.config();
-    let name = args.name;
+    let name = args
+        .name
+        .unwrap_or_else(|| environment.name().as_str().to_string());
 
-    let env_yaml = build_env_yaml(&platform, &environment, config.global_channel_config(),name)?;
+    let env_yaml = build_env_yaml(
+        &platform,
+        &environment,
+        config.global_channel_config(),
+        name,
+    )?;
 
     if let Some(output_path) = args.output_path {
         env_yaml
@@ -277,7 +284,7 @@ mod tests {
             &platform,
             &environment,
             workspace.config().global_channel_config(),
-            None,
+            environment.name().as_str().to_string(),
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml",
@@ -305,7 +312,7 @@ mod tests {
             &platform,
             &environment,
             workspace.config().global_channel_config(),
-            None,
+            environment.name().as_str().to_string(),
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_pip_extras",
@@ -334,7 +341,7 @@ mod tests {
             &platform,
             &environment,
             workspace.config().global_channel_config(),
-            None,
+            environment.name().as_str().to_string(),
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_source_editable",
@@ -357,7 +364,7 @@ mod tests {
             platform: None,
             environment: Some("alternative".to_string()),
             workspace_config: WorkspaceConfig::default(),
-            name : None,
+            name: None,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -368,7 +375,7 @@ mod tests {
             &platform,
             &environment,
             workspace.config().global_channel_config(),
-            None,
+            environment.name().as_str().to_string(),
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_pip_custom_registry",
@@ -386,7 +393,7 @@ mod tests {
             platform: None,
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
-            name : None,
+            name: None,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -397,7 +404,7 @@ mod tests {
             &platform,
             &environment,
             workspace.config().global_channel_config(),
-            None,
+            environment.name().as_str().to_string(),
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_pip_find_links",
@@ -414,7 +421,7 @@ mod tests {
             platform: Some(Platform::OsxArm64),
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
-            name : None,
+            name: None,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -425,7 +432,7 @@ mod tests {
             &platform,
             &environment,
             workspace.config().global_channel_config(),
-            None,
+            environment.name().as_str().to_string(),
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_pyproject_panic",
@@ -450,7 +457,7 @@ mod tests {
             platform: Some(Platform::Osx64),
             environment: None,
             workspace_config: WorkspaceConfig::default(),
-            name : None,
+            name: None,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -461,7 +468,7 @@ mod tests {
             &platform,
             &environment,
             workspace.config().global_channel_config(),
-            None,
+            environment.name().as_str().to_string(),
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_defaults",
@@ -491,12 +498,13 @@ mod tests {
         let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
             .join("tests/data/mock-projects/test-project-export/pixi.toml");
         let workspace = Workspace::from_path(&path).unwrap();
+        let env_name = "custom_env_name".to_string();
         let args = Args {
             output_path: None,
             platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
-            name: Some("custom_env_name".to_string()),
+            name: Some(env_name.clone()),
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -507,7 +515,7 @@ mod tests {
             &platform,
             &environment,
             workspace.config().global_channel_config(),
-            args.name,
+            env_name,
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_custom_name",
