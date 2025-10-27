@@ -29,7 +29,7 @@ use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
 use uv_configuration::RAYON_INITIALIZE;
-use uv_pep508::PackageName;
+use uv_normalize::PackageName;
 use uv_python::PythonEnvironment;
 
 use crate::common::{

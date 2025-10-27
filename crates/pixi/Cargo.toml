@@ -78,6 +78,7 @@ url = { workspace = true }
 uv-cache = { workspace = true }
 uv-configuration = { workspace = true }
 uv-installer = { workspace = true }
+uv-normalize = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-python = { workspace = true }
 zip = { workspace = true }
