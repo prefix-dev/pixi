@@ -287,7 +287,7 @@ impl JsonRpcBackend {
         request: CondaBuildV1Params,
         output_stream: W,
     ) -> Result<CondaBuildV1Result, CommunicationError> {
-        // Capture all of stderr and discard it
+        // Capture all of stderr and stream it somewhere else
         let stderr = self.stderr.as_ref().map(|stderr| {
             // Cancellation signal
             let (cancel_tx, cancel_rx) = oneshot::channel();
@@ -339,7 +339,7 @@ impl JsonRpcBackend {
         request: CondaOutputsParams,
         output_stream: W,
     ) -> Result<CondaOutputsResult, CommunicationError> {
-        // Capture all of stderr and discard it
+        // Capture all of stderr and stream it somewhere else
         let stderr = self.stderr.as_ref().map(|stderr| {
             // Cancellation signal
             let (cancel_tx, cancel_rx) = oneshot::channel();
