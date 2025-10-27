@@ -19,6 +19,7 @@ pixi workspace export conda-environment [OPTIONS] [OUTPUT_PATH]
 
 - [`--platform (-p) <PLATFORM>`](#arg---platform) The platform to render the environment file for. Defaults to the current platform
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) The environment to render the environment file for. Defaults to the default environment
+- [`--name (-n) <NAME>`](#arg---name) The name to use for the rendered conda environment. Defaults to the environment name
 
 ## Global Options
 
