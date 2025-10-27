@@ -87,7 +87,7 @@ impl CommandDispatcherProcessor {
                 .as_source_build_reporter()
                 .zip(self.source_build_reporters.get(&source_build_id).copied())
             {
-                source_reporter.on_started(reporter_id, Box::new(rx), created.clone());
+                source_reporter.on_started(reporter_id, Box::new(rx));
             }
             run_exports_reporter = created;
         }

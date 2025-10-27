@@ -69,7 +69,7 @@ impl CommandDispatcherProcessor {
                 }
 
                 // Open a channel to receive build output.
-                let (tx, rx) = futures::channel::mpsc::unbounded();
+                let (log_sink, rx) = futures::channel::mpsc::unbounded();
 
                 if let Some((reporter, reporter_id)) = self
                     .reporter
@@ -84,7 +84,7 @@ impl CommandDispatcherProcessor {
                     source_metadata_id,
                     task.spec,
                     task.cancellation_token,
-                    tx,
+                    log_sink,
                 );
             }
         }

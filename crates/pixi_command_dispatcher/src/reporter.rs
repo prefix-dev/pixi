@@ -191,7 +191,6 @@ pub trait SourceBuildReporter {
         &mut self,
         id: SourceBuildId,
         backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
-        run_exports_reporter: Option<Arc<dyn RunExportsReporter>>,
     );
 
     /// Called when the operation has finished.

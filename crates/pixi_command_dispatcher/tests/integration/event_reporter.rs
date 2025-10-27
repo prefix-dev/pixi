@@ -17,7 +17,6 @@ use pixi_command_dispatcher::{
     },
 };
 use pixi_git::resolver::RepositoryReference;
-use rattler_repodata_gateway::RunExportsReporter;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -492,7 +491,6 @@ impl SourceBuildReporter for EventReporter {
         &mut self,
         id: SourceBuildId,
         backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
-        _run_exports_reporter: Option<Arc<dyn RunExportsReporter>>,
     ) {
         let event = Event::SourceBuildStarted { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());

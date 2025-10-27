@@ -12,7 +12,6 @@ use pixi_command_dispatcher::{
 use pixi_progress::ProgressBarPlacement;
 use rattler::{install::Transaction, package_cache::CacheReporter};
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
-use rattler_repodata_gateway::RunExportsReporter;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{
@@ -46,7 +45,6 @@ impl SyncReporter {
         inner.preparing_progress_bar.clear();
         inner.install_progress_bar.clear();
         inner.build_output_receiver = None;
-        inner.active_run_exports_reporter = None;
     }
 
     /// Creates a new InstallReporter that shares this SyncReporter instance
@@ -161,7 +159,6 @@ impl SourceBuildReporter for SyncReporter {
         &mut self,
         id: SourceBuildId,
         mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
-        run_exports_reporter: Option<Arc<dyn RunExportsReporter>>,
     ) {
         // Notify the progress bar that the build has started.
         let print_backend_output = tracing::event_enabled!(tracing::Level::WARN);
@@ -171,7 +168,6 @@ impl SourceBuildReporter for SyncReporter {
         {
             let mut inner = self.combined_inner.lock();
             inner.preparing_progress_bar.on_build_start(id.0);
-            inner.active_run_exports_reporter = run_exports_reporter;
             if !print_backend_output {
                 inner.build_output_receiver = Some(rx);
             }
@@ -192,7 +188,6 @@ impl SourceBuildReporter for SyncReporter {
         let build_output_receiver = {
             let mut inner = self.combined_inner.lock();
             inner.preparing_progress_bar.on_build_finished(id.0);
-            inner.active_run_exports_reporter = None;
             inner.build_output_receiver.take()
         };
 
@@ -219,7 +214,6 @@ pub struct CombinedInstallReporterInner {
     install_progress_bar: MainProgressBar<PackageWithSize>,
 
     build_output_receiver: Option<UnboundedReceiver<String>>,
-    active_run_exports_reporter: Option<Arc<dyn RunExportsReporter>>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -273,7 +267,6 @@ impl CombinedInstallReporterInner {
             operation_link_id: HashMap::new(),
             cache_entry_id: HashMap::new(),
             build_output_receiver: None,
-            active_run_exports_reporter: None,
         }
     }
 
