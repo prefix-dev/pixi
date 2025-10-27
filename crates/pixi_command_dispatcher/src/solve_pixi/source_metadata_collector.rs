@@ -69,6 +69,7 @@ pub enum CollectSourceMetadataError {
 }
 
 impl SourceMetadataCollector {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         command_queue: CommandDispatcher,
         channel_urls: Vec<ChannelUrl>,

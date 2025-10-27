@@ -223,6 +223,7 @@ pub(crate) struct SourceBuildCacheStatusId(pub usize);
 pub(crate) struct InstantiatedToolEnvId(pub usize);
 
 /// A message send to the dispatch task.
+#[allow(clippy::large_enum_variant)]
 #[derive(derive_more::From)]
 pub(crate) enum ForegroundMessage {
     SolveCondaEnvironment(SolveCondaEnvironmentTask),

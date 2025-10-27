@@ -30,7 +30,7 @@ use pixi_install_pypi::{
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PinnedSourceSpec, PixiRecord, SourceRecord};
+use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{

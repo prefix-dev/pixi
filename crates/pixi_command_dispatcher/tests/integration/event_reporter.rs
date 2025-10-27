@@ -19,6 +19,7 @@ use pixi_command_dispatcher::{
 use pixi_git::resolver::RepositoryReference;
 use serde::Serialize;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum Event {
