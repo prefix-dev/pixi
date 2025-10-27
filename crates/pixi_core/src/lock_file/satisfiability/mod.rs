@@ -1515,6 +1515,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .map_err(PlatformUnsat::BackendDiscovery)
         .map_err(Box::new)?;
 
+        let glob_root = discovered_backend
+            .init_params
+            .glob_root_with_fallback(&source_dir);
+
         let VariantConfig { variants, .. } = environment
             .workspace()
             .variants(platform)
@@ -1527,7 +1531,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
         let input_hash = input_hash_cache
             .compute_hash(GlobHashKey::new(
-                source_dir,
+                glob_root,
                 locked_input_hash.globs.clone(),
                 additional_glob_hash,
             ))

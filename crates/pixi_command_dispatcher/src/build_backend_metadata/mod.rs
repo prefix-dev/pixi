@@ -12,7 +12,7 @@ use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::{Hash, Hasher},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Mutex,
 };
 use thiserror::Error;
@@ -123,6 +123,10 @@ impl BuildBackendMetadataSpec {
             &self.variants,
         );
 
+        let glob_root = discovered_backend
+            .init_params
+            .glob_root_with_fallback(&source_checkout.path);
+
         // Check if we should skip the metadata cache for this backend
         let skip_cache = Self::should_skip_metadata_cache(
             &discovered_backend.backend_spec,
@@ -141,7 +145,7 @@ impl BuildBackendMetadataSpec {
 
         if !skip_cache {
             if let Some(metadata) = Self::verify_cache_freshness(
-                &source_checkout,
+                &glob_root,
                 &command_dispatcher,
                 metadata,
                 &additional_glob_hash,
@@ -195,6 +199,7 @@ impl BuildBackendMetadataSpec {
                 source_checkout,
                 backend,
                 additional_glob_hash,
+                glob_root,
             )
             .await?;
 
@@ -266,7 +271,7 @@ impl BuildBackendMetadataSpec {
     }
 
     async fn verify_cache_freshness(
-        source_checkout: &SourceCheckout,
+        _glob_root: &Path,
         command_dispatcher: &CommandDispatcher,
         metadata: Option<CachedCondaMetadata>,
         additional_glob_hash: &[u8],
@@ -289,11 +294,19 @@ impl BuildBackendMetadataSpec {
             return Ok(Some(metadata));
         };
 
+        let Some(cached_root) = metadata.glob_root.as_ref() else {
+            tracing::debug!(
+                "cached `{metadata_kind}` response missing glob root; regenerating metadata"
+            );
+            return Ok(None);
+        };
+        let effective_root = cached_root.as_path();
+
         // Check if the input hash is still valid.
         let new_hash = command_dispatcher
             .glob_hash_cache()
             .compute_hash(GlobHashKey::new(
-                source_checkout.path.clone(),
+                effective_root.to_path_buf(),
                 input_globs.globs.clone(),
                 additional_glob_hash.to_vec(),
             ))
@@ -318,6 +331,7 @@ impl BuildBackendMetadataSpec {
         source_checkout: SourceCheckout,
         backend: Backend,
         additional_glob_hash: Vec<u8>,
+        glob_root: PathBuf,
     ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
         let backend_identifier = backend.identifier().to_string();
         let params = CondaOutputsParams {
@@ -358,7 +372,7 @@ impl BuildBackendMetadataSpec {
         let input_globs = extend_input_globs_with_variant_files(
             outputs.input_globs.clone(),
             &self.variant_files,
-            &source_checkout,
+            &glob_root,
         );
         tracing::debug!(
             backend = %backend_identifier,
@@ -369,6 +383,7 @@ impl BuildBackendMetadataSpec {
         let input_hash = Self::compute_input_hash(
             command_dispatcher,
             &source_checkout,
+            &glob_root,
             input_globs,
             additional_glob_hash,
         )
@@ -377,6 +392,7 @@ impl BuildBackendMetadataSpec {
         Ok(CachedCondaMetadata {
             id: random(),
             input_hash: input_hash.clone(),
+            glob_root: Some(glob_root),
             metadata: MetadataKind::Outputs {
                 outputs: outputs.outputs,
             },
@@ -387,6 +403,7 @@ impl BuildBackendMetadataSpec {
     async fn compute_input_hash(
         command_queue: CommandDispatcher,
         source: &SourceCheckout,
+        glob_root: &Path,
         input_globs: BTreeSet<String>,
         additional_glob_hash: Vec<u8>,
     ) -> Result<Option<InputHash>, CommandDispatcherError<BuildBackendMetadataError>> {
@@ -400,7 +417,7 @@ impl BuildBackendMetadataSpec {
         let input_hash = command_queue
             .glob_hash_cache()
             .compute_hash(GlobHashKey::new(
-                &source.path,
+                glob_root.to_path_buf(),
                 input_globs.clone(),
                 additional_glob_hash,
             ))
@@ -432,14 +449,15 @@ impl BuildBackendMetadataSpec {
 fn extend_input_globs_with_variant_files(
     mut input_globs: BTreeSet<String>,
     variant_files: &Option<Vec<PathBuf>>,
-    source_checkout: &SourceCheckout,
+    glob_root: &Path,
 ) -> BTreeSet<String> {
     if let Some(variant_files) = variant_files {
         for variant_file in variant_files {
-            let relative = match variant_file.strip_prefix(&source_checkout.path) {
+            let relative = match variant_file.strip_prefix(glob_root) {
                 Ok(stripped) => stripped.to_path_buf(),
-                Err(_) => diff_paths(variant_file, &source_checkout.path)
-                    .unwrap_or_else(|| variant_file.clone()),
+                Err(_) => {
+                    diff_paths(variant_file, glob_root).unwrap_or_else(|| variant_file.clone())
+                }
             };
             let glob = relative.to_string_lossy().replace("\\", "/");
             input_globs.insert(glob);

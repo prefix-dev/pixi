@@ -365,14 +365,22 @@ impl SourceBuildCacheStatusSpec {
         };
 
         // Checkout the source for the package.
-        let source_checkout = command_dispatcher
+        let _source_checkout = command_dispatcher
             .checkout_pinned_source(source.clone())
             .await
             .map_err_with(SourceBuildCacheStatusError::SourceCheckout)?;
 
+        let Some(glob_root) = source_info.glob_root.as_ref().cloned() else {
+            tracing::debug!(
+                "cached build missing glob root information; marking '{}' as stale",
+                self.package
+            );
+            return Ok(CachedBuildStatus::Stale(cached_build));
+        };
+
         // Compute the modification time of the files that match the source input globs.
         let glob_time = match GlobModificationTime::from_patterns(
-            &source_checkout.path,
+            &glob_root,
             source_info.globs.iter().map(String::as_str),
         ) {
             Ok(glob_time) => glob_time,

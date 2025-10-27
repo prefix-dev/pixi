@@ -232,6 +232,15 @@ pub struct CachedBuildSourceInfo {
     /// considered stale.
     #[serde(default)]
     pub package_build_input_hash: Option<PackageBuildInputHash>,
+
+    /// The root directory that is used when resolving the glob patterns.
+    /// this is especially useful for out-of-tree path builds, that move the
+    /// root to a different location.
+    ///
+    /// E.g we are building from `package.build.source.path = "../"` we want
+    /// to resolve globs from that location
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub glob_root: Option<PathBuf>,
 }
 
 #[serde_as]

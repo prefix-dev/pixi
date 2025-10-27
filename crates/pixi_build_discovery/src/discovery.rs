@@ -67,6 +67,23 @@ pub struct BackendInitializationParams {
     pub target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
 }
 
+impl BackendInitializationParams {
+    /// Returns the directory that should be used as the root for resolving glob
+    /// patterns. Falls back to the provided path if the backend does not
+    /// specify an alternative source location.
+    pub fn glob_root_with_fallback(&self, fallback: &Path) -> PathBuf {
+        match &self.source {
+            Some(SourceLocationSpec::Path(path)) => {
+                let resolved = path
+                    .resolve(&self.source_anchor)
+                    .unwrap_or_else(|_| fallback.to_path_buf());
+                dunce::canonicalize(&resolved).unwrap_or(resolved)
+            }
+            _ => fallback.to_path_buf(),
+        }
+    }
+}
+
 /// Configuration to enable or disable certain protocols discovery.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]

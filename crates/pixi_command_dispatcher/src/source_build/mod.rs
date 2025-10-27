@@ -229,6 +229,10 @@ impl SourceBuildSpec {
             .await
             .map_err_with(SourceBuildError::Discovery)?;
 
+        let glob_root = discovered_backend
+            .init_params
+            .glob_root_with_fallback(&source_checkout.path);
+
         // Compute the package input hash for caching purposes.
         let package_build_input_hash = PackageBuildInputHash::from(discovered_backend.as_ref());
 
@@ -285,6 +289,7 @@ impl SourceBuildSpec {
                 backend,
                 work_directory,
                 package_build_input_hash,
+                glob_root.clone(),
                 reporter,
             )
             .await?;
@@ -404,6 +409,7 @@ impl SourceBuildSpec {
         backend: Backend,
         work_directory: PathBuf,
         package_build_input_hash: PackageBuildInputHash,
+        glob_root: PathBuf,
         reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<BuiltPackage, CommandDispatcherError<SourceBuildError>> {
         let source_anchor = SourceAnchor::from(SourceSpec::from(self.source.clone()));
@@ -643,6 +649,7 @@ impl SourceBuildSpec {
                     packages: host_records,
                 },
                 package_build_input_hash: Some(package_build_input_hash),
+                glob_root: Some(glob_root),
             },
         })
     }

@@ -218,6 +218,14 @@ pub struct CachedCondaMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input_hash: Option<InputHash>,
 
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "source_code_root",
+        alias = "input_root"
+    )]
+    pub glob_root: Option<PathBuf>,
+
     #[serde(flatten)]
     pub metadata: MetadataKind,
 }
