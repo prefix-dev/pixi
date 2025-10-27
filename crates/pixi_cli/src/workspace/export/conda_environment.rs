@@ -31,6 +31,11 @@ pub struct Args {
     /// Defaults to the default environment.
     #[arg(short, long)]
     pub environment: Option<String>,
+
+    /// The name to use for the rendered conda environment. 
+    /// Defaults to the environment name.
+    #[arg(short, long)]
+    pub name: Option<String>,
 }
 
 fn format_pip_extras(extras: &[ExtraName]) -> String {
@@ -128,11 +133,12 @@ fn build_env_yaml(
     platform: &Platform,
     environment: &Environment,
     config: &ChannelConfig,
+    name: Option<String>,
 ) -> miette::Result<EnvironmentYaml> {
     let channels =
         channels_with_nodefaults(environment.channels().into_iter().cloned().collect_vec());
     let mut env_yaml = rattler_conda_types::EnvironmentYaml {
-        name: Some(environment.name().as_str().to_string()),
+        name: Some(name.unwrap_or_else(|| environment.name().as_str().to_string())),
         channels,
         ..Default::default()
     };
@@ -228,8 +234,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
     let platform = args.platform.unwrap_or_else(|| environment.best_platform());
     let config = workspace.config();
+    let name = args.name;
 
-    let env_yaml = build_env_yaml(&platform, &environment, config.global_channel_config())?;
+    let env_yaml = build_env_yaml(&platform, &environment, config.global_channel_config(),name)?;
 
     if let Some(output_path) = args.output_path {
         env_yaml
