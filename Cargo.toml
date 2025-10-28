@@ -135,8 +135,10 @@ rattler_virtual_packages = { version = "2.2.4", default-features = false }
 rayon = "1.10.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", default-features = false }
-reqwest-middleware = "0.4"
-reqwest-retry = "0.7.0"
+# reqwest-middleware = "0.4"
+# reqwest-retry = "0.7.0"
+reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
+reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
 rlimit = "0.10.2"
 rstest = "0.25.0"
 same-file = "1.0.6"
@@ -211,7 +213,7 @@ zstd = { version = "0.13.3", default-features = false }
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
 reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
 reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
-version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "06ec5a5f59ffaeb6cf5079c6cb184467da06c9db" }
+version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
 
 [profile.ci]
 codegen-units = 16

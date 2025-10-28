@@ -23,7 +23,6 @@ uv-configuration = { workspace = true }
 uv-dispatch = { workspace = true }
 uv-distribution-types = { workspace = true }
 uv-normalize = { workspace = true }
-uv-pep508 = { workspace = true }
 uv-preview = { workspace = true }
 uv-types = { workspace = true }
 uv-workspace = { workspace = true }
