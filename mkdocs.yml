@@ -249,7 +249,8 @@ plugins:
         # crates/pixi_cli/src/init.rs
         "init_getting_started.md": "first_workspace.md"
 
-  - search
+  - search:
+      separator: '[\s\u200b\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
   - social
   - mike:
     # These fields are all optional; the defaults are as below...
