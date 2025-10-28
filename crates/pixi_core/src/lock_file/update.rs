@@ -1812,7 +1812,7 @@ impl<'p> UpdateContext<'p> {
             builder.set_options(
                 &environment_name,
                 rattler_lock::SolveOptions {
-                    strategy: grouped_env.solve_strategy(),
+                    strategy: grouped_env.solve_strategy().into(),
                     channel_priority: grouped_env
                         .channel_priority()
                         .unwrap_or_default()
@@ -1962,7 +1962,7 @@ async fn spawn_solve_conda_environment_task(
 
     // Get solve options
     let exclude_newer = group.exclude_newer();
-    let strategy = group.solve_strategy();
+    let strategy = group.solve_strategy().into();
 
     // Get the environment name
     let group_name = group.name();
@@ -2291,6 +2291,7 @@ async fn spawn_solve_pypi_task<'p>(
     };
 
     let environment_name = grouped_environment.name().clone();
+    let solve_strategy = grouped_environment.solve_strategy();
 
     let pixi_solve_records = &repodata_records.records;
     let locked_pypi_records = &locked_pypi_packages.records;
@@ -2330,6 +2331,7 @@ async fn spawn_solve_pypi_task<'p>(
             environment,
             disallow_install_conda_prefix,
             exclude_newer,
+            solve_strategy,
         )
         .await
         .with_context(|| {

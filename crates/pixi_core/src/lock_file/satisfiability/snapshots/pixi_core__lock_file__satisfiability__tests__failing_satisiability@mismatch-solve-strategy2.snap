@@ -1,0 +1,7 @@
+---
+source: src/lock_file/satisfiability/mod.rs
+expression: s
+---
+environment 'default' does not satisfy the requirements of the project
+    Diagnostic severity: error
+    Caused by: the lock-file was solved with a different strategy (highest) than the one selected (lowest-version)
