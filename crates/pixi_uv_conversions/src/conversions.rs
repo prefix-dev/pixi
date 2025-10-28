@@ -346,6 +346,7 @@ pub fn to_uv_specifiers(
 
 pub fn to_requirements<'req>(
     requirements: impl Iterator<Item = &'req uv_distribution_types::Requirement>,
+    base_dir: &Path,
 ) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
     let requirements: Result<Vec<pep508_rs::Requirement>, ConversionError> = requirements
         .map(|requirement| {
@@ -403,17 +404,19 @@ pub fn to_requirements<'req>(
                         writeln!(package_string, "#subdirectory={}", subdirectory.display())?;
                     }
                 }
-                uv_distribution_types::RequirementSource::Path { url, .. } => {
-                    write!(package_string, " @ {url}")?;
-                }
-                uv_distribution_types::RequirementSource::Directory { url, .. } => {
-                    write!(package_string, " @ {url}")?;
+                uv_distribution_types::RequirementSource::Path { url, .. }
+                | uv_distribution_types::RequirementSource::Directory { url, .. } => {
+                    if let Some(g) = url.given() {
+                        write!(package_string, " @ {g}")?;
+                    } else {
+                        write!(package_string, " @ {url}")?;
+                    }
                 }
             }
             if let Some(marker) = marker.contents() {
                 write!(package_string, " ; {marker}")?;
             }
-            pep508_rs::Requirement::from_str(&package_string)
+            pep508_rs::Requirement::parse(&package_string, base_dir)
                 .map_err(crate::Pep508Error::Pep508Error)
                 .map_err(From::from)
         })

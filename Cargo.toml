@@ -74,7 +74,7 @@ ordermap = "0.5.7"
 parking_lot = "0.12.4"
 pathdiff = "0.2.3"
 pep440_rs = "0.7.3"
-pep508_rs = "0.9.2"
+pep508_rs = { version = "0.9.2", features = ["non-pep508-extensions"] }
 percent-encoding = "2.3.1"
 pin-project-lite = "0.2.16"
 pixi = { path = "crates/pixi" }
@@ -190,7 +190,9 @@ uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
-uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
+uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.8.5", features = [
+  "non-pep508-extensions",
+] }
 uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }

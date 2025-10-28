@@ -564,7 +564,7 @@ fn verify_pypi_no_build(
     // violations
     for (_, packages) in locked_environment.pypi_packages_by_platform() {
         for (package, _) in packages {
-            let extension = match &package.location {
+            let extension = match package.location.inner() {
                 // Get the extension from the url
                 UrlOrPath::Url(url) => {
                     if url.scheme().starts_with("git+") {
@@ -776,7 +776,7 @@ pub(crate) fn pypi_satifisfies_editable(
                 "editable requirement cannot be from registry, url, git or path (non-directory)"
             )
         }
-        RequirementSource::Directory { install_path, .. } => match &locked_data.location {
+        RequirementSource::Directory { install_path, .. } => match locked_data.location.inner() {
             // If we have an url requirement locked, but the editable is requested, this does not
             // satifsfy
             UrlOrPath::Url(url) => Err(Box::new(PlatformUnsat::EditablePackageIsUrl(
@@ -846,7 +846,7 @@ pub(crate) fn pypi_satifisfies_requirement(
             }
         }
         RequirementSource::Url { url: spec_url, .. } => {
-            if let UrlOrPath::Url(locked_url) = &locked_data.location {
+            if let UrlOrPath::Url(locked_url) = locked_data.location.inner() {
                 // Url may not start with git, and must start with direct+
                 if locked_url.as_str().starts_with("git+")
                     || !locked_url.as_str().starts_with("direct+")
@@ -877,7 +877,7 @@ pub(crate) fn pypi_satifisfies_requirement(
         } => {
             let repository = git.repository();
             let reference = git.reference();
-            match &locked_data.location {
+            match locked_data.location.inner() {
                 UrlOrPath::Url(url) => {
                     if let Ok(pinned_git_spec) = LockedGitUrl::new(url.clone()).to_pinned_git_spec()
                     {
@@ -948,7 +948,7 @@ pub(crate) fn pypi_satifisfies_requirement(
         }
         RequirementSource::Path { install_path, .. }
         | RequirementSource::Directory { install_path, .. } => {
-            if let UrlOrPath::Path(locked_path) = &locked_data.location {
+            if let UrlOrPath::Path(locked_path) = locked_data.location.inner() {
                 let install_path =
                     Utf8TypedPathBuf::from(install_path.to_string_lossy().to_string());
                 let project_root =
@@ -1359,7 +1359,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 if pypi_packages_visited.insert(idx) {
                     // If this is path based package we need to check if the source tree hash still
                     // matches. and if it is a directory
-                    if let UrlOrPath::Path(path) = &record.0.location {
+                    if let UrlOrPath::Path(path) = record.0.location.inner() {
                         let absolute_path = if path.is_absolute() {
                             Cow::Borrowed(Path::new(path.as_str()))
                         } else {
@@ -1852,7 +1852,7 @@ mod tests {
     use insta::Settings;
     use miette::{IntoDiagnostic, NarratableReportHandler};
     use pep440_rs::{Operator, Version};
-    use rattler_lock::LockFile;
+    use rattler_lock::{LockFile, Verbatim};
     use rstest::rstest;
 
     use super::*;
@@ -2092,7 +2092,7 @@ mod tests {
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
             version: Version::from_str("0.1.0").unwrap(),
-            location: UrlOrPath::Path("C:\\Users\\username\\mypkg.tar.gz".into()),
+            location: Verbatim::new(UrlOrPath::Path("C:\\Users\\username\\mypkg.tar.gz".into())),
             hash: None,
             requires_dist: vec![],
             requires_python: None,
