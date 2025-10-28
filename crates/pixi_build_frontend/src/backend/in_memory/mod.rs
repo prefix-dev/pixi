@@ -55,6 +55,7 @@ pub trait InMemoryBackend: Send {
     fn conda_outputs(
         &self,
         params: CondaOutputsParams,
+        output_stream: &(dyn BackendOutputStream + Send + 'static),
     ) -> Result<CondaOutputsResult, Box<CommunicationError>> {
         unimplemented!()
     }

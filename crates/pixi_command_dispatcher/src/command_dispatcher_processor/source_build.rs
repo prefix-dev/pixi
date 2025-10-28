@@ -1,4 +1,4 @@
-use std::collections::hash_map::Entry;
+use std::{collections::hash_map::Entry, sync::Arc};
 
 use futures::FutureExt;
 use tokio_util::sync::CancellationToken;
@@ -8,6 +8,7 @@ use crate::{
     CommandDispatcherError, Reporter, SourceBuildError, SourceBuildResult, SourceBuildSpec,
     command_dispatcher::{CommandDispatcherContext, SourceBuildId, SourceBuildTask},
 };
+use rattler_repodata_gateway::RunExportsReporter;
 
 impl CommandDispatcherProcessor {
     /// Constructs a new [`SourceBuildId`] for the given `task`.
@@ -61,15 +62,6 @@ impl CommandDispatcherProcessor {
                         .insert(source_build_id, reporter_id);
                 }
 
-                if let Some((reporter, reporter_id)) = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_source_build_reporter)
-                    .zip(reporter_id)
-                {
-                    reporter.on_started(reporter_id)
-                }
-
                 self.queue_source_build_task(source_build_id, task.spec, task.cancellation_token);
             }
         }
@@ -82,19 +74,27 @@ impl CommandDispatcherProcessor {
         spec: SourceBuildSpec,
         cancellation_token: CancellationToken,
     ) {
-        let dispatcher = self
-            .create_task_command_dispatcher(CommandDispatcherContext::SourceBuild(source_build_id));
-
         let dispatcher_context = CommandDispatcherContext::SourceBuild(source_build_id);
+        let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
+
         let reporter_context = self.reporter_context(dispatcher_context);
-        let run_exports_reporter = self
-            .reporter
-            .as_mut()
-            .and_then(|reporter| reporter.create_run_exports_reporter(reporter_context));
+        let (tx, rx) = futures::channel::mpsc::unbounded::<String>();
+
+        let mut run_exports_reporter: Option<Arc<dyn RunExportsReporter>> = None;
+        if let Some(reporter) = self.reporter.as_mut() {
+            let created = reporter.create_run_exports_reporter(reporter_context);
+            if let Some((source_reporter, reporter_id)) = reporter
+                .as_source_build_reporter()
+                .zip(self.source_build_reporters.get(&source_build_id).copied())
+            {
+                source_reporter.on_started(reporter_id, Box::new(rx));
+            }
+            run_exports_reporter = created;
+        }
 
         self.pending_futures.push(
             cancellation_token
-                .run_until_cancelled_owned(spec.build(dispatcher, run_exports_reporter))
+                .run_until_cancelled_owned(spec.build(dispatcher, run_exports_reporter.clone(), tx))
                 .map(move |result| {
                     TaskResult::SourceBuild(
                         source_build_id,
@@ -122,7 +122,8 @@ impl CommandDispatcherProcessor {
             .and_then(Reporter::as_source_build_reporter)
             .zip(self.source_build_reporters.remove(&id))
         {
-            reporter.on_finished(reporter_id);
+            let failed = result.as_ref().is_err();
+            reporter.on_finished(reporter_id, failed);
         }
 
         self.source_build

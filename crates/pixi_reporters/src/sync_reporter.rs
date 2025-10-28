@@ -44,6 +44,7 @@ impl SyncReporter {
         let mut inner = self.combined_inner.lock();
         inner.preparing_progress_bar.clear();
         inner.install_progress_bar.clear();
+        inner.build_output_receiver = None;
     }
 
     /// Creates a new InstallReporter that shares this SyncReporter instance
@@ -154,15 +155,52 @@ impl SourceBuildReporter for SyncReporter {
         SourceBuildId(id)
     }
 
-    fn on_started(&mut self, id: SourceBuildId) {
+    fn on_started(
+        &mut self,
+        id: SourceBuildId,
+        mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
+    ) {
         // Notify the progress bar that the build has started.
-        let mut inner = self.combined_inner.lock();
-        inner.preparing_progress_bar.on_build_start(id.0);
+        let print_backend_output = tracing::event_enabled!(tracing::Level::WARN);
+        let progress_bar = self.multi_progress.clone();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+
+        {
+            let mut inner = self.combined_inner.lock();
+            inner.preparing_progress_bar.on_build_start(id.0);
+            if !print_backend_output {
+                inner.build_output_receiver = Some(rx);
+            }
+        }
+
+        tokio::spawn(async move {
+            while let Some(line) = backend_output_stream.next().await {
+                if print_backend_output {
+                    progress_bar.suspend(|| eprintln!("{line}"));
+                } else if tx.send(line).is_err() {
+                    break;
+                }
+            }
+        });
     }
 
-    fn on_finished(&mut self, id: SourceBuildId) {
-        let mut inner = self.combined_inner.lock();
-        inner.preparing_progress_bar.on_build_finished(id.0);
+    fn on_finished(&mut self, id: SourceBuildId, failed: bool) {
+        let build_output_receiver = {
+            let mut inner = self.combined_inner.lock();
+            inner.preparing_progress_bar.on_build_finished(id.0);
+            inner.build_output_receiver.take()
+        };
+
+        if failed {
+            let progress_bar = self.multi_progress.clone();
+            if let Some(mut build_output_receiver) = build_output_receiver {
+                tokio::spawn(async move {
+                    while let Some(line) = build_output_receiver.recv().await {
+                        progress_bar.suspend(|| eprintln!("{line}"));
+                    }
+                });
+            }
+        }
     }
 }
 
