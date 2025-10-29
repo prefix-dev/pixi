@@ -406,6 +406,7 @@ impl SourceBuildSpec {
         self.build_profile == BuildProfile::Development && self.source.is_mutable()
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn build_v1(
         self,
         command_dispatcher: CommandDispatcher,
