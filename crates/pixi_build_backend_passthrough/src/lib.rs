@@ -66,6 +66,7 @@ impl InMemoryBackend for PassthroughBackend {
     fn conda_outputs(
         &self,
         params: CondaOutputsParams,
+        _output_stream: &(dyn BackendOutputStream + Send + 'static),
     ) -> Result<CondaOutputsResult, Box<CommunicationError>> {
         Ok(CondaOutputsResult {
             outputs: vec![CondaOutput {
