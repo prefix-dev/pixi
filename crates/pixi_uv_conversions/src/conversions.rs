@@ -15,7 +15,8 @@ use pixi_spec::GitReference as PixiReference;
 use std::fmt::Write;
 use uv_configuration::BuildOptions;
 use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
-use uv_pep508::{InvalidNameError, PackageName, VerbatimUrl, VerbatimUrlError};
+use uv_normalize::{InvalidNameError, PackageName};
+use uv_pep508::{VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
 use uv_redacted::DisplaySafeUrl;
 

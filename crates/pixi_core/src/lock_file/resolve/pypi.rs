@@ -40,13 +40,15 @@ use rattler_lock::{
 };
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
-use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
-use uv_configuration::{ConfigSettings, Constraints, Overrides};
+use uv_client::{
+    BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder,
+};
+use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
-    BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
-    IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist, SourceDist,
-    ToUrlError,
+    BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy,
+    IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
+    SourceDist, ToUrlError,
 };
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
 use uv_requirements::LookaheadResolver;
@@ -397,14 +399,18 @@ pub async fn resolve_pypi(
 
     // TODO: create a cached registry client per index_url set?
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
-    let mut uv_client_builder = RegistryClientBuilder::new(context.cache.clone())
+
+    let base_client_builder = BaseClientBuilder::default()
         .allow_insecure_host(context.allow_insecure_host.clone())
-        .index_locations(&index_locations)
-        .index_strategy(index_strategy)
         .markers(&marker_environment)
         .keyring(context.keyring_provider)
         .connectivity(Connectivity::Online)
         .extra_middleware(context.extra_middleware.clone());
+
+    let mut uv_client_builder =
+        RegistryClientBuilder::new(base_client_builder, context.cache.clone())
+            .index_locations(index_locations.clone())
+            .index_strategy(index_strategy);
 
     for p in &context.proxies {
         uv_client_builder = uv_client_builder.proxy(p.clone())

@@ -1596,7 +1596,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
 enum FoundPackage {
     Conda(CondaPackageIdx),
-    PyPi(PypiPackageIdx, Vec<uv_pep508::ExtraName>),
+    PyPi(PypiPackageIdx, Vec<uv_normalize::ExtraName>),
 }
 
 /// An index into the list of conda packages.
