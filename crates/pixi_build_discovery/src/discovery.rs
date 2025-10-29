@@ -7,7 +7,7 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use ordermap::OrderMap;
 use pixi_build_type_conversions::{to_project_model_v1, to_target_selector_v1};
-use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
+use pixi_build_types::{PackageModelV1, TargetSelectorV1};
 use pixi_config::Config;
 use pixi_manifest::{
     DiscoveryStart, ExplicitManifestError, PackageManifest, PrioritizedChannel, WithProvenance,
@@ -58,7 +58,7 @@ pub struct BackendInitializationParams {
     pub manifest_path: PathBuf,
 
     /// Optionally, the manifest of the discovered package.
-    pub project_model: Option<ProjectModelV1>,
+    pub project_model: Option<PackageModelV1>,
 
     /// Additional configuration that applies to the backend.
     pub configuration: Option<serde_json::Value>,
@@ -377,7 +377,7 @@ impl DiscoveredBackend {
                 source: None,
                 source_anchor: source_dir,
                 manifest_path: package_xml_absolute_path,
-                project_model: Some(ProjectModelV1::default()),
+                project_model: Some(PackageModelV1::default()),
                 configuration: None,
                 target_configuration: None,
             },

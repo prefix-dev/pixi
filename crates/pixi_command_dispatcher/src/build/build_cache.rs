@@ -9,7 +9,7 @@ use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use ordermap::OrderMap;
 use pixi_build_discovery::{BackendInitializationParams, DiscoveredBackend};
-use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
+use pixi_build_types::{PackageModelV1, TargetSelectorV1};
 use pixi_record::PinnedSourceSpec;
 use pixi_stable_hash::{StableHashBuilder, json::StableJson, map::StableMap};
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
@@ -317,7 +317,7 @@ impl BuildCacheEntry {
 /// warranted.
 pub struct PackageBuildInputHashBuilder<'a> {
     /// The project model itself. Contains dependencies and more.
-    pub project_model: Option<&'a ProjectModelV1>,
+    pub project_model: Option<&'a PackageModelV1>,
 
     /// The backend specific configuration
     pub configuration: Option<&'a serde_json::Value>,

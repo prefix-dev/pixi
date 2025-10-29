@@ -15,8 +15,8 @@ use pixi_build_frontend::{
     json_rpc::CommunicationError,
 };
 use pixi_build_types::{
-    BackendCapabilities, NamedSpecV1, PackageSpecV1, ProjectModelV1, SourcePackageName,
-    TargetSelectorV1, TargetV1, TargetsV1, VersionedProjectModel,
+    BackendCapabilities, NamedSpecV1, PackageModelV1, PackageSpecV1, SourcePackageName,
+    TargetSelectorV1, TargetV1, TargetsV1, VersionedPackageModel,
     procedures::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{
@@ -36,7 +36,7 @@ const BACKEND_NAME: &str = "passthrough";
 /// backend is useful for testing and debugging purposes, as it does not perform
 /// any actual building or processing of the project model.
 pub struct PassthroughBackend {
-    project_model: ProjectModelV1,
+    project_model: PackageModelV1,
     config: PassthroughBackendConfig,
     source_dir: PathBuf,
     index_json: Option<IndexJson>,
@@ -233,7 +233,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
         params: InitializeParams,
     ) -> Result<Self::Backend, Box<CommunicationError>> {
         let project_model = match params.project_model {
-            Some(VersionedProjectModel::V1(project_model)) => project_model,
+            Some(VersionedPackageModel::V1(project_model)) => project_model,
             _ => {
                 return Err(Box::new(CommunicationError::BackendError(
                     BackendError::new("Passthrough backend only supports project model v1"),

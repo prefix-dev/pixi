@@ -163,12 +163,12 @@ fn to_targets_v1(
     })
 }
 
-/// Converts a [`PackageManifest`] to a [`pbt::ProjectModelV1`].
+/// Converts a [`PackageManifest`] to a [`pbt::PackageModelV1`].
 pub fn to_project_model_v1(
     manifest: &PackageManifest,
     channel_config: &ChannelConfig,
-) -> Result<pbt::ProjectModelV1, SpecConversionError> {
-    let project = pbt::ProjectModelV1 {
+) -> Result<pbt::PackageModelV1, SpecConversionError> {
+    let project = pbt::PackageModelV1 {
         name: manifest.package.name.clone(),
         version: manifest.package.version.clone(),
         description: manifest.package.description.clone(),
@@ -188,7 +188,7 @@ pub fn to_project_model_v1(
 mod tests {
     use std::path::PathBuf;
 
-    use pixi_build_types::VersionedProjectModel;
+    use pixi_build_types::VersionedPackageModel;
     use rattler_conda_types::ChannelConfig;
     use rstest::rstest;
 
@@ -221,7 +221,7 @@ mod tests {
                     .unwrap();
 
                 // Convert the manifest to the project model
-                let project_model: VersionedProjectModel =
+                let project_model: VersionedPackageModel =
                     super::to_project_model_v1(&package_manifest.value, &some_channel_config())
                         .unwrap()
                         .into();

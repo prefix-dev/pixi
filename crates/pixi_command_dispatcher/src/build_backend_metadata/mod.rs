@@ -11,7 +11,7 @@ use once_cell::sync::Lazy;
 use pathdiff::diff_paths;
 use pixi_build_discovery::{CommandSpec, EnabledProtocols};
 use pixi_build_frontend::Backend;
-use pixi_build_types::{ProjectModelV1, procedures::conda_outputs::CondaOutputsParams};
+use pixi_build_types::{PackageModelV1, procedures::conda_outputs::CondaOutputsParams};
 use pixi_glob::GlobHashKey;
 use pixi_record::{InputHash, PinnedSourceSpec};
 use pixi_spec::{SourceAnchor, SourceSpec};
@@ -488,7 +488,7 @@ pub enum BuildBackendMetadataError {
 
 /// Computes an additional hash to be used in glob hash
 pub fn calculate_additional_glob_hash(
-    project_model: &Option<ProjectModelV1>,
+    project_model: &Option<PackageModelV1>,
     variants: &Option<BTreeMap<String, Vec<String>>>,
 ) -> Vec<u8> {
     let mut hasher = Xxh3::new();

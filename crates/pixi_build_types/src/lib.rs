@@ -11,9 +11,9 @@ pub use capabilities::{BackendCapabilities, FrontendCapabilities};
 pub use channel_configuration::ChannelConfiguration;
 pub use conda_package_metadata::CondaPackageMetadata;
 pub use project_model::{
-    BinaryPackageSpecV1, GitReferenceV1, GitSpecV1, NamedSpecV1, PackageSpecV1, PathSpecV1,
-    ProjectModelV1, SourcePackageName, SourcePackageSpecV1, TargetSelectorV1, TargetV1, TargetsV1,
-    UrlSpecV1, VersionedProjectModel,
+    BinaryPackageSpecV1, GitReferenceV1, GitSpecV1, NamedSpecV1, PackageModelV1, PackageSpecV1,
+    PathSpecV1, SourcePackageName, SourcePackageSpecV1, TargetSelectorV1, TargetV1, TargetsV1,
+    UrlSpecV1, VersionedPackageModel,
 };
 use rattler_conda_types::{
     GenericVirtualPackage, PackageName, Platform, Version, VersionSpec,

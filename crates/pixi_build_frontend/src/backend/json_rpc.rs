@@ -14,8 +14,8 @@ use jsonrpsee::{
 use miette::Diagnostic;
 use ordermap::OrderMap;
 use pixi_build_types::{
-    BackendCapabilities, FrontendCapabilities, ProjectModelV1, TargetSelectorV1,
-    VersionedProjectModel,
+    BackendCapabilities, FrontendCapabilities, PackageModelV1, TargetSelectorV1,
+    VersionedPackageModel,
     procedures::{
         self,
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
@@ -146,7 +146,7 @@ impl JsonRpcBackend {
         source_dir: PathBuf,
         manifest_path: PathBuf,
         workspace_root: PathBuf,
-        package_manifest: Option<ProjectModelV1>,
+        package_manifest: Option<PackageModelV1>,
         configuration: Option<serde_json::Value>,
         target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
         cache_dir: Option<PathBuf>,
@@ -215,7 +215,7 @@ impl JsonRpcBackend {
         source_dir: PathBuf,
         manifest_path: PathBuf,
         workspace_root: PathBuf,
-        project_model: Option<ProjectModelV1>,
+        project_model: Option<PackageModelV1>,
         configuration: Option<serde_json::Value>,
         target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
         cache_dir: Option<PathBuf>,
@@ -252,7 +252,7 @@ impl JsonRpcBackend {
             .request(
                 procedures::initialize::METHOD_NAME,
                 RpcParams::from(InitializeParams {
-                    project_model: project_model.map(VersionedProjectModel::V1),
+                    project_model: project_model.map(VersionedPackageModel::V1),
                     configuration,
                     target_configuration,
                     manifest_path: manifest_path.clone(),

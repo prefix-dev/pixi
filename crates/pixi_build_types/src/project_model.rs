@@ -32,14 +32,14 @@ use url::Url;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "version", content = "data")]
 #[serde(rename_all = "camelCase")]
-pub enum VersionedProjectModel {
+pub enum VersionedPackageModel {
     /// Version 1 of the project model.
     #[serde(rename = "1")]
-    V1(ProjectModelV1),
+    V1(PackageModelV1),
     // When adding don't forget to update the highest_version function
 }
 
-impl VersionedProjectModel {
+impl VersionedPackageModel {
     /// Highest version of the project model.
     pub fn highest_version() -> u32 {
         // increase this when adding a new version
@@ -47,9 +47,9 @@ impl VersionedProjectModel {
     }
 
     /// Move into the v1 type, returns None if the version is not v1.
-    pub fn into_v1(self) -> Option<ProjectModelV1> {
+    pub fn into_v1(self) -> Option<PackageModelV1> {
         match self {
-            VersionedProjectModel::V1(v) => Some(v),
+            VersionedPackageModel::V1(v) => Some(v),
             // Add this once we have more versions
             //_ => None,
         }
@@ -57,9 +57,9 @@ impl VersionedProjectModel {
 
     /// Returns a reference to the v1 type, returns None if the version is not
     /// v1.
-    pub fn as_v1(&self) -> Option<&ProjectModelV1> {
+    pub fn as_v1(&self) -> Option<&PackageModelV1> {
         match self {
-            VersionedProjectModel::V1(v) => Some(v),
+            VersionedPackageModel::V1(v) => Some(v),
             // Add this once we have more versions
             //_ => None,
         }
@@ -71,7 +71,7 @@ pub type SourcePackageName = String;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectModelV1 {
+pub struct PackageModelV1 {
     /// The name of the project
     pub name: Option<String>,
 
@@ -102,12 +102,12 @@ pub struct ProjectModelV1 {
     /// URL of the project documentation
     pub documentation: Option<Url>,
 
-    /// The target of the project, this may contain
+    /// The target of the package, this may contain
     /// platform specific configurations.
     pub targets: Option<TargetsV1>,
 }
 
-impl IsDefault for ProjectModelV1 {
+impl IsDefault for PackageModelV1 {
     type Item = Self;
 
     fn is_non_default(&self) -> Option<&Self::Item> {
@@ -115,9 +115,9 @@ impl IsDefault for ProjectModelV1 {
     }
 }
 
-impl From<ProjectModelV1> for VersionedProjectModel {
-    fn from(value: ProjectModelV1) -> Self {
-        VersionedProjectModel::V1(value)
+impl From<PackageModelV1> for VersionedPackageModel {
+    fn from(value: PackageModelV1) -> Self {
+        VersionedPackageModel::V1(value)
     }
 }
 
@@ -193,13 +193,13 @@ impl IsDefault for TargetsV1 {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetV1 {
-    /// Host dependencies of the project
+    /// Host dependencies of the package
     pub host_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
 
-    /// Build dependencies of the project
+    /// Build dependencies of the package
     pub build_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
 
-    /// Run dependencies of the project
+    /// Run dependencies of the package
     pub run_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
 }
 
@@ -415,12 +415,12 @@ impl std::fmt::Debug for BinaryPackageSpecV1 {
 }
 
 // Custom Hash implementations that skip default values for stability
-impl Hash for ProjectModelV1 {
+impl Hash for PackageModelV1 {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let ProjectModelV1 {
+        let PackageModelV1 {
             name,
             version,
             description,
@@ -644,8 +644,8 @@ mod tests {
 
     #[test]
     fn test_hash_stability_with_default_values() {
-        // Create a minimal ProjectModelV1 instance
-        let mut project_model = ProjectModelV1 {
+        // Create a minimal PackageModelV1 instance
+        let mut project_model = PackageModelV1 {
             name: Some("test-project".to_string()),
             version: None,
             description: None,
@@ -700,8 +700,8 @@ mod tests {
 
     #[test]
     fn test_hash_changes_with_meaningful_values() {
-        // Create a minimal ProjectModelV1 instance
-        let mut project_model = ProjectModelV1 {
+        // Create a minimal PackageModelV1 instance
+        let mut project_model = PackageModelV1 {
             name: Some("test-project".to_string()),
             version: None,
             description: None,
@@ -995,15 +995,15 @@ mod tests {
 
     #[test]
     fn test_hash_collision_bug_project_model() {
-        // Test the same issue in ProjectModelV1
-        let project1 = ProjectModelV1 {
+        // Test the same issue in PackageModelV1
+        let project1 = PackageModelV1 {
             name: Some("test".to_string()),
             description: Some("test description".to_string()),
             license: None,
             ..Default::default()
         };
 
-        let project2 = ProjectModelV1 {
+        let project2 = PackageModelV1 {
             name: Some("test".to_string()),
             description: None,
             license: Some("test description".to_string()),
@@ -1015,7 +1015,7 @@ mod tests {
 
         assert_ne!(
             hash1, hash2,
-            "Same value in different fields should produce different hashes in ProjectModelV1"
+            "Same value in different fields should produce different hashes in PackageModelV1"
         );
     }
 }
