@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.59.0] - 2025-10-29
+#### ✨ Highlights
+
+This release introduces the ability to set the strategy used in the solve.
+You can learn more about this feature in the [documentation](https://pixi.sh/dev/reference/pixi_manifest/#solve-strategy-optional).
+
+However, the main reason we are making this release is because one of our dependencies `astral-tokio-tar` below 0.5.6 has a high severity security issue titled `TARmageddon`.
+Updating that dependency fixes that.
+
+
+#### Added
+
+- Add `solve-strategy` to the manifest and solve by @bobozaur in [#4789](https://github.com/prefix-dev/pixi/pull/4789)
+
+
+#### Changed
+
+- Upgrade rust toolchain by @tdejager in [#4815](https://github.com/prefix-dev/pixi/pull/4815)
+- Update patch script to patch versions by @tdejager in [#4823](https://github.com/prefix-dev/pixi/pull/4823)
+- Configurable export name by @charles-turner-1 in [#4838](https://github.com/prefix-dev/pixi/pull/4838)
+
+
+#### Documentation
+
+- Use custom search separator by @Hofer-Julian in [#4835](https://github.com/prefix-dev/pixi/pull/4835)
+
+
+#### Fixed
+
+- CLI logging again by @tdejager in [#4812](https://github.com/prefix-dev/pixi/pull/4812)
+- Slim down trampoline dependency tree by removing `pixi_utils` by @wolfv in [#4817](https://github.com/prefix-dev/pixi/pull/4817)
+- Lefthook parallel by @Hofer-Julian in [#4836](https://github.com/prefix-dev/pixi/pull/4836)
+- CVE-2025-62518 by updating astral-tokio-tar by @niklaskorz in [#4833](https://github.com/prefix-dev/pixi/pull/4833)
+
+
+#### New Contributors
+* @charles-turner-1 made their first contribution in [#4838](https://github.com/prefix-dev/pixi/pull/4838)
+* @niklaskorz made their first contribution in [#4833](https://github.com/prefix-dev/pixi/pull/4833)
+* @bobozaur made their first contribution in [#4789](https://github.com/prefix-dev/pixi/pull/4789)
+
 ### [0.58.0] - 2025-10-22
 #### ✨ Highlights
 
