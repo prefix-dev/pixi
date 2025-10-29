@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This release introduces the ability to set the strategy used in the solve.
 You can learn more about this feature in the [documentation](https://pixi.sh/dev/reference/pixi_manifest/#solve-strategy-optional).
 
-However, the main reason we are making this release is because one of our dependencies `astral-tokio-tar` below 0.5.6 has a high severity security issue titled TARmageddon.
+However, the main reason we are making this release is because one of our dependencies `astral-tokio-tar` below 0.5.6 has a high severity security issue titled `TARmageddon`.
 Updating that dependency fixes that.
 
 
