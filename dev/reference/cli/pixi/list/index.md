@@ -2,7 +2,7 @@
 
 ## About
 
-List workspace's packages
+List the packages of the current workspace
 
 ## Usage
 
@@ -51,7 +51,7 @@ pixi list [OPTIONS] [REGEX]
 
 ## Description
 
-List workspace's packages.
+List the packages of the current workspace
 
 Highlighted packages are explicit dependencies.
 

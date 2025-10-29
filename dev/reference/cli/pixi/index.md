@@ -27,7 +27,7 @@ pixi [OPTIONS] [COMMAND]
 | [`init`](init/)               | Creates a new workspace                                                                                                                   |
 | [`import`](import/)           | Imports a file into an environment in an existing workspace.                                                                              |
 | [`install`](install/)         | Install an environment, both updating the lockfile and installing the environment                                                         |
-| [`list`](list/)               | List workspace's packages                                                                                                                 |
+| [`list`](list/)               | List the packages of the current workspace                                                                                                |
 | [`lock`](lock/)               | Solve environment and update the lock file without installing the environments                                                            |
 | [`reinstall`](reinstall/)     | Re-install an environment, both updating the lockfile and re-installing the environment                                                   |
 | [`remove`](remove/)           | Removes dependencies from the workspace                                                                                                   |
