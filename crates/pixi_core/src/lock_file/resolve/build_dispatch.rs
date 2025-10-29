@@ -577,24 +577,11 @@ impl BuildContext for LazyBuildDispatch<'_> {
 
     fn build_isolation(&self) -> uv_types::BuildIsolation {
         // In similar fashion to interpreter()
-        // the build dispatch should be initialized, because one of the other
-        // trait methods will have been called
-        // But in case it is not, we will initialize it here
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("could not create runtime for async build isolation retrieval");
-
-        runtime.block_on(async move {
-            match self.get_or_try_init().await {
-                Ok(dispatch) => dispatch.build_isolation(),
-                Err(e) => {
-                    // Store the error for later retrieval
-                    let _ = self.lazy_deps.last_error.set(e);
-                    panic!("could not initialize build dispatch correctly")
-                }
-            }
-        })
+        // the build dispatch should be initialized
+        self.build_dispatch
+            .get()
+            .expect("we expect the build dispatch to be initialized when calling interpreter()")
+            .build_isolation()
     }
 
     fn extra_build_variables(&self) -> &ExtraBuildVariables {
