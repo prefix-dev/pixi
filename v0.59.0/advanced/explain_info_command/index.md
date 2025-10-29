@@ -1,0 +1,95 @@
+`pixi info` prints out useful information to debug a situation or to get an overview of your machine/workspace. This information can also be retrieved in `json` format using the `--json` flag, which can be useful for programmatically reading it.
+
+Running pixi info in the pixi repo
+
+```text
+➜ pixi info
+      Pixi version: 0.13.0
+          Platform: linux-64
+  Virtual packages: __unix=0=0
+                  : __linux=6.5.12=0
+                  : __glibc=2.36=0
+                  : __cuda=12.3=0
+                  : __archspec=1=x86_64
+         Cache dir: /home/user/.cache/rattler/cache
+      Auth storage: /home/user/.rattler/credentials.json
+Workspace
+------------
+           Version: 0.13.0
+     Manifest file: /home/user/development/pixi/pixi.toml
+      Last updated: 25-01-2024 10:29:08
+Environments
+------------
+default
+          Features: default
+          Channels: conda-forge
+  Dependency count: 10
+      Dependencies: pre-commit, rust, openssl, pkg-config, git, mkdocs, mkdocs-material, pillow, cairosvg, compilers
+  Target platforms: linux-64, osx-arm64, win-64, osx-64
+             Tasks: docs, test-all, test, build, lint, install, build-docs
+
+```
+
+## Global info
+
+The first part of the info output is information that is always available and tells you what Pixi can read on your machine.
+
+### Platform
+
+This defines the platform you're currently on according to pixi. If this is incorrect, please file an issue on the [Pixi repo](https://github.com/prefix-dev/pixi).
+
+### Virtual packages
+
+The virtual packages that Pixi can find on your machine.
+
+In the Conda ecosystem, you can depend on virtual packages. These packages aren't real dependencies that are going to be installed, but rather are being used in the solve step to find if a package can be installed on the machine. A simple example: When a package depends on Cuda drivers being present on the host machine it can do that by depending on the `__cuda` virtual package. In that case, if Pixi cannot find the `__cuda` virtual package on your machine the installation will fail.
+
+### Cache dir
+
+The directory where Pixi stores its cache. Checkout the [cache documentation](../../workspace/environment/#caching-packages) for more information.
+
+### Auth storage
+
+Check the [authentication documentation](../../deployment/authentication/)
+
+### Cache size
+
+\[requires `--extended`\]
+
+The size of the previously mentioned "Cache dir" in Mebibytes.
+
+## Workspace info
+
+Everything below `Workspace` is info about the workspace you're currently in. This info is only available if your path has a [manifest file](../../reference/pixi_manifest/).
+
+### Manifest file
+
+The path to the [manifest file](../../reference/pixi_manifest/) that describes the workspace.
+
+### Last updated
+
+The last time the lock file was updated, either manually or by Pixi itself.
+
+## Environment info
+
+The environment info defined per environment. If you don't have any environments defined, this will only show the `default` environment.
+
+### Features
+
+This lists which features are enabled in the environment. For the default this is only `default`
+
+### Channels
+
+The list of channels used in this environment.
+
+### Dependency count
+
+The amount of dependencies defined that are defined for this environment (not the amount of installed dependencies).
+
+### Dependencies
+
+The list of dependencies defined for this environment.
+
+### Target platforms
+
+The platforms the workspace has defined.
