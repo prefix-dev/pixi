@@ -21,9 +21,11 @@ pub struct SourceRecord {
     pub package_record: PackageRecord,
 
     /// Exact definition of the source of the package.
-    pub source: PinnedSourceSpec,
+    pub manifest_source: PinnedSourceSpec,
 
-    pub pinned_source_spec: Option<PinnedSourceSpec>,
+    /// The optional pinned source where the build should be executed
+    /// This is used when the manifest is not in the same location ad
+    pub build_source: Option<PinnedSourceSpec>,
 
     /// The hash of the input that was used to build the metadata of the
     /// package. This can be used to verify that the metadata is still valid.
@@ -55,7 +57,7 @@ pub struct InputHash {
 
 impl From<SourceRecord> for CondaPackageData {
     fn from(value: SourceRecord) -> Self {
-        let package_build_source = value.pinned_source_spec.map(|s| match s {
+        let package_build_source = value.build_source.map(|s| match s {
             PinnedSourceSpec::Url(pinned_url_spec) => PackageBuildSource::Url {
                 url: pinned_url_spec.url,
                 sha256: pinned_url_spec.sha256,
@@ -88,7 +90,7 @@ impl From<SourceRecord> for CondaPackageData {
         });
         CondaPackageData::Source(CondaSourceData {
             package_record: value.package_record,
-            location: value.source.clone().into(),
+            location: value.manifest_source.clone().into(),
             package_build_source,
             input: value.input_hash.map(|i| rattler_lock::InputHash {
                 hash: i.hash,
@@ -146,12 +148,12 @@ impl TryFrom<CondaSourceData> for SourceRecord {
         });
         Ok(Self {
             package_record: value.package_record,
-            source: value.location.try_into()?,
+            manifest_source: value.location.try_into()?,
             input_hash: value.input.map(|hash| InputHash {
                 hash: hash.hash,
                 globs: BTreeSet::from_iter(hash.globs),
             }),
-            pinned_source_spec,
+            build_source: pinned_source_spec,
             sources: value
                 .sources
                 .into_iter()
@@ -230,8 +232,8 @@ mod tests {
 
         let record = SourceRecord {
             package_record,
-            source: pinned_source.clone(),
-            pinned_source_spec: Some(pinned_source.clone()),
+            manifest_source: pinned_source.clone(),
+            build_source: Some(pinned_source.clone()),
             input_hash: None,
             sources: Default::default(),
         };
@@ -262,7 +264,7 @@ mod tests {
         assert_eq!(rev, "0123456789abcdef0123456789abcdef01234567");
 
         let roundtrip = SourceRecord::try_from(conda_source).expect("roundtrip should succeed");
-        let Some(PinnedSourceSpec::Git(roundtrip_git)) = roundtrip.pinned_source_spec else {
+        let Some(PinnedSourceSpec::Git(roundtrip_git)) = roundtrip.build_source else {
             panic!("expected git pinned source");
         };
         assert_eq!(

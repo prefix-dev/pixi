@@ -46,9 +46,11 @@ pub struct SourceMetadataSpec {
 pub struct SourceMetadata {
     /// Information about the source checkout that was used to build the
     /// package.
-    pub source: PinnedSourceSpec,
+    pub manifest_source: PinnedSourceSpec,
 
-    pub pinned_build_source: Option<PinnedSourceSpec>,
+    /// The optional location of where the actual source code is located,
+    /// this is used mainly for out-of-tree builds
+    pub build_source: Option<PinnedSourceSpec>,
 
     /// All the source records for this particular package.
     pub records: Vec<SourceRecord>,
@@ -85,17 +87,18 @@ impl SourceMetadataSpec {
                 // Convert the metadata to source records.
                 let records = conversion::package_metadata_to_source_records(
                     &build_backend_metadata.manifest_source,
+                    build_backend_metadata.build_source.as_ref(),
                     packages,
                     &self.package,
                     &build_backend_metadata.metadata.input_hash,
                 );
 
                 Ok(SourceMetadata {
-                    source: build_backend_metadata.manifest_source.clone(),
+                    manifest_source: build_backend_metadata.manifest_source.clone(),
                     records,
                     // As the GetMetadata kind returns all records at once and we don't solve them we can skip this.
                     skipped_packages: Default::default(),
-                    pinned_build_source: None,
+                    build_source: build_backend_metadata.build_source.clone(),
                 })
             }
             MetadataKind::Outputs { outputs } => {
@@ -111,15 +114,16 @@ impl SourceMetadataSpec {
                         output,
                         build_backend_metadata.metadata.input_hash.clone(),
                         build_backend_metadata.manifest_source.clone(),
+                        build_backend_metadata.build_source.clone(),
                         reporter.clone(),
                     ));
                 }
 
                 Ok(SourceMetadata {
-                    source: build_backend_metadata.manifest_source.clone(),
+                    manifest_source: build_backend_metadata.manifest_source.clone(),
                     records: futures.try_collect().await?,
                     skipped_packages,
-                    pinned_build_source: build_backend_metadata.build_source.clone(),
+                    build_source: build_backend_metadata.build_source.clone(),
                 })
             }
         }
@@ -130,15 +134,17 @@ impl SourceMetadataSpec {
         command_dispatcher: &CommandDispatcher,
         output: &CondaOutput,
         input_hash: Option<InputHash>,
-        source: PinnedSourceSpec,
+        manifest_source: PinnedSourceSpec,
+        build_source: Option<PinnedSourceSpec>,
         reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
-        let source_anchor = SourceAnchor::from(SourceSpec::from(source.clone()));
+        let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
 
         // Solve the build environment for the output.
         let build_dependencies = output
             .build_dependencies
             .as_ref()
+            // TODO(tim): we need to check if this works for out-of-tree builds with source dependencies in the out-of-tree, this might be incorrectly anchored
             .map(|deps| Dependencies::new(deps, Some(source_anchor.clone())))
             .transpose()
             .map_err(SourceMetadataError::from)
@@ -294,8 +300,6 @@ impl SourceMetadataSpec {
             strong_constrains: binary_specs_to_match_spec(run_exports.strong_constrains)?,
         };
 
-        let pinned_source_spec = None;
-
         Ok(SourceRecord {
             package_record: PackageRecord {
                 // We cannot now these values from the metadata because no actual package
@@ -349,9 +353,9 @@ impl SourceMetadataSpec {
                 // These are not important at this point.
                 experimental_extra_depends: Default::default(),
             },
-            source,
+            manifest_source,
             input_hash,
-            pinned_source_spec,
+            build_source,
             sources: sources
                 .into_iter()
                 .map(|(name, source)| (name.as_source().to_string(), source))

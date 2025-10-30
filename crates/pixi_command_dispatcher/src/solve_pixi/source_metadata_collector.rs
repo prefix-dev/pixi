@@ -127,7 +127,7 @@ impl SourceMetadataCollector {
             // Process transitive dependencies
             for record in &source_metadata.records {
                 chain.push(record.package_record.name.clone());
-                let anchor = SourceAnchor::from(SourceSpec::from(record.source.clone()));
+                let anchor = SourceAnchor::from(SourceSpec::from(record.manifest_source.clone()));
                 for depend in &record.package_record.depends {
                     if let Ok(spec) = MatchSpec::from_str(depend, ParseStrictness::Lenient) {
                         if let Some((name, source_spec)) = spec.name.as_ref().and_then(|name| {
@@ -230,7 +230,7 @@ impl SourceMetadataCollector {
                         source_metadata.skipped_packages.clone(),
                     ),
                     name,
-                    pinned_source: Box::new(source_metadata.source.clone()),
+                    pinned_source: Box::new(source_metadata.manifest_source.clone()),
                 },
             ));
         }

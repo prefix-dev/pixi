@@ -463,7 +463,7 @@ impl SourceBuildSpec {
                         .expect("the source record should be present in the result sources");
                     BuildHostPackage {
                         repodata_record,
-                        source: Some(source.source),
+                        source: Some(source.manifest_source),
                     }
                 }
             })

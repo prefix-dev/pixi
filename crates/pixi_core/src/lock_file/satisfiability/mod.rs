@@ -1325,9 +1325,9 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             Cow::Owned(format!(
                                 "{} @ {}",
                                 record.package_record.name.as_source(),
-                                &record.source
+                                &record.manifest_source
                             )),
-                            SourceSpec::from(record.source.clone()).into(),
+                            SourceSpec::from(record.manifest_source.clone()).into(),
                         ),
                     };
 
@@ -1497,7 +1497,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .iter()
         .filter_map(PixiRecord::as_source)
     {
-        let Some(path_record) = source_record.source.as_path() else {
+        let Some(path_record) = source_record.manifest_source.as_path() else {
             continue;
         };
 
@@ -1714,7 +1714,7 @@ fn find_matching_source_package(
     };
 
     source_package
-        .source
+        .manifest_source
         .satisfies(&source_spec)
         .map_err(|e| PlatformUnsat::SourcePackageMismatch(name.as_source().to_string(), e))?;
 
@@ -1882,11 +1882,7 @@ fn verify_build_source_matches_manifest(
 
     match requested_loc {
         pixi_spec::SourceLocationSpec::Url(url_spec) => {
-            let Some(locked_url) = src_record
-                .pinned_source_spec
-                .as_ref()
-                .and_then(|p| p.as_url())
-            else {
+            let Some(locked_url) = src_record.build_source.as_ref().and_then(|p| p.as_url()) else {
                 return Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
                     src_record.package_record.name.as_source().to_string(),
                     SourceMismatchError::SourceTypeMismatch,
@@ -1900,11 +1896,7 @@ fn verify_build_source_matches_manifest(
             })
         }
         pixi_spec::SourceLocationSpec::Git(mut git_spec) => {
-            let Some(locked_git) = src_record
-                .pinned_source_spec
-                .as_ref()
-                .and_then(|p| p.as_git())
-            else {
+            let Some(locked_git) = src_record.build_source.as_ref().and_then(|p| p.as_git()) else {
                 return Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
                     src_record.package_record.name.as_source().to_string(),
                     SourceMismatchError::SourceTypeMismatch,
@@ -1928,10 +1920,7 @@ fn verify_build_source_matches_manifest(
             })
         }
         pixi_spec::SourceLocationSpec::Path(path_spec) => {
-            let Some(locked_path) = src_record
-                .pinned_source_spec
-                .as_ref()
-                .and_then(|p| p.as_path())
+            let Some(locked_path) = src_record.build_source.as_ref().and_then(|p| p.as_path())
             else {
                 return Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
                     src_record.package_record.name.as_source().to_string(),

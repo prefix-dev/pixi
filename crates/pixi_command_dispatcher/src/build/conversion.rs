@@ -98,7 +98,8 @@ pub fn from_package_spec_v1(source: PackageSpecV1) -> pixi_spec::PixiSpec {
 }
 
 pub(crate) fn package_metadata_to_source_records(
-    source: &PinnedSourceSpec,
+    manifest_source: &PinnedSourceSpec,
+    build_source: Option<&PinnedSourceSpec>,
     packages: &[CondaPackageMetadata],
     package: &PackageName,
     input_hash: &Option<InputHash>,
@@ -111,8 +112,8 @@ pub(crate) fn package_metadata_to_source_records(
         .map(|p| {
             SourceRecord {
                 input_hash: input_hash.clone(),
-                source: source.clone(),
-                pinned_source_spec: None,
+                manifest_source: manifest_source.clone(),
+                build_source: build_source.cloned(),
                 sources: p
                     .sources
                     .iter()
