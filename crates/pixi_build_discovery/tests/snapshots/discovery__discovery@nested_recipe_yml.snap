@@ -18,6 +18,6 @@ init-params:
   source: ~
   source-anchor: "file://<ROOT>/nested_recipe_yml"
   manifest-path: "file://<ROOT>/nested_recipe_yml/recipe/recipe.yml"
-  project-model: ~
+  package-model: ~
   configuration: ~
   target-configuration: ~

@@ -17,7 +17,7 @@ init-params:
   source: ~
   source-anchor: "file://<ROOT>/ros-package"
   manifest-path: "file://<ROOT>/ros-package/package.xml"
-  project-model:
+  package-model:
     name: ~
     version: ~
     description: ~

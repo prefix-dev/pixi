@@ -334,7 +334,7 @@ impl SourceBuildCacheStatusSpec {
 
         // Compute a hash of the package configuration.
         let package_build_input_hash = PackageBuildInputHashBuilder {
-            project_model: backend.init_params.project_model.as_ref(),
+            package_model: backend.init_params.package_model.as_ref(),
             configuration: backend.init_params.configuration.as_ref(),
             target_configuration: backend.init_params.target_configuration.as_ref(),
         }

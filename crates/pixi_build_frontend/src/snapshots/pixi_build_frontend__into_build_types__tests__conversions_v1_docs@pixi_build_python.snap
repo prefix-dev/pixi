@@ -1,6 +1,6 @@
 ---
 source: crates/pixi_build_frontend/src/into_build_types.rs
-expression: project_model
+expression: package_model
 ---
 {
   "name": "rich_example",

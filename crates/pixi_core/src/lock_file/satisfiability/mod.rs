@@ -1522,7 +1522,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
             .map_err(|err| Box::new(err.into()))?;
 
         let additional_glob_hash = calculate_additional_glob_hash(
-            &discovered_backend.init_params.project_model,
+            &discovered_backend.init_params.package_model,
             &Some(variants),
         );
 

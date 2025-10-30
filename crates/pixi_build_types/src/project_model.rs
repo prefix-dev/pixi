@@ -9,15 +9,6 @@
 //! that we try not to break this in pixi as much as possible. So as long as
 //! older pixi TOMLs keep loading, we can send them to the backend.
 //!
-//! In regards to forwards compatibility, we want to be able to keep converting
-//! to all versions of the `VersionedProjectModel` as much as possible.
-//!
-//! This is why we append a `V{version}` to the type names, to indicate the
-//! version of the protocol.
-//!
-//! Only the whole ProjectModel is versioned explicitly in an enum.
-//! When making a change to one of the types, be sure to add another enum
-//! declaration if it is breaking.
 use std::{convert::Infallible, fmt::Display, hash::Hash, path::PathBuf, str::FromStr};
 
 use ordermap::OrderMap;
@@ -28,50 +19,12 @@ use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay, serde_as};
 use url::Url;
 
-/// Enum containing all versions of the project model.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "version", content = "data")]
-#[serde(rename_all = "camelCase")]
-pub enum VersionedProjectModel {
-    /// Version 1 of the project model.
-    #[serde(rename = "1")]
-    V1(ProjectModelV1),
-    // When adding don't forget to update the highest_version function
-}
-
-impl VersionedProjectModel {
-    /// Highest version of the project model.
-    pub fn highest_version() -> u32 {
-        // increase this when adding a new version
-        1
-    }
-
-    /// Move into the v1 type, returns None if the version is not v1.
-    pub fn into_v1(self) -> Option<ProjectModelV1> {
-        match self {
-            VersionedProjectModel::V1(v) => Some(v),
-            // Add this once we have more versions
-            //_ => None,
-        }
-    }
-
-    /// Returns a reference to the v1 type, returns None if the version is not
-    /// v1.
-    pub fn as_v1(&self) -> Option<&ProjectModelV1> {
-        match self {
-            VersionedProjectModel::V1(v) => Some(v),
-            // Add this once we have more versions
-            //_ => None,
-        }
-    }
-}
-
 /// The source package name of a package. Not normalized per se.
 pub type SourcePackageName = String;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectModelV1 {
+pub struct PackageModel {
     /// The name of the project
     pub name: Option<String>,
 
@@ -102,22 +55,16 @@ pub struct ProjectModelV1 {
     /// URL of the project documentation
     pub documentation: Option<Url>,
 
-    /// The target of the project, this may contain
+    /// The target of the package, this may contain
     /// platform specific configurations.
     pub targets: Option<TargetsV1>,
 }
 
-impl IsDefault for ProjectModelV1 {
+impl IsDefault for PackageModel {
     type Item = Self;
 
     fn is_non_default(&self) -> Option<&Self::Item> {
         Some(self)
-    }
-}
-
-impl From<ProjectModelV1> for VersionedProjectModel {
-    fn from(value: ProjectModelV1) -> Self {
-        VersionedProjectModel::V1(value)
     }
 }
 
@@ -193,13 +140,13 @@ impl IsDefault for TargetsV1 {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetV1 {
-    /// Host dependencies of the project
+    /// Host dependencies of the package
     pub host_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
 
-    /// Build dependencies of the project
+    /// Build dependencies of the package
     pub build_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
 
-    /// Run dependencies of the project
+    /// Run dependencies of the package
     pub run_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
 }
 
@@ -415,12 +362,12 @@ impl std::fmt::Debug for BinaryPackageSpecV1 {
 }
 
 // Custom Hash implementations that skip default values for stability
-impl Hash for ProjectModelV1 {
+impl Hash for PackageModel {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let ProjectModelV1 {
+        let PackageModel {
             name,
             version,
             description,
@@ -644,8 +591,8 @@ mod tests {
 
     #[test]
     fn test_hash_stability_with_default_values() {
-        // Create a minimal ProjectModelV1 instance
-        let mut project_model = ProjectModelV1 {
+        // Create a minimal PackageModel instance
+        let mut package_model = PackageModel {
             name: Some("test-project".to_string()),
             version: None,
             description: None,
@@ -659,16 +606,16 @@ mod tests {
             targets: None,
         };
 
-        let hash1 = calculate_hash(&project_model);
+        let hash1 = calculate_hash(&package_model);
 
         // Add empty targets field - with corrected implementation, this should NOT
         // change hash because we only include discriminants for
         // non-default/non-empty values
-        project_model.targets = Some(TargetsV1 {
+        package_model.targets = Some(TargetsV1 {
             default_target: None,
             targets: Some(OrderMap::new()),
         });
-        let hash2 = calculate_hash(&project_model);
+        let hash2 = calculate_hash(&package_model);
 
         // Add a target with empty dependencies - this should also NOT change hash
         let empty_target = TargetV1 {
@@ -676,11 +623,11 @@ mod tests {
             build_dependencies: Some(OrderMap::new()),
             run_dependencies: Some(OrderMap::new()),
         };
-        project_model.targets = Some(TargetsV1 {
+        package_model.targets = Some(TargetsV1 {
             default_target: Some(empty_target),
             targets: Some(OrderMap::new()),
         });
-        let hash3 = calculate_hash(&project_model);
+        let hash3 = calculate_hash(&package_model);
 
         // With corrected implementation, hashes should remain stable when adding
         // empty/default values This preserves forward/backward compatibility
@@ -700,8 +647,8 @@ mod tests {
 
     #[test]
     fn test_hash_changes_with_meaningful_values() {
-        // Create a minimal ProjectModelV1 instance
-        let mut project_model = ProjectModelV1 {
+        // Create a minimal PackageModel instance
+        let mut package_model = PackageModel {
             name: Some("test-project".to_string()),
             version: None,
             description: None,
@@ -715,11 +662,11 @@ mod tests {
             targets: None,
         };
 
-        let hash1 = calculate_hash(&project_model);
+        let hash1 = calculate_hash(&package_model);
 
         // Add a meaningful field (should change hash)
-        project_model.description = Some("A test project".to_string());
-        let hash2 = calculate_hash(&project_model);
+        package_model.description = Some("A test project".to_string());
+        let hash2 = calculate_hash(&package_model);
 
         // Add a real dependency (should change hash)
         let mut deps = OrderMap::new();
@@ -730,11 +677,11 @@ mod tests {
             build_dependencies: Some(OrderMap::new()),
             run_dependencies: Some(OrderMap::new()),
         };
-        project_model.targets = Some(TargetsV1 {
+        package_model.targets = Some(TargetsV1 {
             default_target: Some(target_with_deps),
             targets: Some(OrderMap::new()),
         });
-        let hash3 = calculate_hash(&project_model);
+        let hash3 = calculate_hash(&package_model);
 
         // Hash should change when adding meaningful values
         assert_ne!(hash1, hash2, "Hash should change when adding description");
@@ -994,28 +941,28 @@ mod tests {
     }
 
     #[test]
-    fn test_hash_collision_bug_project_model() {
-        // Test the same issue in ProjectModelV1
-        let project1 = ProjectModelV1 {
+    fn test_hash_collision_bug_package_model() {
+        // Test the same issue in PackageModel
+        let package1 = PackageModel {
             name: Some("test".to_string()),
             description: Some("test description".to_string()),
             license: None,
             ..Default::default()
         };
 
-        let project2 = ProjectModelV1 {
+        let package2 = PackageModel {
             name: Some("test".to_string()),
             description: None,
             license: Some("test description".to_string()),
             ..Default::default()
         };
 
-        let hash1 = calculate_hash(&project1);
-        let hash2 = calculate_hash(&project2);
+        let hash1 = calculate_hash(&package1);
+        let hash2 = calculate_hash(&package2);
 
         assert_ne!(
             hash1, hash2,
-            "Same value in different fields should produce different hashes in ProjectModelV1"
+            "Same value in different fields should produce different hashes in PackageModel"
         );
     }
 }
