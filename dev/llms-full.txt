@@ -10941,6 +10941,9 @@ The build system specifies how the package can be built. The build system is a t
 
 - `source`: specifies the location of the source code for the package. Default: manifest directory. Currently supported options:
   - `path`: a string representing a relative or absolute path to the source code.
+  - `git`: a string representing URL to the source repository.
+  - `rev`: a string representing SHA revision to checkout.
+  - `subdirectory`: a string representing path to subdirectory to use.
 - `channels`: specifies the channels to get the build backend from.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
@@ -11050,7 +11053,7 @@ pixi [OPTIONS] [COMMAND]
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | [`add`](add/)                 | Adds dependencies to the workspace                                                                                                        |
 | [`auth`](auth/)               | Login to prefix.dev or anaconda.org servers to access private channels                                                                    |
-| [`build`](build/)             | Workspace configuration                                                                                                                   |
+| [`build`](build/)             | Lock file and installation configuration with --as-is support Used by shell, shell-hook, and run commands                                 |
 | [`clean`](clean/)             | Cleanup the environments                                                                                                                  |
 | [`completion`](completion/)   | Generates a completion script for a shell                                                                                                 |
 | [`config`](config/)           | Configuration management                                                                                                                  |
@@ -11319,7 +11322,7 @@ pixi auth <COMMAND>
 
 ## About
 
-Workspace configuration
+Lock file and installation configuration with --as-is support Used by shell, shell-hook, and run commands
 
 ## Usage
 
@@ -11367,6 +11370,20 @@ pixi build [OPTIONS]
 - [`--tls-no-verify`](#arg---tls-no-verify) Do not verify the TLS certificate of the server
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) Use environment activation cache (experimental)
+
+## Update Options
+
+- [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
+
+- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+
+  **env**: `PIXI_FROZEN`
+
+- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+
+  **env**: `PIXI_LOCKED`
+
+- [`--as-is`](#arg---as-is) Shorthand for the combination of --no-install and --frozen
 
 ## Global Options
 

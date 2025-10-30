@@ -17,7 +17,7 @@ pixi [OPTIONS] [COMMAND]
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | [`add`](add/)                 | Adds dependencies to the workspace                                                                                                        |
 | [`auth`](auth/)               | Login to prefix.dev or anaconda.org servers to access private channels                                                                    |
-| [`build`](build/)             | Workspace configuration                                                                                                                   |
+| [`build`](build/)             | Lock file and installation configuration with --as-is support Used by shell, shell-hook, and run commands                                 |
 | [`clean`](clean/)             | Cleanup the environments                                                                                                                  |
 | [`completion`](completion/)   | Generates a completion script for a shell                                                                                                 |
 | [`config`](config/)           | Configuration management                                                                                                                  |

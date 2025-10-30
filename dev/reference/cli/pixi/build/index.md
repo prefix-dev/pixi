@@ -2,7 +2,7 @@
 
 ## About
 
-Workspace configuration
+Lock file and installation configuration with --as-is support Used by shell, shell-hook, and run commands
 
 ## Usage
 
@@ -50,6 +50,20 @@ pixi build [OPTIONS]
 - [`--tls-no-verify`](#arg---tls-no-verify) Do not verify the TLS certificate of the server
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) Use environment activation cache (experimental)
+
+## Update Options
+
+- [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
+
+- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+
+  **env**: `PIXI_FROZEN`
+
+- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+
+  **env**: `PIXI_LOCKED`
+
+- [`--as-is`](#arg---as-is) Shorthand for the combination of --no-install and --frozen
 
 ## Global Options
 

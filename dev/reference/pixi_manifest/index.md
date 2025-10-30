@@ -1061,6 +1061,9 @@ The build system specifies how the package can be built. The build system is a t
 
 - `source`: specifies the location of the source code for the package. Default: manifest directory. Currently supported options:
   - `path`: a string representing a relative or absolute path to the source code.
+  - `git`: a string representing URL to the source repository.
+  - `rev`: a string representing SHA revision to checkout.
+  - `subdirectory`: a string representing path to subdirectory to use.
 - `channels`: specifies the channels to get the build backend from.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.

@@ -4500,6 +4500,9 @@ The build system is a table that can contain the following fields:</p>
 <ul>
 <li><code>source</code>: specifies the location of the source code for the package. Default: manifest directory. Currently supported options:<ul>
 <li><code>path</code>: a string representing a relative or absolute path to the source code.</li>
+<li><code>git</code>: a string representing URL to the source repository.</li>
+<li><code>rev</code>: a string representing SHA revision to checkout.</li>
+<li><code>subdirectory</code>: a string representing path to subdirectory to use.</li>
 </ul>
 </li>
 <li><code>channels</code>: specifies the channels to get the build backend from.</li>
