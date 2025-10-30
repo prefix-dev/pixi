@@ -20,7 +20,7 @@ use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
-use pixi_spec::{SourceLocationSpec, SourceSpec};
+use pixi_spec::SourceLocationSpec;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 use rattler_networking::LazyClient;
@@ -223,6 +223,7 @@ pub(crate) struct SourceBuildCacheStatusId(pub usize);
 pub(crate) struct InstantiatedToolEnvId(pub usize);
 
 /// A message send to the dispatch task.
+#[allow(clippy::large_enum_variant)]
 #[derive(derive_more::From)]
 pub(crate) enum ForegroundMessage {
     SolveCondaEnvironment(SolveCondaEnvironmentTask),
@@ -560,7 +561,7 @@ impl CommandDispatcher {
         self.execute_task(spec).await
     }
 
-    /// Checks out a particular source based on a source spec.
+    /// Checks out a particular source based on a source location spec.
     ///
     /// This function resolves the source specification to a concrete checkout
     /// by:
@@ -576,9 +577,9 @@ impl CommandDispatcher {
     /// same source is used multiple times.
     pub async fn pin_and_checkout(
         &self,
-        source_spec: SourceSpec,
+        source_location_spec: SourceLocationSpec,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
-        match source_spec.location {
+        match source_location_spec {
             SourceLocationSpec::Url(url) => {
                 unimplemented!("fetching URL sources ({}) is not yet implemented", url.url)
             }

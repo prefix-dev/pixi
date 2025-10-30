@@ -1,0 +1,28 @@
+[package.build.source]
+git = "https://github.com/prefix-dev/pixi-build-testsuite.git"
+# branch = "fix/logging_tests"
+subdirectory = "tests/data/pixi_build/cpp-with-path-to-source/project"
+
+[package.build.backend]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-cmake"
+version = "*"
+
+[package]
+name = "sdl_example"
+version = "0.1.0"
+
+[package.host-dependencies]
+# This ensures that SDL2 is available at build time.
+sdl2 = ">=2.26.5,<3.0"
+
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["osx-arm64", "linux-64", "win-64"]
+preview = ["pixi-build"]
+
+[dependencies]
+sdl_example = { path = "." }
