@@ -18,7 +18,7 @@ init-params:
   source: ~
   source-anchor: "file://<ROOT>/nested/nested"
   manifest-path: "file://<ROOT>/nested/nested/pixi.toml"
-  project-model:
+  package-model:
     name: simple
     version: 0.1.0
     description: ~

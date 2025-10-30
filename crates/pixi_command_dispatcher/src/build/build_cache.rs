@@ -9,7 +9,7 @@ use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use ordermap::OrderMap;
 use pixi_build_discovery::{BackendInitializationParams, DiscoveredBackend};
-use pixi_build_types::{PackageModelV1, TargetSelectorV1};
+use pixi_build_types::{PackageModel, TargetSelectorV1};
 use pixi_record::PinnedSourceSpec;
 use pixi_stable_hash::{StableHashBuilder, json::StableJson, map::StableMap};
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
@@ -316,8 +316,8 @@ impl BuildCacheEntry {
 /// This is used to compute a singular hash that changes when a rebuild is
 /// warranted.
 pub struct PackageBuildInputHashBuilder<'a> {
-    /// The project model itself. Contains dependencies and more.
-    pub project_model: Option<&'a PackageModelV1>,
+    /// The package model itself. Contains dependencies and more.
+    pub package_model: Option<&'a PackageModel>,
 
     /// The backend specific configuration
     pub configuration: Option<&'a serde_json::Value>,
@@ -330,7 +330,7 @@ impl PackageBuildInputHashBuilder<'_> {
     pub fn finish(self) -> PackageBuildInputHash {
         let mut hasher = Xxh3::new();
         StableHashBuilder::new()
-            .field("project_model", &self.project_model)
+            .field("package_model", &self.package_model)
             .field("configuration", &self.configuration.map(StableJson::new))
             .field(
                 "target_configuration",
@@ -350,7 +350,7 @@ pub struct PackageBuildInputHash(u64);
 impl<'a> From<&'a DiscoveredBackend> for PackageBuildInputHash {
     fn from(value: &'a DiscoveredBackend) -> Self {
         let BackendInitializationParams {
-            project_model,
+            package_model,
             configuration,
             target_configuration,
 
@@ -362,7 +362,7 @@ impl<'a> From<&'a DiscoveredBackend> for PackageBuildInputHash {
         } = &value.init_params;
 
         PackageBuildInputHashBuilder {
-            project_model: project_model.as_ref(),
+            package_model: package_model.as_ref(),
             configuration: configuration.as_ref(),
             target_configuration: target_configuration.as_ref(),
         }

@@ -1,27 +1,24 @@
 ---
 source: crates/pixi_build_type_conversions/src/project_model.rs
-expression: project_model
+expression: package_model
 ---
 {
-  "version": "1",
-  "data": {
-    "name": "rich_example",
-    "version": "0.1.0",
-    "description": null,
-    "authors": null,
-    "license": null,
-    "licenseFile": null,
-    "readme": null,
-    "homepage": null,
-    "repository": null,
-    "documentation": null,
-    "targets": {
-      "defaultTarget": {
-        "hostDependencies": {},
-        "buildDependencies": {},
-        "runDependencies": {}
-      },
-      "targets": {}
-    }
+  "name": "rich_example",
+  "version": "0.1.0",
+  "description": null,
+  "authors": null,
+  "license": null,
+  "licenseFile": null,
+  "readme": null,
+  "homepage": null,
+  "repository": null,
+  "documentation": null,
+  "targets": {
+    "defaultTarget": {
+      "hostDependencies": {},
+      "buildDependencies": {},
+      "runDependencies": {}
+    },
+    "targets": {}
   }
 }

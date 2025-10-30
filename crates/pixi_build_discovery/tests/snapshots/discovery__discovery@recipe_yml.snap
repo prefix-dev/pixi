@@ -18,6 +18,6 @@ init-params:
   source: ~
   source-anchor: "file://<ROOT>/recipe_yml"
   manifest-path: "file://<ROOT>/recipe_yml/recipe.yml"
-  project-model: ~
+  package-model: ~
   configuration: ~
   target-configuration: ~

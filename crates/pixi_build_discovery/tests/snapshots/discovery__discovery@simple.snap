@@ -18,7 +18,7 @@ init-params:
   source: ~
   source-anchor: "file://<ROOT>/simple"
   manifest-path: "file://<ROOT>/simple/pixi.toml"
-  project-model:
+  package-model:
     name: simple
     version: 0.1.0
     description: ~

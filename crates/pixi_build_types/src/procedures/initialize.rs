@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use ordermap::OrderMap;
 use serde::{Deserialize, Serialize};
 
-use crate::{TargetSelectorV1, VersionedPackageModel};
+use crate::{PackageModel, TargetSelectorV1};
 
 pub const METHOD_NAME: &str = "initialize";
 
@@ -45,10 +45,10 @@ pub struct InitializeParams {
     /// Optionally the cache directory to use for any caching activity.
     pub cache_directory: Option<PathBuf>,
 
-    /// Project model that the backend should use even though it is an option
+    /// Package model that the backend should use even though it is an option
     /// it is highly recommended to use this field. Otherwise, it will be very
     /// easy to break backwards compatibility.
-    pub project_model: Option<VersionedPackageModel>,
+    pub package_model: Option<PackageModel>,
 
     /// Backend specific configuration passed from the frontend to the backend.
     pub configuration: Option<serde_json::Value>,

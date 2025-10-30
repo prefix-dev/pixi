@@ -6,8 +6,8 @@ use std::{
 use itertools::Itertools;
 use miette::Diagnostic;
 use ordermap::OrderMap;
-use pixi_build_type_conversions::{to_package_model_v1, to_target_selector_v1};
-use pixi_build_types::{PackageModelV1, TargetSelectorV1};
+use pixi_build_type_conversions::{to_package_model, to_target_selector_v1};
+use pixi_build_types::{PackageModel, TargetSelectorV1};
 use pixi_config::Config;
 use pixi_manifest::{
     DiscoveryStart, ExplicitManifestError, PackageManifest, PrioritizedChannel, WithProvenance,
@@ -57,8 +57,8 @@ pub struct BackendInitializationParams {
     /// The absolute path of the discovered manifest
     pub manifest_path: PathBuf,
 
-    /// Optionally, the manifest of the discovered package.
-    pub project_model: Option<PackageModelV1>,
+    /// Optionally, the package model of the discovered package.
+    pub package_model: Option<PackageModel>,
 
     /// Additional configuration that applies to the backend.
     pub configuration: Option<serde_json::Value>,
@@ -205,7 +205,7 @@ impl DiscoveredBackend {
                 source: None,
                 source_anchor: source_dir,
                 manifest_path: recipe_absolute_path,
-                project_model: None,
+                package_model: None,
                 configuration: None,
                 target_configuration: None,
             },
@@ -232,8 +232,8 @@ impl DiscoveredBackend {
             .expect("workspace manifest should have a parent directory")
             .to_path_buf();
 
-        // Construct the project model from the manifest
-        let project_model = to_package_model_v1(package_manifest, channel_config)?;
+        // Construct the package model from the manifest
+        let package_model = to_package_model(package_manifest, channel_config)?;
 
         // Determine the build system requirements.
         let build_system = package_manifest.build.clone();
@@ -279,7 +279,7 @@ impl DiscoveredBackend {
                     .parent()
                     .expect("points to a file")
                     .to_path_buf(),
-                project_model: Some(project_model),
+                package_model: Some(package_model),
                 configuration: build_system.config.map(|config| {
                     config
                         .deserialize_into()
@@ -377,7 +377,7 @@ impl DiscoveredBackend {
                 source: None,
                 source_anchor: source_dir,
                 manifest_path: package_xml_absolute_path,
-                project_model: Some(PackageModelV1::default()),
+                package_model: Some(PackageModel::default()),
                 configuration: None,
                 target_configuration: None,
             },

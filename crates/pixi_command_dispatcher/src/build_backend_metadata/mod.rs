@@ -11,7 +11,7 @@ use once_cell::sync::Lazy;
 use pathdiff::diff_paths;
 use pixi_build_discovery::{CommandSpec, EnabledProtocols};
 use pixi_build_frontend::Backend;
-use pixi_build_types::{PackageModelV1, procedures::conda_outputs::CondaOutputsParams};
+use pixi_build_types::{PackageModel, procedures::conda_outputs::CondaOutputsParams};
 use pixi_glob::GlobHashKey;
 use pixi_record::{InputHash, PinnedSourceSpec};
 use pixi_spec::{SourceAnchor, SourceSpec};
@@ -120,9 +120,9 @@ impl BuildBackendMetadataSpec {
             .await
             .map_err_with(BuildBackendMetadataError::Discovery)?;
 
-        // Calculate the hash of the project model
+        // Calculate the hash of the package model
         let additional_glob_hash = calculate_additional_glob_hash(
-            &discovered_backend.init_params.project_model,
+            &discovered_backend.init_params.package_model,
             &self.variants,
         );
 
@@ -488,12 +488,12 @@ pub enum BuildBackendMetadataError {
 
 /// Computes an additional hash to be used in glob hash
 pub fn calculate_additional_glob_hash(
-    project_model: &Option<PackageModelV1>,
+    package_model: &Option<PackageModel>,
     variants: &Option<BTreeMap<String, Vec<String>>>,
 ) -> Vec<u8> {
     let mut hasher = Xxh3::new();
-    if let Some(project_model) = project_model {
-        project_model.hash(&mut hasher);
+    if let Some(package_model) = package_model {
+        package_model.hash(&mut hasher);
     }
     if let Some(variants) = variants {
         if !variants.is_empty() {

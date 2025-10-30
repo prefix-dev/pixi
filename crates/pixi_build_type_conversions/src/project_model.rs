@@ -163,12 +163,12 @@ fn to_targets_v1(
     })
 }
 
-/// Converts a [`PackageManifest`] to a [`pbt::PackageModelV1`].
-pub fn to_package_model_v1(
+/// Converts a [`PackageManifest`] to a [`pbt::PackageModel`].
+pub fn to_package_model(
     manifest: &PackageManifest,
     channel_config: &ChannelConfig,
-) -> Result<pbt::PackageModelV1, SpecConversionError> {
-    let project = pbt::PackageModelV1 {
+) -> Result<pbt::PackageModel, SpecConversionError> {
+    let project = pbt::PackageModel {
         name: manifest.package.name.clone(),
         version: manifest.package.version.clone(),
         description: manifest.package.description.clone(),
@@ -188,7 +188,6 @@ pub fn to_package_model_v1(
 mod tests {
     use std::path::PathBuf;
 
-    use pixi_build_types::VersionedPackageModel;
     use rattler_conda_types::ChannelConfig;
     use rstest::rstest;
 
@@ -220,15 +219,14 @@ mod tests {
                     .and_then(OsStr::to_str)
                     .unwrap();
 
-                // Convert the manifest to the project model
-                let project_model: VersionedPackageModel =
-                    super::to_package_model_v1(&package_manifest.value, &some_channel_config())
-                        .unwrap()
-                        .into();
+                // Convert the manifest to the package model
+                let package_model =
+                    super::to_package_model(&package_manifest.value, &some_channel_config())
+                        .unwrap();
                 let mut settings = insta::Settings::clone_current();
                 settings.set_snapshot_suffix(name);
                 settings.bind(|| {
-                    insta::assert_json_snapshot!(project_model);
+                    insta::assert_json_snapshot!(package_model);
                 });
             }
         }};

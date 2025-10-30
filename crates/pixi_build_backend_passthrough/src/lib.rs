@@ -1,9 +1,9 @@
 //! A passthrough build backend for testing purposes.
 //!
-//! This backend simply passes along the information from the project model to
+//! This backend simply passes along the information from the package model to
 //! the `conda/outputs` API without any modifications. It's useful for testing
 //! and debugging purposes, as it does not perform any actual building or
-//! processing of the project model.
+//! processing of the package model.
 
 use std::{collections::BTreeSet, path::PathBuf};
 
@@ -15,8 +15,8 @@ use pixi_build_frontend::{
     json_rpc::CommunicationError,
 };
 use pixi_build_types::{
-    BackendCapabilities, NamedSpecV1, PackageModelV1, PackageSpecV1, SourcePackageName,
-    TargetSelectorV1, TargetV1, TargetsV1, VersionedPackageModel,
+    BackendCapabilities, NamedSpecV1, PackageModel, PackageSpecV1, SourcePackageName,
+    TargetSelectorV1, TargetV1, TargetsV1,
     procedures::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{
@@ -32,11 +32,11 @@ use serde::Deserialize;
 const BACKEND_NAME: &str = "passthrough";
 
 /// An in-memory build backend that simply passes along the information from the
-/// project model to the `conda/outputs` API without any modifications. This
+/// package model to the `conda/outputs` API without any modifications. This
 /// backend is useful for testing and debugging purposes, as it does not perform
-/// any actual building or processing of the project model.
+/// any actual building or processing of the package model.
 pub struct PassthroughBackend {
-    project_model: PackageModelV1,
+    package_model: PackageModel,
     config: PassthroughBackendConfig,
     source_dir: PathBuf,
     index_json: Option<IndexJson>,
@@ -72,7 +72,7 @@ impl InMemoryBackend for PassthroughBackend {
             outputs: vec![CondaOutput {
                 metadata: CondaOutputMetadata {
                     name: self
-                        .project_model
+                        .package_model
                         .name
                         .as_ref()
                         .map(|name| PackageName::try_from(name.as_str()).unwrap())
@@ -85,7 +85,7 @@ impl InMemoryBackend for PassthroughBackend {
                                 })
                         }),
                     version: self
-                        .project_model
+                        .package_model
                         .version
                         .as_ref()
                         .or_else(|| self.index_json.as_ref().map(|j| j.version.version()))
@@ -108,7 +108,7 @@ impl InMemoryBackend for PassthroughBackend {
                         .and_then(|j| j.subdir.as_deref())
                         .map(|subdir| subdir.parse().unwrap())
                         .unwrap_or(Platform::NoArch),
-                    license: self.project_model.license.clone(),
+                    license: self.package_model.license.clone(),
                     license_family: None,
                     noarch: self
                         .index_json
@@ -120,17 +120,17 @@ impl InMemoryBackend for PassthroughBackend {
                     variant: Default::default(),
                 },
                 build_dependencies: Some(extract_dependencies(
-                    &self.project_model.targets,
+                    &self.package_model.targets,
                     |t| t.build_dependencies.as_ref(),
                     params.host_platform,
                 )),
                 host_dependencies: Some(extract_dependencies(
-                    &self.project_model.targets,
+                    &self.package_model.targets,
                     |t| t.host_dependencies.as_ref(),
                     params.host_platform,
                 )),
                 run_dependencies: extract_dependencies(
-                    &self.project_model.targets,
+                    &self.package_model.targets,
                     |t| t.run_dependencies.as_ref(),
                     params.host_platform,
                 ),
@@ -232,13 +232,10 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
         &self,
         params: InitializeParams,
     ) -> Result<Self::Backend, Box<CommunicationError>> {
-        let project_model = match params.project_model {
-            Some(VersionedPackageModel::V1(project_model)) => project_model,
-            _ => {
-                return Err(Box::new(CommunicationError::BackendError(
-                    BackendError::new("Passthrough backend only supports project model v1"),
-                )));
-            }
+        let Some(package_model) = params.package_model else {
+            return Err(Box::new(CommunicationError::BackendError(
+                BackendError::new("Passthrough backend requires a package model"),
+            )));
         };
 
         let config = match params.configuration {
@@ -269,7 +266,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
         };
 
         Ok(PassthroughBackend {
-            project_model,
+            package_model,
             config,
             source_dir,
             index_json,

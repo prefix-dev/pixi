@@ -84,7 +84,7 @@ impl CommandDispatcher {
                             source_dir: Some(source_dir),
                             workspace_root: Some(spec.init_params.workspace_root),
                             cache_directory: Some(self.cache_dirs().root().clone()),
-                            project_model: spec.init_params.project_model.map(Into::into),
+                            package_model: spec.init_params.package_model.map(Into::into),
                             configuration: spec.init_params.configuration,
                             target_configuration: spec.init_params.target_configuration,
                         })
@@ -163,11 +163,11 @@ impl CommandDispatcher {
             api_version,
         );
 
-        // Make sure that the project model is compatible with the API version.
+        // Make sure that the package model is compatible with the API version.
         if !api_version.supports_name_none()
             && spec
                 .init_params
-                .project_model
+                .package_model
                 .as_ref()
                 .is_some_and(|p| p.name.is_none())
         {
@@ -180,7 +180,7 @@ impl CommandDispatcher {
             source_dir,
             spec.init_params.manifest_path,
             spec.init_params.workspace_root,
-            spec.init_params.project_model,
+            spec.init_params.package_model,
             spec.init_params.configuration,
             spec.init_params.target_configuration,
             Some(self.cache_dirs().root().clone()),
