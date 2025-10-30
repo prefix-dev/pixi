@@ -164,7 +164,7 @@ fn to_targets_v1(
 }
 
 /// Converts a [`PackageManifest`] to a [`pbt::PackageModelV1`].
-pub fn to_project_model_v1(
+pub fn to_package_model_v1(
     manifest: &PackageManifest,
     channel_config: &ChannelConfig,
 ) -> Result<pbt::PackageModelV1, SpecConversionError> {
@@ -222,7 +222,7 @@ mod tests {
 
                 // Convert the manifest to the project model
                 let project_model: VersionedPackageModel =
-                    super::to_project_model_v1(&package_manifest.value, &some_channel_config())
+                    super::to_package_model_v1(&package_manifest.value, &some_channel_config())
                         .unwrap()
                         .into();
                 let mut settings = insta::Settings::clone_current();

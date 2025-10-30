@@ -6,7 +6,7 @@ use std::{
 use itertools::Itertools;
 use miette::Diagnostic;
 use ordermap::OrderMap;
-use pixi_build_type_conversions::{to_project_model_v1, to_target_selector_v1};
+use pixi_build_type_conversions::{to_package_model_v1, to_target_selector_v1};
 use pixi_build_types::{PackageModelV1, TargetSelectorV1};
 use pixi_config::Config;
 use pixi_manifest::{
@@ -233,7 +233,7 @@ impl DiscoveredBackend {
             .to_path_buf();
 
         // Construct the project model from the manifest
-        let project_model = to_project_model_v1(package_manifest, channel_config)?;
+        let project_model = to_package_model_v1(package_manifest, channel_config)?;
 
         // Determine the build system requirements.
         let build_system = package_manifest.build.clone();
