@@ -1,8 +1,6 @@
 use pixi_pypi_spec::{PixiPypiSpec, VersionOrStar};
-use pixi_record::LockedGitUrl;
 use pixi_spec::{GitReference, GitSpec};
 use rattler_lock::UrlOrPath;
-// use uv_git_types::GitReference;
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
