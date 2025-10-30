@@ -1,6 +1,8 @@
 use pixi_pypi_spec::{PixiPypiSpec, VersionOrStar};
+use pixi_record::LockedGitUrl;
 use pixi_spec::{GitReference, GitSpec};
 use rattler_lock::UrlOrPath;
+// use uv_git_types::GitReference;
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
@@ -118,7 +120,11 @@ pub fn as_uv_req(
                 },
             ..
         } => {
+            // dbg!(&req);
             let git_url = GitUrlWithPrefix::from(git);
+            // let locked_git_url = LockedGitUrl::parse(git.as_str()).unwrap().to_pinned_git_spec().unwrap();
+            // take the solved revision and use it to point to the correct commit
+            // let rev = Some(GitReference::Rev(locked_git_url.source.commit.to_string()));
 
             RequirementSource::Git {
                 // Url is already a git url, should look like:

@@ -1285,6 +1285,9 @@ impl<'p> UpdateContextBuilder<'p> {
                 .finish()
         });
 
+        // dbg!(&locked_pypi_records);
+        // dbg!(&locked_grouped_pypi_records);
+
         Ok(UpdateContext {
             project,
 
