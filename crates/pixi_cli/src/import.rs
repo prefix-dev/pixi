@@ -201,7 +201,7 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
             let reqs_txt = RequirementsTxt::parse(
                 &input_file,
                 workspace.workspace().root(),
-                &BaseClientBuilder::new(),
+                &BaseClientBuilder::default(),
             )
             .await
             .into_diagnostic()?;

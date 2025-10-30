@@ -546,7 +546,7 @@ impl<'p> LockFileDerivedData<'p> {
                         None,
                         Some(
                             pkgs.iter()
-                                .filter_map(|pkg| uv_pep508::PackageName::from_str(pkg).ok())
+                                .filter_map(|pkg| uv_normalize::PackageName::from_str(pkg).ok())
                                 .filter(|name| pypi_lock_file_names.contains(name))
                                 .collect(),
                         ),

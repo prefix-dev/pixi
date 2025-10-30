@@ -240,9 +240,11 @@ The cli looks as follows:
 
 ```bash
 ➜ pixi
-Pixi [version 0.50.1] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Workspaces.
+Pixi [version 0.59.0] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic
+Workspaces.
 
-Pixi is a versatile developer workflow tool designed to streamline the management of your workspace's dependencies, tasks, and environments.
+Pixi is a versatile developer workflow tool designed to streamline the management of your workspace's dependencies,
+tasks, and environments.
 Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
 
 Basic Usage:
@@ -262,37 +264,38 @@ Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
 
 For more information, see the documentation at: https://pixi.sh
 
-Usage: pixi [OPTIONS] <COMMAND>
+Usage: pixi [OPTIONS] [COMMAND]
 
 Commands:
-  add          Adds dependencies to the workspace [aliases: a]
-  auth         Login to prefix.dev or anaconda.org servers to access private channels
-  build        Workspace configuration
-  clean        Cleanup the environments
-  completion   Generates a completion script for a shell
-  config       Configuration management
-  exec         Run a command and install it in a temporary environment [aliases: x]
-  global       Subcommand for global package management actions [aliases: g]
-  info         Information about the system, workspace and environments for the current machine
-  init         Creates a new workspace
-  import       Imports a file into an environment in an existing workspace.
-  install      Install an environment, both updating the lockfile and installing the environment [aliases: i]
-  list         List workspace's packages [aliases: ls]
-  lock         Solve environment and update the lock file without installing the environments
-  reinstall    Re-install an environment, both updating the lockfile and re-installing the environment
-  remove       Removes dependencies from the workspace [aliases: rm]
-  run          Runs task in the pixi environment [aliases: r]
-  search       Search a conda package
-  self-update  Update pixi to the latest version or a specific version
-  shell        Start a shell in a pixi environment, run `exit` to leave the shell [aliases: s]
-  shell-hook   Print the pixi environment activation script
-  task         Interact with tasks in the workspace
-  tree         Show a tree of workspace dependencies [aliases: t]
-  update       The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly
-  upgrade      Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file
-  upload       Upload a conda package
-  workspace    Modify the workspace configuration file through the command line
-  help         Print this message or the help of the given subcommand(s)
+  add         Adds dependencies to the workspace [aliases: a]
+  auth        Login to prefix.dev or anaconda.org servers to access private channels
+  build       Workspace configuration
+  clean       Cleanup the environments
+  completion  Generates a completion script for a shell
+  config      Configuration management
+  exec        Run a command and install it in a temporary environment [aliases: x]
+  global      Subcommand for global package management actions [aliases: g]
+  info        Information about the system, workspace and environments for the current machine
+  init        Creates a new workspace
+  import      Imports a file into an environment in an existing workspace.
+  install     Install an environment, both updating the lockfile and installing the environment [aliases: i]
+  list        List the packages of the current workspace [aliases: ls]
+  lock        Solve environment and update the lock file without installing the environments
+  reinstall   Re-install an environment, both updating the lockfile and re-installing the environment
+  remove      Removes dependencies from the workspace [aliases: rm]
+  run         Runs task in the pixi environment [aliases: r]
+  search      Search a conda package
+  shell       Start a shell in a pixi environment, run `exit` to leave the shell [aliases: s]
+  shell-hook  Print the pixi environment activation script
+  task        Interact with tasks in the workspace
+  tree        Show a tree of workspace dependencies [aliases: t]
+  update      The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock`
+              file and environments accordingly
+  upgrade     Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest
+              file
+  upload      Upload a conda package
+  workspace   Modify the workspace configuration file through the command line
+  help        Print this message or the help of the given subcommand(s)
 
 Options:
   -V, --version  Print version
@@ -301,8 +304,10 @@ Global Options:
   -h, --help           Display help information
   -v, --verbose...     Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
   -q, --quiet...       Decrease logging verbosity (quiet mode)
-      --color <COLOR>  Whether the log needs to be colored [env: PIXI_COLOR=] [default: auto] [possible values: always, never, auto]
+      --color <COLOR>  Whether the log needs to be colored [env: PIXI_COLOR=] [default: auto] [possible values:
+                       always, never, auto]
       --no-progress    Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
+      --list           List all installed commands (built-in and extensions)
 ```
 
 ## Creating a Pixi workspace

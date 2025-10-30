@@ -2,7 +2,7 @@
 # <code>[pixi](../pixi.md) list</code>
 
 ## About
-List workspace's packages
+List the packages of the current workspace
 
 --8<-- "docs/reference/cli/pixi/list_extender:description"
 
@@ -46,7 +46,7 @@ pixi list [OPTIONS] [REGEX]
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 ## Description
-List workspace's packages.
+List the packages of the current workspace
 
 Highlighted packages are explicit dependencies.
 

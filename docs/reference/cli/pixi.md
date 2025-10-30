@@ -23,7 +23,7 @@ pixi [OPTIONS] [COMMAND]
 | [`init`](pixi/init.md) | Creates a new workspace |
 | [`import`](pixi/import.md) | Imports a file into an environment in an existing workspace. |
 | [`install`](pixi/install.md) | Install an environment, both updating the lockfile and installing the environment |
-| [`list`](pixi/list.md) | List workspace's packages |
+| [`list`](pixi/list.md) | List the packages of the current workspace |
 | [`lock`](pixi/lock.md) | Solve environment and update the lock file without installing the environments |
 | [`reinstall`](pixi/reinstall.md) | Re-install an environment, both updating the lockfile and re-installing the environment |
 | [`remove`](pixi/remove.md) | Removes dependencies from the workspace |
