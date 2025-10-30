@@ -51,8 +51,8 @@ use uv_distribution_types::{
     SourceDist, ToUrlError,
 };
 use uv_git_types::GitUrl;
-use uv_pep508::{Pep508Url, VerbatimUrl};
-use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests, VerbatimParsedUrl};
+use uv_pep508::VerbatimUrl;
+use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
 use uv_redacted::DisplaySafeUrl;
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
