@@ -593,7 +593,7 @@ pub async fn resolve_pypi(
             };
 
             // When iterating over locked packages,
-            // instead of adding git requiremets as preferences
+            // instead of adding git requirements as preferences
             // we use them as constraints with enriched precis gitsha information.
             // This will help the resolver to pick the commit that we already have locked
             // instead of updating to a newer commit that also matches the requirement.
@@ -792,8 +792,6 @@ pub async fn resolve_pypi(
     for diagnostic in resolution.diagnostics() {
         tracing::warn!("{}", diagnostic.message());
     }
-
-    // dbg!(&conda_python_packages);
 
     // Collect resolution into locked packages
     let locked_packages = lock_pypi_packages(

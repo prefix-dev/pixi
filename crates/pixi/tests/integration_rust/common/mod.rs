@@ -125,6 +125,13 @@ pub trait LockFileExt {
         platform: Platform,
         package: &str,
     ) -> Option<UrlOrPath>;
+
+    fn get_pypi_package(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<LockedPackageRef>;
 }
 
 impl LockFileExt for LockFile {
@@ -200,6 +207,18 @@ impl LockFileExt for LockFile {
                 })
             })
             .map(|(data, _)| data.version.to_string())
+    }
+
+    fn get_pypi_package(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<LockedPackageRef> {
+        self.environment(environment).and_then(|env| {
+            env.packages(platform)
+                .and_then(|mut packages| packages.find(|p| p.name() == package))
+        })
     }
 
     fn get_pypi_package_url(
@@ -373,6 +392,12 @@ impl PixiControl {
     /// To execute the command and await the result, call `.await` on the return value.
     pub fn add(&self, spec: &str) -> AddBuilder {
         self.add_multiple(vec![spec])
+    }
+
+    /// Add a pypi dependency to the project. Returns an [`AddBuilder`].
+    /// To execute the command and await the result, call `.await` on the return value.
+    pub fn add_pypi(&self, spec: &str) -> AddBuilder {
+        self.add_multiple(vec![spec]).set_pypi(true)
     }
 
     /// Add dependencies to the project. Returns an [`AddBuilder`].

@@ -1,5 +1,8 @@
+use std::str::FromStr;
+
 use pixi_consts::consts;
 use rattler_conda_types::Platform;
+use rattler_lock::LockFile;
 use tempfile::TempDir;
 
 use crate::common::{
@@ -153,6 +156,102 @@ async fn test_update_single_package() {
             "bar ==1"
         ),
         "expected `bar` to be on version 1 because only foo should be updated"
+    );
+}
+
+#[tokio::test]
+async fn test_update_conda_package_doesnt_update_git_pypi() {
+    setup_tracing();
+
+    let mut package_database = PackageDatabase::default();
+
+    // Add packages
+    package_database.add_package(Package::build("bar", "1").finish());
+    package_database.add_package(Package::build("foo", "1").finish());
+
+    // Write the repodata to disk
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+
+    // Create a new project using our package database.
+    pixi.init()
+        // .with_local_channel(channel_dir.path())
+        .await
+        .unwrap();
+
+    // Add a dependency on `python`
+    pixi.add("python").await.unwrap();
+
+    // Add a git pypi dependency on `tqdm`
+    pixi.add_pypi("tqdm @ git+https://github.com/tqdm/tqdm.git")
+        .await
+        .unwrap();
+
+    // Get the created lock-file
+    let lock = pixi.lock_file().await.unwrap();
+
+    let workspace = pixi.workspace().unwrap();
+    let url_or_path = lock
+        .get_pypi_package_url(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "tqdm",
+        )
+        .unwrap();
+
+    let mut lock_file_str = lock.render_to_string().unwrap();
+
+    // git url should have a fragment
+    let fragment = url_or_path
+        .as_url()
+        .unwrap()
+        .fragment()
+        .expect("expected git url to have a fragment");
+
+    // and modify this fragment to simulate an older commit
+    let older_commit = "a2d5f1c9d1cbdbcf56f52dc4365ea4124e3e33f7";
+    lock_file_str = lock_file_str.replace(fragment, older_commit);
+
+    eprintln!("Modified lock-file:\n{}", lock_file_str);
+
+    let lockfile = LockFile::from_str(&lock_file_str).unwrap();
+
+    lockfile.to_path(&workspace.lock_file_path()).unwrap();
+
+    // Get the created lock-file
+    let lock = pixi.lock_file().await.unwrap();
+    eprintln!(
+        "Lock-file before update:\n{}",
+        lock.render_to_string().unwrap()
+    );
+
+    // now run the update command to update conda packages
+    // which will invalidate also pypi packages
+    pixi.update().with_package("python").await.unwrap();
+
+    // Get the re-locked lock-file
+    let lock = pixi.lock_file().await.unwrap();
+
+    let url_or_path = lock
+        .get_pypi_package_url(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "tqdm",
+        )
+        .unwrap();
+    let new_fragment = url_or_path
+        .as_url()
+        .unwrap()
+        .fragment()
+        .expect("expected git url to have a fragment");
+    assert_eq!(
+        older_commit, new_fragment,
+        "expected git pypi package to not be updated when updating conda packages"
     );
 }
 

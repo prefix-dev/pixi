@@ -252,7 +252,7 @@ async fn find_unsatisfiable_targets<'p>(
                 }
                 Err(unsat) => {
                     tracing::info!(
-                        "herree the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
+                        "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
                         environment.name().fancy_display()
                     );
 
