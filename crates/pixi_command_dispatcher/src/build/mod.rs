@@ -8,6 +8,7 @@ mod move_file;
 pub(crate) mod source_metadata_cache;
 mod work_dir_key;
 
+use core::fmt;
 use std::hash::{Hash, Hasher};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -22,11 +23,65 @@ pub use dependencies::{
 };
 pub(crate) use move_file::{MoveError, move_file};
 use pixi_record::PinnedSourceSpec;
+use serde::{Deserialize, Serialize};
 use url::Url;
 pub use work_dir_key::{SourceRecordOrCheckout, WorkDirKey};
 use xxhash_rust::xxh3::Xxh3;
 
 const KNOWN_SUFFIXES: [&str; 3] = [".git", ".tar.gz", ".zip"];
+
+/// Stores the two possible locations for the source code,
+/// in the case of an out-of-tree source build.
+///
+/// Something which looks like:
+/// ```toml
+/// [package.build]
+/// source = { path = "some-path" }
+/// ```
+///
+/// We want to prefer that location for our cache checks
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct SourceCodeLocation {
+    /// The location of the manifest and the possible source code
+    manifest_source: PinnedSourceSpec,
+    /// The location of the source code that should be queried and build
+    build_source: Option<PinnedSourceSpec>,
+}
+
+impl SourceCodeLocation {
+    pub fn new(manifest_source: PinnedSourceSpec, build_source: Option<PinnedSourceSpec>) -> Self {
+        Self {
+            manifest_source,
+            build_source,
+        }
+    }
+
+    /// Get the reference to the manifest source
+    pub fn manifest_source(&self) -> &PinnedSourceSpec {
+        &self.manifest_source
+    }
+
+    /// Get the pinned source spec to the actual source code
+    /// This is the normally the path to the manifest_source
+    /// but when set is the path to the build_source
+    pub fn source_code(&self) -> &PinnedSourceSpec {
+        self.build_source.as_ref().unwrap_or(&self.manifest_source)
+    }
+}
+
+impl std::fmt::Display for SourceCodeLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "(manifest-src: {}, build-src: {})",
+            self.manifest_source(),
+            self.build_source
+                .as_ref()
+                .map(|build| format!("{}", build))
+                .unwrap_or("undefined".to_string())
+        )
+    }
+}
 
 /// Try to deduce a name from a url.
 fn pretty_url_name(url: &Url) -> String {

@@ -15,6 +15,7 @@ use crate::{
     PackageIdentifier, SourceCheckoutError,
     build::{
         BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, PackageBuildInputHashBuilder,
+        SourceCodeLocation,
     },
 };
 
@@ -35,7 +36,7 @@ pub struct SourceBuildCacheStatusSpec {
     pub package: PackageIdentifier,
 
     /// Describes the source location of the package to query.
-    pub source: PinnedSourceSpec,
+    pub source: SourceCodeLocation,
 
     /// The channels to use when building source packages.
     pub channels: Vec<ChannelUrl>,
@@ -135,7 +136,7 @@ impl SourceBuildCacheStatusSpec {
         };
         let (cached_build, build_cache_entry) = command_dispatcher
             .build_cache()
-            .entry(&self.source, &build_input)
+            .entry(&self.source.manifest_source(), &build_input)
             .await
             .map_err(SourceBuildCacheStatusError::BuildCache)
             .map_err(CommandDispatcherError::Failed)?;
@@ -176,13 +177,17 @@ impl SourceBuildCacheStatusSpec {
         let source = &self.source;
 
         // Immutable source records are always considered valid.
-        if source.is_immutable() {
+        if source.source_code().is_immutable() {
             return Ok(CachedBuildStatus::UpToDate(cached_build));
         }
 
         // Check if the project configuration has changed.
         let cached_build = match self
-            .check_package_configuration_changed(command_dispatcher, cached_build, source)
+            .check_package_configuration_changed(
+                command_dispatcher,
+                cached_build,
+                source.manifest_source(),
+            )
             .await?
         {
             CachedBuildStatus::UpToDate(cached_build) | CachedBuildStatus::New(cached_build) => {
@@ -196,7 +201,7 @@ impl SourceBuildCacheStatusSpec {
 
         // Determine if the package is out of date by checking the source
         let cached_build = match self
-            .check_source_out_of_date(command_dispatcher, cached_build, source)
+            .check_source_out_of_date(command_dispatcher, cached_build, source.source_code())
             .await?
         {
             CachedBuildStatus::UpToDate(cached_build) | CachedBuildStatus::New(cached_build) => {

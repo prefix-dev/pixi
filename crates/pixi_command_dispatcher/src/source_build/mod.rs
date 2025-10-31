@@ -33,7 +33,7 @@ use crate::{
     build::{
         BuildCacheError, BuildHostEnvironment, BuildHostPackage, CachedBuild,
         CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, PackageBuildInputHash,
-        PixiRunExports, SourceRecordOrCheckout, WorkDirKey, move_file,
+        PixiRunExports, SourceCodeLocation, SourceRecordOrCheckout, WorkDirKey, move_file,
     },
     package_identifier::PackageIdentifier,
 };
@@ -147,7 +147,10 @@ impl SourceBuildSpec {
                 .source_build_cache_status(SourceBuildCacheStatusSpec {
                     package: self.package.clone(),
                     build_environment: self.build_environment.clone(),
-                    source: self.manifest_source.clone(),
+                    source: super::build::SourceCodeLocation::new(
+                        self.manifest_source.clone(),
+                        self.build_source.clone(),
+                    ),
                     channels: self.channels.clone(),
                     channel_config: self.channel_config.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
@@ -463,7 +466,10 @@ impl SourceBuildSpec {
                         .expect("the source record should be present in the result sources");
                     BuildHostPackage {
                         repodata_record,
-                        source: Some(source.manifest_source),
+                        source: Some(SourceCodeLocation::new(
+                            source.manifest_source,
+                            source.build_source,
+                        )),
                     }
                 }
             })
