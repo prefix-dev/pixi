@@ -439,6 +439,7 @@ impl From<PinnedUrlSpec> for UrlOrPath {
 /// use pixi_record::LockedGitUrl;
 /// let locked_url = LockedGitUrl::parse("git+https://github.com/nichmor/pixi-build-examples?branch=fix-backend#1c4b2c7864a60ea169e091901fcde63a8d6fbfdc").unwrap();
 /// ```
+#[derive(Debug)]
 pub struct LockedGitUrl(Url);
 
 impl LockedGitUrl {
@@ -489,6 +490,12 @@ impl LockedGitUrl {
 impl From<LockedGitUrl> for Url {
     fn from(value: LockedGitUrl) -> Self {
         value.0
+    }
+}
+
+impl From<Url> for LockedGitUrl {
+    fn from(value: Url) -> Self {
+        Self(value)
     }
 }
 
