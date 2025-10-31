@@ -568,14 +568,16 @@ impl CommandDispatcher {
     /// 1. For path sources: Resolving relative paths against the root directory or against an alternative root path
     ///
     /// i.e. in the case of an out-of-tree build.
-    /// Some examples for different inputs
-    /// /foo/bar => foo/bar
-    /// ./bar => <workspace_root>/bar
-    /// ../bar.toml => <alternative_root>/../bar.toml
+    /// Some examples for different inputs:
+    /// - `/foo/bar` => `/foo/bar` (absolute paths are unchanged)
+    /// - `./bar` => `<root_dir>/bar`
+    /// - `bar` => `<root_dir>/bar` (or `<alternative_root>/bar` if provided)
+    /// - `../bar` => `<alternative_root>/../bar` (normalized, validated for security)
+    /// - `~/bar` => `<home_dir>/bar`
     ///
     /// Usually:
-    /// * root_dir => workspace manifest path (set during the command dispatcher construction)
-    /// * alternative_root => package manifest path (set during builds of specific packages)
+    /// * `root_dir` => workspace root directory (parent of workspace manifest)
+    /// * `alternative_root` => package root directory (parent of package manifest)
     ///
     /// 2. For git sources: Cloning or fetching the repository and checking out
     ///    the specified reference
@@ -680,7 +682,17 @@ impl CommandDispatcherData {
             normalize_absolute_path(&home_dir.join(Path::new(user_path.as_str())))
         } else {
             let root_dir = match alternative_root {
-                Some(root_path) => root_path,
+                Some(root_path) => {
+                    debug_assert!(
+                        root_path.is_absolute(),
+                        "alternative_root must be absolute, got: {root_path:?}"
+                    );
+                    debug_assert!(
+                        !root_path.is_file(),
+                        "alternative_root should be a directory, not a file: {root_path:?}"
+                    );
+                    root_path
+                }
                 None => self.root_dir.as_path(),
             };
             let native_path = Path::new(path_spec.as_str());
