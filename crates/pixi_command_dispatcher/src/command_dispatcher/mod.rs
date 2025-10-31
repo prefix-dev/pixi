@@ -568,6 +568,14 @@ impl CommandDispatcher {
     /// 1. For path sources: Resolving relative paths against the root directory or against an alternative root path
     ///
     /// i.e. in the case of an out-of-tree build.
+    /// Some examples for different inputs
+    /// /foo/bar => foo/bar
+    /// ./bar => <workspace_root>/bar
+    /// ../bar.toml => <alternative_root>/../bar.toml
+    ///
+    /// Usually:
+    /// * root_dir => workspace manifest path (set during the command dispatcher construction)
+    /// * alternative_root => package manifest path (set during builds of specific packages)
     ///
     /// 2. For git sources: Cloning or fetching the repository and checking out
     ///    the specified reference
@@ -581,7 +589,7 @@ impl CommandDispatcher {
     pub async fn pin_and_checkout(
         &self,
         source_location_spec: SourceLocationSpec,
-        alternative_root_path: Option<&Path>,
+        alternative_root: Option<&Path>,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match source_location_spec {
             SourceLocationSpec::Url(url) => {
@@ -590,7 +598,7 @@ impl CommandDispatcher {
             SourceLocationSpec::Path(path) => {
                 let source_path = self
                     .data
-                    .resolve_typed_path(path.path.to_path(), alternative_root_path)
+                    .resolve_typed_path(path.path.to_path(), alternative_root)
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
@@ -660,7 +668,7 @@ impl CommandDispatcherData {
     fn resolve_typed_path(
         &self,
         path_spec: Utf8TypedPath,
-        alternative_root_path: Option<&Path>,
+        alternative_root: Option<&Path>,
     ) -> Result<PathBuf, InvalidPathError> {
         if path_spec.is_absolute() {
             Ok(Path::new(path_spec.as_str()).to_path_buf())
@@ -671,7 +679,7 @@ impl CommandDispatcherData {
             debug_assert!(home_dir.is_absolute());
             normalize_absolute_path(&home_dir.join(Path::new(user_path.as_str())))
         } else {
-            let root_dir = match alternative_root_path {
+            let root_dir = match alternative_root {
                 Some(root_path) => root_path,
                 None => self.root_dir.as_path(),
             };

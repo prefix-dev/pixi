@@ -274,7 +274,13 @@ impl SourceBuildSpec {
                             .init_params
                             .manifest_path
                             .parent()
-                            .expect("manifest path should have a parent directory"),
+                            .ok_or_else(|| {
+                                SourceCheckoutError::ParentDir(
+                                    discovered_backend.init_params.manifest_path.clone(),
+                                )
+                            })
+                            .map_err(SourceBuildError::SourceCheckout)
+                            .map_err(CommandDispatcherError::Failed)?,
                     ),
                 )
                 .await
