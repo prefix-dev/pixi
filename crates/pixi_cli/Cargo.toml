@@ -106,6 +106,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true, features = ["indexmap"] }
 strsim = { workspace = true }
+strum = { workspace = true }
 tabwriter = { workspace = true, features = ["ansi_formatting"] }
 tar = { workspace = true }
 temp-env = { workspace = true }

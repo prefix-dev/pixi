@@ -4779,6 +4779,7 @@ dependencies = [
  "sha2",
  "signal-hook",
  "strsim",
+ "strum",
  "tabwriter",
  "tar",
  "temp-env",
