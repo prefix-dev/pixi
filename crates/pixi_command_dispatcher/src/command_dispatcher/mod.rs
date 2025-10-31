@@ -565,7 +565,10 @@ impl CommandDispatcher {
     ///
     /// This function resolves the source specification to a concrete checkout
     /// by:
-    /// 1. For path sources: Resolving relative paths against the root directory
+    /// 1. For path sources: Resolving relative paths against the root directory or against an alternative root path
+    ///
+    /// i.e. in the case of an out-of-tree build.
+    ///
     /// 2. For git sources: Cloning or fetching the repository and checking out
     ///    the specified reference
     /// 3. For URL sources: Downloading and extracting the archive (currently
@@ -578,6 +581,7 @@ impl CommandDispatcher {
     pub async fn pin_and_checkout(
         &self,
         source_location_spec: SourceLocationSpec,
+        alternative_root_path: Option<&Path>,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match source_location_spec {
             SourceLocationSpec::Url(url) => {
@@ -586,7 +590,7 @@ impl CommandDispatcher {
             SourceLocationSpec::Path(path) => {
                 let source_path = self
                     .data
-                    .resolve_typed_path(path.path.to_path())
+                    .resolve_typed_path(path.path.to_path(), alternative_root_path)
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
@@ -618,7 +622,7 @@ impl CommandDispatcher {
             PinnedSourceSpec::Path(ref path) => {
                 let source_path = self
                     .data
-                    .resolve_typed_path(path.path.to_path())
+                    .resolve_typed_path(path.path.to_path(), None)
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
@@ -653,7 +657,11 @@ impl CommandDispatcherData {
     ///
     /// This function does not check if the path exists and also does not follow
     /// symlinks.
-    fn resolve_typed_path(&self, path_spec: Utf8TypedPath) -> Result<PathBuf, InvalidPathError> {
+    fn resolve_typed_path(
+        &self,
+        path_spec: Utf8TypedPath,
+        alternative_root_path: Option<&Path>,
+    ) -> Result<PathBuf, InvalidPathError> {
         if path_spec.is_absolute() {
             Ok(Path::new(path_spec.as_str()).to_path_buf())
         } else if let Ok(user_path) = path_spec.strip_prefix("~/") {
@@ -663,7 +671,10 @@ impl CommandDispatcherData {
             debug_assert!(home_dir.is_absolute());
             normalize_absolute_path(&home_dir.join(Path::new(user_path.as_str())))
         } else {
-            let root_dir = self.root_dir.as_path();
+            let root_dir = match alternative_root_path {
+                Some(root_path) => root_path,
+                None => self.root_dir.as_path(),
+            };
             let native_path = Path::new(path_spec.as_str());
             debug_assert!(root_dir.is_absolute());
             normalize_absolute_path(&root_dir.join(native_path))

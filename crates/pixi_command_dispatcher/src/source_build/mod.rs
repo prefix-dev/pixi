@@ -267,7 +267,16 @@ impl SourceBuildSpec {
             discovered_backend.init_params.build_source.clone()
         {
             let build_source_checkout = command_dispatcher
-                .pin_and_checkout(manifest_build_source)
+                .pin_and_checkout(
+                    manifest_build_source,
+                    Some(
+                        discovered_backend
+                            .init_params
+                            .manifest_path
+                            .parent()
+                            .expect("manifest path should have a parent directory"),
+                    ),
+                )
                 .await
                 .map_err_with(SourceBuildError::SourceCheckout)?;
             build_source_checkout.path

@@ -138,7 +138,10 @@ impl BuildBackendMetadataSpec {
         } else if let Some(build_source) = &discovered_backend.init_params.build_source {
             Some(
                 command_dispatcher
-                    .pin_and_checkout(build_source.clone())
+                    .pin_and_checkout(
+                        build_source.clone(),
+                        Some(&discovered_backend.init_params.manifest_path),
+                    )
                     .await
                     .map_err_with(BuildBackendMetadataError::SourceCheckout)?,
             )
