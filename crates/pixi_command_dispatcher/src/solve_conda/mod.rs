@@ -143,7 +143,7 @@ impl SolveCondaEnvironmentSpec {
             let mut url_to_source_package = HashMap::new();
             for source_metadata in &self.source_repodata {
                 for record in &source_metadata.records {
-                    let url = unique_url(record);
+                    let url = unique_url(&record);
                     let package_record = record.package_record();
                     let repodata_record = RepoDataRecord {
                         package_record: package_record.clone(),
@@ -156,6 +156,8 @@ impl SolveCondaEnvironmentSpec {
                         ),
                         channel: None,
                     };
+                    let mut record = record.clone();
+                    record.source_record.build_source = source_metadata.build_source.clone();
                     url_to_source_package.insert(url, (record, repodata_record));
                 }
             }
@@ -224,15 +226,20 @@ impl SolveCondaEnvironmentSpec {
 
 /// Generates a unique URL for a source record.
 fn unique_url(source: &SourcePackageRecord) -> Url {
-    let mut url = source.source_record.source.identifiable_url();
+    let mut url = source.source_record.manifest_source.identifiable_url();
 
     // Add unique identifiers to the URL.
-    url.query_pairs_mut()
-        .append_pair("name", source.source_record.name.as_source())
-        .append_pair("version", &source.version.as_str())
+    let mut query = url.query_pairs_mut();
+
+    query.append_pair("name", source.source_record.name.as_source());
+    if let Some(version) = &source.source_record.version {
+        query.append_pair("version", &version.as_str());
+    }
+    query
         .append_pair("build", &source.build)
         .append_pair("subdir", &source.subdir);
 
+    drop(query);
     url
 }
 

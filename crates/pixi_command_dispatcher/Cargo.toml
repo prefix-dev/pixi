@@ -73,3 +73,6 @@ tokio = { workspace = true, features = ["macros"] }
 
 [features]
 slow_integration_tests = []
+
+[package.metadata.cargo-machete]
+ignored = ["serde_with"]

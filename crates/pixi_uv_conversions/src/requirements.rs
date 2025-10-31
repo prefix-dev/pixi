@@ -228,7 +228,7 @@ pub fn as_uv_req(
         extras: req
             .extras()
             .iter()
-            .map(|e| uv_pep508::ExtraName::from_str(e.as_ref()).expect("conversion failed"))
+            .map(|e| uv_normalize::ExtraName::from_str(e.as_ref()).expect("conversion failed"))
             .collect(),
         marker: Default::default(),
         groups: Default::default(),
@@ -299,12 +299,14 @@ pub fn pep508_requirement_to_uv_requirement(
 
     let marker = to_uv_marker_tree(&requirement.marker)?;
     let converted = uv_pep508::Requirement {
-        name: uv_pep508::PackageName::from_str(requirement.name.as_ref())
+        name: uv_normalize::PackageName::from_str(requirement.name.as_ref())
             .expect("cannot normalize name"),
         extras: requirement
             .extras
             .iter()
-            .map(|e| uv_pep508::ExtraName::from_str(e.as_ref()).expect("cannot convert extra name"))
+            .map(|e| {
+                uv_normalize::ExtraName::from_str(e.as_ref()).expect("cannot convert extra name")
+            })
             .collect(),
         marker,
         version_or_url: parsed_url,

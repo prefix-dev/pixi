@@ -1,6 +1,6 @@
 use std::{
     cmp::PartialEq,
-    collections::{HashMap, HashSet, hash_map::Entry},
+    collections::{BTreeMap, HashMap, HashSet, hash_map::Entry},
     future::{Future, ready},
     iter,
     path::PathBuf,
@@ -546,7 +546,7 @@ impl<'p> LockFileDerivedData<'p> {
                         None,
                         Some(
                             pkgs.iter()
-                                .filter_map(|pkg| uv_pep508::PackageName::from_str(pkg).ok())
+                                .filter_map(|pkg| uv_normalize::PackageName::from_str(pkg).ok())
                                 .filter(|name| pypi_lock_file_names.contains(name))
                                 .collect(),
                         ),
@@ -851,6 +851,9 @@ pub struct UpdateContext<'p> {
     /// The progress bar where all the command dispatcher progress will be
     /// placed.
     dispatcher_progress_bar: ProgressBar,
+
+    /// Optional list of packages explicitly targeted for update.
+    update_targets: Option<std::collections::HashSet<String>>,
 }
 
 impl<'p> UpdateContext<'p> {
@@ -1027,6 +1030,9 @@ pub struct UpdateContextBuilder<'p> {
 
     /// Set the command dispatcher to use for the update process.
     command_dispatcher: Option<CommandDispatcher>,
+
+    /// Optional list of package names explicitly targeted for update.
+    update_targets: Option<std::collections::HashSet<String>>,
 }
 
 impl<'p> UpdateContextBuilder<'p> {
@@ -1063,6 +1069,17 @@ impl<'p> UpdateContextBuilder<'p> {
     pub(crate) fn with_command_dispatcher(self, command_dispatcher: CommandDispatcher) -> Self {
         Self {
             command_dispatcher: Some(command_dispatcher),
+            ..self
+        }
+    }
+
+    /// Sets the packages explicitly targeted for update.
+    pub fn with_update_targets(
+        self,
+        update_targets: Option<std::collections::HashSet<String>>,
+    ) -> Self {
+        Self {
+            update_targets,
             ..self
         }
     }
@@ -1309,6 +1326,7 @@ impl<'p> UpdateContextBuilder<'p> {
             dispatcher_progress_bar: anchor_pb,
 
             no_install: self.no_install,
+            update_targets: self.update_targets,
         })
     }
 }
@@ -1326,6 +1344,7 @@ impl<'p> UpdateContext<'p> {
             glob_hash_cache: None,
             mapping_client: None,
             command_dispatcher: None,
+            update_targets: None,
         }
     }
 
@@ -1396,6 +1415,33 @@ impl<'p> UpdateContext<'p> {
                     .unwrap_or_default();
 
                 // Spawn a task to solve the group.
+                // Determine override pinned sources for source packages when performing
+                // a targeted update.
+                let pin_overrides = (|| {
+                    let targets = self.update_targets.as_ref()?;
+                    if targets.is_empty() {
+                        return None;
+                    }
+                    Some(
+                        locked_group_records
+                            .records
+                            .iter()
+                            .filter_map(|r| match r {
+                                PixiRecord::Source(src) => {
+                                    let name = src.name.clone();
+                                    if targets.contains(name.as_source()) {
+                                        src.build_source.clone().map(|spec| (name, spec))
+                                    } else {
+                                        None
+                                    }
+                                }
+                                _ => None,
+                            })
+                            .collect(),
+                    )
+                })()
+                .unwrap_or_default();
+
                 let group_solve_task = spawn_solve_conda_environment_task(
                     source.clone(),
                     locked_group_records,
@@ -1403,6 +1449,7 @@ impl<'p> UpdateContext<'p> {
                     platform,
                     channel_priority,
                     self.command_dispatcher.clone(),
+                    pin_overrides,
                 )
                 .map_err(Report::new)
                 .boxed_local();
@@ -1908,6 +1955,7 @@ async fn spawn_solve_conda_environment_task(
     platform: Platform,
     channel_priority: ChannelPriority,
     command_dispatcher: CommandDispatcher,
+    pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
 ) -> Result<TaskResult, SolveCondaEnvironmentError> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
@@ -1964,6 +2012,7 @@ async fn spawn_solve_conda_environment_task(
     let start = Instant::now();
 
     // Solve the environment using the command dispatcher.
+    // Determine if we should override the pinned source for the current package
     let mut records = command_dispatcher
         .solve_pixi_environment(PixiEnvironmentSpec {
             name: Some(group_name.to_string()),
@@ -1979,6 +2028,7 @@ async fn spawn_solve_conda_environment_task(
             variants: Some(variants),
             variant_files: Some(variant_files),
             enabled_protocols: Default::default(),
+            pin_overrides,
         })
         .await
         .map_err(|source| SolveCondaEnvironmentError::SolveFailed {

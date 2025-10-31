@@ -1,6 +1,9 @@
 mod cycle;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 pub use cycle::{Cycle, CycleEnvironment};
 use futures::TryStreamExt;
@@ -41,7 +44,11 @@ pub struct SourceMetadataSpec {
 pub struct SourceMetadata {
     /// Information about the source checkout that was used to build the
     /// package.
-    pub source: PinnedSourceSpec,
+    pub manifest_source: PinnedSourceSpec,
+
+    /// The optional location of where the actual source code is located,
+    /// this is used mainly for out-of-tree builds
+    pub build_source: Option<PinnedSourceSpec>,
 
     /// All the source records with metadata for this particular package.
     pub records: Vec<SourcePackageRecord>,
@@ -55,7 +62,7 @@ impl SourceMetadataSpec {
         skip_all,
         name = "source-metadata",
         fields(
-            source= %self.backend_metadata.source,
+            source= %self.backend_metadata.manifest_source,
             name = %self.package.as_source(),
             platform = %self.backend_metadata.build_environment.host_platform,
         )
@@ -85,13 +92,15 @@ impl SourceMetadataSpec {
                 &command_dispatcher,
                 output,
                 build_backend_metadata.metadata.input_hash.clone(),
-                build_backend_metadata.source.clone(),
+                build_backend_metadata.manifest_source.clone(),
+                build_backend_metadata.build_source.clone(),
                 reporter.clone(),
             ));
         }
 
         Ok(SourceMetadata {
-            source: build_backend_metadata.source.clone(),
+            manifest_source: build_backend_metadata.manifest_source.clone(),
+            build_source: build_backend_metadata.build_source.clone(),
             records: futures.try_collect().await?,
             skipped_packages,
         })
@@ -102,15 +111,17 @@ impl SourceMetadataSpec {
         command_dispatcher: &CommandDispatcher,
         output: &CondaOutput,
         input_hash: Option<InputHash>,
-        source: PinnedSourceSpec,
+        manifest_source: PinnedSourceSpec,
+        build_source: Option<PinnedSourceSpec>,
         reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<SourcePackageRecord, CommandDispatcherError<SourceMetadataError>> {
-        let source_anchor = SourceAnchor::from(SourceSpec::from(source.clone()));
+        let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
 
         // Solve the build environment for the output.
         let build_dependencies = output
             .build_dependencies
             .as_ref()
+            // TODO(tim): we need to check if this works for out-of-tree builds with source dependencies in the out-of-tree, this might be incorrectly anchored
             .map(|deps| Dependencies::new(deps, Some(source_anchor.clone())))
             .transpose()
             .map_err(SourceMetadataError::from)
@@ -269,13 +280,14 @@ impl SourceMetadataSpec {
         Ok(SourcePackageRecord {
             source_record: SourceRecord {
                 name: output.metadata.name.clone(),
-                version: if source.is_immutable() {
+                version: if manifest_source.is_immutable() {
                     // Only record the version if the source code is immutable.
                     Some(output.metadata.version.clone())
                 } else {
                     None
                 },
-                source,
+                build_source,
+                manifest_source,
                 variants: output
                     .metadata
                     .variant
@@ -338,6 +350,12 @@ impl SourceMetadataSpec {
         if dependencies.dependencies.is_empty() {
             return Ok(vec![]);
         }
+        let pin_overrides = self
+            .backend_metadata
+            .pin_override
+            .as_ref()
+            .map(|pinned| BTreeMap::from([(pkg_name.clone(), pinned.clone())]))
+            .unwrap_or_default();
         match command_dispatcher
             .solve_pixi_environment(PixiEnvironmentSpec {
                 name: Some(format!("{} ({})", pkg_name.as_source(), env_type)),
@@ -361,6 +379,7 @@ impl SourceMetadataSpec {
                 variants: self.backend_metadata.variants.clone(),
                 variant_files: self.backend_metadata.variant_files.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
+                pin_overrides,
             })
             .await
         {

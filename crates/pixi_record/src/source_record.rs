@@ -7,9 +7,15 @@ use rattler_conda_types::{
 };
 use rattler_digest::{Md5Hash, Sha256, Sha256Hash};
 use rattler_lock::{CondaPackageData, CondaSourceData};
+use std::str::FromStr;
+
+use pixi_git::sha::GitSha;
+use pixi_spec::GitReference;
+use rattler_lock::{GitShallowSpec, PackageBuildSource};
 use serde::{Deserialize, Serialize};
 
-use crate::{ParseLockFileError, PinnedSourceSpec, SelectedVariant};
+use crate::SelectedVariant;
+use crate::{ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec};
 
 /// A minimal record of a source package stored in the lock file.
 ///
@@ -30,7 +36,11 @@ pub struct SourceRecord {
     pub name: PackageName,
 
     /// Exact definition of the source of the package.
-    pub source: PinnedSourceSpec,
+    pub manifest_source: PinnedSourceSpec,
+
+    /// The optional pinned source where the build should be executed
+    /// This is used when the manifest is not in the same location ad
+    pub build_source: Option<PinnedSourceSpec>,
 
     /// Conda-build variants used to disambiguate between multiple source packages
     /// at the same location.
@@ -164,7 +174,7 @@ impl From<SourcePackageRecord> for PackageRecord {
             purls: value.source_record.purls,
             track_features: value.track_features,
             features: value.features,
-            timestamp: value.timestamp,
+            timestamp: value.timestamp.map(From::from),
             run_exports: value.run_exports,
             experimental_extra_depends: value.source_record.experimental_extra_depends,
             noarch: value.noarch,
@@ -202,7 +212,7 @@ impl From<SourceRecord> for CondaPackageData {
     fn from(value: SourceRecord) -> Self {
         CondaPackageData::Source(CondaSourceData {
             name: value.name,
-            location: value.source.into(),
+            location: value.manifest_source.into(),
             variants: value.variants,
             version: value.version,
             depends: value.depends,
@@ -221,6 +231,7 @@ impl From<SourceRecord> for CondaPackageData {
             }),
             package_build_source: None,
             python_site_packages_path: value.python_site_packages_path,
+            dev: false, // TODO: adapt this when we implement the dev feature
         })
     }
 }
@@ -229,9 +240,45 @@ impl TryFrom<CondaSourceData> for SourceRecord {
     type Error = ParseLockFileError;
 
     fn try_from(value: CondaSourceData) -> Result<Self, Self::Error> {
+        let pinned_source_spec = value.package_build_source.map(|source| match source {
+            PackageBuildSource::Git {
+                url,
+                spec,
+                rev,
+                subdir,
+            } => {
+                let reference = match spec {
+                    Some(GitShallowSpec::Branch(branch)) => GitReference::Branch(branch),
+                    Some(GitShallowSpec::Tag(tag)) => GitReference::Tag(tag),
+                    Some(GitShallowSpec::Rev) => GitReference::Rev(rev.clone()),
+                    None => GitReference::DefaultBranch,
+                };
+
+                PinnedSourceSpec::Git(crate::PinnedGitSpec {
+                    git: url,
+                    source: PinnedGitCheckout {
+                        commit: GitSha::from_str(&rev).unwrap(),
+                        subdirectory: subdir.map(|s| s.to_string()),
+                        reference,
+                    },
+                })
+            }
+            PackageBuildSource::Url {
+                url,
+                sha256,
+                subdir: _,
+            } => PinnedSourceSpec::Url(crate::PinnedUrlSpec {
+                url,
+                sha256,
+                md5: None,
+            }),
+            PackageBuildSource::Path { path } => {
+                PinnedSourceSpec::Path(crate::PinnedPathSpec { path })
+            }
+        });
         Ok(Self {
             name: value.name,
-            source: value.location.try_into()?,
+            manifest_source: value.location.try_into()?,
             version: value.version,
             variants: value.variants,
             depends: value.depends,
@@ -243,6 +290,7 @@ impl TryFrom<CondaSourceData> for SourceRecord {
                 hash: hash.hash,
                 globs: BTreeSet::from_iter(hash.globs),
             }),
+            build_source: pinned_source_spec,
             sources: value
                 .sources
                 .into_iter()
@@ -277,5 +325,77 @@ impl Matches<SourceRecord> for MatchSpec {
         // For source packages, version, build, and build_number are not stored
         // in the lock file, so we only match by name
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_git::sha::GitSha;
+    use std::str::FromStr;
+    use url::Url;
+
+    #[test]
+    fn package_build_source_roundtrip_preserves_git_subdirectory() {
+        let git_url = Url::parse("https://example.com/repo.git").unwrap();
+        let pinned_source = PinnedSourceSpec::Git(crate::PinnedGitSpec {
+            git: git_url.clone(),
+            source: PinnedGitCheckout {
+                commit: GitSha::from_str("0123456789abcdef0123456789abcdef01234567").unwrap(),
+                subdirectory: Some("nested/project".to_string()),
+                reference: GitReference::Branch("main".to_string()),
+            },
+        });
+
+        let record = SourceRecord {
+            name: PackageName::from_str("example").unwrap(),
+            version: Some(VersionWithSource::from_str("1.0.0").unwrap()),
+            manifest_source: pinned_source.clone(),
+            build_source: Some(pinned_source.clone()),
+            input_hash: None,
+            sources: Default::default(),
+            variants: Default::default(),
+            constrains: Default::default(),
+            depends: Default::default(),
+            experimental_extra_depends: Default::default(),
+            license: None,
+            purls: None,
+            python_site_packages_path: None,
+        };
+
+        let CondaPackageData::Source(conda_source) = record.clone().into() else {
+            panic!("expected source package data");
+        };
+
+        let package_build_source = conda_source
+            .package_build_source
+            .as_ref()
+            .expect("expected package build source");
+
+        let PackageBuildSource::Git {
+            url,
+            spec,
+            rev,
+            subdir,
+        } = package_build_source
+        else {
+            panic!("expected git package build source");
+        };
+
+        assert_eq!(url.path(), "/repo.git");
+        assert_eq!(url.host_str(), Some("example.com"));
+        assert_eq!(subdir.as_ref().map(|s| s.as_str()), Some("nested/project"));
+        assert!(matches!(spec, Some(GitShallowSpec::Branch(branch)) if branch == "main"));
+        assert_eq!(rev, "0123456789abcdef0123456789abcdef01234567");
+
+        let roundtrip = SourceRecord::try_from(conda_source).expect("roundtrip should succeed");
+        let Some(PinnedSourceSpec::Git(roundtrip_git)) = roundtrip.build_source else {
+            panic!("expected git pinned source");
+        };
+        assert_eq!(
+            roundtrip_git.source.subdirectory.as_deref(),
+            Some("nested/project")
+        );
+        assert_eq!(roundtrip_git.git, git_url);
     }
 }

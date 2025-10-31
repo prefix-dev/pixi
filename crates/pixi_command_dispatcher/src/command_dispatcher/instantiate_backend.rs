@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use miette::Diagnostic;
 use pixi_build_discovery::{
     BackendInitializationParams, BackendSpec, CommandSpec, EnabledProtocols,
@@ -8,7 +10,7 @@ use pixi_build_frontend::{
     tool::{IsolatedTool, SystemTool, Tool},
 };
 use pixi_build_types::{PixiBuildApiVersion, procedures::initialize::InitializeParams};
-use pixi_spec::{SourceLocationSpec, SpecConversionError};
+use pixi_spec::SpecConversionError;
 use rattler_conda_types::ChannelConfig;
 use rattler_shell::{
     activation::{ActivationError, ActivationVariables, Activator},
@@ -18,7 +20,7 @@ use rattler_virtual_packages::DetectVirtualPackageError;
 use thiserror::Error;
 
 use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherErrorResultExt,
+    BuildEnvironment, CommandDispatcher, CommandDispatcherErrorResultExt, SourceCheckoutError,
     command_dispatcher::error::CommandDispatcherError,
     instantiate_tool_env::{
         InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult,
@@ -33,6 +35,9 @@ pub struct InstantiateBackendSpec {
 
     /// The parameters to initialize the backend with
     pub init_params: BackendInitializationParams,
+
+    /// The source directory to use for the backend
+    pub build_source_dir: PathBuf,
 
     /// The channel configuration to use for any source packages required by the
     /// backend.
@@ -50,13 +55,7 @@ impl CommandDispatcher {
     ) -> Result<Backend, CommandDispatcherError<InstantiateBackendError>> {
         let BackendSpec::JsonRpc(backend_spec) = spec.backend_spec;
 
-        let source_dir = if let Some(SourceLocationSpec::Path(path)) = spec.init_params.source {
-            path.resolve(&spec.init_params.source_anchor)
-                .map_err(InstantiateBackendError::from)
-                .map_err(CommandDispatcherError::Failed)?
-        } else {
-            spec.init_params.source_anchor
-        };
+        let source_dir = spec.build_source_dir;
 
         // Canonicalize the source_dir to ensure it's a fully resolved absolute path
         // without any relative components like ".." or "."
@@ -218,4 +217,8 @@ pub enum InstantiateBackendError {
 
     #[error(transparent)]
     SpecConversionError(#[from] SpecConversionError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    SourceCheckout(#[from] SourceCheckoutError),
 }
