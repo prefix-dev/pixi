@@ -2905,8 +2905,12 @@
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1"># Specify the specs of the environment</span>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>pixi<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>--spec<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9<span class="w"> </span>--spec<span class="w"> </span>numpy<span class="w"> </span>python
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># Force reinstall to recreate the environment and get the latest package versions</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>pixi<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>--force-reinstall<span class="w"> </span>--with<span class="w"> </span>py-rattler<span class="w"> </span>ipython
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># Install a specific conda package to temporary environment</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>pixi<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>--spec<span class="w"> </span>./numpy-2.3.4-py314h2b28147_0.conda<span class="w"> </span>--<span class="w"> </span>python
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>pixi<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>--spec<span class="w"> </span>https://prefix.dev/conda-forge/noarch/polars-1.35.1-pyh6a1acc5_0.conda<span class="w"> </span>--<span class="w"> </span>python
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="c1"># Force reinstall to recreate the environment and get the latest package versions</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>pixi<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>--force-reinstall<span class="w"> </span>--with<span class="w"> </span>py-rattler<span class="w"> </span>ipython
 </span></code></pre></div>
 
 

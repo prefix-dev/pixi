@@ -77,6 +77,9 @@ pixi exec python
 pixi exec --with py-rattler --with numpy ipython
 # Specify the specs of the environment
 pixi exec --spec python=3.9 --spec numpy python
+# Install a specific conda package to temporary environment
+pixi exec --spec ./numpy-2.3.4-py314h2b28147_0.conda -- python
+pixi exec --spec https://prefix.dev/conda-forge/noarch/polars-1.35.1-pyh6a1acc5_0.conda -- python
 # Force reinstall to recreate the environment and get the latest package versions
 pixi exec --force-reinstall --with py-rattler ipython
 
