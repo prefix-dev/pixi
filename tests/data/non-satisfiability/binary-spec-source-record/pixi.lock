@@ -1,4 +1,4 @@
-version: 6
+version: 7
 environments:
   default:
     channels:
@@ -13,8 +13,6 @@ packages:
 - conda: source
   name: source
   version: 0.1.0
-  build: hbf21a9e_0
-  subdir: win-64
   depends:
   - vc >=14.1,<15
   - vc14_runtime >=14.16.27033
@@ -27,8 +25,6 @@ packages:
   md5: 6797b005cd0f439c4c5c9ac565783700
   constrains:
   - vs2015_runtime >=14.29.30037
-  arch: x86_64
-  platform: win
   license: LicenseRef-MicrosoftWindowsSDK10
   size: 559710
   timestamp: 1728377334097
@@ -37,8 +33,6 @@ packages:
   md5: 311c9ba1dfdd2895a8cb08346ff26259
   depends:
   - vc14_runtime >=14.38.33135
-  arch: x86_64
-  platform: win
   track_features:
   - vc14
   license: BSD-3-Clause
@@ -52,8 +46,6 @@ packages:
   - ucrt >=10.0.20348.0
   constrains:
   - vs2015_runtime 14.40.33810.* *_22
-  arch: x86_64
-  platform: win
   license: LicenseRef-MicrosoftVisualCpp2015-2022Runtime
   license_family: Proprietary
   size: 750719

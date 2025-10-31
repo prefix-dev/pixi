@@ -66,12 +66,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .to_string();
             let package = Package {
                 name: name.clone(),
-                version: record
-                    .repodata_record
-                    .package_record
-                    .version
-                    .version()
-                    .to_string(),
+                version: Some(
+                    record
+                        .repodata_record
+                        .package_record
+                        .version
+                        .version()
+                        .to_string(),
+                ),
                 dependencies: record
                     .repodata_record
                     .package_record

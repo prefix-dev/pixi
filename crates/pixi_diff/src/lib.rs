@@ -9,7 +9,7 @@ use itertools::{Either, Itertools};
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt};
 use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, LockedPackage, LockedPackageRef};
+use rattler_lock::{CondaPackageData, LockFile, LockedPackage, LockedPackageRef};
 use serde::Serialize;
 use serde_json::Value;
 use tabwriter::TabWriter;
@@ -57,10 +57,9 @@ impl LockFileDiff {
                     .into_iter()
                     .flatten()
                     .partition_map(|p| match p {
-                        LockedPackageRef::Conda(conda_package_data) => Either::Left((
-                            conda_package_data.record().name.clone(),
-                            conda_package_data,
-                        )),
+                        LockedPackageRef::Conda(conda_package_data) => {
+                            Either::Left((conda_package_data.name(), conda_package_data))
+                        }
                         LockedPackageRef::Pypi(pypi_package_data, pypi_env_data) => {
                             Either::Right((
                                 pypi_package_data.name.clone(),
@@ -75,7 +74,7 @@ impl LockFileDiff {
                 for package in packages {
                     match package {
                         LockedPackageRef::Conda(data) => {
-                            let name = &data.record().name;
+                            let name = &data.name();
                             match previous_conda_packages.remove(name) {
                                 Some(previous) if previous.location() != data.location() => {
                                     diff.changed
@@ -254,9 +253,22 @@ impl LockFileDiff {
 
         fn format_package_identifier(package: &LockedPackage) -> String {
             match package {
-                LockedPackage::Conda(p) => {
-                    format!("{} {}", &p.record().version.as_str(), &p.record().build)
-                }
+                LockedPackage::Conda(p) => match p {
+                    CondaPackageData::Binary(binary) => {
+                        format!(
+                            "{} {}",
+                            &binary.package_record.version.as_str(),
+                            &binary.package_record.build
+                        )
+                    }
+                    CondaPackageData::Source(conda_source_data) => {
+                        format!(
+                            "{} @ {}",
+                            conda_source_data.name.as_source(),
+                            conda_source_data.location
+                        )
+                    }
+                },
                 LockedPackage::Pypi(p, _) => p.version.to_string(),
             }
         }
@@ -310,19 +322,54 @@ impl LockFileDiff {
                 let name = previous.name();
                 let line = match (previous, current) {
                     (LockedPackage::Conda(previous), LockedPackage::Conda(current)) => {
-                        let previous = previous.record();
-                        let current = current.record();
+                        // Handle both Binary and Source variants
+                        match (previous.as_binary(), current.as_binary()) {
+                            (Some(prev_binary), Some(curr_binary)) => {
+                                let previous = &prev_binary.package_record;
+                                let current = &curr_binary.package_record;
 
-                        format!(
-                            "{} {} {}\t{} {}\t->\t{} {}",
-                            console::style("~").yellow(),
-                            consts::CondaEmoji,
-                            name,
-                            choose_style(&previous.version.as_str(), &current.version.as_str()),
-                            choose_style(previous.build.as_str(), current.build.as_str()),
-                            choose_style(&current.version.as_str(), &previous.version.as_str()),
-                            choose_style(current.build.as_str(), previous.build.as_str()),
-                        )
+                                format!(
+                                    "{} {} {}\t{} {}\t->\t{} {}",
+                                    console::style("~").yellow(),
+                                    consts::CondaEmoji,
+                                    name,
+                                    choose_style(
+                                        &previous.version.as_str(),
+                                        &current.version.as_str()
+                                    ),
+                                    choose_style(previous.build.as_str(), current.build.as_str()),
+                                    choose_style(
+                                        &current.version.as_str(),
+                                        &previous.version.as_str()
+                                    ),
+                                    choose_style(current.build.as_str(), previous.build.as_str()),
+                                )
+                            }
+                            // For source packages, show location instead of version/build
+                            (Some(_), None) | (None, Some(_)) => {
+                                // Transition between binary and source
+                                format!(
+                                    "{} {} {} (binary <-> source)",
+                                    console::style("~").yellow(),
+                                    consts::CondaEmoji,
+                                    name,
+                                )
+                            }
+                            (None, None) => {
+                                // Both are source packages, show location
+                                let prev_location = previous.location().to_string();
+                                let curr_location = current.location().to_string();
+
+                                format!(
+                                    "{} {} {}\t{}\t->\t{}",
+                                    console::style("~").yellow(),
+                                    consts::CondaEmoji,
+                                    name,
+                                    choose_style(&prev_location, &curr_location),
+                                    choose_style(&curr_location, &prev_location),
+                                )
+                            }
+                        }
                     }
                     (LockedPackage::Pypi(previous, _), LockedPackage::Pypi(current, _)) => {
                         format!(
@@ -404,13 +451,13 @@ impl LockFileJsonDiff {
 
                 let add_diffs = packages_diff.added.into_iter().map(|new| match new {
                     LockedPackage::Conda(pkg) => JsonPackageDiff {
-                        name: pkg.record().name.as_normalized().to_string(),
+                        name: pkg.name().as_normalized().to_string(),
                         before: None,
                         after: Some(
                             serde_json::to_value(&pkg).expect("should be able to serialize"),
                         ),
                         ty: JsonPackageType::Conda,
-                        explicit: conda_dependencies.contains_key(&pkg.record().name),
+                        explicit: conda_dependencies.contains_key(pkg.name()),
                     },
                     LockedPackage::Pypi(pkg, _) => JsonPackageDiff {
                         name: pkg.name.as_dist_info_name().into_owned(),
@@ -425,13 +472,13 @@ impl LockFileJsonDiff {
 
                 let removed_diffs = packages_diff.removed.into_iter().map(|old| match old {
                     LockedPackage::Conda(pkg) => JsonPackageDiff {
-                        name: pkg.record().name.as_normalized().to_string(),
+                        name: pkg.name().as_normalized().to_string(),
                         before: Some(
                             serde_json::to_value(&pkg).expect("should be able to serialize"),
                         ),
                         after: None,
                         ty: JsonPackageType::Conda,
-                        explicit: conda_dependencies.contains_key(&pkg.record().name),
+                        explicit: conda_dependencies.contains_key(pkg.name()),
                     },
 
                     LockedPackage::Pypi(pkg, _) => JsonPackageDiff {
@@ -452,11 +499,11 @@ impl LockFileJsonDiff {
                             let after = serde_json::to_value(&new).expect("should be able to serialize");
                             let (before, after) = compute_json_diff(before, after);
                             JsonPackageDiff {
-                                name: old.record().name.as_normalized().to_string(),
+                                name: old.name().as_normalized().to_string(),
                                 before: Some(before),
                                 after: Some(after),
                                 ty: JsonPackageType::Conda,
-                                explicit: conda_dependencies.contains_key(&old.record().name),
+                                explicit: conda_dependencies.contains_key(old.name()),
                             }
                         }
                     (LockedPackage::Pypi(old, _), LockedPackage::Pypi(new, _)) => {

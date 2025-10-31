@@ -1,5 +1,5 @@
 use futures::FutureExt;
-use pixi_record::PixiRecord;
+use pixi_record::PixiPackageRecord;
 
 use super::{CommandDispatcherProcessor, PendingSolveCondaEnvironment, TaskResult};
 use crate::{
@@ -90,7 +90,7 @@ impl CommandDispatcherProcessor {
     pub(crate) fn on_solve_conda_environment_result(
         &mut self,
         id: SolveCondaEnvironmentId,
-        result: Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>>,
+        result: Result<Vec<PixiPackageRecord>, CommandDispatcherError<SolveCondaEnvironmentError>>,
     ) {
         self.parent_contexts.remove(&id.into());
         let env = self

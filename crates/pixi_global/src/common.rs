@@ -1259,7 +1259,7 @@ mod tests {
         #[cfg(windows)]
         {
             for script_name in script_names {
-                let script_path = bin_dir.path().join(format!("{}.bat", script_name));
+                let script_path = bin_dir.path().join(format!("{script_name}.bat"));
                 let script = format!(
                     r#"
             @"{}" %*
@@ -1267,7 +1267,7 @@ mod tests {
                     env_dir
                         .path()
                         .join("bin")
-                        .join(format!("{}.exe", script_name))
+                        .join(format!("{script_name}.exe"))
                         .to_string_lossy()
                 );
                 tokio_fs::write(&script_path, script).await.unwrap();

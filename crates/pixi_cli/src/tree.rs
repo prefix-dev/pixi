@@ -120,11 +120,10 @@ pub(crate) fn extract_package_info(
     package: rattler_lock::LockedPackageRef<'_>,
 ) -> Option<PackageInfo> {
     if let Some(conda_package) = package.as_conda() {
-        let name = conda_package.record().name.as_normalized().to_string();
+        let name = conda_package.name().as_normalized().to_string();
 
         let dependencies: Vec<String> = conda_package
-            .record()
-            .depends
+            .depends()
             .iter()
             .map(|d| {
                 d.split_once(' ')
@@ -179,9 +178,9 @@ pub fn generate_dependency_map(locked_deps: &[LockedPackageRef<'_>]) -> HashMap<
                     name: package_info.name,
                     version: match package {
                         LockedPackageRef::Conda(conda_data) => {
-                            conda_data.record().version.to_string()
+                            conda_data.version().map(|v| v.to_string())
                         }
-                        LockedPackageRef::Pypi(pypi_data, _) => pypi_data.version.to_string(),
+                        LockedPackageRef::Pypi(pypi_data, _) => Some(pypi_data.version.to_string()),
                     },
                     dependencies: package_info
                         .dependencies

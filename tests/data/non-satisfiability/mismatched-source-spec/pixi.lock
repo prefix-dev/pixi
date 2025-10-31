@@ -1,4 +1,4 @@
-version: 6
+version: 7
 environments:
   default:
     channels:
@@ -7,10 +7,6 @@ environments:
       win-64:
       - conda: child-package
 packages:
-# This should invalidate the lock-file because the package `child-package` is
-# requested as a git package in the pixi.toml.
 - conda: child-package
   name: child-package
   version: 0.1.0
-  build: pyhbf21a9e_0
-  subdir: noarch

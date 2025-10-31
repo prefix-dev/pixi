@@ -1,4 +1,4 @@
-version: 6
+version: 7
 environments:
   default:
     channels:
@@ -35,8 +35,6 @@ packages:
 - conda: child-package
   name: child-package
   version: 0.1.0
-  build: hbf21a9e_0
-  subdir: linux-64
   depends:
   - libstdcxx >=15
   - libgcc >=15

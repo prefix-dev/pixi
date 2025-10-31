@@ -1,24 +1,39 @@
-use std::{
-    collections::{BTreeSet, HashMap},
-    str::FromStr,
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+use pixi_spec::SourceSpec;
+use rattler_conda_types::{
+    MatchSpec, Matches, NoArchType, PackageName, PackageRecord, PackageUrl, VersionWithSource,
+    package::RunExportsJson,
 };
+use rattler_digest::{Md5Hash, Sha256, Sha256Hash};
+use rattler_lock::{CondaPackageData, CondaSourceData};
+use std::str::FromStr;
 
 use pixi_git::sha::GitSha;
-use pixi_spec::{GitReference, SourceSpec};
-use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
-use rattler_digest::{Sha256, Sha256Hash};
-use rattler_lock::{CondaPackageData, CondaSourceData, GitShallowSpec, PackageBuildSource};
+use pixi_spec::GitReference;
+use rattler_lock::{GitShallowSpec, PackageBuildSource};
 use serde::{Deserialize, Serialize};
-use typed_path::Utf8TypedPathBuf;
 
+use crate::SelectedVariant;
 use crate::{ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec};
 
-/// A record of a conda package that still requires building.
+/// A minimal record of a source package stored in the lock file.
+///
+/// This contains only the essential information needed to identify and locate
+/// a source package (name, source location, variants, dependencies). Notably,
+/// it does **not** include version or build information, which is only known
+/// after the package has been built or its metadata has been resolved.
+///
+/// This minimal representation is sufficient to perform an install (build the
+/// package from source), but not to perform a solve (which requires version
+/// and build information).
+///
+/// For the complete package information with version/build details, see
+/// [`SourcePackageRecord`].
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SourceRecord {
-    /// Information about the conda package. This is metadata of the package
-    /// after it has been build.
-    pub package_record: PackageRecord,
+    /// The name of the package
+    pub name: PackageName,
 
     /// Exact definition of the source of the package.
     pub manifest_source: PinnedSourceSpec,
@@ -26,6 +41,29 @@ pub struct SourceRecord {
     /// The optional pinned source where the build should be executed
     /// This is used when the manifest is not in the same location ad
     pub build_source: Option<PinnedSourceSpec>,
+
+    /// Conda-build variants used to disambiguate between multiple source packages
+    /// at the same location.
+    pub variants: SelectedVariant,
+
+    /// Optionally the version of the package
+    pub version: Option<VersionWithSource>,
+
+    /// Specification of packages this package depends on
+    pub depends: Vec<String>,
+
+    /// Additional constraints on packages
+    pub constrains: Vec<String>,
+
+    /// Experimental: additional dependencies grouped by feature name
+    pub experimental_extra_depends: BTreeMap<String, Vec<String>>,
+
+    /// The specific license of the package
+    pub license: Option<String>,
+
+    /// Package identifiers of packages that are equivalent to this package but
+    /// from other ecosystems (e.g., PyPI)
+    pub purls: Option<BTreeSet<PackageUrl>>,
 
     /// The hash of the input that was used to build the metadata of the
     /// package. This can be used to verify that the metadata is still valid.
@@ -37,6 +75,121 @@ pub struct SourceRecord {
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
     pub sources: HashMap<String, SourceSpec>,
+
+    /// Python site-packages path if this is a Python package
+    pub python_site_packages_path: Option<String>,
+}
+
+/// A complete source package record with full metadata after resolution or building.
+///
+/// This extends [`SourceRecord`] with complete package metadata including version,
+/// build string, build number, timestamp, and hashes. This information is obtained
+/// after building the package or resolving its metadata from the recipe.
+///
+/// Unlike [`SourceRecord`], this contains all the information needed to perform
+/// dependency solving. It is **only** used during solve operations; for install
+/// operations, [`SourceRecord`] contains sufficient information.
+///
+/// This is **not** stored in the lock file (only the minimal [`SourceRecord`] is persisted).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SourcePackageRecord {
+    /// The base source record
+    pub source_record: SourceRecord,
+
+    /// The version of the package
+    pub version: VersionWithSource,
+
+    /// The build string of the package
+    pub build: String,
+
+    /// The build number of the package
+    pub build_number: rattler_conda_types::BuildNumber,
+
+    /// The subdir of the package
+    pub subdir: String,
+
+    /// Optionally the architecture the package supports
+    pub arch: Option<String>,
+
+    /// Optionally the platform the package supports
+    pub platform: Option<String>,
+
+    /// MD5 hash of the package archive
+    pub md5: Option<Md5Hash>,
+
+    /// SHA256 hash of the package archive
+    pub sha256: Option<Sha256Hash>,
+
+    /// Size of the package archive in bytes
+    pub size: Option<u64>,
+
+    /// Track features
+    pub track_features: Vec<String>,
+
+    /// Features (deprecated)
+    pub features: Option<String>,
+
+    /// License family
+    pub license_family: Option<String>,
+
+    /// Timestamp of when the package was built
+    pub timestamp: Option<chrono::DateTime<chrono::Utc>>,
+
+    /// Run exports information
+    pub run_exports: Option<RunExportsJson>,
+
+    /// NoArch type
+    pub noarch: NoArchType,
+
+    /// Legacy bz2 MD5 hash
+    pub legacy_bz2_md5: Option<Md5Hash>,
+
+    /// Legacy bz2 size
+    pub legacy_bz2_size: Option<u64>,
+}
+
+impl From<SourcePackageRecord> for SourceRecord {
+    fn from(value: SourcePackageRecord) -> Self {
+        value.source_record
+    }
+}
+
+impl From<SourcePackageRecord> for PackageRecord {
+    fn from(value: SourcePackageRecord) -> Self {
+        PackageRecord {
+            name: value.source_record.name,
+            version: value.version,
+            build: value.build,
+            build_number: value.build_number,
+            subdir: value.subdir,
+            depends: value.source_record.depends,
+            constrains: value.source_record.constrains,
+            arch: value.arch,
+            platform: value.platform,
+            md5: value.md5,
+            sha256: value.sha256,
+            size: value.size,
+            license: value.source_record.license,
+            license_family: value.license_family,
+            purls: value.source_record.purls,
+            track_features: value.track_features,
+            features: value.features,
+            timestamp: value.timestamp.map(From::from),
+            run_exports: value.run_exports,
+            experimental_extra_depends: value.source_record.experimental_extra_depends,
+            noarch: value.noarch,
+            legacy_bz2_md5: value.legacy_bz2_md5,
+            legacy_bz2_size: value.legacy_bz2_size,
+            python_site_packages_path: value.source_record.python_site_packages_path,
+        }
+    }
+}
+
+impl SourcePackageRecord {
+    /// Convert to a PackageRecord
+    pub fn package_record(&self) -> PackageRecord {
+        self.clone().into()
+    }
 }
 
 /// Defines the hash of the input files that were used to build the metadata of
@@ -57,51 +210,28 @@ pub struct InputHash {
 
 impl From<SourceRecord> for CondaPackageData {
     fn from(value: SourceRecord) -> Self {
-        let package_build_source = value.build_source.map(|s| match s {
-            PinnedSourceSpec::Url(pinned_url_spec) => PackageBuildSource::Url {
-                url: pinned_url_spec.url,
-                sha256: pinned_url_spec.sha256,
-                subdir: None,
-            },
-            PinnedSourceSpec::Git(pinned_git_spec) => {
-                let subdirectory = pinned_git_spec
-                    .source
-                    .subdirectory
-                    .as_deref()
-                    .map(Utf8TypedPathBuf::from);
-
-                let spec = match &pinned_git_spec.source.reference {
-                    GitReference::Branch(branch) => Some(GitShallowSpec::Branch(branch.clone())),
-                    GitReference::Tag(tag) => Some(GitShallowSpec::Tag(tag.clone())),
-                    GitReference::Rev(_) => Some(GitShallowSpec::Rev),
-                    GitReference::DefaultBranch => None,
-                };
-
-                PackageBuildSource::Git {
-                    url: pinned_git_spec.git,
-                    spec,
-                    rev: pinned_git_spec.source.commit.to_string(),
-                    subdir: subdirectory,
-                }
-            }
-            PinnedSourceSpec::Path(pinned_path) => PackageBuildSource::Path {
-                path: pinned_path.path,
-            },
-        });
         CondaPackageData::Source(CondaSourceData {
-            package_record: value.package_record,
-            location: value.manifest_source.clone().into(),
-            package_build_source,
-            input: value.input_hash.map(|i| rattler_lock::InputHash {
-                hash: i.hash,
-                // TODO: fix this in rattler
-                globs: Vec::from_iter(i.globs),
-            }),
+            name: value.name,
+            location: value.manifest_source.into(),
+            variants: value.variants,
+            version: value.version,
+            depends: value.depends,
+            constrains: value.constrains,
+            experimental_extra_depends: value.experimental_extra_depends,
+            license: value.license,
+            purls: value.purls,
             sources: value
                 .sources
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
+            input: value.input_hash.map(|i| rattler_lock::InputHash {
+                hash: i.hash,
+                globs: Vec::from_iter(i.globs),
+            }),
+            package_build_source: None,
+            python_site_packages_path: value.python_site_packages_path,
+            dev: false, // TODO: adapt this when we implement the dev feature
         })
     }
 }
@@ -147,8 +277,15 @@ impl TryFrom<CondaSourceData> for SourceRecord {
             }
         });
         Ok(Self {
-            package_record: value.package_record,
+            name: value.name,
             manifest_source: value.location.try_into()?,
+            version: value.version,
+            variants: value.variants,
+            depends: value.depends,
+            constrains: value.constrains,
+            experimental_extra_depends: value.experimental_extra_depends,
+            license: value.license,
+            purls: value.purls,
             input_hash: value.input.map(|hash| InputHash {
                 hash: hash.hash,
                 globs: BTreeSet::from_iter(hash.globs),
@@ -159,30 +296,24 @@ impl TryFrom<CondaSourceData> for SourceRecord {
                 .into_iter()
                 .map(|(k, v)| (k, SourceSpec::from(v)))
                 .collect(),
+            python_site_packages_path: value.python_site_packages_path,
         })
-    }
-}
-
-impl Matches<SourceRecord> for NamelessMatchSpec {
-    fn matches(&self, pkg: &SourceRecord) -> bool {
-        if !self.matches(&pkg.package_record) {
-            return false;
-        }
-
-        if self.channel.is_some() {
-            // We don't have a channel in a source record. So if a matchspec requires that
-            // information it can't match.
-            return false;
-        }
-
-        true
     }
 }
 
 impl Matches<SourceRecord> for MatchSpec {
     fn matches(&self, pkg: &SourceRecord) -> bool {
-        if !self.matches(&pkg.package_record) {
-            return false;
+        // Check if the name matches
+        if let Some(ref name) = self.name {
+            if name != &pkg.name {
+                return false;
+            }
+        }
+
+        if let (Some(version_spec), Some(version)) = (&self.version, &pkg.version) {
+            if !version_spec.matches(version) {
+                return false;
+            }
         }
 
         if self.channel.is_some() {
@@ -191,13 +322,9 @@ impl Matches<SourceRecord> for MatchSpec {
             return false;
         }
 
+        // For source packages, version, build, and build_number are not stored
+        // in the lock file, so we only match by name
         true
-    }
-}
-
-impl AsRef<PackageRecord> for SourceRecord {
-    fn as_ref(&self) -> &PackageRecord {
-        &self.package_record
     }
 }
 
@@ -205,21 +332,11 @@ impl AsRef<PackageRecord> for SourceRecord {
 mod tests {
     use super::*;
     use pixi_git::sha::GitSha;
-    use serde_json::json;
     use std::str::FromStr;
     use url::Url;
 
     #[test]
     fn package_build_source_roundtrip_preserves_git_subdirectory() {
-        let package_record: PackageRecord = serde_json::from_value(json!({
-            "name": "example",
-            "version": "1.0.0",
-            "build": "0",
-            "build_number": 0,
-            "subdir": "noarch",
-        }))
-        .expect("valid package record");
-
         let git_url = Url::parse("https://example.com/repo.git").unwrap();
         let pinned_source = PinnedSourceSpec::Git(crate::PinnedGitSpec {
             git: git_url.clone(),
@@ -231,11 +348,19 @@ mod tests {
         });
 
         let record = SourceRecord {
-            package_record,
+            name: PackageName::from_str("example").unwrap(),
+            version: Some(VersionWithSource::from_str("1.0.0").unwrap()),
             manifest_source: pinned_source.clone(),
             build_source: Some(pinned_source.clone()),
             input_hash: None,
             sources: Default::default(),
+            variants: Default::default(),
+            constrains: Default::default(),
+            depends: Default::default(),
+            experimental_extra_depends: Default::default(),
+            license: None,
+            purls: None,
+            python_site_packages_path: None,
         };
 
         let CondaPackageData::Source(conda_source) = record.clone().into() else {

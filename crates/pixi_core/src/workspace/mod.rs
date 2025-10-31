@@ -734,9 +734,7 @@ impl Workspace {
         filter_lock_file(self, lock_file, |env, platform, package| {
             if affected_environments.contains(&(env.name().as_str(), platform)) {
                 match package {
-                    LockedPackageRef::Conda(package) => {
-                        !conda_packages.contains(&package.record().name)
-                    }
+                    LockedPackageRef::Conda(package) => !conda_packages.contains(package.name()),
                     LockedPackageRef::Pypi(package, _env) => !pypi_packages.contains(&package.name),
                 }
             } else {

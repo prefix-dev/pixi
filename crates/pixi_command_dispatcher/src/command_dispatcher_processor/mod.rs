@@ -31,7 +31,7 @@ use crate::{
 use futures::{StreamExt, future::LocalBoxFuture};
 use itertools::Itertools;
 use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
-use pixi_record::PixiRecord;
+use pixi_record::PixiPackageRecord;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
@@ -149,11 +149,11 @@ type BoxedDispatcherResult<T, E> = Box<Result<T, CommandDispatcherError<E>>>;
 enum TaskResult {
     SolveCondaEnvironment(
         SolveCondaEnvironmentId,
-        BoxedDispatcherResult<Vec<PixiRecord>, SolveCondaEnvironmentError>,
+        BoxedDispatcherResult<Vec<PixiPackageRecord>, SolveCondaEnvironmentError>,
     ),
     SolvePixiEnvironment(
         SolvePixiEnvironmentId,
-        BoxedDispatcherResult<Vec<PixiRecord>, SolvePixiEnvironmentError>,
+        BoxedDispatcherResult<Vec<PixiPackageRecord>, SolvePixiEnvironmentError>,
     ),
     BuildBackendMetadata(
         BuildBackendMetadataId,
@@ -205,7 +205,7 @@ enum PendingGitCheckout {
 /// background task to keep track of which command_dispatcher is awaiting the
 /// result.
 struct PendingSolveCondaEnvironment {
-    tx: oneshot::Sender<Result<Vec<PixiRecord>, SolveCondaEnvironmentError>>,
+    tx: oneshot::Sender<Result<Vec<PixiPackageRecord>, SolveCondaEnvironmentError>>,
     reporter_id: Option<reporter::CondaSolveId>,
 }
 
@@ -218,7 +218,7 @@ struct PendingBackendSourceBuild {
 /// background task to keep track of which command_dispatcher is awaiting the
 /// result.
 struct PendingPixiEnvironment {
-    tx: oneshot::Sender<Result<Vec<PixiRecord>, SolvePixiEnvironmentError>>,
+    tx: oneshot::Sender<Result<Vec<PixiPackageRecord>, SolvePixiEnvironmentError>>,
     reporter_id: Option<reporter::PixiSolveId>,
 }
 

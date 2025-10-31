@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use conda_pypi_clobber::PypiCondaClobberRegistry;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, WrapErr};
+use miette::{IntoDiagnostic, WrapErr, miette};
 use pixi_consts::consts;
 use pixi_manifest::{
     EnvironmentName, SystemRequirements,
@@ -26,10 +26,7 @@ use pixi_uv_conversions::{
     to_exclude_newer, to_index_strategy,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
-use pypi_modifiers::{
-    Tags,
-    pypi_tags::{get_pypi_tags, is_python_record},
-};
+use pypi_modifiers::{Tags, pypi_tags::get_pypi_tags};
 use rattler_conda_types::Platform;
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rayon::prelude::*;
@@ -318,14 +315,17 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         // Determine the current environment markers.
         let python_record = pixi_records
             .iter()
-            .find(|r| is_python_record(r))
+            .find(|r| r.name() == &rattler_conda_types::PackageName::new_unchecked("python"))
             .cloned()
             .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {manifest}, or run:\n\n\tpixi add python", manifest=consts::WORKSPACE_MANIFEST))?;
 
+        // TODO: resolve python record if its a source record
         let tags = get_pypi_tags(
             self.config.platform,
             self.config.system_requirements,
-            python_record.package_record(),
+            python_record
+                .package_record()
+                .ok_or_else(|| miette!("python from source is not yet supported"))?,
         )?;
 
         let index_locations = self

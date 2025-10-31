@@ -215,6 +215,24 @@ zstd = { version = "0.13.3", default-features = false }
 reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
 reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
+#
+# pixi-rattler-patches - START
+file_url = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_cache = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_lock = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_menuinst = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_networking = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_package_streaming = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_shell = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_solve = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+simple_spawn_blocking = { git = "https://github.com/baszalmstra/rattler", branch = "rattler-lock/v7" }
+# pixi-rattler-patches - END
+#
 
 [profile.ci]
 codegen-units = 16

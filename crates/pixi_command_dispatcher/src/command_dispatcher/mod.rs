@@ -19,7 +19,7 @@ use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
-use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
+use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiPackageRecord};
 use pixi_spec::SourceLocationSpec;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
@@ -245,7 +245,7 @@ pub(crate) enum ForegroundMessage {
 /// pixi environment.
 pub(crate) type SolvePixiEnvironmentTask = Task<PixiEnvironmentSpec>;
 impl TaskSpec for PixiEnvironmentSpec {
-    type Output = Vec<PixiRecord>;
+    type Output = Vec<PixiPackageRecord>;
     type Error = SolvePixiEnvironmentError;
 }
 
@@ -261,7 +261,7 @@ impl TaskSpec for InstallPixiEnvironmentSpec {
 /// conda environment.
 pub(crate) type SolveCondaEnvironmentTask = Task<SolveCondaEnvironmentSpec>;
 impl TaskSpec for SolveCondaEnvironmentSpec {
-    type Output = Vec<PixiRecord>;
+    type Output = Vec<PixiPackageRecord>;
     type Error = SolveCondaEnvironmentError;
 }
 
@@ -510,7 +510,7 @@ impl CommandDispatcher {
     pub async fn solve_pixi_environment(
         &self,
         spec: PixiEnvironmentSpec,
-    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>> {
+    ) -> Result<Vec<PixiPackageRecord>, CommandDispatcherError<SolvePixiEnvironmentError>> {
         self.execute_task(spec).await
     }
 
@@ -540,7 +540,7 @@ impl CommandDispatcher {
     pub async fn solve_conda_environment(
         &self,
         spec: SolveCondaEnvironmentSpec,
-    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>> {
+    ) -> Result<Vec<PixiPackageRecord>, CommandDispatcherError<SolveCondaEnvironmentError>> {
         self.execute_task(spec).await
     }
 

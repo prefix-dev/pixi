@@ -30,7 +30,7 @@ use pixi_install_pypi::{
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PixiRecord};
+use pixi_record::{ParseLockFileError, PixiPackageRecord, PixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
@@ -498,7 +498,7 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let (ignored_conda, ignored_pypi): (HashSet<_>, HashSet<_>) =
                     ignored.into_iter().partition_map(|p| match p {
-                        LockedPackageRef::Conda(data) => Either::Left(data.record().name.clone()),
+                        LockedPackageRef::Conda(data) => Either::Left(data.name().clone()),
                         LockedPackageRef::Pypi(data, _) => Either::Right(data.name.clone()),
                     });
 
@@ -1428,7 +1428,7 @@ impl<'p> UpdateContext<'p> {
                             .iter()
                             .filter_map(|r| match r {
                                 PixiRecord::Source(src) => {
-                                    let name = src.package_record.name.clone();
+                                    let name = src.name.clone();
                                     if targets.contains(name.as_source()) {
                                         src.build_source.clone().map(|spec| (name, spec))
                                     } else {
@@ -2044,7 +2044,9 @@ async fn spawn_solve_conda_environment_task(
         mapping_client
             .amend_purls(
                 &pypi_name_mapping_location,
-                records.iter_mut().filter_map(PixiRecord::as_binary_mut),
+                records
+                    .iter_mut()
+                    .filter_map(PixiPackageRecord::as_binary_mut),
                 None,
             )
             .await
@@ -2052,7 +2054,9 @@ async fn spawn_solve_conda_environment_task(
     }
 
     // Turn the records into a map by name
-    let records_by_name = PixiRecordsByName::from(records);
+    let records_by_name =
+        PixiRecordsByName::from_unique_iter(records.into_iter().map(PixiRecord::from))
+            .expect("records returned by solve must have unique names");
 
     let end = Instant::now();
 
@@ -2171,7 +2175,7 @@ async fn spawn_extract_environment_task(
         match record {
             PackageRecord::Conda(record) => {
                 // Find all dependencies in the record and add them to the queue.
-                for dependency in record.package_record().depends.iter() {
+                for dependency in record.depends().iter() {
                     let dependency_name =
                         PackageName::Conda(rattler_conda_types::PackageName::new_unchecked(
                             dependency.split_once(' ').unwrap_or((dependency, "")).0,
@@ -2231,9 +2235,10 @@ async fn spawn_extract_environment_task(
     Ok(TaskResult::ExtractedRecordsSubset(
         environment.name().clone(),
         platform,
-        Arc::new(PixiRecordsByName::from_iter(
-            pixi_records.into_iter().cloned(),
-        )),
+        Arc::new(
+            PixiRecordsByName::from_unique_iter(pixi_records.into_iter().cloned())
+                .expect("solver should never return multiple entries for a single package name"),
+        ),
         Arc::new(PypiRecordsByName::from_iter(
             pypi_records.into_values().cloned(),
         )),
