@@ -140,7 +140,19 @@ impl BuildBackendMetadataSpec {
                 command_dispatcher
                     .pin_and_checkout(
                         build_source.clone(),
-                        Some(&discovered_backend.init_params.manifest_path),
+                        Some(
+                            discovered_backend
+                                .init_params
+                                .manifest_path
+                                .parent()
+                                .ok_or_else(|| {
+                                    SourceCheckoutError::ParentDir(
+                                        discovered_backend.init_params.manifest_path.clone(),
+                                    )
+                                })
+                                .map_err(BuildBackendMetadataError::SourceCheckout)
+                                .map_err(CommandDispatcherError::Failed)?,
+                        ),
                     )
                     .await
                     .map_err_with(BuildBackendMetadataError::SourceCheckout)?,
