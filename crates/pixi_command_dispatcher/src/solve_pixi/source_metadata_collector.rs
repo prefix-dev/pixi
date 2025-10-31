@@ -171,7 +171,7 @@ impl SourceMetadataCollector {
         // will pick build_source; we only override the build pin later.
         let source = self
             .command_queue
-            .pin_and_checkout(spec.location)
+            .pin_and_checkout(spec.location, None)
             .await
             .map_err(|err| CollectSourceMetadataError::SourceCheckoutError {
                 name: name.as_source().to_string(),

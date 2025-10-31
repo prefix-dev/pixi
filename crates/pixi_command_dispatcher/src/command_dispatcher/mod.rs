@@ -565,7 +565,20 @@ impl CommandDispatcher {
     ///
     /// This function resolves the source specification to a concrete checkout
     /// by:
-    /// 1. For path sources: Resolving relative paths against the root directory
+    /// 1. For path sources: Resolving relative paths against the root directory or against an alternative root path
+    ///
+    /// i.e. in the case of an out-of-tree build.
+    /// Some examples for different inputs:
+    /// - `/foo/bar` => `/foo/bar` (absolute paths are unchanged)
+    /// - `./bar` => `<root_dir>/bar`
+    /// - `bar` => `<root_dir>/bar` (or `<alternative_root>/bar` if provided)
+    /// - `../bar` => `<alternative_root>/../bar` (normalized, validated for security)
+    /// - `~/bar` => `<home_dir>/bar`
+    ///
+    /// Usually:
+    /// * `root_dir` => workspace root directory (parent of workspace manifest)
+    /// * `alternative_root` => package root directory (parent of package manifest)
+    ///
     /// 2. For git sources: Cloning or fetching the repository and checking out
     ///    the specified reference
     /// 3. For URL sources: Downloading and extracting the archive (currently
@@ -578,6 +591,7 @@ impl CommandDispatcher {
     pub async fn pin_and_checkout(
         &self,
         source_location_spec: SourceLocationSpec,
+        alternative_root: Option<&Path>,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match source_location_spec {
             SourceLocationSpec::Url(url) => {
@@ -586,7 +600,7 @@ impl CommandDispatcher {
             SourceLocationSpec::Path(path) => {
                 let source_path = self
                     .data
-                    .resolve_typed_path(path.path.to_path())
+                    .resolve_typed_path(path.path.to_path(), alternative_root)
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
@@ -618,7 +632,7 @@ impl CommandDispatcher {
             PinnedSourceSpec::Path(ref path) => {
                 let source_path = self
                     .data
-                    .resolve_typed_path(path.path.to_path())
+                    .resolve_typed_path(path.path.to_path(), None)
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
@@ -653,7 +667,11 @@ impl CommandDispatcherData {
     ///
     /// This function does not check if the path exists and also does not follow
     /// symlinks.
-    fn resolve_typed_path(&self, path_spec: Utf8TypedPath) -> Result<PathBuf, InvalidPathError> {
+    fn resolve_typed_path(
+        &self,
+        path_spec: Utf8TypedPath,
+        alternative_root: Option<&Path>,
+    ) -> Result<PathBuf, InvalidPathError> {
         if path_spec.is_absolute() {
             Ok(Path::new(path_spec.as_str()).to_path_buf())
         } else if let Ok(user_path) = path_spec.strip_prefix("~/") {
@@ -663,7 +681,20 @@ impl CommandDispatcherData {
             debug_assert!(home_dir.is_absolute());
             normalize_absolute_path(&home_dir.join(Path::new(user_path.as_str())))
         } else {
-            let root_dir = self.root_dir.as_path();
+            let root_dir = match alternative_root {
+                Some(root_path) => {
+                    debug_assert!(
+                        root_path.is_absolute(),
+                        "alternative_root must be absolute, got: {root_path:?}"
+                    );
+                    debug_assert!(
+                        !root_path.is_file(),
+                        "alternative_root should be a directory, not a file: {root_path:?}"
+                    );
+                    root_path
+                }
+                None => self.root_dir.as_path(),
+            };
             let native_path = Path::new(path_spec.as_str());
             debug_assert!(root_dir.is_absolute());
             normalize_absolute_path(&root_dir.join(native_path))

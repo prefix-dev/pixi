@@ -340,3 +340,94 @@ my-package = {{ path = "./my-package" }}
         "my-package",
     ));
 }
+
+/// Test that verifies [package.build] source.path is resolved relative to the
+/// package manifest directory, not the workspace root.
+///
+/// This tests the fix for out-of-tree builds where a package manifest
+/// specifies `source.path = "src"` and expects it to be resolved relative
+/// to the package manifest's parent directory.
+#[tokio::test]
+async fn test_package_build_source_relative_to_manifest() {
+    setup_tracing();
+
+    // Create a PixiControl instance with PassthroughBackend
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create the package structure:
+    // workspace/
+    //   pixi.toml (workspace and package manifest)
+    //   src/      (source directory - should be found relative to package manifest)
+    //     pixi.toml (build source manifest)
+
+    let package_source_dir = pixi.workspace_path().join("src");
+    fs::create_dir_all(&package_source_dir).unwrap();
+
+    // Create a pixi.toml in the source directory that PassthroughBackend will read
+    let source_pixi_toml = r#"
+[package]
+name = "test-build-source"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+"#;
+    fs::write(package_source_dir.join("pixi.toml"), source_pixi_toml).unwrap();
+
+    // Create a manifest where the package has [package.build] with source.path
+    // The source.path should be resolved relative to the package manifest directory
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = []
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[package]
+name = "test-build-source"
+version = "0.1.0"
+description = "Test package for build source path resolution"
+
+[package.build]
+backend = {{ name = "in-memory", version = "0.1.0" }}
+# This should resolve to <package_manifest_dir>/src, not <workspace_root>/src
+source.path = "src"
+
+[dependencies]
+test-build-source = {{ path = "." }}
+"#,
+        Platform::current(),
+    );
+
+    // Write the manifest
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // Actually trigger the build process to test the bug
+    // This will call build_backend_metadata which uses alternative_root
+    let result = pixi.update_lock_file().await;
+
+    // The test should succeed if the source path is resolved correctly
+    // If the bug exists (manifest_path instead of manifest_path.parent()),
+    // the build will fail because it will try to find src relative to pixi.toml (a file)
+    // instead of relative to the directory containing pixi.toml
+    assert!(
+        result.is_ok(),
+        "Lock file update should succeed when source.path is resolved correctly. Error: {:?}",
+        result.err()
+    );
+
+    let lock_file = result.unwrap();
+
+    // Verify the package was built and is in the lock file
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "test-build-source",
+        ),
+        "Built package should be in the lock file"
+    );
+}

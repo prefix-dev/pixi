@@ -32,6 +32,9 @@ pub enum SourceCheckoutError {
 
     #[error(transparent)]
     GitError(#[from] GitError),
+
+    #[error("the manifest path {0} should have a parent directory")]
+    ParentDir(PathBuf),
 }
 
 #[derive(Debug, Error)]
