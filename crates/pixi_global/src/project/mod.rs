@@ -1372,7 +1372,7 @@ impl Project {
     ) -> Result<PackageName, InferPackageNameError> {
         let command_dispatcher = self.command_dispatcher()?;
         let checkout = command_dispatcher
-            .pin_and_checkout(source_spec.location)
+            .pin_and_checkout(source_spec.location, None)
             .await
             .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
 
