@@ -12,7 +12,7 @@ use pixi_consts::consts::{
     MOJOPROJECT_MANIFEST, PYPROJECT_MANIFEST, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES,
     WORKSPACE_MANIFEST,
 };
-use pixi_core::WorkspaceLocator;
+use pixi_core::{WorkspaceLocator, workspace::DiscoveryStart};
 use pixi_manifest::FeaturesExt;
 use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
@@ -117,9 +117,35 @@ async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
     Ok(())
 }
 
+pub(crate) async fn determine_discovery_start(
+    package_manifest: &Option<PathBuf>,
+    project_config: &WorkspaceConfig,
+) -> miette::Result<DiscoveryStart> {
+    match (package_manifest, &project_config.manifest_path) {
+        // If --package-manifest is provided but --manifest-path is not
+        (Some(package_manifest), None) => {
+            // Validate the package manifest first
+            validate_package_manifest(package_manifest).await?;
+
+            // Get the directory of the package manifest
+            let package_dir = package_manifest.parent().ok_or_else(|| {
+                miette::miette!("Failed to get parent directory of package manifest")
+            })?;
+            Ok(DiscoveryStart::SearchRoot(package_dir.to_path_buf()))
+        }
+        // Otherwise use the configuration's locator (respects --manifest-path if provided)
+        _ => Ok(project_config.workspace_locator_start()),
+    }
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Locate the workspace based on the provided configuration.
-    let workspace_locator = args.project_config.workspace_locator_start();
+    // When --package-manifest is specified without --manifest-path, we should
+    // find the workspace manifest relative to the package manifest's directory,
+    // not the current working directory.
+    let workspace_locator =
+        determine_discovery_start(&args.package_manifest, &args.project_config).await?;
+
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_locator.clone())
         .with_closest_package(false)
@@ -300,4 +326,47 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_discovery_start() {
+        let discovery_start = determine_discovery_start(
+            &Some(PathBuf::from(
+                "tests/fixtures/build_tests/recipe/recipe.yaml",
+            )),
+            &WorkspaceConfig {
+                manifest_path: None,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let discovery_start_path = discovery_start.path().unwrap();
+        let expected_path = PathBuf::from("tests/fixtures/build_tests/recipe");
+        assert_eq!(discovery_start_path, expected_path);
+    }
+
+    #[tokio::test]
+    async fn test_discovery_start_when_manifest_path_is_presnet() {
+        let discovery_start = determine_discovery_start(
+            &Some(PathBuf::from(
+                "tests/fixtures/build_tests/recipe/recipe.yaml",
+            )),
+            &WorkspaceConfig {
+                manifest_path: Some("manifest/path".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let discovery_start_path = discovery_start.path().unwrap();
+        let expected_path = PathBuf::from("manifest/path");
+        assert_eq!(discovery_start_path, expected_path);
+    }
 }

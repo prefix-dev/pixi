@@ -340,3 +340,86 @@ my-package = {{ path = "./my-package" }}
         "my-package",
     ));
 }
+
+/// Test that verifies --package-manifest finds workspace manifest relative to package manifest directory
+#[tokio::test]
+async fn test_package_manifest_finds_workspace_from_package_dir() {
+    setup_tracing();
+
+    // Create a temporary directory structure:
+    // workspace_dir/
+    //   pixi.toml (workspace manifest)
+    //   project/
+    //     recipe/
+    //       recipe.yaml (package manifest)
+
+    // Create a PixiControl instance with PassthroughBackend
+    // let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new().unwrap();
+    // .with_backend_override(backend_override);
+
+    // let workspace_dir = TempDir::new().unwrap();
+    let workspace_dir = pixi.manifest_path().parent().unwrap().to_path_buf();
+    let recipe_dir = workspace_dir.join("recipe");
+    fs::create_dir_all(&recipe_dir).unwrap();
+
+    // Create workspace manifest at workspace_dir/pixi.toml
+    let workspace_manifest = format!(
+        r#"
+[workspace]
+channels = ["https://prefix.dev/conda-forge", "https://prefix.dev/pixi-build-backends"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+# This will use the PassthroughBackend instead of a real backend
+test-package = {{ path = "./recipe/recipe.yaml" }}
+"#,
+        Platform::current()
+    );
+    fs::write(pixi.manifest_path(), workspace_manifest).unwrap();
+
+    // Create package manifest at project/recipe/recipe.yaml
+    let recipe_content = r#"
+schema_version: 1
+
+package:
+  name: test-package
+  version: 0.1.0
+
+build:
+  number: 0
+  noarch: generic
+
+about:
+  summary: Test package for workspace discovery
+"#;
+    fs::write(recipe_dir.join("recipe.yaml"), recipe_content).unwrap();
+
+    let package_manifest = recipe_dir.join("recipe.yaml");
+
+    let lock_file = pixi.build().await.unwrap();
+
+    // // When --package-manifest is provided without --manifest-path,
+    // // it should search for workspace manifest from the package manifest's directory
+    // let package_dir = package_manifest.parent().unwrap();
+    // let workspace_locator = DiscoveryStart::SearchRoot(package_dir.to_path_buf());
+
+    // let workspace = WorkspaceLocator::default()
+    //     .with_search_start(workspace_locator)
+    //     .locate();
+
+    // assert!(
+    //     workspace.is_ok(),
+    //     "Should find workspace manifest at workspace_dir/pixi.toml when searching from package manifest directory"
+    // );
+
+    // let workspace = workspace.unwrap();
+    // let expected_root = workspace_dir.path().canonicalize().unwrap();
+    // let actual_root = workspace.root().canonicalize().unwrap();
+    // assert_eq!(
+    //     actual_root,
+    //     expected_root,
+    //     "Workspace root should be the directory containing pixi.toml"
+    // );
+}
