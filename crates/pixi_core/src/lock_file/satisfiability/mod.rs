@@ -1506,7 +1506,11 @@ pub(crate) async fn verify_package_platform_satisfiability(
         // and should be resolved relative to the manifest_source location
         // Otherwise, use manifest_source directly
         let source_dir = if let Some(build_source) = &source_record.build_source {
-            let Some(build_path_record) = build_source.as_path() else {
+            // Convert to mutable source spec (only path-based sources are supported)
+            let Ok(mutable_source) = build_source.clone().into_mutable() else {
+                continue;
+            };
+            let Some(build_path_record) = mutable_source.as_path() else {
                 continue;
             };
 
