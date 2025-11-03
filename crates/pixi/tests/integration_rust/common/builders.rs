@@ -87,6 +87,12 @@ impl InitBuilder {
         self.args.format = Some(format);
         self
     }
+
+    /// Instruct init which manifest format to use
+    pub fn with_platforms(mut self, platforms: Vec<Platform>) -> Self {
+        self.args.platforms = platforms.into_iter().map(|p| p.to_string()).collect();
+        self
+    }
 }
 
 impl IntoFuture for InitBuilder {

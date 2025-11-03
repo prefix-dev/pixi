@@ -166,7 +166,10 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
     let pixi = PixiControl::new().unwrap();
 
     // Create a new project using our package database.
-    pixi.init().await.unwrap();
+    pixi.init()
+        .with_platforms(vec![Platform::current()])
+        .await
+        .unwrap();
 
     // Add a dependency on `python`
     pixi.add("python").await.unwrap();
@@ -245,7 +248,10 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
     let pixi = PixiControl::new().unwrap();
 
     // Create a new project using our package database.
-    pixi.init().await.unwrap();
+    pixi.init()
+        .with_platforms(vec![Platform::current()])
+        .await
+        .unwrap();
 
     // Add a dependency on `python`
     pixi.add("python").await.unwrap();
@@ -280,13 +286,16 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
 }
 
 #[tokio::test]
-async fn test_update_conda_package_update_git_pypi_when_requested() {
+async fn test_update_git_pypi_when_requested() {
     setup_tracing();
 
     let pixi = PixiControl::new().unwrap();
 
     // Create a new project using our package database.
-    pixi.init().await.unwrap();
+    pixi.init()
+        .with_platforms(vec![Platform::current()])
+        .await
+        .unwrap();
 
     // Add a dependency on `python`
     pixi.add("python").await.unwrap();
