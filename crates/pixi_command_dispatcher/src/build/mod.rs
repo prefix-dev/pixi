@@ -8,7 +8,6 @@ mod move_file;
 pub(crate) mod source_metadata_cache;
 mod work_dir_key;
 
-use core::fmt;
 use std::hash::{Hash, Hasher};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -66,6 +65,14 @@ impl SourceCodeLocation {
     /// but when set is the path to the build_source
     pub fn source_code(&self) -> &PinnedSourceSpec {
         self.build_source.as_ref().unwrap_or(&self.manifest_source)
+    }
+
+    pub fn as_source_and_alternative_root(&self) -> (&PinnedSourceSpec, Option<&PinnedSourceSpec>) {
+        if let Some(build_source) = &self.build_source {
+            (build_source, Some(&self.manifest_source))
+        } else {
+            (&self.manifest_source, None)
+        }
     }
 }
 

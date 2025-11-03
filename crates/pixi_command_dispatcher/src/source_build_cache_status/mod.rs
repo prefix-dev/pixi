@@ -201,7 +201,7 @@ impl SourceBuildCacheStatusSpec {
 
         // Determine if the package is out of date by checking the source
         let cached_build = match self
-            .check_source_out_of_date(command_dispatcher, cached_build, source.source_code())
+            .check_source_out_of_date(command_dispatcher, cached_build)
             .await?
         {
             CachedBuildStatus::UpToDate(cached_build) | CachedBuildStatus::New(cached_build) => {
@@ -308,7 +308,7 @@ impl SourceBuildCacheStatusSpec {
         &self,
         command_dispatcher: &CommandDispatcher,
         cached_build: CachedBuild,
-        source: &PinnedSourceSpec,
+        manifest_source: &PinnedSourceSpec,
     ) -> Result<CachedBuildStatus, CommandDispatcherError<SourceBuildCacheStatusError>> {
         let Some(source_info) = &cached_build.source else {
             return Ok(CachedBuildStatus::UpToDate(cached_build));
@@ -323,7 +323,8 @@ impl SourceBuildCacheStatusSpec {
 
         // Checkout the source for the package.
         let source_checkout = command_dispatcher
-            .checkout_pinned_source(source.clone())
+            // Manifest source so it is relative to the workspace
+            .checkout_pinned_source(manifest_source.clone(), None)
             .await
             .map_err_with(SourceBuildCacheStatusError::SourceCheckout)?;
 
@@ -361,7 +362,6 @@ impl SourceBuildCacheStatusSpec {
         &self,
         command_dispatcher: &CommandDispatcher,
         cached_build: CachedBuild,
-        source: &PinnedSourceSpec,
     ) -> Result<CachedBuildStatus, CommandDispatcherError<SourceBuildCacheStatusError>> {
         // If there are no source globs, we always consider the cached package
         // up-to-date.
@@ -369,9 +369,12 @@ impl SourceBuildCacheStatusSpec {
             return Ok(CachedBuildStatus::UpToDate(cached_build));
         };
 
+        // Convert into correct tuple
+        let (source, alternative_root) = self.source.as_source_and_alternative_root();
+
         // Checkout the source for the package.
         let source_checkout = command_dispatcher
-            .checkout_pinned_source(source.clone())
+            .checkout_pinned_source(source.clone(), alternative_root.cloned())
             .await
             .map_err_with(SourceBuildCacheStatusError::SourceCheckout)?;
 

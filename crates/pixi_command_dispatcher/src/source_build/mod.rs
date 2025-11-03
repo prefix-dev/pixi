@@ -225,7 +225,8 @@ impl SourceBuildSpec {
 
         // Check out the source code.
         let manifest_source_checkout = command_dispatcher
-            .checkout_pinned_source(self.manifest_source.clone())
+            // This should be relative to the workspace, so we can pass in None
+            .checkout_pinned_source(self.manifest_source.clone(), None)
             .await
             .map_err_with(SourceBuildError::SourceCheckout)?;
 
@@ -265,7 +266,7 @@ impl SourceBuildSpec {
         // 3. Manifest source. Just assume that source is located at the same directory as the manifest.
         let build_source_dir = if let Some(pinned_build_source) = build_source {
             let build_source_checkout = command_dispatcher
-                .checkout_pinned_source(pinned_build_source)
+                .checkout_pinned_source(pinned_build_source, Some(self.manifest_source.clone()))
                 .await
                 .map_err_with(SourceBuildError::SourceCheckout)?;
             build_source_checkout.path

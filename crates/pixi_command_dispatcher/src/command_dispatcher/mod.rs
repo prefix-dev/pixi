@@ -627,12 +627,22 @@ impl CommandDispatcher {
     pub async fn checkout_pinned_source(
         &self,
         pinned_spec: PinnedSourceSpec,
+        alternative_root: Option<PinnedSourceSpec>,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match pinned_spec {
             PinnedSourceSpec::Path(ref path) => {
+                let alternative_root_path = match alternative_root {
+                    Some(PinnedSourceSpec::Path(ref alt_path)) => Some(
+                        self.data
+                            .resolve_typed_path(alt_path.path.to_path(), None)
+                            .map_err(|e| CommandDispatcherError::Failed(e.into()))?,
+                    ),
+                    _ => None,
+                };
+
                 let source_path = self
                     .data
-                    .resolve_typed_path(path.path.to_path(), None)
+                    .resolve_typed_path(path.path.to_path(), alternative_root_path.as_deref())
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {

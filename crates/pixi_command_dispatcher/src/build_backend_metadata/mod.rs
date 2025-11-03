@@ -114,7 +114,8 @@ impl BuildBackendMetadataSpec {
     ) -> Result<BuildBackendMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
         // Ensure that the source is checked out before proceeding.
         let manifest_source_checkout = command_dispatcher
-            .checkout_pinned_source(self.manifest_source.clone())
+            // Never has an alternative root because we want to get the manifest
+            .checkout_pinned_source(self.manifest_source.clone(), None)
             .await
             .map_err_with(BuildBackendMetadataError::SourceCheckout)?;
 
@@ -131,11 +132,17 @@ impl BuildBackendMetadataSpec {
         let build_source_checkout = if let Some(pin_override) = &self.pin_override {
             Some(
                 command_dispatcher
-                    .checkout_pinned_source(pin_override.clone())
+                    // We use the pinned override directly
+                    .checkout_pinned_source(pin_override.clone(), None)
                     .await
                     .map_err_with(BuildBackendMetadataError::SourceCheckout)?,
             )
         } else if let Some(build_source) = &discovered_backend.init_params.build_source {
+            tracing::error!(
+                "build source = {:?}, manifest_path = {}",
+                build_source,
+                discovered_backend.init_params.manifest_path.display()
+            );
             Some(
                 command_dispatcher
                     .pin_and_checkout(
