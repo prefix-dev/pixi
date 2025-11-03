@@ -18,6 +18,7 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
+use pixi_git::git::GitReference;
 use pixi_manifest::{
     EnvironmentName, SolveStrategy, SystemRequirements, pypi::pypi_options::PypiOptions,
 };
@@ -341,7 +342,7 @@ pub async fn resolve_pypi(
         tracing::info!("there are no python packages installed by conda");
     }
 
-    let requirements = dependencies
+    let mut requirements = dependencies
         .into_iter()
         .flat_map(|(name, req)| {
             req.into_iter()
@@ -444,8 +445,6 @@ pub async fn resolve_pypi(
                 .collect::<Result<Vec<_>, _>>()
         }).transpose()?.unwrap_or_default();
 
-    let overrides = Overrides::from_requirements(dependency_overrides);
-
     // Resolve the flat indexes from `--find-links`.
     // In UV 0.7.8, we need to fetch flat index entries from the index locations
     let flat_index_client = FlatIndexClient::new(
@@ -527,7 +526,7 @@ pub async fn resolve_pypi(
     );
 
     // Constrain the conda packages to the specific python packages
-    let mut constraints = conda_python_packages
+    let constraints = conda_python_packages
         .values()
         .map(|(_, p)| {
             // Create pep440 version from the conda version
@@ -594,7 +593,8 @@ pub async fn resolve_pypi(
 
             // When iterating over locked packages,
             // instead of adding git requirements as preferences
-            // we use them as constraints with enriched precis gitsha information.
+            // we enrich previous defined requirements in the `requirements` list
+            // as they have been pinned to a precise commit
             // This will help the resolver to pick the commit that we already have locked
             // instead of updating to a newer commit that also matches the requirement.
             if let Some(location) = package_data.location.as_url() {
@@ -625,26 +625,35 @@ pub async fn resolve_pypi(
                         url: verbatim_url,
                     };
 
-                    let constraint_req = uv_distribution_types::Requirement {
-                        name: requirement.name.clone(),
-                        extras: vec![].into(),
-                        marker: Default::default(),
-                        source: constraint_source,
-                        groups: Default::default(),
-                        origin: None,
-                    };
+                    // find this requirements in dependencies and skip adding it as preference
+                    let req_from_dep = requirements.iter_mut().find(|r| r.name == requirement.name);
+                    if let Some(req) = req_from_dep {
+                        // we need to update the requirement source in the requirements list
+                        // to use the precise git commit
+                        // only if the requirements do not already have a source set with something specific
+                        if let RequirementSource::Git { git, .. } = &req.source {
+                                // only update if the git url does not already have a precise commit
+                                if git.precise().is_none() && !GitReference::looks_like_commit_hash(git.reference().as_rev()) {
+                                    tracing::debug!(
+                                        "updating requirement source to precise git commit for requirement: {:?}",
+                                        &req
+                                    );
+                                    req.source = constraint_source.clone();
+                                }
 
-                    constraints.push(constraint_req);
+                            }
+                    }
                 }
+                Ok(None)
+            } else {
+                let named = uv_requirements_txt::RequirementsTxtRequirement::Named(requirement);
+                let entry = uv_requirements_txt::RequirementEntry {
+                    requirement: named,
+                    hashes: Default::default(),
+                };
+
+                Ok(Preference::from_entry(entry)?)
             }
-
-            let named = uv_requirements_txt::RequirementsTxtRequirement::Named(requirement);
-            let entry = uv_requirements_txt::RequirementEntry {
-                requirement: named,
-                hashes: Default::default(),
-            };
-
-            Ok(Preference::from_entry(entry)?)
         })
         .filter_map(|pref| pref.transpose())
         .collect::<Result<Vec<_>, PixiPreferencesError>>()
@@ -653,6 +662,8 @@ pub async fn resolve_pypi(
     let resolver_env = ResolverEnvironment::specific(marker_environment.clone().into());
 
     let constraints = Constraints::from_requirements(constraints.iter().cloned());
+
+    let overrides = Overrides::from_requirements(dependency_overrides);
 
     // Wrap the resolution in panic catching to handle conda prefix initialization failures
     // This includes both lookahead resolution and main resolution since both use lazy_build_dispatch
