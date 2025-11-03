@@ -23,7 +23,7 @@ site/
 docs/_build/
 *.egg-info/
 dist/
-build/
+/build/
 
 # Conda/Pixi environment related
 *.conda

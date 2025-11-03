@@ -155,6 +155,8 @@ impl SolveCondaEnvironmentSpec {
                         ),
                         channel: None,
                     };
+                    let mut record = record.clone();
+                    record.build_source = source_metadata.build_source.clone();
                     url_to_source_package.insert(url, (record, repodata_record));
                 }
             }
@@ -223,7 +225,7 @@ impl SolveCondaEnvironmentSpec {
 
 /// Generates a unique URL for a source record.
 fn unique_url(source: &SourceRecord) -> Url {
-    let mut url = source.source.identifiable_url();
+    let mut url = source.manifest_source.identifiable_url();
 
     // Add unique identifiers to the URL.
     url.query_pairs_mut()
