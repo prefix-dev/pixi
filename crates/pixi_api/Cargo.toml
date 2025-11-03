@@ -13,6 +13,7 @@ console = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
+indexmap = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 minijinja = { workspace = true }
@@ -20,6 +21,7 @@ pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_core = { workspace = true }
 pixi_manifest = { workspace = true }
+pixi_spec = { workspace = true }
 pixi_utils = { workspace = true }
 rattler_conda_types = { workspace = true }
 same-file = { workspace = true }

@@ -1,10 +1,14 @@
 use std::collections::HashMap;
 
+use indexmap::{IndexMap, IndexSet};
 use miette::IntoDiagnostic;
 use pixi_core::workspace::WorkspaceMut;
 use pixi_core::{Workspace, environment::LockFileUsage};
-use pixi_manifest::{EnvironmentName, FeatureName, Task, TaskName};
-use rattler_conda_types::Platform;
+use pixi_manifest::{
+    EnvironmentName, Feature, FeatureName, PrioritizedChannel, TargetSelector, Task, TaskName,
+};
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{PackageName, Platform};
 
 use crate::interface::Interface;
 use crate::workspace::{InitOptions, ReinstallOptions};
@@ -40,6 +44,39 @@ impl<I: Interface> WorkspaceContext<I> {
 
     pub async fn set_name(&self, name: &str) -> miette::Result<()> {
         crate::workspace::workspace::name::set(&self.interface, self.workspace_mut()?, name).await
+    }
+
+    pub async fn list_features(&self) -> IndexMap<FeatureName, Feature> {
+        crate::workspace::workspace::feature::list_features(&self.workspace).await
+    }
+
+    pub async fn list_feature_channels(
+        &self,
+        feature: FeatureName,
+    ) -> Option<IndexSet<PrioritizedChannel>> {
+        crate::workspace::workspace::feature::list_feature_channels(&self.workspace, feature).await
+    }
+
+    pub async fn list_feature_dependencies(
+        &self,
+        feature: FeatureName,
+        target: Option<&TargetSelector>,
+    ) -> Option<HashMap<PackageName, Vec<PixiSpec>>> {
+        crate::workspace::workspace::feature::list_feature_dependencies(
+            &self.workspace,
+            feature,
+            target,
+        )
+        .await
+    }
+
+    pub async fn list_feature_tasks(
+        &self,
+        feature: FeatureName,
+        target: Option<&TargetSelector>,
+    ) -> Option<HashMap<TaskName, Task>> {
+        crate::workspace::workspace::feature::list_feature_tasks(&self.workspace, feature, target)
+            .await
     }
 
     pub async fn list_tasks(
