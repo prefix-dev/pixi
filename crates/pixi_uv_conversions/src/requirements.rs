@@ -118,11 +118,7 @@ pub fn as_uv_req(
                 },
             ..
         } => {
-            // dbg!(&req);
             let git_url = GitUrlWithPrefix::from(git);
-            // let locked_git_url = LockedGitUrl::parse(git.as_str()).unwrap().to_pinned_git_spec().unwrap();
-            // take the solved revision and use it to point to the correct commit
-            // let rev = Some(GitReference::Rev(locked_git_url.source.commit.to_string()));
 
             RequirementSource::Git {
                 // Url is already a git url, should look like:

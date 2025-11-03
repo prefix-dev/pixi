@@ -158,8 +158,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Unlock dependencies in the lock-file that we want to update.
     let relaxed_lock_file = unlock_packages(&workspace, loaded_lock_file, &specs);
 
-    // dbg!(&relaxed_lock_file.default_environment().unwrap());
-
     // Update the packages in the lock-file.
     let updated_lock_file = UpdateContext::builder(&workspace)
         .with_lock_file(relaxed_lock_file)

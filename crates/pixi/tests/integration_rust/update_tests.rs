@@ -166,10 +166,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
     let pixi = PixiControl::new().unwrap();
 
     // Create a new project using our package database.
-    pixi.init()
-        // .with_local_channel(channel_dir.path())
-        .await
-        .unwrap();
+    pixi.init().await.unwrap();
 
     // Add a dependency on `python`
     pixi.add("python").await.unwrap();
@@ -248,10 +245,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
     let pixi = PixiControl::new().unwrap();
 
     // Create a new project using our package database.
-    pixi.init()
-        // .with_local_channel(channel_dir.path())
-        .await
-        .unwrap();
+    pixi.init().await.unwrap();
 
     // Add a dependency on `python`
     pixi.add("python").await.unwrap();

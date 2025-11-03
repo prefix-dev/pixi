@@ -693,8 +693,6 @@ pub async fn resolve_pypi(
             message: format!("Failed to do lookahead resolution: {e}"),
         })?;
 
-        // dbg!(&lookaheads);
-
         // Move manifest and provider setup inside catch_unwind
         let manifest = Manifest::new(
             requirements,
