@@ -922,8 +922,9 @@ packages:
     hash: 21845b1fd51f8827fc89a50b134dc086fba8a8b5f8c9cc5ed3b800c99ea61f57
     globs: []
   package_build_source:
-    git: https://github.com/prefix-dev/pixi-build-testsuite?subdirectory=tests%2Fdata%2Fpixi_build%2Fcpp-with-path-to-source%2Fproject
-    rev: 6f94028045df9c753596a3084ce6ca2df4bc25c5
+    git: https://github.com/prefix-dev/pixi-build-testsuite
+    rev: 37ad651936da0ea11f7b4c00a113609bb00575be
+    subdir: tests/data/pixi_build/cpp-with-path-to-source/project
 - conda: .
   name: sdl_example
   version: 0.1.0
@@ -937,8 +938,9 @@ packages:
     hash: 21845b1fd51f8827fc89a50b134dc086fba8a8b5f8c9cc5ed3b800c99ea61f57
     globs: []
   package_build_source:
-    git: https://github.com/prefix-dev/pixi-build-testsuite?subdirectory=tests%2Fdata%2Fpixi_build%2Fcpp-with-path-to-source%2Fproject
-    rev: 6f94028045df9c753596a3084ce6ca2df4bc25c5
+    git: https://github.com/prefix-dev/pixi-build-testsuite
+    rev: 37ad651936da0ea11f7b4c00a113609bb00575be
+    subdir: tests/data/pixi_build/cpp-with-path-to-source/project
 - conda: .
   name: sdl_example
   version: 0.1.0
@@ -951,8 +953,9 @@ packages:
     hash: 21845b1fd51f8827fc89a50b134dc086fba8a8b5f8c9cc5ed3b800c99ea61f57
     globs: []
   package_build_source:
-    git: https://github.com/prefix-dev/pixi-build-testsuite?subdirectory=tests%2Fdata%2Fpixi_build%2Fcpp-with-path-to-source%2Fproject
-    rev: 6f94028045df9c753596a3084ce6ca2df4bc25c5
+    git: https://github.com/prefix-dev/pixi-build-testsuite
+    rev: 37ad651936da0ea11f7b4c00a113609bb00575be
+    subdir: tests/data/pixi_build/cpp-with-path-to-source/project
 - conda: https://prefix.dev/conda-forge/win-64/ucrt-10.0.26100.0-h57928b3_0.conda
   sha256: 3005729dce6f3d3f5ec91dfc49fc75a0095f9cd23bab49efb899657297ac91a5
   md5: 71b24316859acd00bdb8b38f5e2ce328
