@@ -1,0 +1,13 @@
+---
+source: crates/pixi_command_dispatcher/src/source_build/mod.rs
+expression: error.to_string()
+---
+The build backend did not provide the requested output for package 'scipy' with variant {"blas":"mkl","python":"3.11"}
+
+Available variants for scipy:
+  - {"blas":"mkl","python":"3.10"}  ← 1/2 keys match
+  - {"blas":"openblas","python":"3.11"}  ← 1/2 keys match
+
+Other available packages:
+  - numpy
+  - tensorflow

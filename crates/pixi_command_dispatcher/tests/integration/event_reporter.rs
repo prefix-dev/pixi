@@ -6,9 +6,9 @@ use std::{
 use futures::{Stream, StreamExt};
 use pixi_command_dispatcher::{
     BackendSourceBuildSpec, BuildBackendMetadataSpec, CondaSolveReporter, GitCheckoutReporter,
-    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PackageIdentifier,
-    PixiEnvironmentSpec, PixiInstallReporter, PixiSolveReporter, Reporter, ReporterContext,
-    SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec,
+    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PixiEnvironmentSpec,
+    PixiInstallReporter, PixiSolveReporter, Reporter, ReporterContext, SolveCondaEnvironmentSpec,
+    SourceBuildSpec, SourceMetadataSpec,
     reporter::{
         BackendSourceBuildId, BackendSourceBuildReporter, BuildBackendMetadataId,
         BuildBackendMetadataReporter, CondaSolveId, GitCheckoutId, InstantiateToolEnvId,
@@ -125,7 +125,7 @@ pub enum Event {
         id: BackendSourceBuildId,
         #[serde(skip_serializing_if = "Option::is_none")]
         context: Option<ReporterContext>,
-        package: PackageIdentifier,
+        package_name: rattler_conda_types::PackageName,
     },
     BackendSourceBuildStarted {
         id: BackendSourceBuildId,
@@ -524,7 +524,7 @@ impl BackendSourceBuildReporter for EventReporter {
         let event = Event::BackendSourceBuildQueued {
             id: next_id,
             context,
-            package: spec.package.clone(),
+            package_name: spec.package_name.clone(),
         };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);

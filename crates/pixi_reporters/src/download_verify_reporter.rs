@@ -146,7 +146,7 @@ impl BuildDownloadVerifyReporter {
         entries.insert(
             id,
             Entry {
-                name: format!("building {}", spec.package.name.as_source()),
+                name: format!("building {}", spec.package_name.as_source()),
                 size: None,
                 state: EntryState::Pending,
             },

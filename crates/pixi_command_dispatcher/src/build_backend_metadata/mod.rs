@@ -26,7 +26,7 @@ use crate::{
     InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
     build::{
         SourceRecordOrCheckout, WorkDirKey,
-        source_metadata_cache::{self, CachedCondaMetadata, MetadataKind, SourceMetadataKey},
+        source_metadata_cache::{self, CachedCondaMetadata, SourceMetadataKey},
     },
 };
 use pixi_build_discovery::BackendSpec;
@@ -332,12 +332,7 @@ impl BuildBackendMetadataSpec {
             return Ok(None);
         };
 
-        let metadata_kind = match metadata.metadata {
-            MetadataKind::GetMetadata { .. } => "conda/getMetadata",
-            MetadataKind::Outputs { .. } => {
-                pixi_build_types::procedures::conda_outputs::METHOD_NAME
-            }
-        };
+        let metadata_kind = pixi_build_types::procedures::conda_outputs::METHOD_NAME;
 
         let Some(input_globs) = &metadata.input_hash else {
             // No input hash so just assume it is still valid.
@@ -436,9 +431,7 @@ impl BuildBackendMetadataSpec {
         Ok(CachedCondaMetadata {
             id: random(),
             input_hash: input_hash.clone(),
-            metadata: MetadataKind::Outputs {
-                outputs: outputs.outputs,
-            },
+            outputs: outputs.outputs,
         })
     }
 

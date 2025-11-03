@@ -1,0 +1,9 @@
+---
+source: crates/pixi_command_dispatcher/src/source_build/mod.rs
+expression: error.to_string()
+---
+The build backend did not provide the requested output for package 'numpy' with variant {"python":"3.12"}
+
+Available variants for numpy:
+  - {"python":"3.10"}
+  - {"python":"3.11"}

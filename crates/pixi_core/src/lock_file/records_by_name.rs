@@ -1,9 +1,9 @@
 use super::package_identifier::ConversionError;
 use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
-use pixi_record::PixiRecord;
+use pixi_record::{PixiPackageRecord, PixiRecord};
 use pixi_uv_conversions::to_uv_normalize;
 use pypi_modifiers::pypi_tags::is_python_record;
-use rattler_conda_types::{PackageName, RepoDataRecord, VersionWithSource};
+use rattler_conda_types::RepoDataRecord;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::hash::Hash;
@@ -12,64 +12,88 @@ pub type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;
 pub type PixiRecordsByName = DependencyRecordsByName<PixiRecord>;
 
 /// A trait required from the dependencies stored in DependencyRecordsByName
-pub trait HasNameVersion {
+pub trait HasName {
     // Name type of the dependency
     type N: Hash + Eq + Clone;
-    // Version type of the dependency
-    type V: PartialOrd + ToString;
 
     /// Returns the name of the dependency
     fn name(&self) -> &Self::N;
+}
+
+/// A trait required from the dependencies stored in DependencyRecordsByName
+pub trait HasVersion {
+    // Version type of the dependency
+    type V: PartialOrd + ToString;
+
     /// Returns the version of the dependency
     fn version(&self) -> &Self::V;
 }
 
-impl HasNameVersion for PypiRecord {
+impl HasName for PypiRecord {
     type N = pep508_rs::PackageName;
-    type V = pep440_rs::Version;
 
     fn name(&self) -> &pep508_rs::PackageName {
         &self.0.name
     }
+}
+
+impl HasVersion for PypiRecord {
+    type V = pep440_rs::Version;
+
     fn version(&self) -> &Self::V {
         &self.0.version
     }
 }
 
-impl HasNameVersion for RepoDataRecord {
+impl HasName for RepoDataRecord {
     type N = rattler_conda_types::PackageName;
-    type V = VersionWithSource;
 
     fn name(&self) -> &rattler_conda_types::PackageName {
         &self.package_record.name
     }
+}
+
+impl HasVersion for RepoDataRecord {
+    type V = rattler_conda_types::Version;
+
     fn version(&self) -> &Self::V {
         &self.package_record.version
     }
 }
 
-impl HasNameVersion for PixiRecord {
-    type N = PackageName;
-    type V = VersionWithSource;
+impl HasName for PixiRecord {
+    type N = rattler_conda_types::PackageName;
 
-    fn name(&self) -> &Self::N {
-        &self.package_record().name
+    fn name(&self) -> &rattler_conda_types::PackageName {
+        self.name()
     }
+}
+
+impl HasName for PixiPackageRecord {
+    type N = rattler_conda_types::PackageName;
+
+    fn name(&self) -> &rattler_conda_types::PackageName {
+        self.name()
+    }
+}
+
+impl HasVersion for PixiPackageRecord {
+    type V = rattler_conda_types::Version;
 
     fn version(&self) -> &Self::V {
-        &self.package_record().version
+        self.version().as_ref()
     }
 }
 
 /// A struct that holds both a ``Vec` of `DependencyRecord` and a mapping from
 /// name to index.
 #[derive(Clone, Debug)]
-pub struct DependencyRecordsByName<D: HasNameVersion> {
+pub struct DependencyRecordsByName<D: HasName> {
     pub records: Vec<D>,
     by_name: HashMap<D::N, usize>,
 }
 
-impl<D: HasNameVersion> Default for DependencyRecordsByName<D> {
+impl<D: HasName> Default for DependencyRecordsByName<D> {
     fn default() -> Self {
         Self {
             records: Vec::new(),
@@ -78,7 +102,7 @@ impl<D: HasNameVersion> Default for DependencyRecordsByName<D> {
     }
 }
 
-impl<D: HasNameVersion> From<Vec<D>> for DependencyRecordsByName<D> {
+impl<D: HasName> From<Vec<D>> for DependencyRecordsByName<D> {
     fn from(records: Vec<D>) -> Self {
         let by_name = records
             .iter()
@@ -89,7 +113,20 @@ impl<D: HasNameVersion> From<Vec<D>> for DependencyRecordsByName<D> {
     }
 }
 
-impl<D: HasNameVersion> DependencyRecordsByName<D> {
+impl<D: HasName, S> From<HashMap<D::N, D, S>> for DependencyRecordsByName<D> {
+    fn from(iter: HashMap<D::N, D, S>) -> Self {
+        let mut records = Vec::new();
+        let mut by_name = HashMap::new();
+        for (name, record) in iter {
+            let idx = records.len();
+            records.push(record);
+            by_name.insert(name, idx);
+        }
+        Self { records, by_name }
+    }
+}
+
+impl<D: HasName> DependencyRecordsByName<D> {
     /// Returns the record with the given name or `None` if no such record
     /// exists.
     pub(crate) fn by_name(&self, key: &D::N) -> Option<&D> {
@@ -145,10 +182,10 @@ impl<D: HasNameVersion> DependencyRecordsByName<D> {
         Ok(Self { records, by_name })
     }
 
-    /// Constructs a new instance from an iterator of repodata records. The
-    /// records are deduplicated where the record with the highest version
-    /// wins.
-    pub(crate) fn from_iter<I: IntoIterator<Item = D>>(iter: I) -> Self {
+    pub(crate) fn from_iter_cmp<I: IntoIterator<Item = D>, F: Fn(&D, &D) -> std::cmp::Ordering>(
+        iter: I,
+        cmp: F,
+    ) -> Self {
         let iter = iter.into_iter();
         let min_size = iter.size_hint().0;
         let mut by_name = HashMap::with_capacity(min_size);
@@ -161,9 +198,8 @@ impl<D: HasNameVersion> DependencyRecordsByName<D> {
                     entry.insert(idx);
                 }
                 Entry::Occupied(entry) => {
-                    // Use the entry with the highest version or otherwise the first we encounter.
                     let idx = *entry.get();
-                    if records[idx].version() < record.version() {
+                    if cmp(&records[idx], &record) == std::cmp::Ordering::Less {
                         records[idx] = record;
                     }
                 }
@@ -201,10 +237,12 @@ impl PixiRecordsByName {
                         .ok()
                         .map(move |identifiers| (idx, record, identifiers))
                 }
-                PixiRecord::Source(source_record) => {
-                    PypiPackageIdentifier::from_package_record(&source_record.package_record)
-                        .ok()
-                        .map(move |identifiers| (idx, record, identifiers))
+                PixiRecord::Source(_source_record) => {
+                    // TODO: We dont have a source record so we cannot extract pypi identifiers for source records.
+                    // PypiPackageIdentifier::from_package_record(&source_record.package_record)
+                    //     .ok()
+                    //     .map(move |identifiers| (idx, record, identifiers))
+                    None
                 }
             })
             .flat_map(|(idx, record, identifiers)| {
@@ -214,5 +252,26 @@ impl PixiRecordsByName {
                 })
             })
             .collect::<Result<HashMap<_, _>, ConversionError>>()
+    }
+
+    pub fn from_iter<I: IntoIterator<Item = PixiRecord>>(iter: I) -> Self {
+        Self::from_iter_cmp(iter, |a, b| {
+            match (a, b) {
+                (PixiRecord::Binary(a_record), PixiRecord::Binary(b_record)) => {
+                    a_record.version().cmp(b_record.version())
+                }
+                // Prefer source packages over binary packages
+                (PixiRecord::Binary(_), PixiRecord::Source(_)) => std::cmp::Ordering::Less,
+                (PixiRecord::Source(_), PixiRecord::Binary(_)) => std::cmp::Ordering::Greater,
+                // Both are source records, consider them equal
+                (PixiRecord::Source(_), PixiRecord::Source(_)) => std::cmp::Ordering::Equal,
+            }
+        })
+    }
+}
+
+impl PypiRecordsByName {
+    pub fn from_iter<I: IntoIterator<Item = PypiRecord>>(iter: I) -> Self {
+        Self::from_iter_cmp(iter, |a, b| a.version().cmp(b.version()))
     }
 }

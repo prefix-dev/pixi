@@ -716,7 +716,7 @@ pub async fn verify_platform_satisfiability(
         Ok(pixi_records) => pixi_records,
         Err(duplicate) => {
             return Err(Box::new(PlatformUnsat::DuplicateEntry(
-                duplicate.package_record().name.as_source().to_string(),
+                duplicate.name().as_source().to_string(),
             )));
         }
     };
@@ -1312,7 +1312,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 }
 
                 let record = &locked_pixi_records.records[idx.0];
-                for depends in &record.package_record().depends {
+                for depends in record.depends() {
                     let spec = MatchSpec::from_str(depends.as_str(), Lenient)
                         .map_err(|e| PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e))?;
 
@@ -1324,7 +1324,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         PixiRecord::Source(record) => (
                             Cow::Owned(format!(
                                 "{} @ {}",
-                                record.package_record.name.as_source(),
+                                record.name.as_source(),
                                 &record.manifest_source
                             )),
                             SourceSpec::from(record.manifest_source.clone()).into(),
@@ -1484,9 +1484,9 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .iter()
         .filter_map(PixiRecord::as_source)
     {
-        if !expected_conda_source_dependencies.contains(&record.package_record.name) {
+        if !expected_conda_source_dependencies.contains(&record.name) {
             return Err(Box::new(PlatformUnsat::RequiredBinaryIsSource(
-                record.package_record.name.as_source().to_string(),
+                record.name.as_source().to_string(),
             )));
         }
     }
@@ -1912,7 +1912,7 @@ fn verify_build_source_matches_manifest(
     let Some(record) = locked_pixi_records
         .records
         .iter()
-        .find(|r| r.package_record().name.as_source() == pkg_name)
+        .find(|r| r.name().as_source() == pkg_name)
     else {
         return Ok(());
     };
@@ -1925,13 +1925,13 @@ fn verify_build_source_matches_manifest(
         pixi_spec::SourceLocationSpec::Url(url_spec) => {
             let Some(locked_url) = src_record.build_source.as_ref().and_then(|p| p.as_url()) else {
                 return Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
-                    src_record.package_record.name.as_source().to_string(),
+                    src_record.name.as_source().to_string(),
                     SourceMismatchError::SourceTypeMismatch,
                 )));
             };
             locked_url.satisfies(&url_spec).map_err(|e| {
                 Box::new(PlatformUnsat::PackageBuildSourceMismatch(
-                    src_record.package_record.name.as_source().to_string(),
+                    src_record.name.as_source().to_string(),
                     e,
                 ))
             })
@@ -1939,7 +1939,7 @@ fn verify_build_source_matches_manifest(
         pixi_spec::SourceLocationSpec::Git(mut git_spec) => {
             let Some(locked_git) = src_record.build_source.as_ref().and_then(|p| p.as_git()) else {
                 return Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
-                    src_record.package_record.name.as_source().to_string(),
+                    src_record.name.as_source().to_string(),
                     SourceMismatchError::SourceTypeMismatch,
                 )));
             };
@@ -1955,7 +1955,7 @@ fn verify_build_source_matches_manifest(
             }
             locked_git.satisfies(&git_spec).map_err(|e| {
                 Box::new(PlatformUnsat::PackageBuildSourceMismatch(
-                    src_record.package_record.name.as_source().to_string(),
+                    src_record.name.as_source().to_string(),
                     e,
                 ))
             })
@@ -1964,14 +1964,14 @@ fn verify_build_source_matches_manifest(
             let Some(locked_path) = src_record.build_source.as_ref().and_then(|p| p.as_path())
             else {
                 return Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
-                    src_record.package_record.name.as_source().to_string(),
+                    src_record.name.as_source().to_string(),
                     SourceMismatchError::SourceTypeMismatch,
                 )));
             };
 
             locked_path.satisfies(&path_spec).map_err(|e| {
                 Box::new(PlatformUnsat::PackageBuildSourceMismatch(
-                    src_record.package_record.name.as_source().to_string(),
+                    src_record.name.as_source().to_string(),
                     e,
                 ))
             })
@@ -1990,7 +1990,7 @@ mod tests {
     use insta::Settings;
     use miette::{IntoDiagnostic, NarratableReportHandler};
     use pep440_rs::{Operator, Version};
-    use rattler_lock::LockFile;
+    use rattler_lock::{FileFormatVersion, LockFile};
     use rstest::rstest;
 
     use super::*;
@@ -2013,6 +2013,11 @@ mod tests {
             "solve group '{0}' does not satisfy the requirements of the project for platform '{1}'"
         )]
         SolveGroupUnsat(String, Platform, #[source] SolveGroupUnsat),
+
+        #[error(
+            "source packages for lockfile version {0} do not contain variants which makes the lockfile unusable"
+        )]
+        PreV7SourceDependencies(FileFormatVersion),
     }
 
     async fn verify_lockfile_satisfiability(
@@ -2020,6 +2025,20 @@ mod tests {
         lock_file: &LockFile,
     ) -> Result<(), LockfileUnsat> {
         let mut individual_verified_envs = HashMap::new();
+
+        // If there are pre-v7 source dependencies present, the lock-file must be invalidated.
+        if lock_file.version() < FileFormatVersion::V7 {
+            for (_, env) in lock_file.environments() {
+                for package in env
+                    .conda_packages_by_platform()
+                    .flat_map(|(_, packages)| packages)
+                {
+                    if let rattler_lock::CondaPackageData::Source(_) = package {
+                        return Err(LockfileUnsat::PreV7SourceDependencies(lock_file.version()));
+                    }
+                }
+            }
+        }
 
         // Verify individual environment satisfiability
         for env in project.environments() {
@@ -2077,6 +2096,8 @@ mod tests {
     async fn test_good_satisfiability(
         #[files("../../tests/data/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
+        eprintln!("Path to pixi.toml: {}", manifest_path.display());
+
         // TODO: skip this test on windows
         // Until we can figure out how to handle unix file paths with pep508_rs url
         // parsing correctly
@@ -2089,6 +2110,7 @@ mod tests {
         }
 
         let project = Workspace::from_path(&manifest_path).unwrap();
+        eprintln!("Path to pixi.lock: {}", project.lock_file_path().display());
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file)
             .await
@@ -2138,6 +2160,8 @@ mod tests {
     async fn test_failing_satisiability(
         #[files("../../tests/data/non-satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
+        eprintln!("Path to pixi.toml: {}", manifest_path.display());
+
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
         let project = Workspace::from_path(&manifest_path).unwrap();

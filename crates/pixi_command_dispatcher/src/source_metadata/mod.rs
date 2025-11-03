@@ -10,12 +10,13 @@ use futures::TryStreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
-use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
+use pixi_record::{
+    InputHash, PinnedSourceSpec, PixiPackageRecord, SourcePackageRecord, SourceRecord,
+};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, PackageRecord,
-    package::RunExportsJson,
+    ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, package::RunExportsJson,
 };
 use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
 use thiserror::Error;
@@ -25,10 +26,7 @@ use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
     SolvePixiEnvironmentError,
-    build::{
-        Dependencies, DependenciesError, PixiRunExports, conversion,
-        source_metadata_cache::MetadataKind,
-    },
+    build::{Dependencies, DependenciesError, PixiRunExports},
     executor::ExecutorFutures,
 };
 
@@ -52,8 +50,8 @@ pub struct SourceMetadata {
     /// this is used mainly for out-of-tree builds
     pub build_source: Option<PinnedSourceSpec>,
 
-    /// All the source records for this particular package.
-    pub records: Vec<SourceRecord>,
+    /// All the source records with metadata for this particular package.
+    pub records: Vec<SourcePackageRecord>,
 
     /// All package names that where skipped but the backend could provide.
     pub skipped_packages: Vec<PackageName>,
@@ -82,51 +80,30 @@ impl SourceMetadataSpec {
 
         let build_backend_metadata = build_backend_metadata?;
 
-        match &build_backend_metadata.metadata.metadata {
-            MetadataKind::GetMetadata { packages } => {
-                // Convert the metadata to source records.
-                let records = conversion::package_metadata_to_source_records(
-                    &build_backend_metadata.manifest_source,
-                    build_backend_metadata.build_source.as_ref(),
-                    packages,
-                    &self.package,
-                    &build_backend_metadata.metadata.input_hash,
-                );
-
-                Ok(SourceMetadata {
-                    manifest_source: build_backend_metadata.manifest_source.clone(),
-                    records,
-                    // As the GetMetadata kind returns all records at once and we don't solve them we can skip this.
-                    skipped_packages: Default::default(),
-                    build_source: build_backend_metadata.build_source.clone(),
-                })
+        let outputs = &build_backend_metadata.metadata.outputs;
+        let mut skipped_packages = vec![];
+        let mut futures = ExecutorFutures::new(command_dispatcher.executor());
+        for output in outputs {
+            if output.metadata.name != self.package {
+                skipped_packages.push(output.metadata.name.clone());
+                continue;
             }
-            MetadataKind::Outputs { outputs } => {
-                let mut skipped_packages = vec![];
-                let mut futures = ExecutorFutures::new(command_dispatcher.executor());
-                for output in outputs {
-                    if output.metadata.name != self.package {
-                        skipped_packages.push(output.metadata.name.clone());
-                        continue;
-                    }
-                    futures.push(self.resolve_output(
-                        &command_dispatcher,
-                        output,
-                        build_backend_metadata.metadata.input_hash.clone(),
-                        build_backend_metadata.manifest_source.clone(),
-                        build_backend_metadata.build_source.clone(),
-                        reporter.clone(),
-                    ));
-                }
-
-                Ok(SourceMetadata {
-                    manifest_source: build_backend_metadata.manifest_source.clone(),
-                    records: futures.try_collect().await?,
-                    skipped_packages,
-                    build_source: build_backend_metadata.build_source.clone(),
-                })
-            }
+            futures.push(self.resolve_output(
+                &command_dispatcher,
+                output,
+                build_backend_metadata.metadata.input_hash.clone(),
+                build_backend_metadata.manifest_source.clone(),
+                build_backend_metadata.build_source.clone(),
+                reporter.clone(),
+            ));
         }
+
+        Ok(SourceMetadata {
+            manifest_source: build_backend_metadata.manifest_source.clone(),
+            build_source: build_backend_metadata.build_source.clone(),
+            records: futures.try_collect().await?,
+            skipped_packages,
+        })
     }
 
     async fn resolve_output(
@@ -137,7 +114,7 @@ impl SourceMetadataSpec {
         manifest_source: PinnedSourceSpec,
         build_source: Option<PinnedSourceSpec>,
         reporter: Option<Arc<dyn RunExportsReporter>>,
-    ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
+    ) -> Result<SourcePackageRecord, CommandDispatcherError<SourceMetadataError>> {
         let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
 
         // Solve the build environment for the output.
@@ -300,66 +277,65 @@ impl SourceMetadataSpec {
             strong_constrains: binary_specs_to_match_spec(run_exports.strong_constrains)?,
         };
 
-        Ok(SourceRecord {
-            package_record: PackageRecord {
-                // We cannot now these values from the metadata because no actual package
-                // was built yet.
-                size: None,
-                sha256: None,
-                md5: None,
-
-                // TODO(baszalmstra): Decide if it makes sense to include the current
-                //  timestamp here.
-                timestamp: None,
-
-                // These values are derived from the build backend values.
-                platform: output
-                    .metadata
-                    .subdir
-                    .only_platform()
-                    .map(ToString::to_string),
-                arch: output
-                    .metadata
-                    .subdir
-                    .arch()
-                    .as_ref()
-                    .map(ToString::to_string),
-
-                // These values are passed by the build backend
+        Ok(SourcePackageRecord {
+            source_record: SourceRecord {
                 name: output.metadata.name.clone(),
-                build: output.metadata.build.clone(),
-                version: output.metadata.version.clone(),
-                build_number: output.metadata.build_number,
-                license: output.metadata.license.clone(),
-                subdir: output.metadata.subdir.to_string(),
-                license_family: output.metadata.license_family.clone(),
-                noarch: output.metadata.noarch,
-                constrains,
+                version: if manifest_source.is_immutable() {
+                    // Only record the version if the source code is immutable.
+                    Some(output.metadata.version.clone())
+                } else {
+                    None
+                },
+                build_source,
+                manifest_source,
+                variants: output
+                    .metadata
+                    .variant
+                    .iter()
+                    .map(|(k, v)| (k.clone(), crate::VariantValue::from(v.clone()).into()))
+                    .collect(),
                 depends,
-                run_exports: Some(run_exports),
+                constrains,
+                experimental_extra_depends: Default::default(),
+                license: output.metadata.license.clone(),
                 purls: output
                     .metadata
                     .purls
                     .as_ref()
                     .map(|purls| purls.iter().cloned().collect()),
+                input_hash,
+                sources: sources
+                    .into_iter()
+                    .map(|(name, source)| (name.as_source().to_string(), source))
+                    .collect(),
                 python_site_packages_path: output.metadata.python_site_packages_path.clone(),
-
-                // These are deprecated and no longer used.
-                features: None,
-                track_features: vec![],
-                legacy_bz2_md5: None,
-                legacy_bz2_size: None,
-
-                // These are not important at this point.
-                experimental_extra_depends: Default::default(),
             },
-            manifest_source,
-            input_hash,
-            build_source,
-            sources: sources
-                .into_iter()
-                .map(|(name, source)| (name.as_source().to_string(), source))
-                .collect(),
+            version: output.metadata.version.clone(),
+            build: output.metadata.build.clone(),
+            build_number: output.metadata.build_number,
+            subdir: output.metadata.subdir.to_string(),
+            arch: output
+                .metadata
+                .subdir
+                .arch()
+                .as_ref()
+                .map(ToString::to_string),
+            platform: output
+                .metadata
+                .subdir
+                .only_platform()
+                .map(ToString::to_string),
+            md5: None,
+            sha256: None,
+            size: None,
+            track_features: vec![],
+            features: None,
+            license_family: output.metadata.license_family.clone(),
+            timestamp: None,
+            run_exports: Some(run_exports),
+            noarch: output.metadata.noarch,
+            legacy_bz2_md5: None,
+            legacy_bz2_size: None,
         })
     }
 
@@ -370,7 +346,7 @@ impl SourceMetadataSpec {
         command_dispatcher: &CommandDispatcher,
         dependencies: Dependencies,
         build_environment: BuildEnvironment,
-    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SourceMetadataError>> {
+    ) -> Result<Vec<PixiPackageRecord>, CommandDispatcherError<SourceMetadataError>> {
         if dependencies.dependencies.is_empty() {
             return Ok(vec![]);
         }

@@ -51,6 +51,7 @@ mod source_build;
 mod source_build_cache_status;
 mod source_checkout;
 mod source_metadata;
+mod variant;
 
 pub use backend_source_build::{
     BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildMethod,
@@ -87,6 +88,7 @@ pub use source_build_cache_status::{
 };
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
 pub use source_metadata::{Cycle, SourceMetadata, SourceMetadataError, SourceMetadataSpec};
+pub use variant::{SelectedVariant, VariantValue};
 
 /// A helper function to check if a value is the default value for its type.
 fn is_default<T: Default + PartialEq>(value: &T) -> bool {

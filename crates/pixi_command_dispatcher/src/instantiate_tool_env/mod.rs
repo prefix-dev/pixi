@@ -13,6 +13,7 @@ use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::{
     PIXI_BUILD_API_VERSION_NAME, PIXI_BUILD_API_VERSION_SPEC, PixiBuildApiVersion,
 };
+use pixi_record::PixiRecord;
 use pixi_spec::{BinarySpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::AsyncPrefixGuard;
@@ -225,8 +226,8 @@ impl InstantiateToolEnvironmentSpec {
         // Ensure that the solution contains matching api version package
         let Some(api_version) = solved_environment
             .iter()
-            .find(|r| r.package_record().name == *PIXI_BUILD_API_VERSION_NAME)
-            .map(|r| r.package_record().version.as_ref())
+            .find(|r| r.name() == &*PIXI_BUILD_API_VERSION_NAME)
+            .map(|r| r.version().as_ref())
             .and_then(PixiBuildApiVersion::from_version)
         else {
             return Err(CommandDispatcherError::Failed(
@@ -239,10 +240,9 @@ impl InstantiateToolEnvironmentSpec {
         // Extract the version of the main requirement package.
         let version = solved_environment
             .iter()
-            .find(|r| r.package_record().name == self.requirement.0)
+            .find(|r| r.name() == &self.requirement.0)
             .expect("The solved environment should always contain the main requirement package")
-            .package_record()
-            .version
+            .version()
             .clone();
 
         // Construct the prefix for the tool environment.
@@ -268,7 +268,10 @@ impl InstantiateToolEnvironmentSpec {
         command_queue
             .install_pixi_environment(InstallPixiEnvironmentSpec {
                 name,
-                records: solved_environment,
+                records: solved_environment
+                    .into_iter()
+                    .map(PixiRecord::from)
+                    .collect(),
                 prefix: prefix.clone(),
                 installed: None,
                 build_environment: self.build_environment,

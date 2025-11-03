@@ -612,7 +612,7 @@ impl Project {
         let result = command_dispatcher
             .install_pixi_environment(InstallPixiEnvironmentSpec {
                 name: env_name.to_string(),
-                records: pixi_records,
+                records: pixi_records.into_iter().map(From::from).collect(),
                 prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
                     .into_diagnostic()?,
                 build_environment,
@@ -1409,11 +1409,14 @@ impl Project {
         match packages.len() {
             0 => Err(InferPackageNameError::NoPackageOutputs),
             1 => {
-                let package = &packages[0];
-                Ok(package.name.clone())
+                let (package_name, _) = &packages[0];
+                Ok(package_name.clone())
             }
             _ => {
-                let package_names: Vec<_> = packages.iter().map(|p| p.name.as_source()).collect();
+                let package_names: Vec<_> = packages
+                    .iter()
+                    .map(|(package_name, _)| package_name.as_source())
+                    .collect();
                 Err(InferPackageNameError::MultiplePackageOutputs {
                     package_names: package_names.join(", "),
                 })

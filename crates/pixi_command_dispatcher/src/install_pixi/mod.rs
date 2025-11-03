@@ -95,14 +95,14 @@ pub struct InstallPixiEnvironmentResult {
 }
 
 impl InstallPixiEnvironmentSpec {
-    pub fn new(records: Vec<PixiRecord>, prefix: Prefix) -> Self {
+    pub fn new<R: Into<PixiRecord>>(records: Vec<R>, prefix: Prefix) -> Self {
         InstallPixiEnvironmentSpec {
             name: prefix
                 .file_name()
                 .map(OsStr::to_string_lossy)
                 .map(Cow::into_owned)
                 .unwrap_or_default(),
-            records,
+            records: records.into_iter().map(Into::into).collect(),
             prefix,
             installed: None,
             ignore_packages: None,
@@ -139,7 +139,7 @@ impl InstallPixiEnvironmentSpec {
             if self
                 .ignore_packages
                 .as_ref()
-                .is_some_and(|ignore| ignore.contains(&source_record.package_record.name))
+                .is_some_and(|ignore| ignore.contains(&source_record.name))
             {
                 continue;
             }
@@ -210,17 +210,16 @@ impl InstallPixiEnvironmentSpec {
     ) -> Result<RepoDataRecord, CommandDispatcherError<SourceBuildError>> {
         // Build the source package.
         // Verify if we need to force the build even if the cache is up to date.
-        let force = self
-            .force_reinstall
-            .contains(&source_record.package_record.name);
+        let force = self.force_reinstall.contains(&source_record.name);
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
                 manifest_source: source_record.manifest_source.clone(),
-                package: source_record.into(),
+                package_name: source_record.name.clone(),
+                package_variant: source_record.variants.clone().into(),
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
                 build_environment: self.build_environment.clone(),
-                variants: self.variants.clone(),
+                variant_config: self.variants.clone(),
                 variant_files: self.variant_files.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 output_directory: None,
@@ -248,7 +247,7 @@ pub enum InstallPixiEnvironmentError {
     Installer(InstallerError),
 
     #[error("failed to build '{}' from '{}'",
-        .0.package_record.name.as_source(),
+        .0.name.as_source(),
         .0.manifest_source)]
     BuildSourceError(
         Box<SourceRecord>,

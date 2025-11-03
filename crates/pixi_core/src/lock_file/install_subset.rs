@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use miette::Diagnostic;
+use pixi_record::{ParseLockFileError, PixiRecord};
 use rattler_lock::LockedPackageRef;
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -29,24 +30,18 @@ struct PackageNode {
     pub source: PackageSource,
 }
 
-impl<'a> From<LockedPackageRef<'a>> for PackageNode {
+impl<'a> TryFrom<LockedPackageRef<'a>> for PackageNode {
+    type Error = ParseLockFileError;
     /// Convert a LockedPackageRef to a PackageNode for efficient processing.
-    fn from(package_ref: LockedPackageRef<'a>) -> Self {
+    fn try_from(package_ref: LockedPackageRef<'a>) -> Result<Self, Self::Error> {
         let name = package_ref.name().to_string();
 
         let dependency_names: Vec<String> = match package_ref {
             LockedPackageRef::Conda(conda_data) => {
+                let pixi_record = PixiRecord::try_from(conda_data.clone())?;
                 // Extract dependencies from conda data and parse as MatchSpec
-                let depends = match conda_data {
-                    rattler_lock::CondaPackageData::Binary(binary_data) => {
-                        &binary_data.package_record.depends
-                    }
-                    rattler_lock::CondaPackageData::Source(source_data) => {
-                        &source_data.package_record.depends
-                    }
-                };
-
-                depends
+                pixi_record
+                    .depends()
                     .iter()
                     .filter_map(|dep_spec| {
                         // Parse as MatchSpec to get the package name
@@ -67,14 +62,14 @@ impl<'a> From<LockedPackageRef<'a>> for PackageNode {
             }
         };
 
-        PackageNode {
+        Ok(PackageNode {
             name,
             dependencies: dependency_names,
             source: match package_ref {
                 LockedPackageRef::Conda(_) => PackageSource::Conda,
                 LockedPackageRef::Pypi(_, _) => PackageSource::Pypi,
             },
-        }
+        })
     }
 }
 
@@ -112,6 +107,9 @@ pub enum InstallSubsetError {
     #[error("the following `--only` packages do not exist: {}", .0.iter().map(|s| format!("'{s}'")).join(", "))]
     #[diagnostic(help("try finding the correct package with `pixi list`"))]
     TargetPackagesDoNotExist(Vec<String>),
+
+    #[error(transparent)]
+    ParseLockFile(#[from] ParseLockFileError),
 }
 
 impl<'a> InstallSubset<'a> {
@@ -168,7 +166,7 @@ impl<'a> InstallSubset<'a> {
 
         let filtered_packages = if !self.target_packages.is_empty() {
             // Target mode: Collect targets + dependencies with skip short-circuiting
-            let reach = Self::build_reachability(&all_packages);
+            let reach = Self::build_reachability(&all_packages)?;
             let required = reach.collect_targets_dependencies(
                 self.target_packages,
                 // This is the stop set, because we just short-circuit getting dependencies
@@ -191,7 +189,7 @@ impl<'a> InstallSubset<'a> {
             FilteredPackages::new(to_process, to_ignore)
         } else {
             // Skip mode: Apply stop/passthrough rules from original roots
-            self.filter_with_skips(&all_packages)
+            self.filter_with_skips(&all_packages)?
         };
 
         Ok(filtered_packages)
@@ -202,16 +200,16 @@ impl<'a> InstallSubset<'a> {
     fn filter_with_skips<'lock>(
         &self,
         all_packages: &[LockedPackageRef<'lock>],
-    ) -> FilteredPackages<'lock> {
+    ) -> Result<FilteredPackages<'lock>, InstallSubsetError> {
         if self.skip_with_deps.is_empty() && self.skip_direct.is_empty() {
-            return FilteredPackages::new(all_packages.to_vec(), Vec::new());
+            return Ok(FilteredPackages::new(all_packages.to_vec(), Vec::new()));
         }
 
         // Compute the set of package names that remain required when the skip
         // packages are removed. We do this by walking the dependency graph
         // starting from every non-skipped package and never traversing through
         // skipped packages.
-        let reach = Self::build_reachability(all_packages);
+        let reach = Self::build_reachability(all_packages)?;
         let kept = reach.collect_reachable_from_non_skipped(self.skip_with_deps, self.skip_direct);
         let to_process: Vec<_> = all_packages
             .iter()
@@ -223,13 +221,19 @@ impl<'a> InstallSubset<'a> {
             .filter(|pkg| !kept.contains(pkg.name()))
             .copied()
             .collect();
-        FilteredPackages::new(to_process, to_ignore)
+        Ok(FilteredPackages::new(to_process, to_ignore))
     }
 
     /// Build a reachability analyzer for a set of packages.
-    fn build_reachability(all_packages: &[LockedPackageRef<'_>]) -> PackageReachability {
-        let nodes: Vec<PackageNode> = all_packages.iter().copied().map(Into::into).collect();
-        PackageReachability::new(nodes)
+    fn build_reachability(
+        all_packages: &[LockedPackageRef<'_>],
+    ) -> Result<PackageReachability, ParseLockFileError> {
+        let nodes: Vec<PackageNode> = all_packages
+            .iter()
+            .copied()
+            .map(PackageNode::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(PackageReachability::new(nodes))
     }
 }
 

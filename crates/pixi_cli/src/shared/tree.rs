@@ -18,7 +18,7 @@ pub enum PackageSource {
 #[derive(Debug, Clone)]
 pub struct Package {
     pub name: String,
-    pub version: String,
+    pub version: Option<String>,
     pub dependencies: Vec<String>,
     pub needed_by: Vec<String>,
     pub source: PackageSource,
@@ -214,7 +214,7 @@ fn print_dependency_node(
                 &format!("{prefix}{symbol} "),
                 &Package {
                     name: dep_name.to_owned(),
-                    version: String::from(""),
+                    version: None,
                     dependencies: Vec::new(),
                     needed_by: Vec::new(),
                     source: PackageSource::Conda,
@@ -256,8 +256,10 @@ pub fn print_package(
             console::style(&package.name)
         },
         match package.source {
-            PackageSource::Conda => console::style(&package.version).fg(Color::Yellow),
-            PackageSource::Pypi => console::style(&package.version).fg(Color::Blue),
+            PackageSource::Conda =>
+                console::style(package.version.as_deref().unwrap_or_default()).fg(Color::Yellow),
+            PackageSource::Pypi =>
+                console::style(package.version.as_deref().unwrap_or_default()).fg(Color::Blue),
         },
         if visited { "(*)" } else { "" }
     )

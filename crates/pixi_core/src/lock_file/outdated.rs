@@ -263,6 +263,26 @@ async fn find_unsatisfiable_targets<'p>(
                         .insert(platform);
                 }
             }
+
+            if lock_file.version() < rattler_lock::FileFormatVersion::V7
+                && locked_environment
+                    .packages(platform)
+                    .into_iter()
+                    .flatten()
+                    .any(|p| p.as_source_conda().is_some())
+            {
+                tracing::info!(
+                    "environment '{0}' for platform {platform} is out of date because the lock-file contains source packages in an old specification (v{1}) which is not longer supported",
+                    environment.name().fancy_display(),
+                    lock_file.version()
+                );
+
+                unsatisfiable_targets
+                    .outdated_conda
+                    .entry(environment.clone())
+                    .or_default()
+                    .insert(platform);
+            }
         }
     }
 
@@ -415,18 +435,16 @@ fn find_inconsistent_solve_groups<'p>(
 
             for package in locked_env.packages(platform).into_iter().flatten() {
                 match package {
-                    LockedPackageRef::Conda(pkg) => {
-                        match conda_packages_by_name.get(&pkg.record().name) {
-                            None => {
-                                conda_packages_by_name
-                                    .insert(pkg.record().name.clone(), pkg.location().clone());
-                            }
-                            Some(url) if pkg.location() != url => {
-                                conda_package_mismatch = true;
-                            }
-                            _ => {}
+                    LockedPackageRef::Conda(pkg) => match conda_packages_by_name.get(pkg.name()) {
+                        None => {
+                            conda_packages_by_name
+                                .insert(pkg.name().clone(), pkg.location().clone());
                         }
-                    }
+                        Some(url) if pkg.location() != url => {
+                            conda_package_mismatch = true;
+                        }
+                        _ => {}
+                    },
                     LockedPackageRef::Pypi(pkg, _) => match pypi_packages_by_name.get(&pkg.name) {
                         None => {
                             pypi_packages_by_name.insert(pkg.name.clone(), pkg.location.clone());
