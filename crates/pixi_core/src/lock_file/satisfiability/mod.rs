@@ -1497,24 +1497,56 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .iter()
         .filter_map(PixiRecord::as_source)
     {
-        let Some(path_record) = source_record.manifest_source.as_path() else {
-            continue;
-        };
-
         let Some(locked_input_hash) = &source_record.input_hash else {
             continue;
         };
 
-        let source_dir = path_record.resolve(project_root);
+        // Determine the source directory to hash
+        // If build_source is specified, it points to where the actual source files are located
+        // and should be resolved relative to the manifest_source location
+        // Otherwise, use manifest_source directly
+        let source_dir = if let Some(build_source) = &source_record.build_source {
+            let Some(build_path_record) = build_source.as_path() else {
+                continue;
+            };
+
+            // Get the manifest directory first
+            let Some(manifest_path_record) = source_record.manifest_source.as_path() else {
+                continue;
+            };
+            let manifest_dir = manifest_path_record.resolve(project_root);
+
+            // Resolve build_source relative to the manifest directory
+            build_path_record.resolve(&manifest_dir)
+        } else {
+            let Some(path_record) = source_record.manifest_source.as_path() else {
+                continue;
+            };
+            path_record.resolve(project_root)
+        };
+
         let source_dir = source_dir.canonicalize().map_err(|e| {
             Box::new(PlatformUnsat::FailedToCanonicalizePath(
-                path_record.path.as_str().into(),
+                source_dir.display().to_string().into(),
+                e,
+            ))
+        })?;
+
+        // Always discover the backend from the manifest directory (where pixi.toml with build config is)
+        // even if we're hashing files from a different build_source directory
+        let Some(manifest_path_record) = source_record.manifest_source.as_path() else {
+            continue;
+        };
+        let manifest_dir = manifest_path_record.resolve(project_root);
+        let manifest_dir = manifest_dir.canonicalize().map_err(|e| {
+            Box::new(PlatformUnsat::FailedToCanonicalizePath(
+                manifest_path_record.path.as_str().into(),
                 e,
             ))
         })?;
 
         let discovered_backend = DiscoveredBackend::discover(
-            &source_dir,
+            &manifest_dir,
             &environment.channel_config(),
             &EnabledProtocols::default(),
         )
@@ -1542,8 +1574,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
             .map_err(Box::new)?;
 
         if input_hash.hash != locked_input_hash.hash {
+            let manifest_path = source_record
+                .manifest_source
+                .as_path()
+                .map(|p| p.path.to_string())
+                .unwrap_or_else(|| source_record.manifest_source.to_string());
             return Err(Box::new(PlatformUnsat::InputHashMismatch(
-                path_record.path.to_string(),
+                manifest_path,
                 format!("{:x}", input_hash.hash),
                 format!("{:x}", locked_input_hash.hash),
             )));
