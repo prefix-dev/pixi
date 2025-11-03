@@ -1887,7 +1887,15 @@ fn verify_build_source_matches_manifest(
         (Some(SourceLocationSpec::Url(murl_spec)), Some(PinnedSourceSpec::Url(lurl_spec))) => {
             lurl_spec.satisfies(&murl_spec).map_err(sat_err)
         }
-        (Some(SourceLocationSpec::Git(mut mgit_spec)), Some(PinnedSourceSpec::Git(lgit_spec))) => {
+        (
+            Some(SourceLocationSpec::Git(mut mgit_spec)),
+            Some(PinnedSourceSpec::Git(mut lgit_spec)),
+        ) => {
+            // Ignore subdirectory for comparison, they should not
+            // trigger lockfile invalidation.
+            mgit_spec.subdirectory = None;
+            lgit_spec.source.subdirectory = None;
+
             // Ensure that we always compare references.
             if mgit_spec.rev.is_none() {
                 mgit_spec.rev = Some(pixi_spec::GitReference::DefaultBranch);
