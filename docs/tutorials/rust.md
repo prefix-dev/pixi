@@ -124,7 +124,7 @@ compilation process.
 Make sure you also have the development packages of openssl installed.
 For example, `libssl-dev` on Ubuntu or `openssl-devel` on Fedora.
 
-If you're in a situation where you think the directory *should* be found
+If you are in a situation where you think the directory *should* be found
 automatically, please open a bug at https://github.com/sfackler/rust-openssl
 and include information about your system as well as this message.
 
@@ -133,7 +133,7 @@ $TARGET = x86_64-unknown-linux-gnu
 openssl-sys = 0.9.102
 
 
-It looks like you're compiling on Linux and also targeting Linux. Currently this
+It looks like you are compiling on Linux and also targeting Linux. Currently this
 requires the `pkg-config` utility to find OpenSSL but unfortunately `pkg-config`
 could not be found. If you have OpenSSL installed you can likely fix this by
 installing `pkg-config`.

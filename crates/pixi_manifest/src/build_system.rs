@@ -106,7 +106,47 @@ mod tests {
               "https://prefix.dev/pixi-build-backends",
               "https://prefix.dev/conda-forge",
             ]
-            source = { git = "https://github.com/conda-forge/numpy-feedstock" }
+            source = { git = "https://github.com/conda-forge/numpy-feedstock", rev ="ee87916a49d5e96d4f322f68c3650e8ff6b8866b" }
+            "#;
+
+        let build = PackageBuild::from_toml_str(toml).unwrap();
+        assert_eq!(
+            build.value.backend.name.as_source(),
+            "pixi-build-rattler-build"
+        );
+        assert!(build.value.source.is_some());
+        assert!(build.value.source.unwrap().is_git());
+    }
+
+    #[test]
+    fn deserialize_build_with_git_source_branch() {
+        let toml = r#"
+            backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
+            channels = [
+              "https://prefix.dev/pixi-build-backends",
+              "https://prefix.dev/conda-forge",
+            ]
+            source = { git = "https://github.com/conda-forge/numpy-feedstock", branch = "main" }
+            "#;
+
+        let build = PackageBuild::from_toml_str(toml).unwrap();
+        assert_eq!(
+            build.value.backend.name.as_source(),
+            "pixi-build-rattler-build"
+        );
+        assert!(build.value.source.is_some());
+        assert!(build.value.source.unwrap().is_git());
+    }
+
+    #[test]
+    fn deserialize_build_with_git_source_tag() {
+        let toml = r#"
+            backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
+            channels = [
+              "https://prefix.dev/pixi-build-backends",
+              "https://prefix.dev/conda-forge",
+            ]
+            source = { git = "https://github.com/conda-forge/numpy-feedstock", tag = "v1.0.0" }
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();

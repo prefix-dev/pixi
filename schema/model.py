@@ -751,11 +751,11 @@ class SourceLocation(StrictBaseModel):
     # md5: Md5Sum | None = Field(None, description="The md5 hash of the source")
     # sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the source")
 
-    # git: NonEmptyStr | None = Field(None, description="The git URL to the source repo")
-    # rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
-    # tag: NonEmptyStr | None = Field(None, description="A git tag to use")
-    # branch: NonEmptyStr | None = Field(None, description="A git branch to use")
-    # subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
+    git: NonEmptyStr | None = Field(None, description="The git URL to the source repo")
+    rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
+    tag: NonEmptyStr | None = Field(None, description="A git tag to use")
+    branch: NonEmptyStr | None = Field(None, description="A git branch to use")
+    subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
 
 
 class Build(StrictBaseModel):
@@ -777,7 +777,14 @@ class Build(StrictBaseModel):
     source: SourceLocation | None = Field(
         None,
         description="The source from which to build the package",
-        examples=[{"path": "project"}],
+        examples=[
+            {"path": "project"},
+            {
+                "git": "https://github.com/user/repo.git",
+                "rev": "bd62770509b8afd792e98d20f8b458e2a7f19ec2",
+                "subdirectory": "subproject/src",
+            },
+        ],
     )
 
 

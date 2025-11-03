@@ -397,6 +397,11 @@ pub enum PlatformUnsat {
 
     #[error("'{name}' is locked as a conda package but only requested by pypi dependencies")]
     CondaPackageShouldBePypi { name: String },
+
+    #[error(
+        "the locked package build source for '{0}' does not match the requested build source, {1}"
+    )]
+    PackageBuildSourceMismatch(String, SourceMismatchError),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -1320,9 +1325,9 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             Cow::Owned(format!(
                                 "{} @ {}",
                                 record.package_record.name.as_source(),
-                                &record.source
+                                &record.manifest_source
                             )),
-                            SourceSpec::from(record.source.clone()).into(),
+                            SourceSpec::from(record.manifest_source.clone()).into(),
                         ),
                     };
 
@@ -1492,24 +1497,60 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .iter()
         .filter_map(PixiRecord::as_source)
     {
-        let Some(path_record) = source_record.source.as_path() else {
-            continue;
-        };
-
         let Some(locked_input_hash) = &source_record.input_hash else {
             continue;
         };
 
-        let source_dir = path_record.resolve(project_root);
+        // Determine the source directory to hash
+        // If build_source is specified, it points to where the actual source files are located
+        // and should be resolved relative to the manifest_source location
+        // Otherwise, use manifest_source directly
+        let source_dir = if let Some(build_source) = &source_record.build_source {
+            // Convert to mutable source spec (only path-based sources are supported)
+            let Ok(mutable_source) = build_source.clone().into_mutable() else {
+                continue;
+            };
+            let Some(build_path_record) = mutable_source.as_path() else {
+                continue;
+            };
+
+            // Get the manifest directory first
+            let Some(manifest_path_record) = source_record.manifest_source.as_path() else {
+                continue;
+            };
+            let manifest_dir = manifest_path_record.resolve(project_root);
+
+            // Resolve build_source relative to the manifest directory
+            build_path_record.resolve(&manifest_dir)
+        } else {
+            let Some(path_record) = source_record.manifest_source.as_path() else {
+                continue;
+            };
+            path_record.resolve(project_root)
+        };
+
         let source_dir = source_dir.canonicalize().map_err(|e| {
             Box::new(PlatformUnsat::FailedToCanonicalizePath(
-                path_record.path.as_str().into(),
+                source_dir.display().to_string().into(),
+                e,
+            ))
+        })?;
+
+        // Always discover the backend from the manifest directory (where pixi.toml with build config is)
+        // even if we're hashing files from a different build_source directory
+        let Some(manifest_path_record) = source_record.manifest_source.as_path() else {
+            continue;
+        };
+        let manifest_dir = manifest_path_record.resolve(project_root);
+        let manifest_dir = manifest_dir.canonicalize().map_err(|e| {
+            Box::new(PlatformUnsat::FailedToCanonicalizePath(
+                manifest_path_record.path.as_str().into(),
                 e,
             ))
         })?;
 
         let discovered_backend = DiscoveredBackend::discover(
-            &source_dir,
+            &manifest_dir,
             &environment.channel_config(),
             &EnabledProtocols::default(),
         )
@@ -1537,8 +1578,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
             .map_err(Box::new)?;
 
         if input_hash.hash != locked_input_hash.hash {
+            let manifest_path = source_record
+                .manifest_source
+                .as_path()
+                .map(|p| p.path.to_string())
+                .unwrap_or_else(|| source_record.manifest_source.to_string());
             return Err(Box::new(PlatformUnsat::InputHashMismatch(
-                path_record.path.to_string(),
+                manifest_path,
                 format!("{:x}", input_hash.hash),
                 format!("{:x}", locked_input_hash.hash),
             )));
@@ -1587,6 +1633,9 @@ pub(crate) async fn verify_package_platform_satisfiability(
             },
         )));
     }
+
+    // Verify the pixi build package's package_build_source matches the manifest.
+    verify_build_source_matches_manifest(environment, locked_pixi_records)?;
 
     Ok(VerifiedIndividualEnvironment {
         expected_conda_packages,
@@ -1706,7 +1755,7 @@ fn find_matching_source_package(
     };
 
     source_package
-        .source
+        .manifest_source
         .satisfies(&source_spec)
         .map_err(|e| PlatformUnsat::SourcePackageMismatch(name.as_source().to_string(), e))?;
 
@@ -1837,6 +1886,95 @@ impl Display for EditablePackagesMismatch {
 
         fn it_they(count: usize) -> &'static str {
             if count == 1 { "it" } else { "they" }
+        }
+    }
+}
+
+/// Verify that the current package's build.source in the manifest
+/// matches the lock file's `package_build_source` (if applicable).
+/// Path-based sources are not represented in the lock file's
+/// `package_build_source` and are skipped.
+fn verify_build_source_matches_manifest(
+    environment: &Environment<'_>,
+    locked_pixi_records: &PixiRecordsByName,
+) -> Result<(), Box<PlatformUnsat>> {
+    let Some(pkg_manifest) = environment.workspace().package.as_ref() else {
+        return Ok(());
+    };
+    let Some(pkg_name) = &pkg_manifest.value.package.name else {
+        return Ok(());
+    };
+    let Some(requested_loc) = pkg_manifest.value.build.source.clone() else {
+        return Ok(());
+    };
+
+    // Find the source record for the current package in locked conda packages.
+    let Some(record) = locked_pixi_records
+        .records
+        .iter()
+        .find(|r| r.package_record().name.as_source() == pkg_name)
+    else {
+        return Ok(());
+    };
+
+    let PixiRecord::Source(src_record) = record else {
+        return Ok(());
+    };
+
+    match requested_loc {
+        pixi_spec::SourceLocationSpec::Url(url_spec) => {
+            let Some(locked_url) = src_record.build_source.as_ref().and_then(|p| p.as_url()) else {
+                return Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
+                    src_record.package_record.name.as_source().to_string(),
+                    SourceMismatchError::SourceTypeMismatch,
+                )));
+            };
+            locked_url.satisfies(&url_spec).map_err(|e| {
+                Box::new(PlatformUnsat::PackageBuildSourceMismatch(
+                    src_record.package_record.name.as_source().to_string(),
+                    e,
+                ))
+            })
+        }
+        pixi_spec::SourceLocationSpec::Git(mut git_spec) => {
+            let Some(locked_git) = src_record.build_source.as_ref().and_then(|p| p.as_git()) else {
+                return Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
+                    src_record.package_record.name.as_source().to_string(),
+                    SourceMismatchError::SourceTypeMismatch,
+                )));
+            };
+            // If the lock omitted subdirectory for package_build_source, ignore subdirectory
+            // difference in comparison.
+            if locked_git.source.subdirectory.is_none() {
+                git_spec.subdirectory = None;
+            }
+            // If manifest does not specify a rev (branch/tag/rev), treat it as DefaultBranch
+            // to ensure we compare references, not silently accept any locked branch.
+            if git_spec.rev.is_none() {
+                git_spec.rev = Some(pixi_spec::GitReference::DefaultBranch);
+            }
+            locked_git.satisfies(&git_spec).map_err(|e| {
+                Box::new(PlatformUnsat::PackageBuildSourceMismatch(
+                    src_record.package_record.name.as_source().to_string(),
+                    e,
+                ))
+            })
+        }
+        pixi_spec::SourceLocationSpec::Path(path_spec) => {
+            let Some(locked_path) = src_record.build_source.as_ref().and_then(|p| p.as_path())
+            else {
+                return Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
+                    src_record.package_record.name.as_source().to_string(),
+                    SourceMismatchError::SourceTypeMismatch,
+                )));
+            };
+
+            locked_path.satisfies(&path_spec).map_err(|e| {
+                Box::new(PlatformUnsat::PackageBuildSourceMismatch(
+                    src_record.package_record.name.as_source().to_string(),
+                    e,
+                ))
+            })
         }
     }
 }
