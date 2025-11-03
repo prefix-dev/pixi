@@ -5,6 +5,7 @@ use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
+    build::SourceCodeLocation,
 };
 use pixi_config::ConfigCli;
 use pixi_core::WorkspaceLocator;
@@ -145,7 +146,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Create the build backend metadata specification.
     let backend_metadata_spec = BuildBackendMetadataSpec {
-        manifest_source: manifest_source.clone(),
+        source: SourceCodeLocation::new(manifest_source.clone(), None),
         channels: channels.clone(),
         channel_config: channel_config.clone(),
         build_environment: build_environment.clone(),
@@ -183,8 +184,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 package,
                 // Build into a temporary directory first
                 output_directory: Some(temp_output_dir.path().to_path_buf()),
-                manifest_source: manifest_source.clone(),
-                build_source: None,
+                source: SourceCodeLocation::new(manifest_source.clone(), None),
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),

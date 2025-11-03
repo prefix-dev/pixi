@@ -136,7 +136,7 @@ impl SourceBuildCacheStatusSpec {
         };
         let (cached_build, build_cache_entry) = command_dispatcher
             .build_cache()
-            .entry(&self.source.manifest_source(), &build_input)
+            .entry(self.source.manifest_source(), &build_input)
             .await
             .map_err(SourceBuildCacheStatusError::BuildCache)
             .map_err(CommandDispatcherError::Failed)?;
@@ -323,8 +323,7 @@ impl SourceBuildCacheStatusSpec {
 
         // Checkout the source for the package.
         let source_checkout = command_dispatcher
-            // Manifest source so it is relative to the workspace
-            .checkout_pinned_source(manifest_source.clone(), None)
+            .checkout_pinned_source(manifest_source)
             .await
             .map_err_with(SourceBuildCacheStatusError::SourceCheckout)?;
 
@@ -369,12 +368,9 @@ impl SourceBuildCacheStatusSpec {
             return Ok(CachedBuildStatus::UpToDate(cached_build));
         };
 
-        // Convert into correct tuple
-        let (source, alternative_root) = self.source.as_source_and_alternative_root();
-
         // Checkout the source for the package.
         let source_checkout = command_dispatcher
-            .checkout_pinned_source(source.clone(), alternative_root.cloned())
+            .checkout_source_location(&self.source)
             .await
             .map_err_with(SourceBuildCacheStatusError::SourceCheckout)?;
 

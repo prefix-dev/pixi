@@ -67,6 +67,11 @@ impl SourceCodeLocation {
         self.build_source.as_ref().unwrap_or(&self.manifest_source)
     }
 
+    /// Get the optional explicit build source override.
+    pub fn build_source(&self) -> Option<&PinnedSourceSpec> {
+        self.build_source.as_ref()
+    }
+
     pub fn as_source_and_alternative_root(&self) -> (&PinnedSourceSpec, Option<&PinnedSourceSpec>) {
         if let Some(build_source) = &self.build_source {
             (build_source, Some(&self.manifest_source))
@@ -84,9 +89,18 @@ impl std::fmt::Display for SourceCodeLocation {
             self.manifest_source(),
             self.build_source
                 .as_ref()
-                .map(|build| format!("{}", build))
+                .map(|build| format!("{build}"))
                 .unwrap_or("undefined".to_string())
         )
+    }
+}
+
+impl From<PinnedSourceSpec> for SourceCodeLocation {
+    fn from(manifest_source: PinnedSourceSpec) -> Self {
+        Self {
+            manifest_source,
+            build_source: None,
+        }
     }
 }
 

@@ -23,7 +23,7 @@ pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec,
-    Limits, PixiEnvironmentSpec,
+    Limits, PixiEnvironmentSpec, build::SourceCodeLocation,
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
@@ -1380,7 +1380,7 @@ impl Project {
 
         // Create the metadata spec
         let metadata_spec = BuildBackendMetadataSpec {
-            manifest_source: pinned_source_spec,
+            source: SourceCodeLocation::new(pinned_source_spec, None),
             channel_config: self.global_channel_config().clone(),
             channels: self
                 .config()

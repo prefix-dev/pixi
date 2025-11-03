@@ -35,7 +35,7 @@ use crate::{
     SourceBuildCacheEntry, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout,
     SourceCheckoutError, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
-    build::{BuildCache, source_metadata_cache::SourceMetadataCache},
+    build::{BuildCache, SourceCodeLocation, source_metadata_cache::SourceMetadataCache},
     cache_dirs::CacheDirs,
     discover_backend_cache::DiscoveryCache,
     install_pixi::{
@@ -626,13 +626,34 @@ impl CommandDispatcher {
     ///   (unimplemented)
     pub async fn checkout_pinned_source(
         &self,
+        pinned_spec: &PinnedSourceSpec,
+    ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
+        self.checkout_pinned_spec(pinned_spec.clone(), None).await
+    }
+
+    /// Checkout a source described by a [`SourceCodeLocation`], automatically
+    /// falling back to the manifest path when no dedicated build source is set.
+    ///
+    /// This is useful for the case where you want to checkout a source that is at
+    /// different location than the manifest, most obviously in an out-of-tree build.
+    pub async fn checkout_source_location(
+        &self,
+        source: &SourceCodeLocation,
+    ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
+        let (primary, alternative_root) = source.as_source_and_alternative_root();
+        self.checkout_pinned_spec(primary.clone(), alternative_root.cloned())
+            .await
+    }
+
+    async fn checkout_pinned_spec(
+        &self,
         pinned_spec: PinnedSourceSpec,
         alternative_root: Option<PinnedSourceSpec>,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match pinned_spec {
-            PinnedSourceSpec::Path(ref path) => {
-                let alternative_root_path = match alternative_root {
-                    Some(PinnedSourceSpec::Path(ref alt_path)) => Some(
+            PinnedSourceSpec::Path(path_spec) => {
+                let alternative_root_path = match alternative_root.as_ref() {
+                    Some(PinnedSourceSpec::Path(alt_path)) => Some(
                         self.data
                             .resolve_typed_path(alt_path.path.to_path(), None)
                             .map_err(|e| CommandDispatcherError::Failed(e.into()))?,
@@ -642,12 +663,12 @@ impl CommandDispatcher {
 
                 let source_path = self
                     .data
-                    .resolve_typed_path(path.path.to_path(), alternative_root_path.as_deref())
+                    .resolve_typed_path(path_spec.path.to_path(), alternative_root_path.as_deref())
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
                     path: source_path,
-                    pinned: pinned_spec,
+                    pinned: PinnedSourceSpec::Path(path_spec),
                 })
             }
             PinnedSourceSpec::Git(git_spec) => self.checkout_pinned_git(git_spec).await,

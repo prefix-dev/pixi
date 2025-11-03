@@ -15,6 +15,7 @@ use thiserror::Error;
 use crate::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
     SourceCheckoutError, SourceMetadataSpec,
+    build::SourceCodeLocation,
     executor::ExecutorFutures,
     source_metadata::{CycleEnvironment, SourceMetadata, SourceMetadataError},
 };
@@ -185,7 +186,7 @@ impl SourceMetadataCollector {
             .source_metadata(SourceMetadataSpec {
                 package: name.clone(),
                 backend_metadata: BuildBackendMetadataSpec {
-                    manifest_source: source.pinned,
+                    source: SourceCodeLocation::new(source.pinned, None),
                     channel_config: self.channel_config.clone(),
                     channels: self.channels.clone(),
                     build_environment: self.build_environment.clone(),
@@ -230,7 +231,7 @@ impl SourceMetadataCollector {
                         source_metadata.skipped_packages.clone(),
                     ),
                     name,
-                    pinned_source: Box::new(source_metadata.manifest_source.clone()),
+                    pinned_source: Box::new(source_metadata.source.manifest_source().clone()),
                 },
             ));
         }

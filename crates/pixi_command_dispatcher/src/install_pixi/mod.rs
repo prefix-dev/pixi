@@ -23,8 +23,8 @@ use thiserror::Error;
 
 use crate::{
     BuildEnvironment, BuildProfile, CommandDispatcher, CommandDispatcherError,
-    CommandDispatcherErrorResultExt, SourceBuildError, SourceBuildSpec, executor::ExecutorFutures,
-    install_pixi::reporter::WrappingInstallReporter,
+    CommandDispatcherErrorResultExt, SourceBuildError, SourceBuildSpec, build::SourceCodeLocation,
+    executor::ExecutorFutures, install_pixi::reporter::WrappingInstallReporter,
 };
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -215,7 +215,10 @@ impl InstallPixiEnvironmentSpec {
             .contains(&source_record.package_record.name);
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
-                manifest_source: source_record.manifest_source.clone(),
+                source: SourceCodeLocation::new(
+                    source_record.manifest_source.clone(),
+                    source_record.build_source.clone(),
+                ),
                 package: source_record.into(),
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
@@ -230,7 +233,6 @@ impl InstallPixiEnvironmentSpec {
                 force,
                 // When we install a pixi environment we always build in development mode.
                 build_profile: BuildProfile::Development,
-                build_source: source_record.build_source.clone(),
             })
             .await?;
 

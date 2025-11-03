@@ -10,7 +10,7 @@ use futures::TryStreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
-use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
+use pixi_record::{InputHash, PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
@@ -26,7 +26,7 @@ use crate::{
     CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
     SolvePixiEnvironmentError,
     build::{
-        Dependencies, DependenciesError, PixiRunExports, conversion,
+        Dependencies, DependenciesError, PixiRunExports, SourceCodeLocation, conversion,
         source_metadata_cache::MetadataKind,
     },
     executor::ExecutorFutures,
@@ -44,13 +44,8 @@ pub struct SourceMetadataSpec {
 /// The result of building a particular source record.
 #[derive(Debug, Clone)]
 pub struct SourceMetadata {
-    /// Information about the source checkout that was used to build the
-    /// package.
-    pub manifest_source: PinnedSourceSpec,
-
-    /// The optional location of where the actual source code is located,
-    /// this is used mainly for out-of-tree builds
-    pub build_source: Option<PinnedSourceSpec>,
+    /// Manifest and optional build source location for this metadata.
+    pub source: SourceCodeLocation,
 
     /// All the source records for this particular package.
     pub records: Vec<SourceRecord>,
@@ -64,7 +59,8 @@ impl SourceMetadataSpec {
         skip_all,
         name = "source-metadata",
         fields(
-            source= %self.backend_metadata.manifest_source,
+            manifest_source= %self.backend_metadata.source.manifest_source(),
+            build_source=?self.backend_metadata.source.build_source(),
             name = %self.package.as_source(),
             platform = %self.backend_metadata.build_environment.host_platform,
         )
@@ -84,26 +80,27 @@ impl SourceMetadataSpec {
 
         match &build_backend_metadata.metadata.metadata {
             MetadataKind::GetMetadata { packages } => {
+                let source_location = build_backend_metadata.source.clone();
                 // Convert the metadata to source records.
                 let records = conversion::package_metadata_to_source_records(
-                    &build_backend_metadata.manifest_source,
-                    build_backend_metadata.build_source.as_ref(),
+                    source_location.manifest_source(),
+                    source_location.build_source(),
                     packages,
                     &self.package,
                     &build_backend_metadata.metadata.input_hash,
                 );
 
                 Ok(SourceMetadata {
-                    manifest_source: build_backend_metadata.manifest_source.clone(),
+                    source: source_location,
                     records,
                     // As the GetMetadata kind returns all records at once and we don't solve them we can skip this.
                     skipped_packages: Default::default(),
-                    build_source: build_backend_metadata.build_source.clone(),
                 })
             }
             MetadataKind::Outputs { outputs } => {
                 let mut skipped_packages = vec![];
                 let mut futures = ExecutorFutures::new(command_dispatcher.executor());
+                let source_location = build_backend_metadata.source.clone();
                 for output in outputs {
                     if output.metadata.name != self.package {
                         skipped_packages.push(output.metadata.name.clone());
@@ -113,17 +110,15 @@ impl SourceMetadataSpec {
                         &command_dispatcher,
                         output,
                         build_backend_metadata.metadata.input_hash.clone(),
-                        build_backend_metadata.manifest_source.clone(),
-                        build_backend_metadata.build_source.clone(),
+                        source_location.clone(),
                         reporter.clone(),
                     ));
                 }
 
                 Ok(SourceMetadata {
-                    manifest_source: build_backend_metadata.manifest_source.clone(),
+                    source: source_location,
                     records: futures.try_collect().await?,
                     skipped_packages,
-                    build_source: build_backend_metadata.build_source.clone(),
                 })
             }
         }
@@ -134,10 +129,11 @@ impl SourceMetadataSpec {
         command_dispatcher: &CommandDispatcher,
         output: &CondaOutput,
         input_hash: Option<InputHash>,
-        manifest_source: PinnedSourceSpec,
-        build_source: Option<PinnedSourceSpec>,
+        source: SourceCodeLocation,
         reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
+        let manifest_source = source.manifest_source().clone();
+        let build_source = source.build_source().cloned();
         let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
 
         // Solve the build environment for the output.

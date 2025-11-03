@@ -51,12 +51,8 @@ pub struct SourceBuildSpec {
     /// The source to build
     pub package: PackageIdentifier,
 
-    /// The location of the source code to build.
-    pub manifest_source: PinnedSourceSpec,
-
-    /// Optional source spec of sources which will be built.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub build_source: Option<PinnedSourceSpec>,
+    /// The manifest and optional build source location.
+    pub source: SourceCodeLocation,
 
     /// The channel configuration to use when resolving metadata
     pub channel_config: ChannelConfig,
@@ -124,8 +120,8 @@ impl SourceBuildSpec {
         skip_all,
         name = "source-build",
         fields(
-            source= %self.manifest_source,
-            build_source= ?self.build_source,
+            manifest_source = %self.source.manifest_source(),
+            build_source = ?self.source.build_source(),
             package = %self.package,
         )
     )]
@@ -135,6 +131,8 @@ impl SourceBuildSpec {
         reporter: Option<Arc<dyn RunExportsReporter>>,
         log_sink: UnboundedSender<String>,
     ) -> Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>> {
+        let manifest_source = self.source.manifest_source().clone();
+
         // If the output directory is not set, we want to use the build cache. Read the
         // build cache in that case.
         let (output_directory, build_cache) = if let Some(output_directory) =
@@ -148,10 +146,7 @@ impl SourceBuildSpec {
                 .source_build_cache_status(SourceBuildCacheStatusSpec {
                     package: self.package.clone(),
                     build_environment: self.build_environment.clone(),
-                    source: super::build::SourceCodeLocation::new(
-                        self.manifest_source.clone(),
-                        self.build_source.clone(),
-                    ),
+                    source: self.source.clone(),
                     channels: self.channels.clone(),
                     channel_config: self.channel_config.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
@@ -167,7 +162,7 @@ impl SourceBuildSpec {
                 if !self.force {
                     // If the build is up to date, we can return the cached build.
                     tracing::debug!(
-                        source = %self.manifest_source,
+                        source = %self.source.manifest_source(),
                         package = ?cached_build.record.package_record.name,
                         build = %cached_build.record.package_record.build,
                         output = %cached_build.record.file_name,
@@ -189,7 +184,7 @@ impl SourceBuildSpec {
                     self.package.name.as_normalized()
                 );
                 tracing::debug!(
-                    source = %self.manifest_source,
+                    source = %self.source.manifest_source(),
                     package = ?cached_build.record.package_record.name,
                     build = %cached_build.record.package_record.build,
                     output = %cached_build.record.file_name,
@@ -205,7 +200,7 @@ impl SourceBuildSpec {
             match &*build_cache.cached_build.lock().await {
                 CachedBuildStatus::Stale(existing) => {
                     tracing::debug!(
-                        source = %self.manifest_source,
+                        source = %self.source.manifest_source(),
                         package = ?existing.record.package_record.name,
                         build = %existing.record.package_record.build,
                         "rebuilding stale source build",
@@ -213,7 +208,7 @@ impl SourceBuildSpec {
                 }
                 CachedBuildStatus::Missing => {
                     tracing::debug!(
-                        source = %self.manifest_source,
+                        source = %self.source.manifest_source(),
                         "no cached source build; starting fresh build",
                     );
                 }
@@ -225,8 +220,7 @@ impl SourceBuildSpec {
 
         // Check out the source code.
         let manifest_source_checkout = command_dispatcher
-            // This should be relative to the workspace, so we can pass in None
-            .checkout_pinned_source(self.manifest_source.clone(), None)
+            .checkout_pinned_source(&manifest_source)
             .await
             .map_err_with(SourceBuildError::SourceCheckout)?;
 
@@ -250,7 +244,7 @@ impl SourceBuildSpec {
 
         // Ensure legacy lock entries that missed the git subdirectory pick it up from the
         // manifest so we check out the correct directory.
-        let mut build_source = self.build_source.clone();
+        let mut build_source = self.source.build_source().cloned();
         if let (Some(PinnedSourceSpec::Git(pinned_git)), Some(SourceLocationSpec::Git(git_spec))) = (
             build_source.as_mut(),
             discovered_backend.init_params.build_source.clone(),
@@ -265,8 +259,10 @@ impl SourceBuildSpec {
         // 2. Manifest package build. This can happen if package isn't added to the dependencies of manifest, so no pinning happens in that case.
         // 3. Manifest source. Just assume that source is located at the same directory as the manifest.
         let build_source_dir = if let Some(pinned_build_source) = build_source {
+            let build_location =
+                SourceCodeLocation::new(manifest_source.clone(), Some(pinned_build_source.clone()));
             let build_source_checkout = command_dispatcher
-                .checkout_pinned_source(pinned_build_source, Some(self.manifest_source.clone()))
+                .checkout_source_location(&build_location)
                 .await
                 .map_err_with(SourceBuildError::SourceCheckout)?;
             build_source_checkout.path
@@ -302,7 +298,7 @@ impl SourceBuildSpec {
             command_dispatcher
                 .instantiate_backend(InstantiateBackendSpec {
                     backend_spec: discovered_backend.backend_spec.clone().resolve(
-                        SourceAnchor::from(SourceSpec::from(self.manifest_source.clone())),
+                        SourceAnchor::from(SourceSpec::from(manifest_source.clone())),
                     ),
                     init_params: discovered_backend.init_params.clone(),
                     build_source_dir,
@@ -318,7 +314,7 @@ impl SourceBuildSpec {
             None => command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {
                     source: SourceRecordOrCheckout::Record {
-                        pinned: self.manifest_source.clone(),
+                        pinned: manifest_source.clone(),
                         package_name: self.package.name.clone(),
                     },
                     host_platform: self.build_environment.host_platform,
@@ -328,7 +324,7 @@ impl SourceBuildSpec {
             ),
         };
         tracing::debug!(
-            source = %self.manifest_source,
+            source = %manifest_source,
             work_directory = %work_directory.display(),
             backend = backend.identifier(),
             "using work directory for source build",
@@ -344,7 +340,7 @@ impl SourceBuildSpec {
         }
 
         // Build the package using the v1 build method.
-        let source_for_logging = self.manifest_source.clone();
+        let source_for_logging = manifest_source.clone();
         let mut built_source = self
             .build_v1(
                 command_dispatcher,
@@ -497,7 +493,7 @@ impl SourceBuildSpec {
 
     /// Returns whether the package should be built in an editable mode.
     fn editable(&self) -> bool {
-        self.build_profile == BuildProfile::Development && self.manifest_source.is_mutable()
+        self.build_profile == BuildProfile::Development && self.source.source_code().is_mutable()
     }
 
     async fn build_v1(
@@ -509,7 +505,9 @@ impl SourceBuildSpec {
         reporter: Option<Arc<dyn RunExportsReporter>>,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<BuiltPackage, CommandDispatcherError<SourceBuildError>> {
-        let source_anchor = SourceAnchor::from(SourceSpec::from(self.manifest_source.clone()));
+        let manifest_source = self.source.manifest_source().clone();
+
+        let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
         let host_platform = self.build_environment.host_platform;
         let build_platform = self.build_environment.build_platform;
 
@@ -732,7 +730,7 @@ impl SourceBuildSpec {
                 }),
                 backend,
                 package: self.package,
-                source: self.manifest_source,
+                source: manifest_source,
                 work_directory,
                 channels: self.channels,
                 channel_config: self.channel_config,
