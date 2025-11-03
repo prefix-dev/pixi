@@ -95,15 +95,6 @@ impl std::fmt::Display for SourceCodeLocation {
     }
 }
 
-impl From<PinnedSourceSpec> for SourceCodeLocation {
-    fn from(manifest_source: PinnedSourceSpec) -> Self {
-        Self {
-            manifest_source,
-            build_source: None,
-        }
-    }
-}
-
 /// Try to deduce a name from a url.
 fn pretty_url_name(url: &Url) -> String {
     if let Some(last_segment) = url

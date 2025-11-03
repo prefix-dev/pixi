@@ -16,8 +16,8 @@ ERROR:
 
 TRACE:
 Pixi solve (package_a)
-└── Source metadata (package_a @ package_a)
-    ├── Build backend metadata (package_a)
+└── Source metadata (package_a @ (manifest-src: package_a, build-src: undefined))
+    ├── Build backend metadata ((manifest-src: package_a, build-src: undefined))
     └── Pixi solve (package_b)
-        └── Source metadata (package_b @ package_b)
-            └── Build backend metadata (package_b)
+        └── Source metadata (package_b @ (manifest-src: package_b, build-src: undefined))
+            └── Build backend metadata ((manifest-src: package_b, build-src: undefined))
