@@ -102,6 +102,14 @@ class ChannelPriority(str, Enum):
     strict = "strict"
 
 
+class SolveStrategy(str, Enum):
+    """The strategy used to solve packages."""
+
+    highest = "highest"
+    lowest = "lowest"
+    lowest_direct = "lowest-direct"
+
+
 PixiBuildFeature = Annotated[
     Literal["pixi-build"], Field(description="Enables building of source records")
 ]
@@ -137,6 +145,14 @@ class Workspace(StrictBaseModel):
         description="""The type of channel priority that is used in the solve.
 - 'strict': only take the package from the channel it exist in first.
 - 'disabled': group all dependencies together as if there is no channel difference.""",
+    )
+    solve_strategy: SolveStrategy | None = Field(
+        None,
+        examples=["lowest", "lowest-direct", "highest"],
+        description="""The strategy that is used in the solve.
+- 'highest': solve all packages to the highest compatible version.
+- 'lowest': solve all packages to the lowest compatible version.
+- 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.""",
     )
     exclude_newer: ExcludeNewer | None = Field(
         None,
@@ -528,6 +544,14 @@ class Feature(StrictBaseModel):
 - 'strict': only take the package from the channel it exist in first.
 - 'disabled': group all dependencies together as if there is no channel difference.""",
     )
+    solve_strategy: SolveStrategy | None = Field(
+        None,
+        examples=["lowest", "lowest-direct", "highest"],
+        description="""The strategy that is used in the solve.
+- 'highest': solve all packages to the highest compatible version.
+- 'lowest': solve all packages to the lowest compatible version.
+- 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.""",
+    )
     platforms: list[Platform] | None = Field(
         None,
         description="The platforms that the feature supports: a union of all features combined in one environment is used for the environment.",
@@ -727,11 +751,11 @@ class SourceLocation(StrictBaseModel):
     # md5: Md5Sum | None = Field(None, description="The md5 hash of the source")
     # sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the source")
 
-    # git: NonEmptyStr | None = Field(None, description="The git URL to the source repo")
-    # rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
-    # tag: NonEmptyStr | None = Field(None, description="A git tag to use")
-    # branch: NonEmptyStr | None = Field(None, description="A git branch to use")
-    # subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
+    git: NonEmptyStr | None = Field(None, description="The git URL to the source repo")
+    rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
+    tag: NonEmptyStr | None = Field(None, description="A git tag to use")
+    branch: NonEmptyStr | None = Field(None, description="A git branch to use")
+    subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
 
 
 class Build(StrictBaseModel):
@@ -753,7 +777,14 @@ class Build(StrictBaseModel):
     source: SourceLocation | None = Field(
         None,
         description="The source from which to build the package",
-        examples=[{"path": "project"}],
+        examples=[
+            {"path": "project"},
+            {
+                "git": "https://github.com/user/repo.git",
+                "rev": "bd62770509b8afd792e98d20f8b458e2a7f19ec2",
+                "subdirectory": "subproject/src",
+            },
+        ],
     )
 
 

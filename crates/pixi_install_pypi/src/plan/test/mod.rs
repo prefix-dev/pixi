@@ -298,8 +298,9 @@ fn test_ignored_packages_not_extraneous() {
 
     // Build a planner that ignores `aiofiles` for extraneous detection; `requests`
     // should be considered extraneous and be uninstalled
-    let plan = harness::install_planner()
-        .with_ignored_extraneous(vec![uv_pep508::PackageName::from_str("aiofiles").unwrap()]);
+    let plan = harness::install_planner().with_ignored_extraneous(vec![
+        uv_normalize::PackageName::from_str("aiofiles").unwrap(),
+    ]);
 
     let required_dists = required.to_required_dists();
     let install_plan = plan
@@ -760,7 +761,7 @@ fn test_uv_refresh() {
     let plan = harness::install_planner();
     let plan = plan.with_uv_refresh(uv_cache::Refresh::from_args(
         Some(true),
-        vec![uv_pep508::PackageName::from_str("aiofiles").unwrap()],
+        vec![uv_normalize::PackageName::from_str("aiofiles").unwrap()],
     ));
     let required_dists = required.to_required_dists();
     let installs = plan

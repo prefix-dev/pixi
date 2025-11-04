@@ -1,6 +1,6 @@
 use std::{collections::hash_map::Entry, sync::Arc};
 
-use futures::FutureExt;
+use futures::{FutureExt, channel::mpsc::UnboundedSender};
 use tokio_util::sync::CancellationToken;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
@@ -68,19 +68,23 @@ impl CommandDispatcherProcessor {
                         .insert(source_metadata_id, reporter_id);
                 }
 
+                // Open a channel to receive build output.
+                let (log_sink, rx) = futures::channel::mpsc::unbounded();
+
                 if let Some((reporter, reporter_id)) = self
                     .reporter
                     .as_deref_mut()
                     .and_then(Reporter::as_build_backend_metadata_reporter)
                     .zip(reporter_id)
                 {
-                    reporter.on_started(reporter_id)
+                    reporter.on_started(reporter_id, Box::new(rx))
                 }
 
                 self.queue_build_backend_metadata_task(
                     source_metadata_id,
                     task.spec,
                     task.cancellation_token,
+                    log_sink,
                 );
             }
         }
@@ -92,13 +96,16 @@ impl CommandDispatcherProcessor {
         build_backend_metadata_id: BuildBackendMetadataId,
         spec: BuildBackendMetadataSpec,
         cancellation_token: CancellationToken,
+        log_sink: UnboundedSender<String>,
     ) {
         let dispatcher = self.create_task_command_dispatcher(
             CommandDispatcherContext::BuildBackendMetadata(build_backend_metadata_id),
         );
+
+        // Open a channel to receive build output.
         self.pending_futures.push(
             cancellation_token
-                .run_until_cancelled_owned(spec.request(dispatcher))
+                .run_until_cancelled_owned(spec.request(dispatcher, log_sink))
                 .map(move |result| {
                     TaskResult::BuildBackendMetadata(
                         build_backend_metadata_id,
@@ -133,7 +140,8 @@ impl CommandDispatcherProcessor {
             .and_then(Reporter::as_build_backend_metadata_reporter)
             .zip(self.build_backend_metadata_reporters.remove(&id))
         {
-            reporter.on_finished(reporter_id);
+            let failed = result.is_err();
+            reporter.on_finished(reporter_id, failed);
         }
 
         self.build_backend_metadata

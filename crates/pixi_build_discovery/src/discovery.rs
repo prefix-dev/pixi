@@ -46,7 +46,7 @@ pub struct BackendInitializationParams {
     pub workspace_root: PathBuf,
 
     /// The location of the source code.
-    pub source: Option<SourceLocationSpec>,
+    pub build_source: Option<SourceLocationSpec>,
 
     /// The anchor for relative paths to the location of the source code.
     pub source_anchor: PathBuf,
@@ -199,7 +199,7 @@ impl DiscoveredBackend {
             backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_rattler_build(channels)),
             init_params: BackendInitializationParams {
                 workspace_root: source_dir.clone(),
-                source: None,
+                build_source: None,
                 source_anchor: source_dir,
                 manifest_path: recipe_absolute_path,
                 project_model: None,
@@ -270,7 +270,7 @@ impl DiscoveredBackend {
             init_params: BackendInitializationParams {
                 workspace_root,
                 manifest_path: provenance.path.clone(),
-                source: build_system.source,
+                build_source: build_system.source,
                 source_anchor: provenance
                     .path
                     .parent()
@@ -371,7 +371,7 @@ impl DiscoveredBackend {
             backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_ros_build(channels)),
             init_params: BackendInitializationParams {
                 workspace_root: source_dir.clone(),
-                source: None,
+                build_source: None,
                 source_anchor: source_dir,
                 manifest_path: package_xml_absolute_path,
                 project_model: Some(ProjectModelV1::default()),

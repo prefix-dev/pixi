@@ -1,0 +1,18 @@
+---
+source: crates/pixi_cli/src/workspace/export/conda_environment.rs
+assertion_line: 512
+expression: env_yaml.unwrap().to_yaml_string()
+---
+name: custom_env_name
+channels:
+- conda-forge
+- nodefaults
+dependencies:
+- python >=3.12.5,<4
+- conda-forge::ca-certificates ==2024.8.30
+- pyyaml >=6.0.2,<7
+- readline ==8.2 h9e318b2_1
+- pip
+- pip:
+  - rich>=13.8.0, <14
+  - test-git-subdir-roundtrip @ git+https://github.com/prefix-dev/pixi@main#subdirectory=tests/data/mock-projects/test-project-export/test-git-subdir-roundtrip

@@ -1,0 +1,8 @@
+[package]
+name = "out-of-tree-package"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-cmake", version = "0.3.*" }
+# Point to source files in a different directory (out-of-tree build)
+source = { path = "../source-files" }

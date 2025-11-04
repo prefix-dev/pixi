@@ -35,19 +35,19 @@ use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rayon::prelude::*;
 use utils::elapsed;
 use uv_auth::store_credentials_from_url;
-use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
-use uv_configuration::{
-    BuildOptions, ConfigSettings, Constraints, IndexStrategy, PackageConfigSettings,
+use uv_client::{
+    BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder,
 };
+use uv_configuration::{BuildOptions, Constraints, IndexStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{BuiltWheelIndex, DistributionDatabase, RegistryWheelIndex};
 use uv_distribution_types::{
-    CachedDist, DependencyMetadata, Dist, ExtraBuildRequires, IndexLocations, IndexUrl,
-    InstalledDist, Name, Resolution,
+    CachedDist, ConfigSettings, DependencyMetadata, Dist, ExtraBuildRequires, ExtraBuildVariables,
+    IndexLocations, IndexUrl, InstalledDist, Name, PackageConfigSettings, Resolution,
 };
 use uv_install_wheel::LinkMode;
 use uv_installer::{Preparer, SitePackages, UninstallError};
-use uv_pep508::PackageName;
+use uv_normalize::PackageName;
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 
@@ -98,7 +98,7 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
                 return None;
             };
 
-            let Ok(installer) = installed_dist.installer() else {
+            let Ok(installer) = installed_dist.read_installer() else {
                 tracing::warn!(
                     "could not get installer for {}: will not remove distribution",
                     installed_dist.name()
@@ -341,14 +341,18 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         let index_strategy = to_index_strategy(self.build_config.index_strategy);
 
-        let mut uv_client_builder =
-            RegistryClientBuilder::new(self.context_config.uv_context.cache.clone())
-                .allow_insecure_host(self.context_config.uv_context.allow_insecure_host.clone())
-                .keyring(self.context_config.uv_context.keyring_provider)
-                .connectivity(Connectivity::Online)
-                .extra_middleware(self.context_config.uv_context.extra_middleware.clone())
-                .index_locations(&index_locations)
-                .index_strategy(index_strategy);
+        let base_client_builder = BaseClientBuilder::default()
+            .allow_insecure_host(self.context_config.uv_context.allow_insecure_host.clone())
+            .keyring(self.context_config.uv_context.keyring_provider)
+            .connectivity(Connectivity::Online)
+            .extra_middleware(self.context_config.uv_context.extra_middleware.clone());
+
+        let mut uv_client_builder = RegistryClientBuilder::new(
+            base_client_builder,
+            self.context_config.uv_context.cache.clone(),
+        )
+        .index_locations(index_locations.clone())
+        .index_strategy(index_strategy);
 
         for p in &self.context_config.uv_context.proxies {
             uv_client_builder = uv_client_builder.proxy(p.clone())
@@ -450,6 +454,11 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             site_packages.iter().count(),
         );
 
+        let extra_build_requires = ExtraBuildRequires::default();
+        let package_settings = PackageConfigSettings::default();
+
+        let extra_build_variables = ExtraBuildVariables::default();
+
         // This is used to find wheels that are available from the registry
         let registry_index = RegistryWheelIndex::new(
             &self.context_config.uv_context.cache,
@@ -457,11 +466,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &setup.index_locations,
             &self.context_config.uv_context.hash_strategy,
             &setup.config_settings,
+            &package_settings,
+            &extra_build_requires,
+            &extra_build_variables,
         );
         // These were added in 0.8.2, we might want to support these
         // if people ask for them
-        let package_settings = PackageConfigSettings::default();
-        let extra_build_requires = ExtraBuildRequires::default();
         let built_wheel_index = BuiltWheelIndex::new(
             &self.context_config.uv_context.cache,
             &setup.tags,
@@ -469,6 +479,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &setup.config_settings,
             &package_settings,
             &extra_build_requires,
+            &extra_build_variables,
         );
 
         // Partition into those that should be linked from the cache (`cached`), those
@@ -821,6 +832,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &self.context_config.uv_context.package_config_settings,
             setup.build_isolation.to_uv(&setup.venv),
             &self.context_config.uv_context.extra_build_requires,
+            &self.context_config.uv_context.extra_build_variables,
             LinkMode::default(),
             &setup.build_options,
             &self.context_config.uv_context.hash_strategy,
@@ -999,7 +1011,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         let start = std::time::Instant::now();
 
-        uv_installer::Installer::new(&setup.venv)
+        uv_installer::Installer::new(&setup.venv, uv_preview::Preview::default())
             .with_link_mode(LinkMode::default())
             .with_installer_name(Some(consts::PIXI_UV_INSTALLER.to_string()))
             .with_reporter(UvReporter::new_arc(options))

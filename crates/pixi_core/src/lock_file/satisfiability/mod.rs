@@ -16,8 +16,10 @@ use pixi_command_dispatcher::calculate_additional_glob_hash;
 use pixi_git::url::RepositoryUrl;
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
-use pixi_record::{LockedGitUrl, ParseLockFileError, PixiRecord, SourceMismatchError};
-use pixi_spec::{PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
+use pixi_record::{
+    LockedGitUrl, ParseLockFileError, PinnedSourceSpec, PixiRecord, SourceMismatchError,
+};
+use pixi_spec::{PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError};
 use pixi_utils::variants::VariantConfig;
 use pixi_uv_conversions::{
     AsPep508Error, as_uv_req, into_pixi_reference, pep508_requirement_to_uv_requirement,
@@ -25,8 +27,8 @@ use pixi_uv_conversions::{
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseChannelError,
-    ParseMatchSpecError, ParseStrictness::Lenient, Platform,
+    ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, PackageName,
+    ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
 };
 use rattler_lock::{
     LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable,
@@ -245,7 +247,7 @@ pub enum PlatformUnsat {
     FailedToParseMatchSpec(String, #[source] ParseMatchSpecError),
 
     #[error("there are more conda packages in the lock-file than are used by the environment: {}", .0.iter().map(rattler_conda_types::PackageName::as_source).format(", "))]
-    TooManyCondaPackages(Vec<rattler_conda_types::PackageName>),
+    TooManyCondaPackages(Vec<PackageName>),
 
     #[error("missing purls")]
     MissingPurls,
@@ -397,6 +399,11 @@ pub enum PlatformUnsat {
 
     #[error("'{name}' is locked as a conda package but only requested by pypi dependencies")]
     CondaPackageShouldBePypi { name: String },
+
+    #[error(
+        "the locked package build source for '{0}' does not match the requested build source, {1}"
+    )]
+    PackageBuildSourceMismatch(String, SourceMismatchError),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -488,10 +495,11 @@ pub fn verify_environment_satisfiability(
     }
 
     // Verify solver options
-    if locked_environment.solve_options().strategy != environment.solve_strategy() {
+    let expected_solve_strategy = environment.solve_strategy().into();
+    if locked_environment.solve_options().strategy != expected_solve_strategy {
         return Err(EnvironmentUnsat::SolveStrategyMismatch {
             locked_strategy: locked_environment.solve_options().strategy,
-            expected_strategy: environment.solve_strategy(),
+            expected_strategy: expected_solve_strategy,
         });
     }
 
@@ -739,18 +747,9 @@ pub async fn verify_platform_satisfiability(
 
 #[allow(clippy::large_enum_variant)]
 enum Dependency {
-    Input(
-        rattler_conda_types::PackageName,
-        PixiSpec,
-        Cow<'static, str>,
-    ),
+    Input(PackageName, PixiSpec, Cow<'static, str>),
     Conda(MatchSpec, Cow<'static, str>),
-    CondaSource(
-        rattler_conda_types::PackageName,
-        MatchSpec,
-        SourceSpec,
-        Cow<'static, str>,
-    ),
+    CondaSource(PackageName, MatchSpec, SourceSpec, Cow<'static, str>),
     PyPi(uv_distribution_types::Requirement, Cow<'static, str>),
 }
 
@@ -982,10 +981,10 @@ pub struct VerifiedIndividualEnvironment {
     /// All packages in the environment that are expected to be conda packages
     /// e.g. they are in the environment as a direct or transitive dependency of
     /// another conda package.
-    pub expected_conda_packages: HashSet<rattler_conda_types::PackageName>,
+    pub expected_conda_packages: HashSet<PackageName>,
 
     /// All conda packages that satisfy a pypi requirement.
-    pub conda_packages_used_by_pypi: HashSet<rattler_conda_types::PackageName>,
+    pub conda_packages_used_by_pypi: HashSet<PackageName>,
 }
 
 pub(crate) async fn verify_package_platform_satisfiability(
@@ -1319,9 +1318,9 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             Cow::Owned(format!(
                                 "{} @ {}",
                                 record.package_record.name.as_source(),
-                                &record.source
+                                &record.manifest_source
                             )),
-                            SourceSpec::from(record.source.clone()).into(),
+                            SourceSpec::from(record.manifest_source.clone()).into(),
                         ),
                     };
 
@@ -1491,24 +1490,60 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .iter()
         .filter_map(PixiRecord::as_source)
     {
-        let Some(path_record) = source_record.source.as_path() else {
-            continue;
-        };
-
         let Some(locked_input_hash) = &source_record.input_hash else {
             continue;
         };
 
-        let source_dir = path_record.resolve(project_root);
+        // Determine the source directory to hash
+        // If build_source is specified, it points to where the actual source files are located
+        // and should be resolved relative to the manifest_source location
+        // Otherwise, use manifest_source directly
+        let source_dir = if let Some(build_source) = &source_record.build_source {
+            // Convert to mutable source spec (only path-based sources are supported)
+            let Ok(mutable_source) = build_source.clone().into_mutable() else {
+                continue;
+            };
+            let Some(build_path_record) = mutable_source.as_path() else {
+                continue;
+            };
+
+            // Get the manifest directory first
+            let Some(manifest_path_record) = source_record.manifest_source.as_path() else {
+                continue;
+            };
+            let manifest_dir = manifest_path_record.resolve(project_root);
+
+            // Resolve build_source relative to the manifest directory
+            build_path_record.resolve(&manifest_dir)
+        } else {
+            let Some(path_record) = source_record.manifest_source.as_path() else {
+                continue;
+            };
+            path_record.resolve(project_root)
+        };
+
         let source_dir = source_dir.canonicalize().map_err(|e| {
             Box::new(PlatformUnsat::FailedToCanonicalizePath(
-                path_record.path.as_str().into(),
+                source_dir.display().to_string().into(),
+                e,
+            ))
+        })?;
+
+        // Always discover the backend from the manifest directory (where pixi.toml with build config is)
+        // even if we're hashing files from a different build_source directory
+        let Some(manifest_path_record) = source_record.manifest_source.as_path() else {
+            continue;
+        };
+        let manifest_dir = manifest_path_record.resolve(project_root);
+        let manifest_dir = manifest_dir.canonicalize().map_err(|e| {
+            Box::new(PlatformUnsat::FailedToCanonicalizePath(
+                manifest_path_record.path.as_str().into(),
                 e,
             ))
         })?;
 
         let discovered_backend = DiscoveredBackend::discover(
-            &source_dir,
+            &manifest_dir,
             &environment.channel_config(),
             &EnabledProtocols::default(),
         )
@@ -1536,8 +1571,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
             .map_err(Box::new)?;
 
         if input_hash.hash != locked_input_hash.hash {
+            let manifest_path = source_record
+                .manifest_source
+                .as_path()
+                .map(|p| p.path.to_string())
+                .unwrap_or_else(|| source_record.manifest_source.to_string());
             return Err(Box::new(PlatformUnsat::InputHashMismatch(
-                path_record.path.to_string(),
+                manifest_path,
                 format!("{:x}", input_hash.hash),
                 format!("{:x}", locked_input_hash.hash),
             )));
@@ -1587,6 +1627,9 @@ pub(crate) async fn verify_package_platform_satisfiability(
         )));
     }
 
+    // Verify the pixi build package's package_build_source matches the manifest.
+    verify_build_source_matches_manifest(environment, locked_pixi_records)?;
+
     Ok(VerifiedIndividualEnvironment {
         expected_conda_packages,
         conda_packages_used_by_pypi,
@@ -1595,7 +1638,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
 enum FoundPackage {
     Conda(CondaPackageIdx),
-    PyPi(PypiPackageIdx, Vec<uv_pep508::ExtraName>),
+    PyPi(PypiPackageIdx, Vec<uv_normalize::ExtraName>),
 }
 
 /// An index into the list of conda packages.
@@ -1610,7 +1653,7 @@ pub struct PypiPackageIdx(usize);
 
 fn find_matching_package(
     locked_pixi_records: &PixiRecordsByName,
-    virtual_packages: &HashMap<rattler_conda_types::PackageName, GenericVirtualPackage>,
+    virtual_packages: &HashMap<PackageName, GenericVirtualPackage>,
     spec: MatchSpec,
     source: Cow<str>,
 ) -> Result<Option<CondaPackageIdx>, Box<PlatformUnsat>> {
@@ -1679,7 +1722,7 @@ fn find_matching_package(
 
 fn find_matching_source_package(
     locked_pixi_records: &PixiRecordsByName,
-    name: rattler_conda_types::PackageName,
+    name: PackageName,
     source_spec: SourceSpec,
     source: Cow<str>,
     match_spec: Option<MatchSpec>,
@@ -1705,7 +1748,7 @@ fn find_matching_source_package(
     };
 
     source_package
-        .source
+        .manifest_source
         .satisfies(&source_spec)
         .map_err(|e| PlatformUnsat::SourcePackageMismatch(name.as_source().to_string(), e))?;
 
@@ -1837,6 +1880,74 @@ impl Display for EditablePackagesMismatch {
         fn it_they(count: usize) -> &'static str {
             if count == 1 { "it" } else { "they" }
         }
+    }
+}
+
+/// Verify that the current package's build.source in the manifest
+/// matches the lock file's `package_build_source` (if applicable).
+/// Path-based sources are not represented in the lock file's
+/// `package_build_source` and are skipped.
+fn verify_build_source_matches_manifest(
+    environment: &Environment<'_>,
+    locked_pixi_records: &PixiRecordsByName,
+) -> Result<(), Box<PlatformUnsat>> {
+    let Some(pkg_manifest) = environment.workspace().package.as_ref() else {
+        return Ok(());
+    };
+    let Some(pkg_name) = &pkg_manifest.value.package.name else {
+        return Ok(());
+    };
+    let package_name = PackageName::new_unchecked(pkg_name);
+    let manifest_source_location = pkg_manifest.value.build.source.clone();
+
+    // Find the source record for the current package in locked conda packages.
+    let Some(record) = locked_pixi_records.by_name(&package_name) else {
+        return Ok(());
+    };
+
+    let PixiRecord::Source(src_record) = record else {
+        return Ok(());
+    };
+
+    let lockfile_source_location = src_record.build_source.clone();
+
+    let ok = Ok(());
+    let error = Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
+        src_record.package_record.name.as_source().to_string(),
+        SourceMismatchError::SourceTypeMismatch,
+    )));
+    let sat_err = |e| {
+        Box::new(PlatformUnsat::PackageBuildSourceMismatch(
+            src_record.package_record.name.as_source().to_string(),
+            e,
+        ))
+    };
+
+    match (manifest_source_location, lockfile_source_location) {
+        (None, None) => ok,
+        (Some(SourceLocationSpec::Url(murl_spec)), Some(PinnedSourceSpec::Url(lurl_spec))) => {
+            lurl_spec.satisfies(&murl_spec).map_err(sat_err)
+        }
+        (
+            Some(SourceLocationSpec::Git(mut mgit_spec)),
+            Some(PinnedSourceSpec::Git(mut lgit_spec)),
+        ) => {
+            // Ignore subdirectory for comparison, they should not
+            // trigger lockfile invalidation.
+            mgit_spec.subdirectory = None;
+            lgit_spec.source.subdirectory = None;
+
+            // Ensure that we always compare references.
+            if mgit_spec.rev.is_none() {
+                mgit_spec.rev = Some(pixi_spec::GitReference::DefaultBranch);
+            }
+            lgit_spec.satisfies(&mgit_spec).map_err(sat_err)
+        }
+        (Some(SourceLocationSpec::Path(mpath_spec)), Some(PinnedSourceSpec::Path(lpath_spec))) => {
+            lpath_spec.satisfies(&mpath_spec).map_err(sat_err)
+        }
+        // If they not equal kind we error-out
+        (_, _) => error,
     }
 }
 

@@ -1372,7 +1372,7 @@ impl Project {
     ) -> Result<PackageName, InferPackageNameError> {
         let command_dispatcher = self.command_dispatcher()?;
         let checkout = command_dispatcher
-            .pin_and_checkout(source_spec)
+            .pin_and_checkout(source_spec.location, None)
             .await
             .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
 
@@ -1380,7 +1380,7 @@ impl Project {
 
         // Create the metadata spec
         let metadata_spec = BuildBackendMetadataSpec {
-            source: pinned_source_spec,
+            manifest_source: pinned_source_spec,
             channel_config: self.global_channel_config().clone(),
             channels: self
                 .config()
@@ -1392,6 +1392,7 @@ impl Project {
             variants: None,
             variant_files: None,
             enabled_protocols: Default::default(),
+            pin_override: None,
         };
 
         // Get the metadata using the command dispatcher

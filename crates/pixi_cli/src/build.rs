@@ -21,11 +21,16 @@ use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use tempfile::tempdir;
 
+use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
+
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
 pub struct Args {
     #[clap(flatten)]
     pub config_cli: ConfigCli,
+
+    #[clap(flatten)]
+    pub lock_and_install_config: LockAndInstallConfig,
 
     /// The target platform to build for (defaults to the current platform)
     #[clap(long, short, default_value_t = Platform::current())]
@@ -71,6 +76,18 @@ async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
     ]
     .concat();
 
+    let unsupported_implicit_file_names: Vec<&str> = [
+        // backend-specific build files
+        // that will be autodiscovered
+        &ROS_BACKEND_FILE_NAMES[..],
+        // &RATTLER_BUILD_FILE_NAMES[..],
+        // // manifests that can contain a package section in it
+        // &[WORKSPACE_MANIFEST],
+        // &[PYPROJECT_MANIFEST],
+        // &[MOJOPROJECT_MANIFEST],
+    ]
+    .concat();
+
     // Iterate over the files in the directory to provide a more helpful error
     // of what manifests were found.
     if path.is_dir() {
@@ -79,7 +96,7 @@ async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
             if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
-                if supported_file_names.contains(&filename) {
+                if unsupported_implicit_file_names.contains(&filename) {
                     return Err(miette::diagnostic!(
                         help = format!("did you mean {filename}?"),
                         "the build manifest path '{}' is a directory, please provide the path to the manifest file",
@@ -121,8 +138,8 @@ pub(crate) async fn determine_discovery_start(
 ) -> miette::Result<DiscoveryStart> {
     match path {
         Some(path) => {
-            // Validate the path first
-            validate_package_manifest(path).await?;
+            // // Validate the path first
+            // validate_package_manifest(path).await?;
 
             // If it's a directory, use it as the search root
             if path.is_dir() {
@@ -223,32 +240,44 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 package_manifest_path.display()
             )
         })?;
-    // Store the manifest location relative to the workspace root when possible to
+    // Determine the directory that contains the manifest.
+    let manifest_dir_canonical = if package_manifest_path_canonical.is_file() {
+        package_manifest_path_canonical.parent().ok_or_else(|| {
+            miette::miette!(
+                "explicit manifest path: {} doesn't have a parent",
+                package_manifest_path.display()
+            )
+        })?
+    } else {
+        package_manifest_path_canonical.as_path()
+    };
+
+    // Store the manifest directory relative to the workspace root when possible to
     // keep the pinned path relocatable and avoid double-prefixing during resolution.
-    let manifest_spec_path =
-        pathdiff::diff_paths(&package_manifest_path_canonical, workspace.root())
-            .unwrap_or(package_manifest_path_canonical.clone());
+    let manifest_dir_spec = pathdiff::diff_paths(manifest_dir_canonical, workspace.root())
+        .unwrap_or_else(|| manifest_dir_canonical.to_path_buf());
+
     let channel_config = workspace.channel_config();
     let channels = workspace
         .default_environment()
         .channel_urls(&channel_config)
         .into_diagnostic()?;
 
-    // Determine the source of the package.
-    let source: PinnedSourceSpec = PinnedPathSpec {
-        path: manifest_spec_path.to_string_lossy().into_owned().into(),
+    let manifest_source: PinnedSourceSpec = PinnedPathSpec {
+        path: manifest_dir_spec.to_string_lossy().into_owned().into(),
     }
     .into();
 
     // Create the build backend metadata specification.
     let backend_metadata_spec = BuildBackendMetadataSpec {
-        source: source.clone(),
+        manifest_source: manifest_source.clone(),
         channels: channels.clone(),
         channel_config: channel_config.clone(),
         build_environment: build_environment.clone(),
         variants: Some(variants.clone()),
         variant_files: Some(variant_files.clone()),
         enabled_protocols: Default::default(),
+        pin_override: None,
     };
     let backend_metadata = command_dispatcher
         .build_backend_metadata(backend_metadata_spec.clone())
@@ -279,7 +308,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 package,
                 // Build into a temporary directory first
                 output_directory: Some(temp_output_dir.path().to_path_buf()),
-                source: source.clone(),
+                manifest_source: manifest_source.clone(),
+                build_source: None,
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),

@@ -68,6 +68,7 @@ pub fn locked_data_to_file(
         upload_time_utc_ms: None,
         yanked: None,
         size: None,
+        zstd: None,
         url,
     })
 }
