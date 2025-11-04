@@ -1074,13 +1074,37 @@ The build system is a table that can contain the following fields:
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
   - `version`: the version of the build backend to use.
-- `configuration`: a table that contains the configuration options for the build backend.
+- `config`: a table that contains the configuration options for the build backend.
 - `target`: a table that can contain target specific build configuration.
+  - Each target can have its own `config` table to override or extend the base configuration for specific platforms.
 
 More documentation on the backends can be found in the [build backend documentation](../build/backends.md).
 
+#### Basic build configuration example
+
 ```toml
 --8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:build-system"
+```
+
+#### Target-specific build configuration example
+
+For platform-specific build configuration, use the `[package.build.target.<platform>]` table:
+
+```toml
+[package.build]
+backend = { name = "pixi-build-cmake", version = "0.3.*" }
+
+[package.build.config]
+# Base configuration applied to all platforms
+extra-args = ["-DCMAKE_BUILD_TYPE=Release"]
+
+[package.build.target.linux-64]
+# Linux-specific configuration
+config = { extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DLINUX_FLAG=ON"] }
+
+[package.build.target.win-64]
+# Windows-specific configuration
+config = { extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DWIN_FLAG=ON"] }
 ```
 
 
