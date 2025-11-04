@@ -19,7 +19,7 @@ use toml_edit::{Array, InlineTable, Item, Table, Value};
 use crate::EnvironmentName;
 
 /// Represents a task name
-#[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash, Ord, PartialOrd, Deserialize)]
 pub struct TaskName(String);
 
 impl TaskName {
@@ -46,14 +46,14 @@ impl From<String> for TaskName {
 }
 
 /// A task dependency with optional args
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Dependency {
     pub task_name: TaskName,
     pub args: Option<Vec<DependencyArg>>,
     pub environment: Option<EnvironmentName>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DependencyArg {
     Positional(TemplateString),
     Named(String, TemplateString),
@@ -153,7 +153,7 @@ impl TypedDependency {
 }
 
 /// Represents different types of scripts
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Task {
     Plain(TemplateString),
     Execute(Box<Execute>),
@@ -324,7 +324,7 @@ impl Deref for GlobPatterns {
 }
 
 /// A command script executes a single command from the environment
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Execute {
     /// A list of arguments, the first argument denotes the command to run. When
     /// deserializing both an array of strings and a single string are
@@ -365,7 +365,7 @@ impl From<Execute> for Task {
     }
 }
 
-#[derive(Debug, Clone, Eq, Hash, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct ArgName(String);
 
 impl FromStr for ArgName {
@@ -388,7 +388,7 @@ impl ArgName {
     }
 }
 
-#[derive(Debug, Clone, Eq, Hash, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct TaskArg {
     /// The name of the argument
     pub name: ArgName,
@@ -409,7 +409,7 @@ impl std::str::FromStr for TaskArg {
 }
 
 /// A custom command script executes a single command in the environment
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Custom {
     /// A list of arguments, the first argument denotes the command to run. When
     /// deserializing both an array of strings and a single string are
@@ -571,7 +571,7 @@ impl TemplateStringError {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CmdArgs {
     Single(TemplateString),
     Multiple(Vec<TemplateString>),
@@ -640,7 +640,7 @@ impl CmdArgs {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Alias {
     /// A list of commands that should be run before this one
     pub depends_on: Vec<Dependency>,
