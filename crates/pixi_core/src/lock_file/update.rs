@@ -2028,7 +2028,7 @@ async fn spawn_solve_conda_environment_task(
             variants: Some(variants),
             variant_files: Some(variant_files),
             enabled_protocols: Default::default(),
-            pin_overrides,
+            preferred_build_source: pin_overrides,
         })
         .await
         .map_err(|source| SolveCondaEnvironmentError::SolveFailed {

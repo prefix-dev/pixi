@@ -216,7 +216,7 @@ impl InstantiateToolEnvironmentSpec {
                 variants: self.variants.clone(),
                 variant_files: self.variant_files.clone(),
                 strategy: SolveStrategy::default(),
-                pin_overrides: BTreeMap::new(),
+                preferred_build_source: BTreeMap::new(),
             })
             .await
             .map_err_with(Box::new)

@@ -59,8 +59,8 @@ impl SourceMetadataSpec {
         skip_all,
         name = "source-metadata",
         fields(
-            manifest_source= %self.backend_metadata.source.manifest_source(),
-            build_source=?self.backend_metadata.source.build_source(),
+            manifest_source= %self.backend_metadata.manifest_source,
+            preferred_build_source=?self.backend_metadata.preferred_build_source,
             name = %self.package.as_source(),
             platform = %self.backend_metadata.build_environment.host_platform,
         )
@@ -370,9 +370,9 @@ impl SourceMetadataSpec {
         if dependencies.dependencies.is_empty() {
             return Ok(vec![]);
         }
-        let pin_overrides = self
+        let preferred_build_source = self
             .backend_metadata
-            .pin_override
+            .preferred_build_source
             .as_ref()
             .map(|pinned| BTreeMap::from([(pkg_name.clone(), pinned.clone())]))
             .unwrap_or_default();
@@ -399,7 +399,7 @@ impl SourceMetadataSpec {
                 variants: self.backend_metadata.variants.clone(),
                 variant_files: self.backend_metadata.variant_files.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
-                pin_overrides,
+                preferred_build_source,
             })
             .await
         {

@@ -49,8 +49,18 @@ fn warn_once_per_backend(backend_name: &str) {
 /// particular source.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
 pub struct BuildBackendMetadataSpec {
-    /// The manifest and optional build source location.
-    pub source: SourceCodeLocation,
+    /// The location that refers to where the manifest is stored.
+    pub manifest_source: PinnedSourceSpec,
+
+    /// The optional pinned location of the source code. If not provide the
+    /// location in the manifest is resolved.
+    ///
+    /// This is passed as a hint. If the [`SourceSpec`] in the discovered
+    /// manifest does not match with the pinned source provided here, the one
+    /// in the manifest takes precedence and it is reresolved.
+    ///
+    /// See [`PinnedSourceSpec::matches_source_spec`] how the matching is done.
+    pub preferred_build_source: Option<PinnedSourceSpec>,
 
     /// The channel configuration to use for the build backend.
     pub channel_config: ChannelConfig,
@@ -71,11 +81,6 @@ pub struct BuildBackendMetadataSpec {
     /// The protocols that are enabled for this source
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
-
-    /// Optional override for the pinned build source of the current package.
-    /// When set, this takes precedence over any discovered build_source.
-    #[serde(skip)]
-    pub pin_override: Option<PinnedSourceSpec>,
 }
 
 /// The metadata of a source checkout.
@@ -100,8 +105,8 @@ impl BuildBackendMetadataSpec {
         skip_all,
         name="backend-metadata",
         fields(
-            manifest_source = %self.source.manifest_source(),
-            build_source = ?self.source.build_source(),
+            manifest_source = ?self.manifest_source,
+            build_source = ?self.preferred_build_source,
             platform = %self.build_environment.host_platform,
         )
     )]
@@ -110,12 +115,10 @@ impl BuildBackendMetadataSpec {
         command_dispatcher: CommandDispatcher,
         log_sink: UnboundedSender<String>,
     ) -> Result<BuildBackendMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
-        let manifest_source = self.source.manifest_source().clone();
-
         // Ensure that the source is checked out before proceeding.
         let manifest_source_checkout = command_dispatcher
             // Never has an alternative root because we want to get the manifest
-            .checkout_pinned_source(&manifest_source)
+            .checkout_pinned_source(self.manifest_source.clone())
             .await
             .map_err_with(BuildBackendMetadataError::SourceCheckout)?;
 
@@ -129,38 +132,36 @@ impl BuildBackendMetadataSpec {
             .await
             .map_err_with(BuildBackendMetadataError::Discovery)?;
 
-        let build_source_checkout = if let Some(pin_override) = &self.pin_override {
-            Some(
-                command_dispatcher
-                    // We use the pinned override directly
-                    .checkout_pinned_source(pin_override)
-                    .await
-                    .map_err_with(BuildBackendMetadataError::SourceCheckout)?,
-            )
-        } else if let Some(build_source) = &discovered_backend.init_params.build_source {
-            Some(
-                command_dispatcher
-                    .pin_and_checkout(
-                        build_source.clone(),
+        // Determine the location of the source to build from.
+        let manifest_source_anchor =
+            SourceAnchor::from(SourceSpec::from(self.manifest_source.clone()));
+        let build_source_checkout = match &discovered_backend.init_params.build_source {
+            None => None,
+            Some(spec) => {
+                // An out of tree source is provided. Resolve it against the manifest source.
+                let resolved_location = manifest_source_anchor.resolve(spec.clone());
+                let resolved_source_build_spec = SourceSpec {
+                    location: resolved_location.clone(),
+                };
+
+                // Check if we have a preferred build source that matches this same location
+                match &self.preferred_build_source {
+                    Some(pinned) if pinned.matches_source_spec(&resolved_source_build_spec) => {
                         Some(
-                            discovered_backend
-                                .init_params
-                                .manifest_path
-                                .parent()
-                                .ok_or_else(|| {
-                                    SourceCheckoutError::ParentDir(
-                                        discovered_backend.init_params.manifest_path.clone(),
-                                    )
-                                })
-                                .map_err(BuildBackendMetadataError::SourceCheckout)
-                                .map_err(CommandDispatcherError::Failed)?,
-                        ),
-                    )
-                    .await
-                    .map_err_with(BuildBackendMetadataError::SourceCheckout)?,
-            )
-        } else {
-            None
+                            command_dispatcher
+                                .checkout_pinned_source(pinned.clone())
+                                .await
+                                .map_err_with(BuildBackendMetadataError::SourceCheckout)?,
+                        )
+                    }
+                    _ => Some(
+                        command_dispatcher
+                            .pin_and_checkout(resolved_location)
+                            .await
+                            .map_err_with(BuildBackendMetadataError::SourceCheckout)?,
+                    ),
+                }
+            }
         };
 
         let (build_source_checkout, build_source) = if let Some(checkout) = build_source_checkout {
@@ -220,19 +221,23 @@ impl BuildBackendMetadataSpec {
 
         let build_source_dir = build_source_checkout.path.clone();
         // Instantiate the backend with the discovered information.
-        let backend =
-            command_dispatcher
-                .instantiate_backend(InstantiateBackendSpec {
-                    backend_spec: discovered_backend.backend_spec.clone().resolve(
-                        SourceAnchor::from(SourceSpec::from(manifest_source.clone())),
-                    ),
-                    init_params: discovered_backend.init_params.clone(),
-                    build_source_dir,
-                    channel_config: self.channel_config.clone(),
-                    enabled_protocols: self.enabled_protocols.clone(),
-                })
-                .await
-                .map_err_with(BuildBackendMetadataError::Initialize)?;
+        let backend = command_dispatcher
+            .instantiate_backend(InstantiateBackendSpec {
+                backend_spec: discovered_backend
+                    .backend_spec
+                    .clone()
+                    .resolve(manifest_source_anchor),
+                build_source_dir,
+                channel_config: self.channel_config.clone(),
+                enabled_protocols: self.enabled_protocols.clone(),
+                workspace_root: discovered_backend.init_params.workspace_root.clone(),
+                manifest_path: discovered_backend.init_params.manifest_path.clone(),
+                project_model: discovered_backend.init_params.project_model.clone(),
+                configuration: discovered_backend.init_params.configuration.clone(),
+                target_configuration: discovered_backend.init_params.target_configuration.clone(),
+            })
+            .await
+            .map_err_with(BuildBackendMetadataError::Initialize)?;
 
         // Call the conda_outputs method to get metadata.
         if !backend.capabilities().provides_conda_outputs() {
@@ -483,7 +488,7 @@ impl BuildBackendMetadataSpec {
             build_environment: self.build_environment.clone(),
             build_variants: self.variants.clone().unwrap_or_default(),
             enabled_protocols: self.enabled_protocols.clone(),
-            pinned_source: self.source.manifest_source().clone(),
+            pinned_source: self.manifest_source.clone(),
         }
     }
 }

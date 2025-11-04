@@ -4,13 +4,13 @@ expression: event_tree.to_string()
 ---
 Pixi solve (foobar-desktop)
 ├── Git Checkout (https://github.com/wolfv/pixi-build-examples@8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a)
-├── Source metadata (foobar-desktop @ (manifest-src: https://github.com/wolfv/pixi-build-examples@8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a, build-src: undefined))
-│   └── Build backend metadata ((manifest-src: https://github.com/wolfv/pixi-build-examples@8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a, build-src: undefined))
+├── Source metadata (foobar-desktop @ https://github.com/wolfv/pixi-build-examples@8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a)
+│   └── Build backend metadata (https://github.com/wolfv/pixi-build-examples@8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a)
 │       └── Instantiate tool environment (pixi-build-rattler-build)
 │           ├── Pixi solve (pixi-build-rattler-build)
 │           │   └── Conda solve #0
 │           └── Pixi install (pixi-build-rattler-build)
-├── Source metadata (foobar @ (manifest-src: https://github.com/wolfv/pixi-build-examples@8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a, build-src: undefined))
+├── Source metadata (foobar @ https://github.com/wolfv/pixi-build-examples@8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a)
 └── Conda solve #1
 Pixi install (test-env)
 ├── Source build (foobar @ (manifest-src: https://github.com/wolfv/pixi-build-examples@8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a, build-src: undefined))

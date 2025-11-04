@@ -1334,7 +1334,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             ))
                         })
                     {
-                        let anchored_source = anchor.resolve(source.clone());
+                        let anchored_location = anchor.resolve(source.location.clone());
+                        let anchored_source = SourceSpec {
+                            location: anchored_location,
+                        };
                         conda_queue.push(Dependency::CondaSource(
                             package_name.clone(),
                             spec,

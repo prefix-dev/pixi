@@ -23,7 +23,7 @@ pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec,
-    Limits, PixiEnvironmentSpec, build::SourceCodeLocation,
+    Limits, PixiEnvironmentSpec,
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
@@ -1372,7 +1372,7 @@ impl Project {
     ) -> Result<PackageName, InferPackageNameError> {
         let command_dispatcher = self.command_dispatcher()?;
         let checkout = command_dispatcher
-            .pin_and_checkout(source_spec.location, None)
+            .pin_and_checkout(source_spec.location)
             .await
             .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
 
@@ -1380,7 +1380,8 @@ impl Project {
 
         // Create the metadata spec
         let metadata_spec = BuildBackendMetadataSpec {
-            source: SourceCodeLocation::new(pinned_source_spec, None),
+            manifest_source: pinned_source_spec,
+            preferred_build_source: None,
             channel_config: self.global_channel_config().clone(),
             channels: self
                 .config()
@@ -1392,7 +1393,6 @@ impl Project {
             variants: None,
             variant_files: None,
             enabled_protocols: Default::default(),
-            pin_override: None,
         };
 
         // Get the metadata using the command dispatcher

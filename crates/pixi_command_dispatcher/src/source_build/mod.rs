@@ -220,7 +220,7 @@ impl SourceBuildSpec {
 
         // Check out the source code.
         let manifest_source_checkout = command_dispatcher
-            .checkout_pinned_source(&manifest_source)
+            .checkout_pinned_source(manifest_source.clone())
             .await
             .map_err_with(SourceBuildError::SourceCheckout)?;
 
@@ -258,55 +258,45 @@ impl SourceBuildSpec {
         // 1. Lock file `package_build_source`. Since we're running lock file update before building package it should pin source in there.
         // 2. Manifest package build. This can happen if package isn't added to the dependencies of manifest, so no pinning happens in that case.
         // 3. Manifest source. Just assume that source is located at the same directory as the manifest.
-        let build_source_dir = if let Some(pinned_build_source) = build_source {
-            let build_location =
-                SourceCodeLocation::new(manifest_source.clone(), Some(pinned_build_source.clone()));
-            let build_source_checkout = command_dispatcher
-                .checkout_source_location(&build_location)
+        let build_source_checkout = if let Some(pinned_build_source) = build_source {
+            &command_dispatcher
+                .checkout_pinned_source(pinned_build_source)
                 .await
-                .map_err_with(SourceBuildError::SourceCheckout)?;
-            build_source_checkout.path
+                .map_err_with(SourceBuildError::SourceCheckout)?
         } else if let Some(manifest_build_source) =
             discovered_backend.init_params.build_source.clone()
         {
-            let build_source_checkout = command_dispatcher
-                .pin_and_checkout(
-                    manifest_build_source,
-                    Some(
-                        discovered_backend
-                            .init_params
-                            .manifest_path
-                            .parent()
-                            .ok_or_else(|| {
-                                SourceCheckoutError::ParentDir(
-                                    discovered_backend.init_params.manifest_path.clone(),
-                                )
-                            })
-                            .map_err(SourceBuildError::SourceCheckout)
-                            .map_err(CommandDispatcherError::Failed)?,
-                    ),
-                )
+            let manifest_source_anchor =
+                SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
+            let resolved_build_source = manifest_source_anchor.resolve(manifest_build_source);
+            &command_dispatcher
+                .pin_and_checkout(resolved_build_source)
                 .await
-                .map_err_with(SourceBuildError::SourceCheckout)?;
-            build_source_checkout.path
+                .map_err_with(SourceBuildError::SourceCheckout)?
         } else {
-            manifest_source_checkout.path
+            &manifest_source_checkout
         };
 
         // Instantiate the backend with the discovered information.
-        let backend =
-            command_dispatcher
-                .instantiate_backend(InstantiateBackendSpec {
-                    backend_spec: discovered_backend.backend_spec.clone().resolve(
-                        SourceAnchor::from(SourceSpec::from(manifest_source.clone())),
-                    ),
-                    init_params: discovered_backend.init_params.clone(),
-                    build_source_dir,
-                    channel_config: self.channel_config.clone(),
-                    enabled_protocols: self.enabled_protocols.clone(),
-                })
-                .await
-                .map_err_with(SourceBuildError::Initialize)?;
+        let backend = command_dispatcher
+            .instantiate_backend(InstantiateBackendSpec {
+                backend_spec: discovered_backend
+                    .backend_spec
+                    .clone()
+                    .resolve(SourceAnchor::from(SourceSpec::from(
+                        manifest_source.clone(),
+                    ))),
+                build_source_dir: build_source_checkout.path.clone(),
+                channel_config: self.channel_config.clone(),
+                enabled_protocols: self.enabled_protocols.clone(),
+                workspace_root: discovered_backend.init_params.workspace_root.clone(),
+                manifest_path: discovered_backend.init_params.manifest_path.clone(),
+                project_model: discovered_backend.init_params.project_model.clone(),
+                configuration: discovered_backend.init_params.configuration.clone(),
+                target_configuration: discovered_backend.init_params.target_configuration.clone(),
+            })
+            .await
+            .map_err_with(SourceBuildError::Initialize)?;
 
         // Determine the working directory for the build.
         let work_directory = match std::mem::take(&mut self.work_directory) {
@@ -786,7 +776,7 @@ impl SourceBuildSpec {
                 variants: self.variants.clone(),
                 variant_files: self.variant_files.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
-                pin_overrides: BTreeMap::new(),
+                preferred_build_source: BTreeMap::new(),
             })
             .await
     }

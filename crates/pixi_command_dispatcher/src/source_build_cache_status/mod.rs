@@ -323,7 +323,7 @@ impl SourceBuildCacheStatusSpec {
 
         // Checkout the source for the package.
         let source_checkout = command_dispatcher
-            .checkout_pinned_source(manifest_source)
+            .checkout_pinned_source(manifest_source.clone())
             .await
             .map_err_with(SourceBuildCacheStatusError::SourceCheckout)?;
 
@@ -369,14 +369,14 @@ impl SourceBuildCacheStatusSpec {
         };
 
         // Checkout the source for the package.
-        let source_checkout = command_dispatcher
-            .checkout_source_location(&self.source)
+        let source_build_checkout = command_dispatcher
+            .checkout_pinned_source(self.source.source_code().clone())
             .await
             .map_err_with(SourceBuildCacheStatusError::SourceCheckout)?;
 
         // Compute the modification time of the files that match the source input globs.
         let glob_time = match GlobModificationTime::from_patterns(
-            &source_checkout.path,
+            &source_build_checkout.path,
             source_info.globs.iter().map(String::as_str),
         ) {
             Ok(glob_time) => glob_time,

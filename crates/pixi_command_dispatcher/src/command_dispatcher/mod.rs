@@ -35,7 +35,7 @@ use crate::{
     SourceBuildCacheEntry, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout,
     SourceCheckoutError, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
-    build::{BuildCache, SourceCodeLocation, source_metadata_cache::SourceMetadataCache},
+    build::{BuildCache, source_metadata_cache::SourceMetadataCache},
     cache_dirs::CacheDirs,
     discover_backend_cache::DiscoveryCache,
     install_pixi::{
@@ -591,7 +591,6 @@ impl CommandDispatcher {
     pub async fn pin_and_checkout(
         &self,
         source_location_spec: SourceLocationSpec,
-        alternative_root: Option<&Path>,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match source_location_spec {
             SourceLocationSpec::Url(url) => {
@@ -600,7 +599,7 @@ impl CommandDispatcher {
             SourceLocationSpec::Path(path) => {
                 let source_path = self
                     .data
-                    .resolve_typed_path(path.path.to_path(), alternative_root)
+                    .resolve_typed_path(path.path.to_path())
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
@@ -626,49 +625,18 @@ impl CommandDispatcher {
     ///   (unimplemented)
     pub async fn checkout_pinned_source(
         &self,
-        pinned_spec: &PinnedSourceSpec,
-    ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
-        self.checkout_pinned_spec(pinned_spec.clone(), None).await
-    }
-
-    /// Checkout a source described by a [`SourceCodeLocation`], automatically
-    /// falling back to the manifest path when no dedicated build source is set.
-    ///
-    /// This is useful for the case where you want to checkout a source that is at
-    /// different location than the manifest, most obviously in an out-of-tree build.
-    pub async fn checkout_source_location(
-        &self,
-        source: &SourceCodeLocation,
-    ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
-        let (primary, alternative_root) = source.as_source_and_alternative_root();
-        self.checkout_pinned_spec(primary.clone(), alternative_root.cloned())
-            .await
-    }
-
-    async fn checkout_pinned_spec(
-        &self,
         pinned_spec: PinnedSourceSpec,
-        alternative_root: Option<PinnedSourceSpec>,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match pinned_spec {
-            PinnedSourceSpec::Path(path_spec) => {
-                let alternative_root_path = match alternative_root.as_ref() {
-                    Some(PinnedSourceSpec::Path(alt_path)) => Some(
-                        self.data
-                            .resolve_typed_path(alt_path.path.to_path(), None)
-                            .map_err(|e| CommandDispatcherError::Failed(e.into()))?,
-                    ),
-                    _ => None,
-                };
-
+            PinnedSourceSpec::Path(ref path_spec) => {
                 let source_path = self
                     .data
-                    .resolve_typed_path(path_spec.path.to_path(), alternative_root_path.as_deref())
+                    .resolve_typed_path(path_spec.path.to_path())
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
                     path: source_path,
-                    pinned: PinnedSourceSpec::Path(path_spec),
+                    pinned: pinned_spec,
                 })
             }
             PinnedSourceSpec::Git(git_spec) => self.checkout_pinned_git(git_spec).await,
@@ -698,11 +666,7 @@ impl CommandDispatcherData {
     ///
     /// This function does not check if the path exists and also does not follow
     /// symlinks.
-    fn resolve_typed_path(
-        &self,
-        path_spec: Utf8TypedPath,
-        alternative_root: Option<&Path>,
-    ) -> Result<PathBuf, InvalidPathError> {
+    fn resolve_typed_path(&self, path_spec: Utf8TypedPath) -> Result<PathBuf, InvalidPathError> {
         if path_spec.is_absolute() {
             Ok(Path::new(path_spec.as_str()).to_path_buf())
         } else if let Ok(user_path) = path_spec.strip_prefix("~/") {
@@ -712,20 +676,7 @@ impl CommandDispatcherData {
             debug_assert!(home_dir.is_absolute());
             normalize_absolute_path(&home_dir.join(Path::new(user_path.as_str())))
         } else {
-            let root_dir = match alternative_root {
-                Some(root_path) => {
-                    debug_assert!(
-                        root_path.is_absolute(),
-                        "alternative_root must be absolute, got: {root_path:?}"
-                    );
-                    debug_assert!(
-                        !root_path.is_file(),
-                        "alternative_root should be a directory, not a file: {root_path:?}"
-                    );
-                    root_path
-                }
-                None => self.root_dir.as_path(),
-            };
+            let root_dir = self.root_dir.as_path();
             let native_path = Path::new(path_spec.as_str());
             debug_assert!(root_dir.is_absolute());
             normalize_absolute_path(&root_dir.join(native_path))
