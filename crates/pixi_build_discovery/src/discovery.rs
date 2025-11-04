@@ -115,7 +115,7 @@ pub enum DiscoveryError {
 
     #[error("the source directory '{0}', does not contain a supported manifest")]
     #[diagnostic(help(
-        "Ensure that the source directory contains a valid pixi.toml or recipe.yaml file."
+        "Ensure that the source directory contains a valid pixi.toml, pyproject.toml, recipe.yaml, package.xml or mojoproject.toml file."
     ))]
     FailedToDiscover(String),
 }
@@ -367,7 +367,7 @@ impl DiscoveredBackend {
 
         let channels = retrieve_channels(&source_dir, channel_config)?;
 
-        Ok(Self {
+        dbg!(Ok(Self {
             backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_ros_build(channels)),
             init_params: BackendInitializationParams {
                 workspace_root: source_dir.clone(),
@@ -378,7 +378,7 @@ impl DiscoveredBackend {
                 configuration: None,
                 target_configuration: None,
             },
-        })
+        }))
     }
 }
 

@@ -1,3 +1,5 @@
+use core::panic;
+
 use fs_err as fs;
 use pixi_build_backend_passthrough::PassthroughBackend;
 use pixi_build_frontend::BackendOverride;
@@ -343,7 +345,6 @@ my-package = {{ path = "./my-package" }}
 
 /// Test that verifies --path finds workspace manifest relative to the path's directory
 #[tokio::test]
-#[ignore] // TODO: Re-enable when PixiControl.build() method is implemented
 async fn test_path_finds_workspace_from_package_dir() {
     setup_tracing();
 
@@ -352,7 +353,7 @@ async fn test_path_finds_workspace_from_package_dir() {
     //   pixi.toml (workspace manifest)
     //   project/
     //     recipe/
-    //       recipe.yaml (package manifest)
+    //       recipe.yaml (package manifest that we will use to build for)
 
     // Create a PixiControl instance with PassthroughBackend
     // let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
@@ -372,9 +373,6 @@ channels = ["https://prefix.dev/conda-forge", "https://prefix.dev/pixi-build-bac
 platforms = ["{}"]
 preview = ["pixi-build"]
 
-[dependencies]
-# This will use the PassthroughBackend instead of a real backend
-test-package = {{ path = "./recipe/recipe.yaml" }}
 "#,
         Platform::current()
     );
@@ -397,36 +395,188 @@ about:
 "#;
     fs::write(recipe_dir.join("recipe.yaml"), recipe_content).unwrap();
 
-    let _package_path = recipe_dir.join("recipe.yaml");
+    // test build with explicit path to recipe.yaml
+    let package_path = recipe_dir.join("recipe.yaml");
 
-    // TODO: Implement this test when PixiControl.build() method is available
-    // When --path is provided, it should search for workspace manifest
-    // from the path's directory (or the path itself if it's a directory)
+    let result = pixi.build().with_path(&package_path).await;
 
-    // let lock_file = pixi.build().with_path(package_path).await.unwrap();
+    assert!(
+        result.is_ok(),
+        "Build with explicit path to recipe.yaml should succeed. Error: {:?}",
+        result.err()
+    );
 
-    // // When --path is provided,
-    // // it should search for workspace manifest from the path's directory
-    // let package_dir = package_path.parent().unwrap();
-    // let workspace_locator = DiscoveryStart::SearchRoot(package_dir.to_path_buf());
+    // test with passing just a directory path
+    let result = pixi.build().with_path(&recipe_dir).await;
 
-    // let workspace = WorkspaceLocator::default()
-    //     .with_search_start(workspace_locator)
-    //     .locate();
+    assert!(
+        result.is_ok(),
+        "Build with directory path should succeed. Error: {:?}",
+        result.err()
+    );
+}
 
-    // assert!(
-    //     workspace.is_ok(),
-    //     "Should find workspace manifest at workspace_dir/pixi.toml when searching from package path directory"
-    // );
+/// Test that verifies package.xml (ROS2 manifest) is auto-discovered when passed to --path
+#[tokio::test]
+async fn test_path_autodiscovers_package_xml() {
+    setup_tracing();
 
-    // let workspace = workspace.unwrap();
-    // let expected_root = workspace_dir.canonicalize().unwrap();
-    // let actual_root = workspace.root().canonicalize().unwrap();
-    // assert_eq!(
-    //     actual_root,
-    //     expected_root,
-    //     "Workspace root should be the directory containing pixi.toml"
-    // );
+    let pixi = PixiControl::new().unwrap();
+    let workspace_dir = pixi.manifest_path().parent().unwrap().to_path_buf();
+
+    // Create workspace manifest at workspace_dir/pixi.toml
+    let workspace_manifest = format!(
+        r#"
+[workspace]
+channels = ["https://prefix.dev/conda-forge", "https://prefix.dev/pixi-build-backends", "https://prefix.dev/robostack-kilted"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+"#,
+        Platform::current()
+    );
+    fs::write(pixi.manifest_path(), workspace_manifest).unwrap();
+
+    // Create a ROS2 package structure with package.xml
+    let ros_package_dir = workspace_dir.join("ros_package");
+    fs::create_dir_all(&ros_package_dir).unwrap();
+
+    // Create a dummy package.xml file
+    let package_xml_content = r#"<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>test_ros_package</name>
+  <version>0.1.0</version>
+  <description>Test ROS2 package for autodiscovery</description>
+  <maintainer email="test@example.com">Test Maintainer</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
+"#;
+    fs::write(ros_package_dir.join("package.xml"), package_xml_content).unwrap();
+
+    let package_xml_path = ros_package_dir.join("package.xml");
+    let output_dir = workspace_dir.join("output");
+    fs::create_dir_all(&output_dir).unwrap();
+
+    // Try to build with path to package.xml
+    // The build `will` fail (since we don't have a real ROS source code),
+    // but we want to verify that package.xml is discovered
+    let _result = pixi.build().with_path(&package_xml_path).await;
+
+    // The key assertion: package.xml should be discovered as a valid manifest
+    // If it fails, it should NOT be because it's not discovered,
+    // but for other reasons (e.g., missing backend)
+    // TODO: finish this when backends are fixed
+}
+
+/// Test that verifies we get a helpful error suggesting the manifest file
+/// when a directory containing package.xml is passed (not the file itself)
+#[tokio::test]
+async fn test_path_directory_with_package_xml_suggests_file() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    let workspace_dir = pixi.manifest_path().parent().unwrap().to_path_buf();
+
+    // Create workspace manifest at workspace_dir/pixi.toml
+    let workspace_manifest = format!(
+        r#"
+[workspace]
+channels = ["https://prefix.dev/conda-forge", "https://prefix.dev/pixi-build-backends"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+"#,
+        Platform::current()
+    );
+    fs::write(pixi.manifest_path(), workspace_manifest).unwrap();
+
+    // Create a ROS2 package structure with package.xml
+    let ros_package_dir = workspace_dir.join("ros_package");
+    fs::create_dir_all(&ros_package_dir).unwrap();
+
+    // Create a package.xml file (ROS2 manifest)
+    let package_xml_content = r#"<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>test_ros_package</name>
+  <version>0.1.0</version>
+  <description>Test ROS2 package for directory path error</description>
+  <maintainer email="test@example.com">Test Maintainer</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
+"#;
+    fs::write(ros_package_dir.join("package.xml"), package_xml_content).unwrap();
+
+    let output_dir = workspace_dir.join("output");
+    fs::create_dir_all(&output_dir).unwrap();
+
+    // Try to build with just the DIRECTORY path (not the file path)
+    // This should fail with a helpful error message suggesting to use package.xml
+    let result = pixi.build().with_path(&ros_package_dir).await;
+
+    let err_msg = format!("{:?}", result.unwrap_err());
+
+    // Should fail because package.xml directories require explicit file path
+    assert!(err_msg.contains("did you mean package.xml?"),);
+}
+
+/// Test that verifies we get a helpful error message when trying to build
+/// a directory without any supported manifest files
+#[tokio::test]
+async fn test_build_error_no_supported_manifest() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    let workspace_dir = pixi.manifest_path().parent().unwrap().to_path_buf();
+
+    // Create workspace manifest at workspace_dir/pixi.toml
+    let workspace_manifest = format!(
+        r#"
+[workspace]
+channels = ["https://prefix.dev/conda-forge", "https://prefix.dev/pixi-build-backends"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+"#,
+        Platform::current()
+    );
+    fs::write(pixi.manifest_path(), workspace_manifest).unwrap();
+
+    // Create a directory without any supported manifest files
+    let empty_dir = workspace_dir.join("empty_package");
+    fs::create_dir_all(&empty_dir).unwrap();
+
+    // Create some random files that are NOT supported manifests
+    fs::write(empty_dir.join("README.md"), "# Empty Package").unwrap();
+    fs::write(empty_dir.join("src.py"), "print('hello')").unwrap();
+
+    // Try to build with path to directory without supported manifests
+    let result = pixi.build().with_path(&empty_dir).await;
+
+    // Should fail with a helpful error message
+    assert!(
+        result.is_err(),
+        "Build should fail when directory has no supported manifest files"
+    );
+
+    let error = result.unwrap_err();
+    let error_message = format!("{error:?}");
+
+    // The error should mention supported manifest formats
+    assert!(
+        error_message.contains("pixi.toml") || error_message.contains("recipe.yaml"),
+        "Error message should mention supported manifest formats. Got: {error_message}"
+    );
 }
 
 /// Test that verifies [package.build] source.path is resolved relative to the

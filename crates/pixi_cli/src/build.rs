@@ -21,7 +21,7 @@ use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use tempfile::tempdir;
 
-use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
+use crate::cli_config::LockAndInstallConfig;
 
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
@@ -76,17 +76,9 @@ async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
     ]
     .concat();
 
-    let unsupported_implicit_file_names: Vec<&str> = [
-        // backend-specific build files
-        // that will be autodiscovered
-        &ROS_BACKEND_FILE_NAMES[..],
-        // &RATTLER_BUILD_FILE_NAMES[..],
-        // // manifests that can contain a package section in it
-        // &[WORKSPACE_MANIFEST],
-        // &[PYPROJECT_MANIFEST],
-        // &[MOJOPROJECT_MANIFEST],
-    ]
-    .concat();
+    // we dont allow for now passing directories without a manifest file
+    // from the list below
+    let unsupported_implicit_file_names: Vec<&str> = [&ROS_BACKEND_FILE_NAMES[..]].concat();
 
     // Iterate over the files in the directory to provide a more helpful error
     // of what manifests were found.
@@ -103,31 +95,37 @@ async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
                         path.display(),
                     ).into());
                 }
+
+                // we found a supported manifest file
+                // which means that we will let our backend discovery handle it
+                if supported_file_names.contains(&filename) {
+                    return Ok(());
+                }
             }
         }
-    }
+    } else {
+        let filename = path
+            .file_name()
+            .and_then(OsStr::to_str)
+            .ok_or_else(|| miette::miette!("Failed to extract file name from {:?}", path))?;
 
-    let filename = path
-        .file_name()
-        .and_then(OsStr::to_str)
-        .ok_or_else(|| miette::miette!("Failed to extract file name from {:?}", path))?;
-
-    if !supported_file_names
-        .iter()
-        .any(|names| names.contains(filename))
-    {
-        let supported_names = supported_file_names
+        if !supported_file_names
             .iter()
-            .map(|name| name.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
+            .any(|names| names.contains(filename))
+        {
+            let supported_names = supported_file_names
+                .iter()
+                .map(|name| name.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
 
-        return Err(miette::diagnostic!(
-            help = format!("Supported formats are: {supported_names}"),
-            "the build manifest file '{}' is not a supported format.",
-            path.display(),
-        )
-        .into());
+            return Err(miette::diagnostic!(
+                help = format!("Supported formats are: {supported_names}"),
+                "the build manifest file '{}' is not a supported format.",
+                path.display(),
+            )
+            .into());
+        }
     }
 
     Ok(())
@@ -221,13 +219,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let package_manifest_path = match args.path {
         Some(path) => {
             validate_package_manifest(&path).await?;
-            // If the path is a directory, use the manifest_path from workspace_locator
-            // (discovery will have found the appropriate manifest)
-            if path.is_dir() {
-                manifest_path.clone()
-            } else {
-                path
-            }
+            path
         }
         None => manifest_path.clone(),
     };
@@ -240,22 +232,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 package_manifest_path.display()
             )
         })?;
-    // Determine the directory that contains the manifest.
-    let manifest_dir_canonical = if package_manifest_path_canonical.is_file() {
-        package_manifest_path_canonical.parent().ok_or_else(|| {
-            miette::miette!(
-                "explicit manifest path: {} doesn't have a parent",
-                package_manifest_path.display()
-            )
-        })?
-    } else {
-        package_manifest_path_canonical.as_path()
-    };
-
-    // Store the manifest directory relative to the workspace root when possible to
-    // keep the pinned path relocatable and avoid double-prefixing during resolution.
-    let manifest_dir_spec = pathdiff::diff_paths(manifest_dir_canonical, workspace.root())
-        .unwrap_or_else(|| manifest_dir_canonical.to_path_buf());
 
     let channel_config = workspace.channel_config();
     let channels = workspace
@@ -264,7 +240,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()?;
 
     let manifest_source: PinnedSourceSpec = PinnedPathSpec {
-        path: manifest_dir_spec.to_string_lossy().into_owned().into(),
+        path: package_manifest_path_canonical
+            .to_string_lossy()
+            .into_owned()
+            .into(),
     }
     .into();
 

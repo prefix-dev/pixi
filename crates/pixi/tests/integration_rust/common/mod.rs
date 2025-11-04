@@ -21,7 +21,7 @@ use pixi_cli::cli_config::{
     ChannelsConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
 };
 use pixi_cli::{
-    add,
+    add, build,
     init::{self, GitAttributes},
     install::Args,
     lock, remove, run, search,
@@ -46,8 +46,9 @@ use thiserror::Error;
 
 use self::builders::{HasDependencyConfig, RemoveBuilder};
 use crate::common::builders::{
-    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, ProjectChannelRemoveBuilder,
-    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
+    AddBuilder, BuildBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder,
+    ProjectChannelRemoveBuilder, ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder,
+    UpdateBuilder,
 };
 
 const DEFAULT_PROJECT_CONFIG: &str = r#"
@@ -673,6 +674,23 @@ impl PixiControl {
                 no_install_config: NoInstallConfig { no_install: false },
                 check: false,
                 json: false,
+            },
+        }
+    }
+
+    /// Returns a [`BuildBuilder`].
+    /// To execute the command and await the result, call `.await` on the return value.
+    pub fn build(&self) -> BuildBuilder {
+        BuildBuilder {
+            args: build::Args {
+                config_cli: Default::default(),
+                lock_and_install_config: Default::default(),
+                target_platform: Platform::current(),
+                build_platform: Platform::current(),
+                output_dir: self.workspace_path().to_path_buf(),
+                build_dir: None,
+                clean: false,
+                path: None,
             },
         }
     }
