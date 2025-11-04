@@ -7,7 +7,7 @@ use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
 };
 use pixi_config::ConfigCli;
-use pixi_core::WorkspaceLocator;
+use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace};
 use pixi_manifest::FeaturesExt;
 use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
@@ -59,6 +59,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_closest_package(false)
         .locate()?
         .with_cli_config(args.config_cli);
+
+    // Sanity check of workspace, ensuring .pixi directory and .gitignore exist
+    sanity_check_workspace(&workspace).await?;
 
     // Construct a command dispatcher based on the workspace.
     let multi_progress = global_multi_progress();
