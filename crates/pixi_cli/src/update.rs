@@ -98,7 +98,7 @@ impl UpdateSpecs {
             }
         }
 
-        // Check if the environmtent is in the list of environments to update.
+        // Check if the environment is in the list of environments to update.
         if let Some(environments) = &self.environments {
             if !environments.contains(environment_name) {
                 return false;
@@ -160,7 +160,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Update the packages in the lock-file.
     let updated_lock_file = UpdateContext::builder(&workspace)
-        .with_lock_file(relaxed_lock_file.clone())
+        .with_lock_file(relaxed_lock_file)
         .with_no_install(args.no_install)
         .with_update_targets(specs.packages.clone())
         .finish()

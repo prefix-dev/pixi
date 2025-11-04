@@ -87,6 +87,11 @@ impl InitBuilder {
         self.args.format = Some(format);
         self
     }
+
+    pub fn with_platforms(mut self, platforms: Vec<Platform>) -> Self {
+        self.args.platforms = platforms.into_iter().map(|p| p.to_string()).collect();
+        self
+    }
 }
 
 impl IntoFuture for InitBuilder {
@@ -237,6 +242,11 @@ impl AddBuilder {
             self.args.lock_file_update_config.lock_file_usage.frozen = true;
             self.args.no_install_config.no_install = true;
         }
+        self
+    }
+
+    pub fn with_no_install(mut self, no_install: bool) -> Self {
+        self.args.no_install_config.no_install = no_install;
         self
     }
 }
@@ -571,6 +581,11 @@ impl UpdateBuilder {
 
     pub fn json(mut self, json: bool) -> Self {
         self.args.json = json;
+        self
+    }
+
+    pub fn with_no_install(mut self, no_install: bool) -> Self {
+        self.args.no_install = no_install;
         self
     }
 }
