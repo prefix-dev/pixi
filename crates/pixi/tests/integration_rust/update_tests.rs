@@ -298,12 +298,13 @@ async fn test_update_git_pypi_when_requested() {
         .unwrap();
 
     // Add a dependency on `python`
-    pixi.add("python").await.unwrap();
+    pixi.add("python").with_no_install(false).await.unwrap();
 
     // Add a `pinned` git pypi dependency on `tqdm`
     pixi.add_pypi(
         "tqdm @ git+https://github.com/tqdm/tqdm.git@cac7150d7c8a650c7e76004cd7f8643990932c7f",
     )
+    .with_no_install(false)
     .await
     .unwrap();
 

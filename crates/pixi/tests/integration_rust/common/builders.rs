@@ -245,6 +245,11 @@ impl AddBuilder {
         }
         self
     }
+
+    pub fn with_no_install(mut self, no_install: bool) -> Self {
+        self.args.no_install_config.no_install = no_install;
+        self
+    }
 }
 
 impl HasDependencyConfig for AddBuilder {
