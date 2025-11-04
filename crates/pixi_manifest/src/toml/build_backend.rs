@@ -204,7 +204,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             .transpose()?;
 
         // Try the new "config" key first, then fall back to deprecated "configuration"
-        let mut configuration = if let Some((_, mut value)) = th.take("config") {
+        let configuration = if let Some((_, mut value)) = th.take("config") {
             Some(convert_toml_to_serde(&mut value)?)
         } else if let Some((key, mut value)) = th.table.remove_entry("configuration") {
             warnings.push(Deprecation::renamed_field("configuration", "config", key.span).into());
@@ -213,44 +213,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             None
         };
 
-        // Extract target-specific configs from within the config field (if present)
-        let mut config_targets = IndexMap::new();
-        if let Some(serde_value::Value::Map(ref mut config_map)) = configuration {
-            // Look for a "targets" key in the config
-            let targets_key = serde_value::Value::String("targets".to_string());
-            if let Some(targets_value) = config_map.remove(&targets_key) {
-                // Parse the targets from the config
-                if let serde_value::Value::Map(targets_map) = targets_value {
-                    for (key, value) in targets_map {
-                        if let serde_value::Value::String(target_str) = key {
-                            // Parse the target selector
-                            match target_str.parse::<TargetSelector>() {
-                                Ok(selector) => {
-                                    config_targets.insert(PixiSpanned::from(selector), value);
-                                }
-                                Err(e) => {
-                                    // Invalid target selector - add a warning or error
-                                    eprintln!("Warning: Invalid target selector '{}' in config.targets: {}", target_str, e);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        let mut target = th
+        let target = th
             .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("target")
             .map(TomlWith::into_inner)
             .unwrap_or_default();
-
-        // Merge config_targets into target, with config_targets taking precedence
-        for (selector, config_value) in config_targets {
-            target.entry(selector).or_insert_with(|| TomlPackageBuildTarget {
-                config: Some(config_value),
-                warnings: Vec::new(),
-            });
-        }
 
         th.finalize(None)?;
 
@@ -530,104 +496,5 @@ mod test {
                 .additional_dependencies
                 .contains_key(&"git".parse::<rattler_conda_types::PackageName>().unwrap())
         );
-    }
-
-    #[test]
-    fn test_config_with_targets_syntax() {
-        let toml = r#"
-            backend = { name = "pixi-build-cmake", version = "*" }
-
-            [config]
-            extra-args = ["-DCMAKE_BUILD_TYPE=Release"]
-
-            [config.targets.linux-64]
-            extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DLINUX_FLAG=ON"]
-
-            [config.targets.win-64]
-            extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DWIN_FLAG=ON"]
-        "#;
-        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
-            .and_then(TomlPackageBuild::into_build_system)
-            .expect("parsing should succeed");
-
-        // Check that the main config exists and doesn't have 'targets' anymore
-        assert!(parsed.value.config.is_some());
-        if let Some(serde_value::Value::Map(config_map)) = &parsed.value.config {
-            // 'targets' should have been removed from the main config
-            assert!(!config_map.contains_key(&serde_value::Value::String("targets".to_string())));
-            // 'extra-args' should still be present
-            assert!(config_map.contains_key(&serde_value::Value::String("extra-args".to_string())));
-        }
-
-        // Check that target-specific configs were extracted
-        assert!(parsed.value.target_config.is_some());
-        let target_config = parsed.value.target_config.unwrap();
-
-        // Should have linux-64 and win-64 targets
-        assert_eq!(target_config.len(), 2);
-
-        // Verify linux-64 target config
-        let linux_selector = "linux-64".parse::<crate::TargetSelector>().unwrap();
-        assert!(target_config.contains_key(&linux_selector));
-
-        // Verify win-64 target config
-        let win_selector = "win-64".parse::<crate::TargetSelector>().unwrap();
-        assert!(target_config.contains_key(&win_selector));
-    }
-
-    #[test]
-    fn test_config_targets_inline_syntax() {
-        let toml = r#"
-            backend = { name = "pixi-build-cmake", version = "*" }
-            config = { extra-args = ["-DCMAKE_BUILD_TYPE=Release"], targets = { linux-64 = { extra-args = ["-DLINUX_FLAG=ON"] } } }
-        "#;
-        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
-            .and_then(TomlPackageBuild::into_build_system)
-            .expect("parsing should succeed");
-
-        // Check that the main config exists and doesn't have 'targets' anymore
-        assert!(parsed.value.config.is_some());
-
-        // Check that target-specific configs were extracted
-        assert!(parsed.value.target_config.is_some());
-        let target_config = parsed.value.target_config.unwrap();
-
-        // Should have linux-64 target
-        assert_eq!(target_config.len(), 1);
-        let linux_selector = "linux-64".parse::<crate::TargetSelector>().unwrap();
-        assert!(target_config.contains_key(&linux_selector));
-    }
-
-    #[test]
-    fn test_config_targets_mixed_with_build_target() {
-        // Test that config.targets and [package.build.target.XXX] work together
-        let toml = r#"
-            backend = { name = "pixi-build-cmake", version = "*" }
-
-            [config]
-            extra-args = ["-DCMAKE_BUILD_TYPE=Release"]
-
-            [config.targets.linux-64]
-            extra-args = ["-DLINUX_FLAG=ON"]
-
-            [target.osx-64]
-            config = { extra-args = ["-DOSX_FLAG=ON"] }
-        "#;
-        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
-            .and_then(TomlPackageBuild::into_build_system)
-            .expect("parsing should succeed");
-
-        // Check that target-specific configs were merged
-        assert!(parsed.value.target_config.is_some());
-        let target_config = parsed.value.target_config.unwrap();
-
-        // Should have both linux-64 and osx-64 targets
-        assert_eq!(target_config.len(), 2);
-
-        let linux_selector = "linux-64".parse::<crate::TargetSelector>().unwrap();
-        assert!(target_config.contains_key(&linux_selector));
-
-        let osx_selector = "osx-64".parse::<crate::TargetSelector>().unwrap();
-        assert!(target_config.contains_key(&osx_selector));
     }
 }
