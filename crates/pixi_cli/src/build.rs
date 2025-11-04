@@ -21,14 +21,9 @@ use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use tempfile::tempdir;
 
-use crate::cli_config::WorkspaceConfig;
-
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
 pub struct Args {
-    #[clap(flatten)]
-    pub project_config: WorkspaceConfig,
-
     #[clap(flatten)]
     pub config_cli: ConfigCli,
 
@@ -52,12 +47,17 @@ pub struct Args {
     #[clap(long, short)]
     pub clean: bool,
 
-    /// The path to `package.xml`, `recipe.yaml`, `pixi.toml`, `pyproject.toml` or `mojoproject.toml` that can be built.
+    /// The path to a directory containing a package manifest, or to a specific manifest file.
+    ///
+    /// Supported manifest files: `package.xml`, `recipe.yaml`, `pixi.toml`, `pyproject.toml`, or `mojoproject.toml`.
+    ///
+    /// When a directory is provided, the command will search for supported manifest files within it.
     #[arg(long)]
-    pub package_manifest: Option<PathBuf>,
+    pub path: Option<PathBuf>,
 }
 
 /// Validate that the full path of package manifest exists and is a supported format.
+/// Directories are allowed (for discovery), and specific manifest files must be supported formats.
 async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
     let supported_file_names: Vec<&str> = [
         // backend-specific build files
@@ -71,10 +71,9 @@ async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
     ]
     .concat();
 
+    // Iterate over the files in the directory to provide a more helpful error
+    // of what manifests were found.
     if path.is_dir() {
-        // Iterate over the files in the directory to provide a more helpful error
-        // of what manifests were found.
-
         let mut entries = tokio_fs::read_dir(&path).await.into_diagnostic()?;
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
@@ -118,33 +117,34 @@ async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
 }
 
 pub(crate) async fn determine_discovery_start(
-    package_manifest: &Option<PathBuf>,
-    project_config: &WorkspaceConfig,
+    path: &Option<PathBuf>,
 ) -> miette::Result<DiscoveryStart> {
-    match (package_manifest, &project_config.manifest_path) {
-        // If --package-manifest is provided but --manifest-path is not
-        (Some(package_manifest), None) => {
-            // Validate the package manifest first
-            validate_package_manifest(package_manifest).await?;
+    match path {
+        Some(path) => {
+            // Validate the path first
+            validate_package_manifest(path).await?;
 
-            // Get the directory of the package manifest
-            let package_dir = package_manifest.parent().ok_or_else(|| {
-                miette::miette!("Failed to get parent directory of package manifest")
-            })?;
-            Ok(DiscoveryStart::SearchRoot(package_dir.to_path_buf()))
+            // If it's a directory, use it as the search root
+            if path.is_dir() {
+                Ok(DiscoveryStart::SearchRoot(path.clone()))
+            } else {
+                // If it's a file, use its parent directory as the search root
+                let package_dir = path.parent().ok_or_else(|| {
+                    miette::miette!("Failed to get parent directory of package manifest")
+                })?;
+                Ok(DiscoveryStart::SearchRoot(package_dir.to_path_buf()))
+            }
         }
-        // Otherwise use the configuration's locator (respects --manifest-path if provided)
-        _ => Ok(project_config.workspace_locator_start()),
+        // If no path is provided, use the current directory
+        None => Ok(DiscoveryStart::CurrentDir),
     }
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Locate the workspace based on the provided configuration.
-    // When --package-manifest is specified without --manifest-path, we should
-    // find the workspace manifest relative to the package manifest's directory,
-    // not the current working directory.
-    let workspace_locator =
-        determine_discovery_start(&args.package_manifest, &args.project_config).await?;
+    // When --path is specified, we should find the workspace manifest relative
+    // to the path's directory, not the current working directory.
+    let workspace_locator = determine_discovery_start(&args.path).await?;
 
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_locator.clone())
@@ -201,10 +201,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         miette::bail!("could not determine the current working directory to locate the workspace");
     };
 
-    let package_manifest_path = match args.package_manifest {
+    let package_manifest_path = match args.path {
         Some(path) => {
             validate_package_manifest(&path).await?;
-            path
+            // If the path is a directory, use the manifest_path from workspace_locator
+            // (discovery will have found the appropriate manifest)
+            if path.is_dir() {
+                manifest_path.clone()
+            } else {
+                path
+            }
         }
         None => manifest_path.clone(),
     };
@@ -333,16 +339,10 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_discovery_start() {
-        let discovery_start = determine_discovery_start(
-            &Some(PathBuf::from(
-                "tests/fixtures/build_tests/recipe/recipe.yaml",
-            )),
-            &WorkspaceConfig {
-                manifest_path: None,
-                ..Default::default()
-            },
-        )
+    async fn test_discovery_start_with_file_path() {
+        let discovery_start = determine_discovery_start(&Some(PathBuf::from(
+            "tests/fixtures/build_tests/recipe/recipe.yaml",
+        )))
         .await
         .unwrap();
 
@@ -352,21 +352,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_discovery_start_when_manifest_path_is_presnet() {
-        let discovery_start = determine_discovery_start(
-            &Some(PathBuf::from(
-                "tests/fixtures/build_tests/recipe/recipe.yaml",
-            )),
-            &WorkspaceConfig {
-                manifest_path: Some("manifest/path".into()),
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
+    async fn test_discovery_start_with_directory_path() {
+        // Use the current directory which always exists
+        let test_dir = PathBuf::from(".");
+        let discovery_start = determine_discovery_start(&Some(test_dir.clone()))
+            .await
+            .unwrap();
 
         let discovery_start_path = discovery_start.path().unwrap();
-        let expected_path = PathBuf::from("manifest/path");
-        assert_eq!(discovery_start_path, expected_path);
+        assert_eq!(discovery_start_path, test_dir);
+    }
+
+    #[tokio::test]
+    async fn test_discovery_start_without_path() {
+        let discovery_start = determine_discovery_start(&None).await.unwrap();
+
+        // When no path is provided, it should use CurrentDir
+        assert!(matches!(discovery_start, DiscoveryStart::CurrentDir));
     }
 }
