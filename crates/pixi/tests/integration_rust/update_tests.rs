@@ -321,7 +321,11 @@ async fn test_update_git_pypi_when_requested() {
         .unwrap();
 
     // run pixi update to re-lock
-    pixi.update().with_package("tqdm").await.unwrap();
+    pixi.update()
+        .with_no_install(false)
+        .with_package("tqdm")
+        .await
+        .unwrap();
 
     // Get the created lock-file
     let lock = pixi.lock_file().await.unwrap();
