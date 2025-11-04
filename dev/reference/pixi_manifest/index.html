@@ -4511,15 +4511,36 @@ The build system is a table that can contain the following fields:</p>
 <li><code>version</code>: the version of the build backend to use.</li>
 </ul>
 </li>
-<li><code>configuration</code>: a table that contains the configuration options for the build backend.</li>
-<li><code>target</code>: a table that can contain target specific build configuration.</li>
+<li><code>config</code>: a table that contains the configuration options for the build backend.</li>
+<li><code>target</code>: a table that can contain target specific build configuration.<ul>
+<li>Each target can have its own <code>config</code> table to override or extend the base configuration for specific platforms.</li>
+</ul>
+</li>
 </ul>
 <p>More documentation on the backends can be found in the <a href="../../build/backends/">build backend documentation</a>.</p>
+<h4 id="basic-build-configuration-example">Basic build configuration example<a class="headerlink" href="#basic-build-configuration-example" title="Permanent link">#</a></h4>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-61-1"><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a><span class="k">[package.build]</span>
 </span><span id="__span-61-2"><a id="__codelineno-61-2" name="__codelineno-61-2" href="#__codelineno-61-2"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-cmake&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0.3.*&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-61-3"><a id="__codelineno-61-3" name="__codelineno-61-3" href="#__codelineno-61-3"></a><span class="c1"># not required:</span>
 </span><span id="__span-61-4"><a id="__codelineno-61-4" name="__codelineno-61-4" href="#__codelineno-61-4"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
 </span><span id="__span-61-5"><a id="__codelineno-61-5" name="__codelineno-61-5" href="#__codelineno-61-5"></a><span class="n">config</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">key</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;value&quot;</span><span class="w"> </span><span class="p">}</span><span class="w">                    </span><span class="c1"># Optional configuration, specific to the build backend</span>
+</span></code></pre></div>
+<h4 id="target-specific-build-configuration-example">Target-specific build configuration example<a class="headerlink" href="#target-specific-build-configuration-example" title="Permanent link">#</a></h4>
+<p>For platform-specific build configuration, use the <code>[package.build.target.&lt;platform&gt;]</code> table:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-62-1"><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a><span class="k">[package.build]</span>
+</span><span id="__span-62-2"><a id="__codelineno-62-2" name="__codelineno-62-2" href="#__codelineno-62-2"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-cmake&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0.3.*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-62-3"><a id="__codelineno-62-3" name="__codelineno-62-3" href="#__codelineno-62-3"></a>
+</span><span id="__span-62-4"><a id="__codelineno-62-4" name="__codelineno-62-4" href="#__codelineno-62-4"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-62-5"><a id="__codelineno-62-5" name="__codelineno-62-5" href="#__codelineno-62-5"></a><span class="c1"># Base configuration applied to all platforms</span>
+</span><span id="__span-62-6"><a id="__codelineno-62-6" name="__codelineno-62-6" href="#__codelineno-62-6"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-DCMAKE_BUILD_TYPE=Release&quot;</span><span class="p">]</span>
+</span><span id="__span-62-7"><a id="__codelineno-62-7" name="__codelineno-62-7" href="#__codelineno-62-7"></a>
+</span><span id="__span-62-8"><a id="__codelineno-62-8" name="__codelineno-62-8" href="#__codelineno-62-8"></a><span class="k">[package.build.target.linux-64.config]</span>
+</span><span id="__span-62-9"><a id="__codelineno-62-9" name="__codelineno-62-9" href="#__codelineno-62-9"></a><span class="c1"># Linux-specific configuration</span>
+</span><span id="__span-62-10"><a id="__codelineno-62-10" name="__codelineno-62-10" href="#__codelineno-62-10"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-DCMAKE_BUILD_TYPE=Debug&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;-DLINUX_FLAG=ON&quot;</span><span class="p">]</span>
+</span><span id="__span-62-11"><a id="__codelineno-62-11" name="__codelineno-62-11" href="#__codelineno-62-11"></a>
+</span><span id="__span-62-12"><a id="__codelineno-62-12" name="__codelineno-62-12" href="#__codelineno-62-12"></a><span class="k">[package.build.target.win-64.config]</span>
+</span><span id="__span-62-13"><a id="__codelineno-62-13" name="__codelineno-62-13" href="#__codelineno-62-13"></a><span class="c1"># Windows-specific configuration</span>
+</span><span id="__span-62-14"><a id="__codelineno-62-14" name="__codelineno-62-14" href="#__codelineno-62-14"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-DCMAKE_BUILD_TYPE=Debug&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;-DWIN_FLAG=ON&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <h3 id="the-build-host-and-run-dependencies-tables">The <code>build</code> <code>host</code> and <code>run</code> dependencies tables<a class="headerlink" href="#the-build-host-and-run-dependencies-tables" title="Permanent link">#</a></h3>
 <p>The dependencies of a package are split into three tables.
@@ -4546,9 +4567,9 @@ You can do this by running <code>ssh-add</code> which will prompt you for your S
 Make sure that the <code>ssh-add</code> agent or service is running and you have a generated public/private SSH key.
 For more details on how to do this, check the <a href="https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent">Github SSH documentation</a>.</p>
 </details>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-62-1"><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a><span class="k">[package.build-dependencies]</span>
-</span><span id="__span-62-2"><a id="__codelineno-62-2" name="__codelineno-62-2" href="#__codelineno-62-2"></a><span class="n">cmake</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
-</span><span id="__span-62-3"><a id="__codelineno-62-3" name="__codelineno-62-3" href="#__codelineno-62-3"></a><span class="n">git</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-63-1"><a id="__codelineno-63-1" name="__codelineno-63-1" href="#__codelineno-63-1"></a><span class="k">[package.build-dependencies]</span>
+</span><span id="__span-63-2"><a id="__codelineno-63-2" name="__codelineno-63-2" href="#__codelineno-63-2"></a><span class="n">cmake</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-63-3"><a id="__codelineno-63-3" name="__codelineno-63-3" href="#__codelineno-63-3"></a><span class="n">git</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span></code></pre></div>
 <h3 id="host-dependencies"><code>host-dependencies</code><a class="headerlink" href="#host-dependencies" title="Permanent link">#</a></h3>
 <p>Host dependencies are required during build phase, but in contrast to build packages they have to be present on the host.</p>
@@ -4559,8 +4580,8 @@ For more details on how to do this, check the <a href="https://docs.github.com/e
 <li><code>python</code>, <code>r-base</code></li>
 <li><code>setuptools</code>, <code>pip</code></li>
 </ul>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-63-1"><a id="__codelineno-63-1" name="__codelineno-63-1" href="#__codelineno-63-1"></a><span class="k">[package.host-dependencies]</span>
-</span><span id="__span-63-2"><a id="__codelineno-63-2" name="__codelineno-63-2" href="#__codelineno-63-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-64-1"><a id="__codelineno-64-1" name="__codelineno-64-1" href="#__codelineno-64-1"></a><span class="k">[package.host-dependencies]</span>
+</span><span id="__span-64-2"><a id="__codelineno-64-2" name="__codelineno-64-2" href="#__codelineno-64-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span></code></pre></div>
 <h3 id="run-dependencies"><code>run-dependencies</code><a class="headerlink" href="#run-dependencies" title="Permanent link">#</a></h3>
 <p>The <code>run-dependencies</code> are the packages that will be installed in the environment when the package is run.</p>
@@ -4569,8 +4590,8 @@ For more details on how to do this, check the <a href="https://docs.github.com/e
 <li>Extra data file packages</li>
 <li>Python/R packages that are not needed during build time</li>
 </ul>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-64-1"><a id="__codelineno-64-1" name="__codelineno-64-1" href="#__codelineno-64-1"></a><span class="k">[package.run-dependencies]</span>
-</span><span id="__span-64-2"><a id="__codelineno-64-2" name="__codelineno-64-2" href="#__codelineno-64-2"></a><span class="n">rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=13.9.4,&lt;14&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-65-1"><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a><span class="k">[package.run-dependencies]</span>
+</span><span id="__span-65-2"><a id="__codelineno-65-2" name="__codelineno-65-2" href="#__codelineno-65-2"></a><span class="n">rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=13.9.4,&lt;14&quot;</span>
 </span></code></pre></div>
 
 
