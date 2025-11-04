@@ -172,10 +172,11 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
         .unwrap();
 
     // Add a dependency on `python`
-    pixi.add("python").await.unwrap();
+    pixi.add("python").with_no_install(false).await.unwrap();
 
     // Add a git pypi dependency on `tqdm`
     pixi.add_pypi("tqdm @ git+https://github.com/tqdm/tqdm.git")
+        .with_no_install(false)
         .await
         .unwrap();
 
@@ -218,7 +219,11 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
 
     // now run the update command to update conda packages
     // which will invalidate also pypi packages
-    pixi.update().with_package("python").await.unwrap();
+    pixi.update()
+        .with_no_install(false)
+        .with_package("python")
+        .await
+        .unwrap();
 
     // Get the re-locked lock-file
     let lock = pixi.lock_file().await.unwrap();
@@ -254,13 +259,14 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
         .unwrap();
 
     // Add a dependency on `python`
-    pixi.add("python").await.unwrap();
+    pixi.add("python").with_no_install(false).await.unwrap();
 
     // Add a `pinned` git pypi dependency on `tqdm`
     // this should not trigger an update
     pixi.add_pypi(
         "tqdm @ git+https://github.com/tqdm/tqdm.git@cac7150d7c8a650c7e76004cd7f8643990932c7f",
     )
+    .with_no_install(false)
     .await
     .unwrap();
 
