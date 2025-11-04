@@ -1098,13 +1098,13 @@ backend = { name = "pixi-build-cmake", version = "0.3.*" }
 # Base configuration applied to all platforms
 extra-args = ["-DCMAKE_BUILD_TYPE=Release"]
 
-[package.build.target.linux-64]
+[package.build.target.linux-64.config]
 # Linux-specific configuration
-config = { extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DLINUX_FLAG=ON"] }
+extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DLINUX_FLAG=ON"]
 
-[package.build.target.win-64]
+[package.build.target.win-64.config]
 # Windows-specific configuration
-config = { extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DWIN_FLAG=ON"] }
+extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DWIN_FLAG=ON"]
 ```
 
 
