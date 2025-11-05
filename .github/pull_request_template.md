@@ -25,4 +25,3 @@ Fixes #{issue}
 - [ ] I have added tests that prove my fix is effective or that my feature works, or that the bug can not reappear.
 - [ ] I have verified that changes that would impact the JSON schema have been made in `schema/model.py`.
 - [ ] I have updated or added relevant documentation.
-- [ ] The PR title is descriptive enough to be part of the changelog on release. (use `chore:` if NA)
