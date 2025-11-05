@@ -466,12 +466,16 @@ preview = ["pixi-build"]
     // Try to build with path to package.xml
     // The build `will` fail (since we don't have a real ROS source code),
     // but we want to verify that package.xml is discovered
-    let _result = pixi.build().with_path(&package_xml_path).await;
+    let result = pixi.build().with_path(&package_xml_path).await;
 
     // The key assertion: package.xml should be discovered as a valid manifest
-    // If it fails, it should NOT be because it's not discovered,
-    // but for other reasons (e.g., missing backend)
-    // TODO: finish this when backends are fixed
+    // and build process should start
+    // It will fail because we dont have any sources to build for
+    // but thats ok
+    assert!(
+        format!("{:?}", result.unwrap_err()).contains("Script failed to execute"),
+        "Build with package.xml path should attempt to discover the ROS2 backend",
+    );
 }
 
 /// Test that verifies we get a helpful error suggesting the manifest file

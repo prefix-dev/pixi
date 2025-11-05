@@ -25,8 +25,8 @@ pixi build [OPTIONS]
 :  The directory to use for incremental builds artifacts
 - <a id="arg---clean" href="#arg---clean">`--clean (-c)`</a>
 :  Whether to clean the build directory before building
-- <a id="arg---package-manifest" href="#arg---package-manifest">`--package-manifest <PACKAGE_MANIFEST>`</a>
-:  The path to `package.xml`, `recipe.yaml`, `pixi.toml`, `pyproject.toml` or `mojoproject.toml` that can be built
+- <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
+:  The path to a directory containing a package manifest, or to a specific manifest file
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
@@ -59,9 +59,5 @@ pixi build [OPTIONS]
 <br>**env**: `PIXI_LOCKED`
 - <a id="arg---as-is" href="#arg---as-is">`--as-is`</a>
 :  Shorthand for the combination of --no-install and --frozen
-
-## Global Options
-- <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
-:  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 --8<-- "docs/reference/cli/pixi/build_extender:example"

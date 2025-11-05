@@ -1321,6 +1321,11 @@ dependencies:
                 [pixi, "shell", "--manifest-path", manifest_path, "--locked", "--no-install"],
                 expected_exit_code=ExitCode.FAILURE,
             )
+        elif command_name == "pixi build":
+            # Special case: build uses --path instead of --manifest-path
+            verify_cli_command(
+                [pixi, "shell", "---path", manifest_path, "--locked", "--no-install"],
+            )
         else:
             verify_cli_command([pixi, *command_parts, *frozen_no_install_flags, *additional_args])
         check_invariants(command_name)
