@@ -3,7 +3,7 @@
 <!--- Please include a summary of the change and which issue is fixed. --->
 <!--- Please also include relevant motivation and context. -->
 
-<!--- Add visual representation of the affect of the change when possible, e.g. before and after screenshots, code snippets, etc. --->
+<!--- Add visual representation of the effect of the change when possible, e.g. before and after screenshots, code snippets, etc. --->
 
 Fixes #{issue}
 
