@@ -1,5 +1,3 @@
-use core::panic;
-
 use fs_err as fs;
 use pixi_build_backend_passthrough::PassthroughBackend;
 use pixi_build_frontend::BackendOverride;
