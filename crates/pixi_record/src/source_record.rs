@@ -7,7 +7,7 @@ use pixi_git::sha::GitSha;
 use pixi_spec::{GitReference, SourceSpec};
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
 use rattler_digest::{Sha256, Sha256Hash};
-use rattler_lock::{CondaPackageData, CondaSourceData, GitShallowSpec, PackageBuildSource};
+use rattler_lock::{CondaSourceData, GitShallowSpec, PackageBuildSource};
 use serde::{Deserialize, Serialize};
 use typed_path::Utf8TypedPathBuf;
 
@@ -55,62 +55,86 @@ pub struct InputHash {
     pub globs: BTreeSet<String>,
 }
 
-impl From<SourceRecord> for CondaPackageData {
-    fn from(value: SourceRecord) -> Self {
-        let package_build_source = value.build_source.map(|s| match s {
-            PinnedSourceSpec::Url(pinned_url_spec) => PackageBuildSource::Url {
-                url: pinned_url_spec.url,
-                sha256: pinned_url_spec.sha256,
-                subdir: None,
-            },
-            PinnedSourceSpec::Git(pinned_git_spec) => {
-                let subdirectory = pinned_git_spec
-                    .source
-                    .subdirectory
-                    .as_deref()
-                    .map(Utf8TypedPathBuf::from);
+impl SourceRecord {
+    /// Convert to CondaSourceData with paths made relative to workspace_root.
+    /// This should be used when writing to the lock file.
+    ///
+    /// TODO: Currently this doesn't use workspace_root and just makes build_source
+    /// relative to manifest_source. Future implementation should make both relative
+    /// to workspace_root first.
+    pub fn into_conda_source_data(
+        self,
+        _workspace_root: &std::path::Path,
+    ) -> CondaSourceData {
+        let package_build_source = self.build_source.map(|s| {
+            // Try to make build_source relative to manifest_source
+            let s = s.make_relative_to(&self.manifest_source).unwrap_or(s);
 
-                let spec = match &pinned_git_spec.source.reference {
-                    GitReference::Branch(branch) => Some(GitShallowSpec::Branch(branch.clone())),
-                    GitReference::Tag(tag) => Some(GitShallowSpec::Tag(tag.clone())),
-                    GitReference::Rev(_) => Some(GitShallowSpec::Rev),
-                    GitReference::DefaultBranch => None,
-                };
+            match s {
+                PinnedSourceSpec::Url(pinned_url_spec) => PackageBuildSource::Url {
+                    url: pinned_url_spec.url,
+                    sha256: pinned_url_spec.sha256,
+                    subdir: None,
+                },
+                PinnedSourceSpec::Git(pinned_git_spec) => {
+                    let subdirectory = pinned_git_spec
+                        .source
+                        .subdirectory
+                        .as_deref()
+                        .map(Utf8TypedPathBuf::from);
 
-                PackageBuildSource::Git {
-                    url: pinned_git_spec.git,
-                    spec,
-                    rev: pinned_git_spec.source.commit.to_string(),
-                    subdir: subdirectory,
+                    let spec = match &pinned_git_spec.source.reference {
+                        GitReference::Branch(branch) => {
+                            Some(GitShallowSpec::Branch(branch.clone()))
+                        }
+                        GitReference::Tag(tag) => Some(GitShallowSpec::Tag(tag.clone())),
+                        GitReference::Rev(_) => Some(GitShallowSpec::Rev),
+                        GitReference::DefaultBranch => None,
+                    };
+
+                    PackageBuildSource::Git {
+                        url: pinned_git_spec.git,
+                        spec,
+                        rev: pinned_git_spec.source.commit.to_string(),
+                        subdir: subdirectory,
+                    }
                 }
+                PinnedSourceSpec::Path(pinned_path) => PackageBuildSource::Path {
+                    path: pinned_path.path,
+                },
             }
-            PinnedSourceSpec::Path(pinned_path) => PackageBuildSource::Path {
-                path: pinned_path.path,
-            },
         });
-        CondaPackageData::Source(CondaSourceData {
-            package_record: value.package_record,
-            location: value.manifest_source.clone().into(),
+
+        CondaSourceData {
+            package_record: self.package_record,
+            location: self.manifest_source.clone().into(),
             package_build_source,
-            input: value.input_hash.map(|i| rattler_lock::InputHash {
+            input: self.input_hash.map(|i| rattler_lock::InputHash {
                 hash: i.hash,
-                // TODO: fix this in rattler
                 globs: Vec::from_iter(i.globs),
             }),
-            sources: value
+            sources: self
                 .sources
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
-        })
+        }
     }
-}
 
-impl TryFrom<CondaSourceData> for SourceRecord {
-    type Error = ParseLockFileError;
+    /// Create SourceRecord from CondaSourceData with paths resolved relative to workspace_root.
+    /// This should be used when reading from the lock file.
+    ///
+    /// TODO: Currently this doesn't use workspace_root and just resolves build_source
+    /// relative to manifest_source. Future implementation should resolve both against
+    /// workspace_root first.
+    pub fn from_conda_source_data(
+        data: CondaSourceData,
+        _workspace_root: &std::path::Path,
+    ) -> Result<Self, ParseLockFileError> {
 
-    fn try_from(value: CondaSourceData) -> Result<Self, Self::Error> {
-        let pinned_source_spec = value.package_build_source.map(|source| match source {
+        let manifest_source: PinnedSourceSpec = data.location.try_into()?;
+
+        let pinned_source_spec = data.package_build_source.map(|source| match source {
             PackageBuildSource::Git {
                 url,
                 spec,
@@ -143,18 +167,21 @@ impl TryFrom<CondaSourceData> for SourceRecord {
                 md5: None,
             }),
             PackageBuildSource::Path { path } => {
+                // Keep paths as-is from the lock file
+                // They will be resolved later by the code that uses them
                 PinnedSourceSpec::Path(crate::PinnedPathSpec { path })
             }
         });
+
         Ok(Self {
-            package_record: value.package_record,
-            manifest_source: value.location.try_into()?,
-            input_hash: value.input.map(|hash| InputHash {
+            package_record: data.package_record,
+            manifest_source,
+            input_hash: data.input.map(|hash| InputHash {
                 hash: hash.hash,
                 globs: BTreeSet::from_iter(hash.globs),
             }),
             build_source: pinned_source_spec,
-            sources: value
+            sources: data
                 .sources
                 .into_iter()
                 .map(|(k, v)| (k, SourceSpec::from(v)))
@@ -238,9 +265,9 @@ mod tests {
             sources: Default::default(),
         };
 
-        let CondaPackageData::Source(conda_source) = record.clone().into() else {
-            panic!("expected source package data");
-        };
+        let conda_source = record
+            .clone()
+            .into_conda_source_data(&std::path::PathBuf::from("/workspace"));
 
         let package_build_source = conda_source
             .package_build_source
@@ -263,7 +290,11 @@ mod tests {
         assert!(matches!(spec, Some(GitShallowSpec::Branch(branch)) if branch == "main"));
         assert_eq!(rev, "0123456789abcdef0123456789abcdef01234567");
 
-        let roundtrip = SourceRecord::try_from(conda_source).expect("roundtrip should succeed");
+        let roundtrip = SourceRecord::from_conda_source_data(
+            conda_source,
+            &std::path::PathBuf::from("/workspace"),
+        )
+        .expect("roundtrip should succeed");
         let Some(PinnedSourceSpec::Git(roundtrip_git)) = roundtrip.build_source else {
             panic!("expected git pinned source");
         };
@@ -272,5 +303,267 @@ mod tests {
             Some("nested/project")
         );
         assert_eq!(roundtrip_git.git, git_url);
+    }
+
+    #[test]
+    fn package_build_source_path_is_made_relative() {
+        use typed_path::Utf8TypedPathBuf;
+
+        let package_record: PackageRecord = serde_json::from_value(json!({
+            "name": "example",
+            "version": "1.0.0",
+            "build": "0",
+            "build_number": 0,
+            "subdir": "noarch",
+        }))
+        .expect("valid package record");
+
+        // Manifest is in /workspace/recipes directory
+        let manifest_source = PinnedSourceSpec::Path(crate::PinnedPathSpec {
+            path: Utf8TypedPathBuf::from("/workspace/recipes"),
+        });
+
+        // Build source is in /workspace/src (sibling of recipes)
+        let build_source = PinnedSourceSpec::Path(crate::PinnedPathSpec {
+            path: Utf8TypedPathBuf::from("/workspace/src"),
+        });
+
+        let record = SourceRecord {
+            package_record,
+            manifest_source: manifest_source.clone(),
+            build_source: Some(build_source),
+            input_hash: None,
+            sources: Default::default(),
+        };
+
+        // Convert to CondaPackageData (serialization)
+        let conda_source = record
+            .clone()
+            .into_conda_source_data(&std::path::PathBuf::from("/workspace"));
+
+        let package_build_source = conda_source
+            .package_build_source
+            .as_ref()
+            .expect("expected package build source");
+
+        let PackageBuildSource::Path { path } = package_build_source else {
+            panic!("expected path package build source");
+        };
+
+        // The path should now be relative to the manifest directory
+        // Manifest is in /workspace/recipes/, so ../src should point to /workspace/src
+        assert_eq!(
+            path.as_str(),
+            "../src",
+            "build_source should be relative to manifest_source directory"
+        );
+
+        // Convert back to SourceRecord (deserialization)
+        let roundtrip = SourceRecord::from_conda_source_data(
+            conda_source,
+            &std::path::PathBuf::from("/workspace"),
+        )
+        .expect("roundtrip should succeed");
+
+        let Some(PinnedSourceSpec::Path(roundtrip_path)) = roundtrip.build_source else {
+            panic!("expected path pinned source");
+        };
+
+        // After roundtrip, the path should remain as it was in the lock file (relative)
+        assert_eq!(
+            roundtrip_path.path.as_str(),
+            "../src",
+            "build_source should remain as relative path from lock file"
+        );
+    }
+
+    #[test]
+    fn package_build_source_path_stays_absolute_when_not_related() {
+        use typed_path::Utf8TypedPathBuf;
+
+        let package_record: PackageRecord = serde_json::from_value(json!({
+            "name": "example",
+            "version": "1.0.0",
+            "build": "0",
+            "build_number": 0,
+            "subdir": "noarch",
+        }))
+        .expect("valid package record");
+
+        // Manifest is in /workspace/recipes directory
+        let manifest_source = PinnedSourceSpec::Path(crate::PinnedPathSpec {
+            path: Utf8TypedPathBuf::from("/workspace/recipes"),
+        });
+
+        // Build source is in a completely different location
+        let build_source = PinnedSourceSpec::Path(crate::PinnedPathSpec {
+            path: Utf8TypedPathBuf::from("/completely/different/path"),
+        });
+
+        let record = SourceRecord {
+            package_record,
+            manifest_source: manifest_source.clone(),
+            build_source: Some(build_source),
+            input_hash: None,
+            sources: Default::default(),
+        };
+
+        // Convert to CondaPackageData (serialization)
+        let conda_source = record
+            .clone()
+            .into_conda_source_data(&std::path::PathBuf::from("/workspace"));
+
+        let package_build_source = conda_source
+            .package_build_source
+            .as_ref()
+            .expect("expected package build source");
+
+        let PackageBuildSource::Path { path } = package_build_source else {
+            panic!("expected path package build source");
+        };
+
+        // The path should be made relative
+        assert_eq!(path.as_str(), "../../completely/different/path");
+    }
+
+    #[test]
+    fn package_build_source_git_same_repo_is_made_relative() {
+        let package_record: PackageRecord = serde_json::from_value(json!({
+            "name": "example",
+            "version": "1.0.0",
+            "build": "0",
+            "build_number": 0,
+            "subdir": "noarch",
+        }))
+        .expect("valid package record");
+
+        let git_url = Url::parse("https://github.com/user/repo.git").unwrap();
+        let commit = GitSha::from_str("0123456789abcdef0123456789abcdef01234567").unwrap();
+
+        // Manifest is in recipes/ subdirectory
+        let manifest_source = PinnedSourceSpec::Git(crate::PinnedGitSpec {
+            git: git_url.clone(),
+            source: PinnedGitCheckout {
+                commit: commit.clone(),
+                subdirectory: Some("recipes".to_string()),
+                reference: GitReference::Branch("main".to_string()),
+            },
+        });
+
+        // Build source is in src/ subdirectory (sibling of recipes)
+        let build_source = PinnedSourceSpec::Git(crate::PinnedGitSpec {
+            git: git_url.clone(),
+            source: PinnedGitCheckout {
+                commit: commit.clone(),
+                subdirectory: Some("src".to_string()),
+                reference: GitReference::Branch("main".to_string()),
+            },
+        });
+
+        let record = SourceRecord {
+            package_record,
+            manifest_source: manifest_source.clone(),
+            build_source: Some(build_source),
+            input_hash: None,
+            sources: Default::default(),
+        };
+
+        // Convert to CondaPackageData (serialization)
+        let conda_source = record
+            .clone()
+            .into_conda_source_data(&std::path::PathBuf::from("/workspace"));
+
+        let package_build_source = conda_source
+            .package_build_source
+            .as_ref()
+            .expect("expected package build source");
+
+        let PackageBuildSource::Path { path } = package_build_source else {
+            panic!("expected path package build source (relativized from git)");
+        };
+
+        // The path should be relative: from recipes/ to src/ is ../src
+        assert_eq!(
+            path.as_str(),
+            "../src",
+            "build_source should be converted to relative path"
+        );
+
+        // Convert back to SourceRecord (deserialization)
+        let roundtrip = SourceRecord::from_conda_source_data(
+            conda_source,
+            &std::path::PathBuf::from("/workspace"),
+        )
+        .expect("roundtrip should succeed");
+
+        let Some(PinnedSourceSpec::Path(roundtrip_path)) = roundtrip.build_source else {
+            panic!("expected path pinned source after roundtrip (deserialized from relative path in lock file)");
+        };
+
+        // After roundtrip, it should remain as the relative path from the lock file
+        assert_eq!(roundtrip_path.path.as_str(), "../src");
+    }
+
+    #[test]
+    fn package_build_source_git_different_repos_stays_git() {
+        let package_record: PackageRecord = serde_json::from_value(json!({
+            "name": "example",
+            "version": "1.0.0",
+            "build": "0",
+            "build_number": 0,
+            "subdir": "noarch",
+        }))
+        .expect("valid package record");
+
+        let manifest_git_url = Url::parse("https://github.com/user/repo1.git").unwrap();
+        let build_git_url = Url::parse("https://github.com/user/repo2.git").unwrap();
+        let commit1 = GitSha::from_str("0123456789abcdef0123456789abcdef01234567").unwrap();
+        let commit2 = GitSha::from_str("abcdef0123456789abcdef0123456789abcdef01").unwrap();
+
+        // Manifest is in one repository
+        let manifest_source = PinnedSourceSpec::Git(crate::PinnedGitSpec {
+            git: manifest_git_url.clone(),
+            source: PinnedGitCheckout {
+                commit: commit1,
+                subdirectory: Some("recipes".to_string()),
+                reference: GitReference::Branch("main".to_string()),
+            },
+        });
+
+        // Build source is in a different repository
+        let build_source = PinnedSourceSpec::Git(crate::PinnedGitSpec {
+            git: build_git_url.clone(),
+            source: PinnedGitCheckout {
+                commit: commit2.clone(),
+                subdirectory: Some("src".to_string()),
+                reference: GitReference::Branch("main".to_string()),
+            },
+        });
+
+        let record = SourceRecord {
+            package_record,
+            manifest_source: manifest_source.clone(),
+            build_source: Some(build_source),
+            input_hash: None,
+            sources: Default::default(),
+        };
+
+        // Convert to CondaPackageData (serialization)
+        let conda_source = record
+            .clone()
+            .into_conda_source_data(&std::path::PathBuf::from("/workspace"));
+
+        let package_build_source = conda_source
+            .package_build_source
+            .as_ref()
+            .expect("expected package build source");
+
+        let PackageBuildSource::Git { url, subdir, .. } = package_build_source else {
+            panic!("expected git package build source (different repos should stay git)");
+        };
+
+        // Different repositories - should stay as Git source
+        assert_eq!(url, &build_git_url);
+        assert_eq!(subdir.as_ref().map(|s| s.as_str()), Some("src"));
     }
 }

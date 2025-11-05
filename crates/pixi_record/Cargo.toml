@@ -12,6 +12,7 @@ version = "0.1.0"
 [dependencies]
 file_url = { workspace = true }
 miette = { workspace = true }
+pathdiff = { workspace = true }
 pixi_git = { workspace = true }
 pixi_spec = { workspace = true, features = ["rattler_lock"] }
 rattler_conda_types = { workspace = true }

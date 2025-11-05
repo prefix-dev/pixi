@@ -212,6 +212,97 @@ impl PinnedSourceSpec {
             _ => false,
         }
     }
+
+    /// Makes this pinned source relative to another pinned source if both are path sources
+    /// or both are git sources pointing to the same repository.
+    /// This is useful for making `build_source` relative to `manifest_source` in lock files.
+    ///
+    /// Returns `None` if:
+    /// - Not a compatible combination (different types or different git repos)
+    /// - The sources cannot be made relative to each other
+    ///
+    /// # Arguments
+    /// * `base` - The base pinned source to make this path relative to (typically the manifest_source)
+    pub fn make_relative_to(&self, base: &PinnedSourceSpec) -> Option<Self> {
+        use pixi_git::url::RepositoryUrl;
+        use typed_path::{Utf8Component, Utf8UnixPath};
+
+        match (self, base) {
+            // Path-to-Path: Make the path relative
+            (PinnedSourceSpec::Path(this_path), PinnedSourceSpec::Path(base_path)) => {
+                // Base path is a directory (not a file path)
+                // Create a temporary Path for the base directory
+                let base_dir = Path::new(base_path.path.as_str());
+
+                Some(PinnedSourceSpec::Path(this_path.make_relative_to(base_dir)))
+            }
+            // Git-to-Git: If same repository, convert to a relative path based on subdirectories
+            (PinnedSourceSpec::Git(this_git), PinnedSourceSpec::Git(base_git)) => {
+                // Check if both point to the same repository
+                let this_repo = RepositoryUrl::new(&this_git.git);
+                let base_repo = RepositoryUrl::new(&base_git.git);
+
+                if this_repo != base_repo {
+                    // Different repositories, can't make relative
+                    return None;
+                }
+
+                // Same repository - compute relative path between subdirectories
+                let base_subdir = base_git.source.subdirectory.as_deref().unwrap_or("");
+                let this_subdir = this_git.source.subdirectory.as_deref().unwrap_or("");
+
+                // If both point to the same subdirectory, don't relativize (keep as Git)
+                if base_subdir == this_subdir {
+                    return None;
+                }
+
+                // Always use Unix-style paths for Git subdirectories
+                let base_unix = Utf8UnixPath::new(base_subdir);
+                let this_unix = Utf8UnixPath::new(this_subdir);
+
+                // Try to compute relative path
+                if let Ok(rel) = this_unix.strip_prefix(base_unix) {
+                    // this_subdir is under base_subdir
+                    Some(PinnedSourceSpec::Path(PinnedPathSpec {
+                        path: rel.as_str().into(),
+                    }))
+                } else {
+                    // Need to compute relative path using .. components
+                    let base_components: Vec<_> = base_unix.components().collect();
+                    let this_components: Vec<_> = this_unix.components().collect();
+
+                    // Find common prefix
+                    let common = base_components
+                        .iter()
+                        .zip(this_components.iter())
+                        .take_while(|(a, b)| a == b)
+                        .count();
+
+                    // Build relative path: go up from base, then down to target
+                    let ups = base_components.len() - common;
+                    let mut rel_path = String::new();
+                    for _ in 0..ups {
+                        if !rel_path.is_empty() {
+                            rel_path.push('/');
+                        }
+                        rel_path.push_str("..");
+                    }
+                    for comp in &this_components[common..] {
+                        if !rel_path.is_empty() {
+                            rel_path.push('/');
+                        }
+                        rel_path.push_str(comp.as_str());
+                    }
+
+                    Some(PinnedSourceSpec::Path(PinnedPathSpec {
+                        path: rel_path.into(),
+                    }))
+                }
+            }
+            // Different types or incompatible sources
+            _ => None,
+        }
+    }
 }
 
 impl MutablePinnedSourceSpec {
@@ -461,6 +552,105 @@ impl PinnedPathSpec {
             native_path.to_path_buf()
         } else {
             project_root.join(native_path)
+        }
+    }
+
+    /// Makes this path relative to another path if possible.
+    /// If the path is already relative or cannot be made relative, returns self unchanged.
+    ///
+    /// # Arguments
+    /// * `base` - The base path to make this path relative to
+    pub fn make_relative_to(&self, base: &Path) -> Self {
+        use typed_path::{Utf8Component, Utf8UnixPath, Utf8WindowsPath};
+
+        // Check if the path is already relative
+        let is_relative = if self.path.as_str().starts_with('/') {
+            // Unix absolute path
+            false
+        } else if self.path.as_str().len() >= 2 && self.path.as_str().chars().nth(1) == Some(':') {
+            // Windows absolute path (C:\...)
+            false
+        } else {
+            // Relative path
+            true
+        };
+
+        if is_relative {
+            return self.clone();
+        }
+
+        // Convert base to string for comparison
+        let base_str = base.to_string_lossy();
+
+        // Determine if we're working with Unix or Windows paths
+        let is_unix_style = self.path.as_str().starts_with('/');
+
+        if is_unix_style {
+            // Use Unix path logic
+            let this_unix = Utf8UnixPath::new(self.path.as_str());
+            let base_unix = Utf8UnixPath::new(&base_str);
+
+            if let Ok(rel) = this_unix.strip_prefix(base_unix) {
+                Self {
+                    path: rel.as_str().into(),
+                }
+            } else {
+                // Try using pathdiff for more complex relativization
+                let this_components: Vec<_> = this_unix.components().collect();
+                let base_components: Vec<_> = base_unix.components().collect();
+
+                // Find common prefix
+                let common = this_components
+                    .iter()
+                    .zip(base_components.iter())
+                    .take_while(|(a, b)| a == b)
+                    .count();
+
+                if common == 0 {
+                    // No common prefix, keep absolute
+                    return self.clone();
+                }
+
+                // Build relative path: go up from base, then down to target
+                let ups = base_components.len() - common;
+                let mut rel_path = String::new();
+                for _ in 0..ups {
+                    if !rel_path.is_empty() {
+                        rel_path.push('/');
+                    }
+                    rel_path.push_str("..");
+                }
+                for comp in &this_components[common..] {
+                    if !rel_path.is_empty() {
+                        rel_path.push('/');
+                    }
+                    rel_path.push_str(comp.as_str());
+                }
+
+                Self {
+                    path: rel_path.into(),
+                }
+            }
+        } else {
+            // Use Windows path logic
+            let this_windows = Utf8WindowsPath::new(self.path.as_str());
+            let base_windows = Utf8WindowsPath::new(&base_str);
+
+            if let Ok(rel) = this_windows.strip_prefix(base_windows) {
+                Self {
+                    path: rel.as_str().into(),
+                }
+            } else {
+                // For Windows, fall back to pathdiff with native paths
+                let native_path = Path::new(self.path.as_str());
+                if let Some(relative_path) = pathdiff::diff_paths(native_path, base) {
+                    Self {
+                        path: relative_path.to_string_lossy().to_string().into(),
+                    }
+                } else {
+                    self.clone()
+                }
+            }
         }
     }
 

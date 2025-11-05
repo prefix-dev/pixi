@@ -685,9 +685,7 @@ pub async fn verify_platform_satisfiability(
             LockedPackageRef::Conda(conda) => {
                 let url = conda.location().clone();
                 pixi_records.push(
-                    conda
-                        .clone()
-                        .try_into()
+                    PixiRecord::from_conda_package_data(conda.clone(), project_root)
                         .map_err(|e| PlatformUnsat::CorruptedEntry(url.to_string(), e))?,
                 );
             }

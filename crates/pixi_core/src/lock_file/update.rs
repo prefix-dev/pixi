@@ -502,7 +502,8 @@ impl<'p> LockFileDerivedData<'p> {
                         LockedPackageRef::Pypi(data, _) => Either::Right(data.name.clone()),
                     });
 
-                let pixi_records = locked_packages_to_pixi_records(conda_packages)?;
+                let pixi_records =
+                    locked_packages_to_pixi_records(conda_packages, self.workspace.root())?;
 
                 let pypi_records = pypi_packages
                     .into_iter()
@@ -679,7 +680,7 @@ impl<'p> LockFileDerivedData<'p> {
                 } else {
                     Vec::new()
                 };
-                let records = locked_packages_to_pixi_records(packages)?;
+                let records = locked_packages_to_pixi_records(packages, self.workspace.root())?;
 
                 // Update the conda prefix
                 let CondaPrefixUpdated {
@@ -767,12 +768,13 @@ impl PackageFilterNames {
 
 fn locked_packages_to_pixi_records(
     conda_packages: Vec<LockedPackageRef<'_>>,
+    workspace_root: &std::path::Path,
 ) -> Result<Vec<PixiRecord>, Report> {
     let pixi_records = conda_packages
         .into_iter()
         .filter_map(LockedPackageRef::as_conda)
         .cloned()
-        .map(PixiRecord::try_from)
+        .map(|data| PixiRecord::from_conda_package_data(data, workspace_root))
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
     Ok(pixi_records)
@@ -1130,6 +1132,7 @@ impl<'p> UpdateContextBuilder<'p> {
 
         // Extract the current conda records from the lock-file
         // TODO: Should we parallelize this? Measure please.
+        let workspace_root = project.root();
         let locked_repodata_records = project
             .environments()
             .into_iter()
@@ -1143,7 +1146,7 @@ impl<'p> UpdateContextBuilder<'p> {
                             .map(|(platform, records)| {
                                 records
                                     .cloned()
-                                    .map(PixiRecord::try_from)
+                                    .map(|data| PixiRecord::from_conda_package_data(data, workspace_root))
                                     .collect::<Result<Vec<_>, _>>()
                                     .map(|records| {
                                         (platform, Arc::new(PixiRecordsByName::from_iter(records)))
@@ -1826,7 +1829,11 @@ impl<'p> UpdateContext<'p> {
             for platform in environment.platforms() {
                 if let Some(records) = self.take_latest_repodata_records(&environment, platform) {
                     for record in records.into_inner() {
-                        builder.add_conda_package(&environment_name, platform, record.into());
+                        builder.add_conda_package(
+                            &environment_name,
+                            platform,
+                            record.into_conda_package_data(project.root()),
+                        );
                     }
                 }
                 if let Some(records) = self.take_latest_pypi_records(&environment, platform) {

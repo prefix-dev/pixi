@@ -5297,6 +5297,7 @@ version = "0.1.0"
 dependencies = [
  "file_url",
  "miette 7.6.0",
+ "pathdiff",
  "pixi_git",
  "pixi_spec",
  "rattler_conda_types",
