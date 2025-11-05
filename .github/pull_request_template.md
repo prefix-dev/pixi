@@ -28,7 +28,6 @@ Fixes #{issue}
 - [ ] I have made corresponding changes to the documentation
 - [ ] I have added tests that prove my fix is effective or that my feature works, or that the bug can not reappear.
 - [ ] I have added relevant labels to the pull request.
-- [ ] I pinged relevant people for review, if applicable.
 - [ ] The PR title is descriptive enough to be part of the changelog on release. (use `chore:` if NA)
 
 ### AI Disclosure
