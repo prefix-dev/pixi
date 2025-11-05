@@ -1,4 +1,4 @@
-## Description
+### Description
 
 <!--- Please include a summary of the change and which issue is fixed. --->
 <!--- Please also include relevant motivation and context. -->
@@ -7,7 +7,7 @@
 
 Fixes #{issue}
 
-## Type of change
+### Type of change
 
 <!--- Please delete options that are not relevant. -->
 
@@ -17,12 +17,11 @@ Fixes #{issue}
 - [ ] Documentation update
 - [ ] Repository maintenance
 
-## How Has This Been Tested?
+### How Has This Been Tested?
 
 <!-- Please describe the tests that you ran to verify your changes. Provide instructions so we can reproduce while reviewing your changes. -->
 
-
-## Checklist:
+### Checklist:
 
 - [ ] I have performed a self-review of my own code
 - [ ] I have commented my code, particularly in hard-to-understand areas
@@ -32,7 +31,7 @@ Fixes #{issue}
 - [ ] I pinged relevant people for review, if applicable.
 - [ ] The PR title is descriptive enough to be part of the changelog on release.
 
-## AI Disclosure
+### AI Disclosure
 <!--- Remove this section if your PR does not contain AI-generated content. --->
 - [ ] This PR contains AI-generated content.
   - [ ] I have tested any AI-generated content in my PR.
