@@ -13,7 +13,7 @@ use std::{
     str::FromStr,
 };
 
-use builders::{LockBuilder, SearchBuilder};
+use builders::{BuildBuilder, LockBuilder, SearchBuilder};
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi_cli::LockFileUsageConfig;
@@ -21,7 +21,7 @@ use pixi_cli::cli_config::{
     ChannelsConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
 };
 use pixi_cli::{
-    add,
+    add, build,
     init::{self, GitAttributes},
     install::Args,
     lock, remove, run, search,
@@ -673,6 +673,26 @@ impl PixiControl {
                 no_install_config: NoInstallConfig { no_install: false },
                 check: false,
                 json: false,
+            },
+        }
+    }
+
+    /// Returns a [`BuildBuilder`]. To execute the command and await the result
+    /// call `.await` on the return value.
+    pub fn build(&self) -> BuildBuilder {
+        BuildBuilder {
+            args: build::Args {
+                project_config: WorkspaceConfig {
+                    manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
+                },
+                config_cli: Default::default(),
+                lock_and_install_config: Default::default(),
+                target_platform: rattler_conda_types::Platform::current(),
+                build_platform: rattler_conda_types::Platform::current(),
+                output_dir: PathBuf::from("."),
+                build_dir: None,
+                clean: false,
             },
         }
     }

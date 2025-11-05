@@ -20,7 +20,7 @@ use std::{env, io::IsTerminal};
 use tracing::level_filters::LevelFilter;
 
 pub mod add;
-mod build;
+pub mod build;
 pub mod clean;
 pub mod cli_config;
 pub mod cli_interface;
@@ -307,7 +307,7 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         EnvFilter::builder()
             .with_default_directive(level_filter.into())
             .parse(format!(
-                "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},resolvo={low_level_filter}"
+                "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}"
             ))
             .into_diagnostic()?
     } else {
@@ -315,7 +315,7 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         // Parse RUST_LOG because we need to set it other our other directives
         let env_directives = env::var("RUST_LOG").unwrap_or_default();
         let original_directives = format!(
-            "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},resolvo={low_level_filter}",
+            "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}",
         );
         // Concatenate both directives where the LOG overrides the potential original directives
         let final_directives = if env_directives.is_empty() {
