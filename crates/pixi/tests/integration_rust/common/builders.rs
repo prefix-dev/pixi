@@ -24,7 +24,7 @@
 //! ```
 
 use pixi_cli::{
-    add,
+    add, build,
     cli_config::{
         DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
     },
@@ -610,5 +610,20 @@ impl IntoFuture for LockBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         lock::execute(self.args).boxed_local()
+    }
+}
+
+/// Contains the arguments to pass to [`build::execute()`]. Call `.await` to call
+/// the CLI execute method and await the result at the same time.
+pub struct BuildBuilder {
+    pub args: build::Args,
+}
+
+impl IntoFuture for BuildBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        build::execute(self.args).boxed_local()
     }
 }
