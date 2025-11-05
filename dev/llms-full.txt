@@ -3951,7 +3951,7 @@ pixi.toml
 
 ```toml
 [tasks]
-echo = { cmd = "echo {{ ARGUMENT }}", args = [{"arg" = "ARGUMENT", "default" = "hello" }]}
+echo = { cmd = "echo {{ ARGUMENT }}", args = [{"arg" = "ARGUMENT", "default" = "hello" }] }
 
 ```
 
@@ -3968,7 +3968,7 @@ You can make sure the environment of a task is "Pixi only". Here Pixi will only 
 
 ```toml
 [tasks]
-clean_command = { cmd = "python run_in_isolated_env.py", clean-env = true}
+clean_command = { cmd = "python run_in_isolated_env.py", clean-env = true }
 
 ```
 
