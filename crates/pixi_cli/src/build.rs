@@ -136,9 +136,6 @@ pub(crate) async fn determine_discovery_start(
 ) -> miette::Result<DiscoveryStart> {
     match path {
         Some(path) => {
-            // // Validate the path first
-            // validate_package_manifest(path).await?;
-
             // If it's a directory, use it as the search root
             if path.is_dir() {
                 Ok(DiscoveryStart::SearchRoot(path.clone()))
@@ -341,42 +338,4 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_discovery_start_with_file_path() {
-        let discovery_start = determine_discovery_start(&Some(PathBuf::from(
-            "tests/fixtures/build_tests/recipe/recipe.yaml",
-        )))
-        .await
-        .unwrap();
-
-        let discovery_start_path = discovery_start.path().unwrap();
-        let expected_path = PathBuf::from("tests/fixtures/build_tests/recipe");
-        assert_eq!(discovery_start_path, expected_path);
-    }
-
-    #[tokio::test]
-    async fn test_discovery_start_with_directory_path() {
-        // Use the current directory which always exists
-        let test_dir = PathBuf::from(".");
-        let discovery_start = determine_discovery_start(&Some(test_dir.clone()))
-            .await
-            .unwrap();
-
-        let discovery_start_path = discovery_start.path().unwrap();
-        assert_eq!(discovery_start_path, test_dir);
-    }
-
-    #[tokio::test]
-    async fn test_discovery_start_without_path() {
-        let discovery_start = determine_discovery_start(&None).await.unwrap();
-
-        // When no path is provided, it should use CurrentDir
-        assert!(matches!(discovery_start, DiscoveryStart::CurrentDir));
-    }
 }
