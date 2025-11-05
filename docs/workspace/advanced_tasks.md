@@ -364,7 +364,7 @@ Notes on environment variables in tasks:
 
     ```toml title="pixi.toml"
     [tasks]
-    echo = { cmd = "echo {{ ARGUMENT }}", args = [{"arg" = "ARGUMENT", "default" = "hello" }]}
+    echo = { cmd = "echo {{ ARGUMENT }}", args = [{"arg" = "ARGUMENT", "default" = "hello" }] }
     ```
 
     ```shell
@@ -382,7 +382,7 @@ It will however include some default values from the shell, like:
 
 ```toml
 [tasks]
-clean_command = { cmd = "python run_in_isolated_env.py", clean-env = true}
+clean_command = { cmd = "python run_in_isolated_env.py", clean-env = true }
 ```
 This setting can also be set from the command line with `pixi run --clean-env TASK_NAME`.
 
