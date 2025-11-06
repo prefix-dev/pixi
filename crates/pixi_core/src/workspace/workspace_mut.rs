@@ -314,7 +314,11 @@ impl WorkspaceMut {
             return Ok(None);
         }
 
-        let original_lock_file = self.workspace().load_lock_file().await?.into_lock_file_or_empty_with_warning();
+        let original_lock_file = self
+            .workspace()
+            .load_lock_file()
+            .await?
+            .into_lock_file_or_empty_with_warning();
         let affected_environments = self
             .workspace()
             .environments()

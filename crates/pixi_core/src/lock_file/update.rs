@@ -116,7 +116,8 @@ impl LockFileLoadResult {
                 max_supported_version,
             } => {
                 #[cfg(feature = "self_update")]
-                let update_instruction = "Try running `pixi self-update` to update to the latest version.";
+                let update_instruction =
+                    "Try running `pixi self-update` to update to the latest version.";
                 #[cfg(not(feature = "self_update"))]
                 let update_instruction = "Please update pixi to the latest version and try again.";
 
@@ -130,7 +131,8 @@ impl LockFileLoadResult {
                 Err(LockFileVersionMismatchError {
                     lock_file_version,
                     help_message,
-                }.into())
+                }
+                .into())
             }
         }
     }
@@ -172,7 +174,8 @@ impl LockFileLoadResult {
             } => {
                 // Display a prominent warning about the version mismatch
                 #[cfg(feature = "self_update")]
-                let update_instruction = "Consider running `pixi self-update` to update to the latest version.";
+                let update_instruction =
+                    "Consider running `pixi self-update` to update to the latest version.";
                 #[cfg(not(feature = "self_update"))]
                 let update_instruction = "Consider updating pixi to the latest version.";
 
@@ -219,35 +222,36 @@ impl Workspace {
         let lock_file_result = self.load_lock_file().await?;
 
         // Handle version mismatch - error if --locked or --frozen is set
-        if lock_file_result.is_version_mismatch() {
-            if options.lock_file_usage == LockFileUsage::Locked
-                || options.lock_file_usage == LockFileUsage::Frozen
+        if lock_file_result.is_version_mismatch()
+            && (options.lock_file_usage == LockFileUsage::Locked
+                || options.lock_file_usage == LockFileUsage::Frozen)
+        {
+            // Extract the version info for the error message
+            if let LockFileLoadResult::VersionMismatch {
+                lock_file_version,
+                max_supported_version,
+            } = lock_file_result
             {
-                // Extract the version info for the error message
-                if let LockFileLoadResult::VersionMismatch {
-                    lock_file_version,
-                    max_supported_version,
-                } = lock_file_result
-                {
-                    #[cfg(feature = "self_update")]
-                    let update_instruction = "Try running `pixi self-update` to update to the latest version.";
-                    #[cfg(not(feature = "self_update"))]
-                    let update_instruction = "Please update pixi to the latest version and try again.";
+                #[cfg(feature = "self_update")]
+                let update_instruction =
+                    "Try running `pixi self-update` to update to the latest version.";
+                #[cfg(not(feature = "self_update"))]
+                let update_instruction = "Please update pixi to the latest version and try again.";
 
-                    let help_message = format!(
-                        "Maximum supported version: {} (pixi v{})\n\
+                let help_message = format!(
+                    "Maximum supported version: {} (pixi v{})\n\
                          Cannot continue with --locked or --frozen mode as the lock-file cannot be read.\n\
                          {}",
-                        max_supported_version,
-                        consts::PIXI_VERSION,
-                        update_instruction
-                    );
+                    max_supported_version,
+                    consts::PIXI_VERSION,
+                    update_instruction
+                );
 
-                    return Err(LockFileVersionMismatchError {
-                        lock_file_version,
-                        help_message,
-                    }.into());
+                return Err(LockFileVersionMismatchError {
+                    lock_file_version,
+                    help_message,
                 }
+                .into());
             }
         }
 
@@ -361,12 +365,13 @@ impl Workspace {
                 LockFile::from_path(&lock_file_path)
                     .map(LockFileLoadResult::Loaded)
                     .or_else(|err| match err {
-                        ParseCondaLockError::IncompatibleVersion { lock_file_version, max_supported_version } => {
-                            Ok(LockFileLoadResult::VersionMismatch {
-                                lock_file_version,
-                                max_supported_version,
-                            })
-                        }
+                        ParseCondaLockError::IncompatibleVersion {
+                            lock_file_version,
+                            max_supported_version,
+                        } => Ok(LockFileLoadResult::VersionMismatch {
+                            lock_file_version,
+                            max_supported_version,
+                        }),
                         _ => Err(miette::miette!(err)),
                     })
                     .wrap_err_with(|| {
@@ -376,8 +381,8 @@ impl Workspace {
                         )
                     })
             })
-                .await
-                .unwrap_or_else(|e| Err(e).into_diagnostic())
+            .await
+            .unwrap_or_else(|e| Err(e).into_diagnostic())
         } else {
             Ok(LockFileLoadResult::Loaded(LockFile::default()))
         }

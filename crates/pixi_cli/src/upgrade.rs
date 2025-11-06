@@ -141,7 +141,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let lock_file_usage = args.lock_file_update_config.lock_file_usage()?;
 
     // Capture original lock-file for combined JSON output (non-dry-run).
-    let original_lock_file = workspace.workspace().load_lock_file().await?.into_lock_file_or_empty_with_warning();
+    let original_lock_file = workspace
+        .workspace()
+        .load_lock_file()
+        .await?
+        .into_lock_file_or_empty_with_warning();
 
     let mut printed_any = false;
 
@@ -233,7 +237,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // Reload the resulting lock-file and compute a combined diff against the original.
             // Use the silent version here since we already warned on the first load (line 144).
             let saved_workspace = workspace.save().await.into_diagnostic()?;
-            let updated_lock_file = saved_workspace.load_lock_file().await?.into_lock_file_or_empty();
+            let updated_lock_file = saved_workspace
+                .load_lock_file()
+                .await?
+                .into_lock_file_or_empty();
             let diff = LockFileDiff::from_lock_files(&original_lock_file, &updated_lock_file);
             let json_diff = LockFileJsonDiff::new(Some(saved_workspace.named_environments()), diff);
             let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
