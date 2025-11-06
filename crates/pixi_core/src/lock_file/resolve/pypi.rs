@@ -690,7 +690,7 @@ pub async fn resolve_pypi(
         .await
         .into_diagnostic()
         .map_err(|e| SolveError::GeneralPanic {
-            message: format!("Failed to do lookahead resolution: {e}"),
+            message: format!("Failed to do lookahead resolution: {e:?}"),
         })?;
 
         // Move manifest and provider setup inside catch_unwind
