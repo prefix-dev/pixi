@@ -691,7 +691,7 @@ impl PixiControl {
                 output_dir: PathBuf::from("."),
                 build_dir: None,
                 clean: false,
-                path: None,
+                path: Some(self.manifest_path()),
             },
         }
     }
