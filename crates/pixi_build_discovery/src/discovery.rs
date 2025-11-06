@@ -118,6 +118,9 @@ pub enum DiscoveryError {
         "Ensure that the source directory contains a valid pixi.toml, pyproject.toml, recipe.yaml, package.xml or mojoproject.toml file."
     ))]
     FailedToDiscover(String),
+
+    #[error("the manifest path '{0}', does not have a parent directory")]
+    NoParentDir(PathBuf),
 }
 
 impl DiscoveredBackend {
@@ -367,18 +370,23 @@ impl DiscoveredBackend {
 
         let channels = retrieve_channels(&source_dir, channel_config)?;
 
-        dbg!(Ok(Self {
+        Ok(Self {
             backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_ros_build(channels)),
             init_params: BackendInitializationParams {
                 workspace_root: source_dir.clone(),
                 build_source: None,
                 source_anchor: source_dir,
-                manifest_path: package_xml_absolute_path,
+                manifest_path: package_xml_absolute_path
+                    .parent()
+                    .ok_or(DiscoveryError::NoParentDir(
+                        package_xml_absolute_path.clone(),
+                    ))?
+                    .to_path_buf(),
                 project_model: Some(ProjectModelV1::default()),
                 configuration: None,
                 target_configuration: None,
             },
-        }))
+        })
     }
 }
 

@@ -137,11 +137,33 @@ pub(crate) async fn determine_discovery_start(
     match path {
         Some(path) => {
             // If it's a directory, use it as the search root
-            if path.is_dir() {
-                Ok(DiscoveryStart::SearchRoot(path.clone()))
+            // if path.is_dir() {
+            //     Ok(DiscoveryStart::SearchRoot(path.clone()))
+            // } else {
+            //     // If it's a file, use its parent directory as the search root
+            //     let package_dir = path.parent().ok_or_else(|| {
+            //         miette::miette!("Failed to get parent directory of package manifest")
+            //     })?;
+            //     Ok(DiscoveryStart::SearchRoot(package_dir.to_path_buf()))
+            // }
+
+            // We need to solve the path to an absolute path
+            // because we can point to specific package manifest file
+            // but still want to discover the workspace from the package location.
+            // For this, we need to take the parent directory of the package manifest file
+            // which `WorkspaceLocator` will use to discover the workspace.
+            let resolved_path = if path.is_relative() {
+                std::env::current_dir().into_diagnostic()?.join(path)
+            } else {
+                path.to_path_buf()
+            };
+
+            // If it's a directory, use it as the search root
+            if resolved_path.is_dir() {
+                Ok(DiscoveryStart::SearchRoot(resolved_path))
             } else {
                 // If it's a file, use its parent directory as the search root
-                let package_dir = path.parent().ok_or_else(|| {
+                let package_dir = resolved_path.parent().ok_or_else(|| {
                     miette::miette!("Failed to get parent directory of package manifest")
                 })?;
                 Ok(DiscoveryStart::SearchRoot(package_dir.to_path_buf()))
@@ -158,11 +180,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // to the path's directory, not the current working directory.
     let workspace_locator = determine_discovery_start(&args.path).await?;
 
+    eprintln!("starting to locate");
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_locator.clone())
         .with_closest_package(false)
         .locate()?
         .with_cli_config(args.config_cli);
+
+    eprintln!("located");
 
     // Construct a command dispatcher based on the workspace.
     let multi_progress = global_multi_progress();
@@ -230,22 +255,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )
         })?;
 
-    // Determine the directory that contains the manifest.
-    let package_manifest_canonical_dir = if package_manifest_path_canonical.is_file() {
-        package_manifest_path_canonical.parent().ok_or_else(|| {
-            miette::miette!(
-                "explicit manifest path: {} doesn't have a parent",
-                package_manifest_path_canonical.display()
-            )
-        })?
-    } else {
-        package_manifest_path_canonical.as_path()
-    };
-
     // Store the manifest directory relative to the workspace root when possible to
     // keep the pinned path relocatable and avoid double-prefixing during resolution.
-    let manifest_dir_spec = pathdiff::diff_paths(package_manifest_canonical_dir, workspace.root())
-        .unwrap_or_else(|| package_manifest_canonical_dir.to_path_buf());
+    let manifest_path_spec =
+        pathdiff::diff_paths(&package_manifest_path_canonical, workspace.root())
+            .unwrap_or_else(|| package_manifest_path_canonical.to_path_buf());
 
     let channel_config = workspace.channel_config();
     let channels = workspace
@@ -254,7 +268,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()?;
 
     let manifest_source: PinnedSourceSpec = PinnedPathSpec {
-        path: manifest_dir_spec.to_string_lossy().into_owned().into(),
+        path: manifest_path_spec.to_string_lossy().into_owned().into(),
     }
     .into();
 
