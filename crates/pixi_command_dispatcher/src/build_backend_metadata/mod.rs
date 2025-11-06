@@ -135,11 +135,12 @@ impl BuildBackendMetadataSpec {
         // Determine the location of the source to build from.
         let manifest_source_anchor =
             SourceAnchor::from(SourceSpec::from(self.manifest_source.clone()));
+        // `build_source` is still relative to the `manifest_source`
         let build_source_checkout = match &discovered_backend.init_params.build_source {
             None => None,
-            Some(spec) => {
+            Some(build_source) => {
                 // An out of tree source is provided. Resolve it against the manifest source.
-                let resolved_location = manifest_source_anchor.resolve(spec.clone());
+                let resolved_location = manifest_source_anchor.resolve(build_source.clone());
                 let resolved_source_build_spec = SourceSpec {
                     location: resolved_location.clone(),
                 };

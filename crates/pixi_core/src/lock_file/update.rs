@@ -1146,7 +1146,9 @@ impl<'p> UpdateContextBuilder<'p> {
                             .map(|(platform, records)| {
                                 records
                                     .cloned()
-                                    .map(|data| PixiRecord::from_conda_package_data(data, workspace_root))
+                                    .map(|data| {
+                                        PixiRecord::from_conda_package_data(data, workspace_root)
+                                    })
                                     .collect::<Result<Vec<_>, _>>()
                                     .map(|records| {
                                         (platform, Arc::new(PixiRecordsByName::from_iter(records)))

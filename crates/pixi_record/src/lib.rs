@@ -40,10 +40,7 @@ impl PixiRecord {
 
     /// Convert to CondaPackageData with paths made relative to workspace_root.
     /// This should be used when writing to the lock file.
-    pub fn into_conda_package_data(
-        self,
-        workspace_root: &std::path::Path,
-    ) -> CondaPackageData {
+    pub fn into_conda_package_data(self, workspace_root: &std::path::Path) -> CondaPackageData {
         match self {
             PixiRecord::Binary(record) => record.into(),
             PixiRecord::Source(record) => {

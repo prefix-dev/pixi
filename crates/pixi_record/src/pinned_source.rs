@@ -223,18 +223,18 @@ impl PinnedSourceSpec {
     ///
     /// # Arguments
     /// * `base` - The base pinned source to make this path relative to (typically the manifest_source)
-    pub fn make_relative_to(&self, base: &PinnedSourceSpec) -> Option<Self> {
-        use pixi_git::url::RepositoryUrl;
-        use typed_path::{Utf8Component, Utf8UnixPath};
-
+    pub fn make_relative_to(&self, base: &PinnedSourceSpec, workspace_root: &Path) -> Option<Self> {
         match (self, base) {
             // Path-to-Path: Make the path relative
             (PinnedSourceSpec::Path(this_path), PinnedSourceSpec::Path(base_path)) => {
-                // Base path is a directory (not a file path)
-                // Create a temporary Path for the base directory
-                let base_dir = Path::new(base_path.path.as_str());
+                let this_path = this_path.resolve(workspace_root);
+                let base_path = base_path.resolve(workspace_root);
 
-                Some(PinnedSourceSpec::Path(this_path.make_relative_to(base_dir)))
+                let relative_path = pathdiff::diff_paths(this_path, base_path)?;
+
+                Some(PinnedSourceSpec::Path(PinnedPathSpec {
+                    path: Utf8TypedPathBuf::from(relative_path.to_string_lossy().as_ref()),
+                }))
             }
             // Git-to-Git: If same repository, convert to a relative path based on subdirectories
             (PinnedSourceSpec::Git(this_git), PinnedSourceSpec::Git(base_git)) => {
@@ -247,58 +247,30 @@ impl PinnedSourceSpec {
                     return None;
                 }
 
-                // Same repository - compute relative path between subdirectories
-                let base_subdir = base_git.source.subdirectory.as_deref().unwrap_or("");
-                let this_subdir = this_git.source.subdirectory.as_deref().unwrap_or("");
-
-                // If both point to the same subdirectory, don't relativize (keep as Git)
-                if base_subdir == this_subdir {
+                if this_git.source.commit != base_git.source.commit {
                     return None;
                 }
 
-                // Always use Unix-style paths for Git subdirectories
-                let base_unix = Utf8UnixPath::new(base_subdir);
-                let this_unix = Utf8UnixPath::new(this_subdir);
+                // bas = { git = "ssh@tim", subdir = "baz" }
+                //
+                // [package.build]
+                // source = foo/bar
+                //
 
-                // Try to compute relative path
-                if let Ok(rel) = this_unix.strip_prefix(base_unix) {
-                    // this_subdir is under base_subdir
-                    Some(PinnedSourceSpec::Path(PinnedPathSpec {
-                        path: rel.as_str().into(),
-                    }))
-                } else {
-                    // Need to compute relative path using .. components
-                    let base_components: Vec<_> = base_unix.components().collect();
-                    let this_components: Vec<_> = this_unix.components().collect();
+                // Same repository - compute relative path between subdirectories
+                //  baz
+                let base_subdir = base_git.source.subdirectory.as_deref().unwrap_or("");
+                // baz/foo/bar
+                let this_subdir = this_git.source.subdirectory.as_deref().unwrap_or("");
 
-                    // Find common prefix
-                    let common = base_components
-                        .iter()
-                        .zip(this_components.iter())
-                        .take_while(|(a, b)| a == b)
-                        .count();
-
-                    // Build relative path: go up from base, then down to target
-                    let ups = base_components.len() - common;
-                    let mut rel_path = String::new();
-                    for _ in 0..ups {
-                        if !rel_path.is_empty() {
-                            rel_path.push('/');
-                        }
-                        rel_path.push_str("..");
-                    }
-                    for comp in &this_components[common..] {
-                        if !rel_path.is_empty() {
-                            rel_path.push('/');
-                        }
-                        rel_path.push_str(comp.as_str());
-                    }
-
-                    Some(PinnedSourceSpec::Path(PinnedPathSpec {
-                        path: rel_path.into(),
-                    }))
-                }
+                //foo/bar
+                let relative_path = pathdiff::diff_paths(this_subdir, base_subdir)?;
+                Some(PinnedSourceSpec::Path(PinnedPathSpec {
+                    path: Utf8TypedPathBuf::from(relative_path.to_string_lossy().as_ref()),
+                }))
             }
+            (PinnedSourceSpec::Url(_), _) => unreachable!("url specs have not been implemented"),
+            (_, PinnedSourceSpec::Url(_)) => unreachable!("url specs have not been implemented"),
             // Different types or incompatible sources
             _ => None,
         }
@@ -546,111 +518,12 @@ pub struct PinnedPathSpec {
 
 impl PinnedPathSpec {
     /// Resolves the path to an absolute path.
-    pub fn resolve(&self, project_root: &Path) -> PathBuf {
+    pub fn resolve(&self, workspace_root: &Path) -> PathBuf {
         let native_path = Path::new(self.path.as_str());
         if native_path.is_absolute() {
             native_path.to_path_buf()
         } else {
-            project_root.join(native_path)
-        }
-    }
-
-    /// Makes this path relative to another path if possible.
-    /// If the path is already relative or cannot be made relative, returns self unchanged.
-    ///
-    /// # Arguments
-    /// * `base` - The base path to make this path relative to
-    pub fn make_relative_to(&self, base: &Path) -> Self {
-        use typed_path::{Utf8Component, Utf8UnixPath, Utf8WindowsPath};
-
-        // Check if the path is already relative
-        let is_relative = if self.path.as_str().starts_with('/') {
-            // Unix absolute path
-            false
-        } else if self.path.as_str().len() >= 2 && self.path.as_str().chars().nth(1) == Some(':') {
-            // Windows absolute path (C:\...)
-            false
-        } else {
-            // Relative path
-            true
-        };
-
-        if is_relative {
-            return self.clone();
-        }
-
-        // Convert base to string for comparison
-        let base_str = base.to_string_lossy();
-
-        // Determine if we're working with Unix or Windows paths
-        let is_unix_style = self.path.as_str().starts_with('/');
-
-        if is_unix_style {
-            // Use Unix path logic
-            let this_unix = Utf8UnixPath::new(self.path.as_str());
-            let base_unix = Utf8UnixPath::new(&base_str);
-
-            if let Ok(rel) = this_unix.strip_prefix(base_unix) {
-                Self {
-                    path: rel.as_str().into(),
-                }
-            } else {
-                // Try using pathdiff for more complex relativization
-                let this_components: Vec<_> = this_unix.components().collect();
-                let base_components: Vec<_> = base_unix.components().collect();
-
-                // Find common prefix
-                let common = this_components
-                    .iter()
-                    .zip(base_components.iter())
-                    .take_while(|(a, b)| a == b)
-                    .count();
-
-                if common == 0 {
-                    // No common prefix, keep absolute
-                    return self.clone();
-                }
-
-                // Build relative path: go up from base, then down to target
-                let ups = base_components.len() - common;
-                let mut rel_path = String::new();
-                for _ in 0..ups {
-                    if !rel_path.is_empty() {
-                        rel_path.push('/');
-                    }
-                    rel_path.push_str("..");
-                }
-                for comp in &this_components[common..] {
-                    if !rel_path.is_empty() {
-                        rel_path.push('/');
-                    }
-                    rel_path.push_str(comp.as_str());
-                }
-
-                Self {
-                    path: rel_path.into(),
-                }
-            }
-        } else {
-            // Use Windows path logic
-            let this_windows = Utf8WindowsPath::new(self.path.as_str());
-            let base_windows = Utf8WindowsPath::new(&base_str);
-
-            if let Ok(rel) = this_windows.strip_prefix(base_windows) {
-                Self {
-                    path: rel.as_str().into(),
-                }
-            } else {
-                // For Windows, fall back to pathdiff with native paths
-                let native_path = Path::new(self.path.as_str());
-                if let Some(relative_path) = pathdiff::diff_paths(native_path, base) {
-                    Self {
-                        path: relative_path.to_string_lossy().to_string().into(),
-                    }
-                } else {
-                    self.clone()
-                }
-            }
+            workspace_root.join(native_path)
         }
     }
 
@@ -1623,6 +1496,96 @@ mod tests {
 
             // Should match - GitHub URLs are case-insensitive
             assert!(pinned.matches_source_spec(&spec));
+        }
+    }
+
+    mod make_relative_to {
+        use std::path::Path;
+
+        use crate::{PinnedPathSpec, PinnedSourceSpec};
+
+        #[test]
+        fn test_relative_to_relative() {
+            // Both paths are relative - after resolution they become absolute, then relative path is computed
+            let workspace_root = Path::new("/workspace");
+
+            let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
+                path: "foo/bar".into(),
+            });
+            let base_spec = PinnedSourceSpec::Path(PinnedPathSpec { path: "foo".into() });
+
+            let result = this_spec.make_relative_to(&base_spec, workspace_root);
+
+            // Both resolve to /workspace/foo/bar and /workspace/foo
+            // Relative path should be "bar"
+            let PinnedSourceSpec::Path(path) = result.expect("Should return Some") else {
+                panic!("Expected Path variant");
+            };
+            assert_eq!(path.path.as_str(), "bar");
+        }
+
+        #[test]
+        fn test_absolute_to_absolute() {
+            // Both paths are absolute
+            let workspace_root = Path::new("/workspace");
+
+            let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
+                path: "/foo/bar/baz".into(),
+            });
+            let base_spec = PinnedSourceSpec::Path(PinnedPathSpec {
+                path: "/foo/bar".into(),
+            });
+
+            let result = this_spec.make_relative_to(&base_spec, workspace_root);
+
+            // Should compute relative path
+            let PinnedSourceSpec::Path(path) = result.expect("Should return Some") else {
+                panic!("Expected Path variant");
+            };
+            assert_eq!(path.path.as_str(), "baz");
+        }
+
+        #[test]
+        fn test_relative_to_absolute() {
+            // Self is relative, base is absolute - after resolution they're both absolute
+            let workspace_root = Path::new("/workspace");
+
+            let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
+                path: "foo/bar".into(), // Resolves to /workspace/foo/bar
+            });
+            let base_spec = PinnedSourceSpec::Path(PinnedPathSpec {
+                path: "/other/path".into(), // Already absolute
+            });
+
+            let result = this_spec.make_relative_to(&base_spec, workspace_root);
+
+            // Both are absolute after resolution, pathdiff should compute relative path
+            let PinnedSourceSpec::Path(path) = result.expect("Should return Some") else {
+                panic!("Expected Path variant");
+            };
+            // From /other/path to /workspace/foo/bar
+            assert_eq!(path.path.as_str(), "../../workspace/foo/bar");
+        }
+
+        #[test]
+        fn test_absolute_with_parent_navigation() {
+            // Test paths that require .. navigation
+            let workspace_root = Path::new("/workspace");
+
+            let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
+                path: "/foo/bar/qux".into(),
+            });
+            let base_spec = PinnedSourceSpec::Path(PinnedPathSpec {
+                path: "/foo/baz/quux".into(),
+            });
+
+            let result = this_spec.make_relative_to(&base_spec, workspace_root);
+
+            let PinnedSourceSpec::Path(path) = result.expect("Should return Some") else {
+                panic!("Expected Path variant");
+            };
+            // From /foo/baz/quux to /foo/bar/qux requires ../../bar/qux
+            assert_eq!(path.path.as_str(), "../../bar/qux");
         }
     }
 }

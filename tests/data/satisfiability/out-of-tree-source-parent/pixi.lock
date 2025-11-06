@@ -11,7 +11,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/libgcc-15.2.0-h767d61c_7.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libgomp-15.2.0-h767d61c_7.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libstdcxx-15.2.0-h8f9b012_7.conda
-      - conda: build-config
+      - conda: ./package
 packages:
 - conda: https://prefix.dev/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
   sha256: fe51de6107f9edc7aa4f786a70f4a883943bc9d39b3bb7307c04c41410990726
@@ -66,7 +66,7 @@ packages:
   license_family: GPL
   size: 3898269
   timestamp: 1759968103436
-- conda: build-config
+- conda: ./package
   name: out-of-tree-package
   version: 0.1.0
   build: hb0f4dca_0
@@ -78,4 +78,4 @@ packages:
     hash: 616e7d8611fa803e6655c354f183d6f4b405e94adcabc83c260d8b9da5e3c9d8
     globs: []
   package_build_source:
-    path: ../source-files
+    path: ..

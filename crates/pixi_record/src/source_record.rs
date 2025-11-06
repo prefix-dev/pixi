@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeSet, HashMap},
+    path::Path,
     str::FromStr,
 };
 
@@ -24,7 +25,8 @@ pub struct SourceRecord {
     pub manifest_source: PinnedSourceSpec,
 
     /// The optional pinned source where the build should be executed
-    /// This is used when the manifest is not in the same location ad
+    /// This is used when the manifest is not in the same location as the
+    /// source files.
     pub build_source: Option<PinnedSourceSpec>,
 
     /// The hash of the input that was used to build the metadata of the
@@ -56,21 +58,17 @@ pub struct InputHash {
 }
 
 impl SourceRecord {
-    /// Convert to CondaSourceData with paths made relative to workspace_root.
+    /// Convert [`SourceRecord`] into lock-file compatible `CondaSourceData`
+    /// The `build_source` in the SourceRecord is always relative to the workspace.
+    /// However, when saving in the lock-file make these relative to the package manifest.
     /// This should be used when writing to the lock file.
-    ///
-    /// TODO: Currently this doesn't use workspace_root and just makes build_source
-    /// relative to manifest_source. Future implementation should make both relative
-    /// to workspace_root first.
-    pub fn into_conda_source_data(
-        self,
-        _workspace_root: &std::path::Path,
-    ) -> CondaSourceData {
-        let package_build_source = self.build_source.map(|s| {
-            // Try to make build_source relative to manifest_source
-            let s = s.make_relative_to(&self.manifest_source).unwrap_or(s);
+    pub fn into_conda_source_data(self, workspace_root: &Path) -> CondaSourceData {
+        let package_build_source = self.build_source.map(|build_source| {
+            let pinned_source_spec = build_source
+                .make_relative_to(&self.manifest_source, workspace_root)
+                .unwrap_or(build_source);
 
-            match s {
+            match pinned_source_spec {
                 PinnedSourceSpec::Url(pinned_url_spec) => PackageBuildSource::Url {
                     url: pinned_url_spec.url,
                     sha256: pinned_url_spec.sha256,
@@ -124,17 +122,16 @@ impl SourceRecord {
     /// Create SourceRecord from CondaSourceData with paths resolved relative to workspace_root.
     /// This should be used when reading from the lock file.
     ///
-    /// TODO: Currently this doesn't use workspace_root and just resolves build_source
-    /// relative to manifest_source. Future implementation should resolve both against
-    /// workspace_root first.
+    /// The inverse of `into_conda_source_data`:
+    /// - manifest_source: relative to workspace_root (or absolute) → resolve to absolute
+    /// - build_source: relative to manifest_source (or absolute) → resolve to absolute
     pub fn from_conda_source_data(
         data: CondaSourceData,
-        _workspace_root: &std::path::Path,
+        workspace_root: &std::path::Path,
     ) -> Result<Self, ParseLockFileError> {
-
         let manifest_source: PinnedSourceSpec = data.location.try_into()?;
 
-        let pinned_source_spec = data.package_build_source.map(|source| match source {
+        let build_source = data.package_build_source.map(|source| match source {
             PackageBuildSource::Git {
                 url,
                 spec,
@@ -148,6 +145,7 @@ impl SourceRecord {
                     None => GitReference::DefaultBranch,
                 };
 
+                // Out-of-tree git repository
                 PinnedSourceSpec::Git(crate::PinnedGitSpec {
                     git: url,
                     source: PinnedGitCheckout {
@@ -167,9 +165,53 @@ impl SourceRecord {
                 md5: None,
             }),
             PackageBuildSource::Path { path } => {
-                // Keep paths as-is from the lock file
-                // They will be resolved later by the code that uses them
-                PinnedSourceSpec::Path(crate::PinnedPathSpec { path })
+                if path.is_absolute() {
+                    crate::PinnedSourceSpec::Path(crate::PinnedPathSpec { path })
+                } else {
+                    match &manifest_source {
+                        PinnedSourceSpec::Url(_) => unimplemented!(),
+                        PinnedSourceSpec::Git(pinned_git_spec) => {
+                            let base_dir = pinned_git_spec.source.subdirectory.as_ref();
+                            // Make `path` relative to repository root, if `base` is not None it will
+                            // be relative with `base` at this point, so lets join
+                            let subdir =
+                                base_dir.map(|base| Path::new(base).join(Path::new(path.as_str())));
+
+                            let mut git_source = pinned_git_spec.source.clone();
+                            git_source.subdirectory =
+                                subdir.map(|p| p.to_string_lossy().to_string());
+
+                            // Reconstruct the git object
+                            PinnedSourceSpec::Git(crate::PinnedGitSpec {
+                                git: pinned_git_spec.git.clone(),
+                                source: git_source,
+                            })
+                        }
+                        PinnedSourceSpec::Path(manifest_path) => {
+                            // path is relative to manifest_source (or absolute) in the lock file
+                            // We need to make it relative to workspace_root (or keep it absolute)
+                            let build_source_spec = crate::PinnedPathSpec { path };
+
+                            // If path is relative, it's relative to manifest_source
+                            // First resolve manifest_source against workspace_root
+                            // Then resolve path against the resolved manifest_source
+                            // Finally make the result relative to workspace_root
+                            let manifest_absolute = manifest_path.resolve(workspace_root);
+                            let build_absolute = build_source_spec.resolve(&manifest_absolute);
+
+                            // Make the normalized path relative to workspace_root
+                            let relative_to_workspace =
+                                pathdiff::diff_paths(&build_absolute, workspace_root)
+                                    .unwrap_or_else(|| build_absolute);
+
+                            PinnedSourceSpec::Path(crate::PinnedPathSpec {
+                                path: Utf8TypedPathBuf::from(
+                                    relative_to_workspace.to_string_lossy().as_ref(),
+                                ),
+                            })
+                        }
+                    }
+                }
             }
         });
 
@@ -180,7 +222,7 @@ impl SourceRecord {
                 hash: hash.hash,
                 globs: BTreeSet::from_iter(hash.globs),
             }),
-            build_source: pinned_source_spec,
+            build_source,
             sources: data
                 .sources
                 .into_iter()
@@ -497,7 +539,9 @@ mod tests {
         .expect("roundtrip should succeed");
 
         let Some(PinnedSourceSpec::Path(roundtrip_path)) = roundtrip.build_source else {
-            panic!("expected path pinned source after roundtrip (deserialized from relative path in lock file)");
+            panic!(
+                "expected path pinned source after roundtrip (deserialized from relative path in lock file)"
+            );
         };
 
         // After roundtrip, it should remain as the relative path from the lock file

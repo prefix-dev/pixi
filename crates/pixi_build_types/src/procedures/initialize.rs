@@ -27,14 +27,14 @@ pub const METHOD_NAME: &str = "initialize";
 pub struct InitializeParams {
     /// The manifest that the build backend should use.
     ///
-    /// This is an absolute path.
+    /// This is an absolute path to a manifest file.
     pub manifest_path: PathBuf,
 
     /// The root directory of the source code that the build backend should use.
     /// If this is `None`, the backend should use the directory of the
     /// `manifest_path` as the source directory.
     ///
-    /// This is an absolute path.
+    /// This is an absolute path. This is always a directory.
     pub source_dir: Option<PathBuf>,
 
     /// The root directory of the workspace.
