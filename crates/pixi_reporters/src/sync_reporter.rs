@@ -12,7 +12,9 @@ use pixi_command_dispatcher::{
 use pixi_progress::ProgressBarPlacement;
 use rattler::{install::Transaction, package_cache::CacheReporter};
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
+use serde_json::Value;
 use tokio::sync::mpsc::UnboundedReceiver;
+use tracing::Level;
 
 use crate::{
     download_verify_reporter::BuildDownloadVerifyReporter,
@@ -38,6 +40,51 @@ impl SyncReporter {
             multi_progress,
             combined_inner,
         }
+    }
+
+    fn parse_backend_log(line: &str) -> Option<ParsedBackendLog> {
+        let value: Value = serde_json::from_str(line).ok()?;
+        let level_str = value.get("level")?.as_str()?;
+        let level = match level_str {
+            "TRACE" => Level::TRACE,
+            "DEBUG" => Level::DEBUG,
+            "INFO" => Level::INFO,
+            "WARN" => Level::WARN,
+            "ERROR" => Level::ERROR,
+            _ => return None,
+        };
+
+        let target = value
+            .get("target")
+            .and_then(Value::as_str)
+            .map(|s| s.to_owned());
+
+        let message = value
+            .get("fields")
+            .and_then(|fields| {
+                if let Some(msg) = fields.get("message").and_then(Value::as_str) {
+                    (!msg.is_empty()).then(|| msg.to_owned())
+                } else if let Some(obj) = fields.as_object() {
+                    (!obj.is_empty()).then(|| fields.to_string())
+                } else if let Some(text) = fields.as_str() {
+                    (!text.is_empty()).then(|| text.to_owned())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| line.to_owned());
+
+        Some(ParsedBackendLog {
+            level,
+            target,
+            message,
+        })
+    }
+
+    fn format_backend_line(line: &str) -> String {
+        Self::parse_backend_log(line)
+            .map(|log| log.format())
+            .unwrap_or_else(|| line.to_owned())
     }
 
     pub fn clear(&mut self) {
@@ -107,15 +154,20 @@ impl BackendSourceBuildReporter for SyncReporter {
 
         tokio::spawn(async move {
             while let Some(line) = backend_output_stream.next().await {
-                if print_backend_output {
-                    // Suspend the main progress bar while we print the line.
-                    progress_bar.suspend(|| eprintln!("{line}"));
-                } else {
-                    // Send the line to the receiver
-                    if tx.send(line).is_err() {
-                        // Receiver dropped, exit early
-                        break;
-                    }
+                let parsed = SyncReporter::parse_backend_log(&line);
+                let should_print = print_backend_output
+                    || parsed.as_ref().is_some_and(|log| log.level >= Level::WARN);
+
+                if should_print {
+                    let display = parsed
+                        .as_ref()
+                        .map(|log| log.format())
+                        .unwrap_or_else(|| line.clone());
+                    progress_bar.suspend(|| eprintln!("{display}"));
+                }
+
+                if !print_backend_output && tx.send(line).is_err() {
+                    break;
                 }
             }
         });
@@ -136,7 +188,8 @@ impl BackendSourceBuildReporter for SyncReporter {
                 tokio::spawn(async move {
                     while let Some(line) = build_output_receiver.recv().await {
                         // Suspend the main progress bar while we print the line.
-                        progress_bar.suspend(|| eprintln!("{line}"));
+                        let display = SyncReporter::format_backend_line(&line);
+                        progress_bar.suspend(|| eprintln!("{display}"));
                     }
                 });
             }
@@ -175,9 +228,19 @@ impl SourceBuildReporter for SyncReporter {
 
         tokio::spawn(async move {
             while let Some(line) = backend_output_stream.next().await {
-                if print_backend_output {
-                    progress_bar.suspend(|| eprintln!("{line}"));
-                } else if tx.send(line).is_err() {
+                let parsed = SyncReporter::parse_backend_log(&line);
+                let should_print = print_backend_output
+                    || parsed.as_ref().is_some_and(|log| log.level >= Level::WARN);
+
+                if should_print {
+                    let display = parsed
+                        .as_ref()
+                        .map(|log| log.format())
+                        .unwrap_or_else(|| line.clone());
+                    progress_bar.suspend(|| eprintln!("{display}"));
+                }
+
+                if !print_backend_output && tx.send(line).is_err() {
                     break;
                 }
             }
@@ -196,7 +259,8 @@ impl SourceBuildReporter for SyncReporter {
             if let Some(mut build_output_receiver) = build_output_receiver {
                 tokio::spawn(async move {
                     while let Some(line) = build_output_receiver.recv().await {
-                        progress_bar.suspend(|| eprintln!("{line}"));
+                        let display = SyncReporter::format_backend_line(&line);
+                        progress_bar.suspend(|| eprintln!("{display}"));
                     }
                 });
             }
@@ -494,6 +558,24 @@ pub struct TransactionId(pub usize);
 impl TransactionId {
     pub fn new(id: usize) -> Self {
         TransactionId(id)
+    }
+}
+
+struct ParsedBackendLog {
+    level: Level,
+    target: Option<String>,
+    message: String,
+}
+
+impl ParsedBackendLog {
+    fn format(&self) -> String {
+        let level = self.level.as_str();
+        match (&self.target, self.message.is_empty()) {
+            (Some(target), false) => format!("[backend {level}] {target}: {}", self.message),
+            (Some(target), true) => format!("[backend {level}] {target}"),
+            (None, false) => format!("[backend {level}] {}", self.message),
+            (None, true) => format!("[backend {level}]"),
+        }
     }
 }
 

@@ -47,5 +47,7 @@ uv-normalize = { workspace = true }
 uv-redacted = { workspace = true }
 uv-resolver = { workspace = true }
 
+serde_json = { workspace = true }
+
 [dev-dependencies]
 # Add test dependencies if needed

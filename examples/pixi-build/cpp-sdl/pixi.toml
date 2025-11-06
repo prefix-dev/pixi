@@ -21,6 +21,9 @@ description = "Showcases how to create a simple C++ executable with Pixi"
 name = "sdl_example"
 version = "0.1.0"
 
+[package.build.config]
+debug-dir = "./debug"
+
 [package.build.backend]
 channels = [
   "https://prefix.dev/pixi-build-backends",
