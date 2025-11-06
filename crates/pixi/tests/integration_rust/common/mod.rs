@@ -647,7 +647,7 @@ impl PixiControl {
     /// [`Self::update_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
         let workspace = Workspace::from_path(&self.manifest_path())?;
-        workspace.load_lock_file().await
+        workspace.load_lock_file().await?.into_lock_file()
     }
 
     /// Load the current lock-file and makes sure that its up to date with the

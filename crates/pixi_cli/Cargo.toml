@@ -26,7 +26,7 @@ rustls-tls = [
   "rattler/rustls-tls",
   "pixi_utils/rustls-tls",
 ]
-self_update = []
+self_update = ["pixi_core/self_update"]
 slow_integration_tests = []
 tokio-console = ["console-subscriber", "tokio/tracing"]
 

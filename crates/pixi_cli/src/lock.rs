@@ -38,7 +38,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Update the lock-file, and extract it from the derived data to drop additional resources
     // created for the solve.
-    let original_lock_file = workspace.load_lock_file().await?;
+    // Use the silent version here since update_lock_file() will display the warning.
+    let original_lock_file = workspace.load_lock_file().await?.into_lock_file_or_empty();
     let (LockFileDerivedData { lock_file, .. }, lock_updated) = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,

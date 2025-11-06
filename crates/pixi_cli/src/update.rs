@@ -146,7 +146,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Load the current lock-file, if any. If none is found, a dummy lock-file is
     // returned.
-    let loaded_lock_file = &workspace.load_lock_file().await?;
+    let loaded_lock_file = &workspace.load_lock_file().await?.into_lock_file_or_empty_with_warning();
 
     // If the user specified a package name, check to see if it is even locked.
     if let Some(packages) = &specs.packages {

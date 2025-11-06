@@ -72,13 +72,17 @@ mod tests {
             .await
             .unwrap();
 
-        let err = &workspace.load_lock_file().await.unwrap_err();
-        let dbg_err = format!("{err:?}");
-        // Test that the error message contains the correct information.
-        assert!(
-            dbg_err.contains("The lock file version is 9999, but only up to including version")
-        );
-        // Also test that we try to help user by suggesting to update pixi.
-        assert!(dbg_err.contains("Please update pixi to the latest version and try again."));
+        let result = workspace.load_lock_file().await.unwrap();
+        // Test that we get a VersionMismatch result
+        match result {
+            crate::lock_file::update::LockFileLoadResult::VersionMismatch {
+                lock_file_version,
+                max_supported_version: _,
+            } => {
+                assert_eq!(lock_file_version, 9999);
+                // We got the version mismatch as expected
+            }
+            _ => panic!("Expected VersionMismatch, got {:?}", result),
+        }
     }
 }
