@@ -581,7 +581,7 @@ mod test {
     use std::path::Path;
 
     use pixi_core::Workspace;
-    use pixi_manifest::{EnvironmentName, task::ArgValues};
+    use pixi_manifest::EnvironmentName;
     use rattler_conda_types::Platform;
 
     use crate::{task_environment::SearchEnvironments, task_graph::TaskGraph};
