@@ -1,0 +1,123 @@
+use std::collections::hash_map::Entry;
+
+use futures::FutureExt;
+
+use super::{CommandDispatcherProcessor, PendingUrlCheckout, TaskResult};
+use crate::{
+    CommandDispatcherError, Reporter,
+    command_dispatcher::url::{UrlCheckout, UrlCheckoutTask},
+};
+use pixi_url::UrlError;
+
+impl CommandDispatcherProcessor {
+    /// Called when a [`ForegroundMessage::GitCheckout`] task was received.
+    pub(crate) fn on_checkout_url(&mut self, task: UrlCheckoutTask) {
+        let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
+        match self.url_checkouts.entry(task.spec.url.clone()) {
+            Entry::Occupied(mut existing_checkout) => match existing_checkout.get_mut() {
+                PendingUrlCheckout::Pending(_, pending) => pending.push(task.tx),
+                PendingUrlCheckout::CheckedOut(checkout) => {
+                    let _ = task.tx.send(Ok(checkout.clone()));
+                }
+                PendingUrlCheckout::Errored => {
+                    // Drop the sender, this will cause a cancellation on the other side.
+                    drop(task.tx);
+                }
+            },
+            Entry::Vacant(entry) => {
+                // Notify the reporter that a new checkout has been queued.
+                let reporter_id = self
+                    .reporter
+                    .as_deref_mut()
+                    .and_then(Reporter::as_url_reporter)
+                    .map(|reporter| reporter.on_queued(parent_context, &task.spec.url));
+
+                entry.insert(PendingUrlCheckout::Pending(reporter_id, vec![task.tx]));
+
+                // Notify the reporter that the solve has started.
+                if let Some((reporter, id)) = self
+                    .reporter
+                    .as_deref_mut()
+                    .and_then(Reporter::as_url_reporter)
+                    .zip(reporter_id)
+                {
+                    reporter.on_start(id)
+                }
+
+                let resolver = self.inner.url_resolver.clone();
+                let client = self.inner.download_client.clone();
+                let cache_dir = self.inner.cache_dirs.url().clone();
+                self.pending_futures.push(
+                    task.cancellation_token
+                        .run_until_cancelled_owned(async move {
+                            resolver
+                                .fetch(task.spec.clone(), client, cache_dir, None)
+                                .await
+                                .map(|fetch| UrlCheckout {
+                                    pinned_url: fetch.pinned().clone(),
+                                    dir: fetch.path().to_path_buf(),
+                                })
+                                .map_err(CommandDispatcherError::Failed)
+                        })
+                        .map(|fetch| {
+                            TaskResult::UrlCheckedOut(
+                                task.spec.url,
+                                Box::new(fetch.unwrap_or(Err(CommandDispatcherError::Cancelled))),
+                            )
+                        })
+                        .boxed_local(),
+                );
+            }
+        }
+    }
+
+    /// Called when a git checkout task has completed.
+    pub(crate) fn on_url_checked_out(
+        &mut self,
+        url: url::Url,
+        result: Result<UrlCheckout, CommandDispatcherError<UrlError>>,
+    ) {
+        let Some(PendingUrlCheckout::Pending(reporter_id, pending)) =
+            self.url_checkouts.get_mut(&url)
+        else {
+            unreachable!("cannot get a result for a git checkout that is not pending");
+        };
+
+        // Notify the reporter that the git checkout has finished.
+        if let Some((reporter, id)) = self
+            .reporter
+            .as_deref_mut()
+            .and_then(Reporter::as_url_reporter)
+            .zip(*reporter_id)
+        {
+            reporter.on_finished(id)
+        }
+
+        match result {
+            Ok(fetch) => {
+                for tx in pending.drain(..) {
+                    let _ = tx.send(Ok(fetch.clone()));
+                }
+
+                // Store the fetch in the url map.
+                self.url_checkouts
+                    .insert(url, PendingUrlCheckout::CheckedOut(fetch));
+            }
+            Err(CommandDispatcherError::Failed(mut err)) => {
+                // Only send the error to the first channel, drop the rest, which cancels them.
+                for tx in pending.drain(..) {
+                    match tx.send(Err(err)) {
+                        Ok(_) => return,
+                        Err(Err(failed_to_send)) => err = failed_to_send,
+                        Err(Ok(_)) => unreachable!(),
+                    }
+                }
+
+                self.url_checkouts.insert(url, PendingUrlCheckout::Errored);
+            }
+            Err(CommandDispatcherError::Cancelled) => {
+                self.url_checkouts.insert(url, PendingUrlCheckout::Errored);
+            }
+        }
+    }
+}

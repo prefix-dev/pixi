@@ -3730,6 +3730,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "lzma-rust2"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bd57dc1513725e598b9609a9505d6fe28ee280861e5b4d792b3db9d00b1a315"
+
+[[package]]
 name = "lzma-sys"
 version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4838,6 +4844,7 @@ dependencies = [
  "pixi_spec_containers",
  "pixi_stable_hash",
  "pixi_test_utils",
+ "pixi_url",
  "pixi_utils",
  "rand 0.9.2",
  "rattler",
@@ -5444,6 +5451,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_url"
+version = "0.1.0"
+dependencies = [
+ "bzip2 0.6.1",
+ "dashmap",
+ "flate2",
+ "fs-err",
+ "futures",
+ "indicatif",
+ "pixi_record",
+ "pixi_spec",
+ "pixi_utils",
+ "rattler_digest",
+ "rattler_networking",
+ "reqwest",
+ "reqwest-middleware",
+ "sevenz-rust2",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "url",
+ "xz2",
+ "zip 2.4.2",
+ "zstd",
+]
+
+[[package]]
 name = "pixi_utils"
 version = "0.1.0"
 dependencies = [
@@ -5612,6 +5648,12 @@ name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
+
+[[package]]
+name = "ppmd-rust"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d558c559f0450f16f2a27a1f017ef38468c1090c9ce63c8e51366232d53717b4"
 
 [[package]]
 name = "ppv-lite86"
@@ -7444,6 +7486,24 @@ dependencies = [
  "ryu",
  "serde",
  "unsafe-libyaml",
+]
+
+[[package]]
+name = "sevenz-rust2"
+version = "0.19.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "724c58ef9fa6b24f223be04638e2073411dd5da79e7b76c21bd93de8dbd753e0"
+dependencies = [
+ "aes",
+ "bzip2 0.6.1",
+ "cbc",
+ "crc32fast",
+ "getrandom 0.3.4",
+ "js-sys",
+ "lzma-rust2",
+ "ppmd-rust",
+ "sha2",
+ "wasm-bindgen",
 ]
 
 [[package]]
