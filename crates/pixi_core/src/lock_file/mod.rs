@@ -82,7 +82,7 @@ mod tests {
                 assert_eq!(lock_file_version, 9999);
                 // We got the version mismatch as expected
             }
-            _ => panic!("Expected VersionMismatch, got {:?}", result),
+            _ => panic!("Expected VersionMismatch, got {result:?}"),
         }
     }
 }
