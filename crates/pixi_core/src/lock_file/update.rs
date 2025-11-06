@@ -94,6 +94,15 @@ struct LockFileVersionMismatchWarning {
     help_message: String,
 }
 
+/// Error for when a lock-file version is newer than supported and cannot continue
+#[derive(Debug, Error, Diagnostic)]
+#[error("Lock-file version {lock_file_version} is newer than supported")]
+struct LockFileVersionMismatchError {
+    lock_file_version: u64,
+    #[help]
+    help_message: String,
+}
+
 impl LockFileLoadResult {
     /// Extract the lock-file, treating version mismatch as an error.
     ///
@@ -107,16 +116,21 @@ impl LockFileLoadResult {
                 max_supported_version,
             } => {
                 #[cfg(feature = "self_update")]
-                let help_msg = "Try running `pixi self-update` to update to the latest version.";
+                let update_instruction = "Try running `pixi self-update` to update to the latest version.";
                 #[cfg(not(feature = "self_update"))]
-                let help_msg = "Please update pixi to the latest version and try again.";
+                let update_instruction = "Please update pixi to the latest version and try again.";
 
-                miette::bail!(
-                    help = help_msg,
-                    "The lock-file version ({}) is newer than the maximum supported version ({}).",
+                let help_message = format!(
+                    "Maximum supported version: {} (pixi v{})\n{}",
+                    max_supported_version,
+                    consts::PIXI_VERSION,
+                    update_instruction
+                );
+
+                Err(LockFileVersionMismatchError {
                     lock_file_version,
-                    max_supported_version
-                )
+                    help_message,
+                }.into())
             }
         }
     }
@@ -216,17 +230,23 @@ impl Workspace {
                 } = lock_file_result
                 {
                     #[cfg(feature = "self_update")]
-                    let help_msg = "Try running `pixi self-update` to update to the latest version.";
+                    let update_instruction = "Try running `pixi self-update` to update to the latest version.";
                     #[cfg(not(feature = "self_update"))]
-                    let help_msg = "Please update pixi to the latest version and try again.";
+                    let update_instruction = "Please update pixi to the latest version and try again.";
 
-                    miette::bail!(
-                        help = help_msg,
-                        "The lock-file version ({}) is newer than the maximum supported version ({}) by this version of pixi. \
-                        Cannot continue with --locked or --frozen mode as the lock-file cannot be read.",
-                        lock_file_version,
-                        max_supported_version
+                    let help_message = format!(
+                        "Maximum supported version: {} (pixi v{})\n\
+                         Cannot continue with --locked or --frozen mode as the lock-file cannot be read.\n\
+                         {}",
+                        max_supported_version,
+                        consts::PIXI_VERSION,
+                        update_instruction
                     );
+
+                    return Err(LockFileVersionMismatchError {
+                        lock_file_version,
+                        help_message,
+                    }.into());
                 }
             }
         }
