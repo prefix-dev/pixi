@@ -327,14 +327,9 @@ impl DiscoveredBackend {
             ));
         };
 
-        Self::from_package_and_workspace(
-            // source_path,
-            &package_manifest,
-            &manifests.workspace,
-            channel_config,
-        )
-        .map_err(DiscoveryError::SpecConversionError)
-        .map(Some)
+        Self::from_package_and_workspace(&package_manifest, &manifests.workspace, channel_config)
+            .map_err(DiscoveryError::SpecConversionError)
+            .map(Some)
     }
 
     /// Try to discover a rattler build recipe in the repository.
