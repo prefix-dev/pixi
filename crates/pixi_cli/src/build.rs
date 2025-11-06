@@ -4,6 +4,7 @@ use clap::Parser;
 use fs_err::tokio as tokio_fs;
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
+use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
 };
@@ -12,7 +13,7 @@ use pixi_consts::consts::{
     MOJOPROJECT_MANIFEST, PYPROJECT_MANIFEST, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES,
     WORKSPACE_MANIFEST,
 };
-use pixi_core::{WorkspaceLocator, workspace::DiscoveryStart};
+use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart};
 use pixi_manifest::FeaturesExt;
 use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
@@ -28,6 +29,11 @@ use crate::cli_config::LockAndInstallConfig;
 pub struct Args {
     #[clap(flatten)]
     pub config_cli: ConfigCli,
+
+    /// Backend override for testing purposes. This field is ignored by clap
+    /// and should only be set programmatically in tests.
+    #[clap(skip)]
+    pub backend_override: Option<BackendOverride>,
 
     #[clap(flatten)]
     pub lock_and_install_config: LockAndInstallConfig,
@@ -187,7 +193,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(args.config_cli);
 
-    eprintln!("located");
+    // Sanity check of workspace, ensuring .pixi directory and .gitignore exist
+    sanity_check_workspace(&workspace).await?;
 
     // Construct a command dispatcher based on the workspace.
     let multi_progress = global_multi_progress();

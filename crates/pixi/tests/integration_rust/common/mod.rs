@@ -678,16 +678,17 @@ impl PixiControl {
         }
     }
 
-    /// Returns a [`BuildBuilder`].
-    /// To execute the command and await the result, call `.await` on the return value.
+    /// Returns a [`BuildBuilder`]. To execute the command and await the result
+    /// call `.await` on the return value.
     pub fn build(&self) -> BuildBuilder {
         BuildBuilder {
             args: build::Args {
+                backend_override: Default::default(),
                 config_cli: Default::default(),
                 lock_and_install_config: Default::default(),
-                target_platform: Platform::current(),
-                build_platform: Platform::current(),
-                output_dir: self.workspace_path().to_path_buf(),
+                target_platform: rattler_conda_types::Platform::current(),
+                build_platform: rattler_conda_types::Platform::current(),
+                output_dir: PathBuf::from("."),
                 build_dir: None,
                 clean: false,
                 path: None,
