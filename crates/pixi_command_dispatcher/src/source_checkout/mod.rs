@@ -4,6 +4,8 @@ use pixi_record::PinnedSourceSpec;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
+use crate::command_dispatcher::url::UrlError;
+
 /// Location of the source code for a package. This will be used as the input
 /// for the build process. Archives are unpacked, git clones are checked out,
 /// etc.
@@ -32,6 +34,9 @@ pub enum SourceCheckoutError {
 
     #[error(transparent)]
     GitError(#[from] GitError),
+
+    #[error(transparent)]
+    UrlError(#[from] UrlError),
 
     #[error("the manifest path {0} should have a parent directory")]
     ParentDir(PathBuf),

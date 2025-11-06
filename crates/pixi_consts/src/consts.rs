@@ -39,6 +39,7 @@ pub const CACHED_ENVS_DIR: &str = "cached-envs-v0";
 pub const _CACHED_BUILD_ENVS_DIR: &str = "cached-build-envs-v0";
 pub const CACHED_BUILD_TOOL_ENVS_DIR: &str = "cached-build-tool-envs-v0";
 pub const CACHED_GIT_DIR: &str = "git-v0";
+pub const CACHED_URL_DIR: &str = "url-v0";
 pub const CACHED_BUILD_WORK_DIR: &str = "work";
 pub const CACHED_BUILD_BACKENDS: &str = "backends-v0";
 pub const CACHED_PACKAGES: &str = "pkgs";

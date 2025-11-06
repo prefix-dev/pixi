@@ -21,6 +21,7 @@ use crate::{
         CommandDispatcherContext, CommandDispatcherData, ForegroundMessage,
         InstallPixiEnvironmentId, InstantiatedToolEnvId, SolveCondaEnvironmentId,
         SolvePixiEnvironmentId, SourceBuildCacheStatusId, SourceBuildId, SourceMetadataId,
+        url::{UrlCheckout, UrlError},
     },
     executor::ExecutorFutures,
     install_pixi::InstallPixiEnvironmentError,
@@ -45,6 +46,7 @@ mod solve_pixi;
 mod source_build;
 mod source_build_cache_status;
 mod source_metadata;
+mod url;
 
 /// Runs the command_dispatcher background task
 pub(crate) struct CommandDispatcherProcessor {
@@ -112,6 +114,10 @@ pub(crate) struct CommandDispatcherProcessor {
     /// out.
     git_checkouts: HashMap<RepositoryReference, PendingGitCheckout>,
 
+    /// Git checkouts in the process of being checked out, or already checked
+    /// out.
+    url_checkouts: HashMap<::url::Url, PendingUrlCheckout>,
+
     /// Source builds that are currently being processed.
     source_build:
         HashMap<SourceBuildId, PendingDeduplicatingTask<SourceBuildResult, SourceBuildError>>,
@@ -164,6 +170,7 @@ enum TaskResult {
         BoxedDispatcherResult<Arc<SourceMetadata>, SourceMetadataError>,
     ),
     GitCheckedOut(RepositoryReference, BoxedDispatcherResult<Fetch, GitError>),
+    UrlCheckedOut(::url::Url, BoxedDispatcherResult<UrlCheckout, UrlError>),
     InstallPixiEnvironment(
         InstallPixiEnvironmentId,
         BoxedDispatcherResult<InstallPixiEnvironmentResult, InstallPixiEnvironmentError>,
@@ -196,6 +203,20 @@ enum PendingGitCheckout {
 
     /// The repository was checked out and the result is available.
     CheckedOut(Fetch),
+
+    /// A previous attempt failed
+    Errored,
+}
+
+enum PendingUrlCheckout {
+    /// The checkout is still ongoing.
+    Pending(
+        Option<reporter::UrlCheckoutId>,
+        Vec<oneshot::Sender<Result<UrlCheckout, UrlError>>>,
+    ),
+
+    /// The repository was checked out and the result is available.
+    CheckedOut(UrlCheckout),
 
     /// A previous attempt failed
     Errored,
@@ -321,6 +342,7 @@ impl CommandDispatcherProcessor {
                 instantiated_tool_envs_reporters: HashMap::default(),
                 instantiated_tool_cache_keys: HashMap::default(),
                 git_checkouts: HashMap::default(),
+                url_checkouts: HashMap::default(),
                 source_build: HashMap::default(),
                 source_build_reporters: HashMap::default(),
                 source_build_ids: HashMap::default(),
@@ -382,6 +404,7 @@ impl CommandDispatcherProcessor {
             }
             ForegroundMessage::BuildBackendMetadata(task) => self.on_build_backend_metadata(task),
             ForegroundMessage::GitCheckout(task) => self.on_checkout_git(task),
+            ForegroundMessage::UrlCheckout(task) => self.on_checkout_url(task),
             ForegroundMessage::SourceBuild(task) => self.on_source_build(task),
             ForegroundMessage::QuerySourceBuildCache(task) => {
                 self.on_source_build_cache_status(task)
@@ -411,6 +434,7 @@ impl CommandDispatcherProcessor {
                 self.on_build_backend_metadata_result(id, *result)
             }
             TaskResult::GitCheckedOut(url, result) => self.on_git_checked_out(url, *result),
+            TaskResult::UrlCheckedOut(url, result) => self.on_url_checked_out(url, *result),
             TaskResult::InstantiateToolEnv(id, result) => {
                 self.on_instantiate_tool_environment_result(id, *result)
             }

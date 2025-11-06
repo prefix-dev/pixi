@@ -28,6 +28,7 @@ use rattler_repodata_gateway::Gateway;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use typed_path::Utf8TypedPath;
+use url::UrlCheckoutTask;
 
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, Executor,
@@ -54,6 +55,7 @@ mod builder;
 mod error;
 mod git;
 mod instantiate_backend;
+pub mod url;
 
 /// The command dispatcher is responsible for synchronizing requests between
 /// different conda environments.
@@ -234,6 +236,7 @@ pub(crate) enum ForegroundMessage {
     SourceBuild(SourceBuildTask),
     QuerySourceBuildCache(SourceBuildCacheStatusTask),
     GitCheckout(GitCheckoutTask),
+    UrlCheckout(UrlCheckoutTask),
     InstallPixiEnvironment(InstallPixiEnvironmentTask),
     InstantiateToolEnvironment(Task<InstantiateToolEnvironmentSpec>),
     ClearReporter(oneshot::Sender<()>),

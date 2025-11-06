@@ -4,6 +4,7 @@ use futures::Stream;
 use pixi_git::resolver::RepositoryReference;
 use rattler_repodata_gateway::RunExportsReporter;
 use serde::Serialize;
+use url::Url;
 
 use crate::{
     BackendSourceBuildSpec, BuildBackendMetadataSpec, PixiEnvironmentSpec,
@@ -109,6 +110,22 @@ pub trait GitCheckoutReporter {
 
     /// Called when the git checkout has finished.
     fn on_finished(&mut self, checkout_id: GitCheckoutId);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct UrlCheckoutId(pub usize);
+
+pub trait UrlCheckoutReporter {
+    /// Called when a url checkout was queued on the
+    /// [`crate::CommandDispatcher`].
+    fn on_queued(&mut self, reason: Option<ReporterContext>, env: &Url) -> UrlCheckoutId;
+
+    /// Called when the url checkout has started.
+    fn on_start(&mut self, checkout_id: UrlCheckoutId);
+
+    /// Called when the url checkout has finished.
+    fn on_finished(&mut self, checkout_id: UrlCheckoutId);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
@@ -240,6 +257,11 @@ pub trait Reporter: Send {
     /// Returns a mutable reference to a reporter that reports on any git
     /// progress.
     fn as_git_reporter(&mut self) -> Option<&mut dyn GitCheckoutReporter> {
+        None
+    }
+    /// Returns a mutable reference to a reporter that reports on any git
+    /// progress.
+    fn as_url_reporter(&mut self) -> Option<&mut dyn UrlCheckoutReporter> {
         None
     }
     /// Returns a mutable reference to a reporter that reports on conda solve
