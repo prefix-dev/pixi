@@ -432,6 +432,19 @@ impl<'p> TaskGraph<'p> {
             None => &Vec::new(),
         };
 
+        // If the task has no typed arguments defined, treat all args as free-form
+        // This ensures consistency between direct execution and dependency execution
+        if task_arguments.is_empty() {
+            let free_form_args: Vec<String> = dep_args
+                .iter()
+                .map(|arg| match arg {
+                    TypedDependencyArg::Positional(v) => v.clone(),
+                    TypedDependencyArg::Named(name, value) => format!("{}={}", name, value),
+                })
+                .collect();
+            return Ok(ArgValues::FreeFormArgs(free_form_args));
+        }
+
         let mut named_args = Vec::new();
         let mut seen_named = false;
 
@@ -568,7 +581,7 @@ mod test {
     use std::path::Path;
 
     use pixi_core::Workspace;
-    use pixi_manifest::EnvironmentName;
+    use pixi_manifest::{EnvironmentName, task::ArgValues};
     use rattler_conda_types::Platform;
 
     use crate::{task_environment::SearchEnvironments, task_graph::TaskGraph};
@@ -860,3 +873,56 @@ mod test {
         );
     }
 }
+
+//     #[test]
+//     fn test_task_args_consistency_between_direct_and_dependency() {
+//         // This test verifies that a task without typed arguments produces the same
+//         // ArgValues whether run directly or as a dependency (fixes issue #4864)
+//         let project_str = r#"
+//         [project]
+//         name = "pixi"
+//         channels = []
+//         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+
+//         [tasks]
+//         preprocess = "python3 src/preprocess.py"
+//         train = { cmd = "python3 src/train.py", depends-on = ["preprocess"] }
+//     "#;
+//         let project = Workspace::from_str(Path::new("pixi.toml"), project_str).unwrap();
+//         let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
+
+//         // Create task graph for direct execution: pixi run preprocess
+//         let graph_direct = TaskGraph::from_cmd_args(
+//             &project,
+//             &search_envs,
+//             vec!["preprocess".to_string()],
+//             false,
+//         )
+//         .unwrap();
+
+//         // Create task graph for dependency execution: pixi run train
+//         // This will include preprocess as a dependency
+//         let graph_with_dep =
+//             TaskGraph::from_cmd_args(&project, &search_envs, vec!["train".to_string()], false)
+//                 .unwrap();
+
+//         // Get the preprocess task from both graphs
+//         let preprocess_direct = &graph_direct.nodes[0];
+//         let preprocess_as_dep = &graph_with_dep.nodes[0]; // First node in topological order
+
+//         // Verify both have the same ArgValues variant
+//         // Both should be FreeFormArgs(vec![]) since the task has no typed arguments
+//         assert!(
+//             matches!(preprocess_direct.args, Some(ArgValues::FreeFormArgs(_))),
+//             "Direct execution should use FreeFormArgs"
+//         );
+//         assert!(
+//             matches!(preprocess_as_dep.args, Some(ArgValues::FreeFormArgs(_))),
+//             "Dependency execution should use FreeFormArgs"
+//         );
+
+//         // Verify they're both empty
+//         assert!(preprocess_direct.args.as_ref().unwrap().is_empty());
+//         assert!(preprocess_as_dep.args.as_ref().unwrap().is_empty());
+//     }
+// }
