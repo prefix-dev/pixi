@@ -439,7 +439,7 @@ impl<'p> TaskGraph<'p> {
                 .iter()
                 .map(|arg| match arg {
                     TypedDependencyArg::Positional(v) => v.clone(),
-                    TypedDependencyArg::Named(name, value) => format!("{}={}", name, value),
+                    TypedDependencyArg::Named(name, value) => format!("{name}={value}"),
                 })
                 .collect();
             return Ok(ArgValues::FreeFormArgs(free_form_args));
