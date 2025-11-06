@@ -30,6 +30,7 @@ use pixi_consts::consts::{self};
 use pixi_core::repodata::Repodata;
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::global_multi_progress;
+use pixi_record::PixiRecord;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::{BinarySpec, PathBinarySpec};
 use pixi_spec_containers::DependencyMap;
@@ -604,6 +605,23 @@ impl Project {
             .solve_pixi_environment(solve_spec)
             .await?;
 
+        // Collect packages from mutable sources (e.g., path-based) that should be force-rebuilt.
+        // This ensures that path-based installations always rebuild when source files change,
+        // bypassing potentially stale build cache entries.
+        let force_reinstall = pixi_records
+            .iter()
+            .filter_map(|record| match record {
+                PixiRecord::Source(source_record) => {
+                    if source_record.manifest_source.is_mutable() {
+                        Some(source_record.package_record.name.clone())
+                    } else {
+                        None
+                    }
+                }
+                PixiRecord::Binary(_) => None,
+            })
+            .collect();
+
         // Move this to a separate function to avoid code duplication
         try_increase_rlimit_to_sensible();
 
@@ -621,7 +639,7 @@ impl Project {
                 enabled_protocols: EnabledProtocols::default(),
                 installed: None,
                 ignore_packages: None,
-                force_reinstall: Default::default(),
+                force_reinstall,
                 variants: None,
                 variant_files: None,
             })
