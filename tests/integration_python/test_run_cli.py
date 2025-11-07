@@ -14,6 +14,7 @@ import tomli
 import tomli_w
 
 from .common import (
+    CURRENT_PLATFORM,
     EMPTY_BOILERPLATE_PROJECT,
     ExitCode,
     default_env_path,
@@ -1415,7 +1416,7 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
 def test_task_caching_when_running_already_cached_depends_task(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
-    """Test executing the same task with different arguments is successively cached."""
+    """Test executing the cached task with depends-on should reuse the cache."""
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
 
     # create the input folder
@@ -1426,24 +1427,22 @@ def test_task_caching_when_running_already_cached_depends_task(
     input_file = input_dir.joinpath("file1.txt")
     input_file.write_text("Content for file1")
 
-    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+    toml_content = f"""
+[workspace]
+name = "test"
+channels = []
+platforms = ["{CURRENT_PLATFORM}"]
 
-    manifest_content["tasks"] = {
-        "process-file": {
-            "cmd": "echo Processing $(cat inputs/file1.txt)",
-            "inputs": ["inputs/file1.txt"],
-        },
-        "multiple-depends": {
-            "cmd": "echo hello from depends",
-            "depends-on": [
-                {"task": "process-file"},
-            ],
-        },
-    }
 
-    manifest_path.write_text(tomli_w.dumps(manifest_content))
+[tasks]
+process-file = {{ cmd = "echo Processing $(cat inputs/file1.txt)", inputs = ["inputs/file1.txt"] }}
+multiple-depends = {{ cmd = "echo hello from depends", depends-on = [{{ task = "process-file" }}] }}
 
-    # Run first time without cache
+"""
+
+    manifest_path.write_text(toml_content)
+
+    # Run first time without being cached
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "process-file"],
         stderr_contains=[
@@ -1454,7 +1453,7 @@ def test_task_caching_when_running_already_cached_depends_task(
         ],
     )
 
-    # Run second time with cache
+    # Should have a cache hit the second time
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "process-file"],
         stderr_contains=["Processing $(cat inputs/file1.txt)", "cache hit"],
@@ -1465,8 +1464,6 @@ def test_task_caching_when_running_already_cached_depends_task(
         [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
         stderr_contains=[
             "file1",
-            "cache hit",
-            "file2",
             "cache hit",
         ],
     )
