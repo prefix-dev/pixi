@@ -1509,7 +1509,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
             };
 
             // Resolve build_source relative to the manifest directory
-            build_path_record.resolve(&project_root)
+            build_path_record.resolve(project_root)
         } else {
             let Some(path_record) = source_record.manifest_source.as_path() else {
                 continue;
