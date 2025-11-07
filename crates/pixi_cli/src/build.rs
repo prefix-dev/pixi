@@ -142,17 +142,6 @@ pub(crate) async fn determine_discovery_start(
 ) -> miette::Result<DiscoveryStart> {
     match path {
         Some(path) => {
-            // If it's a directory, use it as the search root
-            // if path.is_dir() {
-            //     Ok(DiscoveryStart::SearchRoot(path.clone()))
-            // } else {
-            //     // If it's a file, use its parent directory as the search root
-            //     let package_dir = path.parent().ok_or_else(|| {
-            //         miette::miette!("Failed to get parent directory of package manifest")
-            //     })?;
-            //     Ok(DiscoveryStart::SearchRoot(package_dir.to_path_buf()))
-            // }
-
             // We need to solve the path to an absolute path
             // because we can point to specific package manifest file
             // but still want to discover the workspace from the package location.
