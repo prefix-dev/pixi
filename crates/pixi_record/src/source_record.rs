@@ -202,7 +202,7 @@ impl SourceRecord {
                             // Make the normalized path relative to workspace_root
                             let relative_to_workspace =
                                 pathdiff::diff_paths(&build_absolute, workspace_root)
-                                    .unwrap_or_else(|| build_absolute);
+                                    .unwrap_or(build_absolute);
 
                             PinnedSourceSpec::Path(crate::PinnedPathSpec {
                                 path: Utf8TypedPathBuf::from(
@@ -486,7 +486,7 @@ mod tests {
         let manifest_source = PinnedSourceSpec::Git(crate::PinnedGitSpec {
             git: git_url.clone(),
             source: PinnedGitCheckout {
-                commit: commit.clone(),
+                commit: commit,
                 subdirectory: Some("recipes".to_string()),
                 reference: GitReference::Branch("main".to_string()),
             },
@@ -496,7 +496,7 @@ mod tests {
         let build_source = PinnedSourceSpec::Git(crate::PinnedGitSpec {
             git: git_url.clone(),
             source: PinnedGitCheckout {
-                commit: commit.clone(),
+                commit: commit,
                 subdirectory: Some("src".to_string()),
                 reference: GitReference::Branch("main".to_string()),
             },
@@ -578,7 +578,7 @@ mod tests {
         let build_source = PinnedSourceSpec::Git(crate::PinnedGitSpec {
             git: build_git_url.clone(),
             source: PinnedGitCheckout {
-                commit: commit2.clone(),
+                commit: commit2,
                 subdirectory: Some("src".to_string()),
                 reference: GitReference::Branch("main".to_string()),
             },
