@@ -12,7 +12,7 @@ version = "0.1.0"
 bzip2.workspace = true
 dashmap = { workspace = true }
 flate2.workspace = true
-fs-err.workspace = true
+fs-err = { workspace = true, features = ["tokio"] }
 futures.workspace = true
 indicatif.workspace = true
 pixi_record.workspace = true

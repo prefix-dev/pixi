@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use fs_err as fs;
+use fs_err::tokio as async_fs;
 use futures::StreamExt;
 use indicatif::ProgressBar;
 use pixi_record::PinnedUrlSpec;
@@ -77,9 +77,9 @@ impl UrlSource {
     /// Fetch the URL, returning the extracted directory and pinned metadata.
     #[instrument(skip(self), fields(url = %self.spec.url))]
     pub async fn fetch(self) -> Result<Fetch, UrlError> {
-        fs::create_dir_all(self.archives_dir())?;
-        fs::create_dir_all(self.checkouts_dir())?;
-        fs::create_dir_all(self.locks_dir())?;
+        async_fs::create_dir_all(self.archives_dir()).await?;
+        async_fs::create_dir_all(self.checkouts_dir()).await?;
+        async_fs::create_dir_all(self.locks_dir()).await?;
 
         // Re-use existing checkouts if we already know the hash and it's available.
         if let Some(sha) = self.spec.sha256 {
@@ -94,6 +94,10 @@ impl UrlSource {
         }
 
         let url = self.spec.url.clone();
+        let file_name = url_file_name(&url);
+        if !extract::is_archive(&file_name) {
+            return Err(UrlError::UnsupportedArchive(file_name));
+        }
         let ident = cache_digest(&url);
         let lock_dir = self.locks_dir();
         let guard = AsyncPrefixGuard::new(&lock_dir.join(&ident)).await?;
@@ -113,7 +117,7 @@ impl UrlSource {
             }
         }
 
-        let archive_name = format!("{}-{}", ident, url_file_name(&self.spec.url));
+        let archive_name = format!("{}-{}", ident, file_name);
         let archive_path = self.archives_dir().join(archive_name);
 
         let (sha256, md5) = self
@@ -169,7 +173,7 @@ impl UrlSource {
         compute_md5: bool,
     ) -> Result<(Sha256Hash, Option<Md5Hash>), UrlError> {
         if let Some(parent) = archive_path.parent() {
-            fs::create_dir_all(parent)?;
+            async_fs::create_dir_all(parent).await?;
         }
 
         let response = self

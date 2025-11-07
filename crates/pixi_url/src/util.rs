@@ -1,12 +1,10 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
-
+use rattler_digest::{Sha256, digest::Digest};
 use url::Url;
 
 /// Computes a deterministic identifier for the provided URL.
 pub fn cache_digest(url: &Url) -> String {
-    let mut hasher = DefaultHasher::new();
-    url.as_str().hash(&mut hasher);
-    format!("{:x}", hasher.finish())
+    let digest = Sha256::digest(url.as_str().as_bytes());
+    format!("{digest:x}")
 }
 
 /// Attempts to derive a filename from the URL's last path segment.
