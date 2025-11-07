@@ -251,7 +251,7 @@ pub async fn pin_and_checkout_url_reuses_cached_checkout() {
             assert_eq!(pinned.url, spec.url);
             assert_eq!(pinned.sha256, sha);
         }
-        other => panic!("expected url pinned spec, got {:?}", other),
+        other => panic!("expected url pinned spec, got {other:?}"),
     }
 }
 

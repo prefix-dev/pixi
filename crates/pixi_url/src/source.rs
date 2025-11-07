@@ -174,7 +174,7 @@ impl UrlSource {
             }
         }
 
-        let archive_name = format!("{}-{}", ident, file_name);
+        let archive_name = format!("{ident}-{file_name}");
         let archive_path = self.archives_dir().join(archive_name);
 
         let (sha256, md5) = self.download_archive(&archive_path).await?;

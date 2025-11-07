@@ -189,6 +189,7 @@ fn fulfill_waiter(waiter: PendingUrlWaiter, checkout: &UrlCheckout) {
     let _ = tx.send(result);
 }
 
+#[allow(clippy::result_large_err)]
 fn validate_checkout(spec: &UrlSpec, checkout: &UrlCheckout) -> Result<(), UrlError> {
     if let Some(expected) = spec.sha256 {
         let actual = checkout.pinned_url.sha256;

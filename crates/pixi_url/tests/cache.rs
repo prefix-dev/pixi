@@ -3,7 +3,6 @@ use pixi_url::{UrlError, UrlResolver, UrlSource};
 use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, parse_digest_from_hex};
 use rattler_networking::LazyClient;
 use reqwest_middleware::ClientWithMiddleware;
-use std::fs;
 use tempfile::{TempDir, tempdir};
 use url::Url;
 
@@ -20,15 +19,15 @@ fn bogus_md5() -> Md5Hash {
 
 fn file_url(tempdir: &TempDir, name: &str) -> Url {
     let path = tempdir.path().join(name);
-    fs::copy(HELLO_WORLD_ARCHIVE, &path).unwrap();
+    fs_err::copy(HELLO_WORLD_ARCHIVE, &path).unwrap();
     Url::from_file_path(&path).unwrap()
 }
 
 fn cached_checkout(cache_root: &std::path::Path, sha: Sha256Hash) -> std::path::PathBuf {
     let checkout = cache_root.join("checkouts").join(format!("{sha:x}"));
-    std::fs::create_dir_all(&checkout).expect("checkout dir");
-    std::fs::write(checkout.join("text.txt"), "Hello, World\n").expect("file");
-    std::fs::write(checkout.join(".pixi-url-ready"), "ready").unwrap();
+    fs_err::create_dir_all(&checkout).expect("checkout dir");
+    fs_err::write(checkout.join("text.txt"), "Hello, World\n").expect("file");
+    fs_err::write(checkout.join(".pixi-url-ready"), "ready").unwrap();
     checkout
 }
 
