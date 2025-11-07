@@ -33,6 +33,7 @@ use futures::{StreamExt, future::LocalBoxFuture};
 use itertools::Itertools;
 use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
 use pixi_record::PixiRecord;
+use pixi_spec::UrlSpec;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
@@ -208,14 +209,16 @@ enum PendingGitCheckout {
     Errored,
 }
 
+struct PendingUrlWaiter {
+    spec: UrlSpec,
+    tx: oneshot::Sender<Result<UrlCheckout, UrlError>>,
+}
+
 enum PendingUrlCheckout {
     /// The checkout is still ongoing.
-    Pending(
-        Option<reporter::UrlCheckoutId>,
-        Vec<oneshot::Sender<Result<UrlCheckout, UrlError>>>,
-    ),
+    Pending(Option<reporter::UrlCheckoutId>, Vec<PendingUrlWaiter>),
 
-    /// The repository was checked out and the result is available.
+    /// The URL was checked out and the result is available.
     CheckedOut(UrlCheckout),
 
     /// A previous attempt failed

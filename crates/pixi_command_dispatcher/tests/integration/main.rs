@@ -14,21 +14,23 @@ use itertools::Itertools;
 use pixi_build_backend_passthrough::PassthroughBackend;
 use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
-    InstantiateToolEnvironmentSpec, PackageIdentifier, PixiEnvironmentSpec,
-    SourceBuildCacheStatusSpec,
+    BuildEnvironment, CacheDirs, CommandDispatcher, CommandDispatcherError, Executor,
+    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PackageIdentifier,
+    PixiEnvironmentSpec, SourceBuildCacheStatusSpec,
 };
 use pixi_config::default_channel_config;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
+use pixi_url::UrlError;
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, PackageName, Platform, VersionSpec, VersionWithSource,
     prefix::Prefix,
 };
 use rattler_digest::{Sha256, Sha256Hash, digest::Digest};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
+use tempfile::TempDir;
 use url::Url;
 
 use crate::{event_reporter::Event, event_tree::EventTree};
@@ -79,7 +81,19 @@ fn prepare_cached_checkout(cache_root: &Path, sha: Sha256Hash) -> PathBuf {
     let checkout_dir = cache_root.join("checkouts").join(format!("{sha:x}"));
     fs::create_dir_all(&checkout_dir).unwrap();
     fs::write(checkout_dir.join("payload.txt"), "cached contents").unwrap();
+    fs::write(checkout_dir.join(".pixi-url-ready"), "ready").unwrap();
     checkout_dir
+}
+
+const HELLO_WORLD_ARCHIVE: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../tests/data/url/hello_world.zip"
+);
+
+fn file_url_for_test(tempdir: &TempDir, name: &str) -> Url {
+    let path = tempdir.path().join(name);
+    fs::copy(HELLO_WORLD_ARCHIVE, &path).unwrap();
+    Url::from_file_path(&path).unwrap()
 }
 
 #[tokio::test]
@@ -239,6 +253,79 @@ pub async fn pin_and_checkout_url_reuses_cached_checkout() {
         }
         other => panic!("expected url pinned spec, got {:?}", other),
     }
+}
+
+#[tokio::test]
+pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let archive = tempfile::tempdir().unwrap();
+    let url = file_url_for_test(&archive, "archive.zip");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(cache_dirs)
+        .with_executor(Executor::Serial)
+        .finish();
+
+    let good_spec = UrlSpec {
+        url: url.clone(),
+        md5: None,
+        sha256: None,
+    };
+    let bad_spec = UrlSpec {
+        url,
+        md5: None,
+        sha256: Some(Sha256::digest(b"pixi-url-bad-sha")),
+    };
+
+    let (good, bad) = tokio::join!(
+        dispatcher.checkout_url(good_spec),
+        dispatcher.checkout_url(bad_spec),
+    );
+
+    assert!(good.is_ok());
+    assert!(matches!(
+        bad,
+        Err(CommandDispatcherError::Failed(
+            UrlError::Sha256Mismatch { .. }
+        ))
+    ));
+}
+
+#[tokio::test]
+pub async fn pin_and_checkout_url_validates_cached_results() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let archive = tempfile::tempdir().unwrap();
+    let url = file_url_for_test(&archive, "archive.zip");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(cache_dirs)
+        .with_executor(Executor::Serial)
+        .finish();
+
+    let spec = UrlSpec {
+        url: url.clone(),
+        md5: None,
+        sha256: None,
+    };
+
+    dispatcher
+        .checkout_url(spec.clone())
+        .await
+        .expect("initial download succeeds");
+
+    let bad_spec = UrlSpec {
+        url: url.clone(),
+        md5: None,
+        sha256: Some(Sha256::digest(b"pixi-url-bad-cache")),
+    };
+
+    let err = dispatcher.checkout_url(bad_spec).await.unwrap_err();
+    assert!(matches!(
+        err,
+        CommandDispatcherError::Failed(UrlError::Sha256Mismatch { .. })
+    ));
 }
 
 /// When two identical tool env instantiations are queued concurrently and the
