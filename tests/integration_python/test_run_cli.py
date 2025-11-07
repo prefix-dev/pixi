@@ -1412,6 +1412,66 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
     )
 
 
+def test_task_caching_when_running_already_cached_depends_task(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Test executing the same task with different arguments is successively cached."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    # create the input folder
+    # that will be tests if they are cached hit
+    input_dir = tmp_pixi_workspace.joinpath("inputs")
+    input_dir.mkdir(exist_ok=True)
+
+    input_file = input_dir.joinpath("file1.txt")
+    input_file.write_text("Content for file1")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["tasks"] = {
+        "process-file": {
+            "cmd": "echo Processing $(cat inputs/file1.txt)",
+            "inputs": ["inputs/file1.txt"],
+        },
+        "multiple-depends": {
+            "cmd": "echo hello from depends",
+            "depends-on": [
+                {"task": "process-file"},
+            ],
+        },
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # Run first time without cache
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "process-file"],
+        stderr_contains=[
+            "Processing $(cat inputs/file1.txt)",
+        ],
+        stderr_excludes=[
+            "cache hit",
+        ],
+    )
+
+    # Run second time with cache
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "process-file"],
+        stderr_contains=["Processing $(cat inputs/file1.txt)", "cache hit"],
+    )
+
+    # Run the task with depends-on, that should be cached
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
+        stderr_contains=[
+            "file1",
+            "cache hit",
+            "file2",
+            "cache hit",
+        ],
+    )
+
+
 def test_caching_multiple_tasks_with_depends_on_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Test ``depends-on`` with the same inputs, outputs, but different args, are cached independently.
 
