@@ -63,8 +63,8 @@ impl CommandDispatcher {
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         let url_spec = UrlSpec {
             url: pinned_url_spec.url.clone(),
-            md5: pinned_url_spec.md5.clone(),
-            sha256: Some(pinned_url_spec.sha256.clone()),
+            md5: pinned_url_spec.md5,
+            sha256: Some(pinned_url_spec.sha256),
         };
         // Fetch the url in the background
         let fetch = self

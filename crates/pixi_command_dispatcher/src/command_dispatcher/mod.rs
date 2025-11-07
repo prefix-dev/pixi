@@ -21,6 +21,7 @@ use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::SourceLocationSpec;
+use pixi_url::UrlResolver;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 use rattler_networking::LazyClient;
@@ -112,6 +113,9 @@ pub(crate) struct CommandDispatcherData {
 
     /// The resolver of git repositories.
     pub git_resolver: GitResolver,
+
+    /// The resolver of url archives.
+    pub url_resolver: UrlResolver,
 
     /// The base directory to use if relative paths are discovered.
     pub root_dir: PathBuf,

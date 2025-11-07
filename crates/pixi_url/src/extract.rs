@@ -237,7 +237,7 @@ mod test {
         let mut file = File::create(&file_path).unwrap();
         file.write_all(HELLO_WORLD_ZIP_FILE).unwrap();
 
-        let handler = NoProgressHandler::default();
+        let handler = NoProgressHandler;
         let res = extract_zip(file_path, tempdir.path(), &handler);
         assert!(res.is_ok(), "zip extraction failed: {res:?}");
         assert!(tempdir.path().join("text.txt").exists());
@@ -250,7 +250,7 @@ mod test {
 
     #[test]
     fn test_extract_fail() {
-        let handler = NoProgressHandler::default();
+        let handler = NoProgressHandler;
         let tempdir = tempfile::tempdir().unwrap();
         let result = extract_zip("", tempdir.path(), &handler);
         assert!(
@@ -260,7 +260,7 @@ mod test {
 
     #[test]
     fn test_extract_fail_invalid_zip() {
-        let handler = NoProgressHandler::default();
+        let handler = NoProgressHandler;
         let tempdir = tempfile::tempdir().unwrap();
         let file = tempdir.path().join("test.zip");
         File::create(&file).unwrap();

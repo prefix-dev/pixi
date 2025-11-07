@@ -36,7 +36,7 @@ impl UrlSource {
             spec,
             client,
             cache: cache.into(),
-            progress: Arc::new(NoProgressHandler::default()),
+            progress: Arc::new(NoProgressHandler),
         }
     }
 

@@ -47,11 +47,12 @@ impl CommandDispatcherProcessor {
                 let resolver = self.inner.url_resolver.clone();
                 let client = self.inner.download_client.clone();
                 let cache_dir = self.inner.cache_dirs.url().clone();
+                let url_spec = task.spec.clone();
                 self.pending_futures.push(
                     task.cancellation_token
                         .run_until_cancelled_owned(async move {
                             resolver
-                                .fetch(task.spec.clone(), client, cache_dir, None)
+                                .fetch(url_spec, client, cache_dir, None)
                                 .await
                                 .map(|fetch| UrlCheckout {
                                     pinned_url: fetch.pinned().clone(),
