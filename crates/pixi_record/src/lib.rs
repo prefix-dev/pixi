@@ -1,3 +1,4 @@
+mod path_utils;
 mod pinned_source;
 mod source_record;
 

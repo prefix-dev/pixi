@@ -1,7 +1,6 @@
 use std::{
     collections::{BTreeSet, HashMap},
-    ffi::{OsStr, OsString},
-    path::{Path, PathBuf},
+    path::Path,
     str::FromStr,
 };
 
@@ -14,7 +13,13 @@ use serde::{Deserialize, Serialize};
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 
-use crate::{ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec};
+use crate::{
+    ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec,
+    path_utils::{
+        is_cross_platform_absolute, normalize_path, relative_repo_subdir, resolve_repo_subdir,
+        unixify_path,
+    },
+};
 
 /// A record of a conda package that still requires building.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -100,9 +105,14 @@ impl SourceRecord {
                         subdir: None,
                     },
                     PinnedSourceSpec::Path(pinned_path) => {
-                        let native_path = Path::new(pinned_path.path.as_str());
-                        let should_relativize =
-                            !native_path.is_absolute() || native_path.starts_with(workspace_root);
+                        let path_str = pinned_path.path.as_str();
+                        let native_path = Path::new(path_str);
+                        let is_native_absolute = native_path.is_absolute();
+                        let is_cross_platform_absolute =
+                            is_cross_platform_absolute(path_str, native_path);
+                        let is_within_workspace =
+                            is_native_absolute && native_path.starts_with(workspace_root);
+                        let should_relativize = !is_cross_platform_absolute || is_within_workspace;
 
                         let relativized = if should_relativize {
                             PinnedSourceSpec::Path(pinned_path.clone())
@@ -241,9 +251,7 @@ impl SourceRecord {
                                     .unwrap_or(build_absolute);
 
                             PinnedSourceSpec::Path(crate::PinnedPathSpec {
-                                path: Utf8TypedPathBuf::from(
-                                    relative_to_workspace.to_string_lossy().as_ref(),
-                                ),
+                                path: Utf8TypedPathBuf::from(unixify_path(&relative_to_workspace)),
                             })
                         }
                     }
@@ -307,56 +315,6 @@ impl AsRef<PackageRecord> for SourceRecord {
 }
 
 /// Normalize a path lexically (no filesystem access) and remove redundant separators/`..`.
-fn normalize_path(path: &Path) -> PathBuf {
-    use std::path::Component;
-
-    // `dunce::simplified` is purely lexical and strips UNC verbatim prefixes on Windows.
-    let simplified = dunce::simplified(path).to_path_buf();
-
-    let mut prefix: Option<OsString> = None;
-    let mut has_root = false;
-    let mut parts: Vec<OsString> = Vec::new();
-
-    for component in simplified.components() {
-        match component {
-            Component::Prefix(prefix_component) => {
-                prefix = Some(prefix_component.as_os_str().to_os_string());
-                parts.clear();
-            }
-            Component::RootDir => {
-                has_root = true;
-                parts.clear();
-            }
-            Component::CurDir => {}
-            Component::ParentDir => {
-                if let Some(last) = parts.last() {
-                    if last.as_os_str() == OsStr::new("..") {
-                        parts.push(OsString::from(".."));
-                    } else {
-                        parts.pop();
-                    }
-                } else if !has_root {
-                    parts.push(OsString::from(".."));
-                }
-            }
-            Component::Normal(part) => parts.push(part.to_os_string()),
-        }
-    }
-
-    let mut normalized = PathBuf::new();
-    if let Some(prefix) = prefix {
-        normalized.push(prefix);
-    }
-    if has_root {
-        normalized.push(std::path::MAIN_SEPARATOR.to_string());
-    }
-    for part in parts {
-        normalized.push(part);
-    }
-
-    normalized
-}
-
 /// Returns true when both git specs target the same repository (ignoring URL noise)
 /// and are pinned to the identical commit.
 fn same_git_checkout(a: &crate::PinnedGitSpec, b: &crate::PinnedGitSpec) -> bool {
@@ -368,64 +326,6 @@ fn same_git_checkout(a: &crate::PinnedGitSpec, b: &crate::PinnedGitSpec) -> bool
 fn same_git_checkout_url_commit(manifest_git: &crate::PinnedGitSpec, url: &Url, rev: &str) -> bool {
     RepositoryUrl::new(&manifest_git.git) == RepositoryUrl::new(url)
         && manifest_git.source.commit.to_string() == rev
-}
-
-/// Compute the repo-relative path from `base` (manifest subdir) to `target`
-/// (build subdir). Returns `None` if the directories are identical/root.
-fn relative_repo_subdir(base: &str, target: &str) -> Option<String> {
-    let base_abs = repo_absolute_path(base);
-    let target_abs = repo_absolute_path(target);
-    let relative =
-        pathdiff::diff_paths(&target_abs, &base_abs).unwrap_or_else(|| target_abs.clone());
-    let normalized = normalize_path(&relative);
-    if normalized.as_os_str().is_empty() {
-        None
-    } else {
-        Some(normalized.to_string_lossy().to_string())
-    }
-}
-
-/// Undo `relative_repo_subdir`: apply the manifest subdir back onto the relative
-/// path that was stored in the lock, so we get the real repo subdirectory again.
-fn resolve_repo_subdir(base: &str, relative: Option<&str>) -> Option<String> {
-    match relative {
-        Some(rel) => {
-            let combined = repo_absolute_path(base).join(rel);
-            strip_repo_root(normalize_path(&combined))
-        }
-        None => {
-            if base.is_empty() {
-                None
-            } else {
-                Some(base.to_string())
-            }
-        }
-    }
-}
-
-fn repo_absolute_path(subdir: &str) -> PathBuf {
-    if subdir.is_empty() {
-        PathBuf::from("/")
-    } else {
-        Path::new("/").join(subdir)
-    }
-}
-
-fn strip_repo_root(path: PathBuf) -> Option<String> {
-    let trimmed = if path.has_root() {
-        match path.strip_prefix(Path::new("/")) {
-            Ok(stripped) => stripped.to_path_buf(),
-            Err(_) => path,
-        }
-    } else {
-        path
-    };
-
-    if trimmed.as_os_str().is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string_lossy().to_string())
-    }
 }
 
 fn to_git_shallow(reference: &GitReference) -> Option<GitShallowSpec> {
@@ -451,7 +351,7 @@ mod tests {
     use super::*;
     use pixi_git::sha::GitSha;
     use serde_json::json;
-    use std::{path::Path, str::FromStr};
+    use std::str::FromStr;
     use url::Url;
 
     #[test]
@@ -499,15 +399,15 @@ mod tests {
             panic!("expected path package build source");
         };
 
-        // The path should now be relative to the manifest directory
-        // Manifest is in /workspace/recipes/, so ../src should point to /workspace/src
+        // Because manifest + build live in the same git repo we serialize the build as a git
+        // source with a subdir relative to the manifest checkout.
         assert_eq!(
             path.as_str(),
             "../src",
             "build_source should be relative to manifest_source directory"
         );
 
-        // Convert back to SourceRecord (deserialization)
+        // Convert back to SourceRecord (deserialization) and ensure we recover repo-root subdir
         let roundtrip = SourceRecord::from_conda_source_data(
             conda_source,
             &std::path::PathBuf::from("/workspace"),
@@ -518,7 +418,7 @@ mod tests {
             panic!("expected path pinned source");
         };
 
-        // After roundtrip, the path should again be from the repository root
+        // After roundtrip the git subdirectory should be expressed from repo root again.
         assert_eq!(roundtrip_path.path.as_str(), "src");
     }
 
@@ -627,6 +527,7 @@ mod tests {
             panic!("expected git package build source with relative subdir");
         };
 
+        // Git subdir is relative to manifest checkout (recipes -> ../src)
         assert_eq!(subdir.as_ref().map(|s| s.as_str()), Some("../src"));
 
         // Convert back to SourceRecord (deserialization)
@@ -750,36 +651,46 @@ mod tests {
     }
 
     #[test]
-    fn normalize_path_collapses_parent_segments() {
-        let normalized = super::normalize_path(Path::new("recipes/../"));
-        assert!(normalized.as_os_str().is_empty());
-    }
+    fn git_reference_conversion_helpers() {
+        use super::{git_reference_from_shallow, to_git_shallow};
+        use pixi_spec::GitReference;
+        use rattler_lock::GitShallowSpec;
 
-    #[test]
-    fn repo_subdir_helpers_round_trip() {
-        use super::{relative_repo_subdir, resolve_repo_subdir};
+        assert!(matches!(
+            to_git_shallow(&GitReference::Branch("main".into())),
+            Some(GitShallowSpec::Branch(branch)) if branch == "main"
+        ));
 
-        let manifest = "recipes";
-        let build = "recipes/lib";
+        assert!(matches!(
+            to_git_shallow(&GitReference::Tag("v1".into())),
+            Some(GitShallowSpec::Tag(tag)) if tag == "v1"
+        ));
 
-        let relative = relative_repo_subdir(manifest, build).expect("should produce relative path");
-        assert_eq!(relative, "lib");
+        assert!(matches!(
+            to_git_shallow(&GitReference::Rev("abc".into())),
+            Some(GitShallowSpec::Rev)
+        ));
 
-        let resolved = resolve_repo_subdir(manifest, Some(relative.as_str()));
-        assert_eq!(resolved.as_deref(), Some("recipes/lib"));
-    }
+        assert!(matches!(to_git_shallow(&GitReference::DefaultBranch), None));
 
-    #[test]
-    fn repo_subdir_helpers_handle_root() {
-        use super::{relative_repo_subdir, resolve_repo_subdir};
+        assert!(matches!(
+            git_reference_from_shallow(Some(GitShallowSpec::Branch("dev".into())), "ignored"),
+            GitReference::Branch(branch) if branch == "dev"
+        ));
 
-        // Both manifest and build at repo root
-        assert!(relative_repo_subdir("", "").is_none());
-        assert!(resolve_repo_subdir("", None).is_none());
+        assert!(matches!(
+            git_reference_from_shallow(Some(GitShallowSpec::Tag("v2".into())), "ignored"),
+            GitReference::Tag(tag) if tag == "v2"
+        ));
 
-        // Manifest at root, build in subdir
-        let rel = relative_repo_subdir("", "src").expect("relative path");
-        assert_eq!(rel, "src");
-        assert_eq!(resolve_repo_subdir("", Some("src")).as_deref(), Some("src"));
+        assert!(matches!(
+            git_reference_from_shallow(Some(GitShallowSpec::Rev), "deadbeef"),
+            GitReference::Rev(rev) if rev == "deadbeef"
+        ));
+
+        assert!(matches!(
+            git_reference_from_shallow(None, "deadbeef"),
+            GitReference::DefaultBranch
+        ));
     }
 }
