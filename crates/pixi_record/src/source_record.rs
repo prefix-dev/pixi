@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeSet, HashMap},
-    path::Path,
+    ffi::{OsStr, OsString},
+    path::{Path, PathBuf},
     str::FromStr,
 };
 
@@ -171,15 +172,23 @@ impl SourceRecord {
                     match &manifest_source {
                         PinnedSourceSpec::Url(_) => unimplemented!(),
                         PinnedSourceSpec::Git(pinned_git_spec) => {
-                            let base_dir = pinned_git_spec.source.subdirectory.as_ref();
-                            // Make `path` relative to repository root, if `base` is not None it will
-                            // be relative with `base` at this point, so lets join
-                            let subdir =
-                                base_dir.map(|base| Path::new(base).join(Path::new(path.as_str())));
+                            // The path is relative to the manifest subdirectory
+                            // Need to resolve it to get the absolute subdirectory in the repo
+                            let base_subdir =
+                                pinned_git_spec.source.subdirectory.as_deref().unwrap_or("");
+                            let base_path = std::path::Path::new(base_subdir);
+                            let relative_path = std::path::Path::new(path.as_str());
+
+                            // Join to get the subdirectory path and normalize away `.` / `..`
+                            let absolute_subdir = base_path.join(relative_path);
+                            let normalized = normalize_path(&absolute_subdir);
+                            let subdirectory = normalized
+                                .to_str()
+                                .expect("path should be valid UTF-8")
+                                .to_string();
 
                             let mut git_source = pinned_git_spec.source.clone();
-                            git_source.subdirectory =
-                                subdir.map(|p| p.to_string_lossy().to_string());
+                            git_source.subdirectory = Some(subdirectory);
 
                             // Reconstruct the git object
                             PinnedSourceSpec::Git(crate::PinnedGitSpec {
@@ -198,6 +207,7 @@ impl SourceRecord {
                             // Finally make the result relative to workspace_root
                             let manifest_absolute = manifest_path.resolve(workspace_root);
                             let build_absolute = build_source_spec.resolve(&manifest_absolute);
+                            let build_absolute = normalize_path(&build_absolute);
 
                             // Make the normalized path relative to workspace_root
                             let relative_to_workspace =
@@ -270,6 +280,60 @@ impl AsRef<PackageRecord> for SourceRecord {
     }
 }
 
+fn normalize_path(path: &Path) -> PathBuf {
+    use std::path::Component;
+
+    // `dunce::simplified` is purely lexical and strips UNC verbatim prefixes on Windows.
+    let simplified = dunce::simplified(path).to_path_buf();
+
+    let mut prefix: Option<OsString> = None;
+    let mut has_root = false;
+    let mut parts: Vec<OsString> = Vec::new();
+
+    for component in simplified.components() {
+        match component {
+            Component::Prefix(prefix_component) => {
+                prefix = Some(prefix_component.as_os_str().to_os_string());
+                parts.clear();
+            }
+            Component::RootDir => {
+                has_root = true;
+                parts.clear();
+            }
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if let Some(last) = parts.last() {
+                    if last.as_os_str() == OsStr::new("..") {
+                        parts.push(OsString::from(".."));
+                    } else {
+                        parts.pop();
+                    }
+                } else if !has_root {
+                    parts.push(OsString::from(".."));
+                }
+            }
+            Component::Normal(part) => parts.push(part.to_os_string()),
+        }
+    }
+
+    let mut normalized = PathBuf::new();
+    if let Some(prefix) = prefix {
+        normalized.push(prefix);
+    }
+    if has_root {
+        normalized.push(std::path::MAIN_SEPARATOR.to_string());
+    }
+    for part in parts {
+        normalized.push(part);
+    }
+
+    if normalized.as_os_str().is_empty() {
+        simplified
+    } else {
+        normalized
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,75 +341,6 @@ mod tests {
     use serde_json::json;
     use std::str::FromStr;
     use url::Url;
-
-    #[test]
-    fn package_build_source_roundtrip_preserves_git_subdirectory() {
-        let package_record: PackageRecord = serde_json::from_value(json!({
-            "name": "example",
-            "version": "1.0.0",
-            "build": "0",
-            "build_number": 0,
-            "subdir": "noarch",
-        }))
-        .expect("valid package record");
-
-        let git_url = Url::parse("https://example.com/repo.git").unwrap();
-        let pinned_source = PinnedSourceSpec::Git(crate::PinnedGitSpec {
-            git: git_url.clone(),
-            source: PinnedGitCheckout {
-                commit: GitSha::from_str("0123456789abcdef0123456789abcdef01234567").unwrap(),
-                subdirectory: Some("nested/project".to_string()),
-                reference: GitReference::Branch("main".to_string()),
-            },
-        });
-
-        let record = SourceRecord {
-            package_record,
-            manifest_source: pinned_source.clone(),
-            build_source: Some(pinned_source.clone()),
-            input_hash: None,
-            sources: Default::default(),
-        };
-
-        let conda_source = record
-            .clone()
-            .into_conda_source_data(&std::path::PathBuf::from("/workspace"));
-
-        let package_build_source = conda_source
-            .package_build_source
-            .as_ref()
-            .expect("expected package build source");
-
-        let PackageBuildSource::Git {
-            url,
-            spec,
-            rev,
-            subdir,
-        } = package_build_source
-        else {
-            panic!("expected git package build source");
-        };
-
-        assert_eq!(url.path(), "/repo.git");
-        assert_eq!(url.host_str(), Some("example.com"));
-        assert_eq!(subdir.as_ref().map(|s| s.as_str()), Some("nested/project"));
-        assert!(matches!(spec, Some(GitShallowSpec::Branch(branch)) if branch == "main"));
-        assert_eq!(rev, "0123456789abcdef0123456789abcdef01234567");
-
-        let roundtrip = SourceRecord::from_conda_source_data(
-            conda_source,
-            &std::path::PathBuf::from("/workspace"),
-        )
-        .expect("roundtrip should succeed");
-        let Some(PinnedSourceSpec::Git(roundtrip_git)) = roundtrip.build_source else {
-            panic!("expected git pinned source");
-        };
-        assert_eq!(
-            roundtrip_git.source.subdirectory.as_deref(),
-            Some("nested/project")
-        );
-        assert_eq!(roundtrip_git.git, git_url);
-    }
 
     #[test]
     fn package_build_source_path_is_made_relative() {
@@ -411,12 +406,8 @@ mod tests {
             panic!("expected path pinned source");
         };
 
-        // After roundtrip, the path should remain as it was in the lock file (relative)
-        assert_eq!(
-            roundtrip_path.path.as_str(),
-            "../src",
-            "build_source should remain as relative path from lock file"
-        );
+        // After roundtrip, the path should again be from the repository root
+        assert_eq!(roundtrip_path.path.as_str(), "src");
     }
 
     #[test]
@@ -469,7 +460,7 @@ mod tests {
     }
 
     #[test]
-    fn package_build_source_git_same_repo_is_made_relative() {
+    fn package_build_source_roundtrip_git_with_subdir() {
         let package_record: PackageRecord = serde_json::from_value(json!({
             "name": "example",
             "version": "1.0.0",
@@ -538,14 +529,21 @@ mod tests {
         )
         .expect("roundtrip should succeed");
 
-        let Some(PinnedSourceSpec::Path(roundtrip_path)) = roundtrip.build_source else {
+        let Some(PinnedSourceSpec::Git(roundtrip_path)) = roundtrip.build_source else {
             panic!(
                 "expected path pinned source after roundtrip (deserialized from relative path in lock file)"
             );
         };
 
-        // After roundtrip, it should remain as the relative path from the lock file
-        assert_eq!(roundtrip_path.path.as_str(), "../src");
+        // After roundtrip, the path will contain .. components (not normalized)
+        assert_eq!(
+            roundtrip_path
+                .source
+                .subdirectory
+                .expect("subdirectory should be set")
+                .as_str(),
+            "src"
+        );
     }
 
     #[test]
@@ -615,7 +613,7 @@ mod tests {
     fn roundtrip_conda_source_data() {
         let workspace_root = std::path::Path::new("/workspace");
 
-        // Load the SourceRecord from snapshot (skip YAML frontmatter)
+        // Load the SourceRecords from snapshot (skip YAML frontmatter)
         let snapshot_content = include_str!(
             "snapshots/pixi_record__source_record__tests__roundtrip_conda_source_data.snap"
         );
@@ -623,19 +621,24 @@ mod tests {
             .split("---")
             .nth(2)
             .expect("snapshot should have YAML content");
-        let original: SourceRecord =
+        let originals: Vec<SourceRecord> =
             serde_yaml::from_str(yaml_content).expect("failed to load snapshot");
 
-        // Roundtrip: SourceRecord -> CondaSourceData -> SourceRecord
-        let conda_data = original.clone().into_conda_source_data(workspace_root);
-        let roundtrip = SourceRecord::from_conda_source_data(conda_data, workspace_root)
-            .expect("from_conda_source_data should succeed");
+        // Roundtrip each record: SourceRecord -> CondaSourceData -> SourceRecord
+        let roundtrips: Vec<SourceRecord> = originals
+            .into_iter()
+            .map(|original| {
+                let conda_data = original.clone().into_conda_source_data(workspace_root);
+                SourceRecord::from_conda_source_data(conda_data, workspace_root)
+                    .expect("from_conda_source_data should succeed")
+            })
+            .collect();
 
-        // Snapshot the final result - should match the original
+        // Snapshot the final results - should match the originals
         let mut settings = insta::Settings::clone_current();
         settings.set_sort_maps(true);
         settings.bind(|| {
-            insta::assert_yaml_snapshot!(roundtrip);
+            insta::assert_yaml_snapshot!(roundtrips);
         });
     }
 }

@@ -251,22 +251,20 @@ impl PinnedSourceSpec {
                     return None;
                 }
 
-                // bas = { git = "ssh@tim", subdir = "baz" }
-                //
-                // [package.build]
-                // source = foo/bar
-                //
-
-                // Same repository - compute relative path between subdirectories
-                //  baz
+                // Same repository and commit - compute relative path between subdirectories
+                // Both subdirectories are relative to the repository root
                 let base_subdir = base_git.source.subdirectory.as_deref().unwrap_or("");
-                // baz/foo/bar
                 let this_subdir = this_git.source.subdirectory.as_deref().unwrap_or("");
 
-                //foo/bar
-                let relative_path = pathdiff::diff_paths(this_subdir, base_subdir)?;
+                // Compute the relative path from base to this
+                let base_path = std::path::Path::new(base_subdir);
+                let this_path = std::path::Path::new(this_subdir);
+
+                let relative = pathdiff::diff_paths(this_path, base_path)?;
+                let relative_str = relative.to_str()?;
+
                 Some(PinnedSourceSpec::Path(PinnedPathSpec {
-                    path: Utf8TypedPathBuf::from(relative_path.to_string_lossy().as_ref()),
+                    path: Utf8TypedPathBuf::from(relative_str),
                 }))
             }
             (PinnedSourceSpec::Url(_), _) => unreachable!("url specs have not been implemented"),

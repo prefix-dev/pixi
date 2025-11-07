@@ -5295,6 +5295,7 @@ dependencies = [
 name = "pixi_record"
 version = "0.1.0"
 dependencies = [
+ "dunce",
  "file_url",
  "insta",
  "miette 7.6.0",

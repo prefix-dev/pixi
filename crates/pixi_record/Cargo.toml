@@ -10,6 +10,7 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
+dunce = { workspace = true }
 file_url = { workspace = true }
 miette = { workspace = true }
 pathdiff = { workspace = true }

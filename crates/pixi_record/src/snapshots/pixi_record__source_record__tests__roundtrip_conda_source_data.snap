@@ -1,39 +1,93 @@
 ---
 source: crates/pixi_record/src/source_record.rs
-expression: roundtrip
+expression: roundtrips
 ---
-package_record:
-  build: h123456_0
-  build_number: 0
-  depends: []
-  md5: d41d8cd98f00b204e9800998ecf8427e
-  name: comprehensive-test
-  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  subdir: noarch
-  version: 1.0.0
-manifest_source:
-  commit: abc123def456abc123def456abc123def456abc1
-  git: "https://github.com/example/mono-repo.git"
-  reference:
-    branch: main
-  subdirectory: recipes
-build_source:
-  commit: abc123def456abc123def456abc123def456abc1
-  git: "https://github.com/example/mono-repo.git"
-  reference:
-    branch: main
-  subdirectory: recipes/nested/src
-input_hash:
-  hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  globs:
-    - "**/*.py"
-    - "**/*.txt"
-sources:
-  git-dep:
-    location:
-      git: "https://github.com/example/dep.git"
-      subdirectory: python
-      tag: v1.0.0
-  path-dep:
-    location:
-      path: "../vendor"
+- package_record:
+    build: h123456_0
+    build_number: 0
+    depends: []
+    md5: d41d8cd98f00b204e9800998ecf8427e
+    name: git-sibling-test
+    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    subdir: noarch
+    version: 1.0.0
+  manifest_source:
+    commit: abc123def456abc123def456abc123def456abc1
+    git: "https://github.com/example/mono-repo.git"
+    reference:
+      branch: main
+    subdirectory: recipes
+  build_source:
+    commit: abc123def456abc123def456abc123def456abc1
+    git: "https://github.com/example/mono-repo.git"
+    reference:
+      branch: main
+    subdirectory: nested/src
+  input_hash:
+    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    globs:
+      - "**/*.py"
+      - "**/*.txt"
+  sources: {}
+- package_record:
+    build: h234567_0
+    build_number: 0
+    depends: []
+    md5: d41d8cd98f00b204e9800998ecf8427e
+    name: git-child-test
+    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    subdir: noarch
+    version: 1.1.0
+  manifest_source:
+    commit: abc123def456abc123def456abc123def456abc1
+    git: "https://github.com/example/mono-repo.git"
+    reference:
+      branch: main
+    subdirectory: recipes
+  build_source:
+    commit: abc123def456abc123def456abc123def456abc1
+    git: "https://github.com/example/mono-repo.git"
+    reference:
+      branch: main
+    subdirectory: src
+  input_hash:
+    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    globs:
+      - "**/*.c"
+  sources: {}
+- package_record:
+    build: h789012_0
+    build_number: 0
+    depends: []
+    md5: d41d8cd98f00b204e9800998ecf8427e
+    name: path-sibling-test
+    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    subdir: noarch
+    version: 2.0.0
+  manifest_source:
+    path: recipes/my-package
+  build_source:
+    path: other-package/src
+  input_hash:
+    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    globs:
+      - "**/*.rs"
+  sources: {}
+- package_record:
+    build: h890123_0
+    build_number: 0
+    depends: []
+    md5: d41d8cd98f00b204e9800998ecf8427e
+    name: path-child-test
+    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    subdir: noarch
+    version: 2.1.0
+  manifest_source:
+    path: recipes/my-package
+  build_source:
+    path: src/lib
+  input_hash:
+    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    globs:
+      - "**/*.cpp"
+  sources: {}
