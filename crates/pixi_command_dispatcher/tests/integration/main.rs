@@ -9,6 +9,7 @@ use std::{
 };
 
 use event_reporter::EventReporter;
+use fs_err as fs;
 use itertools::Itertools;
 use pixi_build_backend_passthrough::PassthroughBackend;
 use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
@@ -18,14 +19,15 @@ use pixi_command_dispatcher::{
     SourceBuildCacheStatusSpec,
 };
 use pixi_config::default_channel_config;
-use pixi_record::PinnedPathSpec;
-use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec};
+use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
+use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, PackageName, Platform, VersionSpec, VersionWithSource,
     prefix::Prefix,
 };
+use rattler_digest::{Sha256, Sha256Hash, digest::Digest};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use url::Url;
 
@@ -67,6 +69,17 @@ fn workspaces_dir() -> PathBuf {
 fn default_build_environment() -> BuildEnvironment {
     let (tool_platform, tool_virtual_packages) = tool_platform();
     BuildEnvironment::simple(tool_platform, tool_virtual_packages)
+}
+
+fn dummy_sha() -> Sha256Hash {
+    Sha256::digest(b"pixi-url-cache-test")
+}
+
+fn prepare_cached_checkout(cache_root: &Path, sha: Sha256Hash) -> PathBuf {
+    let checkout_dir = cache_root.join("checkouts").join(format!("{sha:x}"));
+    fs::create_dir_all(&checkout_dir).unwrap();
+    fs::write(checkout_dir.join("payload.txt"), "cached contents").unwrap();
+    checkout_dir
 }
 
 #[tokio::test]
@@ -191,6 +204,41 @@ pub async fn instantiate_backend_without_compatible_api_version() {
         .unwrap_err();
 
     insta::assert_snapshot!(format_diagnostic(&err));
+}
+
+#[tokio::test]
+pub async fn pin_and_checkout_url_reuses_cached_checkout() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let url_cache_root = cache_dirs.url();
+
+    let sha = dummy_sha();
+    let checkout_dir = prepare_cached_checkout(&url_cache_root, sha);
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(cache_dirs)
+        .with_executor(Executor::Serial)
+        .finish();
+
+    let spec = UrlSpec {
+        url: "https://example.com/archive.tar.gz".parse().unwrap(),
+        md5: None,
+        sha256: Some(sha),
+    };
+
+    let checkout = dispatcher
+        .pin_and_checkout_url(spec.clone())
+        .await
+        .expect("url checkout should succeed");
+
+    assert_eq!(checkout.path, checkout_dir);
+    match checkout.pinned {
+        PinnedSourceSpec::Url(pinned) => {
+            assert_eq!(pinned.url, spec.url);
+            assert_eq!(pinned.sha256, sha);
+        }
+        other => panic!("expected url pinned spec, got {:?}", other),
+    }
 }
 
 /// When two identical tool env instantiations are queued concurrently and the
