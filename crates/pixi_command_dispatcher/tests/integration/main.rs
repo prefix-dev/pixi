@@ -85,14 +85,13 @@ fn prepare_cached_checkout(cache_root: &Path, sha: Sha256Hash) -> PathBuf {
     checkout_dir
 }
 
-const HELLO_WORLD_ARCHIVE: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../tests/data/url/hello_world.zip"
-);
+fn hello_world_archive() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/url/hello_world.zip")
+}
 
 fn file_url_for_test(tempdir: &TempDir, name: &str) -> Url {
     let path = tempdir.path().join(name);
-    fs::copy(HELLO_WORLD_ARCHIVE, &path).unwrap();
+    fs::copy(hello_world_archive(), &path).unwrap();
     Url::from_file_path(&path).unwrap()
 }
 
