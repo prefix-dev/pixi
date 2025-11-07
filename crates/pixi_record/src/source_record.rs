@@ -671,7 +671,7 @@ mod tests {
             Some(GitShallowSpec::Rev)
         ));
 
-        assert!(matches!(to_git_shallow(&GitReference::DefaultBranch), None));
+        assert!(to_git_shallow(&GitReference::DefaultBranch).is_none());
 
         assert!(matches!(
             git_reference_from_shallow(Some(GitShallowSpec::Branch("dev".into())), "ignored"),
