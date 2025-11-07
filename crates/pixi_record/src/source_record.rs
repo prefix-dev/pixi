@@ -486,7 +486,7 @@ mod tests {
         let manifest_source = PinnedSourceSpec::Git(crate::PinnedGitSpec {
             git: git_url.clone(),
             source: PinnedGitCheckout {
-                commit: commit,
+                commit,
                 subdirectory: Some("recipes".to_string()),
                 reference: GitReference::Branch("main".to_string()),
             },
@@ -496,7 +496,7 @@ mod tests {
         let build_source = PinnedSourceSpec::Git(crate::PinnedGitSpec {
             git: git_url.clone(),
             source: PinnedGitCheckout {
-                commit: commit,
+                commit,
                 subdirectory: Some("src".to_string()),
                 reference: GitReference::Branch("main".to_string()),
             },
