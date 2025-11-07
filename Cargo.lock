@@ -5296,6 +5296,7 @@ name = "pixi_record"
 version = "0.1.0"
 dependencies = [
  "file_url",
+ "insta",
  "miette 7.6.0",
  "pathdiff",
  "pixi_git",
@@ -5306,6 +5307,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "serde_yaml",
  "thiserror 2.0.17",
  "typed-path",
  "url",

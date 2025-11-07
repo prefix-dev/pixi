@@ -15,7 +15,7 @@ use typed_path::Utf8TypedPathBuf;
 use crate::{ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec};
 
 /// A record of a conda package that still requires building.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SourceRecord {
     /// Information about the conda package. This is metadata of the package
     /// after it has been build.
@@ -609,5 +609,33 @@ mod tests {
         // Different repositories - should stay as Git source
         assert_eq!(url, &build_git_url);
         assert_eq!(subdir.as_ref().map(|s| s.as_str()), Some("src"));
+    }
+
+    #[test]
+    fn roundtrip_conda_source_data() {
+        let workspace_root = std::path::Path::new("/workspace");
+
+        // Load the SourceRecord from snapshot (skip YAML frontmatter)
+        let snapshot_content = include_str!(
+            "snapshots/pixi_record__source_record__tests__roundtrip_conda_source_data.snap"
+        );
+        let yaml_content = snapshot_content
+            .split("---")
+            .nth(2)
+            .expect("snapshot should have YAML content");
+        let original: SourceRecord =
+            serde_yaml::from_str(yaml_content).expect("failed to load snapshot");
+
+        // Roundtrip: SourceRecord -> CondaSourceData -> SourceRecord
+        let conda_data = original.clone().into_conda_source_data(workspace_root);
+        let roundtrip = SourceRecord::from_conda_source_data(conda_data, workspace_root)
+            .expect("from_conda_source_data should succeed");
+
+        // Snapshot the final result - should match the original
+        let mut settings = insta::Settings::clone_current();
+        settings.set_sort_maps(true);
+        settings.bind(|| {
+            insta::assert_yaml_snapshot!(roundtrip);
+        });
     }
 }
