@@ -5,13 +5,14 @@ use std::{
     str::FromStr,
 };
 
-use pixi_git::sha::GitSha;
+use pixi_git::{sha::GitSha, url::RepositoryUrl};
 use pixi_spec::{GitReference, SourceSpec};
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
 use rattler_digest::{Sha256, Sha256Hash};
 use rattler_lock::{CondaSourceData, GitShallowSpec, PackageBuildSource};
 use serde::{Deserialize, Serialize};
 use typed_path::Utf8TypedPathBuf;
+use url::Url;
 
 use crate::{ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec};
 
@@ -64,45 +65,62 @@ impl SourceRecord {
     /// However, when saving in the lock-file make these relative to the package manifest.
     /// This should be used when writing to the lock file.
     pub fn into_conda_source_data(self, workspace_root: &Path) -> CondaSourceData {
-        let package_build_source = self.build_source.map(|build_source| {
-            let pinned_source_spec = build_source
-                .make_relative_to(&self.manifest_source, workspace_root)
-                .unwrap_or(build_source);
+        let package_build_source =
+            self.build_source
+                .clone()
+                .map(|build_source| match build_source {
+                    PinnedSourceSpec::Git(git_spec) => {
+                        // When manifest and build refer to the same repo+commit we keep the
+                        // build source as git, but rewrite its subdirectory relative to the
+                        // manifest checkout as expected by the lock file format.
+                        let mut subdirectory = git_spec.source.subdirectory.clone();
 
-            match pinned_source_spec {
-                PinnedSourceSpec::Url(pinned_url_spec) => PackageBuildSource::Url {
-                    url: pinned_url_spec.url,
-                    sha256: pinned_url_spec.sha256,
-                    subdir: None,
-                },
-                PinnedSourceSpec::Git(pinned_git_spec) => {
-                    let subdirectory = pinned_git_spec
-                        .source
-                        .subdirectory
-                        .as_deref()
-                        .map(Utf8TypedPathBuf::from);
-
-                    let spec = match &pinned_git_spec.source.reference {
-                        GitReference::Branch(branch) => {
-                            Some(GitShallowSpec::Branch(branch.clone()))
+                        if let PinnedSourceSpec::Git(manifest_git) = &self.manifest_source {
+                            if same_git_checkout(&git_spec, manifest_git) {
+                                subdirectory = relative_repo_subdir(
+                                    manifest_git.source.subdirectory.as_deref().unwrap_or(""),
+                                    git_spec.source.subdirectory.as_deref().unwrap_or(""),
+                                );
+                            }
                         }
-                        GitReference::Tag(tag) => Some(GitShallowSpec::Tag(tag.clone())),
-                        GitReference::Rev(_) => Some(GitShallowSpec::Rev),
-                        GitReference::DefaultBranch => None,
-                    };
 
-                    PackageBuildSource::Git {
-                        url: pinned_git_spec.git,
-                        spec,
-                        rev: pinned_git_spec.source.commit.to_string(),
-                        subdir: subdirectory,
+                        let subdirectory = subdirectory.as_deref().map(Utf8TypedPathBuf::from);
+                        let spec = to_git_shallow(&git_spec.source.reference);
+
+                        PackageBuildSource::Git {
+                            url: git_spec.git,
+                            spec,
+                            rev: git_spec.source.commit.to_string(),
+                            subdir: subdirectory,
+                        }
                     }
-                }
-                PinnedSourceSpec::Path(pinned_path) => PackageBuildSource::Path {
-                    path: pinned_path.path,
-                },
-            }
-        });
+                    PinnedSourceSpec::Url(pinned_url_spec) => PackageBuildSource::Url {
+                        url: pinned_url_spec.url,
+                        sha256: pinned_url_spec.sha256,
+                        subdir: None,
+                    },
+                    PinnedSourceSpec::Path(pinned_path) => {
+                        let native_path = Path::new(pinned_path.path.as_str());
+                        let should_relativize = !(native_path.is_absolute()
+                            && !native_path.starts_with(workspace_root));
+
+                        let relativized = if should_relativize {
+                            PinnedSourceSpec::Path(pinned_path.clone())
+                                .make_relative_to(&self.manifest_source, workspace_root)
+                                .unwrap_or(PinnedSourceSpec::Path(pinned_path.clone()))
+                        } else {
+                            PinnedSourceSpec::Path(pinned_path.clone())
+                        };
+
+                        let PinnedSourceSpec::Path(result_path) = relativized else {
+                            unreachable!("path specs must remain paths");
+                        };
+
+                        PackageBuildSource::Path {
+                            path: result_path.path,
+                        }
+                    }
+                });
 
         CondaSourceData {
             package_record: self.package_record,
@@ -139,19 +157,27 @@ impl SourceRecord {
                 rev,
                 subdir,
             } => {
-                let reference = match spec {
-                    Some(GitShallowSpec::Branch(branch)) => GitReference::Branch(branch),
-                    Some(GitShallowSpec::Tag(tag)) => GitReference::Tag(tag),
-                    Some(GitShallowSpec::Rev) => GitReference::Rev(rev.clone()),
-                    None => GitReference::DefaultBranch,
-                };
+                let mut subdirectory = subdir.map(|s| s.to_string());
 
-                // Out-of-tree git repository
+                if let PinnedSourceSpec::Git(manifest_git) = &manifest_source {
+                    // For same-repo checkouts the lock stored the subdir relative to the manifest;
+                    // restore the absolute repo subdirectory so SourceRecord stays workspace-root
+                    // relative again.
+                    if same_git_checkout_url_commit(manifest_git, &url, &rev) {
+                        subdirectory = resolve_repo_subdir(
+                            manifest_git.source.subdirectory.as_deref().unwrap_or(""),
+                            subdirectory.as_deref(),
+                        );
+                    }
+                }
+
+                let reference = git_reference_from_shallow(spec, &rev);
+
                 PinnedSourceSpec::Git(crate::PinnedGitSpec {
                     git: url,
                     source: PinnedGitCheckout {
                         commit: GitSha::from_str(&rev).unwrap(),
-                        subdirectory: subdir.map(|s| s.to_string()),
+                        subdirectory,
                         reference,
                     },
                 })
@@ -280,6 +306,7 @@ impl AsRef<PackageRecord> for SourceRecord {
     }
 }
 
+/// Normalize a path lexically (no filesystem access) and remove redundant separators/`..`.
 fn normalize_path(path: &Path) -> PathBuf {
     use std::path::Component;
 
@@ -327,10 +354,95 @@ fn normalize_path(path: &Path) -> PathBuf {
         normalized.push(part);
     }
 
+    normalized
+}
+
+/// Returns true when both git specs target the same repository (ignoring URL noise)
+/// and are pinned to the identical commit.
+fn same_git_checkout(a: &crate::PinnedGitSpec, b: &crate::PinnedGitSpec) -> bool {
+    RepositoryUrl::new(&a.git) == RepositoryUrl::new(&b.git) && a.source.commit == b.source.commit
+}
+
+/// Same check as `same_git_checkout`, but used while parsing lock data where only
+/// the URL + rev string are available.
+fn same_git_checkout_url_commit(manifest_git: &crate::PinnedGitSpec, url: &Url, rev: &str) -> bool {
+    RepositoryUrl::new(&manifest_git.git) == RepositoryUrl::new(url)
+        && manifest_git.source.commit.to_string() == rev
+}
+
+/// Compute the repo-relative path from `base` (manifest subdir) to `target`
+/// (build subdir). Returns `None` if the directories are identical/root.
+fn relative_repo_subdir(base: &str, target: &str) -> Option<String> {
+    let base_abs = repo_absolute_path(base);
+    let target_abs = repo_absolute_path(target);
+    let relative =
+        pathdiff::diff_paths(&target_abs, &base_abs).unwrap_or_else(|| target_abs.clone());
+    let normalized = normalize_path(&relative);
     if normalized.as_os_str().is_empty() {
-        simplified
+        None
     } else {
-        normalized
+        Some(normalized.to_string_lossy().to_string())
+    }
+}
+
+/// Undo `relative_repo_subdir`: apply the manifest subdir back onto the relative
+/// path that was stored in the lock, so we get the real repo subdirectory again.
+fn resolve_repo_subdir(base: &str, relative: Option<&str>) -> Option<String> {
+    match relative {
+        Some(rel) => {
+            let combined = repo_absolute_path(base).join(rel);
+            strip_repo_root(normalize_path(&combined))
+        }
+        None => {
+            if base.is_empty() {
+                None
+            } else {
+                Some(base.to_string())
+            }
+        }
+    }
+}
+
+fn repo_absolute_path(subdir: &str) -> PathBuf {
+    if subdir.is_empty() {
+        PathBuf::from("/")
+    } else {
+        Path::new("/").join(subdir)
+    }
+}
+
+fn strip_repo_root(path: PathBuf) -> Option<String> {
+    let trimmed = if path.has_root() {
+        match path.strip_prefix(Path::new("/")) {
+            Ok(stripped) => stripped.to_path_buf(),
+            Err(_) => path,
+        }
+    } else {
+        path
+    };
+
+    if trimmed.as_os_str().is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string_lossy().to_string())
+    }
+}
+
+fn to_git_shallow(reference: &GitReference) -> Option<GitShallowSpec> {
+    match reference {
+        GitReference::Branch(branch) => Some(GitShallowSpec::Branch(branch.clone())),
+        GitReference::Tag(tag) => Some(GitShallowSpec::Tag(tag.clone())),
+        GitReference::Rev(_) => Some(GitShallowSpec::Rev),
+        GitReference::DefaultBranch => None,
+    }
+}
+
+fn git_reference_from_shallow(spec: Option<GitShallowSpec>, rev: &str) -> GitReference {
+    match spec {
+        Some(GitShallowSpec::Branch(branch)) => GitReference::Branch(branch),
+        Some(GitShallowSpec::Tag(tag)) => GitReference::Tag(tag),
+        Some(GitShallowSpec::Rev) => GitReference::Rev(rev.to_string()),
+        None => GitReference::DefaultBranch,
     }
 }
 
@@ -339,7 +451,7 @@ mod tests {
     use super::*;
     use pixi_git::sha::GitSha;
     use serde_json::json;
-    use std::str::FromStr;
+    use std::{path::Path, str::FromStr};
     use url::Url;
 
     #[test]
@@ -455,8 +567,8 @@ mod tests {
             panic!("expected path package build source");
         };
 
-        // The path should be made relative
-        assert_eq!(path.as_str(), "../../completely/different/path");
+        // The path should stay absolute because the build source is unrelated
+        assert_eq!(path.as_str(), "/completely/different/path");
     }
 
     #[test]
@@ -511,16 +623,11 @@ mod tests {
             .as_ref()
             .expect("expected package build source");
 
-        let PackageBuildSource::Path { path } = package_build_source else {
-            panic!("expected path package build source (relativized from git)");
+        let PackageBuildSource::Git { subdir, .. } = package_build_source else {
+            panic!("expected git package build source with relative subdir");
         };
 
-        // The path should be relative: from recipes/ to src/ is ../src
-        assert_eq!(
-            path.as_str(),
-            "../src",
-            "build_source should be converted to relative path"
-        );
+        assert_eq!(subdir.as_ref().map(|s| s.as_str()), Some("../src"));
 
         // Convert back to SourceRecord (deserialization)
         let roundtrip = SourceRecord::from_conda_source_data(
@@ -640,5 +747,39 @@ mod tests {
         settings.bind(|| {
             insta::assert_yaml_snapshot!(roundtrips);
         });
+    }
+
+    #[test]
+    fn normalize_path_collapses_parent_segments() {
+        let normalized = super::normalize_path(Path::new("recipes/../"));
+        assert!(normalized.as_os_str().is_empty());
+    }
+
+    #[test]
+    fn repo_subdir_helpers_round_trip() {
+        use super::{relative_repo_subdir, resolve_repo_subdir};
+
+        let manifest = "recipes";
+        let build = "recipes/lib";
+
+        let relative = relative_repo_subdir(manifest, build).expect("should produce relative path");
+        assert_eq!(relative, "lib");
+
+        let resolved = resolve_repo_subdir(manifest, Some(relative.as_str()));
+        assert_eq!(resolved.as_deref(), Some("recipes/lib"));
+    }
+
+    #[test]
+    fn repo_subdir_helpers_handle_root() {
+        use super::{relative_repo_subdir, resolve_repo_subdir};
+
+        // Both manifest and build at repo root
+        assert!(relative_repo_subdir("", "").is_none());
+        assert!(resolve_repo_subdir("", None).is_none());
+
+        // Manifest at root, build in subdir
+        let rel = relative_repo_subdir("", "src").expect("relative path");
+        assert_eq!(rel, "src");
+        assert_eq!(resolve_repo_subdir("", Some("src")).as_deref(), Some("src"));
     }
 }

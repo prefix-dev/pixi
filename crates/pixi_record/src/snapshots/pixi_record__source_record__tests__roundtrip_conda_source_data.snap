@@ -91,3 +91,99 @@ expression: roundtrips
     globs:
       - "**/*.cpp"
   sources: {}
+- package_record:
+    build: h901234_0
+    build_number: 0
+    depends: []
+    md5: d41d8cd98f00b204e9800998ecf8427e
+    name: path-absolute-build-outside
+    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    subdir: noarch
+    version: 2.2.0
+  manifest_source:
+    path: recipes/external-package
+  build_source:
+    path: /opt/external/sources/pkg
+  input_hash:
+    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    globs:
+      - "**/*.pyx"
+  sources: {}
+- package_record:
+    build: h901235_0
+    build_number: 0
+    depends: []
+    md5: d41d8cd98f00b204e9800998ecf8427e
+    name: path-root-manifest
+    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    subdir: noarch
+    version: 2.3.0
+  manifest_source:
+    path: ""
+  build_source:
+    path: src/root-build
+  input_hash:
+    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    globs:
+      - pyproject.toml
+  sources: {}
+- package_record:
+    build: h901236_0
+    build_number: 0
+    depends: []
+    md5: d41d8cd98f00b204e9800998ecf8427e
+    name: path-absolute-manifest
+    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    subdir: noarch
+    version: 2.4.0
+  manifest_source:
+    path: /workspace/absolute-recipe
+  build_source:
+    path: absolute-recipe/src
+  input_hash:
+    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    globs:
+      - "**/*.sh"
+  sources: {}
+- package_record:
+    build: h901237_0
+    build_number: 0
+    depends: []
+    md5: d41d8cd98f00b204e9800998ecf8427e
+    name: git-no-manifest-subdir
+    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    subdir: noarch
+    version: 3.0.0
+  manifest_source:
+    commit: abc123def456abc123def456abc123def456abc1
+    git: "https://github.com/example/repo.git"
+    reference:
+      tag: v1.0.0
+  build_source:
+    commit: abc123def456abc123def456abc123def456abc1
+    git: "https://github.com/example/repo.git"
+    reference:
+      tag: v1.0.0
+    subdirectory: build/subdir
+  input_hash:
+    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    globs:
+      - src/**/*.rs
+  sources: {}
+- package_record:
+    build: h901238_0
+    build_number: 0
+    depends: []
+    md5: d41d8cd98f00b204e9800998ecf8427e
+    name: path-no-build-source
+    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    subdir: noarch
+    version: 2.5.0
+  manifest_source:
+    path: recipes/no-build
+  build_source: ~
+  input_hash:
+    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    globs:
+      - "**/*.md"
+  sources: {}
