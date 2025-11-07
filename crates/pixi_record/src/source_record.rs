@@ -101,8 +101,8 @@ impl SourceRecord {
                     },
                     PinnedSourceSpec::Path(pinned_path) => {
                         let native_path = Path::new(pinned_path.path.as_str());
-                        let should_relativize = !(native_path.is_absolute()
-                            && !native_path.starts_with(workspace_root));
+                        let should_relativize =
+                            !native_path.is_absolute() || native_path.starts_with(workspace_root);
 
                         let relativized = if should_relativize {
                             PinnedSourceSpec::Path(pinned_path.clone())
