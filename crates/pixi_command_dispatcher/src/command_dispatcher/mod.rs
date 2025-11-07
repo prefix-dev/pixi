@@ -20,7 +20,7 @@ use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
-use pixi_spec::SourceLocationSpec;
+use pixi_spec::{SourceLocationSpec, UrlSpec};
 use pixi_url::UrlResolver;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
@@ -602,7 +602,12 @@ impl CommandDispatcher {
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match source_location_spec {
             SourceLocationSpec::Url(url) => {
-                unimplemented!("fetching URL sources ({}) is not yet implemented", url.url)
+                self.pin_and_checkout_url(UrlSpec {
+                    url: url.url,
+                    md5: url.md5,
+                    sha256: url.sha256,
+                })
+                .await
             }
             SourceLocationSpec::Path(path) => {
                 let source_path = self
