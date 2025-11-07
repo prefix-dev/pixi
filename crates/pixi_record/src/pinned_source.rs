@@ -5,6 +5,7 @@ use std::{
     str::FromStr,
 };
 
+use crate::path_utils::unixify_path;
 use miette::IntoDiagnostic;
 use pixi_git::{
     GitUrl,
@@ -233,7 +234,7 @@ impl PinnedSourceSpec {
                 let relative_path = pathdiff::diff_paths(this_path, base_path)?;
 
                 Some(PinnedSourceSpec::Path(PinnedPathSpec {
-                    path: Utf8TypedPathBuf::from(relative_path.to_string_lossy().as_ref()),
+                    path: Utf8TypedPathBuf::from(unixify_path(relative_path.as_path())),
                 }))
             }
             // Git-to-Git: If same repository, convert to a relative path based on subdirectories
@@ -261,7 +262,7 @@ impl PinnedSourceSpec {
                 let this_path = std::path::Path::new(this_subdir);
 
                 let relative = pathdiff::diff_paths(this_path, base_path)?;
-                let relative_str = relative.to_str()?;
+                let relative_str = unixify_path(relative.as_path());
 
                 Some(PinnedSourceSpec::Path(PinnedPathSpec {
                     path: Utf8TypedPathBuf::from(relative_str),
