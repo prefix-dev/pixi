@@ -2228,7 +2228,9 @@ async fn spawn_extract_environment_task(
                     }
 
                     // Also add the dependency without any extras
-                    queue.push(PackageName::Pypi((uv_name, None)));
+                    if queued_names.insert(PackageName::Pypi((uv_name.clone(), None))) {
+                        queue.push(PackageName::Pypi((uv_name, None)));
+                    }
                 }
 
                 // Insert the record if it is not already present

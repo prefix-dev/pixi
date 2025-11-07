@@ -432,6 +432,19 @@ impl<'p> TaskGraph<'p> {
             None => &Vec::new(),
         };
 
+        // If the task has no typed arguments defined, treat all args as free-form
+        // This ensures consistency between direct execution and dependency execution
+        if task_arguments.is_empty() {
+            let free_form_args: Vec<String> = dep_args
+                .iter()
+                .map(|arg| match arg {
+                    TypedDependencyArg::Positional(v) => v.clone(),
+                    TypedDependencyArg::Named(name, value) => format!("{name}={value}"),
+                })
+                .collect();
+            return Ok(ArgValues::FreeFormArgs(free_form_args));
+        }
+
         let mut named_args = Vec::new();
         let mut seen_named = false;
 

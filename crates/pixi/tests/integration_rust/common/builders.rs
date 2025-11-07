@@ -24,7 +24,7 @@
 //! ```
 
 use pixi_cli::{
-    add,
+    add, build,
     cli_config::{
         DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
     },
@@ -85,6 +85,11 @@ impl InitBuilder {
     /// Instruct init which manifest format to use
     pub fn with_format(mut self, format: init::ManifestFormat) -> Self {
         self.args.format = Some(format);
+        self
+    }
+
+    pub fn with_platforms(mut self, platforms: Vec<Platform>) -> Self {
+        self.args.platforms = platforms.into_iter().map(|p| p.to_string()).collect();
         self
     }
 }
@@ -237,6 +242,11 @@ impl AddBuilder {
             self.args.lock_file_update_config.lock_file_usage.frozen = true;
             self.args.no_install_config.no_install = true;
         }
+        self
+    }
+
+    pub fn with_no_install(mut self, no_install: bool) -> Self {
+        self.args.no_install_config.no_install = no_install;
         self
     }
 }
@@ -573,6 +583,11 @@ impl UpdateBuilder {
         self.args.json = json;
         self
     }
+
+    pub fn with_no_install(mut self, no_install: bool) -> Self {
+        self.args.no_install = no_install;
+        self
+    }
 }
 
 impl IntoFuture for UpdateBuilder {
@@ -595,5 +610,20 @@ impl IntoFuture for LockBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         lock::execute(self.args).boxed_local()
+    }
+}
+
+/// Contains the arguments to pass to [`build::execute()`]. Call `.await` to call
+/// the CLI execute method and await the result at the same time.
+pub struct BuildBuilder {
+    pub args: build::Args,
+}
+
+impl IntoFuture for BuildBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        build::execute(self.args).boxed_local()
     }
 }

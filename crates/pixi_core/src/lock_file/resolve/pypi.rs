@@ -18,11 +18,12 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
+use pixi_git::git::GitReference;
 use pixi_manifest::{
     EnvironmentName, SolveStrategy, SystemRequirements, pypi::pypi_options::PypiOptions,
 };
 use pixi_pypi_spec::PixiPypiSpec;
-use pixi_record::PixiRecord;
+use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_uv_conversions::{
     ConversionError, as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec,
@@ -50,7 +51,10 @@ use uv_distribution_types::{
     IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
     SourceDist, ToUrlError,
 };
+use uv_git_types::GitUrl;
+use uv_pep508::VerbatimUrl;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
+use uv_redacted::DisplaySafeUrl;
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
@@ -225,6 +229,10 @@ pub enum SolveError {
     BuildDispatchPanic { message: String },
     #[error("unexpected panic during PyPI resolution: {message}")]
     GeneralPanic { message: String },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LookAhead(Box<dyn miette::Diagnostic + Send + Sync + 'static>),
 }
 
 /// Creates a custom `SolveError` from a `ResolveError`.
@@ -338,7 +346,7 @@ pub async fn resolve_pypi(
         tracing::info!("there are no python packages installed by conda");
     }
 
-    let requirements = dependencies
+    let mut requirements = dependencies
         .into_iter()
         .flat_map(|(name, req)| {
             req.into_iter()
@@ -440,8 +448,6 @@ pub async fn resolve_pypi(
                 })
                 .collect::<Result<Vec<_>, _>>()
         }).transpose()?.unwrap_or_default();
-
-    let overrides = Overrides::from_requirements(dependency_overrides);
 
     // Resolve the flat indexes from `--find-links`.
     // In UV 0.7.8, we need to fetch flat index entries from the index locations
@@ -558,6 +564,15 @@ pub async fn resolve_pypi(
         Conversion(#[from] ConversionError),
         #[error(transparent)]
         Preference(#[from] PreferenceError),
+
+        #[error(transparent)]
+        OidParse(#[from] uv_git_types::OidParseError),
+
+        #[error(transparent)]
+        GitUrlParse(#[from] uv_git_types::GitUrlParseError),
+
+        #[error("{0}")]
+        Other(miette::ErrReport),
     }
 
     // Create preferences from the locked pypi packages
@@ -580,13 +595,69 @@ pub async fn resolve_pypi(
                 origin: None,
             };
 
-            let named = uv_requirements_txt::RequirementsTxtRequirement::Named(requirement);
-            let entry = uv_requirements_txt::RequirementEntry {
-                requirement: named,
-                hashes: Default::default(),
-            };
+            // When iterating over locked packages,
+            // instead of adding git requirements as preferences
+            // we enrich previous defined requirements in the `requirements` list
+            // as they have been pinned to a precise commit
+            // This will help the resolver to pick the commit that we already have locked
+            // instead of updating to a newer commit that also matches the requirement.
+            if let Some(location) = package_data.location.as_url() {
+                // now check if it's a git url
+                if LockedGitUrl::is_locked_git_url(location) {
+                    // we need to parse back `LockedGitUrl` in order to get the `PinnedGitSpec`
+                    // then we will precise commit to set for the `GitUrl`
+                    // that will be used in the `RequirementSource::Git` below
+                    let git_locked_url = LockedGitUrl::from(location.clone());
+                    let pinned_git_spec = git_locked_url
+                        .to_pinned_git_spec()
+                        .map_err(PixiPreferencesError::Other)?;
+                    // we need to create VerbatimUrl from the original location
+                    let verbatim_url = VerbatimUrl::from(location.clone());
 
-            Ok(Preference::from_entry(entry)?)
+                    // but the display safe url should come from the `PinnedGitSpec` url
+                    // which don't have anymore git+ prefix
+                    let display_safe = DisplaySafeUrl::from(pinned_git_spec.git.clone());
+
+                    let git_oid =
+                        uv_git_types::GitOid::from_str(&pinned_git_spec.source.commit.to_string())?;
+
+                    let git_url = GitUrl::try_from(display_safe)?.with_precise(git_oid);
+
+                    let constraint_source = RequirementSource::Git {
+                        git: git_url,
+                        subdirectory: None,
+                        url: verbatim_url,
+                    };
+
+                    // find this requirements in dependencies and skip adding it as preference
+                    let req_from_dep = requirements.iter_mut().find(|r| r.name == requirement.name);
+                    if let Some(req) = req_from_dep {
+                        // we need to update the requirement source in the requirements list
+                        // to use the precise git commit
+                        // only if the requirements do not already have a source set with something specific
+                        if let RequirementSource::Git { git, .. } = &req.source {
+                                // only update if the git url does not already have a precise commit
+                                if git.precise().is_none() && !GitReference::looks_like_commit_hash(git.reference().as_rev()) {
+                                    tracing::debug!(
+                                        "updating requirement source to precise git commit for requirement: {:?}",
+                                        &req
+                                    );
+                                    req.source = constraint_source.clone();
+                                }
+
+                            }
+                    }
+                }
+                Ok(None)
+            } else {
+                let named = uv_requirements_txt::RequirementsTxtRequirement::Named(requirement);
+                let entry = uv_requirements_txt::RequirementEntry {
+                    requirement: named,
+                    hashes: Default::default(),
+                };
+
+                Ok(Preference::from_entry(entry)?)
+            }
         })
         .filter_map(|pref| pref.transpose())
         .collect::<Result<Vec<_>, PixiPreferencesError>>()
@@ -595,6 +666,8 @@ pub async fn resolve_pypi(
     let resolver_env = ResolverEnvironment::specific(marker_environment.clone().into());
 
     let constraints = Constraints::from_requirements(constraints.iter().cloned());
+
+    let overrides = Overrides::from_requirements(dependency_overrides);
 
     // Wrap the resolution in panic catching to handle conda prefix initialization failures
     // This includes both lookahead resolution and main resolution since both use lazy_build_dispatch
@@ -620,9 +693,7 @@ pub async fn resolve_pypi(
         .resolve(&resolver_env)
         .await
         .into_diagnostic()
-        .map_err(|e| SolveError::GeneralPanic {
-            message: format!("Failed to do lookahead resolution: {e}"),
-        })?;
+        .map_err(|e| SolveError::LookAhead(e.into()))?;
 
         // Move manifest and provider setup inside catch_unwind
         let manifest = Manifest::new(
