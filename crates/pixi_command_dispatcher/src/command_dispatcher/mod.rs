@@ -588,8 +588,7 @@ impl CommandDispatcher {
     ///
     /// 2. For git sources: Cloning or fetching the repository and checking out
     ///    the specified reference
-    /// 3. For URL sources: Downloading and extracting the archive (currently
-    ///    unimplemented)
+    /// 3. For URL sources: Downloading and extracting the archive
     ///
     /// The function handles path normalization and ensures security by
     /// preventing directory traversal attacks. It also manages caching of
@@ -635,7 +634,6 @@ impl CommandDispatcher {
     /// - For path sources: Resolves and validates the path
     /// - For git sources: Checks out the specific revision
     /// - For URL sources: Extracts the archive with the exact checksum
-    ///   (unimplemented)
     pub async fn checkout_pinned_source(
         &self,
         pinned_spec: PinnedSourceSpec,
@@ -653,9 +651,7 @@ impl CommandDispatcher {
                 })
             }
             PinnedSourceSpec::Git(git_spec) => self.checkout_pinned_git(git_spec).await,
-            PinnedSourceSpec::Url(_) => {
-                unimplemented!("fetching URL sources is not yet implemented")
-            }
+            PinnedSourceSpec::Url(url_spec) => self.checkout_pinned_url(url_spec).await,
         }
     }
 

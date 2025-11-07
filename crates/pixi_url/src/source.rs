@@ -65,7 +65,8 @@ impl UrlSource {
 
     fn existing_checkout(&self, sha: &Sha256Hash) -> Option<PathBuf> {
         let path = self.checkout_path(sha);
-        path.exists().then_some(path)
+        let ok_cond = path.exists();
+        ok_cond.then_some(path)
     }
 
     fn progress_bar(&self, prefix: &str, total: u64) -> ProgressBar {

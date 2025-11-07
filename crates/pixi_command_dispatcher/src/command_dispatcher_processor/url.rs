@@ -10,7 +10,7 @@ use crate::{
 use pixi_url::UrlError;
 
 impl CommandDispatcherProcessor {
-    /// Called when a [`ForegroundMessage::GitCheckout`] task was received.
+    /// Called when a [`ForegroundMessage::UrlCheckout`] task was received.
     pub(crate) fn on_checkout_url(&mut self, task: UrlCheckoutTask) {
         let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
         match self.url_checkouts.entry(task.spec.url.clone()) {
@@ -72,7 +72,7 @@ impl CommandDispatcherProcessor {
         }
     }
 
-    /// Called when a git checkout task has completed.
+    /// Called when a url checkout task has completed.
     pub(crate) fn on_url_checked_out(
         &mut self,
         url: url::Url,
@@ -81,10 +81,10 @@ impl CommandDispatcherProcessor {
         let Some(PendingUrlCheckout::Pending(reporter_id, pending)) =
             self.url_checkouts.get_mut(&url)
         else {
-            unreachable!("cannot get a result for a git checkout that is not pending");
+            unreachable!("cannot get a result for a url checkout that is not pending");
         };
 
-        // Notify the reporter that the git checkout has finished.
+        // Notify the reporter that the url checkout has finished.
         if let Some((reporter, id)) = self
             .reporter
             .as_deref_mut()
