@@ -234,6 +234,7 @@ impl PinnedSourceSpec {
                 let relative_path = pathdiff::diff_paths(this_path, base_path)?;
 
                 Some(PinnedSourceSpec::Path(PinnedPathSpec {
+                    // `pathdiff` yields native separators; convert to `/` for lock-file stability.
                     path: Utf8TypedPathBuf::from(unixify_path(relative_path.as_path())),
                 }))
             }
@@ -262,6 +263,7 @@ impl PinnedSourceSpec {
                 let this_path = std::path::Path::new(this_subdir);
 
                 let relative = pathdiff::diff_paths(this_path, base_path)?;
+                // Same here: ensure lock only contains `/` even when diff runs on Windows paths.
                 let relative_str = unixify_path(relative.as_path());
 
                 Some(PinnedSourceSpec::Path(PinnedPathSpec {

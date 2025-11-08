@@ -50,7 +50,8 @@ pub(crate) fn normalize_path(path: &Path) -> PathBuf {
     normalized
 }
 
-/// Compute the repo-relative path from `base` (manifest subdir) to `target` (build subdir).
+/// Compute the repo-relative path from `base` (manifest subdir) to `target` (build subdir), always
+/// returning `/`-separated strings so the lock format is stable across platforms.
 pub(crate) fn relative_repo_subdir(base: &str, target: &str) -> Option<String> {
     let base_abs = repo_absolute_path(base);
     let target_abs = repo_absolute_path(target);
@@ -64,7 +65,7 @@ pub(crate) fn relative_repo_subdir(base: &str, target: &str) -> Option<String> {
     }
 }
 
-/// Apply a manifest subdir back onto a relative path stored in the lock.
+/// Apply a manifest subdir back onto a relative path stored in the lock, again emitting `/`.
 pub(crate) fn resolve_repo_subdir(base: &str, relative: Option<&str>) -> Option<String> {
     match relative {
         Some(rel) => {

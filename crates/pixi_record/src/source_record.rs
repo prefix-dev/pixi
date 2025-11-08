@@ -250,6 +250,7 @@ impl SourceRecord {
                                     .unwrap_or(build_absolute);
 
                             PinnedSourceSpec::Path(crate::PinnedPathSpec {
+                                // Lock format is always `/`-separated even if diff runs on Windows.
                                 path: Utf8TypedPathBuf::from(unixify_path(&relative_to_workspace)),
                             })
                         }
