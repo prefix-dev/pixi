@@ -16,8 +16,8 @@ use url::Url;
 use crate::{
     ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec,
     path_utils::{
-        is_cross_platform_absolute, normalize_path, relative_repo_subdir, resolve_repo_subdir,
-        unixify_path,
+        is_cross_platform_absolute, normalize_path, path_within_workspace, relative_repo_subdir,
+        resolve_repo_subdir, unixify_path,
     },
 };
 
@@ -107,11 +107,10 @@ impl SourceRecord {
                     PinnedSourceSpec::Path(pinned_path) => {
                         let path_str = pinned_path.path.as_str();
                         let native_path = Path::new(path_str);
-                        let is_native_absolute = native_path.is_absolute();
                         let is_cross_platform_absolute =
                             is_cross_platform_absolute(path_str, native_path);
                         let is_within_workspace =
-                            is_native_absolute && native_path.starts_with(workspace_root);
+                            path_within_workspace(path_str, native_path, workspace_root);
                         let should_relativize = !is_cross_platform_absolute || is_within_workspace;
 
                         let relativized = if should_relativize {

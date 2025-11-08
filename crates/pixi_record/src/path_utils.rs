@@ -114,6 +114,34 @@ pub(crate) fn unixify_str(value: &str) -> String {
     value.replace('\\', "/")
 }
 
+pub(crate) fn path_within_workspace(
+    path_str: &str,
+    native_path: &Path,
+    workspace_root: &Path,
+) -> bool {
+    if native_path.is_absolute() {
+        return native_path.starts_with(workspace_root);
+    }
+
+    let path_unix = unixify_str(path_str);
+    let mut workspace_unix = unixify_path(workspace_root);
+    if workspace_unix.ends_with('/') {
+        workspace_unix.pop();
+    }
+
+    if workspace_unix.is_empty() {
+        return path_unix.starts_with('/');
+    }
+
+    if path_unix == workspace_unix {
+        return true;
+    }
+
+    path_unix.len() > workspace_unix.len()
+        && path_unix.starts_with(&workspace_unix)
+        && path_unix.as_bytes()[workspace_unix.len()] == b'/'
+}
+
 /// Returns true if the string should be treated as absolute regardless of host OS.
 pub(crate) fn is_cross_platform_absolute(path_str: &str, native_path: &Path) -> bool {
     if native_path.is_absolute() {
@@ -191,6 +219,27 @@ mod tests {
         assert!(!is_cross_platform_absolute(
             "relative/path",
             Path::new("relative/path")
+        ));
+    }
+
+    #[test]
+    fn path_within_workspace_detection() {
+        assert!(path_within_workspace(
+            "/workspace/src",
+            Path::new("/workspace/src"),
+            Path::new("/workspace")
+        ));
+
+        assert!(path_within_workspace(
+            "/workspace/src",
+            Path::new("workspace\\src"),
+            Path::new("/workspace")
+        ));
+
+        assert!(!path_within_workspace(
+            "/other/src",
+            Path::new("/other/src"),
+            Path::new("/workspace")
         ));
     }
 }
