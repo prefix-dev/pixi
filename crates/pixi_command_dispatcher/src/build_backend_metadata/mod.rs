@@ -593,11 +593,10 @@ pub enum BuildBackendMetadataError {
     #[error("the build backend {0} does not support the `conda/outputs` procedure")]
     BackendMissingCapabilities(String),
 
-    #[error("the build backend returned outputs with duplicate variants for package '{package}': {duplicates}")]
-    DuplicateVariants {
-        package: String,
-        duplicates: String,
-    },
+    #[error(
+        "the build backend returned outputs with duplicate variants for package '{package}': {duplicates}"
+    )]
+    DuplicateVariants { package: String, duplicates: String },
 
     #[error("could not compute hash of input files")]
     GlobHash(#[from] pixi_glob::GlobHashError),
@@ -633,10 +632,7 @@ mod tests {
     use rattler_conda_types::{NoArchType, PackageName, Platform, Version};
     use std::collections::BTreeMap;
 
-    fn create_test_output(
-        name: &str,
-        variant: BTreeMap<String, String>,
-    ) -> CondaOutput {
+    fn create_test_output(name: &str, variant: BTreeMap<String, String>) -> CondaOutput {
         CondaOutput {
             metadata: CondaOutputMetadata {
                 name: PackageName::try_from(name).unwrap(),
@@ -678,7 +674,10 @@ mod tests {
         ];
 
         let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
-        assert!(result.is_ok(), "Expected validation to pass for unique variants");
+        assert!(
+            result.is_ok(),
+            "Expected validation to pass for unique variants"
+        );
     }
 
     #[test]
@@ -758,7 +757,10 @@ mod tests {
         )];
 
         let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
-        assert!(result.is_ok(), "Expected validation to pass for single output");
+        assert!(
+            result.is_ok(),
+            "Expected validation to pass for single output"
+        );
     }
 
     #[test]
