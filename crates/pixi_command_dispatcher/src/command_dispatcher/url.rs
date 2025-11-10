@@ -33,8 +33,7 @@ impl CommandDispatcher {
         &self,
         url_spec: UrlSpec,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
-        // Determine the git url, including the reference
-        // Fetch the git url in the background
+        // Fetch the url in the background
         let UrlCheckout { pinned_url, dir } = self
             .checkout_url(url_spec)
             .await
@@ -46,9 +45,9 @@ impl CommandDispatcher {
         })
     }
 
-    /// Check out a particular git repository.
+    /// Check out a particular url.
     ///
-    /// The git checkout is performed in the background.
+    /// The url checkout is performed in the background.
     pub async fn checkout_url(
         &self,
         url: UrlSpec,
