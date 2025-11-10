@@ -32,3 +32,6 @@ url.workspace = true
 xz2.workspace = true
 zip.workspace = true
 zstd.workspace = true
+
+[dev-dependencies]
+axum = { workspace = true, features = ["http1", "tokio"] }
