@@ -1,3 +1,5 @@
+use std::collections::hash_map::Entry;
+
 use futures::FutureExt;
 
 use super::{CommandDispatcherProcessor, PendingUrlCheckout, PendingUrlWaiter, TaskResult};
@@ -21,83 +23,51 @@ impl CommandDispatcherProcessor {
         let parent_context = parent.and_then(|ctx| self.reporter_context(ctx));
         let url = spec.url.clone();
 
-        if let Some(existing_checkout) = self.url_checkouts.get_mut(&url) {
-            match existing_checkout {
-                PendingUrlCheckout::Pending(_, pending) => {
-                    pending.push(PendingUrlWaiter {
+        match self.url_checkouts.entry(url.clone()) {
+            Entry::Occupied(mut existing_checkout) => {
+                match existing_checkout.get_mut() {
+                    PendingUrlCheckout::Pending(_, pending) => pending.push(PendingUrlWaiter {
                         spec: spec.clone(),
                         tx,
-                    });
-                    return;
-                }
-                PendingUrlCheckout::CheckedOut(checkout) => {
-                    if validate_checkout(&spec, checkout).is_ok() {
-                        let _ = tx.send(Ok(checkout.clone()));
-                        return;
+                    }),
+                    PendingUrlCheckout::CheckedOut(fetch) => {
+                        let _ = tx.send(Ok(fetch.clone()));
                     }
-
-                    let reporter_id = self
-                        .reporter
-                        .as_deref_mut()
-                        .and_then(Reporter::as_url_reporter)
-                        .map(|reporter| reporter.on_queued(parent_context, &url));
-                    *existing_checkout = PendingUrlCheckout::Pending(
-                        reporter_id,
-                        vec![PendingUrlWaiter {
-                            spec: spec.clone(),
-                            tx,
-                        }],
-                    );
-
-                    if let Some((reporter, id)) = self
-                        .reporter
-                        .as_deref_mut()
-                        .and_then(Reporter::as_url_reporter)
-                        .zip(reporter_id)
-                    {
-                        reporter.on_start(id)
+                    PendingUrlCheckout::Errored => {
+                        // Drop the sender, this will cause a cancellation on the other side.
+                        drop(tx)
                     }
-
-                    self.spawn_url_fetch(spec, cancellation_token, url);
-                    return;
-                }
-                PendingUrlCheckout::Errored => {
-                    // Drop the sender, this will cause a cancellation on the other side.
-                    drop(tx);
-                    return;
                 }
             }
+            Entry::Vacant(entry) => {
+                // Notify the reporter that a new checkout has been queued.
+                let reporter_id = self
+                    .reporter
+                    .as_deref_mut()
+                    .and_then(Reporter::as_url_reporter)
+                    .map(|reporter| reporter.on_queued(parent_context, &url));
+
+                entry.insert(PendingUrlCheckout::Pending(
+                    reporter_id,
+                    vec![PendingUrlWaiter {
+                        spec: spec.clone(),
+                        tx,
+                    }],
+                ));
+
+                // Notify the reporter that the fetch has started.
+                if let Some((reporter, id)) = self
+                    .reporter
+                    .as_deref_mut()
+                    .and_then(Reporter::as_url_reporter)
+                    .zip(reporter_id)
+                {
+                    reporter.on_start(id)
+                }
+
+                self.spawn_url_fetch(spec, cancellation_token, url);
+            }
         }
-
-        // Notify the reporter that a new checkout has been queued.
-        let reporter_id = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_url_reporter)
-            .map(|reporter| reporter.on_queued(parent_context, &url));
-
-        self.url_checkouts.insert(
-            url.clone(),
-            PendingUrlCheckout::Pending(
-                reporter_id,
-                vec![PendingUrlWaiter {
-                    spec: spec.clone(),
-                    tx,
-                }],
-            ),
-        );
-
-        // Notify the reporter that the fetch has started.
-        if let Some((reporter, id)) = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_url_reporter)
-            .zip(reporter_id)
-        {
-            reporter.on_start(id)
-        }
-
-        self.spawn_url_fetch(spec, cancellation_token, url);
     }
 
     fn spawn_url_fetch(
