@@ -24,21 +24,19 @@ impl CommandDispatcherProcessor {
         let url = spec.url.clone();
 
         match self.url_checkouts.entry(url.clone()) {
-            Entry::Occupied(mut existing_checkout) => {
-                match existing_checkout.get_mut() {
-                    PendingUrlCheckout::Pending(_, pending) => pending.push(PendingUrlWaiter {
-                        spec: spec.clone(),
-                        tx,
-                    }),
-                    PendingUrlCheckout::CheckedOut(fetch) => {
-                        let _ = tx.send(Ok(fetch.clone()));
-                    }
-                    PendingUrlCheckout::Errored => {
-                        // Drop the sender, this will cause a cancellation on the other side.
-                        drop(tx)
-                    }
+            Entry::Occupied(mut existing_checkout) => match existing_checkout.get_mut() {
+                PendingUrlCheckout::Pending(_, pending) => pending.push(PendingUrlWaiter {
+                    spec: spec.clone(),
+                    tx,
+                }),
+                PendingUrlCheckout::CheckedOut(fetch) => {
+                    let _ = tx.send(validate_checkout(&spec, fetch).map(|_| fetch.clone()));
                 }
-            }
+                PendingUrlCheckout::Errored => {
+                    // Drop the sender, this will cause a cancellation on the other side.
+                    drop(tx)
+                }
+            },
             Entry::Vacant(entry) => {
                 // Notify the reporter that a new checkout has been queued.
                 let reporter_id = self
