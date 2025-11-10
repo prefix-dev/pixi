@@ -209,6 +209,7 @@ enum PendingGitCheckout {
     Errored,
 }
 
+// We store spec here to double-check that hashes are correct.
 struct PendingUrlWaiter {
     spec: UrlSpec,
     tx: oneshot::Sender<Result<UrlCheckout, UrlError>>,
