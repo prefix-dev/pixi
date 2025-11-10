@@ -219,114 +219,6 @@ pub async fn instantiate_backend_without_compatible_api_version() {
     insta::assert_snapshot!(format_diagnostic(&err));
 }
 
-#[tokio::test]
-pub async fn pin_and_checkout_url_reuses_cached_checkout() {
-    let tempdir = tempfile::tempdir().unwrap();
-    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
-    let url_cache_root = cache_dirs.url();
-
-    let sha = dummy_sha();
-    let checkout_dir = prepare_cached_checkout(&url_cache_root, sha);
-
-    let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(cache_dirs)
-        .with_executor(Executor::Serial)
-        .finish();
-
-    let spec = UrlSpec {
-        url: "https://example.com/archive.tar.gz".parse().unwrap(),
-        md5: None,
-        sha256: Some(sha),
-    };
-
-    let checkout = dispatcher
-        .pin_and_checkout_url(spec.clone())
-        .await
-        .expect("url checkout should succeed");
-
-    assert_eq!(checkout.path, checkout_dir);
-    match checkout.pinned {
-        PinnedSourceSpec::Url(pinned) => {
-            assert_eq!(pinned.url, spec.url);
-            assert_eq!(pinned.sha256, sha);
-        }
-        other => panic!("expected url pinned spec, got {other:?}"),
-    }
-}
-
-#[tokio::test]
-pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request() {
-    let tempdir = tempfile::tempdir().unwrap();
-    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
-    let archive = tempfile::tempdir().unwrap();
-    let url = file_url_for_test(&archive, "archive.zip");
-
-    let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(cache_dirs)
-        .with_executor(Executor::Serial)
-        .finish();
-
-    let good_spec = UrlSpec {
-        url: url.clone(),
-        md5: None,
-        sha256: None,
-    };
-    let bad_spec = UrlSpec {
-        url,
-        md5: None,
-        sha256: Some(Sha256::digest(b"pixi-url-bad-sha")),
-    };
-
-    let (good, bad) = tokio::join!(
-        dispatcher.checkout_url(good_spec),
-        dispatcher.checkout_url(bad_spec),
-    );
-
-    assert!(good.is_ok());
-    assert!(matches!(
-        bad,
-        Err(CommandDispatcherError::Failed(
-            UrlError::Sha256Mismatch { .. }
-        ))
-    ));
-}
-
-#[tokio::test]
-pub async fn pin_and_checkout_url_validates_cached_results() {
-    let tempdir = tempfile::tempdir().unwrap();
-    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
-    let archive = tempfile::tempdir().unwrap();
-    let url = file_url_for_test(&archive, "archive.zip");
-
-    let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(cache_dirs)
-        .with_executor(Executor::Serial)
-        .finish();
-
-    let spec = UrlSpec {
-        url: url.clone(),
-        md5: None,
-        sha256: None,
-    };
-
-    dispatcher
-        .checkout_url(spec.clone())
-        .await
-        .expect("initial download succeeds");
-
-    let bad_spec = UrlSpec {
-        url: url.clone(),
-        md5: None,
-        sha256: Some(Sha256::digest(b"pixi-url-bad-cache")),
-    };
-
-    let err = dispatcher.checkout_url(bad_spec).await.unwrap_err();
-    assert!(matches!(
-        err,
-        CommandDispatcherError::Failed(UrlError::Sha256Mismatch { .. })
-    ));
-}
-
 /// When two identical tool env instantiations are queued concurrently and the
 /// operation fails, the dispatcher sends the failure to one waiter and cancels
 /// the others. This verifies cancellation without network access.
@@ -896,4 +788,113 @@ pub async fn test_force_rebuild() {
         rebuild_packages.is_empty(),
         "Expected no packages to be queued for rebuild"
     );
+}
+
+#[tokio::test]
+pub async fn pin_and_checkout_url_reuses_cached_checkout() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let url_cache_root = cache_dirs.url();
+
+    let sha = dummy_sha();
+    let checkout_dir = prepare_cached_checkout(&url_cache_root, sha);
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(cache_dirs)
+        .with_executor(Executor::Serial)
+        .finish();
+
+    // Since we have the same expected hash we expect to return existing archive.
+    let spec = UrlSpec {
+        url: "https://example.com/archive.tar.gz".parse().unwrap(),
+        md5: None,
+        sha256: Some(sha),
+    };
+
+    let checkout = dispatcher
+        .pin_and_checkout_url(spec.clone())
+        .await
+        .expect("url checkout should succeed");
+
+    assert_eq!(checkout.path, checkout_dir);
+    match checkout.pinned {
+        PinnedSourceSpec::Url(pinned) => {
+            assert_eq!(pinned.url, spec.url);
+            assert_eq!(pinned.sha256, sha);
+        }
+        other => panic!("expected url pinned spec, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let archive = tempfile::tempdir().unwrap();
+    let url = file_url_for_test(&archive, "archive.zip");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(cache_dirs)
+        .with_executor(Executor::Concurrent)
+        .finish();
+
+    let good_spec = UrlSpec {
+        url: url.clone(),
+        md5: None,
+        sha256: None,
+    };
+    let bad_spec = UrlSpec {
+        url,
+        md5: None,
+        sha256: Some(Sha256::digest(b"pixi-url-bad-sha")),
+    };
+
+    let (good, bad) = tokio::join!(
+        dispatcher.checkout_url(good_spec),
+        dispatcher.checkout_url(bad_spec),
+    );
+
+    assert!(good.is_ok());
+    assert!(matches!(
+        bad,
+        Err(CommandDispatcherError::Failed(
+            UrlError::Sha256Mismatch { .. }
+        ))
+    ));
+}
+
+#[tokio::test]
+pub async fn pin_and_checkout_url_validates_cached_results() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let archive = tempfile::tempdir().unwrap();
+    let url = file_url_for_test(&archive, "archive.zip");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(cache_dirs)
+        .with_executor(Executor::Serial)
+        .finish();
+
+    let spec = UrlSpec {
+        url: url.clone(),
+        md5: None,
+        sha256: None,
+    };
+
+    dispatcher
+        .checkout_url(spec.clone())
+        .await
+        .expect("initial download succeeds");
+
+    let bad_spec = UrlSpec {
+        url: url.clone(),
+        md5: None,
+        sha256: Some(Sha256::digest(b"pixi-url-bad-cache")),
+    };
+
+    let err = dispatcher.checkout_url(bad_spec).await.unwrap_err();
+    assert!(matches!(
+        err,
+        CommandDispatcherError::Failed(UrlError::Sha256Mismatch { .. })
+    ));
 }
