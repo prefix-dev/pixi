@@ -340,7 +340,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
     let mut writer = tabwriter::TabWriter::new(stdout());
 
-    let header_style = console::Style::new().bold();
+    let header_style = console::Style::new().bold().cyan();
     writeln!(
         writer,
         "{}\t{}\t{}\t{}\t{}\t{}",
