@@ -1,4 +1,4 @@
-//! Helpers to extract archives.
+//! Helpers to extract archives. That were taken from `rattler-build`. Should be removed after `rattler-build` refactoring is done.
 use std::{ffi::OsStr, io::BufRead, path::Path};
 
 use fs_err as fs;
