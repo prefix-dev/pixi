@@ -159,6 +159,9 @@ fn fulfill_waiter(waiter: PendingUrlWaiter, checkout: &UrlCheckout) {
     let _ = tx.send(result);
 }
 
+/// Validate that hashes are matching.
+///
+/// It is done by `pixi_url` crate, and this is just a double-check.
 #[allow(clippy::result_large_err)]
 fn validate_checkout(spec: &UrlSpec, checkout: &UrlCheckout) -> Result<(), UrlError> {
     if let Some(expected) = spec.sha256 {

@@ -32,6 +32,12 @@ struct CachedDigests {
 }
 
 /// A remote URL source that can be downloaded and extracted locally.
+///
+/// Layout inside the cache root for each URL digest:
+/// - `archives/` stores raw downloaded archives as `{digest}-original-name`
+/// - `checkouts/{sha256}` holds the extracted contents with `.pixi-url-ready` and
+///   `.pixi-url-md5` markers
+/// - `locks/{digest}` synchronizes downloads/extractions and contains `digests` metadata
 pub struct UrlSource {
     spec: UrlSpec,
     client: LazyClient,
@@ -57,22 +63,27 @@ impl UrlSource {
         self
     }
 
+    /// Directory where raw downloaded archives are stored.
     fn archives_dir(&self) -> PathBuf {
         self.cache.join("archives")
     }
 
+    /// Directory containing extracted archives keyed by sha256.
     fn checkouts_dir(&self) -> PathBuf {
         self.cache.join("checkouts")
     }
 
+    /// Directory holding lock files and digest metadata per URL digest.
     fn locks_dir(&self) -> PathBuf {
         self.cache.join("locks")
     }
 
+    /// Checkout directory for a specific sha256 hash.
     fn checkout_path(&self, sha: &Sha256Hash) -> PathBuf {
         self.checkouts_dir().join(format!("{sha:x}"))
     }
 
+    /// Returns an existing checkout if it already satisfies the requested hashes.
     fn reuse_from_cache(
         &self,
         sha: &Sha256Hash,
@@ -96,10 +107,12 @@ impl UrlSource {
         Some((path, md5))
     }
 
+    /// Reports whether a checkout directory completed extraction earlier.
     fn is_checkout_ready(&self, checkout: &Path) -> bool {
         checkout.exists() && checkout.join(CHECKOUT_SENTINEL).is_file()
     }
 
+    /// Reads the stored md5 hash for a checkout directory.
     fn checkout_md5(&self, checkout: &Path) -> Option<Md5Hash> {
         let path = checkout.join(CHECKOUT_MD5);
         let contents = fs_err::read_to_string(path).ok()?;
@@ -113,6 +126,20 @@ impl UrlSource {
     }
 
     /// Fetch the URL, returning the extracted directory and pinned metadata.
+    ///
+    /// High-level overview of what we're doing here is:
+    ///
+    ///   - Ensure cache directories (archives/, checkouts/, locks/) exist for this URL digest.
+    ///   - Look for a previously recorded sha256/md5 in locks/{digest}/digests; if present (or the caller supplied hashes), try to reuse an existing checkout (checkouts/{sha}/)
+    ///     that has a .pixi-url-ready marker and matching hashes so we can return immediately.
+    ///   - If reuse fails, acquire the per-URL lock (locks/{digest}) to prevent other processes from downloading/extracting the same archive concurrently. After locking, re-
+    ///     check the reuse path in case another process finished first.
+    ///   - Download the archive (or copy it for file:// URLs) into archives/{digest}-{filename}, streaming bytes through sha256/md5 hashers. Once finished, validate the computed
+    ///     hashes against any caller-provided expectations.
+    ///   - Extract the archive into checkouts/{sha}/, removing any stale directory first. After extraction, write .pixi-url-ready and .pixi-url-md5, and persist the sha256/md5
+    ///     pair in locks/{digest}/digests for future reuse.
+    ///   - Release the lock and return a Fetch struct pointing at the populated checkout plus a PinnedUrlSpec containing the precise hashes of the fetched archive.
+
     #[instrument(skip(self), fields(url = %self.spec.url))]
     pub async fn fetch(mut self) -> Result<Fetch, UrlError> {
         async_fs::create_dir_all(self.archives_dir()).await?;
@@ -230,6 +257,7 @@ impl UrlSource {
         })
     }
 
+    /// Streams the remote archive into the cache while hashing its content.
     async fn download_archive(
         &self,
         archive_path: &Path,
@@ -284,6 +312,7 @@ impl UrlSource {
         Ok((sha256, md5))
     }
 
+    /// Handles `file://` URLs by copying the archive locally and hashing it.
     async fn copy_local_file(
         &self,
         source: &Path,
@@ -307,6 +336,7 @@ impl UrlSource {
         Ok((sha.finalize(), md5.finalize()))
     }
 
+    /// Extracts the downloaded archive into the checkout directory.
     async fn extract_archive(&self, archive_path: &Path, target: &Path) -> Result<(), UrlError> {
         let file_name = archive_path
             .file_name()
@@ -335,6 +365,7 @@ impl UrlSource {
         Ok(())
     }
 
+    /// Writes the readiness marker and md5 metadata next to the checkout.
     async fn write_checkout_metadata(
         &self,
         checkout: &Path,
@@ -349,6 +380,7 @@ impl UrlSource {
         Ok(())
     }
 
+    /// Reads persisted sha256/md5 digests for a cached archive.
     async fn read_cached_digests(&self, ident: &str) -> Result<Option<CachedDigests>, UrlError> {
         let path = self.digests_path(ident);
         match async_fs::read_to_string(&path).await {
@@ -385,6 +417,7 @@ impl UrlSource {
         }
     }
 
+    /// Persists sha256/md5 digests for a freshly downloaded archive.
     async fn write_cached_digests(
         &self,
         ident: &str,
@@ -400,6 +433,7 @@ impl UrlSource {
         Ok(())
     }
 
+    /// Returns the filesystem path that stores digest metadata for an archive ident.
     fn digests_path(&self, ident: &str) -> PathBuf {
         self.locks_dir().join(ident).join("digests")
     }
