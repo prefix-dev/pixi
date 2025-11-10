@@ -115,8 +115,8 @@ pub(crate) struct CommandDispatcherProcessor {
     /// out.
     git_checkouts: HashMap<RepositoryReference, PendingGitCheckout>,
 
-    /// Git checkouts in the process of being checked out, or already checked
-    /// out.
+    /// Url checkouts in the process of being checked out, or already
+    /// checked out.
     url_checkouts: HashMap<::url::Url, PendingUrlCheckout>,
 
     /// Source builds that are currently being processed.
