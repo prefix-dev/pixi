@@ -79,6 +79,15 @@ impl<I: Interface> WorkspaceContext<I> {
             .await
     }
 
+    pub async fn feature_by_task(
+        &self,
+        task: &TaskName,
+        environment: &EnvironmentName,
+    ) -> Option<FeatureName> {
+        crate::workspace::workspace::feature::feature_by_task(&self.workspace, task, environment)
+            .await
+    }
+
     pub async fn list_tasks(
         &self,
         environment: Option<EnvironmentName>,

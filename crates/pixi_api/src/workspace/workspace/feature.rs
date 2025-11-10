@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use indexmap::{IndexMap, IndexSet};
 use pixi_core::Workspace;
-use pixi_manifest::{Feature, FeatureName, PrioritizedChannel, TargetSelector, Task, TaskName};
+use pixi_manifest::{
+    EnvironmentName, Feature, FeatureName, PrioritizedChannel, TargetSelector, Task, TaskName,
+};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::PackageName;
 
@@ -48,4 +50,21 @@ pub async fn list_feature_tasks(
             .for_opt_target(target)
             .map(|target| target.tasks.clone())
     })
+}
+
+pub async fn feature_by_task(
+    workspace: &Workspace,
+    task: &TaskName,
+    environment: &EnvironmentName,
+) -> Option<FeatureName> {
+    let environment = workspace.environment(environment)?;
+    let feature_tasks = environment.feature_tasks();
+
+    for (feature_name, tasks) in feature_tasks {
+        if tasks.contains_key(task) {
+            return Some(feature_name.clone());
+        }
+    }
+
+    None
 }
