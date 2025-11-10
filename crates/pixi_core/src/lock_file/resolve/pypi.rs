@@ -229,6 +229,10 @@ pub enum SolveError {
     BuildDispatchPanic { message: String },
     #[error("unexpected panic during PyPI resolution: {message}")]
     GeneralPanic { message: String },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LookAhead(Box<dyn miette::Diagnostic + Send + Sync + 'static>),
 }
 
 /// Creates a custom `SolveError` from a `ResolveError`.
@@ -689,9 +693,7 @@ pub async fn resolve_pypi(
         .resolve(&resolver_env)
         .await
         .into_diagnostic()
-        .map_err(|e| SolveError::GeneralPanic {
-            message: format!("Failed to do lookahead resolution: {e}"),
-        })?;
+        .map_err(|e| SolveError::LookAhead(e.into()))?;
 
         // Move manifest and provider setup inside catch_unwind
         let manifest = Manifest::new(
