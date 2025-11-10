@@ -366,6 +366,53 @@ impl BuildBackendMetadataSpec {
         }
     }
 
+    /// Validates that outputs with the same name have unique variants.
+    #[allow(clippy::result_large_err)]
+    fn validate_unique_variants(
+        outputs: &[pixi_build_types::procedures::conda_outputs::CondaOutput],
+    ) -> Result<(), CommandDispatcherError<BuildBackendMetadataError>> {
+        use std::collections::HashMap;
+
+        // Group outputs by package name
+        let mut outputs_by_name: HashMap<_, Vec<_>> = HashMap::new();
+        for output in outputs {
+            outputs_by_name
+                .entry(&output.metadata.name)
+                .or_default()
+                .push(output);
+        }
+
+        // Check for duplicate variants within each package name group
+        for (package_name, package_outputs) in outputs_by_name {
+            if package_outputs.len() <= 1 {
+                // No duplicates possible with 0 or 1 outputs
+                continue;
+            }
+
+            let mut seen_variants = HashSet::new();
+            let mut duplicate_variants = Vec::new();
+
+            for output in package_outputs {
+                let variant = &output.metadata.variant;
+                if !seen_variants.insert(variant) {
+                    // This variant was already seen, so it's a duplicate
+                    duplicate_variants.push(format!("{variant:?}"));
+                }
+            }
+
+            if !duplicate_variants.is_empty() {
+                return Err(CommandDispatcherError::Failed(
+                    BuildBackendMetadataError::DuplicateVariants {
+                        package: package_name.as_normalized().to_string(),
+                        duplicates: duplicate_variants.join(", "),
+                    },
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
     /// Use the `conda/outputs` procedure to get the metadata for the source
     /// checkout.
     async fn call_conda_outputs(
@@ -401,6 +448,12 @@ impl BuildBackendMetadataSpec {
             .await
             .map_err(BuildBackendMetadataError::Communication)
             .map_err(CommandDispatcherError::Failed)?;
+
+        // If the backend supports unique variants, validate that outputs with the same name
+        // have unique variants
+        if backend.api_version().supports_unique_variants() {
+            Self::validate_unique_variants(&outputs.outputs)?;
+        }
 
         for output in &outputs.outputs {
             tracing::debug!(
@@ -531,6 +584,12 @@ pub enum BuildBackendMetadataError {
     #[error("the build backend {0} does not support the `conda/outputs` procedure")]
     BackendMissingCapabilities(String),
 
+    #[error("the build backend returned outputs with duplicate variants for package '{package}': {duplicates}")]
+    DuplicateVariants {
+        package: String,
+        duplicates: String,
+    },
+
     #[error("could not compute hash of input files")]
     GlobHash(#[from] pixi_glob::GlobHashError),
 
@@ -553,4 +612,177 @@ pub fn calculate_additional_glob_hash(
         }
     }
     hasher.finish().to_ne_bytes().to_vec()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_build_types::procedures::conda_outputs::{
+        CondaOutput, CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
+        CondaOutputRunExports,
+    };
+    use rattler_conda_types::{NoArchType, PackageName, Platform, Version};
+    use std::collections::BTreeMap;
+
+    fn create_test_output(
+        name: &str,
+        variant: BTreeMap<String, String>,
+    ) -> CondaOutput {
+        CondaOutput {
+            metadata: CondaOutputMetadata {
+                name: PackageName::try_from(name).unwrap(),
+                version: Version::major(1).into(),
+                build: "0".to_string(),
+                build_number: 0,
+                subdir: Platform::NoArch,
+                license: None,
+                license_family: None,
+                noarch: NoArchType::none(),
+                purls: None,
+                python_site_packages_path: None,
+                variant,
+            },
+            build_dependencies: None,
+            host_dependencies: None,
+            run_dependencies: CondaOutputDependencies {
+                depends: vec![],
+                constraints: vec![],
+            },
+            ignore_run_exports: CondaOutputIgnoreRunExports::default(),
+            run_exports: CondaOutputRunExports::default(),
+            input_globs: None,
+        }
+    }
+
+    #[test]
+    fn test_validate_unique_variants_with_unique_variants() {
+        // Test case: outputs with the same name but different variants should pass
+        let outputs = vec![
+            create_test_output(
+                "mypackage",
+                BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+            ),
+            create_test_output(
+                "mypackage",
+                BTreeMap::from([("python".to_string(), "3.12".to_string())]),
+            ),
+        ];
+
+        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        assert!(result.is_ok(), "Expected validation to pass for unique variants");
+    }
+
+    #[test]
+    fn test_validate_unique_variants_with_duplicate_variants() {
+        // Test case: outputs with the same name and same variants should fail
+        let outputs = vec![
+            create_test_output(
+                "mypackage",
+                BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+            ),
+            create_test_output(
+                "mypackage",
+                BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+            ),
+        ];
+
+        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        assert!(
+            result.is_err(),
+            "Expected validation to fail for duplicate variants"
+        );
+
+        if let Err(CommandDispatcherError::Failed(BuildBackendMetadataError::DuplicateVariants {
+            package,
+            duplicates,
+        })) = result
+        {
+            assert_eq!(package, "mypackage");
+            assert!(duplicates.contains("python"));
+        } else {
+            panic!("Expected DuplicateVariants error");
+        }
+    }
+
+    #[test]
+    fn test_validate_unique_variants_with_empty_variants() {
+        // Test case: outputs with the same name and empty variants should fail
+        let outputs = vec![
+            create_test_output("mypackage", BTreeMap::new()),
+            create_test_output("mypackage", BTreeMap::new()),
+        ];
+
+        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        assert!(
+            result.is_err(),
+            "Expected validation to fail for duplicate empty variants"
+        );
+    }
+
+    #[test]
+    fn test_validate_unique_variants_with_different_packages() {
+        // Test case: outputs with different names can have the same variants
+        let outputs = vec![
+            create_test_output(
+                "package-a",
+                BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+            ),
+            create_test_output(
+                "package-b",
+                BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+            ),
+        ];
+
+        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        assert!(
+            result.is_ok(),
+            "Expected validation to pass for different packages with same variants"
+        );
+    }
+
+    #[test]
+    fn test_validate_unique_variants_with_single_output() {
+        // Test case: a single output should always pass
+        let outputs = vec![create_test_output(
+            "mypackage",
+            BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+        )];
+
+        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        assert!(result.is_ok(), "Expected validation to pass for single output");
+    }
+
+    #[test]
+    fn test_validate_unique_variants_with_multiple_variant_keys() {
+        // Test case: outputs with multiple variant keys, one duplicate
+        let outputs = vec![
+            create_test_output(
+                "mypackage",
+                BTreeMap::from([
+                    ("python".to_string(), "3.11".to_string()),
+                    ("cuda".to_string(), "11.8".to_string()),
+                ]),
+            ),
+            create_test_output(
+                "mypackage",
+                BTreeMap::from([
+                    ("python".to_string(), "3.11".to_string()),
+                    ("cuda".to_string(), "12.0".to_string()),
+                ]),
+            ),
+            create_test_output(
+                "mypackage",
+                BTreeMap::from([
+                    ("python".to_string(), "3.11".to_string()),
+                    ("cuda".to_string(), "11.8".to_string()),
+                ]),
+            ),
+        ];
+
+        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        assert!(
+            result.is_err(),
+            "Expected validation to fail for duplicate multi-key variants"
+        );
+    }
 }
