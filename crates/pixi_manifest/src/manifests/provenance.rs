@@ -172,7 +172,7 @@ mod tests {
         #[cfg(unix)]
         std::os::unix::fs::symlink(&real_manifest, &symlink_manifest).unwrap();
 
-        let canonical_real_path = real_manifest.canonicalize().unwrap();
+        let canonical_real_path = dunce::canonicalize(&real_manifest).unwrap();
         let cases = [
             (
                 "real file",
@@ -199,7 +199,7 @@ mod tests {
             );
             assert_eq!(
                 absolute.parent().unwrap(),
-                expected_parent.canonicalize().unwrap(),
+                dunce::canonicalize(&expected_parent).unwrap(),
                 "parent directory mismatch for {label}"
             );
 
