@@ -2,6 +2,7 @@ use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
 use futures::{Stream, StreamExt};
 use indicatif::MultiProgress;
+use itertools::Itertools;
 use parking_lot::Mutex;
 use pixi_command_dispatcher::{
     BackendSourceBuildSpec, ReporterContext, SourceBuildSpec,
@@ -9,10 +10,9 @@ use pixi_command_dispatcher::{
         BackendSourceBuildId, BackendSourceBuildReporter, SourceBuildId, SourceBuildReporter,
     },
 };
-use pixi_progress::ProgressBarPlacement;
+use pixi_progress::{ProgressBarPlacement, RollingLogDisplay};
 use rattler::{install::Transaction, package_cache::CacheReporter};
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
-use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{
     download_verify_reporter::BuildDownloadVerifyReporter,
@@ -44,7 +44,9 @@ impl SyncReporter {
         let mut inner = self.combined_inner.lock();
         inner.preparing_progress_bar.clear();
         inner.install_progress_bar.clear();
-        inner.build_output_receiver = None;
+        if let Some(display) = inner.rolling_log_display.take() {
+            display.finish();
+        }
     }
 
     /// Creates a new InstallReporter that shares this SyncReporter instance
@@ -92,53 +94,49 @@ impl BackendSourceBuildReporter for SyncReporter {
         _id: BackendSourceBuildId,
         mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
     ) {
-        // Enable streaming of the logs from the backend
-        let print_backend_output = tracing::event_enabled!(tracing::Level::WARN);
-        // Stream the progress of the output to the screen.
-        let progress_bar = self.multi_progress.clone();
-
-        // Create a sender to buffer the output lines so we can output them later if
-        // needed.
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-        if !print_backend_output {
-            let mut inner = self.combined_inner.lock();
-            inner.build_output_receiver = Some(rx);
+        // Initialize the rolling log display
+        let combined_inner = Arc::clone(&self.combined_inner);
+        {
+            let mut inner = combined_inner.lock();
+            inner.rolling_log_display.get_or_insert_with(|| {
+                let placement =
+                    ProgressBarPlacement::After(inner.preparing_progress_bar.progress_bar());
+                RollingLogDisplay::new(self.multi_progress.clone(), placement)
+            })
         }
 
         tokio::spawn(async move {
             while let Some(line) = backend_output_stream.next().await {
-                if print_backend_output {
-                    // Suspend the main progress bar while we print the line.
-                    progress_bar.suspend(|| eprintln!("{line}"));
-                } else {
-                    // Send the line to the receiver
-                    if tx.send(line).is_err() {
-                        // Receiver dropped, exit early
-                        break;
-                    }
+                // Always push to rolling display (shows last 6 lines, buffers all)
+                let mut inner = combined_inner.lock();
+                if let Some(display) = &mut inner.rolling_log_display {
+                    display.push_line(line);
                 }
             }
         });
     }
 
     fn on_finished(&mut self, _id: BackendSourceBuildId, failed: bool) {
-        // Take the stream that receives the output from the backend so we can drop the
-        // memory.
-        let build_output_receiver = {
-            let mut inner = self.combined_inner.lock();
-            inner.build_output_receiver.take()
-        };
+        let mut inner = self.combined_inner.lock();
 
-        // If the build failed, we want to print the output from the backend.
-        let progress_bar = self.multi_progress.clone();
         if failed {
-            if let Some(mut build_output_receiver) = build_output_receiver {
-                tokio::spawn(async move {
-                    while let Some(line) = build_output_receiver.recv().await {
-                        // Suspend the main progress bar while we print the line.
-                        progress_bar.suspend(|| eprintln!("{line}"));
-                    }
-                });
+            // On failure, dump the full log
+            if let Some(display) = inner.rolling_log_display.take() {
+                let progress_bar = self.multi_progress.clone();
+
+                // Release lock before processing
+                drop(inner);
+
+                // Get full log and finish display (no copy)
+                let full_log = display.into_full_log();
+
+                // Print full log using suspend to avoid interfering with progress bars
+                progress_bar.suspend(|| eprintln!("{}", full_log.iter().format("\n")));
+            }
+        } else {
+            // On success, just clear the display
+            if let Some(display) = inner.rolling_log_display.take() {
+                display.finish();
             }
         }
     }
@@ -161,44 +159,54 @@ impl SourceBuildReporter for SyncReporter {
         mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
     ) {
         // Notify the progress bar that the build has started.
-        let print_backend_output = tracing::event_enabled!(tracing::Level::WARN);
-        let progress_bar = self.multi_progress.clone();
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-
+        // Initialize the rolling log display
+        let combined_inner = Arc::clone(&self.combined_inner);
         {
-            let mut inner = self.combined_inner.lock();
+            let mut inner = combined_inner.lock();
             inner.preparing_progress_bar.on_build_start(id.0);
-            if !print_backend_output {
-                inner.build_output_receiver = Some(rx);
+            if inner.rolling_log_display.is_none() {
+                let placement =
+                    ProgressBarPlacement::After(inner.preparing_progress_bar.progress_bar());
+                inner.rolling_log_display = Some(RollingLogDisplay::new(
+                    self.multi_progress.clone(),
+                    placement,
+                ));
             }
         }
 
         tokio::spawn(async move {
             while let Some(line) = backend_output_stream.next().await {
-                if print_backend_output {
-                    progress_bar.suspend(|| eprintln!("{line}"));
-                } else if tx.send(line).is_err() {
-                    break;
+                // Always push to rolling display (shows last 6 lines, buffers all)
+                let mut inner = combined_inner.lock();
+                if let Some(display) = &mut inner.rolling_log_display {
+                    display.push_line(line);
                 }
             }
         });
     }
 
     fn on_finished(&mut self, id: SourceBuildId, failed: bool) {
-        let build_output_receiver = {
-            let mut inner = self.combined_inner.lock();
-            inner.preparing_progress_bar.on_build_finished(id.0);
-            inner.build_output_receiver.take()
-        };
+        let mut inner = self.combined_inner.lock();
+        inner.preparing_progress_bar.on_build_finished(id.0);
 
         if failed {
-            let progress_bar = self.multi_progress.clone();
-            if let Some(mut build_output_receiver) = build_output_receiver {
-                tokio::spawn(async move {
-                    while let Some(line) = build_output_receiver.recv().await {
-                        progress_bar.suspend(|| eprintln!("{line}"));
-                    }
-                });
+            // On failure, dump the full log
+            if let Some(display) = inner.rolling_log_display.take() {
+                let progress_bar = self.multi_progress.clone();
+
+                // Release lock before processing
+                drop(inner);
+
+                // Get full log and finish display (no copy)
+                let full_log = display.into_full_log();
+
+                // Print full log using suspend to avoid interfering with progress bars
+                progress_bar.suspend(|| eprintln!("{}", full_log.iter().format("\n")));
+            }
+        } else {
+            // On success, just clear the display
+            if let Some(display) = inner.rolling_log_display.take() {
+                display.finish();
             }
         }
     }
@@ -213,7 +221,7 @@ pub struct CombinedInstallReporterInner {
     preparing_progress_bar: BuildDownloadVerifyReporter,
     install_progress_bar: MainProgressBar<PackageWithSize>,
 
-    build_output_receiver: Option<UnboundedReceiver<String>>,
+    rolling_log_display: Option<RollingLogDisplay>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -266,7 +274,7 @@ impl CombinedInstallReporterInner {
             install_progress_bar: link_progress_bar,
             operation_link_id: HashMap::new(),
             cache_entry_id: HashMap::new(),
-            build_output_receiver: None,
+            rolling_log_display: None,
         }
     }
 
