@@ -1325,8 +1325,7 @@ checksum = "a1d728cc89cf3aee9ff92b05e62b19ee65a02b5702cff7d5a377e32c6ae29d8d"
 [[package]]
 name = "coalesced_map"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cf5a7a58a9d5b914bddb0a3a2bd920af2be897114dc8128af022af81fc43b8b"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "dashmap",
  "tokio",
@@ -2170,8 +2169,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "765662dc0b26e038099a5a1529f5d48443111eea45377c312be892997651710e"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -4293,7 +4291,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -4387,8 +4385,7 @@ checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
 [[package]]
 name = "path_resolver"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3604448dbdd00c6884479c066f040f503bf26f6b58de5358b5d2376ef4e78d11"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "ahash",
  "fs-err",
@@ -6077,8 +6074,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.38.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97a2c731b4989ca74615b05f308a63664b6e7592a621a58fb5267b51a8239273"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "anyhow",
  "clap",
@@ -6122,8 +6118,7 @@ dependencies = [
 [[package]]
 name = "rattler_cache"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94e25b6c05b42228a55cd58a11d91af92819b03c9c604cbc7a83568ced7e2db2"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "ahash",
  "anyhow",
@@ -6155,8 +6150,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.40.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c4a129c8b0f43f700b43af71fcbf17fae058e0840c8a610d354355a552eb36e"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "ahash",
  "chrono",
@@ -6197,8 +6191,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "886e9a6254e74a830c2b8555e14862d6b2f4cc498b43767d4adf1c71421a4796"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "blake2",
  "digest",
@@ -6216,8 +6209,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.26.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73f11b1ee4ef6fe117b214bb6614127bfeaf0b3301d8347d7dc65c5133e2ab20"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "ahash",
  "chrono",
@@ -6242,8 +6234,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "988d5d7ace4fb1d7549008236cf08de95e8ea2f1f80754109324a08c31e6dc6a"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "quote",
  "syn",
@@ -6252,8 +6243,7 @@ dependencies = [
 [[package]]
 name = "rattler_menuinst"
 version = "0.2.34"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84487b67092b6624ade384f4a22adb287fee9042d2e18c50714ca947d69d3879"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "chrono",
  "configparser",
@@ -6282,8 +6272,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.25.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6937ea4ebf9b46051a96fc061199e7a81e1debfd6a7558e110f400bf8dc054b"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "anyhow",
  "async-once-cell",
@@ -6314,8 +6303,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.23.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0778a02ff0cddc56836f325bd5365cdf3d7357570a8b9f21f6fd590452b39814"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "bzip2 0.6.1",
  "chrono",
@@ -6344,8 +6332,7 @@ dependencies = [
 [[package]]
 name = "rattler_pty"
 version = "0.2.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86a84e6b351c46c7588bb8f5c90994be23d5c3c31cf87f9ec903cd91d9fc4246"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "libc",
  "nix 0.30.1",
@@ -6356,8 +6343,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3aa5057629aeb20861919e9ae56875985d58028f3c6f433a20b5ded086e1cec5"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "reqwest",
  "reqwest-middleware",
@@ -6367,8 +6353,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.24.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "410e796a90104cb4416f24955816dd2cdd9727b08b18972a32dde730e13264b3"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -6427,8 +6412,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.25.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be1ebf3ab404de7616429f74f5d5fca00eaaf9df535706613bab42b44bdacd13"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -6448,8 +6432,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "3.0.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44ebabdec0f11bfe534f6a63f5d49cd4e7647ea029c751821c2ab36e558a97a0"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "chrono",
  "futures",
@@ -6466,8 +6449,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "2.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2debe854ed9ecdf446b976ceac16c4cce14b8c69dd0731a5d9579ee59ec731b7"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "archspec",
  "libloading",
@@ -7672,8 +7654,7 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55c0b0b683828aa9d4f5c0e59b0c856a12c30a65b5f1ca4292664734d76fa9c2"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat%2Fglobal-cache-lock#067ceb0ad97a206845a0600fc77cbe50d9b8498f"
 dependencies = [
  "tokio",
 ]

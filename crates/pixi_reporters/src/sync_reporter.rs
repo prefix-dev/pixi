@@ -485,6 +485,28 @@ impl rattler::install::Reporter for InstallReporter {
     fn on_transaction_complete(&self) {
         self.combined.lock().on_transaction_complete(self.id)
     }
+
+    fn on_post_link_start(&self, package_name: &str, script_path: &str) -> usize {
+        let _ = script_path;
+        let _ = package_name;
+        0
+    }
+
+    fn on_post_link_complete(&self, index: usize, success: bool) {
+        let _ = success;
+        let _ = index;
+    }
+
+    fn on_pre_unlink_start(&self, package_name: &str, script_path: &str) -> usize {
+        let _ = script_path;
+        let _ = package_name;
+        0
+    }
+
+    fn on_pre_unlink_complete(&self, index: usize, success: bool) {
+        let _ = success;
+        let _ = index;
+    }
 }
 
 /// A type-safe identifier for transactions to avoid confusion with other IDs
