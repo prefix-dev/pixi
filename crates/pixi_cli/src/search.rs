@@ -11,7 +11,7 @@ use pixi_api::{DefaultContext, WorkspaceContext};
 use pixi_config::default_channel_config;
 use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
 use pixi_progress::await_in_progress;
-use rattler_conda_types::{Platform, RepoDataRecord};
+use rattler_conda_types::{MatchSpec, ParseStrictness, Platform, RepoDataRecord};
 use tracing::{debug, error};
 use url::Url;
 
@@ -74,34 +74,29 @@ pub async fn execute_impl<W: Write>(
         channels.iter().map(|c| c.name()).format(", ")
     );
 
-    let packages = if let Some(workspace) = workspace {
-        let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
-        await_in_progress("searching packages", |_| async {
-            workspace_ctx
-                .search(&args.package, channels, args.platform)
-                .await
-        })
-        .await?
-    } else {
-        let default_ctx = DefaultContext::new(CliInterface {});
-        await_in_progress("searching packages", |_| async {
-            default_ctx
-                .search(&args.package, channels, args.platform)
-                .await
-        })
-        .await?
-    };
+    let match_spec = MatchSpec::from_str(&args.package, ParseStrictness::Lenient).into_diagnostic();
 
-    if let Some(packages) = packages.as_ref() {
-        if args.package.contains('*') {
-            // Search packages by wildcard
-            if let Err(e) = print_matching_packages(packages, out, args.limit) {
-                if e.kind() != std::io::ErrorKind::BrokenPipe {
-                    return Err(e).into_diagnostic();
-                }
-            }
+    let packages = if let Ok(match_spec) = match_spec {
+        // Search by exact name
+        let packages = if let Some(workspace) = workspace {
+            await_in_progress("search exact package...", |_| async {
+                let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
+                workspace_ctx
+                    .search_exact(match_spec, channels, args.platform)
+                    .await
+            })
+            .await?
         } else {
-            // Search by exact name
+            await_in_progress("search exact package...", |_| async {
+                let default_ctx = DefaultContext::new(CliInterface {});
+                default_ctx
+                    .search_exact(match_spec, channels, args.platform)
+                    .await
+            })
+            .await?
+        };
+
+        if let Some(packages) = packages.as_ref() {
             let newest_package = packages.last();
             if let Some(newest_package) = newest_package {
                 let other_versions = packages
@@ -115,7 +110,43 @@ pub async fn execute_impl<W: Write>(
                 }
             }
         }
-    }
+
+        packages
+    } else if args.package.contains('*') {
+        // Search packages by wildcard
+        let packages = if let Some(workspace) = workspace {
+            await_in_progress("search packages...", |_| async {
+                let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
+                workspace_ctx
+                    .search_wildcard(&args.package, channels, args.platform)
+                    .await
+            })
+            .await?
+        } else {
+            await_in_progress("search packages...", |_| async {
+                let default_ctx = DefaultContext::new(CliInterface {});
+                default_ctx
+                    .search_wildcard(&args.package, channels, args.platform)
+                    .await
+            })
+            .await?
+        };
+
+        if let Some(packages) = packages.as_ref() {
+            if let Err(e) = print_matching_packages(packages, out, args.limit) {
+                if e.kind() != std::io::ErrorKind::BrokenPipe {
+                    return Err(e).into_diagnostic();
+                }
+            }
+        }
+
+        packages
+    } else {
+        return Err(miette::miette!(
+            "Invalid package specification: {}",
+            args.package
+        ));
+    };
 
     Ok(packages)
 }

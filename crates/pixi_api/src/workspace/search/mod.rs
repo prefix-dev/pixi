@@ -6,9 +6,7 @@ use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_core::Workspace;
 use pixi_utils::reqwest::build_lazy_reqwest_clients;
-use rattler_conda_types::{
-    Channel, MatchSpec, PackageName, ParseStrictness, Platform, RepoDataRecord,
-};
+use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_lock::Matches;
 use rattler_repodata_gateway::{GatewayError, RepoData};
 use regex::Regex;
@@ -16,7 +14,45 @@ use strsim::jaro;
 
 use crate::Interface;
 
-pub async fn search<I: Interface>(
+pub async fn search_exact<I: Interface>(
+    _interface: &I,
+    workspace: Option<&Workspace>,
+    match_spec: MatchSpec,
+    channels: IndexSet<Channel>,
+    platform: Platform,
+) -> miette::Result<Option<Vec<RepoDataRecord>>> {
+    let client = if let Some(workspace) = workspace {
+        workspace.authenticated_client()?.clone()
+    } else {
+        build_lazy_reqwest_clients(None, None)?.1
+    };
+
+    let config = Config::load_global();
+
+    // Fetch the all names from the repodata using gateway
+    let gateway = config.gateway().with_client(client).finish();
+
+    let all_names = gateway
+        .names(channels.clone(), [platform, Platform::NoArch])
+        .await
+        .into_diagnostic()?;
+
+    // Compute the repodata query function that will be used to fetch the repodata
+    // for filtered package names
+    let repodata_query_func = |some_specs: Vec<MatchSpec>| {
+        gateway
+            .query(
+                channels.clone(),
+                [platform, Platform::NoArch],
+                some_specs.clone(),
+            )
+            .into_future()
+    };
+
+    search_exact_package(match_spec, all_names, repodata_query_func).await
+}
+
+pub async fn search_wildcard<I: Interface>(
     _interface: &I,
     workspace: Option<&Workspace>,
     package_name_filter: &str,
@@ -51,31 +87,16 @@ pub async fn search<I: Interface>(
             .into_future()
     };
 
-    let match_spec =
-        MatchSpec::from_str(package_name_filter, ParseStrictness::Lenient).into_diagnostic();
+    let package_name_without_filter = package_name_filter.replace('*', "");
+    let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
 
-    let packages = if let Ok(match_spec) = match_spec {
-        search_exact_package(match_spec, all_names, repodata_query_func).await?
-    } else if package_name_filter.contains('*') {
-        // If it's not a valid MatchSpec, check for wildcard
-        let package_name_without_filter = package_name_filter.replace('*', "");
-        let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
-
-        search_package_by_wildcard(
-            package_name,
-            package_name_filter,
-            all_names,
-            repodata_query_func,
-        )
-        .await?
-    } else {
-        return Err(miette::miette!(
-            "Invalid package specification: {}",
-            package_name_filter
-        ));
-    };
-
-    Ok(packages)
+    search_package_by_wildcard(
+        package_name,
+        package_name_filter,
+        all_names,
+        repodata_query_func,
+    )
+    .await
 }
 
 async fn search_package_by_wildcard<QF, FR>(
