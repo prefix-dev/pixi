@@ -98,11 +98,14 @@ impl BackendSourceBuildReporter for SyncReporter {
         let combined_inner = Arc::clone(&self.combined_inner);
         {
             let mut inner = combined_inner.lock();
-            inner.rolling_log_display.get_or_insert_with(|| {
+            if inner.rolling_log_display.is_none() {
                 let placement =
                     ProgressBarPlacement::After(inner.preparing_progress_bar.progress_bar());
-                RollingLogDisplay::new(self.multi_progress.clone(), placement)
-            })
+                inner.rolling_log_display = Some(RollingLogDisplay::new(
+                    self.multi_progress.clone(),
+                    placement,
+                ));
+            }
         }
 
         tokio::spawn(async move {
