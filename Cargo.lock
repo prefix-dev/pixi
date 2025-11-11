@@ -4614,6 +4614,7 @@ dependencies = [
  "pixi_consts",
  "pixi_core",
  "pixi_manifest",
+ "pixi_pypi_spec",
  "pixi_spec",
  "pixi_utils",
  "rattler_conda_types",

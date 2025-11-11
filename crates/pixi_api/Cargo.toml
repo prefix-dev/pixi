@@ -21,6 +21,7 @@ pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_core = { workspace = true }
 pixi_manifest = { workspace = true }
+pixi_pypi_spec = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_utils = { workspace = true }
 rattler_conda_types = { workspace = true }

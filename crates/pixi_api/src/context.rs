@@ -7,6 +7,7 @@ use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
     EnvironmentName, Feature, FeatureName, PrioritizedChannel, TargetSelector, Task, TaskName,
 };
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 
@@ -63,6 +64,19 @@ impl<I: Interface> WorkspaceContext<I> {
         target: Option<&TargetSelector>,
     ) -> Option<HashMap<PackageName, Vec<PixiSpec>>> {
         crate::workspace::workspace::feature::list_feature_dependencies(
+            &self.workspace,
+            feature,
+            target,
+        )
+        .await
+    }
+
+    pub async fn list_feature_pypi_dependencies(
+        &self,
+        feature: FeatureName,
+        target: Option<&TargetSelector>,
+    ) -> Option<HashMap<PypiPackageName, Vec<PixiPypiSpec>>> {
+        crate::workspace::workspace::feature::list_feature_pypi_dependencies(
             &self.workspace,
             feature,
             target,
