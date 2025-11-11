@@ -9,10 +9,36 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{PackageName, Platform};
+use rattler_conda_types::{Channel, PackageName, Platform, RepoDataRecord};
 
 use crate::interface::Interface;
 use crate::workspace::{InitOptions, ReinstallOptions};
+
+pub struct DefaultContext<I: Interface> {
+    interface: I,
+}
+
+impl<I: Interface> DefaultContext<I> {
+    pub fn new(interface: I) -> Self {
+        Self { interface }
+    }
+
+    pub async fn search(
+        &self,
+        package_name_filter: &str,
+        channels: IndexSet<Channel>,
+        platform: Platform,
+    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
+        crate::workspace::search::search(
+            &self.interface,
+            None,
+            package_name_filter,
+            channels,
+            platform,
+        )
+        .await
+    }
+}
 
 pub struct WorkspaceContext<I: Interface> {
     interface: I,
@@ -169,6 +195,22 @@ impl<I: Interface> WorkspaceContext<I> {
             &self.workspace,
             options,
             lock_file_usage,
+        )
+        .await
+    }
+
+    pub async fn search(
+        &self,
+        package_name_filter: &str,
+        channels: IndexSet<Channel>,
+        platform: Platform,
+    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
+        crate::workspace::search::search(
+            &self.interface,
+            Some(&self.workspace),
+            package_name_filter,
+            channels,
+            platform,
         )
         .await
     }

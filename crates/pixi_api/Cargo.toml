@@ -25,8 +25,12 @@ pixi_pypi_spec = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_utils = { workspace = true }
 rattler_conda_types = { workspace = true }
+rattler_lock = { workspace = true }
+rattler_repodata_gateway = { workspace = true }
+regex = { workspace = true }
 same-file = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+strsim = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }

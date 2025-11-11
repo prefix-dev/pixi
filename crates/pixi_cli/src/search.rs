@@ -1,7 +1,4 @@
 use std::{
-    cmp::Ordering,
-    collections::HashMap,
-    future::{Future, IntoFuture},
     io::{self, Write},
     str::FromStr,
 };
@@ -10,19 +7,18 @@ use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, Report};
-use pixi_config::{Config, default_channel_config};
+use pixi_api::{DefaultContext, WorkspaceContext};
+use pixi_config::default_channel_config;
 use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
 use pixi_progress::await_in_progress;
-use pixi_utils::reqwest::build_lazy_reqwest_clients;
-use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, Platform, RepoDataRecord};
-use rattler_lock::Matches;
-use rattler_repodata_gateway::{GatewayError, RepoData};
-use regex::Regex;
-use strsim::jaro;
+use rattler_conda_types::{Platform, RepoDataRecord};
 use tracing::{debug, error};
 use url::Url;
 
-use crate::cli_config::{ChannelsConfig, WorkspaceConfig};
+use crate::{
+    cli_config::{ChannelsConfig, WorkspaceConfig},
+    cli_interface::CliInterface,
+};
 
 /// Search a conda package
 ///
@@ -49,69 +45,11 @@ pub struct Args {
     pub limit: Option<usize>,
 }
 
-/// fetch packages from `repo_data` using `repodata_query_func` based on
-/// `filter_func`
-async fn search_package_by_filter<F, QF, FR>(
-    package: &PackageName,
-    all_package_names: Vec<PackageName>,
-    repodata_query_func: QF,
-    filter_func: F,
-    only_latest: bool,
-) -> miette::Result<Vec<RepoDataRecord>>
-where
-    F: Fn(&PackageName, &PackageName) -> bool,
-    QF: Fn(Vec<MatchSpec>) -> FR,
-    FR: Future<Output = Result<Vec<RepoData>, GatewayError>>,
-{
-    let similar_packages = all_package_names
-        .iter()
-        .filter(|&name| filter_func(name, package))
-        .cloned()
-        .collect_vec();
-
-    // Transform the package names into `MatchSpec`s
-
-    let specs = similar_packages
-        .iter()
-        .cloned()
-        .map(MatchSpec::from)
-        .collect();
-
-    let repos: Vec<RepoData> = repodata_query_func(specs).await.into_diagnostic()?;
-
-    let mut packages: Vec<RepoDataRecord> = Vec::new();
-    if only_latest {
-        for repo in repos {
-            // sort records by version, get the latest one of each package
-            let records_of_repo: HashMap<String, RepoDataRecord> = repo
-                .into_iter()
-                .sorted_by(|a, b| a.package_record.version.cmp(&b.package_record.version))
-                .map(|record| {
-                    (
-                        record.package_record.name.as_normalized().to_string(),
-                        record.clone(),
-                    )
-                })
-                .collect();
-
-            packages.extend(records_of_repo.into_values().collect_vec());
-        }
-        // sort all versions across all channels and platforms
-        packages.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
-    } else {
-        for repo in repos {
-            packages.extend(repo.into_iter().cloned().collect_vec());
-        }
-    }
-
-    Ok(packages)
-}
-
 pub async fn execute_impl<W: Write>(
     args: Args,
     out: &mut W,
 ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-    let project = match WorkspaceLocator::for_cli()
+    let workspace = match WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
     {
@@ -130,71 +68,54 @@ pub async fn execute_impl<W: Write>(
     };
 
     // Resolve channels from project / CLI args
-    let channels = args.channels.resolve_from_project(project.as_ref())?;
+    let channels = args.channels.resolve_from_project(workspace.as_ref())?;
     eprintln!(
         "Using channels: {}",
         channels.iter().map(|c| c.name()).format(", ")
     );
 
-    let package_name_filter = args.package;
-
-    let project = project.as_ref();
-    let client = if let Some(project) = project {
-        project.authenticated_client()?.clone()
-    } else {
-        build_lazy_reqwest_clients(None, None)?.1
-    };
-
-    let config = Config::load_global();
-
-    // Fetch the all names from the repodata using gateway
-    let gateway = config.gateway().with_client(client).finish();
-
-    let all_names = await_in_progress("loading all package names", |_| async {
-        gateway
-            .names(channels.clone(), [args.platform, Platform::NoArch])
-            .await
-    })
-    .await
-    .into_diagnostic()?;
-
-    // Compute the repodata query function that will be used to fetch the repodata
-    // for filtered package names
-    let repodata_query_func = |some_specs: Vec<MatchSpec>| {
-        gateway
-            .query(
-                channels.clone(),
-                [args.platform, Platform::NoArch],
-                some_specs.clone(),
-            )
-            .into_future()
-    };
-
-    let match_spec =
-        MatchSpec::from_str(&package_name_filter, ParseStrictness::Lenient).into_diagnostic();
-
-    let packages = if let Ok(match_spec) = match_spec {
-        search_exact_package(match_spec, all_names, repodata_query_func, out).await?
-    } else if package_name_filter.contains('*') {
-        // If it's not a valid MatchSpec, check for wildcard
-        let package_name_without_filter = package_name_filter.replace('*', "");
-        let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
-
-        search_package_by_wildcard(
-            package_name,
-            &package_name_filter,
-            all_names,
-            repodata_query_func,
-            args.limit,
-            out,
-        )
+    let packages = if let Some(workspace) = workspace {
+        let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
+        await_in_progress("searching packages", |_| async {
+            workspace_ctx
+                .search(&args.package, channels, args.platform)
+                .await
+        })
         .await?
     } else {
-        return Err(miette::miette!(
-            "Invalid package specification: {}",
-            package_name_filter
-        ));
+        let default_ctx = DefaultContext::new(CliInterface {});
+        await_in_progress("searching packages", |_| async {
+            default_ctx
+                .search(&args.package, channels, args.platform)
+                .await
+        })
+        .await?
     };
+
+    if let Some(packages) = packages.as_ref() {
+        if args.package.contains('*') {
+            // Search packages by wildcard
+            if let Err(e) = print_matching_packages(packages, out, args.limit) {
+                if e.kind() != std::io::ErrorKind::BrokenPipe {
+                    return Err(e).into_diagnostic();
+                }
+            }
+        } else {
+            // Search by exact name
+            let newest_package = packages.last();
+            if let Some(newest_package) = newest_package {
+                let other_versions = packages
+                    .iter()
+                    .filter(|p| p.package_record != newest_package.package_record)
+                    .collect::<Vec<_>>();
+                if let Err(e) = print_package_info(newest_package, &other_versions, out) {
+                    if e.kind() != std::io::ErrorKind::BrokenPipe {
+                        return Err(e).into_diagnostic();
+                    }
+                }
+            }
+        }
+    }
 
     Ok(packages)
 }
@@ -203,79 +124,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut out = io::stdout();
     execute_impl(args, &mut out).await?;
     Ok(())
-}
-
-async fn search_exact_package<W: Write, QF, FR>(
-    package_spec: MatchSpec,
-    all_repodata_names: Vec<PackageName>,
-    repodata_query_func: QF,
-    out: &mut W,
-) -> miette::Result<Option<Vec<RepoDataRecord>>>
-where
-    QF: Fn(Vec<MatchSpec>) -> FR,
-    FR: Future<Output = Result<Vec<RepoData>, GatewayError>>,
-{
-    let package_name_search = package_spec.name.clone().ok_or_else(|| {
-        miette::miette!("could not find package name in MatchSpec {}", package_spec)
-    })?;
-
-    let packages = search_package_by_filter(
-        &package_name_search,
-        all_repodata_names,
-        repodata_query_func,
-        |pn, n| pn == n,
-        false,
-    )
-    .await?;
-
-    if packages.is_empty() {
-        let normalized_package_name = package_name_search.as_normalized();
-        return Err(miette::miette!(
-            "Package {normalized_package_name} not found, please use a wildcard '*' in the search name for a broader result."
-        ));
-    }
-
-    // Sort packages by version, build number and build string
-    let packages = packages
-        .iter()
-        .filter(|&p| package_spec.matches(p))
-        .sorted_by(|a, b| {
-            Ord::cmp(
-                &(
-                    &a.package_record.version,
-                    a.package_record.build_number,
-                    &a.package_record.build,
-                ),
-                &(
-                    &b.package_record.version,
-                    b.package_record.build_number,
-                    &b.package_record.build,
-                ),
-            )
-        })
-        .cloned()
-        .collect::<Vec<RepoDataRecord>>();
-
-    if packages.is_empty() {
-        return Err(miette::miette!(
-            "Package found, but MatchSpec {package_spec} does not match any record."
-        ));
-    }
-
-    let newest_package = packages.last();
-    if let Some(newest_package) = newest_package {
-        let other_versions = packages
-            .iter()
-            .filter(|p| p.package_record != newest_package.package_record)
-            .collect::<Vec<_>>();
-        if let Err(e) = print_package_info(newest_package, &other_versions, out) {
-            if e.kind() != std::io::ErrorKind::BrokenPipe {
-                return Err(e).into_diagnostic();
-            }
-        }
-    }
-
-    Ok(newest_package.map(|package| vec![package.clone()]))
 }
 
 fn format_additional_builds_string(builds: Option<Vec<&RepoDataRecord>>) -> String {
@@ -477,80 +325,6 @@ fn print_package_info<W: Write>(
     }
 
     Ok(())
-}
-
-async fn search_package_by_wildcard<W: Write, QF, FR>(
-    package_name: PackageName,
-    package_name_filter: &str,
-    all_package_names: Vec<PackageName>,
-    repodata_query_func: QF,
-    limit: Option<usize>,
-    out: &mut W,
-) -> miette::Result<Option<Vec<RepoDataRecord>>>
-where
-    QF: Fn(Vec<MatchSpec>) -> FR + Clone,
-    FR: Future<Output = Result<Vec<RepoData>, GatewayError>>,
-{
-    let wildcard_pattern = Regex::new(&format!("^{}$", &package_name_filter.replace('*', ".*")))
-        .expect("Expect only characters and/or * (wildcard).");
-
-    let package_name_search = package_name.clone();
-
-    let mut packages = await_in_progress("searching packages", |_| async {
-        let packages = search_package_by_filter(
-            &package_name_search,
-            all_package_names.clone(),
-            repodata_query_func.clone(),
-            |pn, _| wildcard_pattern.is_match(pn.as_normalized()),
-            true,
-        )
-        .await?;
-
-        if !packages.is_empty() {
-            return Ok(packages);
-        }
-
-        tracing::info!("No packages found with wildcard search, trying with fuzzy search.");
-        let similarity = 0.85;
-        search_package_by_filter(
-            &package_name_search,
-            all_package_names,
-            repodata_query_func,
-            |pn, n| jaro(pn.as_normalized(), n.as_normalized()) > similarity,
-            true,
-        )
-        .await
-    })
-    .await?;
-
-    let normalized_package_name = package_name.as_normalized();
-    packages.sort_by(|a, b| {
-        let ord = jaro(
-            b.package_record.name.as_normalized(),
-            normalized_package_name,
-        )
-        .partial_cmp(&jaro(
-            a.package_record.name.as_normalized(),
-            normalized_package_name,
-        ));
-        if let Some(ord) = ord {
-            ord
-        } else {
-            Ordering::Equal
-        }
-    });
-
-    if packages.is_empty() {
-        return Err(miette::miette!("Could not find {normalized_package_name}"));
-    }
-
-    if let Err(e) = print_matching_packages(&packages, out, limit) {
-        if e.kind() != std::io::ErrorKind::BrokenPipe {
-            return Err(e).into_diagnostic();
-        }
-    }
-
-    Ok(Some(packages))
 }
 
 fn print_matching_packages<W: Write>(
