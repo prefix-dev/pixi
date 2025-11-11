@@ -160,12 +160,12 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let dotfiles_dir = temp_dir.path().join("dotfiles");
         let home_dir = temp_dir.path().join("home");
-        std::fs::create_dir_all(&dotfiles_dir).unwrap();
-        std::fs::create_dir_all(&home_dir).unwrap();
+        fs_err::create_dir_all(&dotfiles_dir).unwrap();
+        fs_err::create_dir_all(&home_dir).unwrap();
 
         // Real manifest lives inside the dotfiles directory.
         let real_manifest = dotfiles_dir.join("pixi.toml");
-        std::fs::write(&real_manifest, "[workspace]\nname = \"test\"\n").unwrap();
+        fs_err::write(&real_manifest, "[workspace]\nname = \"test\"\n").unwrap();
 
         // Home directory contains a symlink that points at the real manifest.
         let symlink_manifest = home_dir.join("pixi.toml");
@@ -195,14 +195,12 @@ mod tests {
             assert_eq!(
                 absolute.file_name(),
                 manifest_path.file_name(),
-                "filename changed for {}",
-                label
+                "filename changed for {label}"
             );
             assert_eq!(
                 absolute.parent().unwrap(),
                 expected_parent.canonicalize().unwrap(),
-                "parent directory mismatch for {}",
-                label
+                "parent directory mismatch for {label}"
             );
 
             if should_match_real {
