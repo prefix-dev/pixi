@@ -13,7 +13,7 @@ use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRec
 
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
-use crate::workspace::{AddOptions, InitOptions, ReinstallOptions};
+use crate::workspace::{DependencyOptions, InitOptions, ReinstallOptions};
 
 pub struct DefaultContext<I: Interface> {
     interface: I,
@@ -141,6 +141,84 @@ impl<I: Interface> WorkspaceContext<I> {
             .await
     }
 
+    pub async fn add_conda_deps(
+        &self,
+        specs: IndexMap<PackageName, rattler_conda_types::MatchSpec>,
+        spec_type: pixi_manifest::SpecType,
+        dep_options: DependencyOptions,
+        git_options: GitOptions,
+    ) -> miette::Result<Option<UpdateDeps>> {
+        crate::workspace::add::add_conda_dep(
+            &self.interface,
+            self.workspace_mut()?,
+            specs,
+            spec_type,
+            dep_options,
+            git_options,
+        )
+        .await
+    }
+
+    pub async fn add_pypi_deps(
+        &self,
+        pypi_deps: pixi_core::workspace::PypiDeps,
+        editable: bool,
+        options: DependencyOptions,
+    ) -> miette::Result<Option<UpdateDeps>> {
+        crate::workspace::add::add_pypi_dep(
+            &self.interface,
+            self.workspace_mut()?,
+            pypi_deps,
+            editable,
+            options,
+        )
+        .await
+    }
+
+    pub async fn remove_conda_deps(
+        &self,
+        specs: IndexMap<PackageName, rattler_conda_types::MatchSpec>,
+        spec_type: pixi_manifest::SpecType,
+        dep_options: DependencyOptions,
+    ) -> miette::Result<()> {
+        crate::workspace::remove::remove_conda_deps(
+            &self.interface,
+            self.workspace_mut()?,
+            specs,
+            spec_type,
+            dep_options,
+        )
+        .await
+    }
+
+    pub async fn remove_pypi_deps(
+        &self,
+        pypi_deps: pixi_core::workspace::PypiDeps,
+        options: DependencyOptions,
+    ) -> miette::Result<()> {
+        crate::workspace::remove::remove_pypi_deps(
+            &self.interface,
+            self.workspace_mut()?,
+            pypi_deps,
+            options,
+        )
+        .await
+    }
+
+    pub async fn reinstall(
+        &self,
+        options: ReinstallOptions,
+        lock_file_usage: LockFileUsage,
+    ) -> miette::Result<()> {
+        crate::workspace::reinstall::reinstall(
+            &self.interface,
+            &self.workspace,
+            options,
+            lock_file_usage,
+        )
+        .await
+    }
+
     pub async fn list_tasks(
         &self,
         environment: Option<EnvironmentName>,
@@ -194,54 +272,6 @@ impl<I: Interface> WorkspaceContext<I> {
             names,
             platform,
             feature,
-        )
-        .await
-    }
-
-    pub async fn reinstall(
-        &self,
-        options: ReinstallOptions,
-        lock_file_usage: LockFileUsage,
-    ) -> miette::Result<()> {
-        crate::workspace::reinstall::reinstall(
-            &self.interface,
-            &self.workspace,
-            options,
-            lock_file_usage,
-        )
-        .await
-    }
-
-    pub async fn add_conda_deps(
-        &self,
-        specs: IndexMap<PackageName, rattler_conda_types::MatchSpec>,
-        spec_type: pixi_manifest::SpecType,
-        add_options: AddOptions,
-        git_options: GitOptions,
-    ) -> miette::Result<Option<UpdateDeps>> {
-        crate::workspace::add::add_conda_dep(
-            &self.interface,
-            self.workspace_mut()?,
-            specs,
-            spec_type,
-            add_options,
-            git_options,
-        )
-        .await
-    }
-
-    pub async fn add_pypi_deps(
-        &self,
-        pypi_deps: pixi_core::workspace::PypiDeps,
-        editable: bool,
-        options: AddOptions,
-    ) -> miette::Result<Option<UpdateDeps>> {
-        crate::workspace::add::add_pypi_dep(
-            &self.interface,
-            self.workspace_mut()?,
-            pypi_deps,
-            editable,
-            options,
         )
         .await
     }

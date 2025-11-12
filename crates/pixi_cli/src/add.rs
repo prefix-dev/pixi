@@ -1,7 +1,7 @@
 use clap::Parser;
 use pixi_api::{
     WorkspaceContext,
-    workspace::{AddOptions, GitOptions},
+    workspace::{DependencyOptions, GitOptions},
 };
 use pixi_config::ConfigCli;
 use pixi_core::{DependencyType, WorkspaceLocator};
@@ -94,17 +94,16 @@ pub struct Args {
     pub editable: bool,
 }
 
-impl From<&Args> for AddOptions {
-    fn from(args: &Args) -> Self {
-        AddOptions {
+impl TryFrom<&Args> for DependencyOptions {
+    type Error = miette::Error;
+
+    fn try_from(args: &Args) -> miette::Result<Self> {
+        Ok(DependencyOptions {
             feature: args.dependency_config.feature.clone(),
             platforms: args.dependency_config.platforms.clone(),
             no_install: args.no_install_config.no_install,
-            lock_file_usage: args
-                .lock_file_update_config
-                .lock_file_usage()
-                .unwrap_or_default(),
-        }
+            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+        })
     }
 }
 
@@ -148,7 +147,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .add_conda_deps(
                     args.dependency_config.specs()?,
                     spec_type,
-                    (&args).into(),
+                    (&args).try_into()?,
                     git_options,
                 )
                 .await?
@@ -172,7 +171,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             };
 
             workspace_ctx
-                .add_pypi_deps(pypi_deps, args.editable, (&args).into())
+                .add_pypi_deps(pypi_deps, args.editable, (&args).try_into()?)
                 .await?
         }
     };

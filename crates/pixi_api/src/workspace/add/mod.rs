@@ -12,14 +12,14 @@ use crate::interface::Interface;
 
 mod options;
 
-pub use options::{AddOptions, GitOptions};
+pub use options::{DependencyOptions, GitOptions};
 
 pub async fn add_conda_dep<I: Interface>(
     _interface: &I,
     mut workspace: WorkspaceMut,
     specs: IndexMap<PackageName, MatchSpec>,
     spec_type: SpecType,
-    add_options: AddOptions,
+    dep_options: DependencyOptions,
     git_options: GitOptions,
 ) -> miette::Result<Option<UpdateDeps>> {
     sanity_check_workspace(workspace.workspace()).await?;
@@ -27,7 +27,7 @@ pub async fn add_conda_dep<I: Interface>(
     // Add the platform if it is not already present
     workspace
         .manifest()
-        .add_platforms(add_options.platforms.iter(), &FeatureName::DEFAULT)?;
+        .add_platforms(dep_options.platforms.iter(), &FeatureName::DEFAULT)?;
 
     let mut match_specs = IndexMap::default();
     let mut source_specs = IndexMap::default();
@@ -85,10 +85,10 @@ pub async fn add_conda_dep<I: Interface>(
         match_specs,
         IndexMap::default(),
         source_specs,
-        add_options.no_install,
-        &add_options.lock_file_usage,
-        &add_options.feature,
-        &add_options.platforms,
+        dep_options.no_install,
+        &dep_options.lock_file_usage,
+        &dep_options.feature,
+        &dep_options.platforms,
         false,
         dry_run,
     ))
@@ -113,7 +113,7 @@ pub async fn add_pypi_dep<I: Interface>(
     mut workspace: WorkspaceMut,
     pypi_deps: PypiDeps,
     editable: bool,
-    options: AddOptions,
+    options: DependencyOptions,
 ) -> miette::Result<Option<UpdateDeps>> {
     sanity_check_workspace(workspace.workspace()).await?;
 

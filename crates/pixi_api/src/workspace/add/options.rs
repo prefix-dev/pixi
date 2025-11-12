@@ -5,7 +5,7 @@ use rattler_conda_types::Platform;
 use url::Url;
 
 #[derive(Clone, Debug)]
-pub struct AddOptions {
+pub struct DependencyOptions {
     /// The feature for which the dependency should be modified.
     pub feature: FeatureName,
     /// The platform for which the dependency should be modified.
