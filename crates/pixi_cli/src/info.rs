@@ -1,4 +1,4 @@
-use std::{fmt::Display, path::PathBuf};
+use std::{fmt::Display, io::Write, path::PathBuf};
 
 use chrono::{DateTime, Local};
 use clap::Parser;
@@ -167,7 +167,7 @@ impl Display for EnvironmentInfo {
                 .collect::<Vec<_>>()
                 .join("\n");
 
-            writeln!(f, "{}", indented)?;
+            writeln!(f, "{indented}")?;
         }
 
         if !self.tasks.is_empty() {
@@ -297,7 +297,7 @@ impl Display for Info {
         // Pixi global information
         if let Some(gi) = self.global_info.as_ref() {
             writeln!(f, "\n{}", bold.apply_to("Global\n------------").cyan())?;
-            write!(f, "{}", gi)?;
+            write!(f, "{gi}")?;
         }
 
         // Workspace information
@@ -331,7 +331,7 @@ impl Display for Info {
                 bold.apply_to("Environments\n------------").cyan()
             )?;
             for e in &self.environments_info {
-                writeln!(f, "{}", e)?;
+                writeln!(f, "{e}")?;
             }
         }
 
@@ -491,9 +491,27 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     if args.json {
-        println!("{}", serde_json::to_string_pretty(&info).into_diagnostic()?);
+        writeln!(
+            std::io::stdout(),
+            "{}",
+            serde_json::to_string_pretty(&info).into_diagnostic()?
+        )
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::BrokenPipe {
+                std::process::exit(0);
+            }
+            e
+        })
+        .into_diagnostic()?;
     } else {
-        println!("{}", info);
+        writeln!(std::io::stdout(), "{info}")
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    std::process::exit(0);
+                }
+                e
+            })
+            .into_diagnostic()?;
     }
 
     Ok(())

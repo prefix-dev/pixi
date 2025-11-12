@@ -4,7 +4,7 @@ package:
 
 requirements:
   run:
-    - pixi-build-api-version==0
+    - pixi-build-api-version==1
 
 build:
   noarch: generic

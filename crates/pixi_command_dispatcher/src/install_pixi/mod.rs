@@ -7,13 +7,13 @@ use std::{
     path::PathBuf,
 };
 
-use futures::{FutureExt, StreamExt};
+use futures::StreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_record::{PixiRecord, SourceRecord};
 use rattler::install::{
-    Installer, InstallerError, Transaction,
+    InstallationResultRecord, Installer, InstallerError, Transaction,
     link_script::{LinkScriptError, PrePostLinkResult},
 };
 use rattler_conda_types::{
@@ -65,6 +65,9 @@ pub struct InstallPixiEnvironmentSpec {
     /// Build variants to use during the solve
     pub variants: Option<BTreeMap<String, Vec<String>>>,
 
+    /// Build variant file contents to use during the solve
+    pub variant_files: Option<Vec<PathBuf>>,
+
     /// The protocols that are enabled for source packages
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
@@ -73,7 +76,7 @@ pub struct InstallPixiEnvironmentSpec {
 /// The result of installing a Pixi environment.
 pub struct InstallPixiEnvironmentResult {
     /// The transaction that was applied
-    pub transaction: Transaction<PrefixRecord, RepoDataRecord>,
+    pub transaction: Transaction<InstallationResultRecord, RepoDataRecord>,
 
     /// The result of running pre link scripts. `None` if no
     /// pre-processing was performed, possibly because link scripts were
@@ -108,6 +111,7 @@ impl InstallPixiEnvironmentSpec {
             channels: Vec::new(),
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
             variants: None,
+            variant_files: None,
             enabled_protocols: EnabledProtocols::default(),
         }
     }
@@ -127,12 +131,6 @@ impl InstallPixiEnvironmentSpec {
                     PixiRecord::Binary(record) => Either::Right(record),
                 });
 
-        // Determine which packages are already installed.
-        let installed_packages_fut = match self.installed.take() {
-            Some(installed) => std::future::ready(Ok(installed)).left_future(),
-            None => detect_installed_packages(&self.prefix).right_future(),
-        };
-
         // Build all the source packages concurrently.
         binary_records.reserve(source_records.len());
         let mut build_futures = ExecutorFutures::new(command_dispatcher.executor());
@@ -149,7 +147,10 @@ impl InstallPixiEnvironmentSpec {
                 self.build_from_source(&command_dispatcher, &source_record)
                     .await
                     .map_err_with(move |build_err| {
-                        InstallPixiEnvironmentError::BuildSourceError(source_record, build_err)
+                        InstallPixiEnvironmentError::BuildSourceError(
+                            Box::new(source_record),
+                            build_err,
+                        )
                     })
             });
         }
@@ -165,9 +166,6 @@ impl InstallPixiEnvironmentSpec {
         }
         drop(build_futures);
 
-        // Wait for the installed packages here.
-        let installed_packages = installed_packages_fut.await?;
-
         // Install the environment using the prefix installer
         let mut installer = Installer::new()
             .with_target_platform(self.build_environment.host_platform)
@@ -175,8 +173,7 @@ impl InstallPixiEnvironmentSpec {
             .with_package_cache(command_dispatcher.package_cache().clone())
             .with_reinstall_packages(self.force_reinstall)
             .with_ignored_packages(self.ignore_packages.unwrap_or_default())
-            .with_execute_link_scripts(command_dispatcher.allow_execute_link_scripts())
-            .with_installed_packages(installed_packages);
+            .with_execute_link_scripts(command_dispatcher.allow_execute_link_scripts());
 
         if let Some(installed) = self.installed {
             installer = installer.with_installed_packages(installed);
@@ -189,7 +186,12 @@ impl InstallPixiEnvironmentSpec {
         let result = installer
             .install(self.prefix.path(), binary_records)
             .await
-            .map_err(InstallPixiEnvironmentError::Installer)
+            .map_err(|err| match err {
+                InstallerError::FailedToDetectInstalledPackages(err) => {
+                    InstallPixiEnvironmentError::ReadInstalledPackages(self.prefix, err)
+                }
+                err => InstallPixiEnvironmentError::Installer(err),
+            })
             .map_err(CommandDispatcherError::Failed)?;
 
         Ok(InstallPixiEnvironmentResult {
@@ -207,40 +209,33 @@ impl InstallPixiEnvironmentSpec {
         source_record: &SourceRecord,
     ) -> Result<RepoDataRecord, CommandDispatcherError<SourceBuildError>> {
         // Build the source package.
+        // Verify if we need to force the build even if the cache is up to date.
+        let force = self
+            .force_reinstall
+            .contains(&source_record.package_record.name);
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
-                source: source_record.source.clone(),
+                manifest_source: source_record.manifest_source.clone(),
                 package: source_record.into(),
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
                 build_environment: self.build_environment.clone(),
                 variants: self.variants.clone(),
+                variant_files: self.variant_files.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 output_directory: None,
                 work_directory: None,
                 clean: false,
+                // Should we force the build even if the cache is up to date?
+                force,
                 // When we install a pixi environment we always build in development mode.
                 build_profile: BuildProfile::Development,
+                build_source: None,
             })
             .await?;
 
         Ok(built_source.record)
     }
-}
-
-/// Detects the currently installed packages in the given prefix.
-async fn detect_installed_packages(
-    prefix: &Prefix,
-) -> Result<Vec<PrefixRecord>, CommandDispatcherError<InstallPixiEnvironmentError>> {
-    let prefix = prefix.clone();
-    simple_spawn_blocking::tokio::run_blocking_task(move || {
-        PrefixRecord::collect_from_prefix(prefix.path()).map_err(|e| {
-            CommandDispatcherError::Failed(InstallPixiEnvironmentError::ReadInstalledPackages(
-                prefix, e,
-            ))
-        })
-    })
-    .await
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -254,11 +249,18 @@ pub enum InstallPixiEnvironmentError {
 
     #[error("failed to build '{}' from '{}'",
         .0.package_record.name.as_source(),
-        .0.source)]
+        .0.manifest_source)]
     BuildSourceError(
-        SourceRecord,
+        Box<SourceRecord>,
         #[diagnostic_source]
         #[source]
         SourceBuildError,
     ),
+
+    #[error(
+        "failed to convert install transaction to prefix records from '{}'",
+        .0.path().display()
+    )]
+    #[diagnostic(help("try `pixi clean` to reset the environment and run the command again"))]
+    ConvertTransactionToPrefixRecord(Prefix, #[source] std::io::Error),
 }

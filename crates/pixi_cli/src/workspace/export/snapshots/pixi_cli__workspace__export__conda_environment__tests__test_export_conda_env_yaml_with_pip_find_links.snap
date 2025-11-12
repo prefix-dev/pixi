@@ -1,5 +1,5 @@
 ---
-source: src/cli/workspace/export/conda_environment.rs
+source: crates/pixi_cli/src/workspace/export/conda_environment.rs
 expression: env_yaml.unwrap().to_yaml_string()
 ---
 name: default
@@ -7,7 +7,7 @@ channels:
 - conda-forge
 - nodefaults
 dependencies:
-- python ==3.12
+- python 3.12.*
 - pip
 - pip:
   - --index-url https://pypi.org/simple

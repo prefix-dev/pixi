@@ -20,7 +20,7 @@ fn redact_path(value: &str) -> String {
     let str_skipped = display_skipped.to_string();
     let prettified_norm = str_skipped.replace(r"\\", r"/").replace(r"\", r"/");
     let prettified = prettified_norm.trim_end_matches(['/', '\\']);
-    format!("file://<ROOT>/{}", prettified)
+    format!("file://<ROOT>/{prettified}")
 }
 
 /// This macro is used to assert the discovery of a backend and compare it with a snapshot.
@@ -90,6 +90,24 @@ fn test_non_existing() {
 #[test]
 fn test_direct_recipe() {
     let path = dunce::canonicalize(discovery_directory().join("recipe_yaml/recipe.yaml")).unwrap();
+    let source_path_regex = path
+        .parent()
+        .unwrap()
+        .to_string_lossy()
+        .replace(r"\", r"\\\\");
+    insta::with_settings!({
+        filters => vec![
+            (source_path_regex.as_str(), "file://<ROOT>"),
+            (r"\\", r"/"),
+        ],
+    }, {
+        assert_discover_snapshot ! ( & path);
+    });
+}
+
+#[test]
+fn test_direct_package_xml() {
+    let path = dunce::canonicalize(discovery_directory().join("ros-package/package.xml")).unwrap();
     let source_path_regex = path
         .parent()
         .unwrap()

@@ -11,10 +11,13 @@ version = "0.1.0"
 [dependencies]
 python = ">=3.12.5,<4"
 # Specific channel and version
-ca-certificates = { version = "2024.8.30", channel = "conda-forge" }
+ca-certificates = { version = "==2024.8.30", channel = "conda-forge" }
 
 [pypi-dependencies]
 rich = ">=13.8.0, <14"
+# NOTE: to pass integration tests, the git path here must be either a valid remote or a local abspath
+#       to test local modifications, use an absolute path temporarily.
+test-git-subdir-roundtrip = { git = "https://github.com/prefix-dev/pixi", rev = "main", subdirectory = "tests/data/mock-projects/test-project-export/test-git-subdir-roundtrip" }
 
 [target.linux-64.dependencies]
 requests = ">=2.32.3,<3"

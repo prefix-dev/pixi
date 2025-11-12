@@ -20,9 +20,10 @@ use std::{env, io::IsTerminal};
 use tracing::level_filters::LevelFilter;
 
 pub mod add;
-mod build;
+pub mod build;
 pub mod clean;
 pub mod cli_config;
+pub mod cli_interface;
 pub mod command_info;
 pub mod completion;
 pub mod config;
@@ -147,6 +148,7 @@ impl Args {
 }
 
 #[derive(Parser, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum Command {
     // Commands in alphabetical order
     #[clap(visible_alias = "a")]
@@ -294,23 +296,39 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         LevelFilter::TRACE => (LevelFilter::TRACE, LevelFilter::TRACE, LevelFilter::TRACE),
     };
 
-    let env_filter = EnvFilter::builder()
-        .with_default_directive(level_filter.into())
-        .from_env()
-        .into_diagnostic()?
-        // filter logs from apple codesign because they are very noisy
-        .add_directive("apple_codesign=off".parse().into_diagnostic()?)
-        .add_directive(format!("pixi={}", pixi_level).parse().into_diagnostic()?)
-        .add_directive(
-            format!("pixi_command_dispatcher={}", pixi_level)
-                .parse()
-                .into_diagnostic()?,
-        )
-        .add_directive(
-            format!("resolvo={}", low_level_filter)
-                .parse()
-                .into_diagnostic()?,
+    // Check if CLI verbosity flags were explicitly set
+    let cli_verbosity_set = args.global_options.verbose > 0 || args.global_options.quiet > 0;
+
+    // Build the filter with appropriate precedence:
+    // - If CLI flags are set (--quiet/-v), use them and ignore RUST_LOG
+    // - If no CLI flags, try and RUST_LOG if available
+    let env_filter = if cli_verbosity_set {
+        // CLI flags take precedence i.e. ignore RUST_LOG
+        EnvFilter::builder()
+            .with_default_directive(level_filter.into())
+            .parse(format!(
+                "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}"
+            ))
+            .into_diagnostic()?
+    } else {
+        // No CLI flags - use RUST_LOG if set
+        // Parse RUST_LOG because we need to set it other our other directives
+        let env_directives = env::var("RUST_LOG").unwrap_or_default();
+        let original_directives = format!(
+            "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}",
         );
+        // Concatenate both directives where the LOG overrides the potential original directives
+        let final_directives = if env_directives.is_empty() {
+            original_directives
+        } else {
+            format!("{original_directives},{env_directives}")
+        };
+
+        EnvFilter::builder()
+            .with_default_directive(level_filter.into())
+            .parse(&final_directives)
+            .into_diagnostic()?
+    };
 
     // Set up the tracing subscriber
     let fmt_layer = tracing_subscriber::fmt::layer()
@@ -473,11 +491,11 @@ fn print_installed_commands() {
         if use_colors {
             println!(
                 "    {} {}",
-                console::style(format!("{:<20}", name)).bright().cyan(),
+                console::style(format!("{name:<20}")).bright().cyan(),
                 summary
             );
         } else {
-            println!("    {:<20} {}", name, summary);
+            println!("    {name:<20} {summary}");
         }
     }
 
@@ -487,15 +505,15 @@ fn print_installed_commands() {
     external_names.sort();
 
     for name in external_names {
-        let via = format!("(via pixi-{})", name);
+        let via = format!("(via pixi-{name})");
         if use_colors {
             println!(
                 "    {} {}",
-                console::style(format!("{:<20}", name)).bright().cyan(),
+                console::style(format!("{name:<20}")).bright().cyan(),
                 via
             );
         } else {
-            println!("    {:<20} {}", name, via);
+            println!("    {name:<20} {via}");
         }
     }
 }

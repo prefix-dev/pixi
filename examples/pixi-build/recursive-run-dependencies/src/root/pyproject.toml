@@ -9,7 +9,7 @@ build-backend = "hatchling.build"
 requires = ["hatchling"]
 
 [tool.pixi.package.build]
-backend = { name = "pixi-build-python", version = "0.1.*" }
+backend = { name = "pixi-build-python", version = "0.4.*" }
 
 [tool.pixi.package.host-dependencies]
 hatchling = ">=1.27,<2.0"

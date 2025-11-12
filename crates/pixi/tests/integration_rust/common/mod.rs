@@ -13,7 +13,7 @@ use std::{
     str::FromStr,
 };
 
-use builders::{LockBuilder, SearchBuilder};
+use builders::{BuildBuilder, LockBuilder, SearchBuilder};
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi_cli::LockFileUsageConfig;
@@ -21,7 +21,7 @@ use pixi_cli::cli_config::{
     ChannelsConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
 };
 use pixi_cli::{
-    add,
+    add, build,
     init::{self, GitAttributes},
     install::Args,
     lock, remove, run, search,
@@ -51,6 +51,8 @@ use crate::common::builders::{
 };
 
 const DEFAULT_PROJECT_CONFIG: &str = r#"
+default-channels = ["https://prefix.dev/conda-forge"]
+
 [repodata-config."https://prefix.dev"]
 disable-sharded = false
 "#;
@@ -59,6 +61,8 @@ disable-sharded = false
 pub struct PixiControl {
     /// The path to the project working file
     tmpdir: TempDir,
+    /// Optional backend override for testing purposes
+    backend_override: Option<pixi_build_frontend::BackendOverride>,
 }
 
 pub struct RunResult {
@@ -121,6 +125,13 @@ pub trait LockFileExt {
         platform: Platform,
         package: &str,
     ) -> Option<UrlOrPath>;
+
+    fn get_pypi_package(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<LockedPackageRef>;
 }
 
 impl LockFileExt for LockFile {
@@ -128,25 +139,23 @@ impl LockFileExt for LockFile {
         let Some(env) = self.environment(environment) else {
             return false;
         };
-        let package_found = env
-            .packages(platform)
+
+        env.packages(platform)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_conda)
-            .any(|package| package.record().name.as_normalized() == name);
-        package_found
+            .any(|package| package.record().name.as_normalized() == name)
     }
     fn contains_pypi_package(&self, environment: &str, platform: Platform, name: &str) -> bool {
         let Some(env) = self.environment(environment) else {
             return false;
         };
-        let package_found = env
-            .packages(platform)
+
+        env.packages(platform)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_pypi)
-            .any(|(data, _)| data.name.as_ref() == name);
-        package_found
+            .any(|(data, _)| data.name.as_ref() == name)
     }
 
     fn contains_match_spec(
@@ -159,13 +168,12 @@ impl LockFileExt for LockFile {
         let Some(env) = self.environment(environment) else {
             return false;
         };
-        let package_found = env
-            .packages(platform)
+
+        env.packages(platform)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_conda)
-            .any(move |p| p.satisfies(&match_spec));
-        package_found
+            .any(move |p| p.satisfies(&match_spec))
     }
 
     fn contains_pep508_requirement(
@@ -175,16 +183,15 @@ impl LockFileExt for LockFile {
         requirement: pep508_rs::Requirement,
     ) -> bool {
         let Some(env) = self.environment(environment) else {
-            eprintln!("environment not found: {}", environment);
+            eprintln!("environment not found: {environment}");
             return false;
         };
-        let package_found = env
-            .packages(platform)
+
+        env.packages(platform)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_pypi)
-            .any(move |(data, _)| data.satisfies(&requirement));
-        package_found
+            .any(move |(data, _)| data.satisfies(&requirement))
     }
 
     fn get_pypi_package_version(
@@ -200,6 +207,18 @@ impl LockFileExt for LockFile {
                 })
             })
             .map(|(data, _)| data.version.to_string())
+    }
+
+    fn get_pypi_package(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<LockedPackageRef> {
+        self.environment(environment).and_then(|env| {
+            env.packages(platform)
+                .and_then(|mut packages| packages.find(|p| p.name() == package))
+        })
     }
 
     fn get_pypi_package_url(
@@ -230,7 +249,21 @@ impl PixiControl {
         // Hide the progress bars for the tests
         // Otherwise the override the test output
         hide_progress_bars();
-        Ok(PixiControl { tmpdir: tempdir })
+        Ok(PixiControl {
+            tmpdir: tempdir,
+            backend_override: None,
+        })
+    }
+
+    /// Set a backend override for testing purposes. This allows injecting
+    /// custom build backends for testing build operations without needing
+    /// actual backend processes.
+    pub fn with_backend_override(
+        mut self,
+        backend_override: pixi_build_frontend::BackendOverride,
+    ) -> Self {
+        self.backend_override = Some(backend_override);
+        self
     }
 
     /// Creates a new PixiControl instance from an existing manifest
@@ -261,7 +294,11 @@ impl PixiControl {
 
     /// Loads the workspace manifest and returns it.
     pub fn workspace(&self) -> miette::Result<Workspace> {
-        Workspace::from_path(&self.manifest_path()).into_diagnostic()
+        let mut workspace = Workspace::from_path(&self.manifest_path()).into_diagnostic()?;
+        if let Some(backend_override) = &self.backend_override {
+            workspace = workspace.with_backend_override(backend_override.clone());
+        }
+        Ok(workspace)
     }
 
     /// Get the path to the workspace
@@ -357,6 +394,12 @@ impl PixiControl {
         self.add_multiple(vec![spec])
     }
 
+    /// Add a pypi dependency to the project. Returns an [`AddBuilder`].
+    /// To execute the command and await the result, call `.await` on the return value.
+    pub fn add_pypi(&self, spec: &str) -> AddBuilder {
+        self.add_multiple(vec![spec]).set_pypi(true)
+    }
+
     /// Add dependencies to the project. Returns an [`AddBuilder`].
     /// To execute the command and await the result, call `.await` on the return value.
     pub fn add_multiple(&self, specs: Vec<&str>) -> AddBuilder {
@@ -364,6 +407,7 @@ impl PixiControl {
             args: add::Args {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
                 no_install_config: NoInstallConfig { no_install: true },
@@ -385,6 +429,7 @@ impl PixiControl {
                 package: name,
                 project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 platform: Platform::current(),
                 limit: None,
@@ -399,6 +444,7 @@ impl PixiControl {
             args: remove::Args {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
                 no_install_config: NoInstallConfig { no_install: true },
@@ -417,6 +463,7 @@ impl PixiControl {
             args: workspace::channel::AddRemoveArgs {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
@@ -439,6 +486,7 @@ impl PixiControl {
             args: workspace::channel::AddRemoveArgs {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
@@ -560,6 +608,7 @@ impl PixiControl {
                 environment: None,
                 project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 lock_file_usage: LockFileUsageConfig {
                     frozen: false,
@@ -582,6 +631,7 @@ impl PixiControl {
                 config: Default::default(),
                 project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 no_install: true,
                 dry_run: false,
@@ -597,7 +647,7 @@ impl PixiControl {
     /// [`Self::update_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
         let workspace = Workspace::from_path(&self.manifest_path())?;
-        workspace.load_lock_file().await
+        workspace.load_lock_file().await?.into_lock_file()
     }
 
     /// Load the current lock-file and makes sure that its up to date with the
@@ -618,10 +668,31 @@ impl PixiControl {
             args: lock::Args {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 no_install_config: NoInstallConfig { no_install: false },
                 check: false,
                 json: false,
+            },
+        }
+    }
+
+    /// Returns a [`BuildBuilder`]. To execute the command and await the result
+    /// call `.await` on the return value.
+    pub fn build(&self) -> BuildBuilder {
+        BuildBuilder {
+            args: build::Args {
+                project_config: WorkspaceConfig {
+                    manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
+                },
+                config_cli: Default::default(),
+                lock_and_install_config: Default::default(),
+                target_platform: rattler_conda_types::Platform::current(),
+                build_platform: rattler_conda_types::Platform::current(),
+                output_dir: PathBuf::from("."),
+                build_dir: None,
+                clean: false,
             },
         }
     }
@@ -671,6 +742,7 @@ impl TasksControl<'_> {
         task::execute(task::Args {
             workspace_config: WorkspaceConfig {
                 manifest_path: Some(self.pixi.manifest_path()),
+                ..Default::default()
             },
             operation: task::Operation::Remove(task::RemoveArgs {
                 names: vec![name],

@@ -5,23 +5,15 @@
 //!
 //! This is especially useful for testing purposes.
 
-#[cfg(feature = "passthrough_backend")]
-mod passthrough;
-
-use std::fmt::Debug;
-
-#[cfg(feature = "passthrough_backend")]
-pub use passthrough::PassthroughBackend;
 use pixi_build_types::{
     BackendCapabilities, PixiBuildApiVersion,
     procedures::{
-        conda_build_v0::{CondaBuildParams, CondaBuildResult},
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
-        conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         conda_outputs::{CondaOutputsParams, CondaOutputsResult},
         initialize::InitializeParams,
     },
 };
+use std::{fmt::Debug, sync::Arc};
 
 use crate::{BackendOutputStream, json_rpc::CommunicationError};
 
@@ -30,7 +22,10 @@ use crate::{BackendOutputStream, json_rpc::CommunicationError};
 pub trait InMemoryBackendInstantiator {
     type Backend: InMemoryBackend;
 
-    fn initialize(&self, params: InitializeParams) -> Result<Self::Backend, CommunicationError>;
+    fn initialize(
+        &self,
+        params: InitializeParams,
+    ) -> Result<Self::Backend, Box<CommunicationError>>;
 
     fn identifier(&self) -> &str;
 
@@ -48,26 +43,11 @@ pub trait InMemoryBackend: Send {
 
     fn identifier(&self) -> &str;
 
-    fn conda_get_metadata(
-        &self,
-        params: CondaMetadataParams,
-    ) -> Result<CondaMetadataResult, CommunicationError> {
-        unimplemented!()
-    }
-
-    fn conda_build_v0(
-        &self,
-        params: CondaBuildParams,
-        output_stream: &(dyn BackendOutputStream + Send + 'static),
-    ) -> Result<CondaBuildResult, CommunicationError> {
-        unimplemented!()
-    }
-
     fn conda_build_v1(
         &self,
         params: CondaBuildV1Params,
         output_stream: &(dyn BackendOutputStream + Send + 'static),
-    ) -> Result<CondaBuildV1Result, CommunicationError> {
+    ) -> Result<CondaBuildV1Result, Box<CommunicationError>> {
         unimplemented!()
     }
 
@@ -75,19 +55,22 @@ pub trait InMemoryBackend: Send {
     fn conda_outputs(
         &self,
         params: CondaOutputsParams,
-    ) -> Result<CondaOutputsResult, CommunicationError> {
+        output_stream: &(dyn BackendOutputStream + Send + 'static),
+    ) -> Result<CondaOutputsResult, Box<CommunicationError>> {
         unimplemented!()
     }
 }
 
 type ErasedInMemoryBackend = Box<dyn InMemoryBackend + 'static>;
-type ErasedInitializationFn =
-    dyn Fn(InitializeParams) -> Result<ErasedInMemoryBackend, CommunicationError> + Send + Sync;
+type ErasedInitializationFn = dyn Fn(InitializeParams) -> Result<ErasedInMemoryBackend, Box<CommunicationError>>
+    + Send
+    + Sync;
 
 /// A helper type that erases the type of the in-memory build backend.
+#[derive(Clone)]
 pub struct BoxedInMemoryBackend {
     identifier: String,
-    initialize: Box<ErasedInitializationFn>,
+    initialize: Arc<ErasedInitializationFn>,
     api_version: PixiBuildApiVersion,
 }
 
@@ -96,7 +79,7 @@ impl BoxedInMemoryBackend {
     pub fn initialize(
         &self,
         params: InitializeParams,
-    ) -> Result<Box<dyn InMemoryBackend>, CommunicationError> {
+    ) -> Result<Box<dyn InMemoryBackend>, Box<CommunicationError>> {
         (self.initialize)(params)
     }
 
@@ -119,7 +102,7 @@ impl<T: InMemoryBackendInstantiator + Send + Sync + 'static> From<T> for BoxedIn
         Self {
             identifier: instantiator.identifier().to_owned(),
             api_version: instantiator.api_version(),
-            initialize: Box::new(move |params| {
+            initialize: Arc::new(move |params| {
                 instantiator
                     .initialize(params)
                     .map(|b| Box::new(b) as Box<dyn InMemoryBackend>)

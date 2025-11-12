@@ -5,6 +5,7 @@
 "deno_channel.yaml" = "deno_channel"
 "dummy_channel_1.yaml" = "dummy_channel_1"
 "dummy_channel_2.yaml" = "dummy_channel_2"
+"global_prefix_ignore_channel/recipe.yaml" = "global_prefix_ignore_channel"
 "multiple_versions_channel_1_010.yaml" = "multiple_versions_channel_1"
 "multiple_versions_channel_1_020.yaml" = "multiple_versions_channel_1"
 "non_self_expose_channel_1.yaml" = "non_self_expose_channel_1"

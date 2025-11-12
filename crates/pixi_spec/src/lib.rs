@@ -98,11 +98,11 @@ impl Default for PixiSpec {
 impl Display for PixiSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PixiSpec::Version(version) => write!(f, "{}", version),
-            PixiSpec::DetailedVersion(detailed) => write!(f, "{}", detailed),
-            PixiSpec::Url(url) => write!(f, "{}", url),
-            PixiSpec::Git(git) => write!(f, "{}", git),
-            PixiSpec::Path(path) => write!(f, "{}", path),
+            PixiSpec::Version(version) => write!(f, "{version}"),
+            PixiSpec::DetailedVersion(detailed) => write!(f, "{detailed}"),
+            PixiSpec::Url(url) => write!(f, "{url}"),
+            PixiSpec::Git(git) => write!(f, "{git}"),
+            PixiSpec::Path(path) => write!(f, "{path}"),
         }
     }
 }
@@ -339,6 +339,18 @@ impl PixiSpec {
         !self.is_binary()
     }
 
+    /// Returns true if this spec represents a mutable source.
+    /// A spec is mutable if it points to a local path-based source (non-binary).
+    pub fn is_mutable(&self) -> bool {
+        match self {
+            Self::Version(_) => false,
+            Self::DetailedVersion(_) => false,
+            Self::Url(_) => false,
+            Self::Git(_) => false,
+            Self::Path(path) => !path.is_binary(),
+        }
+    }
+
     /// Converts this instance into a [`toml_edit::Value`].
     pub fn to_toml_value(&self) -> toml_edit::Value {
         ::serde::Serialize::serialize(self, toml_edit::ser::ValueSerializer::new())
@@ -374,9 +386,9 @@ pub enum SourceLocationSpec {
 impl Display for SourceSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.location {
-            SourceLocationSpec::Url(url) => write!(f, "{}", url),
-            SourceLocationSpec::Git(git) => write!(f, "{}", git),
-            SourceLocationSpec::Path(path) => write!(f, "{}", path),
+            SourceLocationSpec::Url(url) => write!(f, "{url}"),
+            SourceLocationSpec::Git(git) => write!(f, "{git}"),
+            SourceLocationSpec::Path(path) => write!(f, "{path}"),
         }
     }
 }

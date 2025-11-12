@@ -6,6 +6,7 @@ use pixi_manifest::{EnvironmentName, TaskName};
 use rattler_conda_types::Platform;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use std::path::PathBuf;
 use thiserror::Error;
 
 /// An error that occurs when data is requested for a platform that is not supported.
@@ -60,6 +61,19 @@ impl Diagnostic for UnsupportedPlatformError {
     fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
         None
     }
+}
+
+/// Errors that can occur while resolving workspace build variants.
+#[derive(Debug, Diagnostic, Error)]
+pub enum VariantsError {
+    #[error("failed to read variant file '{path}'")]
+    #[diagnostic(code(workspace::variants::read_file))]
+    ReadVariantFile {
+        /// Absolute path to the variant file that failed to read.
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
 }
 
 /// An error that occurs when a task is requested which could not be found.

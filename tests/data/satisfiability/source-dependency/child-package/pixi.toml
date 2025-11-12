@@ -3,6 +3,6 @@ name = "child-package"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-cmake", version = "0.1.*" }
+backend = { name = "pixi-build-cmake", version = "0.3.*" }
 
 # A comment shouldn't change the project model and therefore, shouldn't change the hash

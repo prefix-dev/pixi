@@ -654,7 +654,7 @@ pub struct Config {
     pub loaded_from: Vec<PathBuf>,
 
     #[serde(skip, default = "default_channel_config")]
-    channel_config: ChannelConfig,
+    pub channel_config: ChannelConfig,
 
     /// Configuration for repodata fetching.
     #[serde(alias = "repodata_config")] // BREAK: remove to stop supporting snake_case alias
@@ -942,7 +942,7 @@ impl FromStr for PackageFormatAndCompression {
         let archive_type = match package_format.to_lowercase().as_str() {
             "tarbz2" => ArchiveType::TarBz2,
             "conda" => ArchiveType::Conda,
-            _ => return Err(format!("Unknown package format: {}", package_format)),
+            _ => return Err(format!("Unknown package format: {package_format}")),
         };
 
         let compression_level = match compression {
@@ -968,7 +968,7 @@ impl FromStr for PackageFormatAndCompression {
                 }
                 CompressionLevel::Numeric(number)
             }
-            _ => return Err(format!("Unknown compression level: {}", compression)),
+            _ => return Err(format!("Unknown compression level: {compression}")),
         };
 
         Ok(PackageFormatAndCompression {
@@ -994,7 +994,7 @@ impl Serialize for PackageFormatAndCompression {
             CompressionLevel::Numeric(level) => &level.to_string(),
         };
 
-        serializer.serialize_str(format!("{}:{}", package_format, compression_level).as_str())
+        serializer.serialize_str(format!("{package_format}:{compression_level}").as_str())
     }
 }
 
@@ -1346,8 +1346,11 @@ impl Config {
             // Extended self.mirrors with other.mirrors
             mirrors: self.mirrors,
             loaded_from: other.loaded_from,
-            // currently this is always the default so just use the other value
-            channel_config: other.channel_config,
+            channel_config: if other.channel_config == default_channel_config() {
+                self.channel_config
+            } else {
+                other.channel_config
+            },
             repodata_config: self.repodata_config.merge(other.repodata_config),
             pypi_config: self.pypi_config.merge(other.pypi_config),
             s3_options: {
@@ -1957,7 +1960,7 @@ UNUSED = "unused"
     #[case("latest-up", PinningStrategy::LatestUp)]
     #[case("no-pin", PinningStrategy::NoPin)]
     fn test_config_parse_pinning_strategy(#[case] input: &str, #[case] expected: PinningStrategy) {
-        let toml = format!("pinning-strategy = \"{}\"", input);
+        let toml = format!("pinning-strategy = \"{input}\"");
         let (config, _) = Config::from_toml(&toml, None).unwrap();
         assert_eq!(config.pinning_strategy, Some(expected));
     }
@@ -2262,7 +2265,7 @@ UNUSED = "unused"
         merged = merged.merge_config(config_2);
         assert!(merged.s3_options.contains_key("bucket1"));
 
-        let debug = format!("{:#?}", merged);
+        let debug = format!("{merged:#?}");
         let debug = debug.replace("\\\\", "/");
         // replace the path with a placeholder
         let debug = debug.replace(&d.to_str().unwrap().replace('\\', "/"), "path");

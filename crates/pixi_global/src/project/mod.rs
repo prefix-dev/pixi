@@ -31,23 +31,23 @@ use pixi_core::repodata::Repodata;
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::global_multi_progress;
 use pixi_reporters::TopLevelProgress;
+use pixi_spec::{BinarySpec, PathBinarySpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::{
     executable_from_path,
     prefix::{Executable, Prefix},
-    reqwest::build_reqwest_clients,
     rlimit::try_increase_rlimit_to_sensible,
 };
 use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
-    menuinst::MenuMode,
+    menuinst::MenuMode, package::ArchiveIdentifier,
 };
+use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
 // Removed unused rattler_solve imports
 use rattler_virtual_packages::{
     DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
 };
-use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
 
@@ -74,6 +74,7 @@ mod manifest;
 mod parsed_manifest;
 pub use global_spec::{FromMatchSpecError, GlobalSpec};
 use pixi_build_frontend::BackendOverride;
+use pixi_utils::reqwest::{LazyReqwestClient, build_lazy_reqwest_clients};
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum CommandDispatcherError {
@@ -120,7 +121,7 @@ pub struct Project {
     /// The manifest for the project
     pub manifest: Manifest,
     /// The global configuration as loaded from the config file(s)
-    config: Config,
+    pub config: Config,
     /// Root directory of the global environments
     pub(crate) env_root: EnvRoot,
     /// Binary directory
@@ -128,7 +129,7 @@ pub struct Project {
     /// Reqwest client shared for this project.
     /// This is wrapped in a `OnceCell` to allow for lazy initialization.
     // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
-    client: OnceCell<(reqwest::Client, ClientWithMiddleware)>,
+    client: OnceCell<(LazyReqwestClient, rattler_networking::LazyClient)>,
     /// The repodata gateway to use for answering queries about repodata.
     /// This is wrapped in a `OnceCell` to allow for lazy initialization.
     // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
@@ -303,7 +304,10 @@ impl Project {
             .expect("manifest path should always have a parent")
             .to_owned();
 
-        let config = Config::load(&root);
+        // Load the global config and ensure
+        // that the root_dir is relative to the manifest directory
+        let mut config = Config::load_global();
+        config.channel_config.root_dir = root.clone();
 
         let client = OnceCell::new();
         let repodata_gateway = OnceCell::new();
@@ -505,15 +509,15 @@ impl Project {
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> miette::Result<&ClientWithMiddleware> {
-        Ok(&self.client_and_authenticated_client()?.1)
+    pub fn authenticated_client(&self) -> miette::Result<&LazyClient> {
+        Ok(&self.lazy_client_and_authenticated_client()?.1)
     }
 
-    fn client_and_authenticated_client(
+    fn lazy_client_and_authenticated_client(
         &self,
-    ) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
+    ) -> miette::Result<&(LazyReqwestClient, rattler_networking::LazyClient)> {
         self.client
-            .get_or_try_init(|| build_reqwest_clients(Some(&self.config), None))
+            .get_or_try_init(|| build_lazy_reqwest_clients(Some(self.config()), None))
     }
 
     pub fn config(&self) -> &Config {
@@ -619,6 +623,7 @@ impl Project {
                 ignore_packages: None,
                 force_reinstall: Default::default(),
                 variants: None,
+                variant_files: None,
             })
             .await?;
 
@@ -1029,8 +1034,7 @@ impl Project {
             })
             .collect::<miette::Result<Vec<_>>>()
             .wrap_err(format!(
-                "Failed to add executables for environment: {}",
-                env_name
+                "Failed to add executables for environment: {env_name}"
             ))?;
 
         tracing::debug!(
@@ -1361,30 +1365,22 @@ impl Project {
         })
     }
 
-    /// Infer the package name from a PixiSpec (path or git) by examining build
-    /// outputs
-    pub async fn infer_package_name_from_spec(
+    /// Infer the package name from a SourceSpec by examining build outputs
+    async fn infer_package_name_from_source_spec(
         &self,
-        pixi_spec: &pixi_spec::PixiSpec,
+        source_spec: pixi_spec::SourceSpec,
     ) -> Result<PackageName, InferPackageNameError> {
-        let pinned_source_spec = match pixi_spec.clone().into_source_or_binary() {
-            Either::Left(source_spec) => {
-                let command_dispatcher = self.command_dispatcher()?;
-                let checkout = command_dispatcher
-                    .pin_and_checkout(source_spec)
-                    .await
-                    .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
+        let command_dispatcher = self.command_dispatcher()?;
+        let checkout = command_dispatcher
+            .pin_and_checkout(source_spec.location, None)
+            .await
+            .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
 
-                checkout.pinned
-            }
-            Either::Right(_) => {
-                return Err(InferPackageNameError::UnsupportedSpecType);
-            }
-        };
+        let pinned_source_spec = checkout.pinned;
 
         // Create the metadata spec
         let metadata_spec = BuildBackendMetadataSpec {
-            source: pinned_source_spec,
+            manifest_source: pinned_source_spec,
             channel_config: self.global_channel_config().clone(),
             channels: self
                 .config()
@@ -1394,7 +1390,9 @@ impl Project {
                 .collect(),
             build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
             variants: None,
+            variant_files: None,
             enabled_protocols: Default::default(),
+            pin_override: None,
         };
 
         // Get the metadata using the command dispatcher
@@ -1420,6 +1418,27 @@ impl Project {
                     package_names: package_names.join(", "),
                 })
             }
+        }
+    }
+
+    /// Infer the package name from a PixiSpec (path or git) by examining build
+    /// outputs
+    pub async fn infer_package_name_from_spec(
+        &self,
+        pixi_spec: &pixi_spec::PixiSpec,
+    ) -> Result<PackageName, InferPackageNameError> {
+        match pixi_spec.clone().into_source_or_binary() {
+            Either::Left(source_spec) => {
+                self.infer_package_name_from_source_spec(source_spec).await
+            }
+            Either::Right(binary_spec) => match binary_spec {
+                BinarySpec::Path(PathBinarySpec { path }) => path
+                    .file_name()
+                    .and_then(ArchiveIdentifier::try_from_filename)
+                    .and_then(|iden| PackageName::from_str(&iden.name).ok())
+                    .ok_or(InferPackageNameError::UnsupportedSpecType),
+                _ => Err(InferPackageNameError::UnsupportedSpecType),
+            },
         }
     }
 }

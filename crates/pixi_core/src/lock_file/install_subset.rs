@@ -109,7 +109,7 @@ pub struct InstallSubset<'a> {
 
 #[derive(thiserror::Error, Debug, Diagnostic)]
 pub enum InstallSubsetError {
-    #[error("the following `--only` packages do not exist: {}", .0.iter().map(|s| format!("'{}'", s)).join(", "))]
+    #[error("the following `--only` packages do not exist: {}", .0.iter().map(|s| format!("'{s}'")).join(", "))]
     #[diagnostic(help("try finding the correct package with `pixi list`"))]
     TargetPackagesDoNotExist(Vec<String>),
 }
@@ -593,7 +593,7 @@ mod tests {
         let required =
             dc.collect_targets_dependencies(&["A".to_string(), "B".to_string()], &[], &[]);
         for n in ["A", "B", "X", "Y", "Z"] {
-            assert!(required.contains(n), "expected to contain {}", n);
+            assert!(required.contains(n), "expected to contain {n}");
         }
     }
 

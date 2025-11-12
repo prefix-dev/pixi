@@ -71,7 +71,7 @@ jobs:
 
       # Use fork of dist to allow for binaries in the root of the tarball
       - name: Install cargo-dist from git
-        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
+        uses: baptiste0928/cargo-install@b687c656bda5733207e629b50a22bf68974a0305 # v3
         with:
           crate: dist
           git: https://github.com/ruben-arts/cargo-dist.git
@@ -83,7 +83,7 @@ jobs:
           activate-environment: true
 
       - name: Cache dist
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: cargo-dist-cache
           # TODO: revert after switching back to released dist
@@ -100,7 +100,7 @@ jobs:
           cat plan-dist-manifest.json
           echo "manifest=$(jq -c "." plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
       - name: "Upload dist-manifest.json"
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: artifacts-plan-dist-manifest
           path: plan-dist-manifest.json
@@ -149,7 +149,7 @@ jobs:
 
       # Use fork of dist to allow for binaries in the root of the tarball
       - name: Install cargo-dist from git
-        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
+        uses: baptiste0928/cargo-install@b687c656bda5733207e629b50a22bf68974a0305 # v3
         with:
           crate: dist
           git: https://github.com/ruben-arts/cargo-dist.git
@@ -158,7 +158,7 @@ jobs:
       - name: Install cargo-zigbuild
         # Only install on non windows platforms
         if: ${{ contains(matrix.runner, 'windows') == false }}
-        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
+        uses: baptiste0928/cargo-install@b687c656bda5733207e629b50a22bf68974a0305 # v3
         with:
           crate: cargo-zigbuild
           version: "0.20.1"
@@ -170,7 +170,7 @@ jobs:
 
       # Get the dist-manifest
       - name: Fetch local artifacts
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           pattern: artifacts-*
           path: target/distrib/
@@ -211,7 +211,7 @@ jobs:
 
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
       - name: "Upload artifacts"
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: artifacts-build-local-${{ join(matrix.targets, '_') }}
           path: |
@@ -233,14 +233,14 @@ jobs:
         with:
           submodules: recursive
       - name: Install cached dist
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           name: cargo-dist-cache
           path: ~/.cargo/bin/
       - run: chmod +x ~/.cargo/bin/dist
       # Get all the local artifacts for the global tasks to use (for e.g. checksums)
       - name: Fetch local artifacts
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           pattern: artifacts-*
           path: target/distrib/
@@ -258,7 +258,7 @@ jobs:
 
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
       - name: "Upload artifacts"
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: artifacts-build-global
           path: |
@@ -282,14 +282,14 @@ jobs:
         with:
           submodules: recursive
       - name: Install cached dist
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           name: cargo-dist-cache
           path: ~/.cargo/bin/
       - run: chmod +x ~/.cargo/bin/dist
       # Fetch artifacts from scratch-storage
       - name: Fetch artifacts
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           pattern: artifacts-*
           path: target/distrib/
@@ -303,7 +303,7 @@ jobs:
           cat dist-manifest.json
           echo "manifest=$(jq -c "." dist-manifest.json)" >> "$GITHUB_OUTPUT"
       - name: "Upload dist-manifest.json"
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           # Overwrite the previous copy
           name: artifacts-dist-manifest
@@ -337,49 +337,49 @@ jobs:
 
       # Upload unpacked artifacts, not sure how to do this in one go as you have to name the artifact
       - name: Upload unpacked artifact for pixi-aarch64-unknown-linux-musl
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: artifacts-pixi-aarch64-unknown-linux-musl
           path: unpacked-artifacts/pixi-aarch64-unknown-linux-musl
 
       - name: Upload unpacked artifact for pixi-x86_64-unknown-linux-musl
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: artifacts-pixi-x86_64-unknown-linux-musl
           path: unpacked-artifacts/pixi-x86_64-unknown-linux-musl
 
       - name: Upload unpacked artifact for pixi-aarch64-apple-darwin
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: artifacts-pixi-aarch64-apple-darwin
           path: unpacked-artifacts/pixi-aarch64-apple-darwin
 
       - name: Upload unpacked artifact for pixi-x86_64-apple-darwin
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: artifacts-pixi-x86_64-apple-darwin
           path: unpacked-artifacts/pixi-x86_64-apple-darwin
 
       - name: Upload unpacked artifact for pixi-x86_64-pc-windows-msvc.exe
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: artifacts-pixi-x86_64-pc-windows-msvc.exe
           path: unpacked-artifacts/pixi-x86_64-pc-windows-msvc.exe
 
       - name: Upload unpacked artifact for pixi-aarch64-pc-windows-msvc.exe
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: artifacts-pixi-aarch64-pc-windows-msvc.exe
           path: unpacked-artifacts/pixi-aarch64-pc-windows-msvc.exe
 
       # Upload installer scripts
       - name: Upload install.sh
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: artifacts-install.sh
           path: install/install.sh
       - name: Upload install.ps1
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: artifacts-install.ps1
           path: install/install.ps1
@@ -404,7 +404,7 @@ jobs:
           submodules: recursive
       # Create a GitHub Release while uploading all files to it
       - name: "Download GitHub Artifacts"
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           pattern: artifacts-*
           path: artifacts

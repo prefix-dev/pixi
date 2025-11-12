@@ -12,11 +12,10 @@ backend-spec:
       - pixi-build-rattler-build
       - "*"
     channels:
-      - "https://conda.anaconda.org/conda-forge"
-      - "https://prefix.dev/pixi-build-backends"
+      - "https://prefix.dev/conda-forge"
 init-params:
   workspace-root: "file://<ROOT>/nested_recipe_yml"
-  source: ~
+  build-source: ~
   source-anchor: "file://<ROOT>/nested_recipe_yml"
   manifest-path: "file://<ROOT>/nested_recipe_yml/recipe/recipe.yml"
   project-model: ~

@@ -3,11 +3,12 @@ use std::{path::PathBuf, sync::Arc};
 use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
+use pixi_url::resolver::UrlResolver;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_networking::LazyClient;
 use rattler_repodata_gateway::{Gateway, MaxConcurrency};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
-use reqwest_middleware::ClientWithMiddleware;
 
 use crate::build::source_metadata_cache::SourceMetadataCache;
 use crate::discover_backend_cache::DiscoveryCache;
@@ -25,7 +26,8 @@ pub struct CommandDispatcherBuilder {
     root_dir: Option<PathBuf>,
     reporter: Option<Box<dyn Reporter>>,
     git_resolver: Option<GitResolver>,
-    download_client: Option<ClientWithMiddleware>,
+    url_resolver: Option<UrlResolver>,
+    download_client: Option<LazyClient>,
     cache_dirs: Option<CacheDirs>,
     build_backend_overrides: BackendOverride,
     max_download_concurrency: MaxConcurrency,
@@ -61,7 +63,7 @@ impl CommandDispatcherBuilder {
     }
 
     /// Sets the reqwest client to use for network fetches.
-    pub fn with_download_client(self, client: ClientWithMiddleware) -> Self {
+    pub fn with_download_client(self, client: LazyClient) -> Self {
         Self {
             download_client: Some(client),
             ..self
@@ -72,6 +74,14 @@ impl CommandDispatcherBuilder {
     pub fn with_git_resolver(self, resolver: GitResolver) -> Self {
         Self {
             git_resolver: Some(resolver),
+            ..self
+        }
+    }
+
+    /// Sets the url resolver used to fetch archives.
+    pub fn with_url_resolver(self, resolver: UrlResolver) -> Self {
+        Self {
+            url_resolver: Some(resolver),
             ..self
         }
     }
@@ -153,6 +163,7 @@ impl CommandDispatcherBuilder {
         });
 
         let git_resolver = self.git_resolver.unwrap_or_default();
+        let url_resolver = self.url_resolver.unwrap_or_default();
         let source_metadata_cache = SourceMetadataCache::new(cache_dirs.source_metadata());
         let build_cache = BuildCache::new(cache_dirs.source_builds());
         let tool_platform = self.tool_platform.unwrap_or_else(|| {
@@ -171,6 +182,7 @@ impl CommandDispatcherBuilder {
             build_cache,
             root_dir,
             git_resolver,
+            url_resolver,
             cache_dirs,
             download_client,
             build_backend_overrides: self.build_backend_overrides,

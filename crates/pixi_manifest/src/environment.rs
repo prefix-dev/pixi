@@ -86,8 +86,8 @@ impl Borrow<str> for EnvironmentName {
 impl fmt::Display for EnvironmentName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EnvironmentName::Default => write!(f, "{}", DEFAULT_ENVIRONMENT_NAME),
-            EnvironmentName::Named(name) => write!(f, "{}", name),
+            EnvironmentName::Default => write!(f, "{DEFAULT_ENVIRONMENT_NAME}"),
+            EnvironmentName::Named(name) => write!(f, "{name}"),
         }
     }
 }

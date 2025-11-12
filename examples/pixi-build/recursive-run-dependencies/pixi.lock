@@ -148,14 +148,16 @@ packages:
 - conda: src/depend
   name: depend
   version: 0.1.0
-  build: pyhbf21a9e_0
+  build: pyh4616a5c_0
   subdir: noarch
   depends:
   - boltons
-  - python
+  - python >=3.11
+  - python *
   input:
-    hash: c33f206dfc06551f0242c7037fe4d8f019bf8fbb3473b626f808d8947b8671f7
-    globs: []
+    hash: d3f1cccaf86d7fdee5dd02d003d58293d9ba97e005544c9936160c26f5131ec0
+    globs:
+    - pyproject.toml
 - conda: https://prefix.dev/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_4.conda
   sha256: db73f38155d901a610b2320525b9dd3b31e4949215c870685fd92ea61b5ce472
   md5: 01f8d123c96816249efd255a31ad7712
@@ -558,14 +560,16 @@ packages:
 - conda: src/root
   name: root
   version: 0.1.0
-  build: pyhbf21a9e_0
+  build: pyh4616a5c_0
   subdir: noarch
   depends:
   - depend
-  - python
+  - python >=3.11
+  - python *
   input:
-    hash: d74786cfcf078d97d1c9d5e38440e52418fc4650ee65f4adc27d02afcf50c8d0
-    globs: []
+    hash: 960c4783940e6a7bd4f5f557ea68b61d70319c2e9a46947564e9a8e87d64cd81
+    globs:
+    - pyproject.toml
   sources:
     depend:
       path: ../depend

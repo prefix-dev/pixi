@@ -13,7 +13,7 @@ pixi [OPTIONS] [COMMAND]
 |---------|-------------|
 | [`add`](pixi/add.md) | Adds dependencies to the workspace |
 | [`auth`](pixi/auth.md) | Login to prefix.dev or anaconda.org servers to access private channels |
-| [`build`](pixi/build.md) | Workspace configuration |
+| [`build`](pixi/build.md) | Lock file and installation configuration with --as-is support Used by shell, shell-hook, and run commands |
 | [`clean`](pixi/clean.md) | Cleanup the environments |
 | [`completion`](pixi/completion.md) | Generates a completion script for a shell |
 | [`config`](pixi/config.md) | Configuration management |
@@ -23,7 +23,7 @@ pixi [OPTIONS] [COMMAND]
 | [`init`](pixi/init.md) | Creates a new workspace |
 | [`import`](pixi/import.md) | Imports a file into an environment in an existing workspace. |
 | [`install`](pixi/install.md) | Install an environment, both updating the lockfile and installing the environment |
-| [`list`](pixi/list.md) | List workspace's packages |
+| [`list`](pixi/list.md) | List the packages of the current workspace |
 | [`lock`](pixi/lock.md) | Solve environment and update the lock file without installing the environments |
 | [`reinstall`](pixi/reinstall.md) | Re-install an environment, both updating the lockfile and re-installing the environment |
 | [`remove`](pixi/remove.md) | Removes dependencies from the workspace |

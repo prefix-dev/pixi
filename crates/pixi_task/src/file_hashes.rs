@@ -91,7 +91,7 @@ impl FileHashes {
             ignore_builder.push(pat);
         }
 
-        let glob = GlobSet::create(ignore_builder.iter().map(|s| s.as_str()))?;
+        let glob = GlobSet::create(ignore_builder.iter().map(|s| s.as_str()));
 
         // Spawn a thread that will collect the results from a channel.
         let (tx, rx) = crossbeam_channel::bounded(100);
@@ -102,7 +102,7 @@ impl FileHashes {
         let collect_root = Arc::new(root.to_owned());
 
         // Collect all entries first to avoid holding lock during iteration
-        let entries: Vec<_> = glob.filter_directory(root).collect::<Result<Vec<_>, _>>()?;
+        let entries = glob.collect_matching(root)?;
 
         // Force the initialization of the rayon thread pool to avoid implicit creation
         // by the Installer.
@@ -113,19 +113,20 @@ impl FileHashes {
             let tx = tx.clone();
             let collect_root = Arc::clone(&collect_root);
 
-            let result: Result<(PathBuf, String), FileHashesError> = if entry.file_type().is_dir() {
-                // Skip directories
-                return;
-            } else {
-                compute_file_hash(entry.path()).map(|hash| {
-                    let path = entry
-                        .path()
-                        .strip_prefix(&*collect_root)
-                        .expect("path is not prefixed by the root");
-                    tracing::info!("Added hash for file: {:?}", path);
-                    (path.to_owned(), hash)
-                })
-            };
+            let result: Result<(PathBuf, String), FileHashesError> =
+                if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                    // Skip directories
+                    return;
+                } else {
+                    compute_file_hash(entry.path()).map(|hash| {
+                        let path = entry
+                            .path()
+                            .strip_prefix(&*collect_root)
+                            .expect("path is not prefixed by the root");
+                        tracing::info!("Added hash for file: {:?}", path);
+                        (path.to_owned(), hash)
+                    })
+                };
 
             // Send result to channel - if it fails, we just continue with the next item
             let _ = tx.send(result);
@@ -188,13 +189,15 @@ mod test {
                 .await
                 .unwrap();
 
-        assert!(
-            !hashes.files.contains_key(Path::new("build.rs")),
-            "build.rs should not be included"
-        );
+        dbg!(&hashes);
+
         assert!(
             !hashes.files.contains_key(Path::new("src/lib.rs")),
             "lib.rs should not be included"
+        );
+        assert!(
+            !hashes.files.contains_key(Path::new("build.rs")),
+            "build.rs should not be included"
         );
         assert_matches!(
             hashes

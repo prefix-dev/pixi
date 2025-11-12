@@ -2,32 +2,35 @@ mod event_reporter;
 mod event_tree;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     // ptr,
     str::FromStr,
 };
 
 use event_reporter::EventReporter;
+use fs_err as fs;
 use itertools::Itertools;
-use pixi_build_frontend::{
-    BackendOverride, InMemoryOverriddenBackends, in_memory::PassthroughBackend,
-};
+use pixi_build_backend_passthrough::PassthroughBackend;
+use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
-    InstantiateToolEnvironmentSpec, PackageIdentifier, PixiEnvironmentSpec,
-    SourceBuildCacheStatusSpec,
+    BuildEnvironment, CacheDirs, CommandDispatcher, CommandDispatcherError, Executor,
+    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PackageIdentifier,
+    PixiEnvironmentSpec, SourceBuildCacheStatusSpec,
 };
 use pixi_config::default_channel_config;
-use pixi_record::PinnedPathSpec;
-use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec};
+use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
+use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
+use pixi_url::UrlError;
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, PackageName, Platform, VersionSpec, VersionWithSource,
     prefix::Prefix,
 };
+use rattler_digest::{Sha256, Sha256Hash, digest::Digest};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
+use tempfile::TempDir;
 use url::Url;
 
 use crate::{event_reporter::Event, event_tree::EventTree};
@@ -68,6 +71,28 @@ fn workspaces_dir() -> PathBuf {
 fn default_build_environment() -> BuildEnvironment {
     let (tool_platform, tool_virtual_packages) = tool_platform();
     BuildEnvironment::simple(tool_platform, tool_virtual_packages)
+}
+
+fn dummy_sha() -> Sha256Hash {
+    Sha256::digest(b"pixi-url-cache-test")
+}
+
+fn prepare_cached_checkout(cache_root: &Path, sha: Sha256Hash) -> PathBuf {
+    let checkout_dir = cache_root.join("checkouts").join(format!("{sha:x}"));
+    fs::create_dir_all(&checkout_dir).unwrap();
+    fs::write(checkout_dir.join("payload.txt"), "cached contents").unwrap();
+    fs::write(checkout_dir.join(".pixi-url-ready"), "ready").unwrap();
+    checkout_dir
+}
+
+fn hello_world_archive() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/url/hello_world.zip")
+}
+
+fn file_url_for_test(tempdir: &TempDir, name: &str) -> Url {
+    let path = tempdir.path().join(name);
+    fs::copy(hello_world_archive(), &path).unwrap();
+    Url::from_file_path(&path).unwrap()
 }
 
 #[tokio::test]
@@ -129,6 +154,7 @@ pub async fn simple_test() {
             ],
             channel_config: default_channel_config(),
             variants: None,
+            variant_files: None,
             enabled_protocols: Default::default(),
         })
         .await
@@ -502,8 +528,8 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
 
     assert_eq!(
         rebuild_packages,
-        vec!["package-a", "package-b"],
-        "Expected only package-a and package-b to be rebuilt"
+        vec!["package-b"],
+        "Expected only package-b to be rebuilt"
     );
 }
 
@@ -609,4 +635,266 @@ async fn source_build_cache_status_clear_works() {
         weak_first.upgrade().is_none(),
         "Original Arc should be deallocated after cache clear"
     );
+}
+
+/// Tests that forcing a rebuild of a package will ignore UpToDate cache status from previous builds.
+#[tokio::test]
+pub async fn test_force_rebuild() {
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(root_dir.clone())
+            .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+    };
+
+    let (reporter, events) = EventReporter::new();
+    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+
+    // Made a source build of package-b CacheStatus::UpToDate by installing the environment once.
+    let records = dispatcher
+        .solve_pixi_environment(PixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([
+                (
+                    "package-a".parse().unwrap(),
+                    PathSpec::new("package-a").into(),
+                ),
+                (
+                    "package-c".parse().unwrap(),
+                    PathSpec::new("package-c").into(),
+                ),
+            ]),
+            build_environment: build_env.clone(),
+            ..PixiEnvironmentSpec::default()
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("expected solve to succeed");
+
+    // Install the environment to a temporary prefix.
+    // we know will have CacheStatus::New package-b after this
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .unwrap();
+
+    let first_events = events.take();
+
+    dispatcher.clear_reporter().await;
+
+    // Now we want to rebuild package-b by forcing a rebuild
+    let mut spec = InstallPixiEnvironmentSpec::new(records.clone(), prefix);
+    spec.force_reinstall = HashSet::from_iter([PackageName::new_unchecked("package-b")]);
+
+    let _ = dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..spec.clone()
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .unwrap();
+
+    // Get all the events that happened.
+    let second_events = events.take();
+    let event_tree = EventTree::new(first_events.iter().chain(second_events.iter())).to_string();
+    eprintln!("{event_tree}");
+
+    // Ensure that package-b was not queued for rebuild since it is a fresh build already.
+    let rebuild_packages = second_events
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.name.as_normalized())
+            }
+            _ => None,
+        })
+        .sorted()
+        .collect::<Vec<_>>();
+
+    assert!(rebuild_packages.is_empty());
+
+    // now drop the dispatcher
+    drop(dispatcher);
+
+    // Construct a new command dispatcher (as if the program is restarted).
+    let (reporter, second_events) = EventReporter::new();
+    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+
+    let _ = dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..spec
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .unwrap();
+
+    let second_events = second_events.take();
+
+    // Ensure that package-b was force rebuilt.
+    let rebuild_packages = second_events
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.name.as_normalized())
+            }
+            _ => None,
+        })
+        .sorted()
+        .collect::<Vec<_>>();
+
+    eprintln!("Events after restart:\n");
+    let event_tree = EventTree::new(second_events.iter()).to_string();
+    eprintln!("{event_tree}");
+
+    assert_eq!(
+        rebuild_packages,
+        vec!["package-b"],
+        "Expected only package-b to be queued for rebuild"
+    );
+
+    // now queue again without force rebuild and ensure no builds are queued
+    dispatcher.clear_reporter().await;
+    spec.force_reinstall = HashSet::new();
+
+    let last_events = events.take();
+
+    // package-b should just reuse cache
+    let rebuild_packages = last_events
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.name.as_normalized())
+            }
+            _ => None,
+        })
+        .sorted()
+        .collect::<Vec<_>>();
+
+    assert!(
+        rebuild_packages.is_empty(),
+        "Expected no packages to be queued for rebuild"
+    );
+}
+
+#[tokio::test]
+pub async fn pin_and_checkout_url_reuses_cached_checkout() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let url_cache_root = cache_dirs.url();
+
+    let sha = dummy_sha();
+    let checkout_dir = prepare_cached_checkout(&url_cache_root, sha);
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(cache_dirs)
+        .with_executor(Executor::Serial)
+        .finish();
+
+    // Since we have the same expected hash we expect to return existing archive.
+    let spec = UrlSpec {
+        url: "https://example.com/archive.tar.gz".parse().unwrap(),
+        md5: None,
+        sha256: Some(sha),
+    };
+
+    let checkout = dispatcher
+        .pin_and_checkout_url(spec.clone())
+        .await
+        .expect("url checkout should succeed");
+
+    assert_eq!(checkout.path, checkout_dir);
+    match checkout.pinned {
+        PinnedSourceSpec::Url(pinned) => {
+            assert_eq!(pinned.url, spec.url);
+            assert_eq!(pinned.sha256, sha);
+        }
+        other => panic!("expected url pinned spec, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let archive = tempfile::tempdir().unwrap();
+    let url = file_url_for_test(&archive, "archive.zip");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(cache_dirs)
+        .with_executor(Executor::Concurrent)
+        .finish();
+
+    let good_spec = UrlSpec {
+        url: url.clone(),
+        md5: None,
+        sha256: None,
+    };
+    let bad_spec = UrlSpec {
+        url,
+        md5: None,
+        sha256: Some(Sha256::digest(b"pixi-url-bad-sha")),
+    };
+
+    let (good, bad) = tokio::join!(
+        dispatcher.checkout_url(good_spec),
+        dispatcher.checkout_url(bad_spec),
+    );
+
+    assert!(good.is_ok());
+    assert!(matches!(
+        bad,
+        Err(CommandDispatcherError::Failed(
+            UrlError::Sha256Mismatch { .. }
+        ))
+    ));
+}
+
+#[tokio::test]
+pub async fn pin_and_checkout_url_validates_cached_results() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let archive = tempfile::tempdir().unwrap();
+    let url = file_url_for_test(&archive, "archive.zip");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(cache_dirs)
+        .with_executor(Executor::Serial)
+        .finish();
+
+    let spec = UrlSpec {
+        url: url.clone(),
+        md5: None,
+        sha256: None,
+    };
+
+    dispatcher
+        .checkout_url(spec.clone())
+        .await
+        .expect("initial download succeeds");
+
+    let bad_spec = UrlSpec {
+        url: url.clone(),
+        md5: None,
+        sha256: Some(Sha256::digest(b"pixi-url-bad-cache")),
+    };
+
+    let err = dispatcher.checkout_url(bad_spec).await.unwrap_err();
+    assert!(matches!(
+        err,
+        CommandDispatcherError::Failed(UrlError::Sha256Mismatch { .. })
+    ));
 }

@@ -13,7 +13,7 @@ use miette::{IntoDiagnostic, Report};
 use pixi_config::{Config, default_channel_config};
 use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
 use pixi_progress::await_in_progress;
-use pixi_utils::reqwest::build_reqwest_clients;
+use pixi_utils::reqwest::build_lazy_reqwest_clients;
 use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, Platform, RepoDataRecord};
 use rattler_lock::Matches;
 use rattler_repodata_gateway::{GatewayError, RepoData};
@@ -22,8 +22,7 @@ use strsim::jaro;
 use tracing::{debug, error};
 use url::Url;
 
-use crate::cli_config::ChannelsConfig;
-use crate::cli_config::WorkspaceConfig;
+use crate::cli_config::{ChannelsConfig, WorkspaceConfig};
 
 /// Search a conda package
 ///
@@ -143,7 +142,7 @@ pub async fn execute_impl<W: Write>(
     let client = if let Some(project) = project {
         project.authenticated_client()?.clone()
     } else {
-        build_reqwest_clients(None, None)?.1
+        build_lazy_reqwest_clients(None, None)?.1
     };
 
     let config = Config::load_global();
@@ -314,7 +313,7 @@ fn print_package_info<W: Write>(
         console::style(format_additional_builds_string(other_builds))
     );
 
-    writeln!(out, "{}", package_info)?;
+    writeln!(out, "{package_info}")?;
     writeln!(out, "{}\n", "-".repeat(package_info.chars().count()))?;
 
     writeln!(
@@ -382,7 +381,7 @@ fn print_package_info<W: Write>(
     )?;
 
     let md5 = match package.package_record.md5 {
-        Some(md5) => format!("{:x}", md5),
+        Some(md5) => format!("{md5:x}"),
         None => "Not available".to_string(),
     };
     writeln!(
@@ -393,7 +392,7 @@ fn print_package_info<W: Write>(
     )?;
 
     let sha256 = match package.package_record.sha256 {
-        Some(sha256) => format!("{:x}", sha256),
+        Some(sha256) => format!("{sha256:x}"),
         None => "Not available".to_string(),
     };
     writeln!(
@@ -405,7 +404,7 @@ fn print_package_info<W: Write>(
 
     writeln!(out, "\nDependencies:")?;
     for dependency in package.package_record.depends {
-        writeln!(out, " - {}", dependency)?;
+        writeln!(out, " - {dependency}")?;
     }
 
     if let Some(run_exports) = package.package_record.run_exports.as_ref() {
@@ -414,7 +413,7 @@ fn print_package_info<W: Write>(
             if !run_exports.is_empty() {
                 writeln!(out, "  {name}:")?;
                 for run_export in run_exports {
-                    writeln!(out, "   - {}", run_export)?;
+                    writeln!(out, "   - {run_export}")?;
                 }
             }
             Ok::<(), std::io::Error>(())

@@ -2,7 +2,7 @@
 source: crates/pixi/tests/integration_rust/add_tests.rs
 expression: pixi.workspace().unwrap().workspace.provenance.read().unwrap().into_inner()
 ---
-[project]
+[workspace]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["<PLATFORM>"]

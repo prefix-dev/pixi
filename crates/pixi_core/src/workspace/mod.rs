@@ -8,10 +8,11 @@ mod solve_group;
 pub mod virtual_packages;
 mod workspace_mut;
 
+use self::errors::VariantsError;
 #[cfg(not(windows))]
 use std::os::unix::fs::symlink;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
@@ -19,6 +20,11 @@ use std::{
     sync::Arc,
 };
 
+use crate::{
+    activation::{CurrentEnvVarBehavior, initialize_env_variables},
+    lock_file::filter_lock_file,
+    repodata::Repodata,
+};
 use async_once_cell::OnceCell as AsyncCell;
 pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
@@ -32,34 +38,27 @@ use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
 use pixi_config::{Config, RunPostLinkScripts};
 use pixi_consts::consts;
+use pixi_diff::LockFileDiff;
 use pixi_manifest::{
-    AssociateProvenance, EnvironmentName, Environments, ExplicitManifestError,
+    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, ExplicitManifestError,
     HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
     SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::SourceSpec;
-use pixi_utils::reqwest::build_reqwest_clients;
-use pixi_utils::variants::VariantConfig;
+use pixi_utils::reqwest::build_lazy_reqwest_clients;
+use pixi_utils::{reqwest::LazyReqwestClient, variants::VariantConfig};
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, LockedPackageRef};
-use rattler_networking::s3_middleware;
+use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
-use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
 use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
-
-use crate::{
-    activation::{CurrentEnvVarBehavior, initialize_env_variables},
-    diff::LockFileDiff,
-    lock_file::filter_lock_file,
-    repodata::Repodata,
-};
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -142,7 +141,7 @@ pub struct Workspace {
     /// Reqwest client shared for this workspace.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
     // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
-    client: OnceCell<(reqwest::Client, ClientWithMiddleware)>,
+    client: OnceCell<(LazyReqwestClient, rattler_networking::LazyClient)>,
 
     /// The repodata gateway to use for answering queries about repodata.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
@@ -172,6 +171,9 @@ pub struct Workspace {
 
     /// The concurrent request semaphore
     concurrent_downloads_semaphore: OnceCell<Arc<Semaphore>>,
+
+    /// Optional backend override for testing purposes
+    backend_override: Option<BackendOverride>,
 }
 
 impl Debug for Workspace {
@@ -242,6 +244,7 @@ impl Workspace {
             s3_config,
             repodata_gateway: Default::default(),
             concurrent_downloads_semaphore: OnceCell::default(),
+            backend_override: None,
         }
     }
 
@@ -281,6 +284,13 @@ impl Workspace {
         C: Into<Config>,
     {
         self.config = self.config.merge_config(config.into());
+        self
+    }
+
+    /// Sets the backend override for this workspace. This is primarily used
+    /// for testing purposes to inject custom build backends.
+    pub fn with_backend_override(mut self, backend_override: BackendOverride) -> Self {
+        self.backend_override = Some(backend_override);
         self
     }
 
@@ -428,6 +438,14 @@ impl Workspace {
             .collect()
     }
 
+    /// Returns a HashMap of environments in this project.
+    pub fn named_environments(&self) -> HashMap<EnvironmentName, Environment> {
+        self.environments()
+            .iter()
+            .map(|env| (env.name().clone(), env.clone()))
+            .collect()
+    }
+
     /// Returns an environment in this project based on a name or an environment
     /// variable.
     pub fn environment_from_name_or_env_var(
@@ -466,11 +484,11 @@ impl Workspace {
     }
 
     /// Returns the resolved variant configuration for a given platform.
-    pub fn variants(&self, platform: Platform) -> VariantConfig {
-        let mut result = VariantConfig::new();
-
+    pub fn variants(&self, platform: Platform) -> Result<VariantConfig, VariantsError> {
+        // Get inline variants for all targets
+        let mut variants = BTreeMap::new();
         // Resolves from most specific to least specific.
-        for variants in self
+        for build_variants in self
             .workspace
             .value
             .workspace
@@ -479,12 +497,27 @@ impl Workspace {
             .flatten()
         {
             // Update the hash map, but only items that are not already in the map.
-            for (key, value) in variants {
-                result.entry(key.clone()).or_insert_with(|| value.clone());
+            for (key, value) in build_variants {
+                variants.entry(key.clone()).or_insert_with(|| value.clone());
             }
         }
 
-        result
+        // Collect absolute variant file paths without reading their content.
+        let variant_files = self
+            .workspace
+            .value
+            .workspace
+            .build_variant_files
+            .iter()
+            .map(|source| match source {
+                BuildVariantSource::File(path) => self.root.join(path),
+            })
+            .collect();
+
+        Ok(VariantConfig {
+            variants,
+            variant_files,
+        })
     }
 
     // /// Returns the reqwest client used for http networking
@@ -495,8 +528,8 @@ impl Workspace {
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> miette::Result<&ClientWithMiddleware> {
-        Ok(&self.client_and_authenticated_client()?.1)
+    pub fn authenticated_client(&self) -> miette::Result<&LazyClient> {
+        Ok(&self.lazy_client_and_authenticated_client()?.1)
     }
 
     /// Returns a semaphore than can be used to limit the number of concurrent
@@ -540,7 +573,12 @@ impl Workspace {
                 max_concurrent_solves: self.config().max_concurrent_solves().into(),
                 ..Limits::default()
             })
-            .with_backend_overrides(BackendOverride::from_env()?.unwrap_or_default())
+            .with_backend_overrides(
+                self.backend_override
+                    .clone()
+                    .or_else(|| BackendOverride::from_env().ok().flatten())
+                    .unwrap_or_default(),
+            )
             .execute_link_scripts(match self.config.run_post_link_scripts() {
                 RunPostLinkScripts::Insecure => true,
                 RunPostLinkScripts::False => false,
@@ -548,11 +586,11 @@ impl Workspace {
             .with_tool_platform(tool_platform, tool_virtual_packages))
     }
 
-    fn client_and_authenticated_client(
+    fn lazy_client_and_authenticated_client(
         &self,
-    ) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
+    ) -> miette::Result<&(LazyReqwestClient, rattler_networking::LazyClient)> {
         self.client.get_or_try_init(|| {
-            build_reqwest_clients(Some(&self.config), Some(self.s3_config.clone()))
+            build_lazy_reqwest_clients(Some(self.config()), Some(self.s3_config.clone()))
         })
     }
 

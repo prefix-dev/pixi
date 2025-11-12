@@ -18,9 +18,12 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, SystemRequirements, pypi::pypi_options::PypiOptions};
+use pixi_git::git::GitReference;
+use pixi_manifest::{
+    EnvironmentName, SolveStrategy, SystemRequirements, pypi::pypi_options::PypiOptions,
+};
 use pixi_pypi_spec::PixiPypiSpec;
-use pixi_record::PixiRecord;
+use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_uv_conversions::{
     ConversionError, as_uv_req, configure_insecure_hosts_for_tls_bypass,
@@ -38,19 +41,25 @@ use rattler_lock::{
 };
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
-use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
-use uv_configuration::{ConfigSettings, Constraints, Overrides};
+use uv_client::{
+    BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder,
+};
+use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
-    BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
-    IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist, SourceDist,
-    ToUrlError,
+    BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy,
+    IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
+    SourceDist, ToUrlError,
 };
+use uv_git_types::GitUrl;
+use uv_pep508::VerbatimUrl;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
+use uv_redacted::DisplaySafeUrl;
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
-    PreferenceError, Preferences, PythonRequirement, ResolveError, Resolver, ResolverEnvironment,
+    PreferenceError, Preferences, PythonRequirement, ResolutionMode, ResolveError, Resolver,
+    ResolverEnvironment,
 };
 use uv_types::EmptyInstalledPackages;
 
@@ -58,7 +67,7 @@ use crate::{
     environment::CondaPrefixUpdated,
     lock_file::{
         CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
-        PypiRecord, UvResolutionContext,
+        PypiRecord,
         records_by_name::HasNameVersion,
         resolve::{
             build_dispatch::{
@@ -69,6 +78,7 @@ use crate::{
     },
     workspace::{Environment, EnvironmentVars},
 };
+use pixi_uv_context::UvResolutionContext;
 
 #[derive(Debug, thiserror::Error)]
 #[error("Invalid hash: {0} type: {1}")]
@@ -219,6 +229,10 @@ pub enum SolveError {
     BuildDispatchPanic { message: String },
     #[error("unexpected panic during PyPI resolution: {message}")]
     GeneralPanic { message: String },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LookAhead(Box<dyn miette::Diagnostic + Send + Sync + 'static>),
 }
 
 /// Creates a custom `SolveError` from a `ResolveError`.
@@ -280,6 +294,7 @@ pub async fn resolve_pypi(
     environment_name: Environment<'_>,
     disallow_install_conda_prefix: bool,
     exclude_newer: Option<DateTime<Utc>>,
+    solve_strategy: SolveStrategy,
 ) -> miette::Result<(LockedPypiPackages, Option<CondaPrefixUpdated>)> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
@@ -331,7 +346,7 @@ pub async fn resolve_pypi(
         tracing::info!("there are no python packages installed by conda");
     }
 
-    let requirements = dependencies
+    let mut requirements = dependencies
         .into_iter()
         .flat_map(|(name, req)| {
             req.into_iter()
@@ -400,14 +415,17 @@ pub async fn resolve_pypi(
         &index_locations,
     );
 
-    let mut uv_client_builder = RegistryClientBuilder::new(context.cache.clone())
+    let base_client_builder = BaseClientBuilder::default()
         .allow_insecure_host(allow_insecure_hosts)
-        .index_locations(&index_locations)
-        .index_strategy(index_strategy)
         .markers(&marker_environment)
         .keyring(context.keyring_provider)
         .connectivity(Connectivity::Online)
         .extra_middleware(context.extra_middleware.clone());
+
+    let mut uv_client_builder =
+        RegistryClientBuilder::new(base_client_builder, context.cache.clone())
+            .index_locations(index_locations.clone())
+            .index_strategy(index_strategy);
 
     for p in &context.proxies {
         uv_client_builder = uv_client_builder.proxy(p.clone())
@@ -438,8 +456,6 @@ pub async fn resolve_pypi(
                 .collect::<Result<Vec<_>, _>>()
         }).transpose()?.unwrap_or_default();
 
-    let overrides = Overrides::from_requirements(dependency_overrides);
-
     // Resolve the flat indexes from `--find-links`.
     // In UV 0.7.8, we need to fetch flat index entries from the index locations
     let flat_index_client = FlatIndexClient::new(
@@ -462,11 +478,18 @@ pub async fn resolve_pypi(
         &build_options,
     );
 
+    let resolution_mode = match solve_strategy {
+        SolveStrategy::Highest => ResolutionMode::Highest,
+        SolveStrategy::Lowest => ResolutionMode::Lowest,
+        SolveStrategy::LowestDirect => ResolutionMode::LowestDirect,
+    };
+
     // Hi maintainers! For anyone coming here, if you expose any additional `uv`
     // options, similar to `index_strategy`, make sure to include them in this
     // struct as well instead of relying on the default. Otherwise there be
     // panics.
     let options = Options {
+        resolution_mode,
         index_strategy,
         build_options: build_options.clone(),
         exclude_newer: exclude_newer.map(to_exclude_newer).unwrap_or_default(),
@@ -548,6 +571,15 @@ pub async fn resolve_pypi(
         Conversion(#[from] ConversionError),
         #[error(transparent)]
         Preference(#[from] PreferenceError),
+
+        #[error(transparent)]
+        OidParse(#[from] uv_git_types::OidParseError),
+
+        #[error(transparent)]
+        GitUrlParse(#[from] uv_git_types::GitUrlParseError),
+
+        #[error("{0}")]
+        Other(miette::ErrReport),
     }
 
     // Create preferences from the locked pypi packages
@@ -570,13 +602,69 @@ pub async fn resolve_pypi(
                 origin: None,
             };
 
-            let named = uv_requirements_txt::RequirementsTxtRequirement::Named(requirement);
-            let entry = uv_requirements_txt::RequirementEntry {
-                requirement: named,
-                hashes: Default::default(),
-            };
+            // When iterating over locked packages,
+            // instead of adding git requirements as preferences
+            // we enrich previous defined requirements in the `requirements` list
+            // as they have been pinned to a precise commit
+            // This will help the resolver to pick the commit that we already have locked
+            // instead of updating to a newer commit that also matches the requirement.
+            if let Some(location) = package_data.location.as_url() {
+                // now check if it's a git url
+                if LockedGitUrl::is_locked_git_url(location) {
+                    // we need to parse back `LockedGitUrl` in order to get the `PinnedGitSpec`
+                    // then we will precise commit to set for the `GitUrl`
+                    // that will be used in the `RequirementSource::Git` below
+                    let git_locked_url = LockedGitUrl::from(location.clone());
+                    let pinned_git_spec = git_locked_url
+                        .to_pinned_git_spec()
+                        .map_err(PixiPreferencesError::Other)?;
+                    // we need to create VerbatimUrl from the original location
+                    let verbatim_url = VerbatimUrl::from(location.clone());
 
-            Ok(Preference::from_entry(entry)?)
+                    // but the display safe url should come from the `PinnedGitSpec` url
+                    // which don't have anymore git+ prefix
+                    let display_safe = DisplaySafeUrl::from(pinned_git_spec.git.clone());
+
+                    let git_oid =
+                        uv_git_types::GitOid::from_str(&pinned_git_spec.source.commit.to_string())?;
+
+                    let git_url = GitUrl::try_from(display_safe)?.with_precise(git_oid);
+
+                    let constraint_source = RequirementSource::Git {
+                        git: git_url,
+                        subdirectory: None,
+                        url: verbatim_url,
+                    };
+
+                    // find this requirements in dependencies and skip adding it as preference
+                    let req_from_dep = requirements.iter_mut().find(|r| r.name == requirement.name);
+                    if let Some(req) = req_from_dep {
+                        // we need to update the requirement source in the requirements list
+                        // to use the precise git commit
+                        // only if the requirements do not already have a source set with something specific
+                        if let RequirementSource::Git { git, .. } = &req.source {
+                                // only update if the git url does not already have a precise commit
+                                if git.precise().is_none() && !GitReference::looks_like_commit_hash(git.reference().as_rev()) {
+                                    tracing::debug!(
+                                        "updating requirement source to precise git commit for requirement: {:?}",
+                                        &req
+                                    );
+                                    req.source = constraint_source.clone();
+                                }
+
+                            }
+                    }
+                }
+                Ok(None)
+            } else {
+                let named = uv_requirements_txt::RequirementsTxtRequirement::Named(requirement);
+                let entry = uv_requirements_txt::RequirementEntry {
+                    requirement: named,
+                    hashes: Default::default(),
+                };
+
+                Ok(Preference::from_entry(entry)?)
+            }
         })
         .filter_map(|pref| pref.transpose())
         .collect::<Result<Vec<_>, PixiPreferencesError>>()
@@ -585,66 +673,73 @@ pub async fn resolve_pypi(
     let resolver_env = ResolverEnvironment::specific(marker_environment.clone().into());
 
     let constraints = Constraints::from_requirements(constraints.iter().cloned());
-    let lookahead_index = InMemoryIndex::default();
-    let lookaheads = LookaheadResolver::new(
-        &requirements,
-        &constraints,
-        &overrides,
-        &context.hash_strategy,
-        &lookahead_index,
-        DistributionDatabase::new(
-            &registry_client,
-            &lazy_build_dispatch,
-            context.concurrency.downloads,
-        ),
-    )
-    .with_reporter(UvReporter::new_arc(
-        UvReporterOptions::new().with_existing(pb.clone()),
-    ))
-    .resolve(&resolver_env)
-    .await
-    .into_diagnostic()?;
 
-    let manifest = Manifest::new(
-        requirements,
-        constraints,
-        overrides,
-        Preferences::from_iter(preferences, &resolver_env),
-        None,
-        Default::default(),
-        uv_resolver::Exclusions::default(),
-        lookaheads,
-    );
-
-    let provider_tags = tags.clone();
-    let fallback_provider = DefaultResolverProvider::new(
-        DistributionDatabase::new(
-            &registry_client,
-            &lazy_build_dispatch,
-            context.concurrency.downloads,
-        ),
-        &flat_index,
-        Some(&provider_tags),
-        &requires_python,
-        AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
-        &context.hash_strategy,
-        options.exclude_newer.clone(),
-        &build_options,
-        &context.capabilities,
-    );
-    let package_requests = Rc::new(RefCell::new(Default::default()));
-    let provider = CondaResolverProvider {
-        fallback: fallback_provider,
-        conda_python_identifiers: &conda_python_packages,
-        package_requests: package_requests.clone(),
-    };
-
-    // We need a new in-memory index for the resolver so that it does not conflict
-    // with the build dispatch one. As we have noted in the comment above.
-    let resolver_in_memory_index = InMemoryIndex::default();
+    let overrides = Overrides::from_requirements(dependency_overrides);
 
     // Wrap the resolution in panic catching to handle conda prefix initialization failures
+    // This includes both lookahead resolution and main resolution since both use lazy_build_dispatch
+    let package_requests = Rc::new(RefCell::new(Default::default()));
+
     let resolution_future = panic::AssertUnwindSafe(async {
+        let lookahead_index = InMemoryIndex::default();
+        let lookaheads = LookaheadResolver::new(
+            &requirements,
+            &constraints,
+            &overrides,
+            &context.hash_strategy,
+            &lookahead_index,
+            DistributionDatabase::new(
+                &registry_client,
+                &lazy_build_dispatch,
+                context.concurrency.downloads,
+            ),
+        )
+        .with_reporter(UvReporter::new_arc(
+            UvReporterOptions::new().with_existing(pb.clone()),
+        ))
+        .resolve(&resolver_env)
+        .await
+        .into_diagnostic()
+        .map_err(|e| SolveError::LookAhead(e.into()))?;
+
+        // Move manifest and provider setup inside catch_unwind
+        let manifest = Manifest::new(
+            requirements,
+            constraints,
+            overrides,
+            Preferences::from_iter(preferences, &resolver_env),
+            None,
+            Default::default(),
+            uv_resolver::Exclusions::default(),
+            lookaheads,
+        );
+
+        let provider_tags = tags.clone();
+        let fallback_provider = DefaultResolverProvider::new(
+            DistributionDatabase::new(
+                &registry_client,
+                &lazy_build_dispatch,
+                context.concurrency.downloads,
+            ),
+            &flat_index,
+            Some(&provider_tags),
+            &requires_python,
+            AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
+            &context.hash_strategy,
+            options.exclude_newer.clone(),
+            &build_options,
+            &context.capabilities,
+        );
+
+        let provider = CondaResolverProvider {
+            fallback: fallback_provider,
+            conda_python_identifiers: &conda_python_packages,
+            package_requests: package_requests.clone(),
+        };
+
+        // We need a new in-memory index for the resolver so that it does not conflict
+        // with the build dispatch one. As we have noted in the comment above.
+        let resolver_in_memory_index = InMemoryIndex::default();
         let resolver = Resolver::new_custom_io(
             manifest,
             options,
@@ -667,7 +762,7 @@ pub async fn resolve_pypi(
         .into_diagnostic()
         .context("failed to resolve pypi dependencies")
         .map_err(|e| SolveError::GeneralPanic {
-            message: format!("Failed to create resolver: {}", e),
+            message: format!("Failed to create resolver: {e}"),
         })?
         .with_reporter(UvReporter::new_arc(
             UvReporterOptions::new().with_existing(pb.clone()),
@@ -686,7 +781,7 @@ pub async fn resolve_pypi(
             // Try to get the stored initialization error from the lazy build dispatch
             if let Some(stored_error) = lazy_build_dispatch.last_initialization_error() {
                 return Err(SolveError::BuildDispatchPanic {
-                    message: format!("{}", stored_error),
+                    message: format!("{stored_error}"),
                 }
                 .into());
             } else {

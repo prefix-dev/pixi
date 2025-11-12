@@ -1,5 +1,5 @@
 use indexmap::{Equivalent, IndexMap, IndexSet};
-use itertools::Either;
+use itertools::{Either, Itertools};
 use pixi_spec::{BinarySpec, SpecConversionError};
 use rattler_conda_types::{ChannelConfig, MatchSpec};
 use serde::ser::{SerializeMap, SerializeSeq};
@@ -92,6 +92,17 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> DependencyMap<N, D> {
         self.map.entry(name).or_default().insert(spec);
     }
 
+    /// Overwrites all requirements for a package with a single new requirement.
+    ///
+    /// This removes any existing specs for the package and replaces them with
+    /// the provided spec. This is useful for single-target scenarios where only
+    /// one spec per package should exist.
+    pub fn insert_overwrite(&mut self, name: N, spec: D) {
+        let mut specs = IndexSet::new();
+        specs.insert(spec);
+        self.map.insert(name, specs);
+    }
+
     /// Check if there is any dependency
     pub fn is_empty(&self) -> bool {
         self.map.is_empty()
@@ -113,6 +124,33 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> DependencyMap<N, D> {
             map.insert(name.clone(), specs.clone());
         }
         Self { map }
+    }
+
+    /// Merges multiple dependency maps by combining all specs for each package.
+    ///
+    /// This is useful when combining dependencies from multiple features where
+    /// each feature can have different specs for the same package. All specs
+    /// are preserved and collected in the order they appear.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Feature 1: foo = "1.0"
+    /// // Feature 2: foo = "2.0"
+    /// // Result: foo has specs ["1.0", "2.0"]
+    /// let merged = DependencyMap::merge_all([deps1, deps2]);
+    /// ```
+    pub fn merge_all<'a>(maps: impl IntoIterator<Item = &'a Self>) -> Self
+    where
+        N: 'a,
+        D: 'a,
+    {
+        let mut result = Self::default();
+        result.extend(
+            maps.into_iter()
+                .flat_map(|map| map.iter_specs().map(|(n, s)| (n.clone(), s.clone()))),
+        );
+        result
     }
 
     /// Returns an iterator over tuples of dependency names and their combined
@@ -156,6 +194,29 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> DependencyMap<N, D> {
         Q: ?Sized + Hash + Equivalent<N>,
     {
         self.map.get(name)
+    }
+
+    /// Returns a single spec for the specified package name.
+    ///
+    /// This is a convenience method for the common case where you expect
+    /// only one spec per package (e.g., within a single target).
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(Some(&D))` if exactly one spec is found
+    /// - `Ok(None)` if the package doesn't exist
+    /// - `Err(itertools::ExactlyOneError)` if there are multiple specs for the package
+    pub fn get_single<Q>(
+        &self,
+        name: &Q,
+    ) -> Result<Option<&D>, itertools::ExactlyOneError<indexmap::set::Iter<'_, D>>>
+    where
+        Q: ?Sized + Hash + Equivalent<N>,
+    {
+        let Some(specs) = self.map.get(name) else {
+            return Ok(None);
+        };
+        specs.iter().at_most_one()
     }
 }
 

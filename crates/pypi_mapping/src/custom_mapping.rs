@@ -1,7 +1,7 @@
 use async_once_cell::OnceCell as AsyncCell;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
-use reqwest_middleware::ClientWithMiddleware;
+use rattler_networking::LazyClient;
 use std::path::Path;
 use url::Url;
 
@@ -32,7 +32,7 @@ impl CustomMapping {
     /// Fetch the custom mapping from the server or load from the local
     pub async fn fetch_custom_mapping(
         &self,
-        client: &ClientWithMiddleware,
+        client: &LazyClient,
     ) -> miette::Result<MappingByChannel> {
         self.mapping_value
             .get_or_try_init(async {
@@ -74,10 +74,11 @@ impl CustomMapping {
 }
 
 async fn fetch_mapping_from_url(
-    client: &ClientWithMiddleware,
+    client: &LazyClient,
     url: &Url,
 ) -> miette::Result<CompressedMapping> {
     let response = client
+        .client()
         .get(url.clone())
         .send()
         .await
@@ -95,8 +96,7 @@ async fn fetch_mapping_from_url(
     }
 
     let mapping_by_name = response.json().await.into_diagnostic().context(format!(
-        "failed to parse pypi name mapping located at {}. Please make sure that it's a valid json",
-        url
+        "failed to parse pypi name mapping located at {url}. Please make sure that it's a valid json"
     ))?;
 
     Ok(mapping_by_name)

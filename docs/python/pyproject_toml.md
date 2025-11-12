@@ -142,7 +142,7 @@ platforms = ["linux-64"] # if executed on linux
 [tool.pixi.environments]
 default = {features = [], solve-group = "default"}
 test = {features = ["test"], solve-group = "default"}
-all = {features = ["all", "test"], solve-group = "default"}
+all = {features = ["all"], solve-group = "default"}
 ```
 
 In this example, three environments will be created by pixi:
@@ -285,7 +285,7 @@ Given a source tree:
     └── pyproject.toml
 ```
 
-Concretly what this looks like in the `pyproject.toml` for `main_project`:
+Concretely what this looks like in the `pyproject.toml` for `main_project`:
 
 ```toml
 [tool.pixi.pypi-dependencies]

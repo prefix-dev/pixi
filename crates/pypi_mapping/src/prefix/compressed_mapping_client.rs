@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_once_cell::OnceCell;
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
-use reqwest_middleware::ClientWithMiddleware;
+use rattler_networking::LazyClient;
 use tokio::sync::Semaphore;
 use url::Url;
 
@@ -27,12 +27,12 @@ pub struct CompressedMappingClient {
 }
 
 pub struct CompressedMappingClientBuilder {
-    client: ClientWithMiddleware,
+    client: LazyClient,
     limit: Option<Arc<Semaphore>>,
 }
 
 struct CompressedMappingClientInner {
-    client: ClientWithMiddleware,
+    client: LazyClient,
     mapping: OnceCell<CompressedMapping>,
     limit: Option<Arc<Semaphore>>,
 }
@@ -69,7 +69,7 @@ impl CompressedMappingClientBuilder {
 impl CompressedMappingClient {
     /// Constructs a new `HashMappingClient` with the provided
     /// `ClientWithMiddleware`.
-    pub fn builder(client: ClientWithMiddleware) -> CompressedMappingClientBuilder {
+    pub fn builder(client: LazyClient) -> CompressedMappingClientBuilder {
         CompressedMappingClientBuilder {
             client,
             limit: None,
@@ -100,6 +100,7 @@ impl CompressedMappingClient {
                 };
                 let response = inner
                     .client
+                    .client()
                     .get(compressed_mapping_url)
                     .send()
                     .await?

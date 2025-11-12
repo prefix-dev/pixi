@@ -17,7 +17,7 @@ use crate::{
     pypi::pypi_options::PypiOptions,
     toml::{manifest::ExternalWorkspaceProperties, platform::TomlPlatform, preview::TomlPreview},
     utils::PixiSpanned,
-    workspace::ChannelPriority,
+    workspace::{BuildVariantSource, ChannelPriority, SolveStrategy},
 };
 
 #[derive(Debug, Clone)]
@@ -37,6 +37,7 @@ pub struct TomlWorkspace {
     pub authors: Option<Vec<String>>,
     pub channels: IndexSet<PrioritizedChannel>,
     pub channel_priority: Option<ChannelPriority>,
+    pub solve_strategy: Option<SolveStrategy>,
     pub platforms: Spanned<IndexSet<Platform>>,
     pub license: Option<Spanned<String>>,
     pub license_file: Option<Spanned<PathBuf>>,
@@ -50,6 +51,7 @@ pub struct TomlWorkspace {
     pub preview: TomlPreview,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlWorkspaceTarget>,
     pub build_variants: Option<HashMap<String, Vec<String>>>,
+    pub build_variant_files: Option<Vec<Spanned<TomlFromStr<PathBuf>>>>,
     pub requires_pixi: Option<VersionSpec>,
     pub exclude_newer: Option<ExcludeNewer>,
 
@@ -110,6 +112,9 @@ impl TomlWorkspace {
 
         let warnings = preview_warnings;
 
+        let build_variant_files_default =
+            convert_build_variant_files(self.build_variant_files, root_directory)?;
+
         Ok(WithWarnings::from(Workspace {
             name: self.name.or(external.name),
             version: self.version.or(external.version),
@@ -126,11 +131,13 @@ impl TomlWorkspace {
             documentation: self.documentation.or(external.documentation),
             channels: self.channels,
             channel_priority: self.channel_priority,
+            solve_strategy: self.solve_strategy,
             platforms: self.platforms.value,
             conda_pypi_map: self.conda_pypi_map,
             pypi_options: self.pypi_options,
             s3_options: self.s3_options,
             preview,
+            build_variant_files: build_variant_files_default,
             build_variants: Targets::from_default_and_user_defined(
                 self.build_variants,
                 self.target
@@ -143,6 +150,42 @@ impl TomlWorkspace {
             exclude_newer: self.exclude_newer,
         })
         .with_warnings(warnings))
+    }
+}
+
+fn convert_build_variant_files(
+    entries: Option<Vec<Spanned<TomlFromStr<PathBuf>>>>,
+    root_directory: Option<&Path>,
+) -> Result<Vec<BuildVariantSource>, TomlError> {
+    if let Some(entries) = entries {
+        entries
+            .into_iter()
+            .map(|Spanned { value, span }| {
+                let path = value.into_inner();
+                let span_range = if span.is_empty() {
+                    None
+                } else {
+                    Some(span.into())
+                };
+
+                if let Some(root_directory) = root_directory {
+                    let full_path = root_directory.join(&path);
+                    if !full_path.is_file() {
+                        return Err(TomlError::from(
+                            GenericError::new(format!(
+                                "'{}' does not exist",
+                                dunce::simplified(&full_path).display()
+                            ))
+                            .with_opt_span(span_range),
+                        ));
+                    }
+                }
+
+                Ok(BuildVariantSource::File(path))
+            })
+            .collect()
+    } else {
+        Ok(Vec::new())
     }
 }
 
@@ -160,6 +203,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             .required::<TomlIndexSet<_>>("channels")
             .map(TomlIndexSet::into_inner)?;
         let channel_priority = th.optional("channel-priority");
+        let solve_strategy = th
+            .optional::<TomlWith<_, TomlFromStr<_>>>("solve-strategy")
+            .map(TomlWith::into_inner);
         let platforms = th
             .optional::<TomlWith<_, Spanned<TomlIndexSet<TomlPlatform>>>>("platforms")
             .map(TomlWith::into_inner);
@@ -190,6 +236,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let target = th
             .optional::<TomlIndexMap<_, _>>("target")
             .map(TomlIndexMap::into_inner);
+        let build_variant_files =
+            th.optional::<Vec<Spanned<TomlFromStr<PathBuf>>>>("build-variants-files");
         let build_variants = th
             .optional::<TomlHashMap<_, _>>("build-variants")
             .map(TomlHashMap::into_inner);
@@ -209,6 +257,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             authors,
             channels,
             channel_priority,
+            solve_strategy,
             platforms: platforms.unwrap_or_default(),
             license,
             license_file,
@@ -222,6 +271,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             preview,
             target: target.unwrap_or_default(),
             build_variants,
+            build_variant_files,
             requires_pixi,
             exclude_newer,
             span: value.span,
@@ -308,6 +358,28 @@ mod test {
         5 │
           ╰────
         "###);
+    }
+
+    #[test]
+    fn test_missing_build_variant_file() {
+        let input = r#"
+        channels = []
+        platforms = []
+        build-variants-files = ["missing.yaml"]
+        "#;
+        let path = Path::new("");
+        let parse_error = TomlWorkspace::from_toml_str(input)
+            .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), Some(path)))
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, parse_error), @r#"
+         × 'missing.yaml' does not exist
+          ╭─[pixi.toml:4:34]
+        3 │         platforms = []
+        4 │         build-variants-files = ["missing.yaml"]
+          ·                                  ────────────
+        5 │
+          ╰────
+        "#);
     }
 
     #[test]

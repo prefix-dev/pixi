@@ -93,7 +93,7 @@ Pixi defaults to the **biggest Conda package repository**, [conda-forge](https:/
 **30,000 packages**.
 
 - **Python**: [`python`](https://prefix.dev/channels/conda-forge/packages/python), [`scikit-learn`](https://prefix.dev/channels/conda-forge/packages/scikit-learn), [`pytorch`](https://prefix.dev/channels/conda-forge/packages/pytorch)
-- **C/C++**: [`clang`](https://prefix.dev/channels/conda-forge/packages/clang), [`boost`](https://prefix.dev/channels/conda-forge/packages/boost-cpp), [`opencv`](https://prefix.dev/channels/conda-forge/packages/opencv), [`ninja`](https://prefix.dev/channels/conda-forge/packages/ninja)
+- **C/C++**: [`clang`](https://prefix.dev/channels/conda-forge/packages/clang), [`boost`](https://prefix.dev/channels/conda-forge/packages/libboost-devel), [`opencv`](https://prefix.dev/channels/conda-forge/packages/opencv), [`ninja`](https://prefix.dev/channels/conda-forge/packages/ninja)
 - **Java**: [`openjdk`](https://prefix.dev/channels/conda-forge/packages/openjdk), [`gradle`](https://prefix.dev/channels/conda-forge/packages/gradle), [`maven`](https://prefix.dev/channels/conda-forge/packages/maven)
 - **Rust**: [`rust`](https://prefix.dev/channels/conda-forge/packages/rust), [`cargo-edit`](https://prefix.dev/channels/conda-forge/packages/cargo-edit), [`cargo-insta`](https://prefix.dev/channels/conda-forge/packages/cargo-insta)
 - **Node.js**: [`nodejs`](https://prefix.dev/channels/conda-forge/packages/nodejs), [`pnpm`](https://prefix.dev/channels/conda-forge/packages/pnpm), [`eslint`](https://prefix.dev/channels/conda-forge/packages/eslint)

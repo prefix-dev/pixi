@@ -5,6 +5,7 @@ use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
+use pixi_build_frontend::BackendOverride;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_core::DependencyType;
@@ -29,6 +30,11 @@ pub struct WorkspaceConfig {
     /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
     #[arg(long, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub manifest_path: Option<PathBuf>,
+
+    /// Backend override for testing purposes. This field is ignored by clap
+    /// and should only be set programmatically in tests.
+    #[clap(skip)]
+    pub backend_override: Option<BackendOverride>,
 }
 
 impl WorkspaceConfig {
@@ -422,18 +428,18 @@ fn build_vcs_requirement(
     } else {
         "git+"
     };
-    let mut vcs_req = format!("{} @ {}{}", package_name, scheme, git);
+    let mut vcs_req = format!("{package_name} @ {scheme}{git}");
     if let Some(revision) = rev {
         if let Some(rev_str) = revision.as_str().map(|s| s.to_string()) {
-            vcs_req.push_str(&format!("@{}", rev_str));
+            vcs_req.push_str(&format!("@{rev_str}"));
 
             if let Some(rev_type) = revision.reference_type() {
-                vcs_req.push_str(&format!("?{GIT_URL_QUERY_REV_TYPE}={}", rev_type));
+                vcs_req.push_str(&format!("?{GIT_URL_QUERY_REV_TYPE}={rev_type}"));
             }
         }
     }
     if let Some(subdir) = subdir {
-        vcs_req.push_str(&format!("#subdirectory={}", subdir));
+        vcs_req.push_str(&format!("#subdirectory={subdir}"));
     }
 
     vcs_req

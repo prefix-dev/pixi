@@ -1,11 +1,12 @@
 use crate::{
     SpecType, SystemRequirements, WorkspaceTarget, channel::PrioritizedChannel, consts,
     pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
+    workspace::SolveStrategy,
 };
 use indexmap::{IndexMap, IndexSet};
-use itertools::Either;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
+use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{PackageName, Platform};
 use serde::{Deserialize, Serialize};
 use std::ops::Not;
@@ -137,6 +138,12 @@ pub struct Feature {
     /// it will be seen as unset and overwritten by a set one.
     pub channel_priority: Option<ChannelPriority>,
 
+    /// Solve strategy specific for this feature.
+    ///
+    /// If this value is `None` and there are multiple features,
+    /// it will be seen as unset and overwritten by a set one.
+    pub solve_strategy: Option<SolveStrategy>,
+
     /// Additional system requirements
     pub system_requirements: SystemRequirements,
 
@@ -155,6 +162,7 @@ impl Feature {
             platforms: None,
             channels: None,
             channel_priority: None,
+            solve_strategy: None,
             system_requirements: SystemRequirements::default(),
             pypi_options: None,
             targets: <Targets<WorkspaceTarget> as Default>::default(),
@@ -188,7 +196,7 @@ impl Feature {
     pub fn run_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
+    ) -> Option<Cow<'_, DependencyMap<PackageName, PixiSpec>>> {
         self.dependencies(SpecType::Run, platform)
     }
 
@@ -202,7 +210,7 @@ impl Feature {
     pub fn host_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
+    ) -> Option<Cow<'_, DependencyMap<PackageName, PixiSpec>>> {
         self.dependencies(SpecType::Host, platform)
     }
 
@@ -216,7 +224,7 @@ impl Feature {
     pub fn build_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
+    ) -> Option<Cow<'_, DependencyMap<PackageName, PixiSpec>>> {
         self.dependencies(SpecType::Build, platform)
     }
 
@@ -236,20 +244,20 @@ impl Feature {
         &self,
         spec_type: SpecType,
         platform: Option<Platform>,
-    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
+    ) -> Option<Cow<'_, DependencyMap<PackageName, PixiSpec>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
-            // This is required because the extent function will overwrite existing keys.
+            // This is required because we want more specific targets to overwrite their specs.
             .rev()
             .filter_map(|t| t.dependencies(spec_type))
             .filter(|deps| !deps.is_empty())
             .fold(None, |acc, deps| match acc {
                 None => Some(Cow::Borrowed(deps)),
-                Some(mut acc) => {
-                    let deps_iter = deps.iter().map(|(name, spec)| (name.clone(), spec.clone()));
-                    acc.to_mut().extend(deps_iter);
-                    Some(acc)
+                Some(acc) => {
+                    // Overwrite the accumulator with specs from this target
+                    // More specific targets (processed later) overwrite less specific ones
+                    Some(Cow::Owned(acc.as_ref().overwrite(deps)))
                 }
             })
     }
@@ -271,25 +279,20 @@ impl Feature {
     pub fn combined_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
+    ) -> Option<Cow<'_, DependencyMap<PackageName, PixiSpec>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
-            // This is required because the extent function will overwrite existing keys.
+            // This is required because we want more specific targets to overwrite their specs.
             .rev()
             .filter_map(|t| t.combined_dependencies())
             .filter(|deps| !deps.is_empty())
             .fold(None, |acc, deps| match acc {
                 None => Some(deps),
-                Some(mut acc) => {
-                    let deps_iter = match deps {
-                        Cow::Borrowed(deps) => Either::Left(
-                            deps.iter().map(|(name, spec)| (name.clone(), spec.clone())),
-                        ),
-                        Cow::Owned(deps) => Either::Right(deps.into_iter()),
-                    };
-                    acc.to_mut().extend(deps_iter);
-                    Some(acc)
+                Some(acc) => {
+                    // Overwrite the accumulator with specs from this target
+                    // More specific targets (processed later) overwrite less specific ones
+                    Some(Cow::Owned(acc.as_ref().overwrite(deps.as_ref())))
                 }
             })
     }
@@ -305,22 +308,20 @@ impl Feature {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> Option<Cow<'_, IndexMap<PypiPackageName, PixiPypiSpec>>> {
+    ) -> Option<Cow<'_, DependencyMap<PypiPackageName, PixiPypiSpec>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
-            // This is required because the extend function will overwrite existing keys.
+            // This is required because we want more specific targets to overwrite their specs.
             .rev()
             .filter_map(|t| t.pypi_dependencies.as_ref())
             .filter(|deps| !deps.is_empty())
             .fold(None, |acc, deps| match acc {
                 None => Some(Cow::Borrowed(deps)),
-                Some(mut acc) => {
-                    acc.to_mut().extend(
-                        deps.into_iter()
-                            .map(|(name, spec)| (name.clone(), spec.clone())),
-                    );
-                    Some(acc)
+                Some(acc) => {
+                    // Overwrite the accumulator with specs from this target
+                    // More specific targets (processed later) overwrite less specific ones
+                    Some(Cow::Owned(acc.as_ref().overwrite(deps)))
                 }
             })
     }
@@ -361,9 +362,12 @@ impl Feature {
     /// Returns true if the feature contains any reference to a pypi
     /// dependencies.
     pub fn has_pypi_dependencies(&self) -> bool {
-        self.targets
-            .targets()
-            .any(|t| t.pypi_dependencies.iter().flatten().next().is_some())
+        self.targets.targets().any(|t| {
+            t.pypi_dependencies
+                .as_ref()
+                .map(|deps| !deps.is_empty())
+                .unwrap_or(false)
+        })
     }
 
     /// Returns any pypi_options if they are set.
@@ -410,7 +414,7 @@ mod tests {
                 .dependencies(SpecType::Host, None)
                 .unwrap(),
             Cow::Borrowed(_),
-            "[host-dependencies] should be borrowed"
+            "[host-dependencies] can be borrowed when returning DependencyMap"
         );
 
         assert_matches!(
@@ -419,7 +423,7 @@ mod tests {
                 .dependencies(SpecType::Run, None)
                 .unwrap(),
             Cow::Borrowed(_),
-            "[dependencies] should be borrowed"
+            "[dependencies] can be borrowed when returning DependencyMap"
         );
 
         assert_matches!(
@@ -435,13 +439,13 @@ mod tests {
         assert_matches!(
             bla_feature.dependencies(SpecType::Run, None).unwrap(),
             Cow::Borrowed(_),
-            "[feature.bla.dependencies] should be borrowed"
+            "[feature.bla.dependencies] can be borrowed when returning DependencyMap"
         );
 
         assert_matches!(
             bla_feature.combined_dependencies(None).unwrap(),
             Cow::Borrowed(_),
-            "[feature.bla] combined dependencies should also be borrowed"
+            "[feature.bla] combined dependencies can be borrowed when returning DependencyMap"
         );
     }
 

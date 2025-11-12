@@ -113,9 +113,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         if !args.no_modify_ps1 && std::env::current_dir().is_ok() {
             let (prompt_var, prompt_value) = if cfg!(windows) {
-                ("_PIXI_PROMPT", format!("(pixi:{}) $P$G", env_name))
+                ("_PIXI_PROMPT", format!("(pixi:{env_name}) $P$G"))
             } else {
-                ("PS1", format!(r"(pixi:{}) [\w] \$", env_name))
+                ("PS1", format!(r"(pixi:{env_name}) [\w] \$"))
             };
 
             activation_env.insert(prompt_var.into(), prompt_value);
@@ -353,7 +353,7 @@ fn list_exec_environment(
         )
     };
     packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
-    println!("{}", output_message);
+    println!("{output_message}");
     print_package_table(packages_to_output).into_diagnostic()?;
     Ok(())
 }

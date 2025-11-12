@@ -748,7 +748,7 @@ async fn test_disabled_mapping() {
 
     let blocking_middleware = OfflineMiddleware;
 
-    let blocked_client = ClientBuilder::from_client(client.clone())
+    let blocked_client = ClientBuilder::from_client(client.client().clone())
         .with(blocking_middleware)
         .build();
 
@@ -763,7 +763,7 @@ async fn test_disabled_mapping() {
 
     let mut packages = vec![boltons_repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(blocked_client).finish();
+    let mapping_client = pypi_mapping::MappingClient::builder(blocked_client.into()).finish();
     mapping_client
         .amend_purls(
             project.pypi_name_mapping_source().unwrap(),

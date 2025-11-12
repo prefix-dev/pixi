@@ -9,6 +9,7 @@ extend-exclude = [
 ignore-hidden = false
 
 [default.extend-identifiers]
+_placehold = "_placehold"
 intoto = "intoto"
 plt-setp = "plt.setp"
 pn = "pn"

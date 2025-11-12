@@ -80,9 +80,18 @@ pub struct PixiEnvironmentSpec {
     /// Build variants to use during the solve
     pub variants: Option<BTreeMap<String, Vec<String>>>,
 
+    /// Variant file paths to use during the solve
+    pub variant_files: Option<Vec<PathBuf>>,
+
     /// The protocols that are enabled for source packages
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
+
+    /// Optional override for a specific packages: use this pinned
+    /// source for checkout and as the `package_build_source` instead
+    /// of pinning anew.
+    #[serde(skip)]
+    pub pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
 }
 
 impl Default for PixiEnvironmentSpec {
@@ -99,7 +108,9 @@ impl Default for PixiEnvironmentSpec {
             exclude_newer: None,
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
             variants: None,
+            variant_files: None,
             enabled_protocols: EnabledProtocols::default(),
+            pin_overrides: BTreeMap::new(),
         }
     }
 }
@@ -122,7 +133,8 @@ impl PixiEnvironmentSpec {
         let (source_specs, binary_specs) =
             Self::split_into_source_and_binary_requirements(self.dependencies);
 
-        Self::check_missing_channels(binary_specs.clone(), &self.channels, &self.channel_config)?;
+        Self::check_missing_channels(binary_specs.clone(), &self.channels, &self.channel_config)
+            .map_err(|err| CommandDispatcherError::Failed(*err))?;
 
         // Recursively collect the metadata of all the source specs.
         let CollectedSourceMetadata {
@@ -134,7 +146,9 @@ impl PixiEnvironmentSpec {
             self.channel_config.clone(),
             self.build_environment.clone(),
             self.variants.clone(),
+            self.variant_files.clone(),
             self.enabled_protocols.clone(),
+            self.pin_overrides.clone(),
         )
         .collect(
             source_specs
@@ -231,24 +245,26 @@ impl PixiEnvironmentSpec {
         binary_specs: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
         channels: &[ChannelUrl],
         channel_config: &ChannelConfig,
-    ) -> Result<(), CommandDispatcherError<SolvePixiEnvironmentError>> {
+    ) -> Result<(), Box<SolvePixiEnvironmentError>> {
         for (pkg, spec) in binary_specs.iter_specs() {
             if let BinarySpec::DetailedVersion(v) = spec {
                 if let Some(channel) = &v.channel {
-                    let base_url = channel
-                        .clone()
-                        .into_base_url(channel_config)
-                        .map_err(SolvePixiEnvironmentError::ParseChannelError)
-                        .map_err(CommandDispatcherError::Failed)?;
+                    let base_url =
+                        channel
+                            .clone()
+                            .into_base_url(channel_config)
+                            .map_err(|err| {
+                                Box::new(SolvePixiEnvironmentError::ParseChannelError(err))
+                            })?;
 
                     if !channels.iter().any(|c| c == &base_url) {
-                        return Err(CommandDispatcherError::Failed(
-                            SolvePixiEnvironmentError::MissingChannel(MissingChannelError {
+                        return Err(Box::new(SolvePixiEnvironmentError::MissingChannel(
+                            MissingChannelError {
                                 package: pkg.as_normalized().to_string(),
                                 channel: base_url,
                                 advice: None,
-                            }),
-                        ));
+                            },
+                        )));
                     }
                 }
             }

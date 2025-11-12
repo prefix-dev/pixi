@@ -1,0 +1,20 @@
+[package]
+authors.workspace = true
+description = "A passthrough build backend for testing purposes"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_build_backend_passthrough"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+fs-err = { workspace = true }
+ordermap = { workspace = true }
+pixi_build_frontend = { workspace = true }
+pixi_build_types = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_package_streaming = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }

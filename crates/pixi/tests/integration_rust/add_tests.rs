@@ -83,6 +83,7 @@ async fn add_functionality() {
 
 /// Test adding a package with a specific channel
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_with_channel() {
     setup_tracing();
 
@@ -90,17 +91,17 @@ async fn add_with_channel() {
 
     pixi.init().no_fast_prefix_overwrite(true).await.unwrap();
 
-    pixi.add("conda-forge::py_rattler")
+    pixi.add("https://prefix.dev/conda-forge::py_rattler")
         .with_install(false)
         .with_frozen(true)
         .await
         .unwrap();
 
     pixi.project_channel_add()
-        .with_channel("https://prefix.dev/conda-forge")
+        .with_channel("https://conda.anaconda.org/conda-forge")
         .await
         .unwrap();
-    pixi.add("https://prefix.dev/conda-forge::_r-mutex")
+    pixi.add("https://conda.anaconda.org/conda-forge::_r-mutex")
         .with_install(false)
         .await
         .unwrap();
@@ -115,14 +116,14 @@ async fn add_with_channel() {
     assert_eq!(name, PackageName::try_from("py_rattler").unwrap());
     assert_eq!(
         spec.into_detailed().unwrap().channel.unwrap().as_str(),
-        "conda-forge"
+        "https://prefix.dev/conda-forge"
     );
 
     let (name, spec) = specs.next().unwrap();
     assert_eq!(name, PackageName::try_from("_r-mutex").unwrap());
     assert_eq!(
         spec.into_detailed().unwrap().channel.unwrap().as_str(),
-        "https://prefix.dev/conda-forge"
+        "conda-forge"
     );
 }
 
@@ -514,9 +515,10 @@ async fn add_unconstrained_dependency() {
         .default_feature()
         .combined_dependencies(None)
         .unwrap_or_default()
-        .get("foobar")
-        .cloned()
+        .get_single("foobar")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
 
@@ -528,9 +530,10 @@ async fn add_unconstrained_dependency() {
         .expect("feature 'unreferenced' is missing")
         .combined_dependencies(None)
         .unwrap_or_default()
-        .get("bar")
-        .cloned()
+        .get_single("bar")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
 
@@ -568,9 +571,10 @@ async fn pinning_dependency() {
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
-        .get("python")
-        .cloned()
+        .get_single("python")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
     // Testing to see if edge cases are handled correctly
@@ -584,9 +588,10 @@ async fn pinning_dependency() {
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
-        .get("foobar")
-        .cloned()
+        .get_single("foobar")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
     assert_eq!(foobar_spec, r#"">=1,<2""#);
@@ -600,9 +605,10 @@ async fn pinning_dependency() {
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
-        .get("python")
-        .cloned()
+        .get_single("python")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
     assert_eq!(python_spec, r#""==3.13""#);
@@ -638,9 +644,10 @@ async fn add_dependency_pinning_strategy() {
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
-        .get("foo")
-        .cloned()
+        .get_single("foo")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
     assert_eq!(foo_spec, r#"">=1,<2""#);
@@ -652,9 +659,10 @@ async fn add_dependency_pinning_strategy() {
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
-        .get("python")
-        .cloned()
+        .get_single("python")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
     // Testing to see if edge cases are handled correctly
@@ -668,12 +676,13 @@ async fn add_dependency_pinning_strategy() {
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
-        .get("bar")
-        .cloned()
+        .get_single("bar")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
-    // Testing to make sure bugfix did not regress
+    // Testing to make sure bugfix did not regressed
     // Package should be automatically pinned to a major version
     assert_eq!(bar_spec, r#"">=1,<2""#);
 }
@@ -686,7 +695,7 @@ async fn add_git_deps() {
 
     let pixi = PixiControl::from_manifest(
         r#"
-[project]
+[workspace]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64"]
@@ -741,7 +750,7 @@ async fn add_git_deps_with_creds() {
 
     let pixi = PixiControl::from_manifest(
         r#"
-[project]
+[workspace]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64"]
@@ -796,10 +805,10 @@ async fn add_git_with_specific_commit() {
 
     let pixi = PixiControl::from_manifest(
         r#"
-[project]
+[workspace]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["win-64"]
+platforms = ["linux-64"]
 preview = ['pixi-build']"#,
     )
     .unwrap();
@@ -817,7 +826,7 @@ preview = ['pixi-build']"#,
     let git_package = lock
         .default_environment()
         .unwrap()
-        .packages(Platform::Win64)
+        .packages(Platform::Linux64)
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
@@ -848,7 +857,7 @@ async fn add_git_with_tag() {
 
     let pixi = PixiControl::from_manifest(
         r#"
-[project]
+[workspace]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64"]
@@ -901,7 +910,7 @@ async fn add_plain_ssh_url() {
 
     let pixi = PixiControl::from_manifest(
         r#"
-[project]
+[workspace]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64"]
@@ -938,7 +947,7 @@ async fn add_pypi_git() {
     let pixi = PixiControl::from_manifest(
         format!(
             r#"
-[project]
+[workspace]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["{platform}"]
@@ -1077,10 +1086,9 @@ async fn add_dependency_dont_create_project() {
 [workspace]
 name = "some-workspace"
 platforms = []
-channels = ['{local_channel}']
+channels = ['{local_channel_str}']
 preview = ['pixi-build']
-"#,
-        local_channel = local_channel_str
+"#
     ))
     .unwrap();
 

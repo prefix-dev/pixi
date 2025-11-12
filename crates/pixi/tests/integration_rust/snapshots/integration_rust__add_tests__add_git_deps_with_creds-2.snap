@@ -1,8 +1,8 @@
 ---
 source: crates/pixi/tests/integration_rust/add_tests.rs
-expression: pixi.project().unwrap().manifest().source.to_string()
+expression: pixi.workspace().unwrap().modify().unwrap().manifest().document.to_string()
 ---
-[project]
+[workspace]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64"]

@@ -11,7 +11,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    # Dev dependency comment  
+    # Dev dependency comment
     "pyyaml>=6.1.0", # dev inline comment
 ]
 

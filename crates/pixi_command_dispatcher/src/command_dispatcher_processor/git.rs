@@ -58,7 +58,7 @@ impl CommandDispatcherProcessor {
                         .map(|fetch| {
                             TaskResult::GitCheckedOut(
                                 repository_reference,
-                                fetch.unwrap_or(Err(CommandDispatcherError::Cancelled)),
+                                Box::new(fetch.unwrap_or(Err(CommandDispatcherError::Cancelled))),
                             )
                         })
                         .boxed_local(),

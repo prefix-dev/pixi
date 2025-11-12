@@ -143,7 +143,7 @@ impl<'p> ExecutableTask<'p> {
             let cli_args = if let ArgValues::FreeFormArgs(additional_args) = &self.args {
                 additional_args
                     .iter()
-                    .format_with(" ", |arg, f| f(&format_args!("'{}'", arg)))
+                    .format_with(" ", |arg, f| f(&format_args!("'{arg}'")))
                     .to_string()
             } else {
                 String::new()
@@ -151,9 +151,9 @@ impl<'p> ExecutableTask<'p> {
 
             // Skip the export if it's empty, to avoid newlines
             let full_script = if export.is_empty() {
-                format!("{} {}", task, cli_args)
+                format!("{task} {cli_args}")
             } else {
-                format!("{}\n{} {}", export, task, cli_args)
+                format!("{export}\n{task} {cli_args}")
             };
 
             Ok(Some(full_script))
@@ -478,7 +478,7 @@ fn get_export_specific_task_env(task: &Task) -> String {
     if let Some(env) = task.env() {
         for (key, value) in env {
             tracing::debug!("Setting environment variable: {}=\"{}\"", key, value);
-            export.push_str(&format!("export \"{}={}\";\n", key, value));
+            export.push_str(&format!("export \"{key}={value}\";\n"));
         }
     }
     export

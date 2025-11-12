@@ -25,9 +25,9 @@ pub enum ManifestDocument {
 impl fmt::Display for ManifestDocument {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ManifestDocument::PyProjectToml(document) => write!(f, "{}", document),
-            ManifestDocument::PixiToml(document) => write!(f, "{}", document),
-            ManifestDocument::MojoProjectToml(document) => write!(f, "{}", document),
+            ManifestDocument::PyProjectToml(document) => write!(f, "{document}"),
+            ManifestDocument::PixiToml(document) => write!(f, "{document}"),
+            ManifestDocument::MojoProjectToml(document) => write!(f, "{document}"),
         }
     }
 }
@@ -869,7 +869,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    # Dev dependency comment  
+    # Dev dependency comment
     "PyYaML>=6.0", # dev inline comment
 ]
 

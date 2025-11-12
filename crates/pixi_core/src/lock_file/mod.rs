@@ -13,16 +13,18 @@ pub use crate::environment::CondaPrefixUpdater;
 pub use install_subset::{FilteredPackages, InstallSubset};
 pub use package_identifier::PypiPackageIdentifier;
 use pixi_record::PixiRecord;
+pub use pixi_uv_context::UvResolutionContext;
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 pub use records_by_name::{PixiRecordsByName, PypiRecordsByName};
-pub use resolve::{pypi::resolve_pypi, uv_resolution_context::UvResolutionContext};
+pub use resolve::pypi::resolve_pypi;
 pub use satisfiability::{
     EnvironmentUnsat, PlatformUnsat, verify_environment_satisfiability,
     verify_platform_satisfiability,
 };
-pub use update::SolveCondaEnvironmentError;
-pub use update::{LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateContext};
-pub use update::{UpdateLockFileOptions, UpdateMode};
+pub use update::{
+    LockFileDerivedData, PackageFilterNames, ReinstallEnvironment, ReinstallPackages,
+    SolveCondaEnvironmentError, UpdateContext, UpdateLockFileOptions, UpdateMode,
+};
 pub use utils::filter_lock_file;
 
 pub use utils::IoConcurrencyLimit;
@@ -70,13 +72,17 @@ mod tests {
             .await
             .unwrap();
 
-        let err = &workspace.load_lock_file().await.unwrap_err();
-        let dbg_err = format!("{:?}", err);
-        // Test that the error message contains the correct information.
-        assert!(
-            dbg_err.contains("The lock file version is 9999, but only up to including version")
-        );
-        // Also test that we try to help user by suggesting to update pixi.
-        assert!(dbg_err.contains("Please update pixi to the latest version and try again."));
+        let result = workspace.load_lock_file().await.unwrap();
+        // Test that we get a VersionMismatch result
+        match result {
+            crate::lock_file::update::LockFileLoadResult::VersionMismatch {
+                lock_file_version,
+                max_supported_version: _,
+            } => {
+                assert_eq!(lock_file_version, 9999);
+                // We got the version mismatch as expected
+            }
+            _ => panic!("Expected VersionMismatch, got {result:?}"),
+        }
     }
 }

@@ -20,10 +20,11 @@ fs-err = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
+once_cell = { workspace = true }
 ordermap = { workspace = true }
+pathdiff = { workspace = true }
 pin-project-lite = { workspace = true }
 rand = { workspace = true }
-reqwest-middleware = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
@@ -40,6 +41,7 @@ xxhash-rust = { workspace = true, features = ["xxh3"] }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
+rattler_networking = { workspace = true }
 rattler_package_streaming = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
 rattler_shell = { workspace = true }
@@ -49,7 +51,6 @@ simple_spawn_blocking = { workspace = true, features = ["tokio"] }
 
 pixi_build_discovery = { workspace = true, features = ["serde"] }
 pixi_build_frontend = { workspace = true }
-pixi_build_type_conversions = { workspace = true }
 pixi_build_types = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
@@ -58,12 +59,13 @@ pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }
 pixi_stable_hash = { workspace = true, features = ["serde_json"] }
+pixi_url = { workspace = true }
 pixi_utils = { workspace = true }
 
 [dev-dependencies]
 indexmap = { workspace = true }
 insta = { workspace = true, features = ["json"] }
-pixi_build_frontend = { workspace = true, features = ["passthrough_backend"] }
+pixi_build_backend_passthrough = { workspace = true }
 pixi_config = { workspace = true }
 pixi_test_utils = { workspace = true }
 tempfile = { workspace = true }
@@ -73,3 +75,6 @@ tokio = { workspace = true, features = ["macros"] }
 
 [features]
 slow_integration_tests = []
+
+[package.metadata.cargo-machete]
+ignored = ["serde_with"]

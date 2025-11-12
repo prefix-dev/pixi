@@ -7,15 +7,16 @@ use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
 };
 use pixi_config::ConfigCli;
-use pixi_core::WorkspaceLocator;
+use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace};
 use pixi_manifest::FeaturesExt;
 use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
+use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use tempfile::tempdir;
 
-use crate::cli_config::WorkspaceConfig;
+use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
@@ -25,6 +26,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub config_cli: ConfigCli,
+
+    #[clap(flatten)]
+    pub lock_and_install_config: LockAndInstallConfig,
 
     /// The target platform to build for (defaults to the current platform)
     #[clap(long, short, default_value_t = Platform::current())]
@@ -56,6 +60,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(args.config_cli);
 
+    // Sanity check of workspace, ensuring .pixi directory and .gitignore exist
+    sanity_check_workspace(&workspace).await?;
+
     // Construct a command dispatcher based on the workspace.
     let multi_progress = global_multi_progress();
     let anchor_pb = multi_progress.add(ProgressBar::hidden());
@@ -71,7 +78,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .finish();
 
     // Determine the variant configuration for the build.
-    let variant_configuration = workspace.variants(args.target_platform);
+    let VariantConfig {
+        variants,
+        variant_files,
+    } = workspace.variants(args.target_platform)?;
 
     // Build platform virtual packages
     let build_virtual_packages: Vec<GenericVirtualPackage> = workspace
@@ -98,29 +108,54 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Query any and all information we can acquire about the package we're
     // attempting to build.
-    let Ok(search_start) = workspace_locator.path() else {
+    let Ok(manifest_path) = workspace_locator.path() else {
         miette::bail!("could not determine the current working directory to locate the workspace");
     };
+    let manifest_path_canonical = dunce::canonicalize(&manifest_path)
+        .into_diagnostic()
+        .with_context(|| {
+            format!(
+                "failed to canonicalize manifest path '{}'",
+                manifest_path.display()
+            )
+        })?;
+    // Determine the directory that contains the manifest.
+    let manifest_dir_canonical = if manifest_path_canonical.is_file() {
+        manifest_path_canonical.parent().ok_or_else(|| {
+            miette::miette!(
+                "explicit manifest path: {} doesn't have a parent",
+                manifest_path.display()
+            )
+        })?
+    } else {
+        manifest_path_canonical.as_path()
+    };
+
+    // Store the manifest directory relative to the workspace root when possible to
+    // keep the pinned path relocatable and avoid double-prefixing during resolution.
+    let manifest_dir_spec = pathdiff::diff_paths(manifest_dir_canonical, workspace.root())
+        .unwrap_or_else(|| manifest_dir_canonical.to_path_buf());
     let channel_config = workspace.channel_config();
     let channels = workspace
         .default_environment()
         .channel_urls(&channel_config)
         .into_diagnostic()?;
 
-    // Determine the source of the package.
-    let source: PinnedSourceSpec = PinnedPathSpec {
-        path: search_start.to_string_lossy().into_owned().into(),
+    let manifest_source: PinnedSourceSpec = PinnedPathSpec {
+        path: manifest_dir_spec.to_string_lossy().into_owned().into(),
     }
     .into();
 
     // Create the build backend metadata specification.
     let backend_metadata_spec = BuildBackendMetadataSpec {
-        source: source.clone(),
+        manifest_source: manifest_source.clone(),
         channels: channels.clone(),
         channel_config: channel_config.clone(),
         build_environment: build_environment.clone(),
-        variants: Some(variant_configuration.clone()),
+        variants: Some(variants.clone()),
+        variant_files: Some(variant_files.clone()),
         enabled_protocols: Default::default(),
+        pin_override: None,
     };
     let backend_metadata = command_dispatcher
         .build_backend_metadata(backend_metadata_spec.clone())
@@ -151,14 +186,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 package,
                 // Build into a temporary directory first
                 output_directory: Some(temp_output_dir.path().to_path_buf()),
-                source: source.clone(),
+                manifest_source: manifest_source.clone(),
+                build_source: None,
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),
-                variants: Some(variant_configuration.clone()),
+                variants: Some(variants.clone()),
+                variant_files: Some(variant_files.clone()),
                 enabled_protocols: Default::default(),
                 work_directory: None,
                 clean: args.clean,
+                force: false,
                 build_profile: BuildProfile::Release,
             })
             .await?;

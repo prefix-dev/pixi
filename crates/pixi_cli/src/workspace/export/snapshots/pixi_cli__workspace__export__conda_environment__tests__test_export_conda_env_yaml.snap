@@ -1,5 +1,6 @@
 ---
-source: src/cli/workspace/export/conda_environment.rs
+source: crates/pixi_cli/src/workspace/export/conda_environment.rs
+assertion_line: 273
 expression: env_yaml.unwrap().to_yaml_string()
 ---
 name: default
@@ -14,3 +15,4 @@ dependencies:
 - pip
 - pip:
   - rich>=13.8.0, <14
+  - test-git-subdir-roundtrip @ git+https://github.com/prefix-dev/pixi@main#subdirectory=tests/data/mock-projects/test-project-export/test-git-subdir-roundtrip

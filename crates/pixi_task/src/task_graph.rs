@@ -108,7 +108,7 @@ impl TaskNode<'_> {
                 // Pass each additional argument varbatim by wrapping it in single quotes
                 let formatted_args = format!(" {}", self.format_additional_args());
                 cmd = match cmd {
-                    Some(Cow::Borrowed(s)) => Some(Cow::Owned(format!("{}{}", s, formatted_args))),
+                    Some(Cow::Borrowed(s)) => Some(Cow::Owned(format!("{s}{formatted_args}"))),
                     Some(Cow::Owned(mut s)) => {
                         s.push_str(&formatted_args);
                         Some(Cow::Owned(s))
@@ -127,7 +127,7 @@ impl TaskNode<'_> {
             Box::new(
                 additional_args
                     .iter()
-                    .format_with(" ", |arg, f| f(&format_args!("'{}'", arg))),
+                    .format_with(" ", |arg, f| f(&format_args!("'{arg}'"))),
             )
         } else {
             Box::new("".to_string())
@@ -431,6 +431,19 @@ impl<'p> TaskGraph<'p> {
             Some(args) => args,
             None => &Vec::new(),
         };
+
+        // If the task has no typed arguments defined, treat all args as free-form
+        // This ensures consistency between direct execution and dependency execution
+        if task_arguments.is_empty() {
+            let free_form_args: Vec<String> = dep_args
+                .iter()
+                .map(|arg| match arg {
+                    TypedDependencyArg::Positional(v) => v.clone(),
+                    TypedDependencyArg::Named(name, value) => format!("{name}={value}"),
+                })
+                .collect();
+            return Ok(ArgValues::FreeFormArgs(free_form_args));
+        }
 
         let mut named_args = Vec::new();
         let mut seen_named = false;

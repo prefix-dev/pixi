@@ -8,6 +8,9 @@ allow = [
   "BSL-1.0",
   "bzip2-1.0.6",
   "CDLA-Permissive-2.0",
+  # used by uv-auth and required by tiny-keccak
+  # more info: https://github.com/debris/tiny-keccak/issues/54#issuecomment-1953641335
+  "CC0-1.0",
   "ISC",
   "MIT",
   "MPL-2.0",
