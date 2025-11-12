@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use indexmap::{IndexMap, IndexSet};
 use miette::IntoDiagnostic;
-use pixi_core::workspace::WorkspaceMut;
+use pixi_core::workspace::{UpdateDeps, WorkspaceMut};
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
     EnvironmentName, Feature, FeatureName, PrioritizedChannel, TargetSelector, Task, TaskName,
@@ -12,7 +12,8 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
 
 use crate::interface::Interface;
-use crate::workspace::{InitOptions, ReinstallOptions};
+use crate::workspace::add::GitOptions;
+use crate::workspace::{AddOptions, InitOptions, ReinstallOptions};
 
 pub struct DefaultContext<I: Interface> {
     interface: I,
@@ -211,7 +212,40 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
-    /// Returns all matching package versions sorted by version
+    pub async fn add_conda_deps(
+        &self,
+        specs: IndexMap<PackageName, rattler_conda_types::MatchSpec>,
+        spec_type: pixi_manifest::SpecType,
+        add_options: AddOptions,
+        git_options: GitOptions,
+    ) -> miette::Result<Option<UpdateDeps>> {
+        crate::workspace::add::add_conda_dep(
+            &self.interface,
+            self.workspace_mut()?,
+            specs,
+            spec_type,
+            add_options,
+            git_options,
+        )
+        .await
+    }
+
+    pub async fn add_pypi_deps(
+        &self,
+        pypi_deps: pixi_core::workspace::PypiDeps,
+        editable: bool,
+        options: AddOptions,
+    ) -> miette::Result<Option<UpdateDeps>> {
+        crate::workspace::add::add_pypi_dep(
+            &self.interface,
+            self.workspace_mut()?,
+            pypi_deps,
+            editable,
+            options,
+        )
+        .await
+    }
+
     pub async fn search_exact(
         &self,
         match_spec: MatchSpec,
