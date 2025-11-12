@@ -1,14 +1,14 @@
 use clap::Parser;
-use indexmap::IndexMap;
-use miette::IntoDiagnostic;
+use pixi_api::{
+    WorkspaceContext,
+    workspace::{AddOptions, GitOptions},
+};
 use pixi_config::ConfigCli;
-use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace, workspace::DependencyType};
-use pixi_manifest::{FeatureName, KnownPreviewFeature, SpecType};
-use pixi_spec::{GitSpec, SourceLocationSpec, SourceSpec};
-use rattler_conda_types::{MatchSpec, PackageName};
+use pixi_core::{DependencyType, WorkspaceLocator};
 
 use crate::{
     cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
+    cli_interface::CliInterface,
     has_specs::HasSpecs,
 };
 
@@ -94,132 +94,93 @@ pub struct Args {
     pub editable: bool,
 }
 
-pub async fn execute(args: Args) -> miette::Result<()> {
-    let (dependency_config, no_install_config, lock_file_update_config, workspace_config) = (
-        args.dependency_config,
-        args.no_install_config,
-        args.lock_file_update_config,
-        args.workspace_config,
-    );
+impl From<&Args> for AddOptions {
+    fn from(args: &Args) -> Self {
+        AddOptions {
+            feature: args.dependency_config.feature.clone(),
+            platforms: args.dependency_config.platforms.clone(),
+            no_install: args.no_install_config.no_install,
+            lock_file_usage: args
+                .lock_file_update_config
+                .lock_file_usage()
+                .unwrap_or_default(),
+        }
+    }
+}
 
+impl From<&Args> for GitOptions {
+    fn from(args: &Args) -> Self {
+        GitOptions {
+            git: args.dependency_config.git.clone(),
+            reference: args
+                .dependency_config
+                .rev
+                .clone()
+                .unwrap_or_default()
+                .into(),
+            subdir: args.dependency_config.subdir.clone(),
+        }
+    }
+}
+
+pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
-        .with_search_start(workspace_config.workspace_locator_start())
+        .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
         .with_cli_config(args.config.clone());
 
-    sanity_check_workspace(&workspace).await?;
+    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
-    let mut workspace = workspace.modify()?;
-
-    // Add the platform if it is not already present
-    workspace
-        .manifest()
-        .add_platforms(dependency_config.platforms.iter(), &FeatureName::DEFAULT)?;
-
-    let (match_specs, source_specs, pypi_deps) = match dependency_config.dependency_type() {
+    let update_deps = match args.dependency_config.dependency_type() {
         DependencyType::CondaDependency(spec_type) => {
-            // if user passed some git configuration
-            // we will use it to create pixi source specs
-            let passed_specs: IndexMap<PackageName, (MatchSpec, SpecType)> = dependency_config
-                .specs()?
-                .into_iter()
-                .map(|(name, spec)| (name, (spec, spec_type)))
-                .collect();
+            let git_options = GitOptions {
+                git: args.dependency_config.git.clone(),
+                reference: args
+                    .dependency_config
+                    .rev
+                    .clone()
+                    .unwrap_or_default()
+                    .into(),
+                subdir: args.dependency_config.subdir.clone(),
+            };
 
-            if let Some(git) = &dependency_config.git {
-                if !workspace
-                    .manifest()
-                    .workspace
-                    .preview()
-                    .is_enabled(KnownPreviewFeature::PixiBuild)
-                {
-                    return Err(miette::miette!(
-                        help = format!(
-                            "Add `preview = [\"pixi-build\"]` to the `workspace` or `project` table of your manifest ({})",
-                            workspace.workspace().workspace.provenance.path.display()
-                        ),
-                        "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature"
-                    ));
-                }
-
-                let source_specs = passed_specs
-                    .iter()
-                    .map(|(name, (_spec, spec_type))| {
-                        let git_reference =
-                            dependency_config.rev.clone().unwrap_or_default().into();
-
-                        let git_spec = GitSpec {
-                            git: git.clone(),
-                            rev: Some(git_reference),
-                            subdirectory: dependency_config.subdir.clone(),
-                        };
-                        (
-                            name.clone(),
-                            (
-                                SourceSpec {
-                                    location: SourceLocationSpec::Git(git_spec),
-                                },
-                                *spec_type,
-                            ),
-                        )
-                    })
-                    .collect();
-                (IndexMap::default(), source_specs, IndexMap::default())
-            } else {
-                (passed_specs, IndexMap::default(), IndexMap::default())
-            }
+            workspace_ctx
+                .add_conda_deps(
+                    args.dependency_config.specs()?,
+                    spec_type,
+                    (&args).into(),
+                    git_options,
+                )
+                .await?
         }
         DependencyType::PypiDependency => {
-            let match_specs = IndexMap::default();
-            let source_specs = IndexMap::default();
-            let pypi_deps = match dependency_config
-                .vcs_pep508_requirements(workspace.workspace())
+            let pypi_deps = match args
+                .dependency_config
+                .vcs_pep508_requirements(&workspace)
                 .transpose()?
             {
                 Some(vcs_reqs) => vcs_reqs
                     .into_iter()
                     .map(|(name, req)| (name, (req, None, None)))
                     .collect(),
-                None => dependency_config
-                    .pypi_deps(workspace.workspace())?
+                None => args
+                    .dependency_config
+                    .pypi_deps(&workspace)?
                     .into_iter()
                     .map(|(name, req)| (name, (req, None, None)))
                     .collect(),
             };
 
-            (match_specs, source_specs, pypi_deps)
-        }
-    };
-    // TODO: add dry_run logic to add
-    let dry_run = false;
-
-    let update_deps = match Box::pin(workspace.update_dependencies(
-        match_specs,
-        pypi_deps,
-        source_specs,
-        no_install_config.no_install,
-        &lock_file_update_config.lock_file_usage()?,
-        &dependency_config.feature,
-        &dependency_config.platforms,
-        args.editable,
-        dry_run,
-    ))
-    .await
-    {
-        Ok(update_deps) => {
-            // Write the updated manifest
-            workspace.save().await.into_diagnostic()?;
-            update_deps
-        }
-        Err(e) => {
-            workspace.revert().await.into_diagnostic()?;
-            return Err(e);
+            workspace_ctx
+                .add_pypi_deps(pypi_deps, args.editable, (&args).into())
+                .await?
         }
     };
 
     if let Some(update_deps) = update_deps {
         // Notify the user we succeeded
-        dependency_config.display_success("Added", update_deps.implicit_constraints);
+        args.dependency_config
+            .display_success("Added", update_deps.implicit_constraints);
     }
 
     Ok(())
