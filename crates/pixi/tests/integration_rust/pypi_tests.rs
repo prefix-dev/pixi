@@ -462,14 +462,13 @@ async fn test_tls_no_verify_with_pypi_dependencies() {
             // Success - TLS verification was bypassed
         }
         Err(e) => {
-            let error_msg = format!("{:?}", e);
+            let error_msg = format!("{e:?}");
             // If it fails, it should NOT be due to SSL/TLS certificate issues
             assert!(
                 !error_msg.to_lowercase().contains("certificate")
                     && !error_msg.to_lowercase().contains("ssl")
                     && !error_msg.to_lowercase().contains("tls"),
-                "Error should not be SSL/TLS related when tls-no-verify is enabled. Got: {}",
-                error_msg
+                "Error should not be SSL/TLS related when tls-no-verify is enabled. Got: {error_msg}"
             );
         }
     }
@@ -504,15 +503,15 @@ async fn test_tls_verify_still_fails_without_config() {
         "should fail with SSL error when tls-no-verify is not enabled"
     );
 
-    let error_msg = format!("{:?}", result.unwrap_err());
+    let error = result.unwrap_err();
+    let error_msg = format!("{error:?}");
     // The error should be SSL/TLS related
     assert!(
         error_msg.to_lowercase().contains("certificate")
             || error_msg.to_lowercase().contains("ssl")
             || error_msg.to_lowercase().contains("tls")
             || error_msg.contains("expired.badssl.com"),
-        "Error should be SSL/TLS related. Got: {}",
-        error_msg
+        "Error should be SSL/TLS related. Got: {error_msg}"
     );
 }
 
