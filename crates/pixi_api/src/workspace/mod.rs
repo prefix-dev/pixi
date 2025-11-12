@@ -1,3 +1,6 @@
+pub(crate) mod add;
+pub use add::{AddOptions, GitOptions};
+
 pub(crate) mod init;
 pub use init::{GitAttributes, InitOptions, ManifestFormat};
 
