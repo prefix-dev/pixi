@@ -342,10 +342,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let index_strategy = to_index_strategy(self.build_config.index_strategy);
 
         let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
-            self.context_config
-                .uv_context
-                .allow_insecure_host
-                .clone(),
+            self.context_config.uv_context.allow_insecure_host.clone(),
             self.context_config.uv_context.tls_no_verify,
             &index_locations,
         );
