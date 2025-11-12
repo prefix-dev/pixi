@@ -32,7 +32,7 @@ pub async fn search_exact<I: Interface>(
     // Fetch the all names from the repodata using gateway
     let gateway = config.gateway().with_client(client).finish();
 
-    let all_names = gateway
+    let all_package_names = gateway
         .names(channels.clone(), [platform, Platform::NoArch])
         .await
         .into_diagnostic()?;
@@ -49,7 +49,54 @@ pub async fn search_exact<I: Interface>(
             .into_future()
     };
 
-    search_exact_package(match_spec, all_names, repodata_query_func).await
+    let package_name_search = match_spec.name.clone().ok_or_else(|| {
+        miette::miette!("could not find package name in MatchSpec {}", match_spec)
+    })?;
+
+    let packages = search_package_by_filter(
+        &package_name_search,
+        all_package_names,
+        repodata_query_func,
+        |pn, n| pn == n,
+        false,
+    )
+    .await?;
+
+    if packages.is_empty() {
+        let normalized_package_name = package_name_search.as_normalized();
+        return Err(miette::miette!(
+            "Package {normalized_package_name} not found, please use a wildcard '*' in the search name for a broader result."
+        ));
+    }
+
+    // Sort packages by version, build number and build string
+    let packages = packages
+        .iter()
+        .filter(|&p| match_spec.matches(p))
+        .sorted_by(|a, b| {
+            Ord::cmp(
+                &(
+                    &a.package_record.version,
+                    a.package_record.build_number,
+                    &a.package_record.build,
+                ),
+                &(
+                    &b.package_record.version,
+                    b.package_record.build_number,
+                    &b.package_record.build,
+                ),
+            )
+        })
+        .cloned()
+        .collect::<Vec<RepoDataRecord>>();
+
+    if packages.is_empty() {
+        return Err(miette::miette!(
+            "Package found, but MatchSpec {match_spec} does not match any record."
+        ));
+    }
+
+    Ok(Some(packages))
 }
 
 pub async fn search_wildcard<I: Interface>(
@@ -70,7 +117,7 @@ pub async fn search_wildcard<I: Interface>(
     // Fetch the all names from the repodata using gateway
     let gateway = config.gateway().with_client(client).finish();
 
-    let all_names = gateway
+    let all_package_names = gateway
         .names(channels.clone(), [platform, Platform::NoArch])
         .await
         .into_diagnostic()?;
@@ -90,25 +137,6 @@ pub async fn search_wildcard<I: Interface>(
     let package_name_without_filter = package_name_filter.replace('*', "");
     let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
 
-    search_package_by_wildcard(
-        package_name,
-        package_name_filter,
-        all_names,
-        repodata_query_func,
-    )
-    .await
-}
-
-async fn search_package_by_wildcard<QF, FR>(
-    package_name: PackageName,
-    package_name_filter: &str,
-    all_package_names: Vec<PackageName>,
-    repodata_query_func: QF,
-) -> miette::Result<Option<Vec<RepoDataRecord>>>
-where
-    QF: Fn(Vec<MatchSpec>) -> FR + Clone,
-    FR: Future<Output = Result<Vec<RepoData>, GatewayError>>,
-{
     let wildcard_pattern = Regex::new(&format!("^{}$", &package_name_filter.replace('*', ".*")))
         .expect("Expect only characters and/or * (wildcard).");
 
@@ -117,7 +145,7 @@ where
     let mut packages = search_package_by_filter(
         &package_name_search,
         all_package_names.clone(),
-        repodata_query_func.clone(),
+        repodata_query_func,
         |pn, _| wildcard_pattern.is_match(pn.as_normalized()),
         true,
     )
@@ -155,65 +183,6 @@ where
 
     if packages.is_empty() {
         return Err(miette::miette!("Could not find {normalized_package_name}"));
-    }
-
-    Ok(Some(packages))
-}
-
-async fn search_exact_package<QF, FR>(
-    package_spec: MatchSpec,
-    all_repodata_names: Vec<PackageName>,
-    repodata_query_func: QF,
-) -> miette::Result<Option<Vec<RepoDataRecord>>>
-where
-    QF: Fn(Vec<MatchSpec>) -> FR,
-    FR: Future<Output = Result<Vec<RepoData>, GatewayError>>,
-{
-    let package_name_search = package_spec.name.clone().ok_or_else(|| {
-        miette::miette!("could not find package name in MatchSpec {}", package_spec)
-    })?;
-
-    let packages = search_package_by_filter(
-        &package_name_search,
-        all_repodata_names,
-        repodata_query_func,
-        |pn, n| pn == n,
-        false,
-    )
-    .await?;
-
-    if packages.is_empty() {
-        let normalized_package_name = package_name_search.as_normalized();
-        return Err(miette::miette!(
-            "Package {normalized_package_name} not found, please use a wildcard '*' in the search name for a broader result."
-        ));
-    }
-
-    // Sort packages by version, build number and build string
-    let packages = packages
-        .iter()
-        .filter(|&p| package_spec.matches(p))
-        .sorted_by(|a, b| {
-            Ord::cmp(
-                &(
-                    &a.package_record.version,
-                    a.package_record.build_number,
-                    &a.package_record.build,
-                ),
-                &(
-                    &b.package_record.version,
-                    b.package_record.build_number,
-                    &b.package_record.build,
-                ),
-            )
-        })
-        .cloned()
-        .collect::<Vec<RepoDataRecord>>();
-
-    if packages.is_empty() {
-        return Err(miette::miette!(
-            "Package found, but MatchSpec {package_spec} does not match any record."
-        ));
     }
 
     Ok(Some(packages))
