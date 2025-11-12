@@ -173,6 +173,7 @@ __wrap__() {
             # Append the line if not already present
             if ! grep -Fxq "$LINE" "$FILE"; then
                 echo "Updating '${FILE}'"
+                echo >>"$FILE"
                 echo "$LINE" >>"$FILE"
                 echo "Please restart or source your shell."
             fi
