@@ -85,3 +85,5 @@ To further customize the look and feel of your badge, you can add `&style=<custo
 - [pyfixest](https://github.com/py-econometrics/pyfixest): Fast High-Dimensional Fixed Effects Regression in Python following fixest-syntax.
 
 - [geovista](https://github.com/bjlittle/geovista): Cartographic rendering and mesh analytics powered by [PyVista](https://github.com/pyvista/pyvista) 🌍
+
+- [SciPy](https://github.com/scipy/scipy): Fundamental algorithms for scientific computing in Python.
