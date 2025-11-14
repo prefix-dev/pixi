@@ -13,7 +13,7 @@ use std::{
     str::FromStr,
 };
 
-use builders::{BuildBuilder, LockBuilder, SearchBuilder};
+use builders::{LockBuilder, SearchBuilder};
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi_cli::LockFileUsageConfig;
@@ -46,8 +46,9 @@ use thiserror::Error;
 
 use self::builders::{HasDependencyConfig, RemoveBuilder};
 use crate::common::builders::{
-    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, ProjectChannelRemoveBuilder,
-    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
+    AddBuilder, BuildBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder,
+    ProjectChannelRemoveBuilder, ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder,
+    UpdateBuilder,
 };
 
 const DEFAULT_PROJECT_CONFIG: &str = r#"
@@ -682,10 +683,7 @@ impl PixiControl {
     pub fn build(&self) -> BuildBuilder {
         BuildBuilder {
             args: build::Args {
-                project_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
-                },
+                backend_override: Default::default(),
                 config_cli: Default::default(),
                 lock_and_install_config: Default::default(),
                 target_platform: rattler_conda_types::Platform::current(),
@@ -693,6 +691,7 @@ impl PixiControl {
                 output_dir: PathBuf::from("."),
                 build_dir: None,
                 clean: false,
+                path: Some(self.manifest_path()),
             },
         }
     }
