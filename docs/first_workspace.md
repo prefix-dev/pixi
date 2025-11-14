@@ -184,3 +184,14 @@ pixi shell
 python -VV
 exit
 ```
+??? tip "Using direnv with pixi"
+    If you like using `direnv`, you can use it with pixi to automatically load the pixi environment every time 
+    you open the project directory. Follow these steps for the setup: <br />
+    - Install and setup [direnv](https://direnv.net/man/direnv.1.html) (if you haven't already).<br /> 
+    - Create a `.envrc` file at repo root.<br />
+    - Paste these two lines:
+       ```sh
+       watch_file pixi.lock
+       eval "$(pixi shell-hook)"
+       ```
+    - Then trust it once with `direnv allow`.
