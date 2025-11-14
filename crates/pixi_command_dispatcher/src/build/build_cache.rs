@@ -19,7 +19,7 @@ use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use xxhash_rust::xxh3::Xxh3;
 
-use crate::build::source_checkout_cache_key;
+use crate::build::{SourceCodeLocation, source_checkout_cache_key};
 
 /// A cache for caching build artifacts of a source checkout.
 #[derive(Clone)]
@@ -249,7 +249,7 @@ pub struct BuildHostPackage {
     pub repodata_record: RepoDataRecord,
 
     /// The source location from which the package was built.
-    pub source: Option<PinnedSourceSpec>,
+    pub source: Option<SourceCodeLocation>,
 }
 
 /// A cache entry returned by [`BuildCache::entry`] which enables

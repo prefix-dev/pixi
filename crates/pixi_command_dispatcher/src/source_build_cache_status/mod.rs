@@ -15,6 +15,7 @@ use crate::{
     PackageIdentifier, SourceCheckoutError,
     build::{
         BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, PackageBuildInputHashBuilder,
+        SourceCodeLocation,
     },
 };
 
@@ -35,7 +36,7 @@ pub struct SourceBuildCacheStatusSpec {
     pub package: PackageIdentifier,
 
     /// Describes the source location of the package to query.
-    pub source: PinnedSourceSpec,
+    pub source: SourceCodeLocation,
 
     /// The channels to use when building source packages.
     pub channels: Vec<ChannelUrl>,
@@ -135,7 +136,7 @@ impl SourceBuildCacheStatusSpec {
         };
         let (cached_build, build_cache_entry) = command_dispatcher
             .build_cache()
-            .entry(&self.source, &build_input)
+            .entry(self.source.manifest_source(), &build_input)
             .await
             .map_err(SourceBuildCacheStatusError::BuildCache)
             .map_err(CommandDispatcherError::Failed)?;
@@ -176,13 +177,17 @@ impl SourceBuildCacheStatusSpec {
         let source = &self.source;
 
         // Immutable source records are always considered valid.
-        if source.is_immutable() {
+        if source.source_code().is_immutable() {
             return Ok(CachedBuildStatus::UpToDate(cached_build));
         }
 
         // Check if the project configuration has changed.
         let cached_build = match self
-            .check_package_configuration_changed(command_dispatcher, cached_build, source)
+            .check_package_configuration_changed(
+                command_dispatcher,
+                cached_build,
+                source.manifest_source(),
+            )
             .await?
         {
             CachedBuildStatus::UpToDate(cached_build) | CachedBuildStatus::New(cached_build) => {
@@ -196,7 +201,7 @@ impl SourceBuildCacheStatusSpec {
 
         // Determine if the package is out of date by checking the source
         let cached_build = match self
-            .check_source_out_of_date(command_dispatcher, cached_build, source)
+            .check_source_out_of_date(command_dispatcher, cached_build)
             .await?
         {
             CachedBuildStatus::UpToDate(cached_build) | CachedBuildStatus::New(cached_build) => {
@@ -303,7 +308,7 @@ impl SourceBuildCacheStatusSpec {
         &self,
         command_dispatcher: &CommandDispatcher,
         cached_build: CachedBuild,
-        source: &PinnedSourceSpec,
+        manifest_source: &PinnedSourceSpec,
     ) -> Result<CachedBuildStatus, CommandDispatcherError<SourceBuildCacheStatusError>> {
         let Some(source_info) = &cached_build.source else {
             return Ok(CachedBuildStatus::UpToDate(cached_build));
@@ -318,7 +323,7 @@ impl SourceBuildCacheStatusSpec {
 
         // Checkout the source for the package.
         let source_checkout = command_dispatcher
-            .checkout_pinned_source(source.clone())
+            .checkout_pinned_source(manifest_source.clone())
             .await
             .map_err_with(SourceBuildCacheStatusError::SourceCheckout)?;
 
@@ -356,7 +361,6 @@ impl SourceBuildCacheStatusSpec {
         &self,
         command_dispatcher: &CommandDispatcher,
         cached_build: CachedBuild,
-        source: &PinnedSourceSpec,
     ) -> Result<CachedBuildStatus, CommandDispatcherError<SourceBuildCacheStatusError>> {
         // If there are no source globs, we always consider the cached package
         // up-to-date.
@@ -365,14 +369,14 @@ impl SourceBuildCacheStatusSpec {
         };
 
         // Checkout the source for the package.
-        let source_checkout = command_dispatcher
-            .checkout_pinned_source(source.clone())
+        let source_build_checkout = command_dispatcher
+            .checkout_pinned_source(self.source.source_code().clone())
             .await
             .map_err_with(SourceBuildCacheStatusError::SourceCheckout)?;
 
         // Compute the modification time of the files that match the source input globs.
         let glob_time = match GlobModificationTime::from_patterns(
-            &source_checkout.path,
+            &source_build_checkout.path,
             source_info.globs.iter().map(String::as_str),
         ) {
             Ok(glob_time) => glob_time,
