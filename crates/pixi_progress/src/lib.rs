@@ -1,4 +1,5 @@
 mod placement;
+mod rolling_log_display;
 pub mod style;
 
 use std::{
@@ -12,6 +13,7 @@ use std::{
 use indicatif::{HumanBytes, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressState};
 use parking_lot::Mutex;
 pub use placement::ProgressBarPlacement;
+pub use rolling_log_display::RollingLogDisplay;
 
 /// A helper macro to print a message to the console. If a multi-progress bar
 /// is currently active, this macro will suspend the progress bar, print the
