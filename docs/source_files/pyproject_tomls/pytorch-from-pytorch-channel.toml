@@ -4,7 +4,7 @@ name = "pytorch-from-pytorch-channel"
 requires-python = ">= 3.11, < 3.13"
 version = "0.1.0"
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 # `main` is not free! It's a paid channel for organizations over 200 people.
 channels = ["main", "nvidia", "pytorch"]
 platforms = ["osx-arm64", "linux-64", "win-64"]
