@@ -9,10 +9,48 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{PackageName, Platform};
+use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
 
 use crate::interface::Interface;
 use crate::workspace::{InitOptions, ReinstallOptions};
+
+pub struct DefaultContext<I: Interface> {
+    interface: I,
+}
+
+impl<I: Interface> DefaultContext<I> {
+    pub fn new(interface: I) -> Self {
+        Self { interface }
+    }
+
+    /// Returns all matching package versions sorted by version
+    pub async fn search_exact(
+        &self,
+        match_spec: MatchSpec,
+        channels: IndexSet<Channel>,
+        platform: Platform,
+    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
+        crate::workspace::search::search_exact(
+            &self.interface,
+            None,
+            match_spec,
+            channels,
+            platform,
+        )
+        .await
+    }
+
+    /// Returns all matching packages with their latest versions
+    pub async fn search_wildcard(
+        &self,
+        search: &str,
+        channels: IndexSet<Channel>,
+        platform: Platform,
+    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
+        crate::workspace::search::search_wildcard(&self.interface, None, search, channels, platform)
+            .await
+    }
+}
 
 pub struct WorkspaceContext<I: Interface> {
     interface: I,
@@ -169,6 +207,40 @@ impl<I: Interface> WorkspaceContext<I> {
             &self.workspace,
             options,
             lock_file_usage,
+        )
+        .await
+    }
+
+    /// Returns all matching package versions sorted by version
+    pub async fn search_exact(
+        &self,
+        match_spec: MatchSpec,
+        channels: IndexSet<Channel>,
+        platform: Platform,
+    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
+        crate::workspace::search::search_exact(
+            &self.interface,
+            Some(&self.workspace),
+            match_spec,
+            channels,
+            platform,
+        )
+        .await
+    }
+
+    /// Returns all matching packages with their latest versions
+    pub async fn search_wildcard(
+        &self,
+        search: &str,
+        channels: IndexSet<Channel>,
+        platform: Platform,
+    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
+        crate::workspace::search::search_wildcard(
+            &self.interface,
+            Some(&self.workspace),
+            search,
+            channels,
+            platform,
         )
         .await
     }

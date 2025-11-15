@@ -13,7 +13,7 @@ default = []
 native-tls = [
   "reqwest/native-tls",
   "reqwest/native-tls-alpn",
-  "rattler_repodata_gateway/native-tls",
+  "pixi_api/native-tls",
   "rattler/native-tls",
   "pixi_utils/native-tls",
 ]
@@ -22,7 +22,7 @@ online_tests = []
 rustls-tls = [
   "reqwest/rustls-tls",
   "reqwest/rustls-tls-native-roots",
-  "rattler_repodata_gateway/rustls-tls",
+  "pixi_api/rustls-tls",
   "rattler/rustls-tls",
   "pixi_utils/rustls-tls",
 ]
@@ -88,10 +88,6 @@ rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_networking = { workspace = true, default-features = false }
-rattler_repodata_gateway = { workspace = true, features = [
-  "sparse",
-  "gateway",
-] }
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 rattler_virtual_packages = { workspace = true }

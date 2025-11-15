@@ -8,6 +8,11 @@ readme.workspace = true
 repository.workspace = true
 version = "0.1.0"
 
+[features]
+default = []
+native-tls = ["rattler_repodata_gateway/native-tls"]
+rustls-tls = ["rattler_repodata_gateway/rustls-tls"]
+
 [dependencies]
 console = { workspace = true }
 dunce = { workspace = true }
@@ -25,8 +30,15 @@ pixi_pypi_spec = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_utils = { workspace = true }
 rattler_conda_types = { workspace = true }
+rattler_lock = { workspace = true }
+rattler_repodata_gateway = { workspace = true, features = [
+  "sparse",
+  "gateway",
+] }
+regex = { workspace = true }
 same-file = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+strsim = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }
