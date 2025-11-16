@@ -2,7 +2,7 @@
 [project]
 name = "pytorch-conda-forge"
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64"]
 

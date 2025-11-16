@@ -46,7 +46,7 @@ Bare minimum conda-forge pytorch with cuda installation
 ```toml
 [project]
 name = "pytorch-conda-forge"
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64"]
 [tool.pixi.system-requirements]
@@ -103,7 +103,7 @@ Split into environments and add a CPU environment
 ```toml
 [project]
 name = "pytorch-conda-forge"
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64"]
 [tool.pixi.feature.gpu.system-requirements]
@@ -185,7 +185,7 @@ Install PyTorch from pypi
 name = "pytorch-pypi"
 # We need a python version that is compatible with pytorch
 requires-python = ">= 3.11,<3.13"
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["osx-arm64", "linux-64", "win-64"]
 [tool.pixi.pypi-dependencies]
@@ -232,7 +232,7 @@ Use multiple environments for the pypi pytorch installation
 name = "pytorch-pypi-envs"
 # We need a python version that is compatible with pytorch
 requires-python = ">= 3.11,<3.13"
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64", "win-64"]
 [tool.pixi.feature.gpu]
@@ -302,7 +302,7 @@ Install PyTorch from the PyTorch channel
 name = "pytorch-from-pytorch-channel"
 requires-python = ">= 3.11, < 3.13"
 version = "0.1.0"
-[tool.pixi.project]
+[tool.pixi.workspace]
 # `main` is not free! It's a paid channel for organizations over 200 people.
 channels = ["main", "nvidia", "pytorch"]
 platforms = ["osx-arm64", "linux-64", "win-64"]
