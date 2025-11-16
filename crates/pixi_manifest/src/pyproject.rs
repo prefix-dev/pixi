@@ -72,7 +72,7 @@ impl PyProjectManifest {
     }
 
     /// Returns the project name from, in order of priority
-    ///  - the `[tool.pixi.project]` table
+    ///  - the `[tool.pixi.workspace]` table
     ///  - the `[project]` table
     ///  - the `[tool.poetry]` table
     pub fn name(&self) -> Option<&str> {
@@ -332,7 +332,7 @@ mod tests {
             { name = "Author", email = "author@bla.com" }
         ]
 
-        [tool.pixi.project]
+        [tool.pixi.workspace]
         channels = ["stable"]
         platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
         license = "MIT"
