@@ -41,7 +41,7 @@ def test_workspace_variants_separate_work_directories(
     assert work_dir.exists(), "Work directory should exist"
 
     # Get all work directories (should be different for py311 and py312)
-    work_dirs = list(work_dir.glob("python_rich-*/*"))
+    work_dirs = list(work_dir.glob("python_rich-*"))
 
     # Should have at least 2 work directories (one per Python variant)
     assert len(work_dirs) >= 2, (

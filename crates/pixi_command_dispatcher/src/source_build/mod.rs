@@ -549,7 +549,11 @@ impl SourceBuildSpec {
         // preventing files like .pyc accumulation across builds (when using multiple python variants).
         let variant_work_dir_hash = WorkDirKey::variant_key(&output.metadata.variant);
 
-        let work_directory = work_directory.join(variant_work_dir_hash);
+        // not using set_file_name as it requires &mut self
+        let work_directory = PathBuf::from(format!(
+            "{}-{variant_work_dir_hash}",
+            work_directory.to_string_lossy()
+        ));
 
         // Determine final directories for everything.
         let directories = Directories::new(&work_directory, host_platform);
