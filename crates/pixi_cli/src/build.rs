@@ -175,7 +175,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // to the path's directory, not the current working directory.
     let workspace_locator = determine_discovery_start(&args.path).await?;
 
-    eprintln!("starting to locate");
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_locator.clone())
         .with_closest_package(false)
