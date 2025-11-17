@@ -118,6 +118,7 @@ struct PackageToOutput {
     size_bytes: Option<u64>,
     kind: KindPackage,
     source: Option<String>,
+    license: String,
     is_explicit: bool,
     #[serde(skip_serializing_if = "serde_skip_is_editable")]
     is_editable: bool,
@@ -173,6 +174,13 @@ impl PackageExt {
         match self {
             Self::Conda(value) => value.record().version.as_str(),
             Self::PyPI(value, _) => value.version.to_string().into(),
+        }
+    }
+
+    pub fn license(&self) -> Cow<'_, str> {
+        match self {
+            Self::Conda(value) => value.record().license.as_deref().unwrap_or("").into(),
+            Self::PyPI(_value, _) => String::from("").into()
         }
     }
 }
@@ -343,13 +351,14 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
     let header_style = console::Style::new().bold().cyan();
     writeln!(
         writer,
-        "{}\t{}\t{}\t{}\t{}\t{}",
+        "{}\t{}\t{}\t{}\t{}\t{}\t{}",
         header_style.apply_to("Package"),
         header_style.apply_to("Version"),
         header_style.apply_to("Build"),
         header_style.apply_to("Size"),
         header_style.apply_to("Kind"),
-        header_style.apply_to("Source")
+        header_style.apply_to("Source"),
+        header_style.apply_to("License"),
     )?;
 
     for package in packages {
@@ -375,7 +384,7 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
 
         writeln!(
             writer,
-            "\t{}\t{}\t{}\t{}\t{}{}",
+            "\t{}\t{}\t{}\t{}\t{}\t{}{}",
             &package.version,
             package.build.as_deref().unwrap_or(""),
             size_human,
@@ -385,7 +394,8 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
                 format!(" {}", console::style("(editable)").fg(Color::Yellow))
             } else {
                 "".to_string()
-            }
+            },
+            &package.license,
         )?;
     }
 
@@ -422,6 +432,7 @@ fn create_package_to_output<'a, 'b>(
     let name = package.name().to_string();
     let version = package.version().into_owned();
     let kind = KindPackage::from(package);
+    let license = package.license().into_owned();
 
     let build = match package {
         PackageExt::Conda(pkg) => Some(pkg.record().build.clone()),
@@ -471,6 +482,7 @@ fn create_package_to_output<'a, 'b>(
         size_bytes,
         kind,
         source,
+        license,
         is_explicit,
         is_editable,
     })
