@@ -436,8 +436,6 @@ impl SourceBuildSpec {
             // set the status that its a new cache
             // so on the next run we can distinguish between up to date ( was already saved from previous session)
             // and new that was just build now
-            tracing::debug!("updating source build cache entry",);
-            dbg!(&built_source.metadata.globs.clone());
             let cached_build = CachedBuild {
                 source: manifest_source_checkout
                     .pinned
@@ -448,7 +446,6 @@ impl SourceBuildSpec {
 
             let mut cached_entry = build_cache.cached_build.lock().await;
             *cached_entry = CachedBuildStatus::New(cached_build.clone());
-            tracing::debug!("updating source build cache entry",);
             entry
                 .insert(cached_build)
                 .await

@@ -195,7 +195,6 @@ impl SourceBuildCacheStatusSpec {
         };
 
         // Determine if the package is out of date by checking the source
-        tracing::debug!("checking if source files have changed for cached build");
         let cached_build = match self
             .check_source_out_of_date(command_dispatcher, cached_build, source)
             .await?
@@ -412,7 +411,6 @@ impl SourceBuildCacheStatusSpec {
                 return Ok(CachedBuildStatus::Stale(cached_build));
             }
         }
-        tracing::debug!("package is up-to-date based on source file modification times");
         Ok(CachedBuildStatus::UpToDate(cached_build))
     }
 }
