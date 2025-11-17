@@ -1,15 +1,9 @@
 import shutil
-import sys
 from pathlib import Path
 
 import pytest
 
 from .common import repo_root, verify_cli_command
-
-pytestmark = pytest.mark.skipif(
-    sys.platform.startswith("win"),
-    reason="Enable again as soon as pixi build supports windows builds with multiple platforms",
-)
 
 
 @pytest.mark.extra_slow

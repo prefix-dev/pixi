@@ -305,8 +305,7 @@ impl SourceBuildSpec {
                 .await
                 .map_err_with(SourceBuildError::Initialize)?;
 
-        // Determine the base working directory for the build (without variant-specific subdirectory).
-        // The actual variant-specific work directory will be created later in build_v1.
+        // Determine the working directory for the build.
         let work_directory = match std::mem::take(&mut self.work_directory) {
             Some(work_directory) => work_directory,
             None => command_dispatcher.cache_dirs().working_dirs().join(
@@ -343,7 +342,7 @@ impl SourceBuildSpec {
             .build_v1(
                 command_dispatcher,
                 backend,
-                dbg!(work_directory),
+                work_directory,
                 package_build_input_hash,
                 reporter,
                 log_sink,
@@ -545,14 +544,15 @@ impl SourceBuildSpec {
             })?;
 
         // Create a variant-specific work directory by including the actual variant values
-        // in the work directory key. This ensures different variants get separate work directories,
-        // preventing .pyc accumulation across builds (issue #4878).
+        // in the work directory key.
+        // This ensures different variants get separate work directories,
+        // preventing files like .pyc accumulation across builds (when using multiple python variants).
         let variant_work_dir_hash = WorkDirKey::variant_key(&output.metadata.variant);
 
         let work_directory = work_directory.join(variant_work_dir_hash);
 
         // Determine final directories for everything.
-        let directories = Directories::new(dbg!(&work_directory), host_platform);
+        let directories = Directories::new(&work_directory, host_platform);
 
         // Solve the build environment.
         let build_dependencies = output
