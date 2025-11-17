@@ -1,0 +1,88 @@
+use std::collections::HashMap;
+
+use indexmap::{IndexMap, IndexSet};
+use pixi_core::Workspace;
+use pixi_manifest::{
+    EnvironmentName, Feature, FeatureName, PrioritizedChannel, TargetSelector, Task, TaskName,
+};
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
+use pixi_spec::PixiSpec;
+use rattler_conda_types::PackageName;
+
+pub async fn list_features(workspace: &Workspace) -> IndexMap<FeatureName, Feature> {
+    workspace.workspace.value.features.clone()
+}
+
+pub async fn list_feature_channels(
+    workspace: &Workspace,
+    feature: FeatureName,
+) -> Option<IndexSet<PrioritizedChannel>> {
+    workspace
+        .workspace
+        .value
+        .feature(&feature)
+        .and_then(|f| f.channels.clone())
+}
+
+pub async fn list_feature_dependencies(
+    workspace: &Workspace,
+    feature: FeatureName,
+    target: Option<&TargetSelector>,
+) -> Option<HashMap<PackageName, Vec<PixiSpec>>> {
+    workspace.workspace.value.feature(&feature).and_then(|f| {
+        f.targets
+            .for_opt_target(target)
+            .and_then(|t| t.run_dependencies())
+            .map(|deps| {
+                deps.iter()
+                    .map(|(k, v)| (k.clone(), v.iter().cloned().collect()))
+                    .collect()
+            })
+    })
+}
+
+pub async fn list_feature_pypi_dependencies(
+    workspace: &Workspace,
+    feature: FeatureName,
+    target: Option<&TargetSelector>,
+) -> Option<HashMap<PypiPackageName, Vec<PixiPypiSpec>>> {
+    workspace.workspace.value.feature(&feature).and_then(|f| {
+        f.targets
+            .for_opt_target(target)
+            .and_then(|t| t.pypi_dependencies.as_ref())
+            .map(|deps| {
+                deps.iter()
+                    .map(|(k, v)| (k.clone(), v.iter().cloned().collect()))
+                    .collect()
+            })
+    })
+}
+
+pub async fn list_feature_tasks(
+    workspace: &Workspace,
+    feature: FeatureName,
+    target: Option<&TargetSelector>,
+) -> Option<HashMap<TaskName, Task>> {
+    workspace.workspace.value.feature(&feature).and_then(|f| {
+        f.targets
+            .for_opt_target(target)
+            .map(|target| target.tasks.clone())
+    })
+}
+
+pub async fn feature_by_task(
+    workspace: &Workspace,
+    task: &TaskName,
+    environment: &EnvironmentName,
+) -> Option<FeatureName> {
+    let environment = workspace.environment(environment)?;
+    let feature_tasks = environment.feature_tasks();
+
+    for (feature_name, tasks) in feature_tasks {
+        if tasks.contains_key(task) {
+            return Some(feature_name.clone());
+        }
+    }
+
+    None
+}
