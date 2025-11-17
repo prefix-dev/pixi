@@ -1750,6 +1750,12 @@
           "type": "string",
           "minLength": 1
         },
+        "sha256": {
+          "title": "Sha256",
+          "description": "The sha256 hash of the source",
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
         "subdirectory": {
           "title": "Subdirectory",
           "description": "A subdirectory to use in the repo",
@@ -1759,6 +1765,12 @@
         "tag": {
           "title": "Tag",
           "description": "A git tag to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "title": "Url",
+          "description": "The URL to the source",
           "type": "string",
           "minLength": 1
         }

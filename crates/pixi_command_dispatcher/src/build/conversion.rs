@@ -11,6 +11,7 @@ pub fn from_source_spec_v1(source: SourcePackageSpecV1) -> pixi_spec::SourceSpec
         SourcePackageSpecV1::Url(url) => pixi_spec::SourceSpec {
             location: SourceLocationSpec::Url(pixi_spec::UrlSourceSpec {
                 url: url.url,
+                subdirectory: url.subdirectory,
                 md5: url.md5,
                 sha256: url.sha256,
             }),

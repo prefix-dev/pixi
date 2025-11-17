@@ -394,7 +394,7 @@ enum UpdateError {
     #[error("the lockfile is not up-to-date with requested environment: '{}'", .0.fancy_display())]
     LockFileMissingEnv(EnvironmentName),
     #[error("some information from the lockfile could not be parsed")]
-    ParseLockFileError(#[from] ParseLockFileError),
+    ParseLockFileError(#[from] Box<ParseLockFileError>),
 }
 
 #[derive(Debug, Error, Diagnostic)]

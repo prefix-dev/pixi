@@ -1070,6 +1070,8 @@ The build system is a table that can contain the following fields:
   - `git`: a string representing URL to the source repository.
   - `rev`: a string representing SHA revision to checkout.
   - `subdirectory`: a string representing path to subdirectory to use.
+  - `url`: a string representing URL to the source archive.
+  - `sha256`: a string representing url sha256 hash.
 - `channels`: specifies the channels to get the build backend from.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.

@@ -127,6 +127,7 @@ impl PixiSpec {
         if let Some(url) = spec.url {
             Self::Url(UrlSpec {
                 url,
+                subdirectory: None,
                 md5: spec.md5,
                 sha256: spec.sha256,
             })
@@ -573,6 +574,7 @@ impl From<rattler_lock::source::UrlSourceLocation> for UrlSourceSpec {
     fn from(value: rattler_lock::source::UrlSourceLocation) -> Self {
         Self {
             url: value.url,
+            subdirectory: None,
             md5: value.md5,
             sha256: value.sha256,
         }

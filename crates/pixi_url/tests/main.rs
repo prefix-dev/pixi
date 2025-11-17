@@ -105,6 +105,7 @@ async fn url_source_uses_existing_checkout_when_sha_and_files_present() {
 
     let spec = UrlSpec {
         url: Url::parse("https://example.com/hello.zip").unwrap(),
+        subdirectory: None,
         md5: None,
         sha256: Some(sha),
     };
@@ -130,6 +131,7 @@ async fn resolver_reuses_cached_sha_without_downloading() {
 
     let spec = UrlSpec {
         url,
+        subdirectory: None,
         md5: None,
         sha256: None,
     };
@@ -152,6 +154,7 @@ async fn url_source_downloads_and_reuses_checkout() {
 
     let spec = UrlSpec {
         url: url.clone(),
+        subdirectory: None,
         md5: None,
         sha256: None,
     };
@@ -178,6 +181,7 @@ async fn url_source_errors_on_sha_mismatch() {
 
     let spec = UrlSpec {
         url: file_url(&archive, "sha-mismatch.zip"),
+        subdirectory: None,
         md5: None,
         sha256: Some(Sha256Hash::from([0u8; 32])),
     };
@@ -196,6 +200,7 @@ async fn url_source_errors_on_md5_mismatch() {
 
     let spec = UrlSpec {
         url: file_url(&archive, "md5-mismatch.zip"),
+        subdirectory: None,
         md5: Some(bogus_md5()),
         sha256: Some(archive_sha()),
     };
@@ -213,6 +218,7 @@ async fn url_source_downloads_over_http_and_extracts_contents() {
     let cache = tempdir().unwrap();
     let spec = UrlSpec {
         url: server.url().clone(),
+        subdirectory: None,
         md5: None,
         sha256: Some(archive_sha()),
     };

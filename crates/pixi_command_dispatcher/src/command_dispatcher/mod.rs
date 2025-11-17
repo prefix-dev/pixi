@@ -603,6 +603,7 @@ impl CommandDispatcher {
             SourceLocationSpec::Url(url) => {
                 self.pin_and_checkout_url(UrlSpec {
                     url: url.url,
+                    subdirectory: url.subdirectory,
                     md5: url.md5,
                     sha256: url.sha256,
                 })

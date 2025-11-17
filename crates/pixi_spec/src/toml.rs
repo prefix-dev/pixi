@@ -277,15 +277,27 @@ impl TomlSpec {
 
         let spec: PixiSpec;
         if let Some(loc) = self.location {
-            spec = match (loc.url, loc.path, loc.git) {
+            let TomlLocationSpec {
+                url,
+                path,
+                git,
+                branch,
+                rev,
+                tag,
+                subdirectory,
+                md5,
+                sha256,
+            } = loc;
+            spec = match (url, path, git) {
                 (Some(url), None, None) => PixiSpec::Url(UrlSpec {
                     url,
-                    md5: loc.md5,
-                    sha256: loc.sha256,
+                    subdirectory,
+                    md5,
+                    sha256,
                 }),
                 (None, Some(path), None) => PixiSpec::Path(PathSpec { path: path.into() }),
                 (None, None, Some(git)) => {
-                    let rev = match (loc.branch, loc.rev, loc.tag) {
+                    let rev = match (branch, rev, tag) {
                         (Some(branch), None, None) => Some(GitReference::Branch(branch)),
                         (None, Some(rev), None) => Some(GitReference::Rev(rev)),
                         (None, None, Some(tag)) => Some(GitReference::Tag(tag)),
@@ -294,7 +306,6 @@ impl TomlSpec {
                             return Err(SpecError::MultipleGitRefs);
                         }
                     };
-                    let subdirectory = loc.subdirectory;
                     PixiSpec::Git(GitSpec {
                         git,
                         rev,
@@ -308,8 +319,8 @@ impl TomlSpec {
                         || self.file_name.is_some()
                         || self.channel.is_some()
                         || self.subdir.is_some()
-                        || loc.md5.is_some()
-                        || loc.sha256.is_some()
+                        || md5.is_some()
+                        || sha256.is_some()
                         || self.license.is_some();
                     if !is_detailed {
                         return Err(SpecError::MissingDetailedIdentifier);
@@ -322,8 +333,8 @@ impl TomlSpec {
                         file_name: self.file_name,
                         channel: self.channel,
                         subdir: self.subdir,
-                        md5: loc.md5,
-                        sha256: loc.sha256,
+                        md5,
+                        sha256,
                         license: self.license,
                     }))
                 }
@@ -363,12 +374,24 @@ impl TomlSpec {
 
         let spec: BinarySpec;
         if let Some(loc) = self.location {
-            spec = match (loc.url, loc.path, loc.git) {
+            let TomlLocationSpec {
+                url,
+                path,
+                git,
+                branch: _,
+                rev: _,
+                tag: _,
+                subdirectory,
+                md5,
+                sha256,
+            } = loc;
+            spec = match (url, path, git) {
                 (Some(url), None, None) => {
                     let url_spec = UrlSpec {
                         url,
-                        md5: loc.md5,
-                        sha256: loc.sha256,
+                        subdirectory,
+                        md5,
+                        sha256,
                     };
                     if let Either::Right(binary) = url_spec.into_source_or_binary() {
                         BinarySpec::Url(binary)
@@ -394,8 +417,8 @@ impl TomlSpec {
                         || self.file_name.is_some()
                         || self.channel.is_some()
                         || self.subdir.is_some()
-                        || loc.md5.is_some()
-                        || loc.sha256.is_some()
+                        || md5.is_some()
+                        || sha256.is_some()
                         || self.license.is_some();
                     if !is_detailed {
                         return Err(SpecError::MissingDetailedIdentifier);
@@ -408,8 +431,8 @@ impl TomlSpec {
                         file_name: self.file_name,
                         channel: self.channel,
                         subdir: self.subdir,
-                        md5: loc.md5,
-                        sha256: loc.sha256,
+                        md5,
+                        sha256,
                         license: self.license,
                     }))
                 }
@@ -485,17 +508,30 @@ impl TomlLocationSpec {
     pub fn into_source_location_spec(self) -> Result<SourceLocationSpec, SourceLocationSpecError> {
         self.validate_field_combinations()?;
 
-        let spec = match (self.url, self.path, self.git) {
+        let TomlLocationSpec {
+            url,
+            path,
+            git,
+            branch,
+            rev,
+            tag,
+            subdirectory,
+            md5,
+            sha256,
+        } = self;
+
+        let spec = match (url, path, git) {
             (Some(url), None, None) => SourceLocationSpec::Url(UrlSourceSpec {
                 url,
-                md5: self.md5,
-                sha256: self.sha256,
+                subdirectory,
+                md5,
+                sha256,
             }),
             (None, Some(path), None) => {
                 SourceLocationSpec::Path(PathSourceSpec { path: path.into() })
             }
             (None, None, Some(git)) => {
-                let rev = match (self.branch, self.rev, self.tag) {
+                let rev = match (branch, rev, tag) {
                     (Some(branch), None, None) => Some(GitReference::Branch(branch)),
                     (None, Some(rev), None) => Some(GitReference::Rev(rev)),
                     (None, None, Some(tag)) => Some(GitReference::Tag(tag)),
@@ -504,7 +540,6 @@ impl TomlLocationSpec {
                         return Err(SourceLocationSpecError::MultipleGitRefs);
                     }
                 };
-                let subdirectory = self.subdirectory;
                 SourceLocationSpec::Git(GitSpec {
                     git,
                     rev,
