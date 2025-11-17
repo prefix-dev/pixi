@@ -5348,6 +5348,8 @@ dependencies = [
  "pixi_pypi_spec",
  "pixi_spec",
  "pixi_utils",
+ "pixi_uv_conversions",
+ "pypi_modifiers",
  "rattler_conda_types",
  "rattler_lock",
  "rattler_repodata_gateway",
@@ -5359,7 +5361,10 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "uv-distribution",
+ "uv-distribution-types",
  "uv-normalize",
+ "uv-types",
 ]
 
 [[package]]
