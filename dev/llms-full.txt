@@ -11371,6 +11371,8 @@ pixi build [OPTIONS]
 
 - [`--clean (-c)`](#arg---clean) Whether to clean the build directory before building
 
+- [`--path <PATH>`](#arg---path) The path to a directory containing a package manifest, or to a specific manifest file
+
 ## Config Options
 
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) Path to the file containing the authentication token
@@ -11406,10 +11408,6 @@ pixi build [OPTIONS]
   **env**: `PIXI_LOCKED`
 
 - [`--as-is`](#arg---as-is) Shorthand for the combination of --no-install and --frozen
-
-## Global Options
-
-- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 # `[pixi](../) clean`
 
