@@ -53,12 +53,12 @@ pub struct RemoveArgs {
 
 #[derive(Parser, Debug)]
 pub enum Command {
-    /// List the environments in the manifest file.
-    #[clap(visible_alias = "ls")]
-    List,
     /// Adds an environment to the manifest file.
     #[clap(visible_alias = "a")]
     Add(AddArgs),
+    /// List the environments in the manifest file.
+    #[clap(visible_alias = "ls")]
+    List,
     /// Remove an environment from the manifest file.
     #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
