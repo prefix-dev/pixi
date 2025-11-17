@@ -2365,3 +2365,84 @@ class TestCondaFile:
             env=env,
             cwd=cwd,
         )
+
+
+@pytest.mark.slow
+def test_install_source_package_with_force_reinstall(
+    pixi: Path, tmp_path: Path, test_data: Path
+) -> None:
+    """Test that --force-reinstall actually rebuilds source packages."""
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    # Copy an existing source package from test data
+    source_package = test_data / "cpp_simple"
+    target_package = tmp_path / "test-source-package"
+    shutil.copytree(source_package, target_package)
+
+    #     # Modify the pixi.toml to enable pixi-build and set a unique name
+    #     pixi_toml = target_package / "pixi.toml"
+
+    #     # Replace with our test configuration that enables pixi-build
+    #     modified_toml = f"""
+    # [workspace]
+    # channels = []
+    # platforms = [{CURRENT_PLATFORM}]
+    # preview = ["pixi-build"]
+
+    # [package]
+    # name = "test-source-package"
+    # version = "1.0.0"
+
+    # [package.build]
+    # backend = {{ name = "in-memory", version = "*" }}
+
+    # [package.build.config]
+    # build-globs = ["TOUCH*"]
+    # package = "package-b-0.1.0-h4616a5c_0.conda"
+    # """
+    #     pixi_toml.write_text(modified_toml)
+
+    # First installation - should build from source and show "installed"
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--path",
+            str(target_package),
+        ],
+        env=env,
+        stdout_contains="installed",
+    )
+
+    # Second installation without force-reinstall - should show "already installed"
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--path",
+            str(target_package),
+        ],
+        env=env,
+        stdout_contains="already installed",
+    )
+
+    # Third installation with --force-reinstall - should rebuild and show "installed"
+    # This is the key assertion: force-reinstall should cause a rebuild even though
+    # the source hasn't changed
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--path",
+            str(target_package),
+            "--force-reinstall",
+        ],
+        env=env,
+        # To verify that we really install again
+        stdout_contains="installed",
+        # and to verify that we really build from source
+        stderr_contains="Running build for recipe",
+    )

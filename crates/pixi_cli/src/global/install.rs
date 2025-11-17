@@ -228,7 +228,9 @@ async fn setup_environment(
     }
 
     // Installing the environment to be able to find the bin paths later
-    let environment_update = project.install_environment(env_name).await?;
+    let environment_update = project
+        .install_environment_with_options(env_name, args.force_reinstall)
+        .await?;
 
     // Sync exposed name
     sync_exposed_names(env_name, project, args).await?;

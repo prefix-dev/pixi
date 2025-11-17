@@ -191,7 +191,7 @@ impl SourceBuildSpec {
                     output = %cached_build.record.file_name,
                     "using cached new source build",
                 );
-                // dont matter if we forceit , we can reuse the cache entry
+                // dont matter if we force it , we can reuse the cache entry
                 return Ok(SourceBuildResult {
                     output_file: build_cache.cache_dir.join(&cached_build.record.file_name),
                     record: cached_build.record.clone(),
@@ -376,6 +376,12 @@ impl SourceBuildSpec {
                 .file_name()
                 .expect("the build backend did not return a file name");
             let destination = output_directory.join(file_name);
+            tracing::debug!(
+                source = %source_for_logging,
+                from = %output_file.display(),
+                to = %destination.display(),
+                "moving built source package to output directory",
+            );
             if let Err(err) = move_file(&output_file, &destination) {
                 return Err(CommandDispatcherError::Failed(SourceBuildError::Move(
                     output_file,
@@ -430,6 +436,8 @@ impl SourceBuildSpec {
             // set the status that its a new cache
             // so on the next run we can distinguish between up to date ( was already saved from previous session)
             // and new that was just build now
+            tracing::debug!("updating source build cache entry",);
+            dbg!(&built_source.metadata.globs.clone());
             let cached_build = CachedBuild {
                 source: manifest_source_checkout
                     .pinned
@@ -440,6 +448,7 @@ impl SourceBuildSpec {
 
             let mut cached_entry = build_cache.cached_build.lock().await;
             *cached_entry = CachedBuildStatus::New(cached_build.clone());
+            tracing::debug!("updating source build cache entry",);
             entry
                 .insert(cached_build)
                 .await

@@ -553,6 +553,14 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<EnvironmentUpdate> {
+        self.install_environment_with_options(env_name, false).await
+    }
+
+    pub async fn install_environment_with_options(
+        &self,
+        env_name: &EnvironmentName,
+        force_reinstall: bool,
+    ) -> miette::Result<EnvironmentUpdate> {
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
@@ -609,6 +617,12 @@ impl Project {
 
         let prefix = self.environment_prefix(env_name).await?;
 
+        let force_reinstall_packages = if force_reinstall {
+            dependencies_names.iter().cloned().collect()
+        } else {
+            Default::default()
+        };
+
         let result = command_dispatcher
             .install_pixi_environment(InstallPixiEnvironmentSpec {
                 name: env_name.to_string(),
@@ -621,7 +635,7 @@ impl Project {
                 enabled_protocols: EnabledProtocols::default(),
                 installed: None,
                 ignore_packages: None,
-                force_reinstall: Default::default(),
+                force_reinstall: force_reinstall_packages,
                 variants: None,
                 variant_files: None,
             })
