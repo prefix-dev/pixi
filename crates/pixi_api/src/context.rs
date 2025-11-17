@@ -12,7 +12,7 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 
 use crate::interface::Interface;
-use crate::workspace::{InitOptions, ReinstallOptions};
+use crate::workspace::{InitOptions, Package, ReinstallOptions};
 
 pub struct WorkspaceContext<I: Interface> {
     interface: I,
@@ -45,6 +45,27 @@ impl<I: Interface> WorkspaceContext<I> {
 
     pub async fn set_name(&self, name: &str) -> miette::Result<()> {
         crate::workspace::workspace::name::set(&self.interface, self.workspace_mut()?, name).await
+    }
+
+    pub async fn list_packages(
+        &self,
+        regex: Option<String>,
+        platform: Option<Platform>,
+        environment: Option<String>,
+        explicit: bool,
+        no_install: bool,
+        lock_file_usage: LockFileUsage,
+    ) -> miette::Result<Vec<Package>> {
+        crate::workspace::list::list(
+            &self.workspace,
+            regex,
+            platform,
+            environment,
+            explicit,
+            no_install,
+            lock_file_usage,
+        )
+        .await
     }
 
     pub async fn list_features(&self) -> IndexMap<FeatureName, Feature> {
