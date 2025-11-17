@@ -2379,30 +2379,7 @@ def test_install_source_package_with_force_reinstall(
     target_package = tmp_path / "test-source-package"
     shutil.copytree(source_package, target_package)
 
-    #     # Modify the pixi.toml to enable pixi-build and set a unique name
-    #     pixi_toml = target_package / "pixi.toml"
-
-    #     # Replace with our test configuration that enables pixi-build
-    #     modified_toml = f"""
-    # [workspace]
-    # channels = []
-    # platforms = [{CURRENT_PLATFORM}]
-    # preview = ["pixi-build"]
-
-    # [package]
-    # name = "test-source-package"
-    # version = "1.0.0"
-
-    # [package.build]
-    # backend = {{ name = "in-memory", version = "*" }}
-
-    # [package.build.config]
-    # build-globs = ["TOUCH*"]
-    # package = "package-b-0.1.0-h4616a5c_0.conda"
-    # """
-    #     pixi_toml.write_text(modified_toml)
-
-    # First installation - should build from source and show "installed"
+    # First installation
     verify_cli_command(
         [
             pixi,
@@ -2415,7 +2392,7 @@ def test_install_source_package_with_force_reinstall(
         stdout_contains="installed",
     )
 
-    # Second installation without force-reinstall - should show "already installed"
+    # Second installation without force-reinstall
     verify_cli_command(
         [
             pixi,
@@ -2428,9 +2405,7 @@ def test_install_source_package_with_force_reinstall(
         stdout_contains="already installed",
     )
 
-    # Third installation with --force-reinstall - should rebuild and show "installed"
-    # This is the key assertion: force-reinstall should cause a rebuild even though
-    # the source hasn't changed
+    # Third installation with --force-reinstall
     verify_cli_command(
         [
             pixi,
