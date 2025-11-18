@@ -1,4 +1,6 @@
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize, Serialize, Debug, Copy, Clone, Hash, PartialEq, Eq)]
 /// What kind of dependency spec do we have
 pub enum SpecType {
     /// Host dependencies are used that are needed by the host environment when

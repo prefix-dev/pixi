@@ -2,9 +2,10 @@ use pixi_core::environment::LockFileUsage;
 use pixi_manifest::FeatureName;
 use pixi_spec::GitReference;
 use rattler_conda_types::Platform;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
-#[derive(Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct DependencyOptions {
     /// The feature for which the dependency should be modified.
     pub feature: FeatureName,
@@ -15,7 +16,7 @@ pub struct DependencyOptions {
     pub lock_file_usage: LockFileUsage,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct GitOptions {
     pub git: Option<Url>,
     pub reference: GitReference,
