@@ -87,13 +87,14 @@ impl Dependency {
         match &self.args {
             Some(task_args) => {
                 let mut result = Vec::new();
+                let context = TaskRenderContext::with_args(Platform::current(), args);
                 for arg in task_args {
                     match arg {
                         DependencyArg::Positional(val) => {
-                            result.push(TypedDependencyArg::Positional(val.render(args, None)?));
+                            result.push(TypedDependencyArg::Positional(val.render(&context)?));
                         }
                         DependencyArg::Named(key, val) => {
-                            result.push(TypedDependencyArg::Named(key.clone(), val.render(args, None)?));
+                            result.push(TypedDependencyArg::Named(key.clone(), val.render(&context)?));
                         }
                     }
                 }
@@ -201,16 +202,15 @@ impl Task {
     /// Returns the command to execute as a single string.
     pub fn as_single_command(
         &self,
-        args_values: Option<&ArgValues>,
-        platform: Option<Platform>,
+        context: &TaskRenderContext,
     ) -> Result<Option<Cow<str>>, TemplateStringError> {
         match self {
-            Task::Plain(str) => match str.render(args_values, platform) {
+            Task::Plain(str) => match str.render(context) {
                 Ok(rendered) => Ok(Some(Cow::Owned(rendered))),
                 Err(e) => Err(e),
             },
-            Task::Custom(custom) => custom.cmd.as_single(args_values, platform),
-            Task::Execute(exe) => exe.cmd.as_single(args_values, platform),
+            Task::Custom(custom) => custom.cmd.as_single(context),
+            Task::Execute(exe) => exe.cmd.as_single(context),
             Task::Alias(_) => Ok(None),
         }
     }
@@ -305,15 +305,14 @@ impl GlobPatterns {
         GlobPatterns(patterns)
     }
 
-    /// Renders the glob patterns using the provided arguments
+    /// Renders the glob patterns using the provided context
     pub fn render(
         &self,
-        args: Option<&ArgValues>,
-        platform: Option<Platform>,
+        context: &TaskRenderContext,
     ) -> Result<Vec<RenderedString>, TemplateStringError> {
         self.0
             .iter()
-            .map(|i| i.render(args, platform).map(RenderedString::from))
+            .map(|i| i.render(context).map(RenderedString::from))
             .collect::<Result<Vec<RenderedString>, _>>()
     }
 }
@@ -442,6 +441,36 @@ impl Display for TypedArg {
     }
 }
 
+/// Context for rendering task templates with MiniJinja.
+///
+/// This struct contains system-provided variables that are automatically
+/// available in task templates, in addition to user-provided arguments.
+#[derive(Debug, Clone)]
+pub struct TaskRenderContext<'a> {
+    /// The platform for which the task is being rendered.
+    /// This corresponds to the environment's best platform.
+    pub platform: Platform,
+
+    /// The arguments to use for rendering.
+    pub args: Option<&'a ArgValues>,
+}
+
+impl Default for TaskRenderContext<'_> {
+    fn default() -> Self {
+        Self {
+            platform: Platform::current(),
+            args: None,
+        }
+    }
+}
+
+impl<'a> TaskRenderContext<'a> {
+    /// Creates a context with the specified platform and arguments.
+    pub fn with_args(platform: Platform, args: Option<&'a ArgValues>) -> Self {
+        Self { platform, args }
+    }
+}
+
 /// A string that contains placeholders to be rendered using the `minijinja` templating engine.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Hash, Deserialize)]
 pub struct TemplateString(String);
@@ -463,25 +492,28 @@ impl TemplateString {
         TemplateString(value)
     }
 
-    pub fn render(&self, args: Option<&ArgValues>, platform: Option<Platform>) -> Result<String, TemplateStringError> {
+    pub fn render(&self, context: &TaskRenderContext) -> Result<String, TemplateStringError> {
         // Only perform MiniJinja rendering when typed args are provided.
         // For free-form args or no args, return the source verbatim to avoid
         // interpreting arbitrary strings as templates.
-        if let Some(ArgValues::TypedArgs(args)) = args {
-            let mut args_map: HashMap<&str, String> = args
+        if let Some(ArgValues::TypedArgs(args)) = context.args {
+            // Build the context map with user arguments
+            let mut context_map: HashMap<String, minijinja::Value> = args
                 .iter()
-                .map(|arg| (arg.name.as_str(), arg.value.to_string()))
+                .map(|arg| (arg.name.clone(), minijinja::Value::from(arg.value.as_str())))
                 .collect();
 
-            // Add the platform as a system variable if provided
-            if let Some(platform) = platform {
-                args_map.insert("platform", platform.to_string());
-            }
+            // Create the pixi object with system-provided variables
+            let pixi_vars = HashMap::from([("platform", context.platform.to_string())]);
+            context_map.insert(
+                "pixi".to_string(),
+                minijinja::Value::from_serialize(&pixi_vars),
+            );
 
-            let context = minijinja::Value::from_serialize(&args_map);
+            let jinja_context = minijinja::Value::from_serialize(&context_map);
 
             JINJA_ENV
-                .render_str(&self.0, context)
+                .render_str(&self.0, jinja_context)
                 .map_err(|e| TemplateStringError {
                     src: self.0.clone(),
                     err_span: e.range().unwrap_or_default().into(),
@@ -602,15 +634,14 @@ impl CmdArgs {
     /// Returns a single string representation of the command arguments.
     pub fn as_single(
         &self,
-        args_values: Option<&ArgValues>,
-        platform: Option<Platform>,
+        context: &TaskRenderContext,
     ) -> Result<Option<Cow<str>>, TemplateStringError> {
         match self {
-            CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.render(args_values, platform)?))),
+            CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.render(context)?))),
             CmdArgs::Multiple(args) => {
                 let mut rendered_args = Vec::new();
                 for arg in args {
-                    let rendered = arg.render(args_values, platform)?;
+                    let rendered = arg.render(context)?;
                     rendered_args.push(quote(&rendered).to_string());
                 }
                 Ok(Some(Cow::Owned(rendered_args.join(" "))))
@@ -621,16 +652,15 @@ impl CmdArgs {
     /// Returns a single string representation of the command arguments.
     pub fn into_single(
         self,
-        args_values: Option<&ArgValues>,
-        platform: Option<Platform>,
+        context: &TaskRenderContext,
     ) -> Result<Option<String>, TemplateStringError> {
         match self {
-            CmdArgs::Single(cmd) => cmd.render(args_values, platform).map(Some),
+            CmdArgs::Single(cmd) => cmd.render(context).map(Some),
             CmdArgs::Multiple(args) => {
                 let rendered_args = args
                     .iter()
                     .map(|arg| {
-                        Ok(match arg.render(args_values, platform) {
+                        Ok(match arg.render(context) {
                             Ok(rendered) => quote(&rendered).to_string(),
                             Err(e) => return Err(e),
                         })
@@ -911,7 +941,7 @@ mod tests {
 
     use super::quote;
 
-    use super::{ArgValues, TemplateString, TypedArg};
+    use super::{ArgValues, TaskRenderContext, TemplateString, TypedArg};
 
     #[test]
     fn test_quote() {
@@ -948,12 +978,15 @@ mod tests {
     fn test_template_string_no_render_without_typed_args() {
         let t = TemplateString::from("echo {{ foo }}");
         // No args -> should not render, return verbatim string
-        let rendered = t.render(None, None).expect("should not error without typed args");
+        let context = TaskRenderContext::default();
+        let rendered = t.render(&context).expect("should not error without typed args");
         assert_eq!(rendered, "echo {{ foo }}");
 
         // Free-form args -> should not render
+        let free_args = ArgValues::FreeFormArgs(vec!["bar".into()]);
+        let context = TaskRenderContext::with_args(Platform::current(), Some(&free_args));
         let rendered = t
-            .render(Some(&ArgValues::FreeFormArgs(vec!["bar".into()])), None)
+            .render(&context)
             .expect("should not error with free-form args");
         assert_eq!(rendered, "echo {{ foo }}");
     }
@@ -965,19 +998,20 @@ mod tests {
             name: "foo".into(),
             value: "bar".into(),
         }]);
+        let context = TaskRenderContext::with_args(Platform::current(), Some(&args));
         let rendered = t
-            .render(Some(&args), None)
+            .render(&context)
             .expect("should render with typed args");
         assert_eq!(rendered, "echo bar");
     }
 
     #[test]
     fn test_template_string_renders_platform_variable() {
-        let t = TemplateString::from("echo {{ platform }}");
+        let t = TemplateString::from("echo {{ pixi.platform }}");
         let args = ArgValues::TypedArgs(vec![]);
-        let platform = Platform::Linux64;
+        let context = TaskRenderContext::with_args(Platform::Linux64, Some(&args));
         let rendered = t
-            .render(Some(&args), Some(platform))
+            .render(&context)
             .expect("should render platform variable");
 
         assert_eq!(rendered, "echo linux-64");
@@ -985,14 +1019,14 @@ mod tests {
 
     #[test]
     fn test_template_string_renders_with_platform_and_args() {
-        let t = TemplateString::from("build-{{ platform }}-{{ version }}");
+        let t = TemplateString::from("build-{{ pixi.platform }}-{{ version }}");
         let args = ArgValues::TypedArgs(vec![TypedArg {
             name: "version".into(),
             value: "1.0.0".into(),
         }]);
-        let platform = Platform::Linux64;
+        let context = TaskRenderContext::with_args(Platform::Linux64, Some(&args));
         let rendered = t
-            .render(Some(&args), Some(platform))
+            .render(&context)
             .expect("should render with platform and args");
 
         assert_eq!(rendered, "build-linux-64-1.0.0");

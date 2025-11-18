@@ -18,6 +18,7 @@ use crate::{
     feature::{Feature, FeatureName},
     manifests::document::ManifestDocument,
     solve_group::SolveGroups,
+    task::TaskRenderContext,
     to_options,
     toml::{
         ExternalWorkspaceProperties, FromTomlStr, PackageDefaults, TomlManifest,
@@ -1262,7 +1263,7 @@ start = "python -m flask run --port=5050"
                             "{}/{} = {:?}",
                             &selector_name,
                             name.as_str(),
-                            task.as_single_command(None, None)
+                            task.as_single_command(&TaskRenderContext::default())
                                 .ok()
                                 .flatten()
                                 .map(|c| c.to_string())
@@ -2540,7 +2541,7 @@ platforms = ["linux-64", "win-64"]
                 .tasks
                 .get(&"warmup".into())
                 .unwrap()
-                .as_single_command(None, None)
+                .as_single_command(&TaskRenderContext::default())
                 .unwrap()
                 .unwrap(),
             "python warmup.py"

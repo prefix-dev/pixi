@@ -72,7 +72,8 @@ impl fmt::Display for TaskNode<'_> {
             self.name.clone().unwrap_or("CUSTOM COMMAND".into())
         )?;
         write!(f, ", environment: {}", self.run_environment.name())?;
-        if let Ok(Some(command)) = self.task.as_single_command(self.args.as_ref(), Some(self.run_environment.best_platform())) {
+        let context = pixi_manifest::task::TaskRenderContext::with_args(self.run_environment.best_platform(), self.args.as_ref());
+        if let Ok(Some(command)) = self.task.as_single_command(&context) {
             write!(f, "command: `{command}`,",)?;
         }
         write!(
@@ -101,7 +102,8 @@ impl TaskNode<'_> {
     /// execute. This is the case for alias only commands.
     #[cfg(test)]
     pub(crate) fn full_command(&self) -> miette::Result<Option<String>> {
-        let mut cmd = self.task.as_single_command(self.args.as_ref(), Some(self.run_environment.best_platform()))?;
+        let context = pixi_manifest::task::TaskRenderContext::with_args(self.run_environment.best_platform(), self.args.as_ref());
+        let mut cmd = self.task.as_single_command(&context)?;
 
         if let Some(ArgValues::FreeFormArgs(additional_args)) = &self.args {
             if !additional_args.is_empty() {

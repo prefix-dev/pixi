@@ -268,24 +268,26 @@ You can also use filters to transform argument values:
 --8<-- "docs/source_files/pixi_workspaces/minijinja/task_args/pixi.toml:tasks"
 ```
 
-#### Platform Variable
+#### Pixi Variables
 
-In addition to task arguments, Pixi automatically provides a `platform` variable in the MiniJinja context. This variable contains the platform name for the environment in which the task will run (e.g., `linux-64`, `osx-arm64`, `win-64`).
+In addition to task arguments, Pixi automatically provides a `pixi` object in the MiniJinja context with system variables. Currently available:
+
+- `pixi.platform` - The platform name for the environment in which the task will run (e.g., `linux-64`, `osx-arm64`, `win-64`)
 
 This is particularly useful for creating platform-specific tasks:
 
 ```toml title="pixi.toml"
 [tasks]
-build = { cmd = "cargo build --target {{ platform }}", args = [] }
-download-binary = { cmd = "curl -O https://example.com/binary-{{ platform }}.tar.gz", args = [] }
+build = { cmd = "cargo build --target {{ pixi.platform }}", args = [] }
+download-binary = { cmd = "curl -O https://example.com/binary-{{ pixi.platform }}.tar.gz", args = [] }
 ```
 
-The platform variable can also be combined with task arguments:
+The pixi variables can also be combined with task arguments:
 
 ```toml title="pixi.toml"
 [tasks]
 deploy = {
-    cmd = "deploy.sh --platform {{ platform }} --env {{ environment }}",
+    cmd = "deploy.sh --platform {{ pixi.platform }} --env {{ environment }}",
     args = [{ arg = "environment", default = "staging" }]
 }
 ```

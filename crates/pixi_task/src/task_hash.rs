@@ -137,14 +137,15 @@ impl TaskHash {
 
         // We need to compute hash from input args
         // If no input args are provided, we treat them as empty list.
+        let context = pixi_manifest::task::TaskRenderContext::with_args(task.run_environment.best_platform(), Some(task.args()));
         if let Some(ref inputs) = execute.inputs {
-            let rendered_inputs = inputs.render(Some(task.args()), None)?;
+            let rendered_inputs = inputs.render(&context)?;
             rendered_inputs.hash(&mut hasher);
         }
 
         // and the same for output args
         if let Some(ref outputs) = execute.outputs {
-            let rendered_outputs = outputs.render(Some(task.args()), None)?;
+            let rendered_outputs = outputs.render(&context)?;
             rendered_outputs.hash(&mut hasher);
         }
 
@@ -174,9 +175,10 @@ impl InputHashes {
             return Ok(None);
         }
 
+        let context = pixi_manifest::task::TaskRenderContext::with_args(task.run_environment.best_platform(), Some(task.args()));
         let rendered_inputs: Vec<String> = inputs
             .iter()
-            .map(|i| i.render(Some(task.args()), None))
+            .map(|i| i.render(&context))
             .collect::<Result<_, _>>()?;
 
         let files = FileHashes::from_files(task.project().root(), &rendered_inputs).await?;
@@ -202,9 +204,10 @@ impl OutputHashes {
         let outputs: Vec<String> = match task.task().as_execute() {
             Ok(execute) => {
                 if let Some(outputs) = execute.outputs.clone() {
+                    let context = pixi_manifest::task::TaskRenderContext::with_args(task.run_environment.best_platform(), Some(task.args()));
                     let mut rendered_outputs = Vec::new();
                     for output in outputs.iter() {
-                        match output.render(Some(task.args()), None) {
+                        match output.render(&context) {
                             Ok(rendered) => rendered_outputs.push(rendered),
                             Err(err) => return Err(InputHashesError::TemplateStringError(err)),
                         }
