@@ -753,7 +753,8 @@ class SourceLocation(StrictBaseModel):
     rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
     tag: NonEmptyStr | None = Field(None, description="A git tag to use")
     branch: NonEmptyStr | None = Field(None, description="A git branch to use")
-    subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
+
+    subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use")
 
 
 class Build(StrictBaseModel):

@@ -347,6 +347,10 @@
               "git": "https://github.com/user/repo.git",
               "rev": "bd62770509b8afd792e98d20f8b458e2a7f19ec2",
               "subdirectory": "subproject/src"
+            },
+            {
+              "subdirectory": "subproject/src",
+              "url": "https://github.com/user/repo/archive/refs/tags/v0.1.0.tar.gz"
             }
           ]
         },
@@ -1758,7 +1762,7 @@
         },
         "subdirectory": {
           "title": "Subdirectory",
-          "description": "A subdirectory to use in the repo",
+          "description": "A subdirectory to use",
           "type": "string",
           "minLength": 1
         },
