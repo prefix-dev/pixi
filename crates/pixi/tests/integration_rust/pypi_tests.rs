@@ -57,7 +57,7 @@ all = ["recursive-optional-groups[np]"]
 docs = ["sphinx"]
 test = ["recursive-optional-groups[np]", "pytest", {{include-group = "docs"}}]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["{channel_url}"]
 platforms = ["{platform_str}"]
 
@@ -447,7 +447,7 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
 
 
 
-        [tool.pixi.project]
+        [tool.pixi.workspace]
         channels = ["https://prefix.dev/conda-forge"]
         platforms = ["{platform}"]
 
@@ -554,7 +554,7 @@ async fn test_index_strategy_respected_for_build_dependencies() {
         ]
         build-backend = "uv_build"
 
-        [tool.pixi.project]
+        [tool.pixi.workspace]
         channels = ["https://prefix.dev/conda-forge"]
         platforms = ["{platform}"]
 

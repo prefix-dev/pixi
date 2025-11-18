@@ -1,6 +1,7 @@
 //! See [`WorkDirKey`] for more information.
 
 use std::{
+    collections::BTreeMap,
     ffi::OsStr,
     hash::{Hash, Hasher},
 };
@@ -70,5 +71,14 @@ impl WorkDirKey {
             Some(name) => format!("{name}-{unique_key}"),
             None => unique_key,
         }
+    }
+
+    pub fn variant_key(variant_key: &BTreeMap<String, String>) -> String {
+        let mut hasher = Xxh3::new();
+        for (key, value) in variant_key {
+            key.hash(&mut hasher);
+            value.hash(&mut hasher);
+        }
+        URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())
     }
 }
