@@ -133,7 +133,7 @@ impl<'p> ExecutableTask<'p> {
         // Convert the task into an executable string
         let task = self
             .task
-            .as_single_command(Some(&self.args))
+            .as_single_command(Some(&self.args), Some(self.run_environment.best_platform()))
             .map_err(FailedToParseShellScript::ArgumentReplacement)?;
         if let Some(task) = task {
             // Get the export specific environment variables
@@ -209,7 +209,7 @@ impl<'p> ExecutableTask<'p> {
     pub fn full_command(&self) -> Result<Option<String>, TemplateStringError> {
         let original_cmd = self
             .task
-            .as_single_command(Some(&self.args))?
+            .as_single_command(Some(&self.args), Some(self.run_environment.best_platform()))?
             .map(|c| c.into_owned());
 
         if let Some(mut cmd) = original_cmd {
@@ -308,11 +308,11 @@ impl<'p> ExecutableTask<'p> {
                 let ins = exe
                     .inputs
                     .as_ref()
-                    .map(|p| p.render(Some(self.args())).unwrap_or_default());
+                    .map(|p| p.render(Some(self.args()), None).unwrap_or_default());
                 let outs = exe
                     .outputs
                     .as_ref()
-                    .map(|p| p.render(Some(self.args())).unwrap_or_default());
+                    .map(|p| p.render(Some(self.args()), None).unwrap_or_default());
                 (ins, outs)
             }
             Err(_) => (None, None),
@@ -429,7 +429,7 @@ struct ExecutableTaskConsoleDisplay<'p, 't> {
 
 impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self.task.task.as_single_command(Some(&self.task.args)) {
+        match self.task.task.as_single_command(Some(&self.task.args), Some(self.task.run_environment.best_platform())) {
             Ok(command) => {
                 write!(
                     f,

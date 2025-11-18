@@ -138,13 +138,13 @@ impl TaskHash {
         // We need to compute hash from input args
         // If no input args are provided, we treat them as empty list.
         if let Some(ref inputs) = execute.inputs {
-            let rendered_inputs = inputs.render(Some(task.args()))?;
+            let rendered_inputs = inputs.render(Some(task.args()), None)?;
             rendered_inputs.hash(&mut hasher);
         }
 
         // and the same for output args
         if let Some(ref outputs) = execute.outputs {
-            let rendered_outputs = outputs.render(Some(task.args()))?;
+            let rendered_outputs = outputs.render(Some(task.args()), None)?;
             rendered_outputs.hash(&mut hasher);
         }
 
@@ -176,7 +176,7 @@ impl InputHashes {
 
         let rendered_inputs: Vec<String> = inputs
             .iter()
-            .map(|i| i.render(Some(task.args())))
+            .map(|i| i.render(Some(task.args()), None))
             .collect::<Result<_, _>>()?;
 
         let files = FileHashes::from_files(task.project().root(), &rendered_inputs).await?;
@@ -204,7 +204,7 @@ impl OutputHashes {
                 if let Some(outputs) = execute.outputs.clone() {
                     let mut rendered_outputs = Vec::new();
                     for output in outputs.iter() {
-                        match output.render(Some(task.args())) {
+                        match output.render(Some(task.args()), None) {
                             Ok(rendered) => rendered_outputs.push(rendered),
                             Err(err) => return Err(InputHashesError::TemplateStringError(err)),
                         }

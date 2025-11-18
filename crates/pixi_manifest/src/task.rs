@@ -12,6 +12,7 @@ use crate::workspace::JINJA_ENV;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Diagnostic, SourceSpan};
+use rattler_conda_types::Platform;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use toml_edit::{Array, InlineTable, Item, Table, Value};
@@ -89,10 +90,10 @@ impl Dependency {
                 for arg in task_args {
                     match arg {
                         DependencyArg::Positional(val) => {
-                            result.push(TypedDependencyArg::Positional(val.render(args)?));
+                            result.push(TypedDependencyArg::Positional(val.render(args, None)?));
                         }
                         DependencyArg::Named(key, val) => {
-                            result.push(TypedDependencyArg::Named(key.clone(), val.render(args)?));
+                            result.push(TypedDependencyArg::Named(key.clone(), val.render(args, None)?));
                         }
                     }
                 }
@@ -201,14 +202,15 @@ impl Task {
     pub fn as_single_command(
         &self,
         args_values: Option<&ArgValues>,
+        platform: Option<Platform>,
     ) -> Result<Option<Cow<str>>, TemplateStringError> {
         match self {
-            Task::Plain(str) => match str.render(args_values) {
+            Task::Plain(str) => match str.render(args_values, platform) {
                 Ok(rendered) => Ok(Some(Cow::Owned(rendered))),
                 Err(e) => Err(e),
             },
-            Task::Custom(custom) => custom.cmd.as_single(args_values),
-            Task::Execute(exe) => exe.cmd.as_single(args_values),
+            Task::Custom(custom) => custom.cmd.as_single(args_values, platform),
+            Task::Execute(exe) => exe.cmd.as_single(args_values, platform),
             Task::Alias(_) => Ok(None),
         }
     }
@@ -307,10 +309,11 @@ impl GlobPatterns {
     pub fn render(
         &self,
         args: Option<&ArgValues>,
+        platform: Option<Platform>,
     ) -> Result<Vec<RenderedString>, TemplateStringError> {
         self.0
             .iter()
-            .map(|i| i.render(args).map(RenderedString::from))
+            .map(|i| i.render(args, platform).map(RenderedString::from))
             .collect::<Result<Vec<RenderedString>, _>>()
     }
 }
@@ -460,15 +463,21 @@ impl TemplateString {
         TemplateString(value)
     }
 
-    pub fn render(&self, args: Option<&ArgValues>) -> Result<String, TemplateStringError> {
+    pub fn render(&self, args: Option<&ArgValues>, platform: Option<Platform>) -> Result<String, TemplateStringError> {
         // Only perform MiniJinja rendering when typed args are provided.
         // For free-form args or no args, return the source verbatim to avoid
         // interpreting arbitrary strings as templates.
         if let Some(ArgValues::TypedArgs(args)) = args {
-            let args_map: HashMap<&str, &str> = args
+            let mut args_map: HashMap<&str, String> = args
                 .iter()
-                .map(|arg| (arg.name.as_str(), arg.value.as_str()))
+                .map(|arg| (arg.name.as_str(), arg.value.to_string()))
                 .collect();
+
+            // Add the platform as a system variable if provided
+            if let Some(platform) = platform {
+                args_map.insert("platform", platform.to_string());
+            }
+
             let context = minijinja::Value::from_serialize(&args_map);
 
             JINJA_ENV
@@ -594,13 +603,14 @@ impl CmdArgs {
     pub fn as_single(
         &self,
         args_values: Option<&ArgValues>,
+        platform: Option<Platform>,
     ) -> Result<Option<Cow<str>>, TemplateStringError> {
         match self {
-            CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.render(args_values)?))),
+            CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.render(args_values, platform)?))),
             CmdArgs::Multiple(args) => {
                 let mut rendered_args = Vec::new();
                 for arg in args {
-                    let rendered = arg.render(args_values)?;
+                    let rendered = arg.render(args_values, platform)?;
                     rendered_args.push(quote(&rendered).to_string());
                 }
                 Ok(Some(Cow::Owned(rendered_args.join(" "))))
@@ -612,14 +622,15 @@ impl CmdArgs {
     pub fn into_single(
         self,
         args_values: Option<&ArgValues>,
+        platform: Option<Platform>,
     ) -> Result<Option<String>, TemplateStringError> {
         match self {
-            CmdArgs::Single(cmd) => cmd.render(args_values).map(Some),
+            CmdArgs::Single(cmd) => cmd.render(args_values, platform).map(Some),
             CmdArgs::Multiple(args) => {
                 let rendered_args = args
                     .iter()
                     .map(|arg| {
-                        Ok(match arg.render(args_values) {
+                        Ok(match arg.render(args_values, platform) {
                             Ok(rendered) => quote(&rendered).to_string(),
                             Err(e) => return Err(e),
                         })
@@ -894,6 +905,7 @@ impl From<Task> for Item {
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
+    use rattler_conda_types::Platform;
 
     use crate::task::{Alias, Dependency, DependencyArg, Task};
 
@@ -936,12 +948,12 @@ mod tests {
     fn test_template_string_no_render_without_typed_args() {
         let t = TemplateString::from("echo {{ foo }}");
         // No args -> should not render, return verbatim string
-        let rendered = t.render(None).expect("should not error without typed args");
+        let rendered = t.render(None, None).expect("should not error without typed args");
         assert_eq!(rendered, "echo {{ foo }}");
 
         // Free-form args -> should not render
         let rendered = t
-            .render(Some(&ArgValues::FreeFormArgs(vec!["bar".into()])))
+            .render(Some(&ArgValues::FreeFormArgs(vec!["bar".into()])), None)
             .expect("should not error with free-form args");
         assert_eq!(rendered, "echo {{ foo }}");
     }
@@ -954,8 +966,35 @@ mod tests {
             value: "bar".into(),
         }]);
         let rendered = t
-            .render(Some(&args))
+            .render(Some(&args), None)
             .expect("should render with typed args");
         assert_eq!(rendered, "echo bar");
+    }
+
+    #[test]
+    fn test_template_string_renders_platform_variable() {
+        let t = TemplateString::from("echo {{ platform }}");
+        let args = ArgValues::TypedArgs(vec![]);
+        let platform = Platform::Linux64;
+        let rendered = t
+            .render(Some(&args), Some(platform))
+            .expect("should render platform variable");
+
+        assert_eq!(rendered, "echo linux-64");
+    }
+
+    #[test]
+    fn test_template_string_renders_with_platform_and_args() {
+        let t = TemplateString::from("build-{{ platform }}-{{ version }}");
+        let args = ArgValues::TypedArgs(vec![TypedArg {
+            name: "version".into(),
+            value: "1.0.0".into(),
+        }]);
+        let platform = Platform::Linux64;
+        let rendered = t
+            .render(Some(&args), Some(platform))
+            .expect("should render with platform and args");
+
+        assert_eq!(rendered, "build-linux-64-1.0.0");
     }
 }

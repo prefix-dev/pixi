@@ -1262,7 +1262,7 @@ start = "python -m flask run --port=5050"
                             "{}/{} = {:?}",
                             &selector_name,
                             name.as_str(),
-                            task.as_single_command(None)
+                            task.as_single_command(None, None)
                                 .ok()
                                 .flatten()
                                 .map(|c| c.to_string())
@@ -2540,7 +2540,7 @@ platforms = ["linux-64", "win-64"]
                 .tasks
                 .get(&"warmup".into())
                 .unwrap()
-                .as_single_command(None)
+                .as_single_command(None, None)
                 .unwrap()
                 .unwrap(),
             "python warmup.py"

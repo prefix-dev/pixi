@@ -268,6 +268,30 @@ You can also use filters to transform argument values:
 --8<-- "docs/source_files/pixi_workspaces/minijinja/task_args/pixi.toml:tasks"
 ```
 
+#### Platform Variable
+
+In addition to task arguments, Pixi automatically provides a `platform` variable in the MiniJinja context. This variable contains the platform name for the environment in which the task will run (e.g., `linux-64`, `osx-arm64`, `win-64`).
+
+This is particularly useful for creating platform-specific tasks:
+
+```toml title="pixi.toml"
+[tasks]
+build = { cmd = "cargo build --target {{ platform }}", args = [] }
+download-binary = { cmd = "curl -O https://example.com/binary-{{ platform }}.tar.gz", args = [] }
+```
+
+The platform variable can also be combined with task arguments:
+
+```toml title="pixi.toml"
+[tasks]
+deploy = {
+    cmd = "deploy.sh --platform {{ platform }} --env {{ environment }}",
+    args = [{ arg = "environment", default = "staging" }]
+}
+```
+
+When running tasks with typed arguments, the platform will automatically reflect the best platform for the environment where the task executes.
+
 For more information about available filters and template syntax, see the [MiniJinja documentation](https://docs.rs/minijinja/latest/minijinja/filters/index.html).
 
 ## Task Names
