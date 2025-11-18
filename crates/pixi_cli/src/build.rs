@@ -328,11 +328,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .expect("built package should have a file name");
         let dest_path = args.output_dir.join(file_name);
 
-        // Move the .conda artifact into the requested directory.
-        // If a simple rename fails (e.g., across filesystems), fall back to copy+remove.
-        if let Err(_e) = fs_err::rename(&package_path, &dest_path) {
-            fs_err::copy(&package_path, &dest_path).into_diagnostic()?;
-        }
+        // Copy the .conda artifact into the requested directory.
+        // We use copy instead of move to preserve the cache for subsequent builds.
+        fs_err::copy(&package_path, &dest_path).into_diagnostic()?;
 
         // Print success relative to the user-requested output directory
         let output_dir = dunce::canonicalize(&args.output_dir)
