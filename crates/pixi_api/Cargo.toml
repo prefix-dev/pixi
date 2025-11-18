@@ -22,7 +22,6 @@ indexmap = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 minijinja = { workspace = true }
-pep508_rs = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_core = { workspace = true }
