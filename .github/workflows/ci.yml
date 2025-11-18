@@ -941,7 +941,7 @@ jobs:
         run: pixi run --locked test-slow
 
   test-build-windows-x86_64:
-    timeout-minutes: 10
+    timeout-minutes: 15
     name: Test pixi-build Windows x86_64
     runs-on: windows-latest
     needs: build-binary-windows-x86_64
