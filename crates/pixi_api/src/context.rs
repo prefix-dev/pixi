@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 use indexmap::{IndexMap, IndexSet};
 use miette::IntoDiagnostic;
-use pixi_core::workspace::{UpdateDeps, WorkspaceMut};
+use pixi_core::workspace::{PypiDeps, UpdateDeps, WorkspaceMut};
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
-    EnvironmentName, Feature, FeatureName, PrioritizedChannel, TargetSelector, Task, TaskName,
+    EnvironmentName, Feature, FeatureName, PrioritizedChannel, SpecType, TargetSelector, Task,
+    TaskName,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -143,8 +144,8 @@ impl<I: Interface> WorkspaceContext<I> {
 
     pub async fn add_conda_deps(
         &self,
-        specs: IndexMap<PackageName, rattler_conda_types::MatchSpec>,
-        spec_type: pixi_manifest::SpecType,
+        specs: IndexMap<PackageName, MatchSpec>,
+        spec_type: SpecType,
         dep_options: DependencyOptions,
         git_options: GitOptions,
     ) -> miette::Result<Option<UpdateDeps>> {
@@ -161,7 +162,7 @@ impl<I: Interface> WorkspaceContext<I> {
 
     pub async fn add_pypi_deps(
         &self,
-        pypi_deps: pixi_core::workspace::PypiDeps,
+        pypi_deps: PypiDeps,
         editable: bool,
         options: DependencyOptions,
     ) -> miette::Result<Option<UpdateDeps>> {
@@ -177,8 +178,8 @@ impl<I: Interface> WorkspaceContext<I> {
 
     pub async fn remove_conda_deps(
         &self,
-        specs: IndexMap<PackageName, rattler_conda_types::MatchSpec>,
-        spec_type: pixi_manifest::SpecType,
+        specs: IndexMap<PackageName, MatchSpec>,
+        spec_type: SpecType,
         dep_options: DependencyOptions,
     ) -> miette::Result<()> {
         crate::workspace::remove::remove_conda_deps(
@@ -193,7 +194,7 @@ impl<I: Interface> WorkspaceContext<I> {
 
     pub async fn remove_pypi_deps(
         &self,
-        pypi_deps: pixi_core::workspace::PypiDeps,
+        pypi_deps: PypiDeps,
         options: DependencyOptions,
     ) -> miette::Result<()> {
         crate::workspace::remove::remove_pypi_deps(
