@@ -1053,7 +1053,7 @@ mod tests {
             let env = workspace.environment("test").unwrap();
             let grouped_env = GroupedEnvironment::from(env);
 
-            // This should return an error because both features have the same channel-priority
+            // This should not return an error because both features have the same channel-priority
             let result = grouped_env.channel_priority();
             assert!(
                 result.is_ok(),
