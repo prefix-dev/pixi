@@ -38,10 +38,10 @@ __wrap__() {
     fi
 
     if [ "$VERSION" = "latest" ]; then
-        DOWNLOAD_URL="${REPOURL%/}/releases/latest/download/${BINARY}${EXTENSION-}"
+        DOWNLOAD_URL="${PIXI_DOWNLOAD_URL:-${REPOURL%/}/releases/latest/download/${BINARY}${EXTENSION-}}"
     else
         # Check if version is incorrectly specified without prefix 'v', and prepend 'v' in this case
-        DOWNLOAD_URL="${REPOURL%/}/releases/download/v${VERSION#v}/${BINARY}${EXTENSION-}"
+        DOWNLOAD_URL="${PIXI_DOWNLOAD_URL:-${REPOURL%/}/releases/download/v${VERSION#v}/${BINARY}${EXTENSION-}}"
     fi
 
     printf "This script will automatically download and install Pixi (%s) for you.\nGetting it from this url: %s\n" "$VERSION" "$DOWNLOAD_URL"

@@ -119,13 +119,14 @@ If you have any issues building because of the dependency on `rattler` checkout 
 
 The installation script has several options that can be manipulated through environment variables.
 
-| Variable              | Description                                                                        | Default Value |
-| --------------------- | ---------------------------------------------------------------------------------- | ------------- |
-| `PIXI_VERSION`        | The version of Pixi getting installed, can be used to up- or down-grade.           | `latest`      |
-| `PIXI_HOME`           | The location of the binary folder.                                                 | `$HOME/.pixi` |
-| `PIXI_ARCH`           | The architecture the Pixi version was built for.                                   | `uname -m`    |
-| `PIXI_NO_PATH_UPDATE` | If set the `$PATH` will not be updated to add `pixi` to it.                        |               |
-| `TMP_DIR`             | The temporary directory the script uses to download to and unpack the binary from. | `/tmp`        |
+| Variable              | Description                                                                           | Default Value                                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `PIXI_VERSION`        | The version of Pixi getting installed, can be used to up- or down-grade.              | `latest`                                                                                                                            |
+| `PIXI_HOME`           | The location of the binary folder.                                                    | `$HOME/.pixi`                                                                                                                       |
+| `PIXI_ARCH`           | The architecture the Pixi version was built for.                                      | `uname -m`                                                                                                                          |
+| `PIXI_NO_PATH_UPDATE` | If set the `$PATH` will not be updated to add `pixi` to it.                           |                                                                                                                                     |
+| `PIXI_DOWNLOAD_URL`   | Overrides the download URL for the Pixi binary (useful for mirrors or custom builds). | GitHub releases, e.g. [linux-64](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-unknown-linux-musl.tar.gz) |
+| `TMP_DIR`             | The temporary directory the script uses to download to and unpack the binary from.    | `/tmp`                                                                                                                              |
 
 For example, on Apple Silicon, you can force the installation of the x86 version:
 
@@ -143,11 +144,12 @@ curl -fsSL https://pixi.sh/install.sh | PIXI_VERSION=v0.18.0 bash
 
 The installation script has several options that can be manipulated through environment variables.
 
-| Environment variable  | Description                                                              | Default Value            |
-| --------------------- | ------------------------------------------------------------------------ | ------------------------ |
-| `PIXI_VERSION`        | The version of Pixi getting installed, can be used to up- or down-grade. | `latest`                 |
-| `PIXI_HOME`           | The location of the installation.                                        | `$Env:USERPROFILE\.pixi` |
-| `PIXI_NO_PATH_UPDATE` | If set, the `$PATH` will not be updated to add `pixi` to it.             | `false`                  |
+| Environment variable  | Description                                                                           | Default Value                                                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `PIXI_VERSION`        | The version of Pixi getting installed, can be used to up- or down-grade.              | `latest`                                                                                                                    |
+| `PIXI_HOME`           | The location of the installation.                                                     | `$Env:USERPROFILE\.pixi`                                                                                                    |
+| `PIXI_NO_PATH_UPDATE` | If set, the `$PATH` will not be updated to add `pixi` to it.                          | `false`                                                                                                                     |
+| `PIXI_DOWNLOAD_URL`   | Overrides the download URL for the Pixi binary (useful for mirrors or custom builds). | GitHub releases, e.g. [win-64](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-pc-windows-msvc.zip) |
 
 For example, set the version:
 
