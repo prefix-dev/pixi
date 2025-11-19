@@ -220,7 +220,7 @@ def test_exec_with_absolute_path(
     )
 
 
-def test_exec_with_url(pixi: Path, dummy_channel_1: str, test_data: Path, tmp_path: Path) -> None:
+def test_exec_with_url(pixi: Path, dummy_channel_1: str, tmp_path: Path) -> None:
     cache_dir = tmp_path / "pixi-cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
     env = {"PIXI_CACHE_DIR": str(cache_dir)}
