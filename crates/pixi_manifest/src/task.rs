@@ -82,22 +82,19 @@ impl Dependency {
     }
     pub fn render_args(
         &self,
-        args: Option<&ArgValues>,
+        context: &TaskRenderContext,
     ) -> Result<Option<Vec<TypedDependencyArg>>, TemplateStringError> {
         match &self.args {
             Some(task_args) => {
                 let mut result = Vec::new();
-                let context = TaskRenderContext::with_args(Platform::current(), args);
                 for arg in task_args {
                     match arg {
                         DependencyArg::Positional(val) => {
-                            result.push(TypedDependencyArg::Positional(val.render(&context)?));
+                            result.push(TypedDependencyArg::Positional(val.render(context)?));
                         }
                         DependencyArg::Named(key, val) => {
-                            result.push(TypedDependencyArg::Named(
-                                key.clone(),
-                                val.render(&context)?,
-                            ));
+                            result
+                                .push(TypedDependencyArg::Named(key.clone(), val.render(context)?));
                         }
                     }
                 }
@@ -147,11 +144,11 @@ pub enum TypedDependencyArg {
 impl TypedDependency {
     pub fn from_dependency(
         dependency: &Dependency,
-        args: Option<&ArgValues>,
+        context: &TaskRenderContext,
     ) -> Result<Self, TemplateStringError> {
         Ok(TypedDependency {
             task_name: dependency.task_name.clone(),
-            args: dependency.render_args(args)?,
+            args: dependency.render_args(context)?,
             environment: dependency.environment.clone(),
         })
     }

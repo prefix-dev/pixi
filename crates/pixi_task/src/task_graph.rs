@@ -342,7 +342,11 @@ impl<'p> TaskGraph<'p> {
             // Iterate over all the dependencies of the node and add them to the graph.
             let mut node_dependencies = Vec::with_capacity(dependencies.len());
             for dependency in dependencies {
-                let dependency = TypedDependency::from_dependency(&dependency, node.args.as_ref())?;
+                let context = pixi_manifest::task::TaskRenderContext::with_args(
+                    node.run_environment.best_platform(),
+                    node.args.as_ref(),
+                );
+                let dependency = TypedDependency::from_dependency(&dependency, &context)?;
                 // Check if we visited this node before already.
                 if let Some(&task_id) = task_name_with_args_to_node.get(&dependency) {
                     node_dependencies.push(GraphDependency(
