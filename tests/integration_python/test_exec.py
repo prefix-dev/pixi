@@ -1,10 +1,11 @@
+import platform
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import pytest
 
-from .common import ExitCode, verify_cli_command, run_and_get_env
+from .common import ExitCode, run_and_get_env, verify_cli_command
 
 
 @pytest.mark.skipif(
@@ -180,3 +181,94 @@ def test_exec_with(pixi: Path, dummy_channel_1: str) -> None:
         expected_exit_code=ExitCode.INCORRECT_USAGE,
         stderr_contains="cannot be used with",
     )
+
+
+def test_exec_with_relative_path(
+    pixi: Path, dummy_channel_1: str, test_data: Path, tmp_path: Path
+) -> None:
+    artifact = _dummy_artifact(test_data)
+    cwd = Path.cwd()
+    try:
+        relative_path = artifact.relative_to(cwd)
+        spec_value = f"./{relative_path}"
+    except ValueError:
+        spec_value = str(artifact)
+
+    cache_dir = tmp_path / "pixi-cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    env = {"PIXI_CACHE_DIR": str(cache_dir)}
+    expected_env = f"PIXI_ENVIRONMENT_NAME=temp:{artifact.name}"
+    verify_cli_command(
+        [pixi, "exec", f"--channel={dummy_channel_1}", "--spec", spec_value, "env"],
+        stdout_contains=[expected_env],
+        env=env,
+    )
+
+
+def test_exec_with_absolute_path(
+    pixi: Path, dummy_channel_1: str, test_data: Path, tmp_path: Path
+) -> None:
+    artifact = _dummy_artifact(test_data)
+    cache_dir = tmp_path / "pixi-cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    env = {"PIXI_CACHE_DIR": str(cache_dir)}
+    expected_env = "PIXI_ENVIRONMENT_NAME=temp:dummy-a"
+    verify_cli_command(
+        [pixi, "exec", f"--channel={dummy_channel_1}", "--spec", str(artifact), "env"],
+        stdout_contains=[expected_env],
+        env=env,
+    )
+
+
+def test_exec_with_url(pixi: Path, dummy_channel_1: str, test_data: Path, tmp_path: Path) -> None:
+    artifact = _dummy_artifact(test_data)
+    cache_dir = tmp_path / "pixi-cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    env = {"PIXI_CACHE_DIR": str(cache_dir)}
+    expected_env = "PIXI_ENVIRONMENT_NAME=temp:dummy-a"
+    verify_cli_command(
+        [pixi, "exec", f"--channel={dummy_channel_1}", "--spec", artifact.as_uri(), "env"],
+        stdout_contains=[expected_env],
+        env=env,
+    )
+
+
+def _dummy_artifact(test_data: Path) -> Path:
+    if sys.platform.startswith("linux"):
+        return (
+            test_data
+            / "channels"
+            / "channels"
+            / "dummy_channel_1"
+            / "linux-64"
+            / "dummy-a-0.1.0-hb0f4dca_0.conda"
+        )
+
+    if sys.platform == "darwin":
+        machine = platform.machine().lower()
+        if machine == "x86_64":
+            subdir = "osx-64"
+            build = "h0dc7051_0"
+        else:
+            subdir = "osx-arm64"
+            build = "h60d57d3_0"
+        return (
+            test_data
+            / "channels"
+            / "channels"
+            / "dummy_channel_1"
+            / subdir
+            / f"dummy-a-0.1.0-{build}.conda"
+        )
+
+    if sys.platform.startswith("win"):
+        return (
+            test_data
+            / "channels"
+            / "channels"
+            / "dummy_channel_1"
+            / "win-64"
+            / "dummy-a-0.1.0-h9490d1a_0.conda"
+        )
+
+    pytest.skip("exec path tests not supported on this platform")
