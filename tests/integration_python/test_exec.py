@@ -221,14 +221,21 @@ def test_exec_with_absolute_path(
 
 
 def test_exec_with_url(pixi: Path, dummy_channel_1: str, test_data: Path, tmp_path: Path) -> None:
-    artifact = _dummy_artifact(test_data)
     cache_dir = tmp_path / "pixi-cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
     env = {"PIXI_CACHE_DIR": str(cache_dir)}
-    expected_env = "PIXI_ENVIRONMENT_NAME=temp:dummy-a"
+    # Test with HTTPS URL (file:// URLs are not supported as they're not recognized by rattler)
+    # For local files, use absolute or relative paths instead
     verify_cli_command(
-        [pixi, "exec", f"--channel={dummy_channel_1}", "--spec", artifact.as_uri(), "env"],
-        stdout_contains=[expected_env],
+        [
+            pixi,
+            "exec",
+            f"--channel={dummy_channel_1}",
+            "--spec",
+            "https://conda.anaconda.org/conda-forge/noarch/tzdata-2024b-hc8b5060_0.conda",
+            "env",
+        ],
+        stdout_contains=["PIXI_ENVIRONMENT_NAME=temp:tzdata"],
         env=env,
     )
 

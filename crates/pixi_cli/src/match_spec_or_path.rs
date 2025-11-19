@@ -6,7 +6,7 @@ use std::{
 
 use dunce::canonicalize;
 use pixi_spec::PathSpec;
-use rattler_conda_types::{MatchSpec, ParseStrictness};
+use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, package::ArchiveIdentifier};
 
 /// Represents either a regular conda MatchSpec or a filesystem path to a conda artifact.
 #[derive(Debug, Clone)]
@@ -63,6 +63,22 @@ impl FromStr for MatchSpecOrPath {
     type Err = String;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
+        // Check if this is a URL pointing to a conda package
+        // Rattler's MatchSpec parser doesn't recognize URLs with schemes, so we handle them here
+        if let Ok(url) = url::Url::parse(value) {
+            if let Some(archive) = ArchiveIdentifier::try_from_url(&url) {
+                // This is a URL to a conda package
+                let name = PackageName::try_from(archive.name)
+                    .map_err(|e| format!("invalid package name: {}", e))?;
+
+                return Ok(Self::MatchSpec(Box::new(MatchSpec {
+                    name: Some(name),
+                    url: Some(url),
+                    ..MatchSpec::default()
+                })));
+            }
+        }
+
         match MatchSpec::from_str(value, ParseStrictness::Lenient) {
             Ok(spec) => Ok(Self::MatchSpec(Box::new(spec))),
             Err(parse_err) => {
@@ -139,7 +155,15 @@ fn path_spec_to_match_spec(path_spec: PathSpec) -> Result<MatchSpec, String> {
     let url = url::Url::from_file_path(path)
         .map_err(|_| format!("failed to convert '{}' into a file:// url", path.display()))?;
 
+    // Extract package name from the archive
+    let archive = ArchiveIdentifier::try_from_url(&url)
+        .ok_or_else(|| format!("failed to parse package archive from '{}'", url))?;
+
+    let name =
+        PackageName::try_from(archive.name).map_err(|e| format!("invalid package name: {}", e))?;
+
     Ok(MatchSpec {
+        name: Some(name),
         url: Some(url),
         ..MatchSpec::default()
     })
@@ -147,7 +171,7 @@ fn path_spec_to_match_spec(path_spec: PathSpec) -> Result<MatchSpec, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::looks_like_path;
+    use super::*;
 
     #[test]
     fn detects_relative_like_inputs() {
@@ -157,5 +181,42 @@ mod tests {
         assert!(looks_like_path("file.conda"));
         assert!(!looks_like_path("python>=3.12"));
         assert!(!looks_like_path("conda-forge::python"));
+    }
+
+    #[test]
+    fn parses_https_url() {
+        let result = MatchSpecOrPath::from_str(
+            "https://conda.anaconda.org/conda-forge/noarch/tzdata-2024b-hc8b5060_0.conda",
+        );
+        assert!(result.is_ok(), "Failed to parse HTTPS URL: {:?}", result);
+        let spec_or_path = result.unwrap();
+        match spec_or_path {
+            MatchSpecOrPath::MatchSpec(spec) => {
+                assert_eq!(
+                    spec.name.as_ref().map(|n| n.as_normalized()),
+                    Some("tzdata")
+                );
+                assert!(spec.url.is_some());
+            }
+            _ => panic!("Expected MatchSpec, got Path"),
+        }
+    }
+
+    #[test]
+    fn parses_file_url() {
+        let result = MatchSpecOrPath::from_str("file:///tmp/test-package-1.0.0-h123_0.conda");
+        assert!(result.is_ok());
+        let spec_or_path = result.unwrap();
+        match spec_or_path {
+            MatchSpecOrPath::MatchSpec(spec) => {
+                assert_eq!(
+                    spec.name.as_ref().map(|n| n.as_normalized()),
+                    Some("test-package")
+                );
+                assert!(spec.url.is_some());
+                assert_eq!(spec.url.as_ref().unwrap().scheme(), "file");
+            }
+            _ => panic!("Expected MatchSpec, got Path"),
+        }
     }
 }
