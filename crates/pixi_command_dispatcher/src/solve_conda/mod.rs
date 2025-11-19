@@ -174,7 +174,7 @@ impl SolveCondaEnvironmentSpec {
 
             // Add source records
             for source_metadata in &self.source_repodata {
-                for record in &source_metadata.records {
+                for record in &source_metadata.metadata.metadata.records {
                     let url = unique_url(record);
                     let repodata_record = RepoDataRecord {
                         package_record: record.package_record.clone(),

@@ -35,7 +35,10 @@ use crate::{
     SourceBuildCacheEntry, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout,
     SourceCheckoutError, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
-    build::{BuildCache, source_metadata_cache::SourceMetadataCache},
+    build::BuildCache,
+    cache::{
+        build_backend_metadata::BuildBackendMetadataCache, source_metadata::SourceMetadataCache,
+    },
     cache_dirs::CacheDirs,
     discover_backend_cache::DiscoveryCache,
     install_pixi::{
@@ -101,6 +104,9 @@ impl Drop for CommandDispatcher {
 pub(crate) struct CommandDispatcherData {
     /// The gateway to use to query conda repodata.
     pub gateway: Gateway,
+
+    /// Backend metadata cache used to store metadata for source packages.
+    pub build_backend_metadata_cache: BuildBackendMetadataCache,
 
     /// Source metadata cache used to store metadata for source packages.
     pub source_metadata_cache: SourceMetadataCache,
@@ -326,6 +332,11 @@ impl CommandDispatcher {
     /// Returns the executor used by the command dispatcher.
     pub fn executor(&self) -> Executor {
         self.data.executor
+    }
+
+    /// Returns the cache for source metadata.
+    pub fn build_backend_metadata_cache(&self) -> &BuildBackendMetadataCache {
+        &self.data.build_backend_metadata_cache
     }
 
     /// Returns the cache for source metadata.

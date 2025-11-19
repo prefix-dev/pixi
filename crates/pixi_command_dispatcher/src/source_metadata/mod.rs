@@ -10,6 +10,7 @@ use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
+use rand::random;
 use rattler_conda_types::{
     ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, PackageRecord,
     package::RunExportsJson,
@@ -22,9 +23,10 @@ use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
     SolvePixiEnvironmentError,
-    build::{
-        Dependencies, DependenciesError, PixiRunExports, conversion,
-        source_metadata_cache::MetadataKind,
+    build::{Dependencies, DependenciesError, PixiRunExports, conversion},
+    cache::{
+        build_backend_metadata::MetadataKind,
+        source_metadata::{self, CachedSourceMetadata, Metadata, SourceMetadataKey},
     },
     executor::ExecutorFutures,
 };
@@ -39,17 +41,21 @@ pub struct SourceMetadataSpec {
 }
 
 /// The result of building a particular source record.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SourceMetadata {
     /// Information about the source checkout that was used to build the
     /// package.
     pub source: PinnedSourceSpec,
 
-    /// All the source records for this particular package.
-    pub records: Vec<SourceRecord>,
+    /// The cache entry that contains the metadata acquired from the build
+    /// backend.
+    ///
+    /// As long as the cache entry is not dropped, the metadata cannot be
+    /// accessed by another process.
+    pub cache_entry: source_metadata::CacheEntry,
 
-    /// All package names that where skipped but the backend could provide.
-    pub skipped_packages: Vec<PackageName>,
+    /// The metadata that was acquired from the build backend.
+    pub metadata: CachedSourceMetadata,
 }
 
 impl SourceMetadataSpec {
@@ -75,21 +81,55 @@ impl SourceMetadataSpec {
 
         let build_backend_metadata = build_backend_metadata?;
 
+        tracing::info!(
+            "Retrieving source metadata for package {}",
+            self.package.as_source()
+        );
+
+        let cache_key = self.cache_key();
+        let (metadata, mut cache_entry) = command_dispatcher
+            .source_metadata_cache()
+            .entry(&cache_key)
+            .await
+            .map_err(SourceMetadataError::Cache)
+            .map_err(CommandDispatcherError::Failed)?;
+
+        if let Some(metadata) = metadata {
+            tracing::debug!(
+                "Using cached source metadata for package {}",
+                self.package.as_source()
+            );
+            return Ok(SourceMetadata {
+                metadata,
+                cache_entry,
+                source: build_backend_metadata.source.clone(),
+            });
+        }
+
         match &build_backend_metadata.metadata.metadata {
             MetadataKind::GetMetadata { packages } => {
                 // Convert the metadata to source records.
                 let records = conversion::package_metadata_to_source_records(
                     &build_backend_metadata.source,
-                    packages,
+                    &packages,
                     &self.package,
                     &build_backend_metadata.metadata.input_hash,
                 );
 
+                let cached_source_metadata = CachedSourceMetadata {
+                    id: random(),
+                    input_hash: build_backend_metadata.metadata.input_hash.clone(),
+                    metadata: Metadata {
+                        records: records.clone(),
+                        // As the GetMetadata kind returns all records at once and we don't solve them we can skip this.
+                        skipped_packages: Default::default(),
+                    },
+                };
+
                 Ok(SourceMetadata {
                     source: build_backend_metadata.source.clone(),
-                    records,
-                    // As the GetMetadata kind returns all records at once and we don't solve them we can skip this.
-                    skipped_packages: Default::default(),
+                    cache_entry,
+                    metadata: cached_source_metadata,
                 })
             }
             MetadataKind::Outputs { outputs } => {
@@ -102,19 +142,40 @@ impl SourceMetadataSpec {
                     }
                     futures.push(self.resolve_output(
                         &command_dispatcher,
-                        output,
+                        &output,
                         build_backend_metadata.metadata.input_hash.clone(),
                         build_backend_metadata.source.clone(),
                         reporter.clone(),
                     ));
                 }
 
+                let cached_source_metadata = CachedSourceMetadata {
+                    id: random(),
+                    input_hash: build_backend_metadata.metadata.input_hash.clone(),
+                    metadata: Metadata {
+                        records: futures.try_collect().await?,
+                        // As the GetMetadata kind returns all records at once and we don't solve them we can skip this.
+                        skipped_packages,
+                    },
+                };
+
                 Ok(SourceMetadata {
                     source: build_backend_metadata.source.clone(),
-                    records: futures.try_collect().await?,
-                    skipped_packages,
+                    cache_entry,
+                    metadata: cached_source_metadata,
                 })
             }
+        }
+    }
+
+    /// Computes the cache key for this instance
+    pub(crate) fn cache_key(&self) -> SourceMetadataKey {
+        SourceMetadataKey {
+            channel_urls: self.backend_metadata.channels.clone(),
+            build_environment: self.backend_metadata.build_environment.clone(),
+            build_variants: self.backend_metadata.variants.clone().unwrap_or_default(),
+            enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
+            pinned_source: self.backend_metadata.source.clone(),
         }
     }
 
@@ -502,6 +563,9 @@ pub enum SourceMetadataError {
 
     #[error("the dependencies of some packages in the environment form a cycle")]
     Cycle(Cycle),
+
+    #[error(transparent)]
+    Cache(#[from] source_metadata::SourceMetadataCacheError),
 }
 
 impl From<DependenciesError> for SourceMetadataError {

@@ -8,8 +8,10 @@ use tracing::instrument;
 
 use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher, CommandDispatcherError,
-    CommandDispatcherErrorResultExt, build::source_metadata_cache::MetadataKind,
+    CommandDispatcherErrorResultExt,
 };
+
+use crate::cache::build_backend_metadata::MetadataKind;
 
 /// A specification for retrieving dev source metadata.
 ///
@@ -94,7 +96,7 @@ impl DevSourceMetadataSpec {
                 continue;
             }
             let record = Self::create_dev_source_record(
-                output,
+                &output,
                 &build_backend_metadata.source,
                 &build_backend_metadata.metadata.input_hash,
                 &source_anchor,

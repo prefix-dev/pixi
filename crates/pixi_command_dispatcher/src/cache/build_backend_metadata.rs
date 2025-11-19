@@ -26,12 +26,12 @@ use crate::{BuildEnvironment, PackageIdentifier, build::source_checkout_cache_ke
 /// This cache stores the raw response for a given source checkout together with
 /// some additional properties to determine if the cache is still valid.
 #[derive(Clone)]
-pub struct SourceMetadataCache {
+pub struct BuildBackendMetadataCache {
     root: PathBuf,
 }
 
 #[derive(Debug, Error)]
-pub enum SourceMetadataCacheError {
+pub enum BuildBackendMetadataCacheError {
     /// An I/O error occurred while reading or writing the cache.
     #[error("an IO error occurred while {0} {1}")]
     IoError(String, PathBuf, #[source] std::io::Error),
@@ -40,7 +40,7 @@ pub enum SourceMetadataCacheError {
 /// Defines additional input besides the source files that are used to compute
 /// the metadata of a source checkout. This is used to bucket the metadata.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct SourceMetadataKey {
+pub struct BuildBackendMetadataKey {
     /// The URLs of the channels that were used.
     pub channel_urls: Vec<ChannelUrl>,
 
@@ -57,7 +57,7 @@ pub struct SourceMetadataKey {
     pub pinned_source: PinnedSourceSpec,
 }
 
-impl SourceMetadataKey {
+impl BuildBackendMetadataKey {
     /// Computes a unique semi-human-readable hash for this key.
     pub fn hash_key(&self) -> String {
         let mut hasher = DefaultHasher::new();
@@ -80,7 +80,7 @@ impl SourceMetadataKey {
     }
 }
 
-impl SourceMetadataCache {
+impl BuildBackendMetadataCache {
     /// The version identifier that should be used for the cache directory.
     pub const CACHE_SUFFIX: &'static str = "v0";
 
@@ -96,12 +96,12 @@ impl SourceMetadataCache {
     /// [`CacheEntry`] is held, another process cannot update the cache.
     pub async fn entry(
         &self,
-        input: &SourceMetadataKey,
-    ) -> Result<(Option<CachedCondaMetadata>, CacheEntry), SourceMetadataCacheError> {
+        input: &BuildBackendMetadataKey,
+    ) -> Result<(Option<CachedCondaMetadata>, CacheEntry), BuildBackendMetadataCacheError> {
         // Locate the cache file and lock it.
         let cache_dir = self.root.join(input.hash_key());
         tokio::fs::create_dir_all(&cache_dir).await.map_err(|e| {
-            SourceMetadataCacheError::IoError(
+            BuildBackendMetadataCacheError::IoError(
                 "creating cache directory".to_string(),
                 cache_dir.clone(),
                 e,
@@ -118,7 +118,7 @@ impl SourceMetadataCache {
             .open(&cache_file_path)
             .await
             .map_err(|e| {
-                SourceMetadataCacheError::IoError(
+                BuildBackendMetadataCacheError::IoError(
                     "opening cache file".to_string(),
                     cache_file_path.clone(),
                     e,
@@ -126,7 +126,7 @@ impl SourceMetadataCache {
             })?;
 
         let mut locked_cache_file = cache_file.lock_write().await.map_err(|e| {
-            SourceMetadataCacheError::IoError(
+            BuildBackendMetadataCacheError::IoError(
                 "locking cache file".to_string(),
                 cache_file_path.clone(),
                 e.error,
@@ -139,7 +139,7 @@ impl SourceMetadataCache {
             .read_to_string(&mut cache_file_contents)
             .await
             .map_err(|e| {
-                SourceMetadataCacheError::IoError(
+                BuildBackendMetadataCacheError::IoError(
                     "reading cache file".to_string(),
                     cache_file_path.clone(),
                     e,
@@ -172,9 +172,9 @@ impl CacheEntry {
     pub async fn write(
         &mut self,
         metadata: CachedCondaMetadata,
-    ) -> Result<(), SourceMetadataCacheError> {
+    ) -> Result<(), BuildBackendMetadataCacheError> {
         self.file.seek(SeekFrom::Start(0)).await.map_err(|e| {
-            SourceMetadataCacheError::IoError(
+            BuildBackendMetadataCacheError::IoError(
                 "seeking to start of cache file".to_string(),
                 self.path.clone(),
                 e,
@@ -182,7 +182,7 @@ impl CacheEntry {
         })?;
         let bytes = serde_json::to_vec(&metadata).expect("serialization to JSON should not fail");
         self.file.write_all(&bytes).await.map_err(|e| {
-            SourceMetadataCacheError::IoError(
+            BuildBackendMetadataCacheError::IoError(
                 "writing metadata to cache file".to_string(),
                 self.path.clone(),
                 e,
@@ -193,7 +193,7 @@ impl CacheEntry {
             .set_len(bytes.len() as u64)
             .await
             .map_err(|e| {
-                SourceMetadataCacheError::IoError(
+                BuildBackendMetadataCacheError::IoError(
                     "setting length of cache file".to_string(),
                     self.path.clone(),
                     e,

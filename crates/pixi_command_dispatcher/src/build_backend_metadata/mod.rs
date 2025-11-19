@@ -22,9 +22,9 @@ use xxhash_rust::xxh3::Xxh3;
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
-    build::{
-        SourceRecordOrCheckout, WorkDirKey,
-        source_metadata_cache::{self, CachedCondaMetadata, MetadataKind, SourceMetadataKey},
+    build::{SourceRecordOrCheckout, WorkDirKey},
+    cache::build_backend_metadata::{
+        self, BuildBackendMetadataKey, CachedCondaMetadata, MetadataKind,
     },
 };
 use pixi_build_discovery::BackendSpec;
@@ -82,7 +82,7 @@ pub struct BuildBackendMetadata {
     ///
     /// As long as the cache entry is not dropped, the metadata cannot be
     /// accessed by another process.
-    pub cache_entry: source_metadata_cache::CacheEntry,
+    pub cache_entry: build_backend_metadata::CacheEntry,
 
     /// The metadata that was acquired from the build backend.
     pub metadata: CachedCondaMetadata,
@@ -133,7 +133,7 @@ impl BuildBackendMetadataSpec {
         // is still fresh.
         let cache_key = self.cache_key();
         let (metadata, mut cache_entry) = command_dispatcher
-            .source_metadata_cache()
+            .build_backend_metadata_cache()
             .entry(&cache_key)
             .await
             .map_err(BuildBackendMetadataError::Cache)
@@ -415,8 +415,8 @@ impl BuildBackendMetadataSpec {
     }
 
     /// Computes the cache key for this instance
-    pub(crate) fn cache_key(&self) -> SourceMetadataKey {
-        SourceMetadataKey {
+    pub(crate) fn cache_key(&self) -> BuildBackendMetadataKey {
+        BuildBackendMetadataKey {
             channel_urls: self.channels.clone(),
             build_environment: self.build_environment.clone(),
             build_variants: self.variants.clone().unwrap_or_default(),
@@ -476,7 +476,7 @@ pub enum BuildBackendMetadataError {
     GlobHash(#[from] pixi_glob::GlobHashError),
 
     #[error(transparent)]
-    Cache(#[from] source_metadata_cache::SourceMetadataCacheError),
+    Cache(#[from] build_backend_metadata::BuildBackendMetadataCacheError),
 }
 
 /// Computes an additional hash to be used in glob hash

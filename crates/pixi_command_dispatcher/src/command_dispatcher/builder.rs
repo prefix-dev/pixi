@@ -9,7 +9,8 @@ use rattler_networking::LazyClient;
 use rattler_repodata_gateway::{Gateway, MaxConcurrency};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 
-use crate::build::source_metadata_cache::SourceMetadataCache;
+use crate::cache::build_backend_metadata::BuildBackendMetadataCache;
+use crate::cache::source_metadata::{self, SourceMetadataCache};
 use crate::discover_backend_cache::DiscoveryCache;
 use crate::{
     CacheDirs, CommandDispatcher, Executor, Limits, Reporter,
@@ -153,7 +154,11 @@ impl CommandDispatcherBuilder {
         });
 
         let git_resolver = self.git_resolver.unwrap_or_default();
+        let build_backend_metadata_cache =
+            BuildBackendMetadataCache::new(cache_dirs.build_backend_metadata());
+
         let source_metadata_cache = SourceMetadataCache::new(cache_dirs.source_metadata());
+
         let build_cache = BuildCache::new(cache_dirs.source_builds());
         let tool_platform = self.tool_platform.unwrap_or_else(|| {
             let platform = Platform::current();
@@ -167,6 +172,7 @@ impl CommandDispatcherBuilder {
 
         let data = Arc::new(CommandDispatcherData {
             gateway,
+            build_backend_metadata_cache,
             source_metadata_cache,
             build_cache,
             root_dir,
