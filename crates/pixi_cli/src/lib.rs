@@ -295,6 +295,11 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         LevelFilter::DEBUG => (LevelFilter::INFO, LevelFilter::DEBUG, LevelFilter::TRACE),
         LevelFilter::TRACE => (LevelFilter::TRACE, LevelFilter::TRACE, LevelFilter::TRACE),
     };
+    let backend_level = if level_filter >= LevelFilter::INFO {
+        pixi_level
+    } else {
+        LevelFilter::WARN
+    };
 
     // Check if CLI verbosity flags were explicitly set
     let cli_verbosity_set = args.global_options.verbose > 0 || args.global_options.quiet > 0;
@@ -307,7 +312,7 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         EnvFilter::builder()
             .with_default_directive(level_filter.into())
             .parse(format!(
-                "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}"
+                "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter},pixi_build_backend={backend_level},pixi_build_cmake={backend_level},pixi_build_python={backend_level},pixi_build_rattler_build={backend_level},pixi_build_rust={backend_level},pixi_build_mojo={backend_level},pixi_build_ros={backend_level},rattler_build={backend_level}"
             ))
             .into_diagnostic()?
     } else {
@@ -315,7 +320,7 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         // Parse RUST_LOG because we need to set it other our other directives
         let env_directives = env::var("RUST_LOG").unwrap_or_default();
         let original_directives = format!(
-            "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}",
+            "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter},pixi_build_backend={backend_level},pixi_build_cmake={backend_level},pixi_build_python={backend_level},pixi_build_rattler_build={backend_level},pixi_build_rust={backend_level},pixi_build_mojo={backend_level},pixi_build_ros={backend_level},rattler_build={backend_level}",
         );
         // Concatenate both directives where the LOG overrides the potential original directives
         let final_directives = if env_directives.is_empty() {

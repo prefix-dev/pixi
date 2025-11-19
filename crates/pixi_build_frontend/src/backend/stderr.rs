@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fs::OpenOptions, io::Write, sync::Arc};
 
 use crate::{BackendOutputStream, backend::logs::parse_backend_logs};
 use tokio::{
@@ -14,20 +14,28 @@ pub(crate) async fn stream_stderr<W: BackendOutputStream>(
     cancel: oneshot::Receiver<()>,
     mut on_log: W,
 ) -> Result<String, std::io::Error> {
+    let dump_raw_path = std::env::var_os("PIXI_DUMP_BACKEND_RAW");
+
     // Create a future that continuously read from the buffer and stores the lines
     // until all data is received.
     let mut lines = Vec::new();
     let read_and_buffer = async {
         let mut buffer = buffer.lock().await;
         while let Some(line) = buffer.next_line().await? {
+            if let Some(path) = dump_raw_path.as_ref() {
+                let _ = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(path)
+                    .and_then(|mut file| writeln!(file, "{line}"));
+            }
+
             if let Some(entries) = parse_backend_logs(&line) {
                 for entry in entries {
-                    for formatted in entry.lines() {
-                        let formatted = formatted.clone();
-                        on_log.on_line(formatted.clone());
-                        lines.push(formatted);
-                    }
+                    entry.emit();
                 }
+                on_log.on_line(line.clone());
+                lines.push(line);
                 continue;
             }
 

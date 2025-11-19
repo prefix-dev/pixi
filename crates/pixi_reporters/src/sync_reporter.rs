@@ -18,12 +18,9 @@ use crate::{
     download_verify_reporter::BuildDownloadVerifyReporter,
     main_progress_bar::{MainProgressBar, Tracker},
 };
-use pixi_build_frontend::backend::logs::{BackendLogEntry, parse_backend_logs};
-use tracing::Level;
 
 #[derive(Clone)]
 pub struct SyncReporter {
-    multi_progress: MultiProgress,
     combined_inner: Arc<Mutex<CombinedInstallReporterInner>>,
 }
 
@@ -36,10 +33,7 @@ impl SyncReporter {
             multi_progress.clone(),
             progress_bar_placement,
         )));
-        Self {
-            multi_progress,
-            combined_inner,
-        }
+        Self { combined_inner }
     }
 
     pub fn clear(&mut self) {
@@ -97,8 +91,6 @@ impl BackendSourceBuildReporter for SyncReporter {
         // Enable streaming of the logs from the backend
         let print_backend_output = tracing::event_enabled!(tracing::Level::WARN);
         // Stream the progress of the output to the screen.
-        let progress_bar = self.multi_progress.clone();
-
         // Create a sender to buffer the output lines so we can output them later if
         // needed.
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
@@ -109,20 +101,6 @@ impl BackendSourceBuildReporter for SyncReporter {
 
         tokio::spawn(async move {
             while let Some(line) = backend_output_stream.next().await {
-                let parsed = parse_backend_logs(&line);
-
-                if print_backend_output {
-                    if let Some(entries) = parsed.as_deref() {
-                        print_backend_entries(entries, true, &progress_bar);
-                    } else {
-                        progress_bar.suspend(|| eprintln!("{line}"));
-                    }
-                } else if let Some(entries) = parsed.as_deref() {
-                    if entries.iter().any(|entry| entry.level >= Level::WARN) {
-                        print_backend_entries(entries, false, &progress_bar);
-                    }
-                }
-
                 if !print_backend_output && tx.send(line).is_err() {
                     break;
                 }
@@ -139,18 +117,9 @@ impl BackendSourceBuildReporter for SyncReporter {
         };
 
         // If the build failed, we want to print the output from the backend.
-        let progress_bar = self.multi_progress.clone();
         if failed {
             if let Some(mut build_output_receiver) = build_output_receiver {
-                tokio::spawn(async move {
-                    while let Some(line) = build_output_receiver.recv().await {
-                        if let Some(entries) = parse_backend_logs(&line) {
-                            print_backend_entries(&entries, true, &progress_bar);
-                        } else {
-                            progress_bar.suspend(|| eprintln!("{line}"));
-                        }
-                    }
-                });
+                tokio::spawn(async move { while build_output_receiver.recv().await.is_some() {} });
             }
         }
     }
@@ -174,7 +143,6 @@ impl SourceBuildReporter for SyncReporter {
     ) {
         // Notify the progress bar that the build has started.
         let print_backend_output = tracing::event_enabled!(tracing::Level::WARN);
-        let progress_bar = self.multi_progress.clone();
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
         {
@@ -187,20 +155,6 @@ impl SourceBuildReporter for SyncReporter {
 
         tokio::spawn(async move {
             while let Some(line) = backend_output_stream.next().await {
-                let parsed = parse_backend_logs(&line);
-
-                if print_backend_output {
-                    if let Some(entries) = parsed.as_deref() {
-                        print_backend_entries(entries, true, &progress_bar);
-                    } else {
-                        progress_bar.suspend(|| eprintln!("{line}"));
-                    }
-                } else if let Some(entries) = parsed.as_deref() {
-                    if entries.iter().any(|entry| entry.level >= Level::WARN) {
-                        print_backend_entries(entries, false, &progress_bar);
-                    }
-                }
-
                 if !print_backend_output && tx.send(line).is_err() {
                     break;
                 }
@@ -216,32 +170,8 @@ impl SourceBuildReporter for SyncReporter {
         };
 
         if failed {
-            let progress_bar = self.multi_progress.clone();
             if let Some(mut build_output_receiver) = build_output_receiver {
-                tokio::spawn(async move {
-                    while let Some(line) = build_output_receiver.recv().await {
-                        if let Some(entries) = parse_backend_logs(&line) {
-                            print_backend_entries(&entries, true, &progress_bar);
-                        } else {
-                            progress_bar.suspend(|| eprintln!("{line}"));
-                        }
-                    }
-                });
-            }
-        }
-    }
-}
-
-fn print_backend_entries(
-    entries: &[BackendLogEntry],
-    print_all_levels: bool,
-    progress_bar: &MultiProgress,
-) {
-    for entry in entries {
-        if print_all_levels || entry.level >= Level::WARN {
-            for line in entry.lines() {
-                let line = line.clone();
-                progress_bar.suspend(|| eprintln!("{line}"));
+                tokio::spawn(async move { while build_output_receiver.recv().await.is_some() {} });
             }
         }
     }
