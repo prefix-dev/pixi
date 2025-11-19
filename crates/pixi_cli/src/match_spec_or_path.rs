@@ -188,7 +188,7 @@ mod tests {
         let result = MatchSpecOrPath::from_str(
             "https://conda.anaconda.org/conda-forge/noarch/tzdata-2024b-hc8b5060_0.conda",
         );
-        assert!(result.is_ok(), "Failed to parse HTTPS URL: {:?}", result);
+        assert!(result.is_ok(), "Failed to parse HTTPS URL: {result:?}");
         let spec_or_path = result.unwrap();
         match spec_or_path {
             MatchSpecOrPath::MatchSpec(spec) => {
