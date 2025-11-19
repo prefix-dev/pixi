@@ -128,8 +128,21 @@ fn looks_like_path(value: &str) -> bool {
 }
 
 fn path_spec_to_match_spec(path_spec: PathSpec) -> Result<MatchSpec, String> {
-    MatchSpec::from_str(path_spec.path.as_str(), ParseStrictness::Lenient)
-        .map_err(|err| err.to_string())
+    let path = Path::new(path_spec.path.as_str());
+
+    // Invariant for if we ever change stuff around
+    debug_assert!(
+        path.is_absolute(),
+        "path_spec_to_match_spec expects absolute paths"
+    );
+
+    let url = url::Url::from_file_path(path)
+        .map_err(|_| format!("failed to convert '{}' into a file:// url", path.display()))?;
+
+    Ok(MatchSpec {
+        url: Some(url),
+        ..MatchSpec::default()
+    })
 }
 
 #[cfg(test)]
