@@ -1108,7 +1108,7 @@ mod tests {
             let env = workspace.environment("test").unwrap();
             let grouped_env = GroupedEnvironment::from(env);
 
-            // This should return an error because the features have conflicting channel-priorities
+            // This should not return an error because the default feature sets the priority
             let result = grouped_env.channel_priority();
             assert_eq!(
                 result.unwrap(),
