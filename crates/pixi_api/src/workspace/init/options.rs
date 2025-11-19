@@ -42,12 +42,12 @@ impl GitAttributes {
         match self {
             GitAttributes::Github | GitAttributes::Codeberg => {
                 r#"# SCM syntax highlighting & preventing 3-way merges
-pixi.lock merge=binary linguist-language=YAML linguist-generated=true
+pixi.lock merge=binary linguist-language=YAML linguist-generated=true -diff
 "#
             }
             GitAttributes::Gitlab => {
                 r#"# GitLab syntax highlighting & preventing 3-way merges
-pixi.lock merge=binary gitlab-language=yaml gitlab-generated=true
+pixi.lock merge=binary gitlab-language=yaml gitlab-generated=true -diff
 "#
             }
         }

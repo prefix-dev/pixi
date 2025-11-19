@@ -543,6 +543,18 @@ impl SourceBuildSpec {
                 })
             })?;
 
+        // Create a variant-specific work directory by including the actual variant values
+        // in the work directory key.
+        // This ensures different variants get separate work directories,
+        // preventing files like .pyc accumulation across builds (when using multiple python variants).
+        let variant_work_dir_hash = WorkDirKey::variant_key(&output.metadata.variant);
+
+        // not using set_file_name as it requires &mut self
+        let work_directory = PathBuf::from(format!(
+            "{}-{variant_work_dir_hash}",
+            work_directory.to_string_lossy()
+        ));
+
         // Determine final directories for everything.
         let directories = Directories::new(&work_directory, host_platform);
 
