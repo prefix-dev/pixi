@@ -93,6 +93,15 @@ __wrap__() {
         WGET_OPTIONS="--show-progress"
     fi
 
+    # Use .netrc for authentication - prioritize NETRC env var over default location
+    if [ -n "${NETRC:-}" ]; then
+        CURL_OPTIONS="$CURL_OPTIONS --netrc-file $NETRC"
+        WGET_OPTIONS="$WGET_OPTIONS --netrc-file=$NETRC"
+    elif [ -f "$HOME/.netrc" ]; then
+        CURL_OPTIONS="$CURL_OPTIONS --netrc"
+        WGET_OPTIONS="$WGET_OPTIONS --netrc"
+    fi
+
     if $HAVE_CURL; then
         CURL_ERR=0
         HTTP_CODE="$(curl -SL $CURL_OPTIONS "$DOWNLOAD_URL" --output "$TEMP_FILE" --write-out "%{http_code}")" || CURL_ERR=$?
@@ -105,14 +114,18 @@ __wrap__() {
             # fallback to wget
             ;;
         0)
-            if [ "${HTTP_CODE}" -lt 200 ] || [ "${HTTP_CODE}" -gt 299 ]; then
-                echo "error: '${DOWNLOAD_URL}' is not available" >&2
+            if [ "${HTTP_CODE}" -eq 401 ]; then
+                echo "error: authentication failed when downloading '${DOWNLOAD_URL}'" >&2
+                echo "       Check your .netrc file, NETRC environment variable, or the hardcoded credentials in PIXI_DOWNLOAD_URL." >&2
+                exit 1
+            elif [ "${HTTP_CODE}" -lt 200 ] || [ "${HTTP_CODE}" -gt 299 ]; then
+                echo "error: '${DOWNLOAD_URL}' is not available (HTTP ${HTTP_CODE})" >&2
                 exit 1
             fi
             HAVE_WGET=false # download success, skip wget
             ;;
         *)
-            echo "error: when download '${DOWNLOAD_URL}', curl fails with with error $CURL_ERR" >&2
+            echo "error: when download '${DOWNLOAD_URL}', curl fails with error $CURL_ERR" >&2
             exit 1
             ;;
         esac
