@@ -24,6 +24,7 @@ use serde::{Deserialize, Serialize};
 // Version 0: Initial version (removed)
 // Version 1: Added conda/outputs and conda/build_v1
 // Version 2: Name in project models can be `None`.
+// Version 3: Outputs with the same name must have unique variants.
 
 /// The constraint for the pixi build api version package
 /// Adding this constraint when solving a pixi build backend environment ensures
@@ -31,7 +32,7 @@ use serde::{Deserialize, Serialize};
 pub static PIXI_BUILD_API_VERSION_NAME: LazyLock<PackageName> =
     LazyLock::new(|| PackageName::new_unchecked("pixi-build-api-version"));
 pub const PIXI_BUILD_API_VERSION_LOWER: u64 = 1;
-pub const PIXI_BUILD_API_VERSION_CURRENT: u64 = 2;
+pub const PIXI_BUILD_API_VERSION_CURRENT: u64 = 3;
 pub const PIXI_BUILD_API_VERSION_UPPER: u64 = PIXI_BUILD_API_VERSION_CURRENT + 1;
 pub static PIXI_BUILD_API_VERSION_SPEC: LazyLock<VersionSpec> = LazyLock::new(|| {
     VersionSpec::Group(
@@ -84,6 +85,9 @@ impl PixiBuildApiVersion {
             2 => BackendCapabilities {
                 ..Self(1).expected_backend_capabilities()
             },
+            3 => BackendCapabilities {
+                ..Self(2).expected_backend_capabilities()
+            },
             _ => BackendCapabilities::default(),
         }
     }
@@ -92,6 +96,12 @@ impl PixiBuildApiVersion {
     /// the project model to be `None`.
     pub fn supports_name_none(&self) -> bool {
         self.0 >= 2
+    }
+
+    /// Returns true if this version of the protocol guarantees that outputs
+    /// with the same name have unique variants.
+    pub fn supports_unique_variants(&self) -> bool {
+        self.0 >= 3
     }
 }
 
