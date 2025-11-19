@@ -18,7 +18,6 @@ use crate::{
     feature::{Feature, FeatureName},
     manifests::document::ManifestDocument,
     solve_group::SolveGroups,
-    task::TaskRenderContext,
     to_options,
     toml::{
         ExternalWorkspaceProperties, FromTomlStr, PackageDefaults, TomlManifest,
@@ -812,6 +811,7 @@ mod tests {
         PrioritizedChannel, SpecType, TargetSelector, Task, TomlError, WorkspaceManifest,
         manifests::document::ManifestDocument,
         pyproject::PyProjectManifest,
+        task::TaskRenderContext,
         to_options,
         toml::{FromTomlStr, TomlDocument},
         utils::{WithSourceCode, test_utils::expect_parse_failure},

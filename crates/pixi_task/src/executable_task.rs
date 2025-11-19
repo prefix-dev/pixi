@@ -131,7 +131,10 @@ impl<'p> ExecutableTask<'p> {
     /// Returns the task as script
     fn as_script(&self) -> Result<Option<String>, FailedToParseShellScript> {
         // Convert the task into an executable string
-        let context = pixi_manifest::task::TaskRenderContext::with_args(self.run_environment.best_platform(), Some(&self.args));
+        let context = pixi_manifest::task::TaskRenderContext::with_args(
+            self.run_environment.best_platform(),
+            Some(&self.args),
+        );
         let task = self
             .task
             .as_single_command(&context)
@@ -208,7 +211,10 @@ impl<'p> ExecutableTask<'p> {
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
     pub fn full_command(&self) -> Result<Option<String>, TemplateStringError> {
-        let context = pixi_manifest::task::TaskRenderContext::with_args(self.run_environment.best_platform(), Some(&self.args));
+        let context = pixi_manifest::task::TaskRenderContext::with_args(
+            self.run_environment.best_platform(),
+            Some(&self.args),
+        );
         let original_cmd = self
             .task
             .as_single_command(&context)?
@@ -307,7 +313,10 @@ impl<'p> ExecutableTask<'p> {
     pub fn warn_on_missing_globs(&self, post_hash: &TaskHash) {
         let (rendered_inputs, rendered_outputs) = match self.task().as_execute() {
             Ok(exe) => {
-                let context = pixi_manifest::task::TaskRenderContext::with_args(self.run_environment.best_platform(), Some(self.args()));
+                let context = pixi_manifest::task::TaskRenderContext::with_args(
+                    self.run_environment.best_platform(),
+                    Some(self.args()),
+                );
                 let ins = exe
                     .inputs
                     .as_ref()
@@ -432,7 +441,10 @@ struct ExecutableTaskConsoleDisplay<'p, 't> {
 
 impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let context = pixi_manifest::task::TaskRenderContext::with_args(self.task.run_environment.best_platform(), Some(&self.task.args));
+        let context = pixi_manifest::task::TaskRenderContext::with_args(
+            self.task.run_environment.best_platform(),
+            Some(&self.task.args),
+        );
         match self.task.task.as_single_command(&context) {
             Ok(command) => {
                 write!(

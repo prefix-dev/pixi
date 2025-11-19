@@ -137,7 +137,10 @@ impl TaskHash {
 
         // We need to compute hash from input args
         // If no input args are provided, we treat them as empty list.
-        let context = pixi_manifest::task::TaskRenderContext::with_args(task.run_environment.best_platform(), Some(task.args()));
+        let context = pixi_manifest::task::TaskRenderContext::with_args(
+            task.run_environment.best_platform(),
+            Some(task.args()),
+        );
         if let Some(ref inputs) = execute.inputs {
             let rendered_inputs = inputs.render(&context)?;
             rendered_inputs.hash(&mut hasher);
@@ -175,7 +178,10 @@ impl InputHashes {
             return Ok(None);
         }
 
-        let context = pixi_manifest::task::TaskRenderContext::with_args(task.run_environment.best_platform(), Some(task.args()));
+        let context = pixi_manifest::task::TaskRenderContext::with_args(
+            task.run_environment.best_platform(),
+            Some(task.args()),
+        );
         let rendered_inputs: Vec<String> = inputs
             .iter()
             .map(|i| i.render(&context))
@@ -204,7 +210,10 @@ impl OutputHashes {
         let outputs: Vec<String> = match task.task().as_execute() {
             Ok(execute) => {
                 if let Some(outputs) = execute.outputs.clone() {
-                    let context = pixi_manifest::task::TaskRenderContext::with_args(task.run_environment.best_platform(), Some(task.args()));
+                    let context = pixi_manifest::task::TaskRenderContext::with_args(
+                        task.run_environment.best_platform(),
+                        Some(task.args()),
+                    );
                     let mut rendered_outputs = Vec::new();
                     for output in outputs.iter() {
                         match output.render(&context) {

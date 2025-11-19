@@ -94,7 +94,10 @@ impl Dependency {
                             result.push(TypedDependencyArg::Positional(val.render(&context)?));
                         }
                         DependencyArg::Named(key, val) => {
-                            result.push(TypedDependencyArg::Named(key.clone(), val.render(&context)?));
+                            result.push(TypedDependencyArg::Named(
+                                key.clone(),
+                                val.render(&context)?,
+                            ));
                         }
                     }
                 }
@@ -979,7 +982,9 @@ mod tests {
         let t = TemplateString::from("echo {{ foo }}");
         // No args -> should not render, return verbatim string
         let context = TaskRenderContext::default();
-        let rendered = t.render(&context).expect("should not error without typed args");
+        let rendered = t
+            .render(&context)
+            .expect("should not error without typed args");
         assert_eq!(rendered, "echo {{ foo }}");
 
         // Free-form args -> should not render
@@ -999,9 +1004,7 @@ mod tests {
             value: "bar".into(),
         }]);
         let context = TaskRenderContext::with_args(Platform::current(), Some(&args));
-        let rendered = t
-            .render(&context)
-            .expect("should render with typed args");
+        let rendered = t.render(&context).expect("should render with typed args");
         assert_eq!(rendered, "echo bar");
     }
 
@@ -1010,9 +1013,7 @@ mod tests {
         let t = TemplateString::from("echo {{ pixi.platform }}");
         let args = ArgValues::TypedArgs(vec![]);
         let context = TaskRenderContext::with_args(Platform::Linux64, Some(&args));
-        let rendered = t
-            .render(&context)
-            .expect("should render platform variable");
+        let rendered = t.render(&context).expect("should render platform variable");
 
         assert_eq!(rendered, "echo linux-64");
     }
