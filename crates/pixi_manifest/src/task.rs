@@ -469,6 +469,31 @@ impl<'a> TaskRenderContext<'a> {
     pub fn with_args(platform: Platform, args: Option<&'a ArgValues>) -> Self {
         Self { platform, args }
     }
+
+    /// Builds a MiniJinja context value from this render context.
+    ///
+    /// The context always includes the pixi system variables (like `pixi.platform`).
+    /// User arguments are added when TypedArgs are provided.
+    pub fn to_jinja_context(&self) -> minijinja::Value {
+        // Build the context map with user arguments if available
+        let mut context_map: HashMap<String, minijinja::Value> =
+            if let Some(ArgValues::TypedArgs(args)) = self.args {
+                args.iter()
+                    .map(|arg| (arg.name.clone(), minijinja::Value::from(arg.value.as_str())))
+                    .collect()
+            } else {
+                HashMap::new()
+            };
+
+        // Create the pixi object with system-provided variables
+        let pixi_vars = HashMap::from([("platform", self.platform.to_string())]);
+        context_map.insert(
+            "pixi".to_string(),
+            minijinja::Value::from_serialize(&pixi_vars),
+        );
+
+        minijinja::Value::from_serialize(&context_map)
+    }
 }
 
 /// A string that contains placeholders to be rendered using the `minijinja` templating engine.
@@ -493,34 +518,13 @@ impl TemplateString {
     }
 
     pub fn render(&self, context: &TaskRenderContext) -> Result<String, TemplateStringError> {
-        // Only perform MiniJinja rendering when typed args are provided.
-        // For free-form args or no args, return the source verbatim to avoid
-        // interpreting arbitrary strings as templates.
-        if let Some(ArgValues::TypedArgs(args)) = context.args {
-            // Build the context map with user arguments
-            let mut context_map: HashMap<String, minijinja::Value> = args
-                .iter()
-                .map(|arg| (arg.name.clone(), minijinja::Value::from(arg.value.as_str())))
-                .collect();
-
-            // Create the pixi object with system-provided variables
-            let pixi_vars = HashMap::from([("platform", context.platform.to_string())]);
-            context_map.insert(
-                "pixi".to_string(),
-                minijinja::Value::from_serialize(&pixi_vars),
-            );
-
-            let jinja_context = minijinja::Value::from_serialize(&context_map);
-
-            JINJA_ENV
-                .render_str(&self.0, jinja_context)
-                .map_err(|e| TemplateStringError {
-                    src: self.0.clone(),
-                    err_span: e.range().unwrap_or_default().into(),
-                })
-        } else {
-            Ok(self.0.clone())
-        }
+        let jinja_context = context.to_jinja_context();
+        JINJA_ENV
+            .render_str(&self.0, jinja_context)
+            .map_err(|e| TemplateStringError {
+                src: self.0.clone(),
+                err_span: e.range().unwrap_or_default().into(),
+            })
     }
 
     pub fn source(&self) -> &str {
@@ -975,22 +979,33 @@ mod tests {
     }
 
     #[test]
-    fn test_template_string_no_render_without_typed_args() {
-        let t = TemplateString::from("echo {{ foo }}");
-        // No args -> should not render, return verbatim string
+    fn test_template_string_pixi_vars_always_available() {
+        // pixi variables should always be available, even without typed args
+        let t = TemplateString::from("echo {{ pixi.platform }}");
+
+        // No args -> pixi.platform still works
         let context = TaskRenderContext::default();
         let rendered = t
             .render(&context)
-            .expect("should not error without typed args");
-        assert_eq!(rendered, "echo {{ foo }}");
+            .expect("pixi.platform should be available without args");
+        assert_eq!(rendered, format!("echo {}", Platform::current()));
 
-        // Free-form args -> should not render
+        // Free-form args -> pixi.platform still works
         let free_args = ArgValues::FreeFormArgs(vec!["bar".into()]);
         let context = TaskRenderContext::with_args(Platform::current(), Some(&free_args));
         let rendered = t
             .render(&context)
-            .expect("should not error with free-form args");
-        assert_eq!(rendered, "echo {{ foo }}");
+            .expect("pixi.platform should be available with free-form args");
+        assert_eq!(rendered, format!("echo {}", Platform::current()));
+    }
+
+    #[test]
+    fn test_template_string_undefined_var_errors() {
+        // Undefined user variables should cause an error
+        let t = TemplateString::from("echo {{ foo }}");
+        let context = TaskRenderContext::default();
+        let result = t.render(&context);
+        assert!(result.is_err(), "undefined variable should cause error");
     }
 
     #[test]
