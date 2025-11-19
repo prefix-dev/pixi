@@ -111,7 +111,7 @@ impl SourceMetadataSpec {
                 // Convert the metadata to source records.
                 let records = conversion::package_metadata_to_source_records(
                     &build_backend_metadata.source,
-                    &packages,
+                    packages,
                     &self.package,
                     &build_backend_metadata.metadata.input_hash,
                 );
@@ -142,7 +142,7 @@ impl SourceMetadataSpec {
                     }
                     futures.push(self.resolve_output(
                         &command_dispatcher,
-                        &output,
+                        output,
                         build_backend_metadata.metadata.input_hash.clone(),
                         build_backend_metadata.source.clone(),
                         reporter.clone(),
