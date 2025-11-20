@@ -808,7 +808,11 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
     [pypi-dependencies]
     boltons = "*"
     "#,
-        mapping_file.to_str().unwrap()
+        mapping_file
+            .to_str()
+            .unwrap()
+            .to_string()
+            .replace("\\", "/")
     ))
     .unwrap();
 
