@@ -461,7 +461,7 @@ mod tests {
             .default_environment()
             .task(&"foo".into(), None)
             .unwrap()
-            .as_single_command(None)
+            .as_single_command(&pixi_manifest::task::TaskRenderContext::default())
             .unwrap()
             .unwrap();
 
@@ -471,7 +471,10 @@ mod tests {
             .default_environment()
             .task(&"foo".into(), Some(Platform::Linux64))
             .unwrap()
-            .as_single_command(None)
+            .as_single_command(&pixi_manifest::task::TaskRenderContext::with_args(
+                Platform::Linux64,
+                None,
+            ))
             .unwrap()
             .unwrap();
 

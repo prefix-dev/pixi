@@ -78,11 +78,18 @@ pub async fn add_command_types() {
     assert!(matches!(task2, Task::Execute(cmd) if !cmd.depends_on.is_empty()));
 
     assert_eq!(
-        task.as_single_command(None).unwrap().unwrap().to_string(),
+        task.as_single_command(&pixi_manifest::task::TaskRenderContext::default())
+            .unwrap()
+            .unwrap()
+            .to_string(),
         "echo hello"
     );
     assert_eq!(
-        task2.as_single_command(None).unwrap().unwrap().to_string(),
+        task2
+            .as_single_command(&pixi_manifest::task::TaskRenderContext::default())
+            .unwrap()
+            .unwrap()
+            .to_string(),
         "\"echo hello\" \"echo bonjour\""
     );
 
