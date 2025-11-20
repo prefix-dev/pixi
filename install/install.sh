@@ -3,6 +3,13 @@ set -eu
 # Version: v0.59.0
 
 __wrap__() {
+    # Function to mask username and password in URLs for safe printing
+    mask_credentials() {
+        URL="$1"
+        # Use sed to replace username:password@ pattern with ***:***@
+        echo "$URL" | sed -E 's|://[^:@/]+:[^@/]+@|://***:***@|g'
+    }
+
     VERSION="${PIXI_VERSION:-latest}"
     PIXI_HOME="${PIXI_HOME:-$HOME/.pixi}"
     case "$PIXI_HOME" in
@@ -44,7 +51,7 @@ __wrap__() {
         DOWNLOAD_URL="${PIXI_DOWNLOAD_URL:-${REPOURL%/}/releases/download/v${VERSION#v}/${BINARY}${EXTENSION-}}"
     fi
 
-    printf "This script will automatically download and install Pixi (%s) for you.\nGetting it from this url: %s\n" "$VERSION" "$DOWNLOAD_URL"
+    printf "This script will automatically download and install Pixi (%s) for you.\nGetting it from this url: %s\n" "$VERSION" "$(mask_credentials "$DOWNLOAD_URL")"
 
     HAVE_CURL=false
     HAVE_CURL_8_8_0=false
@@ -108,31 +115,31 @@ __wrap__() {
         case "$CURL_ERR" in
         35 | 53 | 54 | 59 | 66 | 77)
             if ! $HAVE_WGET; then
-                echo "error: when download '${DOWNLOAD_URL}', curl has some local ssl problems with error $CURL_ERR" >&2
+                echo "error: when download '$(mask_credentials "$DOWNLOAD_URL")', curl has some local ssl problems with error $CURL_ERR" >&2
                 exit 1
             fi
             # fallback to wget
             ;;
         0)
             if [ "${HTTP_CODE}" -eq 401 ]; then
-                echo "error: authentication failed when downloading '${DOWNLOAD_URL}'" >&2
+                echo "error: authentication failed when downloading '$(mask_credentials "$DOWNLOAD_URL")'" >&2
                 echo "       Check your .netrc file, NETRC environment variable, or the hardcoded credentials in PIXI_DOWNLOAD_URL." >&2
                 exit 1
             elif [ "${HTTP_CODE}" -lt 200 ] || [ "${HTTP_CODE}" -gt 299 ]; then
-                echo "error: '${DOWNLOAD_URL}' is not available (HTTP ${HTTP_CODE})" >&2
+                echo "error: '$(mask_credentials "$DOWNLOAD_URL")' is not available (HTTP ${HTTP_CODE})" >&2
                 exit 1
             fi
             HAVE_WGET=false # download success, skip wget
             ;;
         *)
-            echo "error: when download '${DOWNLOAD_URL}', curl fails with error $CURL_ERR" >&2
+            echo "error: when download '$(mask_credentials "$DOWNLOAD_URL")', curl fails with error $CURL_ERR" >&2
             exit 1
             ;;
         esac
     fi
 
     if $HAVE_WGET && ! wget $WGET_OPTIONS --output-document="$TEMP_FILE" "$DOWNLOAD_URL"; then
-        echo "error: '${DOWNLOAD_URL}' is not available" >&2
+        echo "error: '$(mask_credentials "$DOWNLOAD_URL")' is not available" >&2
         exit 1
     fi
 
