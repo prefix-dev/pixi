@@ -4,6 +4,20 @@ set -eu
 
 __wrap__() {
     # Function to mask username and password in URLs for safe printing
+    # Usage: mask_credentials "url"
+    # Returns the URL with credentials replaced by ***:***@
+    #
+    # [^:@/]+ - This matches the username part:
+    #   - [^:@/] means "any character EXCEPT :, @, or /"
+    #   - + means "one or more of these characters"
+    #   - So it captures everything up until it hits a colon, at-sign, or slash
+    #   - : - Matches the literal colon that separates username from password
+    #
+    # [^@/]+ - This matches the password part:
+    #   - [^@/] means "any character EXCEPT @ or /"
+    #   - + means "one or more of these characters"
+    #   - So it captures everything after the colon until it hits an at-sign or slash
+    #   - @ - Matches the literal at-sign that
     mask_credentials() {
         URL="$1"
         # Use sed to replace username:password@ pattern with ***:***@
