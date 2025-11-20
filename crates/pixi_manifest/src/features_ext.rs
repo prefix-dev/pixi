@@ -10,8 +10,9 @@ use rattler_conda_types::{
 
 use crate::{
     CondaDependencies, PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
-    has_features_iter::HasFeaturesIter, has_manifest_ref::HasWorkspaceManifest,
-    pypi::pypi_options::PypiOptions, workspace::ChannelPriority,
+    dependencies::CondaDevDependencies, has_features_iter::HasFeaturesIter,
+    has_manifest_ref::HasWorkspaceManifest, pypi::pypi_options::PypiOptions,
+    workspace::ChannelPriority,
 };
 
 /// ChannelPriorityCombination error, thrown when multiple channel priorities
@@ -193,6 +194,20 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             .features()
             .filter_map(|f| f.combined_dependencies(platform))
             .collect();
+        DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
+    }
+
+    /// Returns the combined dev dependencies to install for this collection.
+    ///
+    /// Dev dependencies from all features in the group are collected and
+    /// merged. If multiple features define the same dev dependency, the
+    /// last one wins (later features override earlier ones).
+    fn combined_dev_dependencies(&self, platform: Option<Platform>) -> CondaDevDependencies {
+        let deps: Vec<_> = self
+            .features()
+            .filter_map(|f| f.dev_dependencies(platform))
+            .collect();
+
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
     }
 

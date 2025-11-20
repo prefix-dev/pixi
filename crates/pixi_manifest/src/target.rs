@@ -11,6 +11,7 @@ use crate::{
     CondaDependencies, DependencyOverwriteBehavior, InternalDependencyBehavior, PyPiDependencies,
     SpecType,
     activation::Activation,
+    dependencies::CondaDevDependencies,
     task::{Task, TaskName},
     utils::PixiSpanned,
 };
@@ -33,7 +34,7 @@ pub struct WorkspaceTarget {
 
     /// Dev dependencies - source packages whose dependencies should be
     /// installed without building the packages themselves
-    pub dev_dependencies: Option<IndexMap<PackageName, SourceSpec>>,
+    pub dev_dependencies: Option<CondaDevDependencies>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,

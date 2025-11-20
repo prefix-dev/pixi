@@ -11,6 +11,7 @@ version = "0.1.0"
 
 [dependencies]
 file_url = { workspace = true }
+itertools = { workspace = true }
 miette = { workspace = true }
 pixi_git = { workspace = true }
 pixi_spec = { workspace = true, features = ["rattler_lock"] }

@@ -384,22 +384,20 @@ impl Feature {
     pub fn dev_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> Option<Cow<'_, IndexMap<PackageName, pixi_spec::SourceSpec>>> {
+    ) -> Option<Cow<'_, DependencyMap<PackageName, pixi_spec::SourceSpec>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
-            // This is required because the extend function will overwrite existing keys.
+            // This is required because we want more specific targets to overwrite their specs.
             .rev()
             .filter_map(|t| t.dev_dependencies.as_ref())
             .filter(|deps| !deps.is_empty())
             .fold(None, |acc, deps| match acc {
                 None => Some(Cow::Borrowed(deps)),
-                Some(mut acc) => {
-                    acc.to_mut().extend(
-                        deps.into_iter()
-                            .map(|(name, spec)| (name.clone(), spec.clone())),
-                    );
-                    Some(acc)
+                Some(acc) => {
+                    // Overwrite the accumulator with specs from this target
+                    // More specific targets (processed later) overwrite less specific ones
+                    Some(Cow::Owned(acc.as_ref().overwrite(deps)))
                 }
             })
     }

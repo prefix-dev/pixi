@@ -5,9 +5,11 @@
 
 use std::collections::BTreeMap;
 
-use pixi_spec::{BinarySpec, PixiSpec};
+use pixi_spec::{BinarySpec, PixiSpec, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::PackageName;
+
+use itertools::{Either, Itertools};
 
 use crate::{InputHash, PinnedSourceSpec};
 
@@ -35,4 +37,51 @@ pub struct DevSourceRecord {
 
     /// All constraints combined
     pub constraints: DependencyMap<PackageName, BinarySpec>,
+}
+
+impl DevSourceRecord {
+    /// Returns an iterator over all dependencies from dev source records,
+    /// excluding packages that are themselves dev sources.
+    pub fn dev_source_dependencies(
+        dev_source_records: &[DevSourceRecord],
+    ) -> impl Iterator<Item = (rattler_conda_types::PackageName, PixiSpec)> + '_ {
+        use std::collections::HashSet;
+
+        // Collect all dev source package names to filter them out
+        let dev_source_names: HashSet<_> = dev_source_records
+            .iter()
+            .map(|record| record.name.clone())
+            .collect();
+
+        // Collect all dependencies from all dev sources, filtering out dev sources themselves
+        dev_source_records
+            .iter()
+            .flat_map(|dev_source| {
+                dev_source
+                    .dependencies
+                    .iter_specs()
+                    .map(|(name, spec)| (name.clone(), spec.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .filter(move |(name, _)| !dev_source_names.contains(name))
+    }
+
+    /// Split the set of requirements into source and binary requirements.
+    ///
+    /// This method doesn't take `self` so we can move ownership of
+    /// [`Self::requirements`] without also taking a mutable reference to
+    /// `self`.
+    pub fn split_into_source_and_binary_requirements(
+        specs: impl IntoIterator<Item = (rattler_conda_types::PackageName, PixiSpec)>,
+    ) -> (
+        DependencyMap<rattler_conda_types::PackageName, SourceSpec>,
+        DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
+    ) {
+        specs.into_iter().partition_map(|(name, constraint)| {
+            match constraint.into_source_or_binary() {
+                Either::Left(source) => Either::Left((name, source)),
+                Either::Right(binary) => Either::Right((name, binary)),
+            }
+        })
+    }
 }

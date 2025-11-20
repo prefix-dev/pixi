@@ -12,11 +12,17 @@ use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
-use pixi_command_dispatcher::calculate_additional_glob_hash;
-use pixi_git::url::RepositoryUrl;
+use pixi_command_dispatcher::{
+    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, DevSourceMetadata,
+    DevSourceMetadataError, DevSourceMetadataSpec, SolvePixiEnvironmentError,
+    calculate_additional_glob_hash,
+};
+use pixi_git::{source, url::RepositoryUrl};
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
-use pixi_record::{LockedGitUrl, ParseLockFileError, PixiRecord, SourceMismatchError};
+use pixi_record::{
+    DevSourceRecord, LockedGitUrl, ParseLockFileError, PixiRecord, SourceMismatchError,
+};
 use pixi_spec::{PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
 use pixi_utils::variants::VariantConfig;
 use pixi_uv_conversions::{
@@ -25,8 +31,8 @@ use pixi_uv_conversions::{
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, ParseChannelError,
-    ParseMatchSpecError, ParseStrictness::Lenient, Platform,
+    ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, PackageName,
+    ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
 };
 use rattler_lock::{
     LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable,
@@ -400,6 +406,10 @@ pub enum PlatformUnsat {
 
     #[error("'{name}' is locked as a conda package but only requested by pypi dependencies")]
     CondaPackageShouldBePypi { name: String },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    DevSourceMetadataError(DevSourceMetadataError),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -667,6 +677,7 @@ fn verify_pypi_indexes(
 /// the user and developer to figure out what went wrong.
 pub async fn verify_platform_satisfiability(
     environment: &Environment<'_>,
+    command_dispatcher: CommandDispatcher,
     locked_environment: rattler_lock::Environment<'_>,
     platform: Platform,
     project_root: &Path,
@@ -731,6 +742,7 @@ pub async fn verify_platform_satisfiability(
 
     verify_package_platform_satisfiability(
         environment,
+        command_dispatcher,
         &pixi_records_by_name,
         &pypi_records_by_name,
         platform,
@@ -753,6 +765,11 @@ enum Dependency {
         MatchSpec,
         SourceSpec,
         Cow<'static, str>,
+    ),
+    CondaDev(
+        rattler_conda_types::PackageName,
+        SourceSpec,
+        // Cow<'static, str>,
     ),
     PyPi(uv_distribution_types::Requirement, Cow<'static, str>),
 }
@@ -993,6 +1010,7 @@ pub struct VerifiedIndividualEnvironment {
 
 pub(crate) async fn verify_package_platform_satisfiability(
     environment: &Environment<'_>,
+    command_dispatcher: CommandDispatcher,
     locked_pixi_records: &PixiRecordsByName,
     locked_pypi_environment: &PypiRecordsByName,
     platform: Platform,
@@ -1008,7 +1026,17 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .map(|(package_name, spec)| Dependency::Input(package_name, spec, "<environment>".into()))
         .collect_vec();
 
-    if environment_dependencies.is_empty() && !locked_pixi_records.is_empty() {
+    // Get the dev dependencies for this platform
+    let dev_dependencies = environment
+        .combined_dev_dependencies(Some(platform))
+        .into_specs()
+        .map(|(package_name, spec)| Dependency::CondaDev(package_name, spec))
+        .collect_vec();
+
+    if (environment_dependencies.is_empty() && dev_dependencies.is_empty())
+        && !locked_pixi_records.is_empty()
+    {
+        tracing::error!("env dep is empty, too many conda packages");
         return Err(Box::new(PlatformUnsat::TooManyCondaPackages(Vec::new())));
     }
 
@@ -1063,6 +1091,28 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .map(|vpkg| (vpkg.name.clone(), vpkg))
         .collect::<HashMap<_, _>>();
 
+    // The list of channels and platforms we need for this task
+    let channels = environment.channels().into_iter().cloned().collect_vec();
+
+    // Get the channel configuration
+    let channel_config = environment.workspace().channel_config();
+
+    // Resolve the channel URLs for the channels we need.
+    let channels = channels
+        .iter()
+        .map(|c| c.clone().into_base_url(&channel_config))
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+
+    // Determine the build variants
+    let VariantConfig {
+        variants,
+        variant_files,
+    } = environment.workspace().variants(platform).unwrap();
+
+    let build_environment =
+        BuildEnvironment::simple(platform, virtual_packages.values().cloned().collect());
+
     // Find the python interpreter from the list of conda packages. Note that this
     // refers to the locked python interpreter, it might not match the specs
     // from the environment. That is ok because we will find that out when we
@@ -1101,6 +1151,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
     // Keep a list of all conda packages that we have already visisted
     let mut conda_packages_visited = HashSet::new();
+    let mut conda_dev_packages_visited = HashSet::new();
     let mut pypi_packages_visited = HashSet::new();
     let mut pypi_requirements_visited = pypi_requirements
         .iter()
@@ -1113,13 +1164,18 @@ pub(crate) async fn verify_package_platform_satisfiability(
     // Iterate over all packages. First iterate over all conda matchspecs and then
     // over all pypi requirements. We want to ensure we always check the conda
     // packages first.
-    let mut conda_queue = environment_dependencies;
+    let mut conda_queue = environment_dependencies
+        .into_iter()
+        .chain(dev_dependencies.into_iter())
+        .collect_vec();
     let mut pypi_queue = pypi_requirements;
     let mut expected_editable_pypi_packages = HashSet::new();
     let mut expected_conda_source_dependencies = HashSet::new();
     let mut expected_conda_packages = HashSet::new();
     let mut conda_packages_used_by_pypi = HashSet::new();
     let mut delayed_pypi_error = None;
+
+    // let command_dispatcher = environment.com
     while let Some(package) = conda_queue.pop().or_else(|| pypi_queue.pop()) {
         // Determine the package that matches the requirement of matchspec.
         let found_package = match package {
@@ -1175,6 +1231,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 expected_conda_packages
                     .insert(locked_pixi_records.records[found_package.0].name().clone());
                 FoundPackage::Conda(found_package)
+            }
+            Dependency::CondaDev(name, spec) => {
+                // we dont have IDX for it, but we need to add all it's dependencies there
+                FoundPackage::CondaDev((name.clone(), spec.clone()))
             }
             Dependency::Conda(spec, source) => {
                 match find_matching_package(locked_pixi_records, &virtual_packages, spec, source)? {
@@ -1301,6 +1361,86 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
         // Add all the requirements of the package to the queue.
         match found_package {
+            FoundPackage::CondaDev((package_name, source_spec)) => {
+                if !conda_dev_packages_visited.insert(package_name.clone()) {
+                    // We already visited this package, so we can skip adding its dependencies to
+                    // the queue
+                    continue;
+                }
+
+                let pinned_source = command_dispatcher
+                    .pin_and_checkout(source_spec)
+                    .await
+                    // .map_err_with(SolvePixiEnvironmentError::SourceCheckoutError)?;
+                    .unwrap();
+
+                // Create the spec for getting dev source metadata
+                let spec = DevSourceMetadataSpec {
+                    package_name,
+                    backend_metadata: BuildBackendMetadataSpec {
+                        source: pinned_source.pinned,
+                        channel_config: channel_config.clone(),
+                        channels: channels.clone(),
+                        build_environment: build_environment.clone(),
+                        variants: Some(variants.clone()),
+                        variant_files: Some(variant_files.clone()),
+                        enabled_protocols: Default::default(),
+                    },
+                };
+
+                // Get the dev source metadata
+                let dev_metadata = command_dispatcher
+                    .dev_source_metadata(spec)
+                    .await
+                    // .map_err(SolvePixiEnvironmentError::DevSourceMetadataError)
+                    .unwrap();
+                // .map_err(|e| )
+                // ?;
+
+                let dev_deps = DevSourceRecord::dev_source_dependencies(&dev_metadata.records);
+
+                let (dev_source, dev_bin) =
+                    DevSourceRecord::split_into_source_and_binary_requirements(dev_deps);
+
+                for (dev_name, dep) in dev_source.into_specs() {
+                    let anchored_source = SourceAnchor::Workspace.resolve(dep.clone());
+
+                    // Create a matchspec from the dev dependency name
+                    let spec =
+                        MatchSpec::from_str(&dev_name.as_source(), Lenient).map_err(|e| {
+                            PlatformUnsat::FailedToParseMatchSpec(dev_name.as_source().into(), e)
+                        })?;
+
+                    // Create origin string showing this comes from the main dev package
+                    let origin =
+                        Cow::Owned(format!("{} @ {}", dev_name.as_source(), dep.to_string()));
+
+                    conda_queue.push(Dependency::CondaSource(
+                        dev_name.clone(),
+                        spec,
+                        anchored_source,
+                        origin,
+                    ));
+                }
+
+                // Handle binary dependencies from the dev package
+                for (dev_name, binary_spec) in dev_bin.into_specs() {
+                    // Convert BinarySpec to NamelessMatchSpec
+                    let nameless_spec = binary_spec
+                        .try_into_nameless_match_spec(&channel_config)
+                        .expect("failed to convert binary spec to matchspec");
+
+                    // Create a full MatchSpec by combining the name with the spec
+                    let spec = MatchSpec::from_nameless(nameless_spec, Some(dev_name.clone()));
+
+                    // Create origin string showing this comes from the main dev package
+                    let origin =
+                        // Cow::Owned(format!("{} @ {}", package_name.as_source(), &binary_spec));
+                        Cow::Owned(format!("{}", dev_name.as_source()));
+
+                    conda_queue.push(Dependency::Conda(spec, origin));
+                }
+            }
             FoundPackage::Conda(idx) => {
                 if !conda_packages_visited.insert(idx) {
                     // We already visited this package, so we can skip adding its dependencies to
@@ -1458,6 +1598,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
     // Check if all locked packages have also been visited
     if conda_packages_visited.len() != locked_pixi_records.len() {
+        tracing::debug!("Im here too many conda packages");
         return Err(Box::new(PlatformUnsat::TooManyCondaPackages(
             locked_pixi_records
                 .names()
@@ -1598,6 +1739,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
 enum FoundPackage {
     Conda(CondaPackageIdx),
+    CondaDev((PackageName, SourceSpec)),
     PyPi(PypiPackageIdx, Vec<uv_pep508::ExtraName>),
 }
 
@@ -1885,6 +2027,8 @@ mod tests {
     ) -> Result<(), LockfileUnsat> {
         let mut individual_verified_envs = HashMap::new();
 
+        let command_dispatcher = project.command_dispatcher_builder().unwrap().finish();
+
         // Verify individual environment satisfiability
         for env in project.environments() {
             let locked_env = lock_file
@@ -1896,6 +2040,7 @@ mod tests {
             for platform in env.platforms() {
                 let verified_env = verify_platform_satisfiability(
                     &env,
+                    command_dispatcher.clone(),
                     locked_env,
                     platform,
                     project.root(),

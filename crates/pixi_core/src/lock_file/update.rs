@@ -129,6 +129,7 @@ impl Workspace {
         // Check which environments are out of date.
         let outdated = OutdatedEnvironments::from_workspace_and_lock_file(
             self,
+            command_dispatcher.clone(),
             &lock_file,
             glob_hash_cache.clone(),
         )
@@ -1099,11 +1100,29 @@ impl<'p> UpdateContextBuilder<'p> {
         };
         let lock_file = self.lock_file;
         let glob_hash_cache = self.glob_hash_cache.unwrap_or_default();
+
+        // Create command dispatcher if not provided
+        let command_dispatcher = match self.command_dispatcher {
+            Some(ref dispatcher) => dispatcher.clone(),
+            None => {
+                let multi_progress = pixi_progress::global_multi_progress();
+                let anchor_pb = multi_progress.add(indicatif::ProgressBar::hidden());
+                project
+                    .command_dispatcher_builder()?
+                    .with_reporter(pixi_reporters::TopLevelProgress::new(
+                        multi_progress,
+                        anchor_pb,
+                    ))
+                    .finish()
+            }
+        };
+
         let outdated = match self.outdated_environments {
             Some(outdated) => outdated,
             None => {
                 OutdatedEnvironments::from_workspace_and_lock_file(
                     project,
+                    command_dispatcher.clone(),
                     &lock_file,
                     glob_hash_cache.clone(),
                 )
@@ -1935,9 +1954,6 @@ async fn spawn_solve_conda_environment_task(
     // Get the virtual packages for this platform
     let virtual_packages = group.virtual_packages(platform);
 
-    // The list of channels and platforms we need for this task
-    let channels = group.channels().into_iter().cloned().collect_vec();
-
     // Whether there are pypi dependencies, and we should fetch purls.
     let has_pypi_dependencies = group.has_pypi_dependencies();
 
@@ -1947,6 +1963,9 @@ async fn spawn_solve_conda_environment_task(
         .pypi_name_mapping_source()
         .map_err(|err| SolveCondaEnvironmentError::PypiMappingFailed(err.into()))?
         .clone();
+
+    // The list of channels and platforms we need for this task
+    let channels = group.channels().into_iter().cloned().collect_vec();
 
     // Get the channel configuration
     let channel_config = group.workspace().channel_config();
@@ -1966,13 +1985,15 @@ async fn spawn_solve_conda_environment_task(
     // Convert dev dependencies to DevSourceSpecs
     let dev_sources: IndexMap<_, _> = dev_dependencies
         .into_iter()
-        .map(|(name, source_spec)| {
-            (
-                name,
-                pixi_spec::DevSourceSpec {
-                    source: source_spec,
-                },
-            )
+        .flat_map(|(name, source_specs)| {
+            source_specs.into_iter().map(move |source_spec| {
+                (
+                    name.clone(),
+                    pixi_spec::DevSourceSpec {
+                        source: source_spec,
+                    },
+                )
+            })
         })
         .collect();
 
