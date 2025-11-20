@@ -1101,20 +1101,19 @@ impl<'p> UpdateContextBuilder<'p> {
         let lock_file = self.lock_file;
         let glob_hash_cache = self.glob_hash_cache.unwrap_or_default();
 
-        // Create command dispatcher if not provided
+        // Construct a command dispatcher that will be used to run the tasks.
+        let multi_progress = global_multi_progress();
+        let anchor_pb = multi_progress.add(ProgressBar::hidden());
         let command_dispatcher = match self.command_dispatcher {
-            Some(ref dispatcher) => dispatcher.clone(),
-            None => {
-                let multi_progress = pixi_progress::global_multi_progress();
-                let anchor_pb = multi_progress.add(indicatif::ProgressBar::hidden());
-                project
-                    .command_dispatcher_builder()?
-                    .with_reporter(pixi_reporters::TopLevelProgress::new(
-                        multi_progress,
-                        anchor_pb,
-                    ))
-                    .finish()
-            }
+            Some(dispatcher) => dispatcher,
+            None => self
+                .project
+                .command_dispatcher_builder()?
+                .with_reporter(pixi_reporters::TopLevelProgress::new(
+                    global_multi_progress(),
+                    anchor_pb.clone(),
+                ))
+                .finish(),
         };
 
         let outdated = match self.outdated_environments {
@@ -1282,21 +1281,6 @@ impl<'p> UpdateContextBuilder<'p> {
             .collect();
 
         let client = project.authenticated_client()?.clone();
-
-        // Construct a command dispatcher that will be used to run the tasks.
-        let multi_progress = global_multi_progress();
-        let anchor_pb = multi_progress.add(ProgressBar::hidden());
-        let command_dispatcher = match self.command_dispatcher {
-            Some(dispatcher) => dispatcher,
-            None => self
-                .project
-                .command_dispatcher_builder()?
-                .with_reporter(pixi_reporters::TopLevelProgress::new(
-                    global_multi_progress(),
-                    anchor_pb.clone(),
-                ))
-                .finish(),
-        };
 
         let mapping_client = self.mapping_client.unwrap_or_else(|| {
             MappingClient::builder(client)
