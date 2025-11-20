@@ -2,7 +2,7 @@ use std::{borrow::Cow, collections::HashMap, str::FromStr};
 
 use indexmap::{IndexMap, map::Entry};
 use itertools::Either;
-use pixi_spec::{PixiSpec, SourceSpec};
+use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
 
