@@ -18,7 +18,7 @@ use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
 use uv_configuration::RAYON_INITIALIZE;
 
-use crate::cli_config::ChannelsConfig;
+use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath};
 
 /// Run a command and install it in a temporary environment.
 ///
@@ -33,12 +33,12 @@ pub struct Args {
     /// Matchspecs of package to install.
     /// If this is not provided, the package is guessed from the command.
     #[clap(long = "spec", short = 's', value_name = "SPEC")]
-    pub specs: Vec<MatchSpec>,
+    pub specs: Vec<MatchSpecOrPath>,
 
     /// Matchspecs of package to install, while also guessing a package
     /// from the command.
     #[clap(long, short = 'w', conflicts_with = "specs")]
-    pub with: Vec<MatchSpec>,
+    pub with: Vec<MatchSpecOrPath>,
 
     #[clap(flatten)]
     channels: ChannelsConfig,
@@ -75,13 +75,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let (_, client) = build_reqwest_clients(Some(&config), None)?;
 
     // Determine the specs for installation and for the environment name.
-    let mut name_specs = args.specs.clone();
-    name_specs.extend(args.with.clone());
+    let exec_specs = to_exec_match_specs(&args.specs)?;
+    let exec_with = to_exec_match_specs(&args.with)?;
 
-    let mut install_specs = name_specs.clone();
+    let mut install_specs = exec_specs.clone();
+    install_specs.extend(exec_with.clone());
+
+    let mut display_names: Vec<String> = args
+        .specs
+        .iter()
+        .filter_map(|spec| spec.display_name())
+        .collect();
+    display_names.extend(args.with.iter().filter_map(|spec| spec.display_name()));
 
     // Guess a package from the command if no specs were provided at all OR if --with is used
-    let should_guess_package = name_specs.is_empty() || !args.with.is_empty();
+    let should_guess_package = args.specs.is_empty() || !args.with.is_empty();
     if should_guess_package {
         install_specs.push(guess_package_spec(command));
     }
@@ -101,10 +109,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut activation_env = run_activation(&prefix).await?;
 
     // Collect unique package names for environment naming
-    let package_names: BTreeSet<String> = name_specs
-        .iter()
-        .filter_map(|spec| spec.name.as_ref().map(|n| n.as_normalized().to_string()))
-        .collect();
+    let package_names: BTreeSet<String> = display_names.into_iter().collect();
 
     if !package_names.is_empty() {
         let env_name = format!("temp:{}", package_names.into_iter().format(","));
@@ -379,4 +384,15 @@ async fn run_activation(
     prefix: &Prefix,
 ) -> miette::Result<std::collections::HashMap<String, String>> {
     wrap_in_progress("running activation", move || prefix.run_activation()).await
+}
+
+fn to_exec_match_specs(specs: &[MatchSpecOrPath]) -> miette::Result<Vec<MatchSpec>> {
+    specs
+        .iter()
+        .cloned()
+        .map(|spec| {
+            spec.into_exec_match_spec()
+                .map_err(|err| miette::miette!(err))
+        })
+        .collect()
 }
