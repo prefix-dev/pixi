@@ -1047,10 +1047,8 @@ async fn resolve_dev_dependencies(
         })
         .collect::<futures::stream::FuturesUnordered<_>>();
 
-    // Execute all futures concurrently and collect results as they complete
     let results: Vec<Result<Vec<Dependency>, PlatformUnsat>> = futures.collect().await;
 
-    // Process results and flatten
     let mut resolved_dependencies = Vec::new();
     for result in results {
         resolved_dependencies.extend(result?);
@@ -1135,10 +1133,8 @@ async fn resolve_single_dev_dependency(
                 )
             })?;
 
-        // Create a full MatchSpec by combining the name with the spec
         let spec = MatchSpec::from_nameless(nameless_spec, Some(dev_name.clone()));
 
-        // Create origin string showing this comes from the dev package
         dependencies.push(Dependency::Conda(
             spec,
             Cow::Owned(dev_name.as_source().to_string()),
@@ -1164,7 +1160,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .map(|(package_name, spec)| Dependency::Input(package_name, spec, "<environment>".into()))
         .collect_vec();
 
-    // Get the dev dependencies for this platform - we'll resolve them later
+    // Get the dev dependencies for this platform
     let dev_dependencies = environment
         .combined_dev_dependencies(Some(platform))
         .into_specs()
@@ -1326,7 +1322,6 @@ pub(crate) async fn verify_package_platform_satisfiability(
     let mut conda_packages_used_by_pypi = HashSet::new();
     let mut delayed_pypi_error = None;
 
-    // let command_dispatcher = environment.com
     while let Some(package) = conda_queue.pop().or_else(|| pypi_queue.pop()) {
         // Determine the package that matches the requirement of matchspec.
         let found_package = match package {
@@ -1665,7 +1660,6 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
     // Check if all locked packages have also been visited
     if conda_packages_visited.len() != locked_pixi_records.len() {
-        tracing::debug!("Im here too many conda packages");
         return Err(Box::new(PlatformUnsat::TooManyCondaPackages(
             locked_pixi_records
                 .names()

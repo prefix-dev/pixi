@@ -5,11 +5,10 @@ use std::{borrow::Borrow, collections::BTreeMap, path::PathBuf, time::Instant};
 
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
-use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_record::PixiRecord;
-use pixi_spec::{BinarySpec, PixiSpec, SourceSpec, SpecConversionError};
+use pixi_record::{DevSourceRecord, PixiRecord};
+use pixi_spec::{BinarySpec, PixiSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, ParseChannelError, Platform};
 use rattler_repodata_gateway::RepoData;
@@ -134,11 +133,13 @@ impl PixiEnvironmentSpec {
 
         // Split the requirements into source and binary requirements.
         let (dev_source_source_specs, dev_source_binary_specs) =
-            Self::split_into_source_and_binary_requirements(Self::dev_source_dependencies(
-                &dev_source_records,
-            ));
+            DevSourceRecord::split_into_source_and_binary_requirements(
+                DevSourceRecord::dev_source_dependencies(&dev_source_records),
+            );
         let (source_specs, binary_specs) =
-            Self::split_into_source_and_binary_requirements(self.dependencies.into_specs());
+            DevSourceRecord::split_into_source_and_binary_requirements(
+                self.dependencies.into_specs(),
+            );
 
         Self::check_missing_channels(binary_specs.clone(), &self.channels, &self.channel_config)?;
 
@@ -299,51 +300,6 @@ impl PixiEnvironmentSpec {
         }
 
         Ok(all_records)
-    }
-
-    /// Returns an iterator over all dependencies from dev source records,
-    /// excluding packages that are themselves dev sources.
-    fn dev_source_dependencies(
-        dev_source_records: &[pixi_record::DevSourceRecord],
-    ) -> impl Iterator<Item = (rattler_conda_types::PackageName, PixiSpec)> + '_ {
-        use std::collections::HashSet;
-
-        // Collect all dev source package names to filter them out
-        let dev_source_names: HashSet<_> = dev_source_records
-            .iter()
-            .map(|record| record.name.clone())
-            .collect();
-
-        // Collect all dependencies from all dev sources, filtering out dev sources themselves
-        dev_source_records
-            .iter()
-            .flat_map(|dev_source| {
-                dev_source
-                    .dependencies
-                    .iter_specs()
-                    .map(|(name, spec)| (name.clone(), spec.clone()))
-                    .collect::<Vec<_>>()
-            })
-            .filter(move |(name, _)| !dev_source_names.contains(name))
-    }
-
-    /// Split the set of requirements into source and binary requirements.
-    ///
-    /// This method doesn't take `self` so we can move ownership of
-    /// [`Self::requirements`] without also taking a mutable reference to
-    /// `self`.
-    fn split_into_source_and_binary_requirements(
-        specs: impl IntoIterator<Item = (rattler_conda_types::PackageName, PixiSpec)>,
-    ) -> (
-        DependencyMap<rattler_conda_types::PackageName, SourceSpec>,
-        DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
-    ) {
-        specs.into_iter().partition_map(|(name, constraint)| {
-            match constraint.into_source_or_binary() {
-                Either::Left(source) => Either::Left((name, source)),
-                Either::Right(binary) => Either::Right((name, binary)),
-            }
-        })
     }
 
     /// Check that binary specs do not refer to inaccessible channels
