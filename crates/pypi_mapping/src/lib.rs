@@ -276,7 +276,9 @@ impl MappingClient {
             let (record, mut derived_purls) = next.into_diagnostic()?;
 
             // As a last resort use the verbatim conda-forge purls.
-            if derived_purls.is_none() {
+            // But only if we're not using a custom mapping, since custom mapping
+            // should be exclusive - only packages explicitly in the mapping get purls.
+            if derived_purls.is_none() && !matches!(mapping_source, MappingSource::Custom(_)) {
                 derived_purls = CondaForgeVerbatim
                     .derive_purls(record, &metrics)
                     .await
