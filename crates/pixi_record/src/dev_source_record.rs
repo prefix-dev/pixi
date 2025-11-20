@@ -67,10 +67,6 @@ impl DevSourceRecord {
     }
 
     /// Split the set of requirements into source and binary requirements.
-    ///
-    /// This method doesn't take `self` so we can move ownership of
-    /// [`Self::requirements`] without also taking a mutable reference to
-    /// `self`.
     pub fn split_into_source_and_binary_requirements(
         specs: impl IntoIterator<Item = (rattler_conda_types::PackageName, PixiSpec)>,
     ) -> (

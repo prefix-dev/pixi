@@ -159,7 +159,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let relaxed_lock_file = unlock_packages(&workspace, loaded_lock_file, &specs);
 
     // Update the packages in the lock-file.
-    let updated_lock_file = UpdateContext::builder(&workspace)
+    let updated_lock_file = UpdateContext::builder(&workspace, None)
         .with_lock_file(relaxed_lock_file.clone())
         .with_no_install(args.no_install)
         .finish()

@@ -215,7 +215,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if args.dry_run {
             // Compute a combined diff by solving once against the final in-memory manifest
             // without writing to disk, then revert. Reuse the already-loaded original lockfile.
-            let derived = UpdateContext::builder(workspace.workspace())
+            let derived = UpdateContext::builder(workspace.workspace(), None)
                 .with_lock_file(original_lock_file.clone())
                 .with_no_install(args.no_install_config.no_install || args.dry_run)
                 .finish()

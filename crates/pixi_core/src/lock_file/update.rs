@@ -161,13 +161,12 @@ impl Workspace {
         }
 
         // Construct an update context and perform the actual update.
-        let lock_file_derived_data = UpdateContext::builder(self)
+        let lock_file_derived_data = UpdateContext::builder(self, Some(command_dispatcher))
             .with_package_cache(package_cache)
             .with_no_install(options.no_install)
             .with_outdated_environments(outdated)
             .with_lock_file(lock_file)
             .with_glob_hash_cache(glob_hash_cache)
-            .with_command_dispatcher(command_dispatcher)
             .finish()
             .await?
             .update()
@@ -1060,14 +1059,6 @@ impl<'p> UpdateContextBuilder<'p> {
         Self { lock_file, ..self }
     }
 
-    /// Sets the command dispatcher to use for the update process.
-    pub(crate) fn with_command_dispatcher(self, command_dispatcher: CommandDispatcher) -> Self {
-        Self {
-            command_dispatcher,
-            ..self
-        }
-    }
-
     /// Explicitly set the environments that are considered out-of-date. Only
     /// these environments will be updated during the update process.
     pub fn with_outdated_environments(
@@ -1306,16 +1297,21 @@ impl<'p> UpdateContextBuilder<'p> {
 
 impl<'p> UpdateContext<'p> {
     /// Construct a new builder for the update context.
-    pub fn builder(project: &'p Workspace) -> UpdateContextBuilder<'p> {
+    pub fn builder(
+        project: &'p Workspace,
+        command_dispatcher: Option<CommandDispatcher>,
+    ) -> UpdateContextBuilder<'p> {
         let multi_progress = pixi_progress::global_multi_progress();
         let anchor_pb = multi_progress.add(indicatif::ProgressBar::hidden());
 
-        let command_dispatcher = CommandDispatcherBuilder::default()
-            .with_reporter(pixi_reporters::TopLevelProgress::new(
-                multi_progress,
-                anchor_pb,
-            ))
-            .finish();
+        let command_dispatcher = command_dispatcher.unwrap_or_else(|| {
+            CommandDispatcherBuilder::default()
+                .with_reporter(pixi_reporters::TopLevelProgress::new(
+                    multi_progress,
+                    anchor_pb,
+                ))
+                .finish()
+        });
 
         UpdateContextBuilder {
             project,
