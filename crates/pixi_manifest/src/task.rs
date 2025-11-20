@@ -451,6 +451,12 @@ pub struct TaskRenderContext<'a> {
     /// This corresponds to the environment's best platform.
     pub platform: Platform,
 
+    /// The name of the environment for which the task is being rendered.
+    pub environment_name: Option<&'a EnvironmentName>,
+
+    /// The absolute path to the manifest file.
+    pub manifest_path: Option<&'a Path>,
+
     /// The arguments to use for rendering.
     pub args: Option<&'a ArgValues>,
 }
@@ -459,6 +465,8 @@ impl Default for TaskRenderContext<'_> {
     fn default() -> Self {
         Self {
             platform: Platform::current(),
+            environment_name: None,
+            manifest_path: None,
             args: None,
         }
     }
@@ -467,12 +475,32 @@ impl Default for TaskRenderContext<'_> {
 impl<'a> TaskRenderContext<'a> {
     /// Creates a context with the specified platform and arguments.
     pub fn with_args(platform: Platform, args: Option<&'a ArgValues>) -> Self {
-        Self { platform, args }
+        Self {
+            platform,
+            environment_name: None,
+            manifest_path: None,
+            args,
+        }
+    }
+
+    /// Creates a full context with all available information.
+    pub fn new(
+        platform: Platform,
+        environment_name: Option<&'a EnvironmentName>,
+        manifest_path: Option<&'a Path>,
+        args: Option<&'a ArgValues>,
+    ) -> Self {
+        Self {
+            platform,
+            environment_name,
+            manifest_path,
+            args,
+        }
     }
 
     /// Builds a MiniJinja context value from this render context.
     ///
-    /// The context always includes the pixi system variables (like `pixi.platform`).
+    /// The context always includes the pixi system variables.
     /// User arguments are added when TypedArgs are provided.
     pub fn to_jinja_context(&self) -> minijinja::Value {
         // Build the context map with user arguments if available
@@ -486,7 +514,54 @@ impl<'a> TaskRenderContext<'a> {
             };
 
         // Create the pixi object with system-provided variables
-        let pixi_vars = HashMap::from([("platform", self.platform.to_string())]);
+        let mut pixi_vars: HashMap<String, minijinja::Value> = HashMap::new();
+
+        // Add platform as a string
+        pixi_vars.insert(
+            "platform".to_string(),
+            minijinja::Value::from(self.platform.to_string()),
+        );
+
+        // Add platform detection boolean flags
+        pixi_vars.insert(
+            "is_win".to_string(),
+            minijinja::Value::from(self.platform.is_windows()),
+        );
+        pixi_vars.insert(
+            "is_unix".to_string(),
+            minijinja::Value::from(self.platform.is_unix()),
+        );
+        pixi_vars.insert(
+            "is_linux".to_string(),
+            minijinja::Value::from(self.platform.is_linux()),
+        );
+        pixi_vars.insert(
+            "is_osx".to_string(),
+            minijinja::Value::from(self.platform.is_osx()),
+        );
+
+        // Add environment name if available
+        if let Some(env_name) = self.environment_name {
+            pixi_vars.insert(
+                "environment".to_string(),
+                minijinja::Value::from(env_name.as_str()),
+            );
+        }
+
+        // Add manifest path if available
+        if let Some(path) = self.manifest_path {
+            pixi_vars.insert(
+                "manifest-path".to_string(),
+                minijinja::Value::from(path.display().to_string()),
+            );
+        }
+
+        // Add pixi version
+        pixi_vars.insert(
+            "version".to_string(),
+            minijinja::Value::from(pixi_consts::consts::PIXI_VERSION),
+        );
+
         context_map.insert(
             "pixi".to_string(),
             minijinja::Value::from_serialize(&pixi_vars),
@@ -1006,6 +1081,49 @@ mod tests {
         let context = TaskRenderContext::default();
         let result = t.render(&context);
         assert!(result.is_err(), "undefined variable should cause error");
+    }
+
+    #[test]
+    fn test_template_string_pixi_variables() {
+        // Test all pixi system variables
+        use crate::EnvironmentName;
+        use std::path::PathBuf;
+        use std::str::FromStr;
+
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let manifest_path = PathBuf::from("/tmp/pixi.toml");
+        let args = ArgValues::TypedArgs(vec![]);
+
+        let context = TaskRenderContext::new(
+            Platform::Linux64,
+            Some(&env_name),
+            Some(&manifest_path),
+            Some(&args),
+        );
+
+        // Test platform
+        let t = TemplateString::from("{{ pixi.platform }}");
+        assert_eq!(t.render(&context).unwrap(), "linux-64");
+
+        // Test is_linux
+        let t = TemplateString::from("{{ pixi.is_linux }}");
+        assert_eq!(t.render(&context).unwrap(), "true");
+
+        // Test is_win
+        let t = TemplateString::from("{{ pixi.is_win }}");
+        assert_eq!(t.render(&context).unwrap(), "false");
+
+        // Test environment
+        let t = TemplateString::from("{{ pixi.environment }}");
+        assert_eq!(t.render(&context).unwrap(), "test-env");
+
+        // Test manifest-path
+        let t = TemplateString::from("{{ pixi[\"manifest-path\"] }}");
+        assert_eq!(t.render(&context).unwrap(), "/tmp/pixi.toml");
+
+        // Test version
+        let t = TemplateString::from("{{ pixi.version }}");
+        assert!(t.render(&context).unwrap().contains("."));
     }
 
     #[test]
