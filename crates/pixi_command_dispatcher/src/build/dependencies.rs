@@ -293,9 +293,7 @@ fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
             else {
                 return None;
             };
-            let Some(name) = name_matcher.as_exact().cloned() else {
-                return None;
-            };
+            let name = name_matcher.as_exact().cloned()?;
             if ignore.by_name.contains(&name) {
                 return None;
             }
