@@ -270,16 +270,35 @@ You can also use filters to transform argument values:
 
 #### Pixi Variables
 
-In addition to task arguments, Pixi automatically provides a `pixi` object in the MiniJinja context with system variables. Currently available:
+In addition to task arguments, Pixi automatically provides a `pixi` object in the MiniJinja context with system variables:
 
-- `pixi.platform` - The platform name for the environment in which the task will run (e.g., `linux-64`, `osx-arm64`, `win-64`)
+| Variable | Description | Example Value |
+|----------|-------------|---------------|
+| `pixi.platform` | The platform name for the environment in which the task will run | `linux-64`, `osx-arm64`, `win-64` |
+| `pixi.environment` | The name of the current environment (when available) | `default`, `prod`, `test` |
+| `pixi.manifest-path` | Absolute path to the manifest file (use bracket notation) | `/path/to/project/pixi.toml` |
+| `pixi.version` | The version of pixi being used | `0.59.0` |
+| `pixi.is_win` | Boolean flag indicating if the platform is Windows | `true` or `false` |
+| `pixi.is_unix` | Boolean flag indicating if the platform is Unix-like | `true` or `false` |
+| `pixi.is_linux` | Boolean flag indicating if the platform is Linux | `true` or `false` |
+| `pixi.is_osx` | Boolean flag indicating if the platform is macOS | `true` or `false` |
 
-This is particularly useful for creating platform-specific tasks:
+These variables are particularly useful for creating platform-specific or environment-aware tasks:
 
 ```toml title="pixi.toml"
 [tasks]
+# Platform-specific commands
 build = { cmd = "cargo build --target {{ pixi.platform }}", args = [] }
 download-binary = { cmd = "curl -O https://example.com/binary-{{ pixi.platform }}.tar.gz", args = [] }
+
+# Conditional execution based on platform
+install = { cmd = "{% if pixi.is_win %}install.bat{% else %}./install.sh{% endif %}", args = [] }
+
+# Environment-aware tasks
+deploy = { cmd = "deploy.sh --env {{ pixi.environment }}", args = [] }
+
+# Using manifest path (note the bracket notation due to the hyphen)
+validate = { cmd = "validator --manifest {{ pixi[\"manifest-path\"] }}", args = [] }
 ```
 
 The pixi variables can also be combined with task arguments:
@@ -287,7 +306,7 @@ The pixi variables can also be combined with task arguments:
 ```toml title="pixi.toml"
 [tasks]
 deploy = {
-    cmd = "deploy.sh --platform {{ pixi.platform }} --env {{ environment }}",
+    cmd = "deploy.sh --platform {{ pixi.platform }} --env {{ environment }} --version {{ pixi.version }}",
     args = [{ arg = "environment", default = "staging" }]
 }
 ```
