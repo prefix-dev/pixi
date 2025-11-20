@@ -19,8 +19,8 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, PixiEnvironmentSpec,
-    SolvePixiEnvironmentError,
+    BuildEnvironment, CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
+    PixiEnvironmentSpec, SolvePixiEnvironmentError,
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
@@ -1027,7 +1027,7 @@ pub struct UpdateContextBuilder<'p> {
     glob_hash_cache: Option<GlobHashCache>,
 
     /// Set the command dispatcher to use for the update process.
-    command_dispatcher: Option<CommandDispatcher>,
+    command_dispatcher: CommandDispatcher,
 }
 
 impl<'p> UpdateContextBuilder<'p> {
@@ -1063,7 +1063,7 @@ impl<'p> UpdateContextBuilder<'p> {
     /// Sets the command dispatcher to use for the update process.
     pub(crate) fn with_command_dispatcher(self, command_dispatcher: CommandDispatcher) -> Self {
         Self {
-            command_dispatcher: Some(command_dispatcher),
+            command_dispatcher,
             ..self
         }
     }
@@ -1101,27 +1101,15 @@ impl<'p> UpdateContextBuilder<'p> {
         let lock_file = self.lock_file;
         let glob_hash_cache = self.glob_hash_cache.unwrap_or_default();
 
-        // Construct a command dispatcher that will be used to run the tasks.
-        let multi_progress = global_multi_progress();
-        let anchor_pb = multi_progress.add(ProgressBar::hidden());
-        let command_dispatcher = match self.command_dispatcher {
-            Some(dispatcher) => dispatcher,
-            None => self
-                .project
-                .command_dispatcher_builder()?
-                .with_reporter(pixi_reporters::TopLevelProgress::new(
-                    global_multi_progress(),
-                    anchor_pb.clone(),
-                ))
-                .finish(),
-        };
+        let multi_progress = pixi_progress::global_multi_progress();
+        let anchor_pb = multi_progress.add(indicatif::ProgressBar::hidden());
 
         let outdated = match self.outdated_environments {
             Some(outdated) => outdated,
             None => {
                 OutdatedEnvironments::from_workspace_and_lock_file(
                     project,
-                    command_dispatcher.clone(),
+                    self.command_dispatcher.clone(),
                     &lock_file,
                     glob_hash_cache.clone(),
                 )
@@ -1307,7 +1295,7 @@ impl<'p> UpdateContextBuilder<'p> {
             package_cache,
             pypi_solve_semaphore: Arc::new(Semaphore::new(determine_pypi_solve_permits(project))),
             io_concurrency_limit: self.io_concurrency_limit.unwrap_or_default(),
-            command_dispatcher,
+            command_dispatcher: self.command_dispatcher.clone(),
             glob_hash_cache,
             dispatcher_progress_bar: anchor_pb,
 
@@ -1319,6 +1307,16 @@ impl<'p> UpdateContextBuilder<'p> {
 impl<'p> UpdateContext<'p> {
     /// Construct a new builder for the update context.
     pub fn builder(project: &'p Workspace) -> UpdateContextBuilder<'p> {
+        let multi_progress = pixi_progress::global_multi_progress();
+        let anchor_pb = multi_progress.add(indicatif::ProgressBar::hidden());
+
+        let command_dispatcher = CommandDispatcherBuilder::default()
+            .with_reporter(pixi_reporters::TopLevelProgress::new(
+                multi_progress,
+                anchor_pb,
+            ))
+            .finish();
+
         UpdateContextBuilder {
             project,
             lock_file: LockFile::default(),
@@ -1328,7 +1326,7 @@ impl<'p> UpdateContext<'p> {
             io_concurrency_limit: None,
             glob_hash_cache: None,
             mapping_client: None,
-            command_dispatcher: None,
+            command_dispatcher,
         }
     }
 
