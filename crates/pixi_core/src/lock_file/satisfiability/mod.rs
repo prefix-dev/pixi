@@ -1159,7 +1159,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         match find_matching_package(
                             locked_pixi_records,
                             &virtual_packages,
-                            MatchSpec::from_nameless(spec, Some(name)),
+                            MatchSpec::from_nameless(spec, Some(name.into())),
                             source,
                         )? {
                             Some(pkg) => pkg,
@@ -1327,7 +1327,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     if let Some((source, package_name)) = record
                         .as_source()
                         .and_then(|record| Some((record, spec.name.as_ref()?)))
-                        .and_then(|(record, package_name)| {
+                        .and_then(|(record, package_name_matcher)| {
+                            let package_name = package_name_matcher
+                                .as_exact()
+                                .expect("depends can only contain exact package names");
                             Some((
                                 record.sources.get(package_name.as_normalized())?,
                                 package_name,
@@ -1675,7 +1678,10 @@ fn find_matching_package(
                 Some(idx) => idx,
             }
         }
-        Some(name) => {
+        Some(name_matcher) => {
+            let name = name_matcher
+                .as_exact()
+                .expect("depends can only contain exact package names");
             match locked_pixi_records
                 .index_by_name(name)
                 .map(|idx| (idx, &locked_pixi_records.records[idx]))
@@ -1771,7 +1777,7 @@ trait MatchesMatchspec {
 impl MatchesMatchspec for GenericVirtualPackage {
     fn matches(&self, spec: &MatchSpec) -> bool {
         if let Some(name) = &spec.name {
-            if name != &self.name {
+            if !name.matches(&self.name) {
                 return false;
             }
         }

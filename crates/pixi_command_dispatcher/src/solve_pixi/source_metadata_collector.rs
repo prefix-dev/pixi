@@ -130,12 +130,17 @@ impl SourceMetadataCollector {
                 let anchor = SourceAnchor::from(SourceSpec::from(record.manifest_source.clone()));
                 for depend in &record.package_record.depends {
                     if let Ok(spec) = MatchSpec::from_str(depend, ParseStrictness::Lenient) {
-                        if let Some((name, source_spec)) = spec.name.as_ref().and_then(|name| {
-                            record
-                                .sources
-                                .get(name.as_normalized())
-                                .map(|source_spec| (name.clone(), source_spec.clone()))
-                        }) {
+                        if let Some((name, source_spec)) =
+                            spec.name.as_ref().and_then(|name_matcher| {
+                                let name = name_matcher
+                                    .as_exact()
+                                    .expect("depends can only contain exact package names");
+                                record
+                                    .sources
+                                    .get(name.as_normalized())
+                                    .map(|source_spec| (name.clone(), source_spec.clone()))
+                            })
+                        {
                             // We encountered a transitive source dependency.
                             specs.push((name, anchor.resolve(source_spec), chain.clone()));
                         } else {
