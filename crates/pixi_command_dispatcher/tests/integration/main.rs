@@ -676,6 +676,7 @@ pub async fn test_dev_source_metadata() {
             variants: None,
             variant_files: None,
             enabled_protocols: Default::default(),
+            pin_override: None,
         },
     };
 
@@ -775,6 +776,7 @@ pub async fn test_dev_source_metadata_with_variants() {
             variants: Some(variant_config),
             variant_files: None,
             enabled_protocols: Default::default(),
+            pin_override: None,
         },
     };
 
