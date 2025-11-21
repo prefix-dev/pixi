@@ -235,7 +235,6 @@ impl SourceBuildSpec {
             .await
             .map_err_with(SourceBuildError::Discovery)?;
 
-
         // Compute the package input hash for caching purposes.
         let package_build_input_hash = PackageBuildInputHash::from(discovered_backend.as_ref());
 
