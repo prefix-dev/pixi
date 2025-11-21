@@ -225,7 +225,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         (_, true) => {
             // Deactivation script
-            generate_deactivation_script(args.shell, &environment, &workspace).await?
+            generate_deactivation_script(args.shell, &environment).await?
         }
         _ => {
             // Default: activation script
