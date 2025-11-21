@@ -50,12 +50,11 @@ pub(crate) fn normalize_path(path: &Path) -> PathBuf {
     normalized
 }
 
-pub(crate) fn unixify_path(path: &Path) -> Utf8UnixPathBuf {
+pub(crate) fn unxify_relative_path(path: &Path) -> Utf8UnixPathBuf {
     // This function should only be called with relative paths
     debug_assert!(
         !path.is_absolute(),
-        "unixify_path should only be called with relative paths, got: {:?}",
-        path
+        "unixify_path should only be called with relative paths, got: {path:?}",
     );
 
     let typed_path = Utf8TypedPathBuf::from(path.to_string_lossy().as_ref());
