@@ -252,6 +252,14 @@ impl SourceBuildSpec {
                 pinned_git.source.subdirectory = git_spec.subdirectory.clone();
             }
         }
+        if let (Some(PinnedSourceSpec::Url(pinned_url)), Some(SourceLocationSpec::Url(url_spec))) = (
+            build_source.as_mut(),
+            discovered_backend.init_params.build_source.clone(),
+        ) {
+            if pinned_url.subdirectory.is_none() {
+                pinned_url.subdirectory = url_spec.subdirectory.clone();
+            }
+        }
 
         // Here we have to get path in which we will run build. We have those options in order of decreasing priority:
         // 1. Lock file `package_build_source`. Since we're running lock file update before building package it should pin source in there.

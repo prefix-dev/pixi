@@ -61,7 +61,7 @@ impl From<SourceRecord> for CondaPackageData {
             PinnedSourceSpec::Url(pinned_url_spec) => PackageBuildSource::Url {
                 url: pinned_url_spec.url,
                 sha256: pinned_url_spec.sha256,
-                subdir: None,
+                subdir: pinned_url_spec.subdirectory.map(Utf8TypedPathBuf::from),
             },
             PinnedSourceSpec::Git(pinned_git_spec) => {
                 let subdirectory = pinned_git_spec
@@ -136,11 +136,12 @@ impl TryFrom<CondaSourceData> for SourceRecord {
             PackageBuildSource::Url {
                 url,
                 sha256,
-                subdir: _,
+                subdir,
             } => PinnedSourceSpec::Url(crate::PinnedUrlSpec {
                 url,
                 sha256,
                 md5: None,
+                subdirectory: subdir.map(|s| s.to_string()),
             }),
             PackageBuildSource::Path { path } => {
                 PinnedSourceSpec::Path(crate::PinnedPathSpec { path })
@@ -272,5 +273,54 @@ mod tests {
             Some("nested/project")
         );
         assert_eq!(roundtrip_git.git, git_url);
+    }
+
+    #[test]
+    fn package_build_source_roundtrip_preserves_url_subdirectory() {
+        let package_record: PackageRecord = serde_json::from_value(json!({
+            "name": "example",
+            "version": "1.0.0",
+            "build": "0",
+            "build_number": 0,
+            "subdir": "noarch",
+        }))
+        .expect("valid package record");
+
+        let archive_url = Url::parse("https://example.com/archive.zip").unwrap();
+        let pinned_source = PinnedSourceSpec::Url(crate::PinnedUrlSpec {
+            url: archive_url.clone(),
+            sha256: Sha256Hash::from([1u8; 32]),
+            md5: None,
+            subdirectory: Some("nested/path".to_string()),
+        });
+
+        let record = SourceRecord {
+            package_record,
+            manifest_source: pinned_source.clone(),
+            build_source: Some(pinned_source.clone()),
+            input_hash: None,
+            sources: Default::default(),
+        };
+
+        let CondaPackageData::Source(conda_source) = record.clone().into() else {
+            panic!("expected source package data");
+        };
+
+        let package_build_source = conda_source
+            .package_build_source
+            .as_ref()
+            .expect("expected package build source");
+
+        let PackageBuildSource::Url { subdir, .. } = package_build_source else {
+            panic!("expected url package build source");
+        };
+        assert_eq!(subdir.as_ref().map(|s| s.as_str()), Some("nested/path"));
+
+        let roundtrip = SourceRecord::try_from(conda_source).expect("roundtrip should succeed");
+        let Some(PinnedSourceSpec::Url(roundtrip_url)) = roundtrip.build_source else {
+            panic!("expected url pinned source");
+        };
+        assert_eq!(roundtrip_url.subdirectory.as_deref(), Some("nested/path"));
+        assert_eq!(roundtrip_url.url, archive_url);
     }
 }

@@ -807,6 +807,7 @@ pub async fn pin_and_checkout_url_reuses_cached_checkout() {
     // Since we have the same expected hash we expect to return existing archive.
     let spec = UrlSpec {
         url: "https://example.com/archive.tar.gz".parse().unwrap(),
+        subdirectory: None,
         md5: None,
         sha256: Some(sha),
     };
@@ -827,6 +828,49 @@ pub async fn pin_and_checkout_url_reuses_cached_checkout() {
 }
 
 #[tokio::test]
+pub async fn pin_and_checkout_url_honors_subdirectory() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let archive = tempfile::tempdir().unwrap();
+    let url = file_url_for_test(&archive, "subdir.zip");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(cache_dirs)
+        .with_executor(Executor::Serial)
+        .finish();
+
+    let spec = UrlSpec {
+        url,
+        subdirectory: Some("text.txt".to_string()),
+        md5: None,
+        sha256: None,
+    };
+
+    let checkout = dispatcher
+        .pin_and_checkout_url(spec)
+        .await
+        .expect("url checkout should succeed");
+
+    assert!(
+        checkout.path.ends_with("text.txt"),
+        "expected checkout path to end with subdirectory"
+    );
+    let Some(parent) = checkout.path.parent() else {
+        panic!("checkout with subdirectory should have a parent directory");
+    };
+    assert!(
+        parent.join("text.txt") == checkout.path,
+        "expected checkout path to be parent + subdirectory"
+    );
+    match checkout.pinned {
+        PinnedSourceSpec::Url(pinned) => {
+            assert_eq!(pinned.subdirectory.as_deref(), Some("text.txt"));
+        }
+        other => panic!("expected url pinned spec, got {other:?}"),
+    };
+}
+
+#[tokio::test]
 pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request() {
     let tempdir = tempfile::tempdir().unwrap();
     let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
@@ -840,11 +884,13 @@ pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request()
 
     let good_spec = UrlSpec {
         url: url.clone(),
+        subdirectory: None,
         md5: None,
         sha256: None,
     };
     let bad_spec = UrlSpec {
         url,
+        subdirectory: None,
         md5: None,
         sha256: Some(Sha256::digest(b"pixi-url-bad-sha")),
     };
@@ -877,6 +923,7 @@ pub async fn pin_and_checkout_url_validates_cached_results() {
 
     let spec = UrlSpec {
         url: url.clone(),
+        subdirectory: None,
         md5: None,
         sha256: None,
     };
@@ -888,6 +935,7 @@ pub async fn pin_and_checkout_url_validates_cached_results() {
 
     let bad_spec = UrlSpec {
         url: url.clone(),
+        subdirectory: None,
         md5: None,
         sha256: Some(Sha256::digest(b"pixi-url-bad-cache")),
     };

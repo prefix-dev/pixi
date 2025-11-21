@@ -14,7 +14,7 @@ use pixi_git::{
 use pixi_spec::{
     GitReference, GitSpec, PathSourceSpec, SourceLocationSpec, SourceSpec, UrlSourceSpec,
 };
-use rattler_digest::{Md5Hash, Sha256Hash};
+use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, parse_digest_from_hex};
 use rattler_lock::UrlOrPath;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -167,15 +167,30 @@ pub struct PinnedUrlSpec {
     /// The md5 hash of the archive.
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Md5>>")]
     pub md5: Option<Md5Hash>,
+
+    /// The subdirectory inside the extracted archive.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subdirectory: Option<String>,
 }
 
 impl PinnedUrlSpec {
     /// Returns a URL that uniquely identifies this path spec. This URL is not
     /// portable, e.g. it might result in a different URL on different systems.
     pub fn identifiable_url(&self) -> Url {
+        // NOTE: we piggyback on user-visible query parameters to store pixi metadata.
+        // If the upstream URL already uses `sha256`, `md5`, or `subdirectory` keys we
+        // currently overwrite/interpret them as our own metadata.
         let mut url = self.url.clone();
-        url.query_pairs_mut()
-            .append_pair("sha256", &format!("{:x}", self.sha256));
+        {
+            let mut pairs = url.query_pairs_mut();
+            pairs.append_pair("sha256", &format!("{:x}", self.sha256));
+            if let Some(md5) = &self.md5 {
+                pairs.append_pair("md5", &format!("{md5:x}"));
+            }
+            if let Some(subdir) = &self.subdirectory {
+                pairs.append_pair("subdirectory", subdir);
+            }
+        }
         url
     }
 }
@@ -422,8 +437,8 @@ impl From<PinnedGitSpec> for UrlOrPath {
 }
 
 impl From<PinnedUrlSpec> for UrlOrPath {
-    fn from(_value: PinnedUrlSpec) -> Self {
-        unimplemented!()
+    fn from(value: PinnedUrlSpec) -> Self {
+        UrlOrPath::Url(value.identifiable_url())
     }
 }
 
@@ -518,6 +533,24 @@ pub enum ParseError {
     /// An error that occurs when parsing a locked git URL.
     #[error("failed to parse locked git url {0}. Reason: {1}")]
     LockedGitUrl(String, String),
+
+    /// A pinned URL is missing the sha256 query parameter.
+    #[error("failed to parse pinned url {url}: missing sha256 query parameter")]
+    MissingUrlSha256 {
+        /// The url missing mandatory metadata.
+        url: Url,
+    },
+
+    /// Failed to parse a hash stored in the pinned URL.
+    #[error("failed to parse pinned url {url}: invalid {hash} digest '{value}'")]
+    InvalidUrlDigest {
+        /// The url that failed to parse.
+        url: Url,
+        /// The digest kind.
+        hash: &'static str,
+        /// The invalid digest string.
+        value: String,
+    },
 }
 
 impl TryFrom<UrlOrPath> for PinnedSourceSpec {
@@ -535,7 +568,60 @@ impl TryFrom<UrlOrPath> for PinnedSourceSpec {
                         })?;
                         Ok(pinned.into())
                     }
-                    false => unimplemented!("url not supported"),
+                    false => {
+                        let mut sha256 = None;
+                        let mut md5 = None;
+                        let mut subdirectory = None;
+                        let mut preserved = Vec::new();
+                        for (key, value) in url.query_pairs() {
+                            match key.as_ref() {
+                                "sha256" => {
+                                    sha256 = Some(
+                                        parse_digest_from_hex::<Sha256>(value.as_ref())
+                                            .ok_or_else(|| ParseError::InvalidUrlDigest {
+                                                url: url.clone(),
+                                                hash: "sha256",
+                                                value: value.to_string(),
+                                            })?,
+                                    );
+                                }
+                                "md5" => {
+                                    md5 = Some(
+                                        parse_digest_from_hex::<Md5>(value.as_ref()).ok_or_else(
+                                            || ParseError::InvalidUrlDigest {
+                                                url: url.clone(),
+                                                hash: "md5",
+                                                value: value.to_string(),
+                                            },
+                                        )?,
+                                    );
+                                }
+                                "subdirectory" => subdirectory = Some(value.into_owned()),
+                                _ => preserved.push((key.into_owned(), value.into_owned())),
+                            }
+                        }
+
+                        let Some(sha256) = sha256 else {
+                            return Err(ParseError::MissingUrlSha256 { url });
+                        };
+
+                        let mut base_url = url.clone();
+                        base_url.set_query(None);
+                        if !preserved.is_empty() {
+                            let mut pairs = base_url.query_pairs_mut();
+                            for (key, value) in preserved {
+                                pairs.append_pair(&key, &value);
+                            }
+                        }
+
+                        Ok(PinnedUrlSpec {
+                            url: base_url,
+                            sha256,
+                            md5,
+                            subdirectory,
+                        }
+                        .into())
+                    }
                 }
             }
             UrlOrPath::Path(path) => Ok(PinnedPathSpec { path }.into()),
@@ -577,6 +663,19 @@ pub enum SourceMismatchError {
         locked: String,
         /// The requested url
         requested: String,
+    },
+
+    #[error(
+        "the locked url subdirectory '{locked:?}' for '{url}' does not match the requested url subdirectory '{requested:?}'"
+    )]
+    /// The locked url subdirectory does not match the requested url subdirectory.
+    UrlSubdirectoryMismatch {
+        /// The url.
+        url: Url,
+        /// The locked subdirectory.
+        locked: Option<String>,
+        /// The requested subdirectory.
+        requested: Option<String>,
     },
 
     #[error(
@@ -656,6 +755,13 @@ impl PinnedUrlSpec {
                     requested: format!("{md5:x}"),
                 });
             }
+        }
+        if spec.subdirectory != self.subdirectory {
+            return Err(SourceMismatchError::UrlSubdirectoryMismatch {
+                url: self.url.clone(),
+                locked: self.subdirectory.clone(),
+                requested: spec.subdirectory.clone(),
+            });
         }
         Ok(())
     }
@@ -773,6 +879,7 @@ impl From<PinnedUrlSpec> for UrlSourceSpec {
     fn from(value: PinnedUrlSpec) -> Self {
         Self {
             url: value.url,
+            subdirectory: value.subdirectory,
             sha256: Some(value.sha256),
             md5: value.md5,
         }

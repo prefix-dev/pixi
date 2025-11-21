@@ -15,6 +15,10 @@ pub struct UrlSpec {
     /// The URL of the package
     pub url: Url,
 
+    /// The subdirectory inside the extracted archive
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subdirectory: Option<String>,
+
     /// The md5 hash of the package
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Md5>>")]
@@ -52,6 +56,7 @@ impl UrlSpec {
         } else {
             Ok(UrlSourceSpec {
                 url: self.url,
+                subdirectory: self.subdirectory,
                 md5: self.md5,
                 sha256: self.sha256,
             })
@@ -61,17 +66,20 @@ impl UrlSpec {
     /// Converts this instance into a [`UrlSourceSpec`] if the URL points to a
     /// source package. Or to a [`UrlBinarySpec`] otherwise.
     pub fn into_source_or_binary(self) -> Either<UrlSourceSpec, UrlBinarySpec> {
-        if self.is_binary() {
-            Either::Right(UrlBinarySpec {
-                url: self.url,
-                md5: self.md5,
-                sha256: self.sha256,
-            })
+        let UrlSpec {
+            url,
+            subdirectory,
+            md5,
+            sha256,
+        } = self;
+        if ArchiveIdentifier::try_from_url(&url).is_some() {
+            Either::Right(UrlBinarySpec { url, md5, sha256 })
         } else {
             Either::Left(UrlSourceSpec {
-                url: self.url,
-                md5: self.md5,
-                sha256: self.sha256,
+                url,
+                subdirectory,
+                md5,
+                sha256,
             })
         }
     }
@@ -85,6 +93,9 @@ impl UrlSpec {
 impl Display for UrlSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.url)?;
+        if let Some(subdir) = &self.subdirectory {
+            write!(f, " in {subdir}")?;
+        }
         if let Some(md5) = &self.md5 {
             write!(f, " md5={md5:x}")?;
         }
@@ -102,6 +113,10 @@ pub struct UrlSourceSpec {
     /// The URL of the package
     pub url: Url,
 
+    /// The subdirectory inside the extracted archive
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subdirectory: Option<String>,
+
     /// The md5 hash of the archive
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Md5>>")]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -116,6 +131,9 @@ pub struct UrlSourceSpec {
 impl Display for UrlSourceSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.url)?;
+        if let Some(subdir) = &self.subdirectory {
+            write!(f, " in {subdir}")?;
+        }
         if let Some(md5) = &self.md5 {
             write!(f, " md5={md5:x}")?;
         }
@@ -130,6 +148,7 @@ impl From<UrlSourceSpec> for UrlSpec {
     fn from(value: UrlSourceSpec) -> Self {
         Self {
             url: value.url,
+            subdirectory: value.subdirectory,
             md5: value.md5,
             sha256: value.sha256,
         }
@@ -153,6 +172,7 @@ impl From<UrlBinarySpec> for UrlSpec {
     fn from(value: UrlBinarySpec) -> Self {
         Self {
             url: value.url,
+            subdirectory: None,
             md5: value.md5,
             sha256: value.sha256,
         }
