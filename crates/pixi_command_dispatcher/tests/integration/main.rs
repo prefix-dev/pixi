@@ -669,7 +669,7 @@ pub async fn test_dev_source_metadata() {
     let spec = DevSourceMetadataSpec {
         package_name: PackageName::new_unchecked("test-package"),
         backend_metadata: BuildBackendMetadataSpec {
-            source: pinned_source,
+            manifest_source: pinned_source,
             channel_config: default_channel_config(),
             channels: vec![],
             build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
@@ -768,7 +768,7 @@ pub async fn test_dev_source_metadata_with_variants() {
     let spec = DevSourceMetadataSpec {
         package_name: PackageName::new_unchecked("variant-package"),
         backend_metadata: BuildBackendMetadataSpec {
-            source: pinned_source,
+            manifest_source: pinned_source,
             channel_config: default_channel_config(),
             channels: vec![],
             build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
