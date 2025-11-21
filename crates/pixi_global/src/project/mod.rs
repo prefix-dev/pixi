@@ -497,6 +497,11 @@ impl Project {
         self.manifest.parsed.envs.get(name)
     }
 
+    /// Returns the path to the environment root directory.
+    pub fn env_root_path(&self) -> &Path {
+        self.env_root.path()
+    }
+
     /// Returns the EnvDir with the environment name.
     pub async fn environment_dir(&self, name: &EnvironmentName) -> miette::Result<EnvDir> {
         EnvDir::from_env_root(self.env_root.clone(), name).await
