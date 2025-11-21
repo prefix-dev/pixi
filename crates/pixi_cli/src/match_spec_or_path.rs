@@ -33,7 +33,8 @@ impl MatchSpecOrPath {
             Self::MatchSpec(spec) => spec
                 .name
                 .as_ref()
-                .map(|name| name.as_normalized().to_string()),
+                .and_then(|name| name.as_exact())
+                .map(|n| n.as_normalized().to_string()),
             Self::Path(path_spec) => path_spec
                 .path
                 .file_name()
@@ -72,7 +73,7 @@ impl FromStr for MatchSpecOrPath {
                     .map_err(|e| format!("invalid package name: {e}"))?;
 
                 return Ok(Self::MatchSpec(Box::new(MatchSpec {
-                    name: Some(name),
+                    name: Some(name.into()),
                     url: Some(url),
                     ..MatchSpec::default()
                 })));
@@ -163,7 +164,7 @@ fn path_spec_to_match_spec(path_spec: PathSpec) -> Result<MatchSpec, String> {
         PackageName::try_from(archive.name).map_err(|e| format!("invalid package name: {e}"))?;
 
     Ok(MatchSpec {
-        name: Some(name),
+        name: Some(name.into()),
         url: Some(url),
         ..MatchSpec::default()
     })
