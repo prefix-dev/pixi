@@ -58,7 +58,7 @@ jinja-loop = { cmd = "{% for name in names | split %} echo {{ name }};{% endfor 
 
 # Pixi preset variables
 all-pixi-vars = "echo '{{ pixi }}'"
-environment = "echo Environment: {{ pixi.environment }}"
+environment = "echo Environment: {{ pixi.environment.name }}"
 environment-extra = [{ task = "environment", environment = "extra" }]
 manifest = "echo Manifest path: {{ pixi.manifest_path }}"
 platform = "echo Current platform = {{ pixi.platform }},thus {% if pixi.is_osx %}macOS,{% else %}not macOS,{% endif %} {% if pixi.is_linux %}Linux,{% else %}not Linux,{% endif %} {% if pixi.is_win %}Windows{% else %}not Windows{% endif %}"
@@ -96,6 +96,7 @@ echo "=== Pixi variables ===" && \
 pixi run version && \
 pixi run platform && \
 pixi run environment && \
+pixi run environment-extra && \
 pixi run manifest && \
 pixi run all-pixi-vars && \
 echo "=== Input/Output tasks ===" && \
