@@ -330,9 +330,7 @@ impl PinnedSourceSpec {
                 let this_path = this_path.resolve(workspace_root);
                 let base_path = base_path.resolve(workspace_root);
 
-                dbg!(&this_path, &base_path);
                 let relative_path = pathdiff::diff_paths(this_path, base_path)?;
-                dbg!(&relative_path);
 
                 // `pathdiff` yields native separators; convert to `/` for lock-file stability.
                 Some(Utf8UnixPathBuf::from(unixify_path(relative_path.as_path())))

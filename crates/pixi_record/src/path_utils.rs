@@ -1,5 +1,7 @@
 use std::path::{Component, Path, PathBuf};
 
+use typed_path::{Utf8TypedPathBuf, Utf8UnixPathBuf};
+
 /// Normalize a path lexically (no filesystem access) and strip redundant segments.
 pub(crate) fn normalize_path(path: &Path) -> PathBuf {
     let simplified = dunce::simplified(path).to_path_buf();
@@ -48,8 +50,19 @@ pub(crate) fn normalize_path(path: &Path) -> PathBuf {
     normalized
 }
 
-pub(crate) fn unixify_path(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+pub(crate) fn unixify_path(path: &Path) -> Utf8UnixPathBuf {
+    // This function should only be called with relative paths
+    debug_assert!(
+        !path.is_absolute(),
+        "unixify_path should only be called with relative paths, got: {:?}",
+        path
+    );
+
+    let typed_path = Utf8TypedPathBuf::from(path.to_string_lossy().as_ref());
+    match typed_path.with_unix_encoding() {
+        Utf8TypedPathBuf::Unix(unix_path) => unix_path,
+        _ => unreachable!("with_unix_encoding should always return Unix variant"),
+    }
 }
 
 #[cfg(test)]
