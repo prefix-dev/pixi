@@ -1,4 +1,3 @@
-use serde::Deserialize;
 use serde_json::{Map, Value as JsonValue};
 use tracing::Level;
 
@@ -41,8 +40,11 @@ impl BackendLogEntry {
 }
 
 pub fn parse_backend_logs(line: &str) -> Option<Vec<BackendLogEntry>> {
-    match serde_json::from_str::<TracingJsonLine>(line) {
-        Ok(entry) => BackendLogEntry::from_tracing_json(entry).map(|entry| vec![entry]),
+    match serde_json::from_str::<JsonValue>(line) {
+        Ok(JsonValue::Object(map)) => {
+            BackendLogEntry::from_tracing_fields(map).map(|entry| vec![entry])
+        }
+        Ok(_) => None,
         Err(err) => {
             tracing::debug!(target: "pixi::backend_logs", "Failed to parse tracing JSON line: {err}");
             None
@@ -91,35 +93,41 @@ fn maybe_quote(value: &str) -> String {
     }
 }
 
-#[derive(Deserialize)]
-struct TracingJsonLine {
-    level: Option<String>,
-    target: Option<String>,
-    fields: Option<Map<String, JsonValue>>,
-}
-
 impl BackendLogEntry {
-    fn from_tracing_json(line: TracingJsonLine) -> Option<Self> {
-        let level = line
-            .level
-            .as_deref()
-            .and_then(parse_level)
+    fn from_tracing_fields(mut map: Map<String, JsonValue>) -> Option<Self> {
+        let level = map
+            .remove("level")
+            .and_then(|value| value.as_str().and_then(parse_level))
             .unwrap_or(Level::INFO);
-        let target = line
-            .target
+
+        let target = map
+            .remove("target")
+            .and_then(|value| value.as_str().map(|s| s.to_string()))
             .unwrap_or_else(|| "pixi-build-backend".to_string());
 
-        let mut fields = line.fields.unwrap_or_default();
-        let message = fields
-            .remove("message")
-            .and_then(|value| value.as_str().map(|s| s.to_string()))
-            .unwrap_or_default();
+        let mut extra = Map::new();
+        let mut message = take_message_from_fields(map.remove("fields"), &mut extra);
+
+        if message.is_none() {
+            if let Some(value) = map.remove("message") {
+                message = Some(stringify_value(value));
+            }
+        } else {
+            map.remove("message");
+        }
+
+        for (key, value) in map.into_iter() {
+            if is_reserved_top_level_field(&key) {
+                continue;
+            }
+            extra.insert(key, value);
+        }
 
         Some(Self {
             level,
             target,
-            message,
-            extra: fields,
+            message: message.unwrap_or_default(),
+            extra,
         })
     }
 }
@@ -133,6 +141,50 @@ fn parse_level(value: &str) -> Option<Level> {
         "ERROR" => Some(Level::ERROR),
         _ => None,
     }
+}
+
+fn take_message_from_fields(
+    fields_value: Option<JsonValue>,
+    extra_fields: &mut Map<String, JsonValue>,
+) -> Option<String> {
+    let mut message = None;
+    if let Some(JsonValue::Object(mut fields)) = fields_value {
+        message = take_message(&mut fields);
+        for (key, value) in fields.into_iter() {
+            extra_fields.insert(key, value);
+        }
+    }
+    message
+}
+
+fn take_message(fields: &mut Map<String, JsonValue>) -> Option<String> {
+    if let Some(value) = fields.remove("message") {
+        return Some(stringify_value(value));
+    }
+    None
+}
+
+fn stringify_value(value: JsonValue) -> String {
+    match value {
+        JsonValue::String(s) => s,
+        JsonValue::Null => "null".to_string(),
+        other => value_to_string(&other),
+    }
+}
+
+fn is_reserved_top_level_field(key: &str) -> bool {
+    matches!(
+        key,
+        "timestamp"
+            | "level"
+            | "target"
+            | "threadName"
+            | "threadId"
+            | "filename"
+            | "line_number"
+            | "span"
+            | "spans"
+    )
 }
 
 #[cfg(test)]
@@ -149,5 +201,37 @@ mod tests {
         assert_eq!(entry.target, "pixi_build_backend::intermediate_backend");
         assert_eq!(entry.message, "sample message");
         assert!(entry.extra.contains_key("path"));
+    }
+
+    #[test]
+    fn parses_flattened_tracing_line() {
+        let sample = include_str!("../../tests/tracing_flattened_sample.json");
+        let entries = parse_backend_logs(sample).expect("failed to parse flattened sample");
+        assert_eq!(entries.len(), 1);
+        let entry = &entries[0];
+        assert_eq!(entry.level, Level::DEBUG);
+        assert_eq!(entry.target, "pixi_build_backend::flattened");
+        assert_eq!(entry.message, "flattened message");
+        assert_eq!(
+            entry.extra.get("answer").and_then(|value| value.as_i64()),
+            Some(42)
+        );
+        assert!(!entry.extra.contains_key("timestamp"));
+        assert!(!entry.extra.contains_key("threadName"));
+    }
+
+    #[test]
+    fn parses_span_metadata_line() {
+        let sample = include_str!("../../tests/tracing_span_sample.json");
+        let entries = parse_backend_logs(sample).expect("failed to parse span sample");
+        assert_eq!(entries.len(), 1);
+        let entry = &entries[0];
+        assert_eq!(entry.level, Level::INFO);
+        assert_eq!(entry.target, "pixi_build_backend::span");
+        assert_eq!(entry.message, "span event");
+        assert_eq!(
+            entry.extra.get("busy_ns").and_then(|value| value.as_i64()),
+            Some(123)
+        );
     }
 }

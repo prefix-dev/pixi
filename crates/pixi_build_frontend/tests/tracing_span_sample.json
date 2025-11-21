@@ -1,0 +1,1 @@
+{"level":"INFO","target":"pixi_build_backend::span","fields":{"message":"span event","busy_ns":123},"span":{"name":"solve","context":"pkg=sdl_example"},"spans":[{"name":"solve","pkg":"sdl_example"}]}
