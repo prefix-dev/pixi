@@ -843,7 +843,7 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
     // But due to backwards compatibility logic, it gets purls anyway
     let purls = match boltons_package {
         rattler_lock::CondaPackageData::Binary(binary) => &binary.package_record.purls,
-        _ => panic!("All packagees should be binary"),
+        _ => panic!("All packages should be binary"),
     };
 
     if let Some(purls) = purls {
