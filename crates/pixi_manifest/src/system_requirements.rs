@@ -245,12 +245,12 @@ impl std::fmt::Display for LibCSystemRequirement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LibCSystemRequirement::GlibC(version) => {
-                write!(f, "GlibC version: {}", version)
+                write!(f, "GlibC version: {version}")
             }
             LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion { family, version }) => {
                 match family {
-                    Some(fam) => write!(f, "{} version: {}", fam, version),
-                    None => write!(f, "No family, version: {}", version),
+                    Some(fam) => write!(f, "{fam} version: {version}"),
+                    None => write!(f, "No family, version: {version}"),
                 }
             }
         }

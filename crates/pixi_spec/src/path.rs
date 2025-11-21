@@ -258,8 +258,7 @@ mod tests {
             let spec = PathSpec::new(Utf8TypedPathBuf::from(path_str));
             assert!(
                 spec.is_binary(),
-                "Expected {} to be identified as a binary archive",
-                path_str
+                "Expected {path_str} to be identified as a binary archive"
             );
         }
 
@@ -281,8 +280,7 @@ mod tests {
             let spec = PathSpec::new(Utf8TypedPathBuf::from(path_str));
             assert!(
                 !spec.is_binary(),
-                "Expected {} to NOT be identified as a binary archive",
-                path_str
+                "Expected {path_str} to NOT be identified as a binary archive"
             );
         }
     }

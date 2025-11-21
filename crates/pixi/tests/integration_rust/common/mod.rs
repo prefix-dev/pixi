@@ -21,7 +21,7 @@ use pixi_cli::cli_config::{
     ChannelsConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
 };
 use pixi_cli::{
-    add,
+    add, build,
     init::{self, GitAttributes},
     install::Args,
     lock, remove, run, search,
@@ -46,8 +46,9 @@ use thiserror::Error;
 
 use self::builders::{HasDependencyConfig, RemoveBuilder};
 use crate::common::builders::{
-    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, ProjectChannelRemoveBuilder,
-    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
+    AddBuilder, BuildBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder,
+    ProjectChannelRemoveBuilder, ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder,
+    UpdateBuilder,
 };
 
 const DEFAULT_PROJECT_CONFIG: &str = r#"
@@ -125,6 +126,13 @@ pub trait LockFileExt {
         platform: Platform,
         package: &str,
     ) -> Option<UrlOrPath>;
+
+    fn get_pypi_package(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<LockedPackageRef>;
 }
 
 impl LockFileExt for LockFile {
@@ -132,25 +140,23 @@ impl LockFileExt for LockFile {
         let Some(env) = self.environment(environment) else {
             return false;
         };
-        let package_found = env
-            .packages(platform)
+
+        env.packages(platform)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_conda)
-            .any(|package| package.record().name.as_normalized() == name);
-        package_found
+            .any(|package| package.record().name.as_normalized() == name)
     }
     fn contains_pypi_package(&self, environment: &str, platform: Platform, name: &str) -> bool {
         let Some(env) = self.environment(environment) else {
             return false;
         };
-        let package_found = env
-            .packages(platform)
+
+        env.packages(platform)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_pypi)
-            .any(|(data, _)| data.name.as_ref() == name);
-        package_found
+            .any(|(data, _)| data.name.as_ref() == name)
     }
 
     fn contains_match_spec(
@@ -163,13 +169,12 @@ impl LockFileExt for LockFile {
         let Some(env) = self.environment(environment) else {
             return false;
         };
-        let package_found = env
-            .packages(platform)
+
+        env.packages(platform)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_conda)
-            .any(move |p| p.satisfies(&match_spec));
-        package_found
+            .any(move |p| p.satisfies(&match_spec))
     }
 
     fn contains_pep508_requirement(
@@ -179,16 +184,15 @@ impl LockFileExt for LockFile {
         requirement: pep508_rs::Requirement,
     ) -> bool {
         let Some(env) = self.environment(environment) else {
-            eprintln!("environment not found: {}", environment);
+            eprintln!("environment not found: {environment}");
             return false;
         };
-        let package_found = env
-            .packages(platform)
+
+        env.packages(platform)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_pypi)
-            .any(move |(data, _)| data.satisfies(&requirement));
-        package_found
+            .any(move |(data, _)| data.satisfies(&requirement))
     }
 
     fn get_pypi_package_version(
@@ -204,6 +208,18 @@ impl LockFileExt for LockFile {
                 })
             })
             .map(|(data, _)| data.version.to_string())
+    }
+
+    fn get_pypi_package(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<LockedPackageRef> {
+        self.environment(environment).and_then(|env| {
+            env.packages(platform)
+                .and_then(|mut packages| packages.find(|p| p.name() == package))
+        })
     }
 
     fn get_pypi_package_url(
@@ -377,6 +393,12 @@ impl PixiControl {
     /// To execute the command and await the result, call `.await` on the return value.
     pub fn add(&self, spec: &str) -> AddBuilder {
         self.add_multiple(vec![spec])
+    }
+
+    /// Add a pypi dependency to the project. Returns an [`AddBuilder`].
+    /// To execute the command and await the result, call `.await` on the return value.
+    pub fn add_pypi(&self, spec: &str) -> AddBuilder {
+        self.add_multiple(vec![spec]).set_pypi(true)
     }
 
     /// Add dependencies to the project. Returns an [`AddBuilder`].
@@ -626,7 +648,7 @@ impl PixiControl {
     /// [`Self::update_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
         let workspace = Workspace::from_path(&self.manifest_path())?;
-        workspace.load_lock_file().await
+        workspace.load_lock_file().await?.into_lock_file()
     }
 
     /// Load the current lock-file and makes sure that its up to date with the
@@ -652,6 +674,25 @@ impl PixiControl {
                 no_install_config: NoInstallConfig { no_install: false },
                 check: false,
                 json: false,
+            },
+        }
+    }
+
+    /// Returns a [`BuildBuilder`]. To execute the command and await the result
+    /// call `.await` on the return value.
+    pub fn build(&self) -> BuildBuilder {
+        BuildBuilder {
+            args: build::Args {
+                build_manifest: Default::default(),
+                backend_override: Default::default(),
+                config_cli: Default::default(),
+                lock_and_install_config: Default::default(),
+                target_platform: rattler_conda_types::Platform::current(),
+                build_platform: rattler_conda_types::Platform::current(),
+                output_dir: PathBuf::from("."),
+                build_dir: None,
+                clean: false,
+                path: Some(self.manifest_path()),
             },
         }
     }

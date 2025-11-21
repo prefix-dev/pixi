@@ -109,7 +109,7 @@ pub struct AddArgs {
 fn parse_key_val(s: &str) -> Result<(String, String), Box<dyn Error + Send + Sync + 'static>> {
     let pos = s
         .find('=')
-        .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{}`", s))?;
+        .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{s}`"))?;
     let key = s[..pos].to_string();
     let value = s[pos + 1..].to_string();
     Ok((key, value))
@@ -285,7 +285,7 @@ fn print_tasks(
 
     print_heading("Tasks that can run on this machine:");
     let formatted_tasks: String = all_tasks.iter().map(|name| name.fancy_display()).join(", ");
-    eprintln!("{}", formatted_tasks);
+    eprintln!("{formatted_tasks}");
 
     let mut writer = tabwriter::TabWriter::new(std::io::stdout());
     let header_style = console::Style::new().bold().cyan();
@@ -350,7 +350,7 @@ async fn list_tasks(
             .sorted()
             .map(|name| name.as_str())
             .join(" ");
-        writeln!(std::io::stdout(), "{}", unformatted)
+        writeln!(std::io::stdout(), "{unformatted}")
             .inspect_err(|e| {
                 if e.kind() == std::io::ErrorKind::BrokenPipe {
                     std::process::exit(0);
@@ -416,7 +416,7 @@ fn print_tasks_json(project: &Workspace) -> miette::Result<()> {
 
     let json_string =
         serde_json::to_string_pretty(&env_feature_task_map).expect("Failed to serialize tasks");
-    writeln!(std::io::stdout(), "{}", json_string)
+    writeln!(std::io::stdout(), "{json_string}")
         .inspect_err(|e| {
             if e.kind() == std::io::ErrorKind::BrokenPipe {
                 std::process::exit(0);

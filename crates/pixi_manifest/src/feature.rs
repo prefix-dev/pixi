@@ -1,6 +1,7 @@
 use crate::{
     SpecType, SystemRequirements, WorkspaceTarget, channel::PrioritizedChannel, consts,
     pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
+    workspace::SolveStrategy,
 };
 use indexmap::{IndexMap, IndexSet};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -137,6 +138,12 @@ pub struct Feature {
     /// it will be seen as unset and overwritten by a set one.
     pub channel_priority: Option<ChannelPriority>,
 
+    /// Solve strategy specific for this feature.
+    ///
+    /// If this value is `None` and there are multiple features,
+    /// it will be seen as unset and overwritten by a set one.
+    pub solve_strategy: Option<SolveStrategy>,
+
     /// Additional system requirements
     pub system_requirements: SystemRequirements,
 
@@ -155,6 +162,7 @@ impl Feature {
             platforms: None,
             channels: None,
             channel_priority: None,
+            solve_strategy: None,
             system_requirements: SystemRequirements::default(),
             pypi_options: None,
             targets: <Targets<WorkspaceTarget> as Default>::default(),

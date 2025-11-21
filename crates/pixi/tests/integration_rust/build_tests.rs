@@ -399,3 +399,150 @@ preview = ["pixi-build"]
         "recipe.yaml should contain the package name"
     );
 }
+
+/// Test that verifies [package.build] source.path is resolved relative to the
+/// package manifest directory, not the workspace root.
+///
+/// This tests the fix for out-of-tree builds where a package manifest
+/// specifies `source.path = "src"` and expects it to be resolved relative
+/// to the package manifest's parent directory.
+#[tokio::test]
+async fn test_package_build_source_relative_to_manifest() {
+    setup_tracing();
+
+    // Create a PixiControl instance with PassthroughBackend
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create the package structure:
+    // workspace/
+    //   pixi.toml (workspace and package manifest)
+    //   src/      (source directory - should be found relative to package manifest)
+    //     pixi.toml (build source manifest)
+
+    let package_source_dir = pixi.workspace_path().join("src");
+    fs::create_dir_all(&package_source_dir).unwrap();
+
+    // Create a pixi.toml in the source directory that PassthroughBackend will read
+    let source_pixi_toml = r#"
+[package]
+name = "test-build-source"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+"#;
+    fs::write(package_source_dir.join("pixi.toml"), source_pixi_toml).unwrap();
+
+    // Create a manifest where the package has [package.build] with source.path
+    // The source.path should be resolved relative to the package manifest directory
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = []
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[package]
+name = "test-build-source"
+version = "0.1.0"
+description = "Test package for build source path resolution"
+
+[package.build]
+backend = {{ name = "in-memory", version = "0.1.0" }}
+# This should resolve to <package_manifest_dir>/src, not <workspace_root>/src
+source.path = "src"
+
+[dependencies]
+test-build-source = {{ path = "." }}
+"#,
+        Platform::current(),
+    );
+
+    // Write the manifest
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // Actually trigger the build process to test the bug
+    // This will call build_backend_metadata which uses alternative_root
+    let result = pixi.update_lock_file().await;
+
+    // The test should succeed if the source path is resolved correctly
+    // If the bug exists (manifest_path instead of manifest_path.parent()),
+    // the build will fail because it will try to find src relative to pixi.toml (a file)
+    // instead of relative to the directory containing pixi.toml
+    assert!(
+        result.is_ok(),
+        "Lock file update should succeed when source.path is resolved correctly. Error: {:?}",
+        result.err()
+    );
+
+    let lock_file = result.unwrap();
+
+    // Verify the package was built and is in the lock file
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "test-build-source",
+        ),
+        "Built package should be in the lock file"
+    );
+}
+
+/// Test that verifies `.pixi/.gitignore` is created during `pixi build`
+/// This fixes issue #4761 where pixi build didn't create the .gitignore file,
+/// causing recursion errors in rattler-build when source files reference the project root
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_build_creates_gitignore() {
+    setup_tracing();
+
+    // Create a PixiControl instance
+    let pixi = PixiControl::new().unwrap();
+
+    // Create a minimal manifest with build configuration
+    // We're not setting up a real backend, so the build will fail,
+    // but the .gitignore should still be created
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = []
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[package]
+name = "test-gitignore-build"
+version = "0.1.0"
+description = "Test package for .gitignore creation during build"
+
+[package.build]
+backend.name = "nonexistent-backend"
+backend.version = "0.1.0"
+"#,
+        Platform::current(),
+    );
+
+    // Write the manifest
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    let gitignore_path = pixi.workspace().unwrap().pixi_dir().join(".gitignore");
+
+    // Verify .pixi/.gitignore doesn't exist initially
+    assert!(
+        !gitignore_path.exists(),
+        ".pixi/.gitignore file should not exist before build"
+    );
+
+    // Run pixi build - this will fail because the backend doesn't exist,
+    // but it should still create the .pixi/.gitignore file as part of
+    // the sanity_check_workspace call
+    let _ = pixi.build().await;
+
+    // Verify .pixi/.gitignore was created even though the build failed
+    assert!(
+        gitignore_path.exists(),
+        ".pixi/.gitignore file was not created after build"
+    );
+}

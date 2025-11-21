@@ -36,7 +36,7 @@ pub struct InstallPlanner {
     uv_cache: Cache,
     lock_file_dir: PathBuf,
     // Packages that should never be marked as extraneous
-    ignored_extraneous: HashSet<uv_pep508::PackageName>,
+    ignored_extraneous: HashSet<uv_normalize::PackageName>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -77,7 +77,7 @@ impl InstallPlanner {
     /// during the extraneous/duplicate detection phase.
     pub fn with_ignored_extraneous<I>(mut self, names: I) -> Self
     where
-        I: IntoIterator<Item = uv_pep508::PackageName>,
+        I: IntoIterator<Item = uv_normalize::PackageName>,
     {
         self.ignored_extraneous = names.into_iter().collect();
         self
@@ -116,7 +116,7 @@ impl InstallPlanner {
             let pkg_and_dist = required_dists_map.get(dist.name());
             // Get the installer name
             let installer = dist
-                .installer()
+                .read_installer()
                 // Empty string if no installer or any other error
                 .map_or(String::new(), |f| f.unwrap_or_default());
 
@@ -202,7 +202,7 @@ impl InstallPlanner {
             let pkg_and_dist = required_dists_map.get(dist.name());
             let pkg = pkg_and_dist.map(|(pkg, _dist)| *pkg);
             let installer = dist
-                .installer()
+                .read_installer()
                 .map_or(String::new(), |f| f.unwrap_or_default());
 
             // If this package is in the ignore list, never consider it extraneous

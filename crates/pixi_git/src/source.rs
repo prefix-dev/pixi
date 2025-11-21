@@ -180,5 +180,5 @@ pub fn cache_digest(url: &RepositoryUrl) -> String {
     let mut hasher = DefaultHasher::new();
     url.hash(&mut hasher);
     let hash = hasher.finish();
-    format!("{:x}", hash)
+    format!("{hash:x}")
 }

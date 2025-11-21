@@ -4,6 +4,7 @@ use futures::Stream;
 use pixi_git::resolver::RepositoryReference;
 use rattler_repodata_gateway::RunExportsReporter;
 use serde::Serialize;
+use url::Url;
 
 use crate::{
     BackendSourceBuildSpec, BuildBackendMetadataSpec, PixiEnvironmentSpec,
@@ -113,6 +114,22 @@ pub trait GitCheckoutReporter {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(transparent)]
+pub struct UrlCheckoutId(pub usize);
+
+pub trait UrlCheckoutReporter {
+    /// Called when a url checkout was queued on the
+    /// [`crate::CommandDispatcher`].
+    fn on_queued(&mut self, reason: Option<ReporterContext>, env: &Url) -> UrlCheckoutId;
+
+    /// Called when the url checkout has started.
+    fn on_start(&mut self, checkout_id: UrlCheckoutId);
+
+    /// Called when the url checkout has finished.
+    fn on_finished(&mut self, checkout_id: UrlCheckoutId);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
 pub struct InstantiateToolEnvId(pub usize);
 
 pub trait InstantiateToolEnvironmentReporter {
@@ -143,10 +160,14 @@ pub trait BuildBackendMetadataReporter {
     ) -> BuildBackendMetadataId;
 
     /// Called when the operation has started.
-    fn on_started(&mut self, id: BuildBackendMetadataId);
+    fn on_started(
+        &mut self,
+        id: BuildBackendMetadataId,
+        backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
+    );
 
     /// Called when the operation has finished.
-    fn on_finished(&mut self, id: BuildBackendMetadataId);
+    fn on_finished(&mut self, id: BuildBackendMetadataId, failed: bool);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
@@ -183,10 +204,14 @@ pub trait SourceBuildReporter {
     ) -> SourceBuildId;
 
     /// Called when the operation has started.
-    fn on_started(&mut self, id: SourceBuildId);
+    fn on_started(
+        &mut self,
+        id: SourceBuildId,
+        backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
+    );
 
     /// Called when the operation has finished.
-    fn on_finished(&mut self, id: SourceBuildId);
+    fn on_finished(&mut self, id: SourceBuildId, failed: bool);
 }
 
 /// A trait that is used to report the progress of a source build performed by
@@ -232,6 +257,11 @@ pub trait Reporter: Send {
     /// Returns a mutable reference to a reporter that reports on any git
     /// progress.
     fn as_git_reporter(&mut self) -> Option<&mut dyn GitCheckoutReporter> {
+        None
+    }
+    /// Returns a mutable reference to a reporter that reports on any git
+    /// progress.
+    fn as_url_reporter(&mut self) -> Option<&mut dyn UrlCheckoutReporter> {
         None
     }
     /// Returns a mutable reference to a reporter that reports on conda solve

@@ -11,7 +11,7 @@ use pixi_spec::PixiSpec;
 use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::{Serialize, Serializer, ser::SerializeMap};
-use serde_with::serde_derive::Deserialize;
+use serde_derive::Deserialize;
 use thiserror::Error;
 use toml_span::{DeserError, Deserialize, Value, de_helpers::TableHelper};
 
@@ -91,7 +91,7 @@ impl ManifestParsingError {
                         "Unexpected keys, expected only {}",
                         expected
                             .iter()
-                            .format_with(", ", |key, f| f(&format_args!("'{}'", key)))
+                            .format_with(", ", |key, f| f(&format_args!("'{key}'")))
                     )
                 }
                 toml_span::ErrorKind::UnexpectedValue { expected, .. } => {
@@ -99,7 +99,7 @@ impl ManifestParsingError {
                         "Expected one of {}",
                         expected
                             .iter()
-                            .format_with(", ", |key, f| f(&format_args!("'{}'", key)))
+                            .format_with(", ", |key, f| f(&format_args!("'{key}'")))
                     )
                 }
                 _ => err.to_string(),

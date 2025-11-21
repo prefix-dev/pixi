@@ -96,8 +96,7 @@ async fn fetch_mapping_from_url(
     }
 
     let mapping_by_name = response.json().await.into_diagnostic().context(format!(
-        "failed to parse pypi name mapping located at {}. Please make sure that it's a valid json",
-        url
+        "failed to parse pypi name mapping located at {url}. Please make sure that it's a valid json"
     ))?;
 
     Ok(mapping_by_name)

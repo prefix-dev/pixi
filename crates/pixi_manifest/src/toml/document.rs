@@ -274,7 +274,7 @@ dependencies = { dummy = "3.11.*" }
 
         // Should create proper quoted section names
         let result = manifest.0.to_string();
-        println!("Result: {}", result);
+        println!("Result: {result}");
         assert!(result.contains("[envs.\"sdl.example\"]"));
     }
 
@@ -296,7 +296,7 @@ dependencies = { dummy = "3.11.*" }
 
         // Should create proper quoted section names
         let result = manifest.0.to_string();
-        println!("get_or_insert_nested_table Result: {}", result);
+        println!("get_or_insert_nested_table Result: {result}");
         // The key should be properly quoted in the section header
         assert!(result.contains("[envs.\"sdl.example\".dependencies]"));
     }
@@ -305,7 +305,7 @@ dependencies = { dummy = "3.11.*" }
     fn test_feature_names_with_dots_issue_3171() {
         // Test case for issue #3171: Feature names with dots should be properly quoted
         let toml = r#"
-[tool.pixi.project]
+[tool.pixi.workspace]
 "#;
         let mut manifest = TomlDocument::new(DocumentMut::from_str(toml).unwrap());
         let result_table = manifest
@@ -316,7 +316,7 @@ dependencies = { dummy = "3.11.*" }
         result_table.insert("rich", toml_edit::Item::Value(toml_edit::Value::from("*")));
 
         let result = manifest.0.to_string();
-        println!("Feature with dots result: {}", result);
+        println!("Feature with dots result: {result}");
 
         // Should create [tool.pixi.feature."test.test".dependencies] not [tool.pixi.feature.test.test.dependencies]
         assert!(result.contains("[tool.pixi.feature.\"test.test\".dependencies]"));
@@ -329,7 +329,7 @@ dependencies = { dummy = "3.11.*" }
     fn test_feature_names_with_dots_inline_table_issue_3171() {
         // Test case for issue #3171 using insert_into_inline_table
         let toml = r#"
-[tool.pixi.project]
+[tool.pixi.workspace]
 "#;
         let mut manifest = TomlDocument::new(DocumentMut::from_str(toml).unwrap());
         manifest
@@ -341,7 +341,7 @@ dependencies = { dummy = "3.11.*" }
             .unwrap();
 
         let result = manifest.0.to_string();
-        println!("Feature with dots inline table result: {}", result);
+        println!("Feature with dots inline table result: {result}");
 
         // Should create [tool.pixi.feature."test.test"] with dependencies = { rich = "*" }
         assert!(result.contains("[tool.pixi.feature.\"test.test\"]"));

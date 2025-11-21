@@ -1,13 +1,19 @@
-use std::path::PathBuf;
+use std::{ffi::OsStr, path::PathBuf};
 
 use clap::Parser;
+use fs_err::tokio as tokio_fs;
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
+use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
 };
 use pixi_config::ConfigCli;
-use pixi_core::WorkspaceLocator;
+use pixi_consts::consts::{
+    MOJOPROJECT_MANIFEST, PYPROJECT_MANIFEST, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES,
+    WORKSPACE_MANIFEST,
+};
+use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart};
 use pixi_manifest::FeaturesExt;
 use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
@@ -16,16 +22,21 @@ use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use tempfile::tempdir;
 
-use crate::cli_config::WorkspaceConfig;
+use crate::cli_config::LockAndInstallConfig;
 
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: WorkspaceConfig,
+    pub config_cli: ConfigCli,
+
+    /// Backend override for testing purposes. This field is ignored by clap
+    /// and should only be set programmatically in tests.
+    #[clap(skip)]
+    pub backend_override: Option<BackendOverride>,
 
     #[clap(flatten)]
-    pub config_cli: ConfigCli,
+    pub lock_and_install_config: LockAndInstallConfig,
 
     /// The path to the manifest file to build (e.g., recipe.yaml, package.xml, pixi.toml).
     /// If not specified, defaults to the workspace manifest.
@@ -51,16 +62,132 @@ pub struct Args {
     /// Whether to clean the build directory before building.
     #[clap(long, short)]
     pub clean: bool,
+
+    /// The path to a directory containing a package manifest, or to a specific manifest file.
+    ///
+    /// Supported manifest files: `package.xml`, `recipe.yaml`, `pixi.toml`, `pyproject.toml`, or `mojoproject.toml`.
+    ///
+    /// When a directory is provided, the command will search for supported manifest files within it.
+    #[arg(long)]
+    pub path: Option<PathBuf>,
+}
+
+/// Validate that the full path of package manifest exists and is a supported format.
+/// Directories are allowed (for discovery), and specific manifest files must be supported formats.
+async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
+    let supported_file_names: Vec<&str> = [
+        // backend-specific build files
+        // that will be autodiscovered
+        &ROS_BACKEND_FILE_NAMES[..],
+        &RATTLER_BUILD_FILE_NAMES[..],
+        // manifests that can contain a package section in it
+        &[WORKSPACE_MANIFEST],
+        &[PYPROJECT_MANIFEST],
+        &[MOJOPROJECT_MANIFEST],
+    ]
+    .concat();
+
+    // we dont allow for now passing directories without a manifest file
+    // from the list below
+    let unsupported_implicit_file_names: Vec<&str> = [&ROS_BACKEND_FILE_NAMES[..]].concat();
+
+    // Iterate over the files in the directory to provide a more helpful error
+    // of what manifests were found.
+    if path.is_dir() {
+        let mut entries = tokio_fs::read_dir(&path).await.into_diagnostic()?;
+
+        while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
+            let path = entry.path();
+            if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
+                if unsupported_implicit_file_names.contains(&filename) {
+                    return Err(miette::diagnostic!(
+                        help = format!("did you mean {filename}?"),
+                        "the build manifest path '{}' is a directory, please provide the path to the manifest file",
+                        path.display(),
+                    ).into());
+                }
+
+                // we found a supported manifest file
+                // which means that we will let our backend discovery handle it
+                if supported_file_names.contains(&filename) {
+                    return Ok(());
+                }
+            }
+        }
+    } else {
+        let filename = path
+            .file_name()
+            .and_then(OsStr::to_str)
+            .ok_or_else(|| miette::miette!("Failed to extract file name from {:?}", path))?;
+
+        if !supported_file_names
+            .iter()
+            .any(|names| names.contains(filename))
+        {
+            let supported_names = supported_file_names
+                .iter()
+                .map(|name| name.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            return Err(miette::diagnostic!(
+                help = format!("Supported formats are: {supported_names}"),
+                "the build manifest file '{}' is not a supported format.",
+                path.display(),
+            )
+            .into());
+        }
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn determine_discovery_start(
+    path: &Option<PathBuf>,
+) -> miette::Result<DiscoveryStart> {
+    match path {
+        Some(path) => {
+            // We need to solve the path to an absolute path
+            // because we can point to specific package manifest file
+            // but still want to discover the workspace from the package location.
+            // For this, we need to take the parent directory of the package manifest file
+            // which `WorkspaceLocator` will use to discover the workspace.
+            let resolved_path = if path.is_relative() {
+                std::env::current_dir().into_diagnostic()?.join(path)
+            } else {
+                path.to_path_buf()
+            };
+
+            // If it's a directory, use it as the search root
+            if resolved_path.is_dir() {
+                Ok(DiscoveryStart::SearchRoot(resolved_path))
+            } else {
+                // If it's a file, use its parent directory as the search root
+                let package_dir = resolved_path.parent().ok_or_else(|| {
+                    miette::miette!("Failed to get parent directory of package manifest")
+                })?;
+                Ok(DiscoveryStart::SearchRoot(package_dir.to_path_buf()))
+            }
+        }
+        // If no path is provided, use the current directory
+        None => Ok(DiscoveryStart::CurrentDir),
+    }
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Locate the workspace based on the provided configuration.
-    let workspace_locator = args.project_config.workspace_locator_start();
+    // When --path is specified, we should find the workspace manifest relative
+    // to the path's directory, not the current working directory.
+    let workspace_locator = determine_discovery_start(&args.path).await?;
+
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_locator.clone())
         .with_closest_package(false)
         .locate()?
         .with_cli_config(args.config_cli);
+
+    // Sanity check of workspace, ensuring .pixi directory and .gitignore exist
+    sanity_check_workspace(&workspace).await?;
 
     // Construct a command dispatcher based on the workspace.
     let multi_progress = global_multi_progress();
@@ -118,39 +245,51 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         };
         path
     };
-    let manifest_path_canonical = dunce::canonicalize(&manifest_path)
+
+    let package_manifest_path = match args.path {
+        Some(path) => {
+            validate_package_manifest(&path).await?;
+            path
+        }
+        None => manifest_path.clone(),
+    };
+
+    let package_manifest_path_canonical = dunce::canonicalize(&package_manifest_path)
         .into_diagnostic()
         .with_context(|| {
             format!(
                 "failed to canonicalize manifest path '{}'",
-                manifest_path.display()
+                package_manifest_path.display()
             )
         })?;
-    // Store the manifest location relative to the workspace root when possible to
+
+    // Store the manifest directory relative to the workspace root when possible to
     // keep the pinned path relocatable and avoid double-prefixing during resolution.
-    let manifest_spec_path = pathdiff::diff_paths(&manifest_path_canonical, workspace.root())
-        .unwrap_or(manifest_path_canonical.clone());
+    let manifest_path_spec =
+        pathdiff::diff_paths(&package_manifest_path_canonical, workspace.root())
+            .unwrap_or_else(|| package_manifest_path_canonical.to_path_buf());
+
     let channel_config = workspace.channel_config();
     let channels = workspace
         .default_environment()
         .channel_urls(&channel_config)
         .into_diagnostic()?;
 
-    // Determine the source of the package.
-    let source: PinnedSourceSpec = PinnedPathSpec {
-        path: manifest_spec_path.to_string_lossy().into_owned().into(),
+    let manifest_source: PinnedSourceSpec = PinnedPathSpec {
+        path: manifest_path_spec.to_string_lossy().into_owned().into(),
     }
     .into();
 
     // Create the build backend metadata specification.
     let backend_metadata_spec = BuildBackendMetadataSpec {
-        source: source.clone(),
+        manifest_source: manifest_source.clone(),
         channels: channels.clone(),
         channel_config: channel_config.clone(),
         build_environment: build_environment.clone(),
         variants: Some(variants.clone()),
         variant_files: Some(variant_files.clone()),
         enabled_protocols: Default::default(),
+        pin_override: None,
     };
     let backend_metadata = command_dispatcher
         .build_backend_metadata(backend_metadata_spec.clone())
@@ -183,7 +322,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 package,
                 // Build into a temporary directory first
                 output_directory: Some(temp_output_dir.path().to_path_buf()),
-                source: source.clone(),
+                manifest_source: manifest_source.clone(),
+                build_source: None,
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),

@@ -3,6 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
+use pixi_url::resolver::UrlResolver;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::LazyClient;
@@ -10,7 +11,7 @@ use rattler_repodata_gateway::{Gateway, MaxConcurrency};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 
 use crate::cache::build_backend_metadata::BuildBackendMetadataCache;
-use crate::cache::source_metadata::{self, SourceMetadataCache};
+use crate::cache::source_metadata::SourceMetadataCache;
 use crate::discover_backend_cache::DiscoveryCache;
 use crate::{
     CacheDirs, CommandDispatcher, Executor, Limits, Reporter,
@@ -26,6 +27,7 @@ pub struct CommandDispatcherBuilder {
     root_dir: Option<PathBuf>,
     reporter: Option<Box<dyn Reporter>>,
     git_resolver: Option<GitResolver>,
+    url_resolver: Option<UrlResolver>,
     download_client: Option<LazyClient>,
     cache_dirs: Option<CacheDirs>,
     build_backend_overrides: BackendOverride,
@@ -73,6 +75,14 @@ impl CommandDispatcherBuilder {
     pub fn with_git_resolver(self, resolver: GitResolver) -> Self {
         Self {
             git_resolver: Some(resolver),
+            ..self
+        }
+    }
+
+    /// Sets the url resolver used to fetch archives.
+    pub fn with_url_resolver(self, resolver: UrlResolver) -> Self {
+        Self {
+            url_resolver: Some(resolver),
             ..self
         }
     }
@@ -157,6 +167,7 @@ impl CommandDispatcherBuilder {
         let build_backend_metadata_cache =
             BuildBackendMetadataCache::new(cache_dirs.build_backend_metadata());
 
+        let url_resolver = self.url_resolver.unwrap_or_default();
         let source_metadata_cache = SourceMetadataCache::new(cache_dirs.source_metadata());
 
         let build_cache = BuildCache::new(cache_dirs.source_builds());
@@ -177,6 +188,7 @@ impl CommandDispatcherBuilder {
             build_cache,
             root_dir,
             git_resolver,
+            url_resolver,
             cache_dirs,
             download_client,
             build_backend_overrides: self.build_backend_overrides,

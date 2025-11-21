@@ -32,7 +32,7 @@ use tokio::{
     sync::{Mutex, oneshot},
 };
 
-use super::stderr::{stderr_buffer, stream_stderr};
+use super::stderr::stream_stderr;
 use crate::{
     backend::BackendOutputStream,
     error::BackendError,
@@ -93,7 +93,7 @@ pub enum InitializeError {
     ),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Communication(#[from] CommunicationError),
+    Communication(#[from] Box<CommunicationError>),
 }
 
 impl CommunicationError {
@@ -238,13 +238,13 @@ impl JsonRpcBackend {
             )
             .await
             .map_err(|err| {
-                CommunicationError::from_client_error(
+                Box::new(CommunicationError::from_client_error(
                     backend_identifier.clone(),
                     err,
                     procedures::negotiate_capabilities::METHOD_NAME,
                     manifest_path.parent().unwrap_or(&manifest_path),
                     None,
-                )
+                ))
             })?;
 
         // Invoke the initialize method on the backend to establish the connection.
@@ -263,13 +263,13 @@ impl JsonRpcBackend {
             )
             .await
             .map_err(|err| {
-                CommunicationError::from_client_error(
+                Box::new(CommunicationError::from_client_error(
                     backend_identifier.clone(),
                     err,
                     procedures::initialize::METHOD_NAME,
                     manifest_path.parent().unwrap_or(&manifest_path),
                     None,
-                )
+                ))
             })?;
 
         Ok(Self {
@@ -287,7 +287,7 @@ impl JsonRpcBackend {
         request: CondaBuildV1Params,
         output_stream: W,
     ) -> Result<CondaBuildV1Result, CommunicationError> {
-        // Capture all of stderr and discard it
+        // Capture all of stderr and stream it
         let stderr = self.stderr.as_ref().map(|stderr| {
             // Cancellation signal
             let (cancel_tx, cancel_rx) = oneshot::channel();
@@ -334,16 +334,17 @@ impl JsonRpcBackend {
     }
 
     /// Call the `conda/outputs` method on the backend.
-    pub async fn conda_outputs(
+    pub async fn conda_outputs<W: BackendOutputStream + Send + 'static>(
         &self,
         request: CondaOutputsParams,
+        output_stream: W,
     ) -> Result<CondaOutputsResult, CommunicationError> {
-        // Capture all of stderr and discard it
+        // Capture all of stderr and stream it
         let stderr = self.stderr.as_ref().map(|stderr| {
             // Cancellation signal
             let (cancel_tx, cancel_rx) = oneshot::channel();
             // Spawn the stderr forwarding task
-            let handle = tokio::spawn(stderr_buffer(stderr.clone(), cancel_rx));
+            let handle = tokio::spawn(stream_stderr(stderr.clone(), cancel_rx, output_stream));
             (cancel_tx, handle)
         });
 

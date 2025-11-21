@@ -25,9 +25,9 @@ pub enum ManifestDocument {
 impl fmt::Display for ManifestDocument {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ManifestDocument::PyProjectToml(document) => write!(f, "{}", document),
-            ManifestDocument::PixiToml(document) => write!(f, "{}", document),
-            ManifestDocument::MojoProjectToml(document) => write!(f, "{}", document),
+            ManifestDocument::PyProjectToml(document) => write!(f, "{document}"),
+            ManifestDocument::PixiToml(document) => write!(f, "{document}"),
+            ManifestDocument::MojoProjectToml(document) => write!(f, "{document}"),
         }
     }
 }
@@ -77,7 +77,7 @@ impl ManifestDocument {
         let empty_content = r#"
         [project]
         name = "test"
-        [tool.pixi.project]
+        [tool.pixi.workspace]
         channels = []
         platforms = []
         "#
@@ -821,7 +821,7 @@ mod test {
         let manifest_content = r#"[project]
 name = "test"
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = []
 platforms = []
 
@@ -873,7 +873,7 @@ dev = [
     "PyYaML>=6.0", # dev inline comment
 ]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = []
 platforms = []
 

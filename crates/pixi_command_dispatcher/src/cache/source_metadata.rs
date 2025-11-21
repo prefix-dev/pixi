@@ -8,14 +8,13 @@ use std::{
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
-use pixi_build_types::{CondaPackageMetadata, procedures::conda_outputs::CondaOutput};
 use pixi_record::{InputHash, PinnedSourceSpec, SourceRecord};
 use rattler_conda_types::{ChannelUrl, PackageName};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
-use crate::{BuildEnvironment, PackageIdentifier, build::source_checkout_cache_key};
+use crate::{BuildEnvironment, build::source_checkout_cache_key};
 
 /// A cache for caching the metadata of a source checkout.
 ///

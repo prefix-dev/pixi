@@ -198,8 +198,8 @@ impl GroupedEnvironmentName {
 impl Display for GroupedEnvironmentName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GroupedEnvironmentName::Group(name) => write!(f, "{}", name),
-            GroupedEnvironmentName::Environment(name) => write!(f, "{}", name),
+            GroupedEnvironmentName::Group(name) => write!(f, "{name}"),
+            GroupedEnvironmentName::Environment(name) => write!(f, "{name}"),
         }
     }
 }

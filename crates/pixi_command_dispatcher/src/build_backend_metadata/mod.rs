@@ -1,3 +1,11 @@
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    hash::{Hash, Hasher},
+    path::PathBuf,
+    sync::Mutex,
+};
+
+use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use miette::Diagnostic;
 use once_cell::sync::Lazy;
 use pathdiff::diff_paths;
@@ -9,12 +17,6 @@ use pixi_record::{InputHash, PinnedSourceSpec};
 use pixi_spec::{SourceAnchor, SourceSpec};
 use rand::random;
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    hash::{Hash, Hasher},
-    path::PathBuf,
-    sync::Mutex,
-};
 use thiserror::Error;
 use tracing::instrument;
 use xxhash_rust::xxh3::Xxh3;
@@ -47,8 +49,8 @@ fn warn_once_per_backend(backend_name: &str) {
 /// particular source.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
 pub struct BuildBackendMetadataSpec {
-    /// The source specification
-    pub source: PinnedSourceSpec,
+    /// The source specification where manifest is located at.
+    pub manifest_source: PinnedSourceSpec,
 
     /// The channel configuration to use for the build backend.
     pub channel_config: ChannelConfig,
@@ -69,13 +71,21 @@ pub struct BuildBackendMetadataSpec {
     /// The protocols that are enabled for this source
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
+
+    /// Optional override for the pinned build source of the current package.
+    /// When set, this takes precedence over any discovered build_source.
+    #[serde(skip)]
+    pub pin_override: Option<PinnedSourceSpec>,
 }
 
 /// The metadata of a source checkout.
 #[derive(Debug)]
 pub struct BuildBackendMetadata {
     /// The source checkout that the manifest was extracted from.
-    pub source: PinnedSourceSpec,
+    pub manifest_source: PinnedSourceSpec,
+
+    /// The source checkout from which we want to build package.
+    pub build_source: Option<PinnedSourceSpec>,
 
     /// The cache entry that contains the metadata acquired from the build
     /// backend.
@@ -93,29 +103,70 @@ impl BuildBackendMetadataSpec {
         skip_all,
         name="backend-metadata",
         fields(
-            source = %self.source,
+            source = %self.manifest_source,
             platform = %self.build_environment.host_platform,
         )
     )]
     pub(crate) async fn request(
         self,
         command_dispatcher: CommandDispatcher,
+        log_sink: UnboundedSender<String>,
     ) -> Result<BuildBackendMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
         // Ensure that the source is checked out before proceeding.
-        let source_checkout = command_dispatcher
-            .checkout_pinned_source(self.source.clone())
+        let manifest_source_checkout = command_dispatcher
+            .checkout_pinned_source(self.manifest_source.clone())
             .await
             .map_err_with(BuildBackendMetadataError::SourceCheckout)?;
 
         // Discover information about the build backend from the source code (cached by path).
         let discovered_backend = command_dispatcher
             .discover_backend(
-                &source_checkout.path,
+                &manifest_source_checkout.path,
                 self.channel_config.clone(),
                 self.enabled_protocols.clone(),
             )
             .await
             .map_err_with(BuildBackendMetadataError::Discovery)?;
+
+        let build_source_checkout = if let Some(pin_override) = &self.pin_override {
+            Some(
+                command_dispatcher
+                    .checkout_pinned_source(pin_override.clone())
+                    .await
+                    .map_err_with(BuildBackendMetadataError::SourceCheckout)?,
+            )
+        } else if let Some(build_source) = &discovered_backend.init_params.build_source {
+            Some(
+                command_dispatcher
+                    .pin_and_checkout(
+                        build_source.clone(),
+                        Some(
+                            discovered_backend
+                                .init_params
+                                .manifest_path
+                                .parent()
+                                .ok_or_else(|| {
+                                    SourceCheckoutError::ParentDir(
+                                        discovered_backend.init_params.manifest_path.clone(),
+                                    )
+                                })
+                                .map_err(BuildBackendMetadataError::SourceCheckout)
+                                .map_err(CommandDispatcherError::Failed)?,
+                        ),
+                    )
+                    .await
+                    .map_err_with(BuildBackendMetadataError::SourceCheckout)?,
+            )
+        } else {
+            None
+        };
+
+        let (build_source_checkout, build_source) = if let Some(checkout) = build_source_checkout {
+            let pinned = checkout.pinned.clone();
+            (checkout, Some(pinned))
+        } else {
+            (manifest_source_checkout.clone(), None)
+        };
 
         // Calculate the hash of the project model
         let additional_glob_hash = calculate_additional_glob_hash(
@@ -141,7 +192,7 @@ impl BuildBackendMetadataSpec {
 
         if !skip_cache {
             if let Some(metadata) = Self::verify_cache_freshness(
-                &source_checkout,
+                &build_source_checkout,
                 &command_dispatcher,
                 metadata,
                 &additional_glob_hash,
@@ -151,7 +202,8 @@ impl BuildBackendMetadataSpec {
                 return Ok(BuildBackendMetadata {
                     metadata,
                     cache_entry,
-                    source: source_checkout.pinned,
+                    manifest_source: manifest_source_checkout.pinned,
+                    build_source,
                 });
             }
         } else {
@@ -161,22 +213,24 @@ impl BuildBackendMetadataSpec {
             warn_once_per_backend(backend_name);
         }
 
+        let build_source_dir = build_source_checkout.path.clone();
         // Instantiate the backend with the discovered information.
-        let backend = command_dispatcher
-            .instantiate_backend(InstantiateBackendSpec {
-                backend_spec: discovered_backend
-                    .backend_spec
-                    .clone()
-                    .resolve(SourceAnchor::from(SourceSpec::from(self.source.clone()))),
-                init_params: discovered_backend.init_params.clone(),
-                channel_config: self.channel_config.clone(),
-                enabled_protocols: self.enabled_protocols.clone(),
-            })
-            .await
-            .map_err_with(BuildBackendMetadataError::Initialize)?;
+        let backend =
+            command_dispatcher
+                .instantiate_backend(InstantiateBackendSpec {
+                    backend_spec: discovered_backend.backend_spec.clone().resolve(
+                        SourceAnchor::from(SourceSpec::from(self.manifest_source.clone())),
+                    ),
+                    init_params: discovered_backend.init_params.clone(),
+                    build_source_dir,
+                    channel_config: self.channel_config.clone(),
+                    enabled_protocols: self.enabled_protocols.clone(),
+                })
+                .await
+                .map_err_with(BuildBackendMetadataError::Initialize)?;
 
         // Call the conda_outputs method to get metadata.
-        let source = source_checkout.pinned.clone();
+        let manifest_source = manifest_source_checkout.pinned.clone();
         if !backend.capabilities().provides_conda_outputs() {
             return Err(CommandDispatcherError::Failed(
                 BuildBackendMetadataError::BackendMissingCapabilities(
@@ -192,9 +246,10 @@ impl BuildBackendMetadataSpec {
         let metadata = self
             .call_conda_outputs(
                 command_dispatcher,
-                source_checkout,
+                build_source_checkout,
                 backend,
                 additional_glob_hash,
+                log_sink,
             )
             .await?;
 
@@ -206,9 +261,10 @@ impl BuildBackendMetadataSpec {
             .map_err(CommandDispatcherError::Failed)?;
 
         Ok(BuildBackendMetadata {
+            manifest_source,
+            build_source,
             metadata,
             cache_entry,
-            source,
         })
     }
 
@@ -310,6 +366,53 @@ impl BuildBackendMetadataSpec {
         }
     }
 
+    /// Validates that outputs with the same name have unique variants.
+    #[allow(clippy::result_large_err)]
+    fn validate_unique_variants(
+        outputs: &[pixi_build_types::procedures::conda_outputs::CondaOutput],
+    ) -> Result<(), CommandDispatcherError<BuildBackendMetadataError>> {
+        use std::collections::HashMap;
+
+        // Group outputs by package name
+        let mut outputs_by_name: HashMap<_, Vec<_>> = HashMap::new();
+        for output in outputs {
+            outputs_by_name
+                .entry(&output.metadata.name)
+                .or_default()
+                .push(output);
+        }
+
+        // Check for duplicate variants within each package name group
+        for (package_name, package_outputs) in outputs_by_name {
+            if package_outputs.len() <= 1 {
+                // No duplicates possible with 0 or 1 outputs
+                continue;
+            }
+
+            let mut seen_variants = HashSet::new();
+            let mut duplicate_variants = Vec::new();
+
+            for output in package_outputs {
+                let variant = &output.metadata.variant;
+                if !seen_variants.insert(variant) {
+                    // This variant was already seen, so it's a duplicate
+                    duplicate_variants.push(format!("{variant:?}"));
+                }
+            }
+
+            if !duplicate_variants.is_empty() {
+                return Err(CommandDispatcherError::Failed(
+                    BuildBackendMetadataError::DuplicateVariants {
+                        package: package_name.as_normalized().to_string(),
+                        duplicates: duplicate_variants.join(", "),
+                    },
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
     /// Use the `conda/outputs` procedure to get the metadata for the source
     /// checkout.
     async fn call_conda_outputs(
@@ -318,6 +421,7 @@ impl BuildBackendMetadataSpec {
         source_checkout: SourceCheckout,
         backend: Backend,
         additional_glob_hash: Vec<u8>,
+        mut log_sink: UnboundedSender<String>,
     ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
         let backend_identifier = backend.identifier().to_string();
         let params = CondaOutputsParams {
@@ -338,10 +442,18 @@ impl BuildBackendMetadataSpec {
             ),
         };
         let outputs = backend
-            .conda_outputs(params)
+            .conda_outputs(params, move |line| {
+                let _err = futures::executor::block_on(log_sink.send(line));
+            })
             .await
             .map_err(BuildBackendMetadataError::Communication)
             .map_err(CommandDispatcherError::Failed)?;
+
+        // If the backend supports unique variants, validate that outputs with the same name
+        // have unique variants
+        if backend.api_version().supports_unique_variants() {
+            Self::validate_unique_variants(&outputs.outputs)?;
+        }
 
         for output in &outputs.outputs {
             tracing::debug!(
@@ -421,7 +533,7 @@ impl BuildBackendMetadataSpec {
             build_environment: self.build_environment.clone(),
             build_variants: self.variants.clone().unwrap_or_default(),
             enabled_protocols: self.enabled_protocols.clone(),
-            pinned_source: self.source.clone(),
+            pinned_source: self.manifest_source.clone(),
         }
     }
 }
@@ -472,6 +584,11 @@ pub enum BuildBackendMetadataError {
     #[error("the build backend {0} does not support the `conda/outputs` procedure")]
     BackendMissingCapabilities(String),
 
+    #[error(
+        "the build backend returned outputs with duplicate variants for package '{package}': {duplicates}"
+    )]
+    DuplicateVariants { package: String, duplicates: String },
+
     #[error("could not compute hash of input files")]
     GlobHash(#[from] pixi_glob::GlobHashError),
 
@@ -494,4 +611,180 @@ pub fn calculate_additional_glob_hash(
         }
     }
     hasher.finish().to_ne_bytes().to_vec()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_build_types::procedures::conda_outputs::{
+        CondaOutput, CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
+        CondaOutputRunExports,
+    };
+    use rattler_conda_types::{NoArchType, PackageName, Platform, Version};
+    use std::collections::BTreeMap;
+
+    fn create_test_output(name: &str, variant: BTreeMap<String, String>) -> CondaOutput {
+        CondaOutput {
+            metadata: CondaOutputMetadata {
+                name: PackageName::try_from(name).unwrap(),
+                version: Version::major(1).into(),
+                build: "0".to_string(),
+                build_number: 0,
+                subdir: Platform::NoArch,
+                license: None,
+                license_family: None,
+                noarch: NoArchType::none(),
+                purls: None,
+                python_site_packages_path: None,
+                variant,
+            },
+            build_dependencies: None,
+            host_dependencies: None,
+            run_dependencies: CondaOutputDependencies {
+                depends: vec![],
+                constraints: vec![],
+            },
+            ignore_run_exports: CondaOutputIgnoreRunExports::default(),
+            run_exports: CondaOutputRunExports::default(),
+            input_globs: None,
+        }
+    }
+
+    #[test]
+    fn test_validate_unique_variants_with_unique_variants() {
+        // Test case: outputs with the same name but different variants should pass
+        let outputs = vec![
+            create_test_output(
+                "mypackage",
+                BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+            ),
+            create_test_output(
+                "mypackage",
+                BTreeMap::from([("python".to_string(), "3.12".to_string())]),
+            ),
+        ];
+
+        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        assert!(
+            result.is_ok(),
+            "Expected validation to pass for unique variants"
+        );
+    }
+
+    #[test]
+    fn test_validate_unique_variants_with_duplicate_variants() {
+        // Test case: outputs with the same name and same variants should fail
+        let outputs = vec![
+            create_test_output(
+                "mypackage",
+                BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+            ),
+            create_test_output(
+                "mypackage",
+                BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+            ),
+        ];
+
+        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        assert!(
+            result.is_err(),
+            "Expected validation to fail for duplicate variants"
+        );
+
+        if let Err(CommandDispatcherError::Failed(BuildBackendMetadataError::DuplicateVariants {
+            package,
+            duplicates,
+        })) = result
+        {
+            assert_eq!(package, "mypackage");
+            assert!(duplicates.contains("python"));
+        } else {
+            panic!("Expected DuplicateVariants error");
+        }
+    }
+
+    #[test]
+    fn test_validate_unique_variants_with_empty_variants() {
+        // Test case: outputs with the same name and empty variants should fail
+        let outputs = vec![
+            create_test_output("mypackage", BTreeMap::new()),
+            create_test_output("mypackage", BTreeMap::new()),
+        ];
+
+        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        assert!(
+            result.is_err(),
+            "Expected validation to fail for duplicate empty variants"
+        );
+    }
+
+    #[test]
+    fn test_validate_unique_variants_with_different_packages() {
+        // Test case: outputs with different names can have the same variants
+        let outputs = vec![
+            create_test_output(
+                "package-a",
+                BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+            ),
+            create_test_output(
+                "package-b",
+                BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+            ),
+        ];
+
+        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        assert!(
+            result.is_ok(),
+            "Expected validation to pass for different packages with same variants"
+        );
+    }
+
+    #[test]
+    fn test_validate_unique_variants_with_single_output() {
+        // Test case: a single output should always pass
+        let outputs = vec![create_test_output(
+            "mypackage",
+            BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+        )];
+
+        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        assert!(
+            result.is_ok(),
+            "Expected validation to pass for single output"
+        );
+    }
+
+    #[test]
+    fn test_validate_unique_variants_with_multiple_variant_keys() {
+        // Test case: outputs with multiple variant keys, one duplicate
+        let outputs = vec![
+            create_test_output(
+                "mypackage",
+                BTreeMap::from([
+                    ("python".to_string(), "3.11".to_string()),
+                    ("cuda".to_string(), "11.8".to_string()),
+                ]),
+            ),
+            create_test_output(
+                "mypackage",
+                BTreeMap::from([
+                    ("python".to_string(), "3.11".to_string()),
+                    ("cuda".to_string(), "12.0".to_string()),
+                ]),
+            ),
+            create_test_output(
+                "mypackage",
+                BTreeMap::from([
+                    ("python".to_string(), "3.11".to_string()),
+                    ("cuda".to_string(), "11.8".to_string()),
+                ]),
+            ),
+        ];
+
+        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        assert!(
+            result.is_err(),
+            "Expected validation to fail for duplicate multi-key variants"
+        );
+    }
 }

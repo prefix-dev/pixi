@@ -30,7 +30,10 @@ pub struct CacheDirs {
     /// The location where to store build backend metadata information.
     build_backend_metadata: Option<PathBuf>,
 
-    /// The location where to store build backend metadata information.
+    /// The directory where url archives are cached.
+    url: Option<PathBuf>,
+
+    /// The location where to store source metadata information.
     source_metadata: Option<PathBuf>,
 
     /// The location where to store source builds.
@@ -48,6 +51,7 @@ impl CacheDirs {
             packages: None,
             git: None,
             build_backend_metadata: None,
+            url: None,
             source_metadata: None,
             source_builds: None,
         }
@@ -118,6 +122,13 @@ impl CacheDirs {
         self.git
             .clone()
             .unwrap_or_else(|| self.root.join(consts::CACHED_GIT_DIR))
+    }
+
+    /// Returns the directory where git repositories are cached.
+    pub fn url(&self) -> PathBuf {
+        self.url
+            .clone()
+            .unwrap_or_else(|| self.root.join(consts::CACHED_URL_DIR))
     }
 
     /// Returns the directory where source metadata is cached.

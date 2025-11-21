@@ -7,9 +7,12 @@ use pixi_uv_conversions::{ConversionError, to_uv_trusted_host};
 use tracing::debug;
 use uv_cache::Cache;
 use uv_client::ExtraMiddleware;
-use uv_configuration::{Concurrency, PackageConfigSettings, Preview, SourceStrategy, TrustedHost};
+use uv_configuration::{Concurrency, SourceStrategy, TrustedHost};
 use uv_dispatch::SharedState;
-use uv_distribution_types::{ExtraBuildRequires, IndexCapabilities};
+use uv_distribution_types::{
+    ExtraBuildRequires, ExtraBuildVariables, IndexCapabilities, PackageConfigSettings,
+};
+use uv_preview::Preview;
 use uv_types::{HashStrategy, InFlight};
 use uv_workspace::WorkspaceCache;
 
@@ -29,6 +32,7 @@ pub struct UvResolutionContext {
     pub proxies: Vec<reqwest::Proxy>,
     pub package_config_settings: PackageConfigSettings,
     pub extra_build_requires: ExtraBuildRequires,
+    pub extra_build_variables: ExtraBuildVariables,
     pub preview: Preview,
     pub workspace_cache: WorkspaceCache,
 }
@@ -83,6 +87,7 @@ impl UvResolutionContext {
             proxies: config.get_proxies().into_diagnostic()?,
             package_config_settings: PackageConfigSettings::default(),
             extra_build_requires: ExtraBuildRequires::default(),
+            extra_build_variables: ExtraBuildVariables::default(),
             preview: Preview::default(),
             workspace_cache: WorkspaceCache::default(),
         })
@@ -92,7 +97,7 @@ impl UvResolutionContext {
     pub fn set_cache_refresh(
         mut self,
         all: Option<bool>,
-        specific_packages: Option<Vec<uv_pep508::PackageName>>,
+        specific_packages: Option<Vec<uv_normalize::PackageName>>,
     ) -> Self {
         let policy = uv_cache::Refresh::from_args(all, specific_packages.unwrap_or_default());
         self.cache = self.cache.with_refresh(policy);
