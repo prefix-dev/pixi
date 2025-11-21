@@ -2,7 +2,7 @@ use std::{borrow::Cow, collections::HashMap, str::FromStr};
 
 use indexmap::{IndexMap, map::Entry};
 use itertools::Either;
-use pixi_spec::{PixiSpec, SourceSpec};
+use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
 
@@ -11,6 +11,7 @@ use crate::{
     CondaDependencies, DependencyOverwriteBehavior, InternalDependencyBehavior, PyPiDependencies,
     SpecType,
     activation::Activation,
+    dependencies::CondaDevDependencies,
     task::{Task, TaskName},
     utils::PixiSpanned,
 };
@@ -33,7 +34,7 @@ pub struct WorkspaceTarget {
 
     /// Dev dependencies - source packages whose dependencies should be
     /// installed without building the packages themselves
-    pub dev_dependencies: Option<IndexMap<PackageName, SourceSpec>>,
+    pub dev_dependencies: Option<CondaDevDependencies>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,

@@ -1016,7 +1016,7 @@ mod test {
             .dev_dependencies(None)
             .expect("should have dev dependencies");
 
-        assert_eq!(dev_deps.len(), 1);
+        assert_eq!(dev_deps.iter().count(), 1);
         assert!(dev_deps.contains_key("test-package"));
     }
 
@@ -1040,7 +1040,7 @@ mod test {
             .dev_dependencies(None)
             .expect("should have dev dependencies");
 
-        assert_eq!(dev_deps.len(), 1);
+        assert_eq!(dev_deps.iter().count(), 1);
         assert!(dev_deps.contains_key("my-lib"));
     }
 
@@ -1066,7 +1066,7 @@ mod test {
             .dev_dependencies(None)
             .expect("should have develop dependencies");
 
-        assert_eq!(dev_deps.len(), 3);
+        assert_eq!(dev_deps.iter().count(), 3);
         assert!(dev_deps.contains_key("pkg-a"));
         assert!(dev_deps.contains_key("pkg-b"));
         assert!(dev_deps.contains_key("pkg-c"));
@@ -1102,7 +1102,7 @@ mod test {
             .dev_dependencies(None)
             .expect("should have develop dependencies");
 
-        assert_eq!(dev_deps.len(), 1);
+        assert_eq!(dev_deps.iter().count(), 1);
         assert!(dev_deps.contains_key("feature-pkg"));
     }
 
@@ -1129,7 +1129,7 @@ mod test {
             .dev_dependencies(Some(Platform::Linux64))
             .expect("should have linux dev dependencies");
 
-        assert_eq!(linux_deps.len(), 1);
+        assert_eq!(linux_deps.iter().count(), 1);
         assert!(linux_deps.contains_key("linux-pkg"));
 
         let windows_deps = manifest
@@ -1137,7 +1137,7 @@ mod test {
             .dev_dependencies(Some(Platform::Win64))
             .expect("should have windows dev dependencies");
 
-        assert_eq!(windows_deps.len(), 1);
+        assert_eq!(windows_deps.iter().count(), 1);
         assert!(windows_deps.contains_key("windows-pkg"));
     }
 
