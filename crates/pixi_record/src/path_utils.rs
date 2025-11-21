@@ -1,6 +1,6 @@
 use std::path::{Component, Path, PathBuf};
 
-use typed_path::{Utf8TypedPathBuf, Utf8UnixPathBuf};
+use typed_path::{Utf8UnixPathBuf, Utf8WindowsPathBuf};
 
 /// Normalize a path lexically (no filesystem access) and strip redundant segments.
 pub(crate) fn normalize_path(path: &Path) -> PathBuf {
@@ -50,27 +50,46 @@ pub(crate) fn normalize_path(path: &Path) -> PathBuf {
     normalized
 }
 
-pub(crate) fn unxify_relative_path(path: &Path) -> Utf8UnixPathBuf {
+/// Make sure the path we get back out is always unix compatible
+pub(crate) fn unixify_relative_path(path: &Path) -> Utf8UnixPathBuf {
     // This function should only be called with relative paths
     debug_assert!(
         !path.is_absolute(),
         "unixify_path should only be called with relative paths, got: {path:?}",
     );
 
-    let typed_path = Utf8TypedPathBuf::from(path.to_string_lossy().as_ref());
-    match typed_path.with_unix_encoding() {
-        Utf8TypedPathBuf::Unix(unix_path) => unix_path,
-        _ => unreachable!("with_unix_encoding should always return Unix variant"),
-    }
+    // Parse as Windows path to handle backslashes correctly, then convert to Unix
+    // because windows also supports forward slashes this should be okay!
+    Utf8WindowsPathBuf::from(path.to_string_lossy().into_owned()).with_unix_encoding()
 }
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
 
     #[test]
     fn normalize_path_collapses_parent_segments() {
         let normalized = normalize_path(Path::new("recipes/../"));
         assert!(normalized.as_os_str().is_empty());
+    }
+
+    #[test]
+    fn unixify_windows_path() {
+        let win = PathBuf::from_str("my-windows\\path").unwrap();
+        assert_eq!(
+            unixify_relative_path(&win).to_string(),
+            "my-windows/path".to_string()
+        );
+    }
+
+    #[test]
+    fn unixify_unix_path() {
+        let unix = PathBuf::from_str("my-unix/path").unwrap();
+        assert_eq!(
+            unixify_relative_path(&unix).to_string(),
+            "my-unix/path".to_string()
+        );
     }
 }

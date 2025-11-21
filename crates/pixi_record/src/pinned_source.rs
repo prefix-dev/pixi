@@ -5,7 +5,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::path_utils::unxify_relative_path;
+use crate::path_utils::unixify_relative_path;
 use miette::IntoDiagnostic;
 use pixi_git::{
     GitUrl,
@@ -333,7 +333,7 @@ impl PinnedSourceSpec {
                 let relative_path = pathdiff::diff_paths(this_path, base_path)?;
 
                 // `pathdiff` yields native separators; convert to `/` for lock-file stability.
-                Some(Utf8UnixPathBuf::from(unxify_relative_path(
+                Some(Utf8UnixPathBuf::from(unixify_relative_path(
                     relative_path.as_path(),
                 )))
             }
@@ -363,7 +363,7 @@ impl PinnedSourceSpec {
 
                 let relative = pathdiff::diff_paths(this_path, base_path)?;
                 // Same here: ensure lock only contains `/` even when diff runs on Windows paths.
-                let relative_str = unxify_relative_path(relative.as_path());
+                let relative_str = unixify_relative_path(relative.as_path());
 
                 Some(Utf8UnixPathBuf::from(relative_str))
             }
