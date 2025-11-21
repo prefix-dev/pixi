@@ -9051,11 +9051,13 @@ packages:
   - __glibc >=2.17
   license: BSD-3-Clause
   input:
-    hash: 54a170115d957acd85e0bf85bea2a4311b9c7d575de4c406398c6914d2412184
+    hash: c5c7fc28fdb95f2aad1249b42ee94b91ded9908f12e8514b27e108f40ec33b2d
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml
     - Cargo.toml
+  package_build_source:
+    path: crates/pixi
 - conda: .
   name: pixi
   version: 0.59.0
@@ -9065,11 +9067,13 @@ packages:
   - __glibc >=2.17
   license: BSD-3-Clause
   input:
-    hash: 70f4e5af6bd373ee3992f7f84e6efe6bd323e4ebc6c9c20fd116dc43ae619516
+    hash: 06cd1686b2f09b2862740355479d0f2f3b763d4bb282d5d17c98dd59cd7fe61c
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml
     - Cargo.toml
+  package_build_source:
+    path: crates/pixi
 - conda: .
   name: pixi
   version: 0.59.0
@@ -9079,11 +9083,13 @@ packages:
   - __osx >=10.13
   license: BSD-3-Clause
   input:
-    hash: 70f4e5af6bd373ee3992f7f84e6efe6bd323e4ebc6c9c20fd116dc43ae619516
+    hash: 06cd1686b2f09b2862740355479d0f2f3b763d4bb282d5d17c98dd59cd7fe61c
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml
     - Cargo.toml
+  package_build_source:
+    path: crates/pixi
 - conda: .
   name: pixi
   version: 0.59.0
@@ -9093,11 +9099,13 @@ packages:
   - __osx >=11.0
   license: BSD-3-Clause
   input:
-    hash: 70f4e5af6bd373ee3992f7f84e6efe6bd323e4ebc6c9c20fd116dc43ae619516
+    hash: 06cd1686b2f09b2862740355479d0f2f3b763d4bb282d5d17c98dd59cd7fe61c
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml
     - Cargo.toml
+  package_build_source:
+    path: crates/pixi
 - conda: .
   name: pixi
   version: 0.59.0
@@ -9105,11 +9113,13 @@ packages:
   subdir: win-64
   license: BSD-3-Clause
   input:
-    hash: 70f4e5af6bd373ee3992f7f84e6efe6bd323e4ebc6c9c20fd116dc43ae619516
+    hash: 06cd1686b2f09b2862740355479d0f2f3b763d4bb282d5d17c98dd59cd7fe61c
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml
     - Cargo.toml
+  package_build_source:
+    path: crates/pixi
 - conda: https://prefix.dev/conda-forge/linux-64/pixman-0.46.4-h54a6638_1.conda
   sha256: 43d37bc9ca3b257c5dd7bf76a8426addbdec381f6786ff441dc90b1a49143b6a
   md5: c01af13bdc553d1a8fbfff6e8db075f0
