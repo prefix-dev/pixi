@@ -408,9 +408,9 @@ pub enum SolveCondaEnvironmentError {
         source: Box<CommandDispatcherError<SolvePixiEnvironmentError>>,
     },
 
-    #[error(transparent)]
+    #[error("failed to map conda packages to their PyPI equivalents. This mapping is required when using PyPI dependencies alongside conda packages.")]
     #[diagnostic(transparent)]
-    PypiMappingFailed(Box<dyn Diagnostic + Send + Sync + 'static>),
+    PypiMappingFailed(#[source] Box<dyn Diagnostic + Send + Sync + 'static>),
 
     #[error(transparent)]
     ParseChannels(#[from] Box<ParseChannelError>),
