@@ -5317,8 +5317,11 @@ dependencies = [
 name = "pixi_record"
 version = "0.1.0"
 dependencies = [
+ "dunce",
  "file_url",
+ "insta",
  "miette 7.6.0",
+ "pathdiff",
  "pixi_git",
  "pixi_spec",
  "rattler_conda_types",
@@ -5327,6 +5330,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "serde_yaml",
  "thiserror 2.0.17",
  "typed-path",
  "url",

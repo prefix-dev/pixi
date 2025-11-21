@@ -685,9 +685,7 @@ pub async fn verify_platform_satisfiability(
             LockedPackageRef::Conda(conda) => {
                 let url = conda.location().clone();
                 pixi_records.push(
-                    conda
-                        .clone()
-                        .try_into()
+                    PixiRecord::from_conda_package_data(conda.clone(), project_root)
                         .map_err(|e| PlatformUnsat::CorruptedEntry(url.to_string(), e))?,
                 );
             }
@@ -1337,7 +1335,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             ))
                         })
                     {
-                        let anchored_source = anchor.resolve(source.clone());
+                        let anchored_location = anchor.resolve(source.location.clone());
+                        let anchored_source = SourceSpec {
+                            location: anchored_location,
+                        };
                         conda_queue.push(Dependency::CondaSource(
                             package_name.clone(),
                             spec,
@@ -1510,14 +1511,8 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 continue;
             };
 
-            // Get the manifest directory first
-            let Some(manifest_path_record) = source_record.manifest_source.as_path() else {
-                continue;
-            };
-            let manifest_dir = manifest_path_record.resolve(project_root);
-
             // Resolve build_source relative to the manifest directory
-            build_path_record.resolve(&manifest_dir)
+            build_path_record.resolve(project_root)
         } else {
             let Some(path_record) = source_record.manifest_source.as_path() else {
                 continue;
