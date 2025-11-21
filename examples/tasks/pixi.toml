@@ -1,0 +1,108 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["osx-arm64"]
+
+[tasks]
+# Simple Task Example
+hello = "echo 'Hello, Pixi!'"
+
+# Simple inline table command
+build = { cmd = "echo 'Building the project...'" }
+build2 = { cmd = "echo Building the project again...", description = "This is another build task." }
+
+# Hidden task
+_hidden = "echo This task is hidden from the task list."
+
+# Task with dependencies
+test = { cmd = "echo 'Running tests...'", depends-on = ["build", "hello"] }
+
+# Alias with multiple depends-on tasks
+all = { depends-on = ["build", "test", "hello"] }
+all2 = [{ task = "build" }, { task = "test" }, { task = "hello" }]
+
+# Task with environment variables
+deploy = { cmd = "echo Deploying to $DEPLOY_ENV", env = { DEPLOY_ENV = "production" } }
+
+# Task with working directory
+cwd = { cmd = "ls", cwd = "../" }
+
+# Task with arguments
+greet = { cmd = "echo Hello, {{ name }}!", args = ["name"] }
+greet-jane = [{ task = "greet", args = [{ name = "Jane" }] }]
+greet-john = [{ task = "greet", args = ["John"] }]
+
+# Task with default arguments
+hi = { cmd = "echo Hi, {{ name }}!", args = [
+  { arg = "name", default = "You" },
+] }
+
+# Task with jinja
+jinja-filter = { cmd = "echo {{ text | upper }}", args = ["text"] }
+# If arg `text` contains 'hoi', it will be converted to lowercase. The result will be printed.
+jinja-filter-if-in = { cmd = "echo {{ text | lower if 'hoi' in text }}", args = [
+  { arg = "text", default = "" },
+] }
+# With `a` and `b` being strings, they will be appended and then printed.
+jinja-concat = { cmd = "echo {{ a + b }}", args = [
+  "a",
+  { arg = "b", default = "!" },
+] }
+# If the string "win" is in arg `platform`, "windows" will be printed, otherwise "unix".
+jinja-if-else = { cmd = """echo {% if "win" in platform  %}windows{% else %}unix{% endif %}""", args = [
+  "platform",
+] }
+# `names` will be split by whitespace and then every name will be printed separately e.g. `pixi run jinja5 "Alice Bob"`
+jinja-loop = { cmd = "{% for name in names | split %} echo {{ name }};{% endfor %}", args = [
+  "names",
+] }
+
+# Pixi preset variables
+all-pixi-vars = "echo '{{ pixi }}'"
+environment = "echo Environment: {{ pixi.environment }}"
+environment-extra = [{ task = "environment", environment = "extra" }]
+manifest = "echo Manifest path: {{ pixi.manifest_path }}"
+platform = "echo Current platform = {{ pixi.platform }},thus {% if pixi.is_osx %}macOS,{% else %}not macOS,{% endif %} {% if pixi.is_linux %}Linux,{% else %}not Linux,{% endif %} {% if pixi.is_win %}Windows{% else %}not Windows{% endif %}"
+version = "echo Pixi version: {{ pixi.version }}"
+
+# Inputs and Outputs
+create-file = { cmd = "echo 'hello' > output.txt", outputs = ["output.txt"] }
+use-file = { cmd = "cat output.txt", inputs = ["output.txt"] }
+
+# Regression test - runs all tasks
+run-all = """
+echo "=== Simple tasks ===" && \
+pixi run hello && \
+pixi run build && \
+pixi run build2 && \
+pixi run _hidden && \
+pixi run test && \
+pixi run all && \
+pixi run deploy && \
+pixi run cwd && \
+echo "=== Tasks with arguments ===" && \
+pixi run greet World && \
+pixi run greet-john && \
+pixi run greet-jane && \
+pixi run hi && \
+pixi run hi CustomName && \
+echo "=== Jinja tasks ===" && \
+pixi run jinja-filter hello && \
+pixi run jinja-filter-if-in "hoihoi" && \
+pixi run jinja-concat "Hello" && \
+pixi run jinja-if-else win && \
+pixi run jinja-if-else linux && \
+pixi run jinja-loop "Alice Bob Charlie" && \
+echo "=== Pixi variables ===" && \
+pixi run version && \
+pixi run platform && \
+pixi run environment && \
+pixi run manifest && \
+pixi run all-pixi-vars && \
+echo "=== Input/Output tasks ===" && \
+pixi run create-file && \
+pixi run use-file && \
+echo "=== All tasks completed ==="
+"""
+
+[environments]
+extra = []
