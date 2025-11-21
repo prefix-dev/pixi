@@ -72,15 +72,6 @@ impl fmt::Display for TaskNode<'_> {
             self.name.clone().unwrap_or("CUSTOM COMMAND".into())
         )?;
         write!(f, ", environment: {}", self.run_environment.name())?;
-        let context = pixi_manifest::task::TaskRenderContext {
-            platform: self.run_environment.best_platform(),
-            environment_name: Some(self.run_environment.name()),
-            manifest_path: None, // manifest_path not available at TaskNode level
-            args: self.args.as_ref(),
-        };
-        if let Ok(Some(command)) = self.task.as_single_command(&context) {
-            write!(f, "command: `{command}`,",)?;
-        }
         write!(
             f,
             ", additional arguments: `{}`",
@@ -106,14 +97,11 @@ impl TaskNode<'_> {
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
     #[cfg(test)]
-    pub(crate) fn full_command(&self) -> miette::Result<Option<String>> {
-        let context = pixi_manifest::task::TaskRenderContext {
-            platform: self.run_environment.best_platform(),
-            environment_name: Some(self.run_environment.name()),
-            manifest_path: None, // manifest_path not available at TaskNode level
-            args: self.args.as_ref(),
-        };
-        let mut cmd = self.task.as_single_command(&context)?;
+    pub(crate) fn full_command(
+        &self,
+        context: &pixi_manifest::task::TaskRenderContext,
+    ) -> miette::Result<Option<String>> {
+        let mut cmd = self.task.as_single_command(context)?;
 
         if let Some(ArgValues::FreeFormArgs(additional_args)) = &self.args {
             if !additional_args.is_empty() {
@@ -348,7 +336,7 @@ impl<'p> TaskGraph<'p> {
             for dependency in dependencies {
                 let context = pixi_manifest::task::TaskRenderContext {
                     platform: node.run_environment.best_platform(),
-                    environment_name: Some(node.run_environment.name()),
+                    environment_name: node.run_environment.name(),
                     manifest_path: None, // manifest_path not available at TaskNode level
                     args: node.args.as_ref(),
                 };
@@ -627,8 +615,16 @@ mod test {
         graph
             .topological_order()
             .into_iter()
-            .map(|task| &graph[task])
-            .filter_map(|task| task.full_command().ok().flatten())
+            .map(|task_id| &graph[task_id])
+            .filter_map(|task| {
+                let context = pixi_manifest::task::TaskRenderContext {
+                    platform: task.run_environment.best_platform(),
+                    environment_name: task.run_environment.name(),
+                    manifest_path: Some(&project.workspace.provenance.path),
+                    args: task.args.as_ref(),
+                };
+                task.full_command(&context).ok().flatten()
+            })
             .collect()
     }
 

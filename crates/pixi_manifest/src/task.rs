@@ -441,6 +441,9 @@ impl Display for TypedArg {
     }
 }
 
+// Static default environment name for use in Default impl
+static DEFAULT_ENV: EnvironmentName = EnvironmentName::Default;
+
 /// Context for rendering task templates with MiniJinja.
 ///
 /// This struct contains system-provided variables that are automatically
@@ -452,10 +455,10 @@ pub struct TaskRenderContext<'a> {
     pub platform: Platform,
 
     /// The name of the environment for which the task is being rendered.
-    pub environment_name: Option<&'a EnvironmentName>,
+    pub environment_name: &'a EnvironmentName,
 
     /// The absolute path to the manifest file.
-    pub manifest_path: Option<PathBuf>,
+    pub manifest_path: Option<&'a Path>,
 
     /// The arguments to use for rendering.
     pub args: Option<&'a ArgValues>,
@@ -465,7 +468,7 @@ impl Default for TaskRenderContext<'_> {
     fn default() -> Self {
         Self {
             platform: Platform::current(),
-            environment_name: None,
+            environment_name: &DEFAULT_ENV,
             manifest_path: None,
             args: None,
         }
@@ -515,16 +518,19 @@ impl<'a> TaskRenderContext<'a> {
             minijinja::Value::from(self.platform.is_osx()),
         );
 
-        // Add environment name if available
-        if let Some(env_name) = self.environment_name {
-            pixi_vars.insert(
-                "environment".to_string(),
-                minijinja::Value::from(env_name.as_str()),
-            );
-        }
+        // Add environment object
+        let mut env_vars: HashMap<String, minijinja::Value> = HashMap::new();
+        env_vars.insert(
+            "name".to_string(),
+            minijinja::Value::from(self.environment_name.as_str()),
+        );
+        pixi_vars.insert(
+            "environment".to_string(),
+            minijinja::Value::from_serialize(&env_vars),
+        );
 
         // Add manifest path if available
-        if let Some(ref path) = self.manifest_path {
+        if let Some(path) = self.manifest_path {
             pixi_vars.insert(
                 "manifest_path".to_string(),
                 minijinja::Value::from(path.display().to_string()),
@@ -1043,10 +1049,8 @@ mod tests {
         // Free-form args -> pixi.platform still works
         let free_args = ArgValues::FreeFormArgs(vec!["bar".into()]);
         let context = TaskRenderContext {
-            platform: Platform::current(),
-            environment_name: None,
-            manifest_path: None,
             args: Some(&free_args),
+            ..TaskRenderContext::default()
         };
         let rendered = t
             .render(&context)
@@ -1076,8 +1080,8 @@ mod tests {
 
         let context = TaskRenderContext {
             platform: Platform::Linux64,
-            environment_name: Some(&env_name),
-            manifest_path: Some(manifest_path),
+            environment_name: &env_name,
+            manifest_path: Some(&manifest_path),
             args: Some(&args),
         };
 
@@ -1094,7 +1098,7 @@ mod tests {
         assert_eq!(t.render(&context).unwrap(), "false");
 
         // Test environment
-        let t = TemplateString::from("{{ pixi.environment }}");
+        let t = TemplateString::from("{{ pixi.environment.name }}");
         assert_eq!(t.render(&context).unwrap(), "test-env");
 
         // Test manifest_path
@@ -1114,10 +1118,8 @@ mod tests {
             value: "bar".into(),
         }]);
         let context = TaskRenderContext {
-            platform: Platform::current(),
-            environment_name: None,
-            manifest_path: None,
             args: Some(&args),
+            ..TaskRenderContext::default()
         };
         let rendered = t.render(&context).expect("should render with typed args");
         assert_eq!(rendered, "echo bar");
@@ -1129,9 +1131,8 @@ mod tests {
         let args = ArgValues::TypedArgs(vec![]);
         let context = TaskRenderContext {
             platform: Platform::Linux64,
-            environment_name: None,
-            manifest_path: None,
             args: Some(&args),
+            ..TaskRenderContext::default()
         };
         let rendered = t.render(&context).expect("should render platform variable");
 
@@ -1147,9 +1148,8 @@ mod tests {
         }]);
         let context = TaskRenderContext {
             platform: Platform::Linux64,
-            environment_name: None,
-            manifest_path: None,
             args: Some(&args),
+            ..TaskRenderContext::default()
         };
         let rendered = t
             .render(&context)

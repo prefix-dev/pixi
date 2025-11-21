@@ -134,8 +134,8 @@ impl<'p> ExecutableTask<'p> {
     pub fn render_context(&self) -> pixi_manifest::task::TaskRenderContext {
         pixi_manifest::task::TaskRenderContext {
             platform: self.run_environment.best_platform(),
-            environment_name: Some(self.run_environment.name()),
-            manifest_path: Some(self.workspace.workspace.provenance.absolute_path()),
+            environment_name: self.run_environment.name(),
+            manifest_path: Some(&self.workspace.workspace.provenance.path),
             args: Some(&self.args),
         }
     }

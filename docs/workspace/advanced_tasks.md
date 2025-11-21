@@ -275,7 +275,7 @@ In addition to task arguments, Pixi automatically provides a `pixi` object in th
 | Variable | Description | Example Value |
 |----------|-------------|---------------|
 | `pixi.platform` | The platform name for the environment in which the task will run | `linux-64`, `osx-arm64`, `win-64` |
-| `pixi.environment` | The name of the current environment (when available) | `default`, `prod`, `test` |
+| `pixi.environment.name` | The name of the current environment (when available) | `default`, `prod`, `test` |
 | `pixi.manifest_path` | Absolute path to the manifest file | `/path/to/project/pixi.toml` |
 | `pixi.version` | The version of pixi being used | `0.59.0` |
 | `pixi.is_win` | Boolean flag indicating if the platform is Windows | `true` or `false` |
@@ -295,7 +295,7 @@ download-binary = { cmd = "curl -O https://example.com/binary-{{ pixi.platform }
 install = { cmd = "{% if pixi.is_win %}install.bat{% else %}./install.sh{% endif %}", args = [] }
 
 # Environment-aware tasks
-deploy = { cmd = "deploy.sh --env {{ pixi.environment }}", args = [] }
+deploy = { cmd = "deploy.sh --env {{ pixi.environment.name }}", args = [] }
 
 # Using manifest path
 validate = { cmd = "validator --manifest {{ pixi.manifest_path }}", args = [] }

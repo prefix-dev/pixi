@@ -473,9 +473,7 @@ mod tests {
             .unwrap()
             .as_single_command(&pixi_manifest::task::TaskRenderContext {
                 platform: Platform::Linux64,
-                environment_name: None,
-                manifest_path: None,
-                args: None,
+                ..pixi_manifest::task::TaskRenderContext::default()
             })
             .unwrap()
             .unwrap();
