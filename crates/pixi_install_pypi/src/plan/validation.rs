@@ -5,7 +5,7 @@ use pixi_record::LockedGitUrl;
 use pixi_uv_conversions::{to_parsed_git_url, to_uv_version};
 use rattler_lock::{PypiPackageData, UrlOrPath};
 use url::Url;
-use uv_distribution_types::InstalledDist;
+use uv_distribution_types::{InstalledDist, InstalledDistKind};
 use uv_pypi_types::{ParsedGitUrl, ParsedUrlError};
 
 use crate::utils::{check_url_freshness, strip_direct_scheme};
@@ -34,8 +34,8 @@ pub(crate) fn need_reinstall(
     lock_file_dir: &Path,
 ) -> Result<ValidateCurrentInstall, NeedsReinstallError> {
     // Check if the installed version is the same as the required version
-    match installed {
-        InstalledDist::Registry(reg) => {
+    match &installed.kind {
+        InstalledDistKind::Registry(reg) => {
             if !matches!(locked.location, UrlOrPath::Url(_)) {
                 return Ok(ValidateCurrentInstall::Reinstall(
                     NeedReinstall::SourceMismatch {
@@ -58,8 +58,8 @@ pub(crate) fn need_reinstall(
         }
 
         // For installed distributions check the direct_url.json to check if a re-install is needed
-        InstalledDist::Url(direct_url) => {
-            let direct_url_json = match InstalledDist::direct_url(&direct_url.path) {
+        InstalledDistKind::Url(direct_url) => {
+            let direct_url_json = match InstalledDist::read_direct_url(&direct_url.path) {
                 Ok(Some(direct_url)) => direct_url,
                 Ok(None) => {
                     return Ok(ValidateCurrentInstall::Reinstall(
@@ -311,19 +311,19 @@ pub(crate) fn need_reinstall(
             }
         }
         // Figure out what to do with these
-        InstalledDist::EggInfoFile(installed_egg) => {
+        InstalledDistKind::EggInfoFile(installed_egg) => {
             tracing::warn!(
                 "egg-info files are not supported yet, skipping: {}",
                 installed_egg.name
             );
         }
-        InstalledDist::EggInfoDirectory(installed_egg_dir) => {
+        InstalledDistKind::EggInfoDirectory(installed_egg_dir) => {
             tracing::warn!(
                 "egg-info directories are not supported yet, skipping: {}",
                 installed_egg_dir.name
             );
         }
-        InstalledDist::LegacyEditable(egg_link) => {
+        InstalledDistKind::LegacyEditable(egg_link) => {
             tracing::warn!(
                 ".egg-link pointers are not supported yet, skipping: {}",
                 egg_link.name
@@ -332,7 +332,7 @@ pub(crate) fn need_reinstall(
     };
 
     // Do some extra checks if the version is the same
-    let metadata = match installed.metadata() {
+    let metadata = match installed.read_metadata() {
         Ok(metadata) => metadata,
         Err(err) => {
             // Can't be sure lets reinstall
@@ -344,7 +344,7 @@ pub(crate) fn need_reinstall(
         }
     };
 
-    if let Some(requires_python) = metadata.requires_python {
+    if let Some(ref requires_python) = metadata.requires_python {
         // If the installed package requires a different requires python version of the locked package,
         // or if one of them is `Some` and the other is `None`.
         match &locked.requires_python {

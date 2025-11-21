@@ -1,6 +1,6 @@
 use std::{
     cmp::PartialEq,
-    collections::{HashMap, HashSet, hash_map::Entry},
+    collections::{BTreeMap, HashMap, HashSet, hash_map::Entry},
     future::{Future, ready},
     iter,
     path::PathBuf,
@@ -72,6 +72,136 @@ use crate::{
     },
 };
 
+/// Result of loading a lock-file from disk
+#[derive(Debug)]
+pub enum LockFileLoadResult {
+    /// The lock-file was successfully loaded
+    Loaded(LockFile),
+    /// The lock-file version is newer than what is supported
+    VersionMismatch {
+        lock_file_version: u64,
+        max_supported_version: rattler_lock::FileFormatVersion,
+    },
+}
+
+/// Warning for when a lock-file version is newer than supported
+#[derive(Debug, Error, Diagnostic)]
+#[error("Lock-file version {lock_file_version} is newer than supported")]
+#[diagnostic(severity(Warning))]
+struct LockFileVersionMismatchWarning {
+    lock_file_version: u64,
+    #[help]
+    help_message: String,
+}
+
+/// Error for when a lock-file version is newer than supported and cannot continue
+#[derive(Debug, Error, Diagnostic)]
+#[error("Lock-file version {lock_file_version} is newer than supported")]
+struct LockFileVersionMismatchError {
+    lock_file_version: u64,
+    #[help]
+    help_message: String,
+}
+
+impl LockFileLoadResult {
+    /// Extract the lock-file, treating version mismatch as an error.
+    ///
+    /// Use this in tests and places where lock-file integrity is critical.
+    /// This ensures that version mismatches are caught and reported as errors.
+    pub fn into_lock_file(self) -> miette::Result<LockFile> {
+        match self {
+            Self::Loaded(lock_file) => Ok(lock_file),
+            Self::VersionMismatch {
+                lock_file_version,
+                max_supported_version,
+            } => {
+                #[cfg(feature = "self_update")]
+                let update_instruction =
+                    "Try running `pixi self-update` to update to the latest version.";
+                #[cfg(not(feature = "self_update"))]
+                let update_instruction = "Please update pixi to the latest version and try again.";
+
+                let help_message = format!(
+                    "Maximum supported version: {} (pixi v{})\n{}",
+                    max_supported_version,
+                    consts::PIXI_VERSION,
+                    update_instruction
+                );
+
+                Err(LockFileVersionMismatchError {
+                    lock_file_version,
+                    help_message,
+                }
+                .into())
+            }
+        }
+    }
+
+    /// Extract the lock-file, treating version mismatch as missing (empty lock-file).
+    ///
+    /// Use this in CLI code where we want to continue gracefully when encountering
+    /// a newer lock-file version without displaying a warning. The version mismatch
+    /// should be reported elsewhere (e.g., in `update_lock_file()` or a prior load).
+    /// This allows the operation to continue by treating the incompatible lock-file
+    /// as if it doesn't exist.
+    pub fn into_lock_file_or_empty(self) -> LockFile {
+        match self {
+            Self::Loaded(lock_file) => lock_file,
+            Self::VersionMismatch { .. } => LockFile::default(),
+        }
+    }
+
+    /// Check if this result represents a version mismatch.
+    pub fn is_version_mismatch(&self) -> bool {
+        matches!(self, Self::VersionMismatch { .. })
+    }
+
+    /// Extract the lock-file, displaying a warning for version mismatches and treating them as missing.
+    ///
+    /// This method:
+    /// - Returns the loaded lock-file if successful
+    /// - Displays a prominent warning if version is incompatible
+    /// - Returns an empty lock-file (treating it as missing) to allow graceful continuation
+    ///
+    /// Use this in CLI code where version mismatches should be warned about but shouldn't
+    /// stop execution (unless --locked or --frozen is set, which is handled elsewhere).
+    pub fn into_lock_file_or_empty_with_warning(self) -> LockFile {
+        match self {
+            Self::Loaded(lock_file) => lock_file,
+            Self::VersionMismatch {
+                lock_file_version,
+                max_supported_version,
+            } => {
+                // Display a prominent warning about the version mismatch
+                #[cfg(feature = "self_update")]
+                let update_instruction =
+                    "Consider running `pixi self-update` to update to the latest version.";
+                #[cfg(not(feature = "self_update"))]
+                let update_instruction = "Consider updating pixi to the latest version.";
+
+                let help_message = format!(
+                    "Maximum supported version: {} (pixi v{})\n\
+                     The lock-file will be treated as missing and regenerated.\n\
+                     {}",
+                    max_supported_version,
+                    consts::PIXI_VERSION,
+                    update_instruction
+                );
+
+                let warning = LockFileVersionMismatchWarning {
+                    lock_file_version,
+                    help_message,
+                };
+
+                eprintln!("{:?}", miette::Report::new(warning));
+
+                // Treat as missing lock-file (same as if it doesn't exist)
+                LockFile::default()
+            }
+        }
+    }
+}
+
 impl Workspace {
     /// Ensures that the lock-file is up-to-date with the project.
     ///
@@ -89,7 +219,45 @@ impl Workspace {
         &self,
         options: UpdateLockFileOptions,
     ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
-        let lock_file = self.load_lock_file().await?;
+        let lock_file_result = self.load_lock_file().await?;
+
+        // Handle version mismatch - error if --locked or --frozen is set
+        if lock_file_result.is_version_mismatch()
+            && (options.lock_file_usage == LockFileUsage::Locked
+                || options.lock_file_usage == LockFileUsage::Frozen)
+        {
+            // Extract the version info for the error message
+            if let LockFileLoadResult::VersionMismatch {
+                lock_file_version,
+                max_supported_version,
+            } = lock_file_result
+            {
+                #[cfg(feature = "self_update")]
+                let update_instruction =
+                    "Try running `pixi self-update` to update to the latest version.";
+                #[cfg(not(feature = "self_update"))]
+                let update_instruction = "Please update pixi to the latest version and try again.";
+
+                let help_message = format!(
+                    "Maximum supported version: {} (pixi v{})\n\
+                         Cannot continue with --locked or --frozen mode as the lock-file cannot be read.\n\
+                         {}",
+                    max_supported_version,
+                    consts::PIXI_VERSION,
+                    update_instruction
+                );
+
+                return Err(LockFileVersionMismatchError {
+                    lock_file_version,
+                    help_message,
+                }
+                .into());
+            }
+        }
+
+        // Load the lock-file, displaying warning if there's a version mismatch
+        let lock_file = lock_file_result.into_lock_file_or_empty_with_warning();
+
         let glob_hash_cache = GlobHashCache::default();
 
         // Construct a command dispatcher that will be used to run the tasks.
@@ -178,23 +346,33 @@ impl Workspace {
         Ok((lock_file_derived_data, true))
     }
 
-    /// Loads the lockfile for the workspace or returns `Lockfile::default` if
-    /// none could be found.
-    pub async fn load_lock_file(&self) -> miette::Result<LockFile> {
+    /// Loads the lockfile for the workspace or returns an appropriate enum variant.
+    ///
+    /// Returns:
+    /// - `LockFileLoadResult::Loaded(lock_file)` if the lock-file was successfully loaded
+    /// - `LockFileLoadResult::VersionMismatch` if the lock-file version is newer than supported
+    /// - If no lock-file exists, returns `LockFileLoadResult::Loaded(LockFile::default())`
+    ///
+    /// Use the enum's methods to handle the result:
+    /// - `.into_lock_file()` - errors on version mismatch (for tests)
+    /// - `.into_lock_file_or_empty()` - silent fallback to empty
+    /// - `.into_lock_file_or_empty_with_warning()` - displays warning and continues
+    pub async fn load_lock_file(&self) -> miette::Result<LockFileLoadResult> {
         let lock_file_path = self.lock_file_path();
         if lock_file_path.is_file() {
             // Spawn a background task because loading the file might be IO bound.
             tokio::task::spawn_blocking(move || {
                 LockFile::from_path(&lock_file_path)
-                    .map_err(|err| match err {
-                        ParseCondaLockError::IncompatibleVersion { lock_file_version, max_supported_version } => {
-                            miette::miette!(
-                            help="Please update pixi to the latest version and try again.",
-                            "The lock file version is {}, but only up to including version {} is supported by the current version.",
-                            lock_file_version, max_supported_version
-                        )
-                        }
-                        _ => miette::miette!(err),
+                    .map(LockFileLoadResult::Loaded)
+                    .or_else(|err| match err {
+                        ParseCondaLockError::IncompatibleVersion {
+                            lock_file_version,
+                            max_supported_version,
+                        } => Ok(LockFileLoadResult::VersionMismatch {
+                            lock_file_version,
+                            max_supported_version,
+                        }),
+                        _ => Err(miette::miette!(err)),
                     })
                     .wrap_err_with(|| {
                         format!(
@@ -203,10 +381,10 @@ impl Workspace {
                         )
                     })
             })
-                .await
-                .unwrap_or_else(|e| Err(e).into_diagnostic())
+            .await
+            .unwrap_or_else(|e| Err(e).into_diagnostic())
         } else {
-            Ok(LockFile::default())
+            Ok(LockFileLoadResult::Loaded(LockFile::default()))
         }
     }
 }
@@ -227,7 +405,7 @@ pub enum SolveCondaEnvironmentError {
         platform: Platform,
         #[source]
         #[diagnostic_source]
-        source: CommandDispatcherError<SolvePixiEnvironmentError>,
+        source: Box<CommandDispatcherError<SolvePixiEnvironmentError>>,
     },
 
     #[error(transparent)]
@@ -235,7 +413,7 @@ pub enum SolveCondaEnvironmentError {
     PypiMappingFailed(Box<dyn Diagnostic + Send + Sync + 'static>),
 
     #[error(transparent)]
-    ParseChannels(#[from] ParseChannelError),
+    ParseChannels(#[from] Box<ParseChannelError>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -546,7 +724,7 @@ impl<'p> LockFileDerivedData<'p> {
                         None,
                         Some(
                             pkgs.iter()
-                                .filter_map(|pkg| uv_pep508::PackageName::from_str(pkg).ok())
+                                .filter_map(|pkg| uv_normalize::PackageName::from_str(pkg).ok())
                                 .filter(|name| pypi_lock_file_names.contains(name))
                                 .collect(),
                         ),
@@ -851,6 +1029,9 @@ pub struct UpdateContext<'p> {
     /// The progress bar where all the command dispatcher progress will be
     /// placed.
     dispatcher_progress_bar: ProgressBar,
+
+    /// Optional list of packages explicitly targeted for update.
+    update_targets: Option<std::collections::HashSet<String>>,
 }
 
 impl<'p> UpdateContext<'p> {
@@ -1027,6 +1208,9 @@ pub struct UpdateContextBuilder<'p> {
 
     /// Set the command dispatcher to use for the update process.
     command_dispatcher: CommandDispatcher,
+
+    /// Optional list of package names explicitly targeted for update.
+    update_targets: Option<std::collections::HashSet<String>>,
 }
 
 impl<'p> UpdateContextBuilder<'p> {
@@ -1057,6 +1241,17 @@ impl<'p> UpdateContextBuilder<'p> {
     /// previously locked packages.
     pub fn with_lock_file(self, lock_file: LockFile) -> Self {
         Self { lock_file, ..self }
+    }
+
+    /// Sets the packages explicitly targeted for update.
+    pub fn with_update_targets(
+        self,
+        update_targets: Option<std::collections::HashSet<String>>,
+    ) -> Self {
+        Self {
+            update_targets,
+            ..self
+        }
     }
 
     /// Explicitly set the environments that are considered out-of-date. Only
@@ -1291,6 +1486,7 @@ impl<'p> UpdateContextBuilder<'p> {
             dispatcher_progress_bar: anchor_pb,
 
             no_install: self.no_install,
+            update_targets: self.update_targets,
         })
     }
 }
@@ -1323,6 +1519,7 @@ impl<'p> UpdateContext<'p> {
             glob_hash_cache: None,
             mapping_client: None,
             command_dispatcher,
+            update_targets: None,
         }
     }
 
@@ -1393,6 +1590,33 @@ impl<'p> UpdateContext<'p> {
                     .unwrap_or_default();
 
                 // Spawn a task to solve the group.
+                // Determine override pinned sources for source packages when performing
+                // a targeted update.
+                let pin_overrides = (|| {
+                    let targets = self.update_targets.as_ref()?;
+                    if targets.is_empty() {
+                        return None;
+                    }
+                    Some(
+                        locked_group_records
+                            .records
+                            .iter()
+                            .filter_map(|r| match r {
+                                PixiRecord::Source(src) => {
+                                    let name = src.package_record.name.clone();
+                                    if targets.contains(name.as_source()) {
+                                        src.build_source.clone().map(|spec| (name, spec))
+                                    } else {
+                                        None
+                                    }
+                                }
+                                _ => None,
+                            })
+                            .collect(),
+                    )
+                })()
+                .unwrap_or_default();
+
                 let group_solve_task = spawn_solve_conda_environment_task(
                     source.clone(),
                     locked_group_records,
@@ -1400,6 +1624,7 @@ impl<'p> UpdateContext<'p> {
                     platform,
                     channel_priority,
                     self.command_dispatcher.clone(),
+                    pin_overrides,
                 )
                 .map_err(Report::new)
                 .boxed_local();
@@ -1762,7 +1987,7 @@ impl<'p> UpdateContext<'p> {
             builder.set_options(
                 &environment_name,
                 rattler_lock::SolveOptions {
-                    strategy: grouped_env.solve_strategy(),
+                    strategy: grouped_env.solve_strategy().into(),
                     channel_priority: grouped_env
                         .channel_priority()
                         .unwrap_or_default()
@@ -1905,6 +2130,7 @@ async fn spawn_solve_conda_environment_task(
     platform: Platform,
     channel_priority: ChannelPriority,
     command_dispatcher: CommandDispatcher,
+    pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
 ) -> Result<TaskResult, SolveCondaEnvironmentError> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
@@ -1914,7 +2140,7 @@ async fn spawn_solve_conda_environment_task(
 
     // Get solve options
     let exclude_newer = group.exclude_newer();
-    let strategy = group.solve_strategy();
+    let strategy = group.solve_strategy().into();
 
     // Get the environment name
     let group_name = group.name();
@@ -1952,7 +2178,8 @@ async fn spawn_solve_conda_environment_task(
     let channels = channels
         .iter()
         .map(|c| c.clone().into_base_url(&channel_config))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Box::new)?;
 
     // Determine the build variants
     let VariantConfig {
@@ -1978,6 +2205,7 @@ async fn spawn_solve_conda_environment_task(
     let start = Instant::now();
 
     // Solve the environment using the command dispatcher.
+    // Determine if we should override the pinned source for the current package
     let mut records = command_dispatcher
         .solve_pixi_environment(PixiEnvironmentSpec {
             name: Some(group_name.to_string()),
@@ -1994,12 +2222,13 @@ async fn spawn_solve_conda_environment_task(
             variants: Some(variants),
             variant_files: Some(variant_files),
             enabled_protocols: Default::default(),
+            pin_overrides,
         })
         .await
         .map_err(|source| SolveCondaEnvironmentError::SolveFailed {
             environment_name: group_name.clone(),
             platform,
-            source,
+            source: Box::new(source),
         })?;
 
     // Add purl's for the conda packages that are also available as pypi packages if
@@ -2184,7 +2413,9 @@ async fn spawn_extract_environment_task(
                     }
 
                     // Also add the dependency without any extras
-                    queue.push(PackageName::Pypi((uv_name, None)));
+                    if queued_names.insert(PackageName::Pypi((uv_name.clone(), None))) {
+                        queue.push(PackageName::Pypi((uv_name, None)));
+                    }
                 }
 
                 // Insert the record if it is not already present
@@ -2256,6 +2487,7 @@ async fn spawn_solve_pypi_task<'p>(
     };
 
     let environment_name = grouped_environment.name().clone();
+    let solve_strategy = grouped_environment.solve_strategy();
 
     let pixi_solve_records = &repodata_records.records;
     let locked_pypi_records = &locked_pypi_packages.records;
@@ -2295,6 +2527,7 @@ async fn spawn_solve_pypi_task<'p>(
             environment,
             disallow_install_conda_prefix,
             exclude_newer,
+            solve_strategy,
         )
         .await
         .with_context(|| {

@@ -22,7 +22,7 @@
 .LINK
     https://github.com/prefix-dev/pixi
 .NOTES
-    Version: v0.58.0
+    Version: v0.59.0
 #>
 param (
     [string] $PixiVersion = 'latest',
@@ -163,7 +163,9 @@ if (-not @("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc") -contains $ARCH)
 
 $BINARY = "pixi-$ARCH"
 
-if ($PixiVersion -eq 'latest') {
+if ($Env:PIXI_DOWNLOAD_URL) {
+    $DOWNLOAD_URL = $Env:PIXI_DOWNLOAD_URL
+} elseif ($PixiVersion -eq 'latest') {
     $DOWNLOAD_URL = "$PixiRepourl/releases/latest/download/$BINARY.zip"
 } else {
     # Check if version is incorrectly specified without prefix 'v', and prepend 'v' in this case

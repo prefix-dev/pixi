@@ -290,7 +290,7 @@ impl PackageBuilder {
                 sha256,
                 size: None,
                 subdir: subdir.to_string(),
-                timestamp: self.timestamp,
+                timestamp: self.timestamp.map(Into::into),
                 track_features: vec![],
                 version: self.version,
                 purls: self.purls,

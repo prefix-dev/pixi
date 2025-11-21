@@ -70,7 +70,7 @@ pub(crate) fn execute(workspace: &Workspace, args: Args) -> miette::Result<()> {
         );
     } else {
         for env in &environments {
-            println!("{}", env);
+            println!("{env}");
         }
     }
     Ok(())

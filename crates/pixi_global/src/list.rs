@@ -16,7 +16,7 @@ use crate::common::find_package_records;
 pub fn format_asciiart_section(label: &str, content: String, last: bool, more: bool) -> String {
     let prefix = if last { " " } else { "│" };
     let symbol = if more { "├" } else { "└" };
-    format!("\n{}   {}─ {}: {}", prefix, symbol, label, content)
+    format!("\n{prefix}   {symbol}─ {label}: {content}")
 }
 
 pub fn format_exposed(exposed: &IndexSet<Mapping>, last: bool, more: bool) -> Option<String> {
@@ -167,7 +167,7 @@ pub async fn list_specific_global_environment(
     } else {
         packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
     }
-    writeln!(std::io::stdout(), "{}", output_message)
+    writeln!(std::io::stdout(), "{output_message}")
         .inspect_err(|e| {
             if e.kind() == std::io::ErrorKind::BrokenPipe {
                 std::process::exit(0);
@@ -313,7 +313,7 @@ pub async fn list_all_global_environments(
             project.manifest.path.display()
         );
         if show_header {
-            writeln!(std::io::stdout(), "{}", header)
+            writeln!(std::io::stdout(), "{header}")
                 .inspect_err(|e| {
                     if e.kind() == std::io::ErrorKind::BrokenPipe {
                         std::process::exit(0);
@@ -321,7 +321,7 @@ pub async fn list_all_global_environments(
                 })
                 .into_diagnostic()?;
         }
-        writeln!(std::io::stdout(), "{}", message)
+        writeln!(std::io::stdout(), "{message}")
             .inspect_err(|e| {
                 if e.kind() == std::io::ErrorKind::BrokenPipe {
                     std::process::exit(0);

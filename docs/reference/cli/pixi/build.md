@@ -2,7 +2,7 @@
 # <code>[pixi](../pixi.md) build</code>
 
 ## About
-Workspace configuration
+Lock file and installation configuration with --as-is support Used by shell, shell-hook, and run commands
 
 --8<-- "docs/reference/cli/pixi/build_extender:description"
 
@@ -27,6 +27,8 @@ pixi build [OPTIONS]
 :  The directory to use for incremental builds artifacts
 - <a id="arg---clean" href="#arg---clean">`--clean (-c)`</a>
 :  Whether to clean the build directory before building
+- <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
+:  The path to a directory containing a package manifest, or to a specific manifest file
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
@@ -48,8 +50,16 @@ pixi build [OPTIONS]
 - <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
 :  Use environment activation cache (experimental)
 
-## Global Options
-- <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
-:  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+## Update Options
+- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
+:  Don't modify the environment, only modify the lock-file
+- <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
+:  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+<br>**env**: `PIXI_FROZEN`
+- <a id="arg---locked" href="#arg---locked">`--locked`</a>
+:  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+<br>**env**: `PIXI_LOCKED`
+- <a id="arg---as-is" href="#arg---as-is">`--as-is`</a>
+:  Shorthand for the combination of --no-install and --frozen
 
 --8<-- "docs/reference/cli/pixi/build_extender:example"

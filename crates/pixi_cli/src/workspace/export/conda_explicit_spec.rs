@@ -64,7 +64,7 @@ fn build_explicit_spec<'a>(
         ))?;
 
         let mut url = cp.url.clone();
-        url.set_fragment(Some(&format!("{:x}", hash)));
+        url.set_fragment(Some(&format!("{hash:x}")));
 
         packages.push(ExplicitEnvironmentEntry {
             url: url.to_owned(),
@@ -155,7 +155,7 @@ fn render_env_platform(
 
     tracing::info!("Creating conda explicit spec for env: {env_name} platform: {platform}");
     let target = output_dir
-        .join(format!("{}_{}_conda_spec.txt", env_name, platform))
+        .join(format!("{env_name}_{platform}_conda_spec.txt"))
         .into_os_string();
 
     render_explicit_spec(target, &ees)?;
@@ -263,7 +263,7 @@ mod tests {
 
                 let file_path = output_dir
                     .path()
-                    .join(format!("{}_{}_conda_spec.txt", env_name, platform));
+                    .join(format!("{env_name}_{platform}_conda_spec.txt"));
                 insta::assert_snapshot!(
                     format!("test_render_conda_explicit_spec_{}_{}", env_name, platform),
                     fs_err::read_to_string(file_path).unwrap()

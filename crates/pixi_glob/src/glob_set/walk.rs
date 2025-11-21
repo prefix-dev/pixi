@@ -294,7 +294,7 @@ pub fn set_ignore_hidden_patterns(patterns: &[String]) -> Option<Vec<String>> {
                         // Add: directory, negation of all its contents, then the specific file
                         result.push(dir.to_string());
 
-                        let negate_all = format!("!{}/*", dir);
+                        let negate_all = format!("!{dir}/*");
                         result.push(negate_all);
 
                         // Always re-add the specific file pattern at the end

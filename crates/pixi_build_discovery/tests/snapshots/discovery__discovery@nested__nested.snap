@@ -15,7 +15,7 @@ backend-spec:
       - "https://prefix.dev/pixi-build-backends"
 init-params:
   workspace-root: "file://<ROOT>/nested"
-  source: ~
+  build-source: ~
   source-anchor: "file://<ROOT>/nested/nested"
   manifest-path: "file://<ROOT>/nested/nested/pixi.toml"
   project-model:

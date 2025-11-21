@@ -94,8 +94,6 @@ async fn upgrade_command_updates_platform_specific_version() {
         [target.{platform}.dependencies]
         python = "==3.12"
         "#,
-        platform = platform,
-        channel = channel,
     ))
     .unwrap();
 
@@ -144,7 +142,6 @@ async fn upgrade_command_updates_all_platform_specific_targets() {
         [target.win-64.dependencies]
         python = "==3.12"
         "#,
-        channel = channel,
     ))
     .unwrap();
 

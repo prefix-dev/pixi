@@ -1,12 +1,17 @@
-use std::collections::{BTreeSet, HashMap};
+use std::{
+    collections::{BTreeSet, HashMap},
+    str::FromStr,
+};
 
-use pixi_spec::SourceSpec;
+use pixi_git::sha::GitSha;
+use pixi_spec::{GitReference, SourceSpec};
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
 use rattler_digest::{Sha256, Sha256Hash};
-use rattler_lock::{CondaPackageData, CondaSourceData};
+use rattler_lock::{CondaPackageData, CondaSourceData, GitShallowSpec, PackageBuildSource};
 use serde::{Deserialize, Serialize};
+use typed_path::Utf8TypedPathBuf;
 
-use crate::{ParseLockFileError, PinnedSourceSpec};
+use crate::{ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec};
 
 /// A record of a conda package that still requires building.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -16,7 +21,11 @@ pub struct SourceRecord {
     pub package_record: PackageRecord,
 
     /// Exact definition of the source of the package.
-    pub source: PinnedSourceSpec,
+    pub manifest_source: PinnedSourceSpec,
+
+    /// The optional pinned source where the build should be executed
+    /// This is used when the manifest is not in the same location ad
+    pub build_source: Option<PinnedSourceSpec>,
 
     /// The hash of the input that was used to build the metadata of the
     /// package. This can be used to verify that the metadata is still valid.
@@ -48,9 +57,41 @@ pub struct InputHash {
 
 impl From<SourceRecord> for CondaPackageData {
     fn from(value: SourceRecord) -> Self {
+        let package_build_source = value.build_source.map(|s| match s {
+            PinnedSourceSpec::Url(pinned_url_spec) => PackageBuildSource::Url {
+                url: pinned_url_spec.url,
+                sha256: pinned_url_spec.sha256,
+                subdir: None,
+            },
+            PinnedSourceSpec::Git(pinned_git_spec) => {
+                let subdirectory = pinned_git_spec
+                    .source
+                    .subdirectory
+                    .as_deref()
+                    .map(Utf8TypedPathBuf::from);
+
+                let spec = match &pinned_git_spec.source.reference {
+                    GitReference::Branch(branch) => Some(GitShallowSpec::Branch(branch.clone())),
+                    GitReference::Tag(tag) => Some(GitShallowSpec::Tag(tag.clone())),
+                    GitReference::Rev(_) => Some(GitShallowSpec::Rev),
+                    GitReference::DefaultBranch => None,
+                };
+
+                PackageBuildSource::Git {
+                    url: pinned_git_spec.git,
+                    spec,
+                    rev: pinned_git_spec.source.commit.to_string(),
+                    subdir: subdirectory,
+                }
+            }
+            PinnedSourceSpec::Path(pinned_path) => PackageBuildSource::Path {
+                path: pinned_path.path,
+            },
+        });
         CondaPackageData::Source(CondaSourceData {
             package_record: value.package_record,
-            location: value.source.into(),
+            location: value.manifest_source.clone().into(),
+            package_build_source,
             input: value.input_hash.map(|i| rattler_lock::InputHash {
                 hash: i.hash,
                 // TODO: fix this in rattler
@@ -61,7 +102,6 @@ impl From<SourceRecord> for CondaPackageData {
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
-            package_build_source: None,
         })
     }
 }
@@ -70,13 +110,50 @@ impl TryFrom<CondaSourceData> for SourceRecord {
     type Error = ParseLockFileError;
 
     fn try_from(value: CondaSourceData) -> Result<Self, Self::Error> {
+        let pinned_source_spec = value.package_build_source.map(|source| match source {
+            PackageBuildSource::Git {
+                url,
+                spec,
+                rev,
+                subdir,
+            } => {
+                let reference = match spec {
+                    Some(GitShallowSpec::Branch(branch)) => GitReference::Branch(branch),
+                    Some(GitShallowSpec::Tag(tag)) => GitReference::Tag(tag),
+                    Some(GitShallowSpec::Rev) => GitReference::Rev(rev.clone()),
+                    None => GitReference::DefaultBranch,
+                };
+
+                PinnedSourceSpec::Git(crate::PinnedGitSpec {
+                    git: url,
+                    source: PinnedGitCheckout {
+                        commit: GitSha::from_str(&rev).unwrap(),
+                        subdirectory: subdir.map(|s| s.to_string()),
+                        reference,
+                    },
+                })
+            }
+            PackageBuildSource::Url {
+                url,
+                sha256,
+                subdir: _,
+            } => PinnedSourceSpec::Url(crate::PinnedUrlSpec {
+                url,
+                sha256,
+                md5: None,
+            }),
+            PackageBuildSource::Path { path } => {
+                PinnedSourceSpec::Path(crate::PinnedPathSpec { path })
+            }
+        });
         Ok(Self {
             package_record: value.package_record,
-            source: value.location.try_into()?,
+            manifest_source: value.location.try_into()?,
             input_hash: value.input.map(|hash| InputHash {
                 hash: hash.hash,
                 globs: BTreeSet::from_iter(hash.globs),
             }),
+            build_source: pinned_source_spec,
             sources: value
                 .sources
                 .into_iter()
@@ -121,5 +198,79 @@ impl Matches<SourceRecord> for MatchSpec {
 impl AsRef<PackageRecord> for SourceRecord {
     fn as_ref(&self) -> &PackageRecord {
         &self.package_record
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_git::sha::GitSha;
+    use serde_json::json;
+    use std::str::FromStr;
+    use url::Url;
+
+    #[test]
+    fn package_build_source_roundtrip_preserves_git_subdirectory() {
+        let package_record: PackageRecord = serde_json::from_value(json!({
+            "name": "example",
+            "version": "1.0.0",
+            "build": "0",
+            "build_number": 0,
+            "subdir": "noarch",
+        }))
+        .expect("valid package record");
+
+        let git_url = Url::parse("https://example.com/repo.git").unwrap();
+        let pinned_source = PinnedSourceSpec::Git(crate::PinnedGitSpec {
+            git: git_url.clone(),
+            source: PinnedGitCheckout {
+                commit: GitSha::from_str("0123456789abcdef0123456789abcdef01234567").unwrap(),
+                subdirectory: Some("nested/project".to_string()),
+                reference: GitReference::Branch("main".to_string()),
+            },
+        });
+
+        let record = SourceRecord {
+            package_record,
+            manifest_source: pinned_source.clone(),
+            build_source: Some(pinned_source.clone()),
+            input_hash: None,
+            sources: Default::default(),
+        };
+
+        let CondaPackageData::Source(conda_source) = record.clone().into() else {
+            panic!("expected source package data");
+        };
+
+        let package_build_source = conda_source
+            .package_build_source
+            .as_ref()
+            .expect("expected package build source");
+
+        let PackageBuildSource::Git {
+            url,
+            spec,
+            rev,
+            subdir,
+        } = package_build_source
+        else {
+            panic!("expected git package build source");
+        };
+
+        assert_eq!(url.path(), "/repo.git");
+        assert_eq!(url.host_str(), Some("example.com"));
+        assert_eq!(subdir.as_ref().map(|s| s.as_str()), Some("nested/project"));
+        assert!(matches!(spec, Some(GitShallowSpec::Branch(branch)) if branch == "main"));
+        assert_eq!(rev, "0123456789abcdef0123456789abcdef01234567");
+
+        let roundtrip = SourceRecord::try_from(conda_source).expect("roundtrip should succeed");
+        let Some(PinnedSourceSpec::Git(roundtrip_git)) = roundtrip.build_source else {
+            panic!("expected git pinned source");
+        };
+        assert_eq!(
+            roundtrip_git.source.subdirectory.as_deref(),
+            Some("nested/project")
+        );
+        assert_eq!(roundtrip_git.git, git_url);
     }
 }

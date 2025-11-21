@@ -14,9 +14,9 @@ backend-spec:
       - "https://prefix.dev/conda-forge"
 init-params:
   workspace-root: "file://<ROOT>/ros-package"
-  source: ~
+  build-source: ~
   source-anchor: "file://<ROOT>/ros-package"
-  manifest-path: "file://<ROOT>/ros-package/package.xml"
+  manifest-path: "file://<ROOT>/ros-package"
   project-model:
     name: ~
     version: ~

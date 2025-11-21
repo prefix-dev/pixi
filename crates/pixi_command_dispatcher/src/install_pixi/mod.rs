@@ -147,7 +147,10 @@ impl InstallPixiEnvironmentSpec {
                 self.build_from_source(&command_dispatcher, &source_record)
                     .await
                     .map_err_with(move |build_err| {
-                        InstallPixiEnvironmentError::BuildSourceError(source_record, build_err)
+                        InstallPixiEnvironmentError::BuildSourceError(
+                            Box::new(source_record),
+                            build_err,
+                        )
                     })
             });
         }
@@ -212,7 +215,7 @@ impl InstallPixiEnvironmentSpec {
             .contains(&source_record.package_record.name);
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
-                source: source_record.source.clone(),
+                manifest_source: source_record.manifest_source.clone(),
                 package: source_record.into(),
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
@@ -227,6 +230,7 @@ impl InstallPixiEnvironmentSpec {
                 force,
                 // When we install a pixi environment we always build in development mode.
                 build_profile: BuildProfile::Development,
+                build_source: None,
             })
             .await?;
 
@@ -245,9 +249,9 @@ pub enum InstallPixiEnvironmentError {
 
     #[error("failed to build '{}' from '{}'",
         .0.package_record.name.as_source(),
-        .0.source)]
+        .0.manifest_source)]
     BuildSourceError(
-        SourceRecord,
+        Box<SourceRecord>,
         #[diagnostic_source]
         #[source]
         SourceBuildError,

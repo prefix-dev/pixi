@@ -91,6 +91,12 @@ pub struct PixiEnvironmentSpec {
     /// The protocols that are enabled for source packages
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
+
+    /// Optional override for a specific packages: use this pinned
+    /// source for checkout and as the `package_build_source` instead
+    /// of pinning anew.
+    #[serde(skip)]
+    pub pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
 }
 
 impl Default for PixiEnvironmentSpec {
@@ -110,6 +116,7 @@ impl Default for PixiEnvironmentSpec {
             variants: None,
             variant_files: None,
             enabled_protocols: EnabledProtocols::default(),
+            pin_overrides: BTreeMap::new(),
         }
     }
 }
@@ -141,7 +148,8 @@ impl PixiEnvironmentSpec {
                 self.dependencies.into_specs(),
             );
 
-        Self::check_missing_channels(binary_specs.clone(), &self.channels, &self.channel_config)?;
+        Self::check_missing_channels(binary_specs.clone(), &self.channels, &self.channel_config)
+            .map_err(|err| CommandDispatcherError::Failed(*err))?;
 
         // Recursively collect the metadata of all the source specs.
         let CollectedSourceMetadata {
@@ -155,6 +163,7 @@ impl PixiEnvironmentSpec {
             self.variants.clone(),
             self.variant_files.clone(),
             self.enabled_protocols.clone(),
+            self.pin_overrides.clone(),
         )
         .collect(
             source_specs
@@ -266,7 +275,7 @@ impl PixiEnvironmentSpec {
             dev_source_futures.push(async move {
                 // Pin and checkout the source
                 let pinned_source = command_dispatcher
-                    .pin_and_checkout(dev_source_spec.source)
+                    .pin_and_checkout(dev_source_spec.source.location, None)
                     .await
                     .map_err_with(SolvePixiEnvironmentError::SourceCheckoutError)?;
 
@@ -274,13 +283,14 @@ impl PixiEnvironmentSpec {
                 let spec = DevSourceMetadataSpec {
                     package_name,
                     backend_metadata: BuildBackendMetadataSpec {
-                        source: pinned_source.pinned,
+                        manifest_source: pinned_source.pinned,
                         channel_config,
                         channels,
                         build_environment,
                         variants,
                         variant_files,
                         enabled_protocols,
+                        pin_override: None,
                     },
                 };
 
@@ -307,27 +317,28 @@ impl PixiEnvironmentSpec {
         binary_specs: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
         channels: &[ChannelUrl],
         channel_config: &ChannelConfig,
-    ) -> Result<(), CommandDispatcherError<SolvePixiEnvironmentError>> {
+    ) -> Result<(), Box<SolvePixiEnvironmentError>> {
         for (pkg, spec) in binary_specs.iter_specs() {
-            let BinarySpec::DetailedVersion(v) = spec else {
-                continue;
-            };
-            let Some(channel) = &v.channel else { continue };
+            if let BinarySpec::DetailedVersion(v) = spec {
+                if let Some(channel) = &v.channel {
+                    let base_url =
+                        channel
+                            .clone()
+                            .into_base_url(channel_config)
+                            .map_err(|err| {
+                                Box::new(SolvePixiEnvironmentError::ParseChannelError(err))
+                            })?;
 
-            let base_url = channel
-                .clone()
-                .into_base_url(channel_config)
-                .map_err(SolvePixiEnvironmentError::ParseChannelError)
-                .map_err(CommandDispatcherError::Failed)?;
-
-            if !channels.iter().any(|c| c == &base_url) {
-                return Err(CommandDispatcherError::Failed(
-                    SolvePixiEnvironmentError::MissingChannel(MissingChannelError {
-                        package: pkg.as_normalized().to_string(),
-                        channel: base_url,
-                        advice: None,
-                    }),
-                ));
+                    if !channels.iter().any(|c| c == &base_url) {
+                        return Err(Box::new(SolvePixiEnvironmentError::MissingChannel(
+                            MissingChannelError {
+                                package: pkg.as_normalized().to_string(),
+                                channel: base_url,
+                                advice: None,
+                            },
+                        )));
+                    }
+                }
             }
         }
         Ok(())

@@ -39,7 +39,7 @@ pub struct DevSourceMetadata {
 pub enum DevSourceMetadataError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    BuildBackendMetadata(#[from] BuildBackendMetadataError),
+    BuildBackendMetadata(#[from] Box<BuildBackendMetadataError>),
 
     #[error(
         "the build backend does not support the `conda/outputs` procedure, which is required for dev sources"
@@ -58,7 +58,7 @@ impl DevSourceMetadataSpec {
         skip_all,
         name = "dev-source-metadata",
         fields(
-            source = %self.backend_metadata.source,
+            source = %self.backend_metadata.manifest_source,
             platform = %self.backend_metadata.build_environment.host_platform,
         )
     )]
@@ -70,6 +70,7 @@ impl DevSourceMetadataSpec {
         let build_backend_metadata = command_dispatcher
             .build_backend_metadata(self.backend_metadata.clone())
             .await
+            .map_err_with(Box::new)
             .map_err_with(DevSourceMetadataError::BuildBackendMetadata)?;
 
         // We only support the Outputs protocol for dev sources
@@ -84,7 +85,7 @@ impl DevSourceMetadataSpec {
 
         // Create a SourceAnchor for resolving relative paths in dependencies
         let source_anchor = SourceAnchor::from(pixi_spec::SourceSpec::from(
-            build_backend_metadata.source.clone(),
+            build_backend_metadata.manifest_source.clone(),
         ));
 
         // Create a DevSourceRecord for each output
@@ -95,7 +96,7 @@ impl DevSourceMetadataSpec {
             }
             let record = Self::create_dev_source_record(
                 output,
-                &build_backend_metadata.source,
+                &build_backend_metadata.manifest_source,
                 &build_backend_metadata.metadata.input_hash,
                 &source_anchor,
             )?;
@@ -103,7 +104,7 @@ impl DevSourceMetadataSpec {
         }
 
         Ok(DevSourceMetadata {
-            source: build_backend_metadata.source.clone(),
+            source: build_backend_metadata.manifest_source.clone(),
             records,
         })
     }

@@ -10,9 +10,11 @@ use rattler_conda_types::{
 
 use crate::{
     CondaDependencies, PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
-    dependencies::CondaDevDependencies, has_features_iter::HasFeaturesIter,
-    has_manifest_ref::HasWorkspaceManifest, pypi::pypi_options::PypiOptions,
-    workspace::ChannelPriority,
+    dependencies::CondaDevDependencies,
+    has_features_iter::HasFeaturesIter,
+    has_manifest_ref::HasWorkspaceManifest,
+    pypi::pypi_options::PypiOptions,
+    workspace::{ChannelPriority, SolveStrategy},
 };
 
 /// ChannelPriorityCombination error, thrown when multiple channel priorities
@@ -67,7 +69,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             .collect()
     }
 
-    /// Returns the channel priority, error on multiple values, return None if
+    /// Returns the channel priority, error on multiple, different values, return None if
     /// no value is set.
     ///
     /// When using multiple channel priorities over different features we should
@@ -76,7 +78,8 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         let mut channel_priority = None;
         for feature in self.features() {
             if let Some(priority) = feature.channel_priority {
-                if channel_priority == Some(priority) {
+                // If we already have a priority and it's different, error
+                if channel_priority.is_some() && channel_priority != Some(priority) {
                     return Err(ChannelPriorityCombinationError);
                 }
                 channel_priority = Some(priority);
@@ -94,8 +97,16 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     }
 
     /// Returns the strategy for solving packages.
-    fn solve_strategy(&self) -> rattler_solve::SolveStrategy {
-        rattler_solve::SolveStrategy::default()
+    ///
+    /// The chosen strategy is the first explicitly declared one in a feature
+    /// as they are provided by the [`HasFeaturesIter::features`] iterator.
+    ///
+    /// If no feature declares a strategy, the default value of [`SolveStrategy`] is used.
+    fn solve_strategy(&self) -> SolveStrategy {
+        self.features()
+            .flat_map(|feature| feature.solve_strategy)
+            .next()
+            .unwrap_or_default()
     }
 
     /// Returns the platforms that this collection is compatible with.

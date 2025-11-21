@@ -187,6 +187,8 @@ impl SolveCondaEnvironmentSpec {
                         ),
                         channel: None,
                     };
+                    let mut record = record.clone();
+                    record.build_source = source_metadata.build_source.clone();
                     url_to_source_package.insert(url, (record, repodata_record));
                 }
             }
@@ -241,7 +243,7 @@ impl SolveCondaEnvironmentSpec {
                         )
                     },
                     url: url.clone(),
-                    file_name: format!("{}-0-{}.devsource", prefixed_name, build_string),
+                    file_name: format!("{prefixed_name}-0-{build_string}.devsource"),
                     channel: None,
                 };
                 url_to_dev_source.insert(url, (dev_source, repodata_record));
@@ -317,7 +319,7 @@ impl SolveCondaEnvironmentSpec {
 
 /// Generates a unique URL for a source record.
 fn unique_url(source: &SourceRecord) -> Url {
-    let mut url = source.source.identifiable_url();
+    let mut url = source.manifest_source.identifiable_url();
 
     // Add unique identifiers to the URL.
     url.query_pairs_mut()
@@ -338,7 +340,7 @@ fn unique_dev_source_url(dev_source: &pixi_record::DevSourceRecord) -> Url {
     pairs.append_pair("name", dev_source.name.as_source());
 
     for (key, value) in &dev_source.variants {
-        pairs.append_pair(&format!("_{}", key), value);
+        pairs.append_pair(&format!("_{key}"), value);
     }
 
     drop(pairs);
@@ -356,7 +358,7 @@ fn dev_source_build_string(dev_source: &pixi_record::DevSourceRecord) -> String 
     let mut hasher = DefaultHasher::new();
     dev_source.variants.hash(&mut hasher);
     let hash = hasher.finish();
-    format!("{:x}", hash)
+    format!("{hash:x}")
 }
 
 #[derive(Debug, thiserror::Error)]

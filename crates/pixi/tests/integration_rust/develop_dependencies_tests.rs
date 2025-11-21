@@ -46,14 +46,13 @@ fn create_source_package(
     let pixi_toml_content = format!(
         r#"
 [package]
-name = "{}"
-version = "{}"
+name = "{name}"
+version = "{version}"
 
 [package.build]
 backend = {{ name = "in-memory", version = "0.1.0" }}
 
-{}"#,
-        name, version, dependencies
+{dependencies}"#,
     );
 
     fs::write(package_dir.join("pixi.toml"), pixi_toml_content).unwrap();

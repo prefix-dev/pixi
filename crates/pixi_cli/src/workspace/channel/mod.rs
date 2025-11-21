@@ -74,14 +74,14 @@ impl AddRemoveArgs {
                         .into_base_url(channel_config)
                         .into_diagnostic()?,
                     self.priority
-                        .map_or_else(|| "".to_string(), |p| format!(" at priority {}", p))
+                        .map_or_else(|| "".to_string(), |p| format!(" at priority {p}"))
                 ),
                 NamedChannelOrUrl::Url(url) => eprintln!(
                     "{}{operation} {}{}",
                     console::style(console::Emoji("✔ ", "")).green(),
                     url,
                     self.priority
-                        .map_or_else(|| "".to_string(), |p| format!(" at priority {}", p)),
+                        .map_or_else(|| "".to_string(), |p| format!(" at priority {p}")),
                 ),
                 NamedChannelOrUrl::Path(path) => eprintln!(
                     "{}{operation} {}",

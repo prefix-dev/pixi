@@ -160,8 +160,7 @@ mod tests {
             let result = Args::try_parse_from(["init", "--scm", value]);
             assert!(
                 result.is_err(),
-                "Expected error for invalid SCM value '{}', but got success",
-                value
+                "Expected error for invalid SCM value '{value}', but got success"
             );
         }
     }

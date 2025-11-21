@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{fmt, path::PathBuf};
 
 use chrono::Utc;
 use itertools::chain;
@@ -65,6 +65,43 @@ pub enum CachedBuildStatus {
     Missing,
 }
 
+impl fmt::Display for CachedBuildStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CachedBuildStatus::Stale(build) => fmt_cached_build_status("stale", build, f),
+            CachedBuildStatus::UpToDate(build) => fmt_cached_build_status("up-to-date", build, f),
+            CachedBuildStatus::New(build) => fmt_cached_build_status("new", build, f),
+            CachedBuildStatus::Missing => f.write_str("missing"),
+        }
+    }
+}
+
+fn fmt_cached_build_status(
+    state: &str,
+    build: &CachedBuild,
+    f: &mut fmt::Formatter<'_>,
+) -> fmt::Result {
+    write!(f, "{state} {}", build.record.package_record)?;
+
+    if let Some(channel) = &build.record.channel {
+        if !channel.is_empty() {
+            write!(f, " @ {channel}")?;
+            let subdir = build.record.package_record.subdir.as_str();
+            if !subdir.is_empty() {
+                write!(f, "/{subdir}")?;
+            }
+            return Ok(());
+        }
+    }
+
+    let subdir = build.record.package_record.subdir.as_str();
+    if !subdir.is_empty() {
+        write!(f, " @ {subdir}")?;
+    }
+
+    Ok(())
+}
+
 pub struct SourceBuildCacheEntry {
     /// The information stored in the build cache. Or `None` if the build did
     /// not exist in the cache.
@@ -117,7 +154,7 @@ impl SourceBuildCacheStatusSpec {
         };
 
         tracing::debug!(
-            "status of cached build for package '{}' is '{:?}'",
+            "status of cached build for package '{}' is '{}'",
             self.package,
             &cached_build
         );

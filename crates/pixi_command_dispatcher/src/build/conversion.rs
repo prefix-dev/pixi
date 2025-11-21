@@ -98,19 +98,22 @@ pub fn from_package_spec_v1(source: PackageSpecV1) -> pixi_spec::PixiSpec {
 }
 
 pub(crate) fn package_metadata_to_source_records(
-    source: &PinnedSourceSpec,
+    manifest_source: &PinnedSourceSpec,
+    build_source: Option<&PinnedSourceSpec>,
     packages: &[CondaPackageMetadata],
     package: &PackageName,
     input_hash: &Option<InputHash>,
 ) -> Vec<SourceRecord> {
     // Convert the metadata to repodata
-    let packages = packages
+
+    packages
         .iter()
         .filter(|pkg| pkg.name == *package)
         .map(|p| {
             SourceRecord {
                 input_hash: input_hash.clone(),
-                source: source.clone(),
+                manifest_source: manifest_source.clone(),
+                build_source: build_source.cloned(),
                 sources: p
                     .sources
                     .iter()
@@ -159,6 +162,5 @@ pub(crate) fn package_metadata_to_source_records(
                 },
             }
         })
-        .collect();
-    packages
+        .collect()
 }

@@ -7,7 +7,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.58.0"
+version = "0.59.0"
 
 [features]
 default = ["rustls-tls"]
@@ -78,6 +78,7 @@ url = { workspace = true }
 uv-cache = { workspace = true }
 uv-configuration = { workspace = true }
 uv-installer = { workspace = true }
+uv-normalize = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-python = { workspace = true }
 zip = { workspace = true }

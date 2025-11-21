@@ -314,7 +314,11 @@ impl WorkspaceMut {
             return Ok(None);
         }
 
-        let original_lock_file = self.workspace().load_lock_file().await?;
+        let original_lock_file = self
+            .workspace()
+            .load_lock_file()
+            .await?
+            .into_lock_file_or_empty_with_warning();
         let affected_environments = self
             .workspace()
             .environments()
@@ -334,7 +338,11 @@ impl WorkspaceMut {
             affected_environments.contains(&self.workspace().default_environment());
         tracing::debug!(
             "environments affected by the add command: {}",
-            affected_environments.iter().map(|e| e.name()).format(", ")
+            affected_environments
+                .iter()
+                .map(|e| e.name())
+                .format(", ")
+                .to_string()
         );
         let affect_environment_and_platforms = affected_environments
             .into_iter()
@@ -371,20 +379,20 @@ impl WorkspaceMut {
             .update()
             .await
             .map_err(|mut e| {
-                if let Some(SolveCondaEnvironmentError::SolveFailed {
-                    source:
-                        CommandDispatcherError::Failed(MissingChannel(MissingChannelError {
-                            package: _,
-                            channel,
-                            advice,
-                        })),
-                    ..
-                }) = e.downcast_mut::<SolveCondaEnvironmentError>()
+                if let Some(SolveCondaEnvironmentError::SolveFailed { source, .. }) =
+                    e.downcast_mut::<SolveCondaEnvironmentError>()
                 {
-                    *advice = Some(format!(
-                        "To add the missing channel to a workspace, use:\n\n  {}",
-                        console::style(format!("pixi workspace channel add {}", channel)).bold(),
-                    ));
+                    if let CommandDispatcherError::Failed(MissingChannel(MissingChannelError {
+                        package: _,
+                        channel,
+                        advice,
+                    })) = source.as_mut()
+                    {
+                        *advice = Some(format!(
+                            "To add the missing channel to a workspace, use:\n\n  {}",
+                            console::style(format!("pixi workspace channel add {channel}")).bold(),
+                        ));
+                    }
                 }
                 e
             })?;

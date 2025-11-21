@@ -183,7 +183,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     // Print the output - either a JSON object or a shell script
-    println!("{}", output);
+    println!("{output}");
 
     Ok(())
 }
