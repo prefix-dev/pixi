@@ -455,7 +455,7 @@ pub struct TaskRenderContext<'a> {
     pub environment_name: Option<&'a EnvironmentName>,
 
     /// The absolute path to the manifest file.
-    pub manifest_path: Option<&'a Path>,
+    pub manifest_path: Option<PathBuf>,
 
     /// The arguments to use for rendering.
     pub args: Option<&'a ArgValues>,
@@ -473,31 +473,6 @@ impl Default for TaskRenderContext<'_> {
 }
 
 impl<'a> TaskRenderContext<'a> {
-    /// Creates a context with the specified platform and arguments.
-    pub fn with_args(platform: Platform, args: Option<&'a ArgValues>) -> Self {
-        Self {
-            platform,
-            environment_name: None,
-            manifest_path: None,
-            args,
-        }
-    }
-
-    /// Creates a full context with all available information.
-    pub fn new(
-        platform: Platform,
-        environment_name: Option<&'a EnvironmentName>,
-        manifest_path: Option<&'a Path>,
-        args: Option<&'a ArgValues>,
-    ) -> Self {
-        Self {
-            platform,
-            environment_name,
-            manifest_path,
-            args,
-        }
-    }
-
     /// Builds a MiniJinja context value from this render context.
     ///
     /// The context always includes the pixi system variables.
@@ -549,7 +524,7 @@ impl<'a> TaskRenderContext<'a> {
         }
 
         // Add manifest path if available
-        if let Some(path) = self.manifest_path {
+        if let Some(ref path) = self.manifest_path {
             pixi_vars.insert(
                 "manifest_path".to_string(),
                 minijinja::Value::from(path.display().to_string()),
@@ -1067,7 +1042,12 @@ mod tests {
 
         // Free-form args -> pixi.platform still works
         let free_args = ArgValues::FreeFormArgs(vec!["bar".into()]);
-        let context = TaskRenderContext::with_args(Platform::current(), Some(&free_args));
+        let context = TaskRenderContext {
+            platform: Platform::current(),
+            environment_name: None,
+            manifest_path: None,
+            args: Some(&free_args),
+        };
         let rendered = t
             .render(&context)
             .expect("pixi.platform should be available with free-form args");
@@ -1094,12 +1074,12 @@ mod tests {
         let manifest_path = PathBuf::from("/tmp/pixi.toml");
         let args = ArgValues::TypedArgs(vec![]);
 
-        let context = TaskRenderContext::new(
-            Platform::Linux64,
-            Some(&env_name),
-            Some(&manifest_path),
-            Some(&args),
-        );
+        let context = TaskRenderContext {
+            platform: Platform::Linux64,
+            environment_name: Some(&env_name),
+            manifest_path: Some(manifest_path),
+            args: Some(&args),
+        };
 
         // Test platform
         let t = TemplateString::from("{{ pixi.platform }}");
@@ -1133,7 +1113,12 @@ mod tests {
             name: "foo".into(),
             value: "bar".into(),
         }]);
-        let context = TaskRenderContext::with_args(Platform::current(), Some(&args));
+        let context = TaskRenderContext {
+            platform: Platform::current(),
+            environment_name: None,
+            manifest_path: None,
+            args: Some(&args),
+        };
         let rendered = t.render(&context).expect("should render with typed args");
         assert_eq!(rendered, "echo bar");
     }
@@ -1142,7 +1127,12 @@ mod tests {
     fn test_template_string_renders_platform_variable() {
         let t = TemplateString::from("echo {{ pixi.platform }}");
         let args = ArgValues::TypedArgs(vec![]);
-        let context = TaskRenderContext::with_args(Platform::Linux64, Some(&args));
+        let context = TaskRenderContext {
+            platform: Platform::Linux64,
+            environment_name: None,
+            manifest_path: None,
+            args: Some(&args),
+        };
         let rendered = t.render(&context).expect("should render platform variable");
 
         assert_eq!(rendered, "echo linux-64");
@@ -1155,7 +1145,12 @@ mod tests {
             name: "version".into(),
             value: "1.0.0".into(),
         }]);
-        let context = TaskRenderContext::with_args(Platform::Linux64, Some(&args));
+        let context = TaskRenderContext {
+            platform: Platform::Linux64,
+            environment_name: None,
+            manifest_path: None,
+            args: Some(&args),
+        };
         let rendered = t
             .render(&context)
             .expect("should render with platform and args");

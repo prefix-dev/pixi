@@ -471,10 +471,12 @@ mod tests {
             .default_environment()
             .task(&"foo".into(), Some(Platform::Linux64))
             .unwrap()
-            .as_single_command(&pixi_manifest::task::TaskRenderContext::with_args(
-                Platform::Linux64,
-                None,
-            ))
+            .as_single_command(&pixi_manifest::task::TaskRenderContext {
+                platform: Platform::Linux64,
+                environment_name: None,
+                manifest_path: None,
+                args: None,
+            })
             .unwrap()
             .unwrap();
 

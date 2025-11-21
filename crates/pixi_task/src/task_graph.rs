@@ -72,10 +72,12 @@ impl fmt::Display for TaskNode<'_> {
             self.name.clone().unwrap_or("CUSTOM COMMAND".into())
         )?;
         write!(f, ", environment: {}", self.run_environment.name())?;
-        let context = pixi_manifest::task::TaskRenderContext::with_args(
-            self.run_environment.best_platform(),
-            self.args.as_ref(),
-        );
+        let context = pixi_manifest::task::TaskRenderContext {
+            platform: self.run_environment.best_platform(),
+            environment_name: Some(self.run_environment.name()),
+            manifest_path: None, // manifest_path not available at TaskNode level
+            args: self.args.as_ref(),
+        };
         if let Ok(Some(command)) = self.task.as_single_command(&context) {
             write!(f, "command: `{command}`,",)?;
         }
@@ -105,10 +107,12 @@ impl TaskNode<'_> {
     /// execute. This is the case for alias only commands.
     #[cfg(test)]
     pub(crate) fn full_command(&self) -> miette::Result<Option<String>> {
-        let context = pixi_manifest::task::TaskRenderContext::with_args(
-            self.run_environment.best_platform(),
-            self.args.as_ref(),
-        );
+        let context = pixi_manifest::task::TaskRenderContext {
+            platform: self.run_environment.best_platform(),
+            environment_name: Some(self.run_environment.name()),
+            manifest_path: None, // manifest_path not available at TaskNode level
+            args: self.args.as_ref(),
+        };
         let mut cmd = self.task.as_single_command(&context)?;
 
         if let Some(ArgValues::FreeFormArgs(additional_args)) = &self.args {
@@ -342,10 +346,12 @@ impl<'p> TaskGraph<'p> {
             // Iterate over all the dependencies of the node and add them to the graph.
             let mut node_dependencies = Vec::with_capacity(dependencies.len());
             for dependency in dependencies {
-                let context = pixi_manifest::task::TaskRenderContext::with_args(
-                    node.run_environment.best_platform(),
-                    node.args.as_ref(),
-                );
+                let context = pixi_manifest::task::TaskRenderContext {
+                    platform: node.run_environment.best_platform(),
+                    environment_name: Some(node.run_environment.name()),
+                    manifest_path: None, // manifest_path not available at TaskNode level
+                    args: node.args.as_ref(),
+                };
                 let dependency = TypedDependency::from_dependency(&dependency, &context)?;
                 // Check if we visited this node before already.
                 if let Some(&task_id) = task_name_with_args_to_node.get(&dependency) {
