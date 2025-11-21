@@ -53,8 +53,12 @@ pub async fn search_exact<I: Interface>(
         miette::miette!("could not find package name in MatchSpec {}", match_spec)
     })?;
 
+    let package_name = package_name_search
+        .as_exact()
+        .ok_or_else(|| miette::miette!("search does not support wildcard package names"))?;
+
     let packages = search_package_by_filter(
-        &package_name_search,
+        package_name,
         all_package_names,
         repodata_query_func,
         |pn, n| pn == n,
@@ -63,7 +67,7 @@ pub async fn search_exact<I: Interface>(
     .await?;
 
     if packages.is_empty() {
-        let normalized_package_name = package_name_search.as_normalized();
+        let normalized_package_name = package_name.as_normalized();
         return Err(miette::miette!(
             "Package {normalized_package_name} not found, please use a wildcard '*' in the search name for a broader result."
         ));
