@@ -404,11 +404,11 @@ pub enum PlatformUnsat {
     #[diagnostic(transparent)]
     Variants(#[from] VariantsError),
 
-    #[error(transparent)]
-    InvalidChannel(#[from] ParseChannelError),
-
     #[error("'{name}' is locked as a conda package but only requested by pypi dependencies")]
     CondaPackageShouldBePypi { name: String },
+
+    #[error(transparent)]
+    InvalidChannel(#[from] ParseChannelError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
