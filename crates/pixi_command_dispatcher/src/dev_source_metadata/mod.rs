@@ -58,7 +58,7 @@ impl DevSourceMetadataSpec {
         skip_all,
         name = "dev-source-metadata",
         fields(
-            source = %self.backend_metadata.source,
+            source = %self.backend_metadata.manifest_source,
             platform = %self.backend_metadata.build_environment.host_platform,
         )
     )]
@@ -84,7 +84,7 @@ impl DevSourceMetadataSpec {
 
         // Create a SourceAnchor for resolving relative paths in dependencies
         let source_anchor = SourceAnchor::from(pixi_spec::SourceSpec::from(
-            build_backend_metadata.source.clone(),
+            build_backend_metadata.manifest_source.clone(),
         ));
 
         // Create a DevSourceRecord for each output
@@ -95,7 +95,7 @@ impl DevSourceMetadataSpec {
             }
             let record = Self::create_dev_source_record(
                 output,
-                &build_backend_metadata.source,
+                &build_backend_metadata.manifest_source,
                 &build_backend_metadata.metadata.input_hash,
                 &source_anchor,
             )?;
@@ -103,7 +103,7 @@ impl DevSourceMetadataSpec {
         }
 
         Ok(DevSourceMetadata {
-            source: build_backend_metadata.source.clone(),
+            source: build_backend_metadata.manifest_source.clone(),
             records,
         })
     }

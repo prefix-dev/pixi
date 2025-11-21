@@ -274,7 +274,7 @@ impl PixiEnvironmentSpec {
             dev_source_futures.push(async move {
                 // Pin and checkout the source
                 let pinned_source = command_dispatcher
-                    .pin_and_checkout(dev_source_spec.source)
+                    .pin_and_checkout(dev_source_spec.source.location, None)
                     .await
                     .map_err_with(SolvePixiEnvironmentError::SourceCheckoutError)?;
 
@@ -289,6 +289,7 @@ impl PixiEnvironmentSpec {
                         variants,
                         variant_files,
                         enabled_protocols,
+                        pin_override: None,
                     },
                 };
 
