@@ -338,7 +338,11 @@ impl WorkspaceMut {
             affected_environments.contains(&self.workspace().default_environment());
         tracing::debug!(
             "environments affected by the add command: {}",
-            affected_environments.iter().map(|e| e.name()).format(", ")
+            affected_environments
+                .iter()
+                .map(|e| e.name())
+                .format(", ")
+                .to_string()
         );
         let affect_environment_and_platforms = affected_environments
             .into_iter()
