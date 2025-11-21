@@ -83,7 +83,7 @@ impl SourceRecord {
                     PinnedSourceSpec::Git(pinned_git_spec) => Some(PackageBuildSource::Git {
                         url: pinned_git_spec.git,
                         spec: to_git_shallow(&pinned_git_spec.source.reference),
-                        rev: pinned_git_spec.source.reference.to_string(),
+                        rev: pinned_git_spec.source.commit.to_string(),
                         subdir: pinned_git_spec
                             .source
                             .subdirectory
