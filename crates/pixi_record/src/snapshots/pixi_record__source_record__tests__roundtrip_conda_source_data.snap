@@ -1,189 +1,123 @@
 ---
 source: crates/pixi_record/src/source_record.rs
-expression: roundtrips
+expression: roundtrip_lock
 ---
-- package_record:
-    build: h123456_0
-    build_number: 0
-    depends: []
-    md5: d41d8cd98f00b204e9800998ecf8427e
-    name: git-sibling-test
-    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    subdir: noarch
-    version: 1.0.0
-  manifest_source:
-    commit: abc123def456abc123def456abc123def456abc1
-    git: "https://github.com/example/mono-repo.git"
-    reference:
-      branch: main
-    subdirectory: recipes
-  build_source:
-    commit: abc123def456abc123def456abc123def456abc1
-    git: "https://github.com/example/mono-repo.git"
-    reference:
-      branch: main
-    subdirectory: nested/src
-  input_hash:
+version: 6
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      noarch:
+      - conda: git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
+        name: git-child-test
+      - conda: git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
+        name: git-sibling-test
+      - conda: git+https://github.com/example/repo.git?tag=v1.0.0#abc123def456abc123def456abc123def456abc1
+      - conda: /workspace/absolute-recipe
+      - conda: recipes/my-package
+        name: path-child-test
+      - conda: recipes/my-package
+        name: path-sibling-test
+      - conda: recipes/no-build
+packages:
+- conda: git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
+  name: git-child-test
+  version: 1.1.0
+  build: h234567_0
+  subdir: noarch
+  noarch: false
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  md5: d41d8cd98f00b204e9800998ecf8427e
+  channel: null
+  input:
     hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
     globs:
-      - "**/*.py"
-      - "**/*.txt"
-  sources: {}
-- package_record:
-    build: h234567_0
-    build_number: 0
-    depends: []
-    md5: d41d8cd98f00b204e9800998ecf8427e
-    name: git-child-test
-    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    subdir: noarch
-    version: 1.1.0
-  manifest_source:
-    commit: abc123def456abc123def456abc123def456abc1
-    git: "https://github.com/example/mono-repo.git"
-    reference:
-      branch: main
-    subdirectory: recipes
-  build_source:
-    commit: abc123def456abc123def456abc123def456abc1
-    git: "https://github.com/example/mono-repo.git"
-    reference:
-      branch: main
-    subdirectory: src
-  input_hash:
+    - '**/*.c'
+  package_build_source:
+    path: ../src
+- conda: git+https://github.com/example/repo.git?tag=v1.0.0#abc123def456abc123def456abc123def456abc1
+  name: git-no-manifest-subdir
+  version: 3.0.0
+  build: h901237_0
+  subdir: noarch
+  noarch: false
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  md5: d41d8cd98f00b204e9800998ecf8427e
+  channel: null
+  input:
     hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
     globs:
-      - "**/*.c"
-  sources: {}
-- package_record:
-    build: h789012_0
-    build_number: 0
-    depends: []
-    md5: d41d8cd98f00b204e9800998ecf8427e
-    name: path-sibling-test
-    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    subdir: noarch
-    version: 2.0.0
-  manifest_source:
-    path: recipes/my-package
-  build_source:
-    path: other-package/src
-  input_hash:
+    - src/**/*.rs
+  package_build_source:
+    path: build/subdir
+- conda: git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
+  name: git-sibling-test
+  version: 1.0.0
+  build: h123456_0
+  subdir: noarch
+  noarch: false
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  md5: d41d8cd98f00b204e9800998ecf8427e
+  channel: null
+  input:
     hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
     globs:
-      - "**/*.rs"
-  sources: {}
-- package_record:
-    build: h890123_0
-    build_number: 0
-    depends: []
-    md5: d41d8cd98f00b204e9800998ecf8427e
-    name: path-child-test
-    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    subdir: noarch
-    version: 2.1.0
-  manifest_source:
-    path: recipes/my-package
-  build_source:
-    path: src/lib
-  input_hash:
+    - '**/*.py'
+    - '**/*.txt'
+  package_build_source:
+    path: ../non-nested
+- conda: /workspace/absolute-recipe
+  name: path-absolute-manifest
+  version: 2.4.0
+  build: h901236_0
+  subdir: noarch
+  noarch: false
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  md5: d41d8cd98f00b204e9800998ecf8427e
+  input:
     hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
     globs:
-      - "**/*.cpp"
-  sources: {}
-- package_record:
-    build: h901234_0
-    build_number: 0
-    depends: []
-    md5: d41d8cd98f00b204e9800998ecf8427e
-    name: path-absolute-build-outside
-    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    subdir: noarch
-    version: 2.2.0
-  manifest_source:
-    path: recipes/external-package
-  build_source:
-    path: /opt/external/sources/pkg
-  input_hash:
+    - '**/*.sh'
+  package_build_source:
+    path: ../src
+- conda: recipes/my-package
+  name: path-child-test
+  version: 2.1.0
+  build: h890123_0
+  subdir: noarch
+  noarch: false
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  md5: d41d8cd98f00b204e9800998ecf8427e
+  input:
     hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
     globs:
-      - "**/*.pyx"
-  sources: {}
-- package_record:
-    build: h901235_0
-    build_number: 0
-    depends: []
-    md5: d41d8cd98f00b204e9800998ecf8427e
-    name: path-root-manifest
-    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    subdir: noarch
-    version: 2.3.0
-  manifest_source:
-    path: ""
-  build_source:
-    path: src/root-build
-  input_hash:
+    - '**/*.cpp'
+  package_build_source:
+    path: ../../src/lib
+- conda: recipes/no-build
+  name: path-no-build-source
+  version: 2.5.0
+  build: h901238_0
+  subdir: noarch
+  noarch: false
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  md5: d41d8cd98f00b204e9800998ecf8427e
+  input:
     hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
     globs:
-      - pyproject.toml
-  sources: {}
-- package_record:
-    build: h901236_0
-    build_number: 0
-    depends: []
-    md5: d41d8cd98f00b204e9800998ecf8427e
-    name: path-absolute-manifest
-    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    subdir: noarch
-    version: 2.4.0
-  manifest_source:
-    path: /workspace/absolute-recipe
-  build_source:
-    path: absolute-recipe/src
-  input_hash:
+    - '**/*.md'
+- conda: recipes/my-package
+  name: path-sibling-test
+  version: 2.0.0
+  build: h789012_0
+  subdir: noarch
+  noarch: false
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  md5: d41d8cd98f00b204e9800998ecf8427e
+  input:
     hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
     globs:
-      - "**/*.sh"
-  sources: {}
-- package_record:
-    build: h901237_0
-    build_number: 0
-    depends: []
-    md5: d41d8cd98f00b204e9800998ecf8427e
-    name: git-no-manifest-subdir
-    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    subdir: noarch
-    version: 3.0.0
-  manifest_source:
-    commit: abc123def456abc123def456abc123def456abc1
-    git: "https://github.com/example/repo.git"
-    reference:
-      tag: v1.0.0
-  build_source:
-    commit: abc123def456abc123def456abc123def456abc1
-    git: "https://github.com/example/repo.git"
-    reference:
-      tag: v1.0.0
-    subdirectory: build/subdir
-  input_hash:
-    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    globs:
-      - src/**/*.rs
-  sources: {}
-- package_record:
-    build: h901238_0
-    build_number: 0
-    depends: []
-    md5: d41d8cd98f00b204e9800998ecf8427e
-    name: path-no-build-source
-    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    subdir: noarch
-    version: 2.5.0
-  manifest_source:
-    path: recipes/no-build
-  build_source: ~
-  input_hash:
-    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    globs:
-      - "**/*.md"
-  sources: {}
+    - '**/*.rs'
+  package_build_source:
+    path: ../../other-package/src

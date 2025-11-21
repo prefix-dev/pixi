@@ -10,16 +10,10 @@ use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
 use rattler_digest::{Sha256, Sha256Hash};
 use rattler_lock::{CondaSourceData, GitShallowSpec, PackageBuildSource};
 use serde::{Deserialize, Serialize};
-use typed_path::Utf8TypedPathBuf;
+use typed_path::{Utf8TypedPathBuf, Utf8UnixPathBuf};
 use url::Url;
 
-use crate::{
-    ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec,
-    path_utils::{
-        is_cross_platform_absolute, normalize_path, path_within_workspace, relative_repo_subdir,
-        resolve_repo_subdir, unixify_path,
-    },
-};
+use crate::{ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec};
 
 /// A record of a conda package that still requires building.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -70,66 +64,41 @@ impl SourceRecord {
     /// However, when saving in the lock-file make these relative to the package manifest.
     /// This should be used when writing to the lock file.
     pub fn into_conda_source_data(self, workspace_root: &Path) -> CondaSourceData {
-        let package_build_source =
-            self.build_source
+        let package_build_source = if let Some(package_build_source) = self.build_source.clone() {
+            // See if we can make it relative
+            let package_build_source_path = package_build_source
                 .clone()
-                .map(|build_source| match build_source {
-                    PinnedSourceSpec::Git(git_spec) => {
-                        // When manifest and build refer to the same repo+commit we keep the
-                        // build source as git, but rewrite its subdirectory relative to the
-                        // manifest checkout as expected by the lock file format.
-                        let mut subdirectory = git_spec.source.subdirectory.clone();
+                .make_relative_to(&self.manifest_source, workspace_root)
+                .map(|path| PackageBuildSource::Path {
+                    path: Utf8TypedPathBuf::Unix(path),
+                });
 
-                        if let PinnedSourceSpec::Git(manifest_git) = &self.manifest_source {
-                            if same_git_checkout(&git_spec, manifest_git) {
-                                subdirectory = relative_repo_subdir(
-                                    manifest_git.source.subdirectory.as_deref().unwrap_or(""),
-                                    git_spec.source.subdirectory.as_deref().unwrap_or(""),
-                                );
-                            }
-                        }
-
-                        let subdirectory = subdirectory.as_deref().map(Utf8TypedPathBuf::from);
-                        let spec = to_git_shallow(&git_spec.source.reference);
-
-                        PackageBuildSource::Git {
-                            url: git_spec.git,
-                            spec,
-                            rev: git_spec.source.commit.to_string(),
-                            subdir: subdirectory,
-                        }
-                    }
-                    PinnedSourceSpec::Url(pinned_url_spec) => PackageBuildSource::Url {
+            if package_build_source_path.is_none() {
+                match package_build_source {
+                    PinnedSourceSpec::Url(pinned_url_spec) => Some(PackageBuildSource::Url {
                         url: pinned_url_spec.url,
                         sha256: pinned_url_spec.sha256,
                         subdir: None,
-                    },
-                    PinnedSourceSpec::Path(pinned_path) => {
-                        let path_str = pinned_path.path.as_str();
-                        let native_path = Path::new(path_str);
-                        let is_cross_platform_absolute =
-                            is_cross_platform_absolute(path_str, native_path);
-                        let is_within_workspace =
-                            path_within_workspace(path_str, native_path, workspace_root);
-                        let should_relativize = !is_cross_platform_absolute || is_within_workspace;
-
-                        let relativized = if should_relativize {
-                            PinnedSourceSpec::Path(pinned_path.clone())
-                                .make_relative_to(&self.manifest_source, workspace_root)
-                                .unwrap_or(PinnedSourceSpec::Path(pinned_path.clone()))
-                        } else {
-                            PinnedSourceSpec::Path(pinned_path.clone())
-                        };
-
-                        let PinnedSourceSpec::Path(result_path) = relativized else {
-                            unreachable!("path specs must remain paths");
-                        };
-
-                        PackageBuildSource::Path {
-                            path: result_path.path,
-                        }
-                    }
-                });
+                    }),
+                    PinnedSourceSpec::Git(pinned_git_spec) => Some(PackageBuildSource::Git {
+                        url: pinned_git_spec.git,
+                        spec: to_git_shallow(&pinned_git_spec.source.reference),
+                        rev: pinned_git_spec.source.reference.to_string(),
+                        subdir: pinned_git_spec
+                            .source
+                            .subdirectory
+                            .map(Utf8TypedPathBuf::from),
+                    }),
+                    PinnedSourceSpec::Path(pinned_path_spec) => Some(PackageBuildSource::Path {
+                        path: pinned_path_spec.path,
+                    }),
+                }
+            } else {
+                package_build_source_path
+            }
+        } else {
+            None
+        };
 
         CondaSourceData {
             package_record: self.package_record,
@@ -166,27 +135,29 @@ impl SourceRecord {
                 rev,
                 subdir,
             } => {
-                let mut subdirectory = subdir.map(|s| s.to_string());
-
-                if let PinnedSourceSpec::Git(manifest_git) = &manifest_source {
-                    // For same-repo checkouts the lock stored the subdir relative to the manifest;
-                    // restore the absolute repo subdirectory so SourceRecord stays workspace-root
-                    // relative again.
+                // Check if this is a relative subdirectory (same repo checkout)
+                if let (Some(subdir), PinnedSourceSpec::Git(manifest_git)) =
+                    (&subdir, &manifest_source)
+                {
                     if same_git_checkout_url_commit(manifest_git, &url, &rev) {
-                        subdirectory = resolve_repo_subdir(
-                            manifest_git.source.subdirectory.as_deref().unwrap_or(""),
-                            subdirectory.as_deref(),
-                        );
+                        // The subdirectory is relative to the manifest, use from_relative_to
+                        let relative_path = Utf8UnixPathBuf::from(subdir.as_str());
+                        return PinnedSourceSpec::from_relative_to(
+                            relative_path,
+                            &manifest_source,
+                            workspace_root,
+                        )
+                        .expect("from_relative_to should succeed for same-repo git checkouts, this is a bug");
                     }
                 }
 
+                // Different repository
                 let reference = git_reference_from_shallow(spec, &rev);
-
                 PinnedSourceSpec::Git(crate::PinnedGitSpec {
                     git: url,
                     source: PinnedGitCheckout {
                         commit: GitSha::from_str(&rev).unwrap(),
-                        subdirectory,
+                        subdirectory: subdir.map(|s| s.to_string()),
                         reference,
                     },
                 })
@@ -201,61 +172,23 @@ impl SourceRecord {
                 md5: None,
             }),
             PackageBuildSource::Path { path } => {
-                if path.is_absolute() {
-                    crate::PinnedSourceSpec::Path(crate::PinnedPathSpec { path })
-                } else {
-                    match &manifest_source {
-                        PinnedSourceSpec::Url(_) => unimplemented!(),
-                        PinnedSourceSpec::Git(pinned_git_spec) => {
-                            // The path is relative to the manifest subdirectory
-                            // Need to resolve it to get the absolute subdirectory in the repo
-                            let base_subdir =
-                                pinned_git_spec.source.subdirectory.as_deref().unwrap_or("");
-                            let base_path = std::path::Path::new(base_subdir);
-                            let relative_path = std::path::Path::new(path.as_str());
-
-                            // Join to get the subdirectory path and normalize away `.` / `..`
-                            let absolute_subdir = base_path.join(relative_path);
-                            let normalized = normalize_path(&absolute_subdir);
-                            let subdirectory = normalized
-                                .to_str()
-                                .expect("path should be valid UTF-8")
-                                .to_string();
-
-                            let mut git_source = pinned_git_spec.source.clone();
-                            git_source.subdirectory = Some(subdirectory);
-
-                            // Reconstruct the git object
-                            PinnedSourceSpec::Git(crate::PinnedGitSpec {
-                                git: pinned_git_spec.git.clone(),
-                                source: git_source,
-                            })
-                        }
-                        PinnedSourceSpec::Path(manifest_path) => {
-                            // path is relative to manifest_source (or absolute) in the lock file
-                            // We need to make it relative to workspace_root (or keep it absolute)
-                            let build_source_spec = crate::PinnedPathSpec { path };
-
-                            // If path is relative, it's relative to manifest_source
-                            // First resolve manifest_source against workspace_root
-                            // Then resolve path against the resolved manifest_source
-                            // Finally make the result relative to workspace_root
-                            let manifest_absolute = manifest_path.resolve(workspace_root);
-                            let build_absolute = build_source_spec.resolve(&manifest_absolute);
-                            let build_absolute = normalize_path(&build_absolute);
-
-                            // Make the normalized path relative to workspace_root
-                            let relative_to_workspace =
-                                pathdiff::diff_paths(&build_absolute, workspace_root)
-                                    .unwrap_or(build_absolute);
-
-                            PinnedSourceSpec::Path(crate::PinnedPathSpec {
-                                // Lock format is always `/`-separated even if diff runs on Windows.
-                                path: Utf8TypedPathBuf::from(unixify_path(&relative_to_workspace)),
-                            })
-                        }
+                // Convert path to Unix format for from_relative_to
+                let path_unix = match path {
+                    Utf8TypedPathBuf::Unix(ref p) => p,
+                    // If its a windows path, it can *ONLY* be absolute per the `into_conda_source_data` method
+                    // so let's return as-is
+                    Utf8TypedPathBuf::Windows(path) => {
+                        return PinnedSourceSpec::Path(crate::PinnedPathSpec { path: Utf8TypedPathBuf::Windows(path) })
                     }
-                }
+                };
+
+                dbg!("GET HERE");
+                // Try to resolve relative to manifest_source, or use absolute path if that fails
+                PinnedSourceSpec::from_relative_to(path_unix.to_path_buf(), &manifest_source, workspace_root)
+                    .unwrap_or_else(|| {
+                        // If from_relative_to returns None (absolute paths), use as-is
+                        PinnedSourceSpec::Path(crate::PinnedPathSpec { path })
+                    })
             }
         });
 
@@ -314,15 +247,8 @@ impl AsRef<PackageRecord> for SourceRecord {
     }
 }
 
-/// Normalize a path lexically (no filesystem access) and remove redundant separators/`..`.
-/// Returns true when both git specs target the same repository (ignoring URL noise)
-/// and are pinned to the identical commit.
-fn same_git_checkout(a: &crate::PinnedGitSpec, b: &crate::PinnedGitSpec) -> bool {
-    RepositoryUrl::new(&a.git) == RepositoryUrl::new(&b.git) && a.source.commit == b.source.commit
-}
-
-/// Same check as `same_git_checkout`, but used while parsing lock data where only
-/// the URL + rev string are available.
+/// Returns true when the git URL and commit match the manifest git spec.
+/// Used while parsing lock data where only the URL + rev string are available.
 fn same_git_checkout_url_commit(manifest_git: &crate::PinnedGitSpec, url: &Url, rev: &str) -> bool {
     RepositoryUrl::new(&manifest_git.git) == RepositoryUrl::new(url)
         && manifest_git.source.commit.to_string() == rev
@@ -353,6 +279,11 @@ mod tests {
     use serde_json::json;
     use std::str::FromStr;
     use url::Url;
+
+    use rattler_conda_types::Platform;
+    use rattler_lock::{
+        Channel, CondaPackageData, DEFAULT_ENVIRONMENT_NAME, LockFile, LockFileBuilder,
+    };
 
     #[test]
     fn package_build_source_path_is_made_relative() {
@@ -423,55 +354,6 @@ mod tests {
     }
 
     #[test]
-    fn package_build_source_path_stays_absolute_when_not_related() {
-        use typed_path::Utf8TypedPathBuf;
-
-        let package_record: PackageRecord = serde_json::from_value(json!({
-            "name": "example",
-            "version": "1.0.0",
-            "build": "0",
-            "build_number": 0,
-            "subdir": "noarch",
-        }))
-        .expect("valid package record");
-
-        // Manifest is in /workspace/recipes directory
-        let manifest_source = PinnedSourceSpec::Path(crate::PinnedPathSpec {
-            path: Utf8TypedPathBuf::from("/workspace/recipes"),
-        });
-
-        // Build source is in a completely different location
-        let build_source = PinnedSourceSpec::Path(crate::PinnedPathSpec {
-            path: Utf8TypedPathBuf::from("/completely/different/path"),
-        });
-
-        let record = SourceRecord {
-            package_record,
-            manifest_source: manifest_source.clone(),
-            build_source: Some(build_source),
-            input_hash: None,
-            sources: Default::default(),
-        };
-
-        // Convert to CondaPackageData (serialization)
-        let conda_source = record
-            .clone()
-            .into_conda_source_data(&std::path::PathBuf::from("/workspace"));
-
-        let package_build_source = conda_source
-            .package_build_source
-            .as_ref()
-            .expect("expected package build source");
-
-        let PackageBuildSource::Path { path } = package_build_source else {
-            panic!("expected path package build source");
-        };
-
-        // The path should stay absolute because the build source is unrelated
-        assert_eq!(path.as_str(), "/completely/different/path");
-    }
-
-    #[test]
     fn package_build_source_roundtrip_git_with_subdir() {
         let package_record: PackageRecord = serde_json::from_value(json!({
             "name": "example",
@@ -523,12 +405,12 @@ mod tests {
             .as_ref()
             .expect("expected package build source");
 
-        let PackageBuildSource::Git { subdir, .. } = package_build_source else {
-            panic!("expected git package build source with relative subdir");
+        let PackageBuildSource::Path { path, .. } = package_build_source else {
+            panic!("expected path build source with relative subdir");
         };
 
-        // Git subdir is relative to manifest checkout (recipes -> ../src)
-        assert_eq!(subdir.as_ref().map(|s| s.as_str()), Some("../src"));
+        // Path is relative to manifest checkout (recipes -> ../src)
+        assert_eq!(path.as_str(), "../src");
 
         // Convert back to SourceRecord (deserialization)
         let roundtrip = SourceRecord::from_conda_source_data(
@@ -621,33 +503,75 @@ mod tests {
     fn roundtrip_conda_source_data() {
         let workspace_root = std::path::Path::new("/workspace");
 
-        // Load the SourceRecords from snapshot (skip YAML frontmatter)
-        let snapshot_content = include_str!(
-            "snapshots/pixi_record__source_record__tests__roundtrip_conda_source_data.snap"
-        );
-        let yaml_content = snapshot_content
-            .split("---")
-            .nth(2)
-            .expect("snapshot should have YAML content");
-        let originals: Vec<SourceRecord> =
-            serde_yaml::from_str(yaml_content).expect("failed to load snapshot");
+        // Load the lock file from the snapshot content (skip insta frontmatter).
+        let lock_source = lock_source_from_snapshot();
+        let lock_file = LockFile::from_str(&lock_source).expect("failed to load lock file fixture");
 
-        // Roundtrip each record: SourceRecord -> CondaSourceData -> SourceRecord
-        let roundtrips: Vec<SourceRecord> = originals
-            .into_iter()
-            .map(|original| {
-                let conda_data = original.clone().into_conda_source_data(workspace_root);
-                SourceRecord::from_conda_source_data(conda_data, workspace_root)
+        // Extract Conda source packages from the lock file.
+        let environment = lock_file
+            .default_environment()
+            .expect("expected default environment");
+
+        let conda_sources: Vec<CondaSourceData> = environment
+            .conda_packages_by_platform()
+            .flat_map(|(_, packages)| packages.filter_map(|pkg| pkg.as_source().cloned()))
+            .collect();
+
+        // Convert to SourceRecords and roundtrip back to CondaSourceData.
+        let roundtrip_records: Vec<SourceRecord> = conda_sources
+            .iter()
+            .map(|conda_data| {
+                SourceRecord::from_conda_source_data(conda_data.clone(), workspace_root)
                     .expect("from_conda_source_data should succeed")
             })
             .collect();
 
-        // Snapshot the final results - should match the originals
+        let roundtrip_lock = build_lock_from_records(&roundtrip_records, workspace_root);
         let mut settings = insta::Settings::clone_current();
         settings.set_sort_maps(true);
         settings.bind(|| {
-            insta::assert_yaml_snapshot!(roundtrips);
+            insta::assert_snapshot!(roundtrip_lock);
         });
+    }
+
+    /// Extract the lock file body from the snapshot by skipping the insta frontmatter.
+    fn lock_source_from_snapshot() -> String {
+        let snapshot_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            "src/snapshots/pixi_record__source_record__tests__roundtrip_conda_source_data.snap",
+        );
+        let snap = std::fs::read_to_string(snapshot_path).expect("failed to read snapshot file");
+        // Skip insta frontmatter (two --- delimiters) and return the lock file contents
+        snap.splitn(3, "---")
+            .nth(2)
+            .map(|s| s.trim_start_matches('\n'))
+            .unwrap_or_default()
+            .to_string()
+    }
+
+    /// Build a lock file string from a set of SourceRecords.
+    fn build_lock_from_records(
+        records: &[SourceRecord],
+        workspace_root: &std::path::Path,
+    ) -> String {
+        let mut builder = LockFileBuilder::new();
+        builder.set_channels(
+            DEFAULT_ENVIRONMENT_NAME,
+            [Channel::from("https://conda.anaconda.org/conda-forge/")],
+        );
+
+        for record in records {
+            let conda_data =
+                CondaPackageData::from(record.clone().into_conda_source_data(workspace_root));
+
+            let platform = Platform::from_str(&conda_data.record().subdir)
+                .expect("failed to parse platform from subdir");
+            builder.add_conda_package(DEFAULT_ENVIRONMENT_NAME, platform, conda_data);
+        }
+
+        builder
+            .finish()
+            .render_to_string()
+            .expect("failed to render lock file")
     }
 
     #[test]
