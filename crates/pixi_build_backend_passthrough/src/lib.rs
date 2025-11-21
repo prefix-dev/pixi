@@ -69,7 +69,8 @@ impl InMemoryBackend for PassthroughBackend {
     fn conda_outputs(
         &self,
         params: CondaOutputsParams,
-    ) -> Result<CondaOutputsResult, CommunicationError> {
+        _output_stream: &(dyn BackendOutputStream + Send + 'static),
+    ) -> Result<CondaOutputsResult, Box<CommunicationError>> {
         // Generate outputs for all variant combinations
         let outputs = generate_variant_outputs(&self.project_model, &self.index_json, &params);
 
@@ -83,11 +84,11 @@ impl InMemoryBackend for PassthroughBackend {
         &self,
         params: CondaBuildV1Params,
         _output_stream: &(dyn BackendOutputStream + Send + 'static),
-    ) -> Result<CondaBuildV1Result, CommunicationError> {
+    ) -> Result<CondaBuildV1Result, Box<CommunicationError>> {
         let (Some(index_json), Some(package)) = (&self.index_json, &self.config.package) else {
-            return Err(
+            return Err(Box::new(
                 BackendError::new("no 'package' configured for passthrough backend").into(),
-            );
+            ));
         };
         let absolute_path = self.source_dir.join(package);
         let output_file = params
@@ -429,12 +430,15 @@ pub struct PassthroughBackendInstantiator;
 impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
     type Backend = PassthroughBackend;
 
-    fn initialize(&self, params: InitializeParams) -> Result<Self::Backend, CommunicationError> {
+    fn initialize(
+        &self,
+        params: InitializeParams,
+    ) -> Result<Self::Backend, Box<CommunicationError>> {
         let project_model = match params.project_model {
             Some(VersionedProjectModel::V1(project_model)) => project_model,
             _ => {
-                return Err(CommunicationError::BackendError(BackendError::new(
-                    "Passthrough backend only supports project model v1",
+                return Err(Box::new(CommunicationError::BackendError(
+                    BackendError::new("Passthrough backend only supports project model v1"),
                 )));
             }
         };
@@ -451,12 +455,14 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                 let path = source_dir.join(path);
                 match rattler_package_streaming::seek::read_package_file(&path) {
                     Err(err) => {
-                        return Err(BackendError::new(format!(
-                            "failed to read '{}' file: {}",
-                            path.display(),
-                            err
-                        ))
-                        .into());
+                        return Err(Box::new(
+                            BackendError::new(format!(
+                                "failed to read '{}' file: {}",
+                                path.display(),
+                                err
+                            ))
+                            .into(),
+                        ));
                     }
                     Ok(index_json) => Some(index_json),
                 }

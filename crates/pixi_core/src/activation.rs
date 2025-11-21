@@ -96,15 +96,15 @@ impl Environment<'_> {
             }
             EnvironmentName::Default => self.workspace().display_name().to_string(),
         };
-        let map = IndexMap::from_iter([
+
+        IndexMap::from_iter([
             (format!("{ENV_PREFIX}NAME"), self.name().to_string()),
             (
                 format!("{ENV_PREFIX}PLATFORMS"),
                 self.platforms().iter().map(|plat| plat.as_str()).join(","),
             ),
-            ("PIXI_PROMPT".to_string(), format!("({}) ", prompt)),
-        ]);
-        map
+            ("PIXI_PROMPT".to_string(), format!("({prompt}) ")),
+        ])
     }
 }
 
@@ -128,7 +128,11 @@ pub fn get_activator<'p>(
     if !missing_scripts.is_empty() {
         tracing::warn!(
             "Could not find activation scripts: {}",
-            missing_scripts.iter().map(|p| p.display()).format(", ")
+            missing_scripts
+                .iter()
+                .map(|p| p.display())
+                .format(", ")
+                .to_string()
         );
     }
 

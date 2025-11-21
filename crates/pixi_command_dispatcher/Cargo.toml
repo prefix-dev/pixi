@@ -60,6 +60,7 @@ pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }
 pixi_stable_hash = { workspace = true, features = ["serde_json"] }
+pixi_url = { workspace = true }
 pixi_utils = { workspace = true }
 
 [dev-dependencies]
@@ -75,3 +76,6 @@ tokio = { workspace = true, features = ["macros"] }
 
 [features]
 slow_integration_tests = []
+
+[package.metadata.cargo-machete]
+ignored = ["serde_with"]

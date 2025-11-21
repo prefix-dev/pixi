@@ -118,6 +118,7 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                             },
                             hashes: archive.hashes,
                             cache_info,
+                            build_info: None,
                             path: uv_cache.archive(&archive.id).into_boxed_path(),
                         };
 
@@ -166,6 +167,7 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                                     },
                                     hashes: archive.hashes,
                                     cache_info,
+                                    build_info: None,
                                     path: uv_cache.archive(&archive.id).into_boxed_path(),
                                 };
 

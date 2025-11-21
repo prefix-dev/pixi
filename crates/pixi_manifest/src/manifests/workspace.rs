@@ -773,18 +773,10 @@ fn handle_missing_target(
     let platform = platform.copied().unwrap_or_else(Platform::current);
 
     let help = if feature_name.is_default() {
-        format!(
-            r#"Expected target for `{name}`, e.g.: `[target.{platform}.{section}]`"#,
-            name = feature_name,
-            platform = platform,
-            section = section
-        )
+        format!(r#"Expected target for `{feature_name}`, e.g.: `[target.{platform}.{section}]`"#)
     } else {
         format!(
-            r#"Expected target for `{name}`, e.g.: `[feature.{name}.target.{platform}.{section}]`"#,
-            name = feature_name,
-            platform = platform,
-            section = section
+            r#"Expected target for `{feature_name}`, e.g.: `[feature.{feature_name}.target.{platform}.{section}]`"#
         )
     };
     miette!(

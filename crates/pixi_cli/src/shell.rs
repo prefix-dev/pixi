@@ -458,7 +458,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Ok(Some(code)) => std::process::exit(code),
         Ok(None) => std::process::exit(0),
         Err(e) => {
-            eprintln!("Error starting shell: {}", e);
+            eprintln!("Error starting shell: {e}");
             std::process::exit(1);
         }
     }

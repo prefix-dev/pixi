@@ -34,7 +34,7 @@ pub struct Backend {
 
 pub enum BackendImplementation {
     /// The backend is a JSON-RPC backend.
-    JsonRpc(json_rpc::JsonRpcBackend),
+    JsonRpc(Box<json_rpc::JsonRpcBackend>),
 
     /// An in memory backend.
     InMemory(Box<dyn InMemoryBackend>),
@@ -77,7 +77,7 @@ impl BackendImplementation {
 
 impl From<json_rpc::JsonRpcBackend> for BackendImplementation {
     fn from(json_rpc: json_rpc::JsonRpcBackend) -> Self {
-        BackendImplementation::JsonRpc(json_rpc)
+        BackendImplementation::JsonRpc(Box::new(json_rpc))
     }
 }
 
@@ -145,24 +145,29 @@ impl Backend {
             BackendImplementation::JsonRpc(json_rpc) => {
                 json_rpc.conda_build_v1(params, output_stream).await
             }
-            BackendImplementation::InMemory(in_memory) => {
-                in_memory.conda_build_v1(params, &output_stream)
-            }
+            BackendImplementation::InMemory(in_memory) => in_memory
+                .conda_build_v1(params, &output_stream)
+                .map_err(|e| *e),
         }
     }
 
     /// Returns the outputs that this backend can produce.
-    pub async fn conda_outputs(
+    pub async fn conda_outputs<W: BackendOutputStream + Send + 'static>(
         &self,
         params: CondaOutputsParams,
+        output_stream: W,
     ) -> Result<CondaOutputsResult, CommunicationError> {
         assert!(
             self.inner.capabilities().provides_conda_outputs(),
             "This backend does not support the conda outputs procedure"
         );
         match &self.inner {
-            BackendImplementation::JsonRpc(json_rpc) => json_rpc.conda_outputs(params).await,
-            BackendImplementation::InMemory(in_memory) => in_memory.conda_outputs(params),
+            BackendImplementation::JsonRpc(json_rpc) => {
+                json_rpc.conda_outputs(params, output_stream).await
+            }
+            BackendImplementation::InMemory(in_memory) => in_memory
+                .conda_outputs(params, &output_stream)
+                .map_err(|e| *e),
         }
     }
 }

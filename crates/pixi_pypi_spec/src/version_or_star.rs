@@ -34,7 +34,7 @@ impl<'de> toml_span::Deserialize<'de> for VersionOrStar {
 impl Display for VersionOrStar {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            VersionOrStar::Version(v) => f.write_str(&format!("{}", v)),
+            VersionOrStar::Version(v) => f.write_str(&format!("{v}")),
             VersionOrStar::Star => f.write_char('*'),
         }
     }

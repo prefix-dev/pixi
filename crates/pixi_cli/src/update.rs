@@ -98,7 +98,7 @@ impl UpdateSpecs {
             }
         }
 
-        // Check if the environmtent is in the list of environments to update.
+        // Check if the environment is in the list of environments to update.
         if let Some(environments) = &self.environments {
             if !environments.contains(environment_name) {
                 return false;
@@ -146,7 +146,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Load the current lock-file, if any. If none is found, a dummy lock-file is
     // returned.
-    let loaded_lock_file = &workspace.load_lock_file().await?;
+    let loaded_lock_file = &workspace
+        .load_lock_file()
+        .await?
+        .into_lock_file_or_empty_with_warning();
 
     // If the user specified a package name, check to see if it is even locked.
     if let Some(packages) = &specs.packages {
@@ -160,8 +163,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Update the packages in the lock-file.
     let updated_lock_file = UpdateContext::builder(&workspace)
-        .with_lock_file(relaxed_lock_file.clone())
+        .with_lock_file(relaxed_lock_file)
         .with_no_install(args.no_install)
+        .with_update_targets(specs.packages.clone())
         .finish()
         .await?
         .update()
@@ -182,7 +186,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let diff = LockFileDiff::from_lock_files(loaded_lock_file, &lock_file);
         let json_diff = LockFileJsonDiff::new(Some(workspace.named_environments()), diff);
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
-        println!("{}", json);
+        println!("{json}");
     } else if diff.is_empty() {
         eprintln!(
             "{}Lock-file was already up-to-date",

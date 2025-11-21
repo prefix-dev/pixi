@@ -298,8 +298,9 @@ fn test_ignored_packages_not_extraneous() {
 
     // Build a planner that ignores `aiofiles` for extraneous detection; `requests`
     // should be considered extraneous and be uninstalled
-    let plan = harness::install_planner()
-        .with_ignored_extraneous(vec![uv_pep508::PackageName::from_str("aiofiles").unwrap()]);
+    let plan = harness::install_planner().with_ignored_extraneous(vec![
+        uv_normalize::PackageName::from_str("aiofiles").unwrap(),
+    ]);
 
     let required_dists = required.to_required_dists();
     let install_plan = plan
@@ -317,7 +318,7 @@ fn test_ignored_packages_not_extraneous() {
         .iter()
         .map(|d| d.name().to_string())
         .collect();
-    assert_eq!(names.len(), 1, "unexpected extraneous: {:?}", names);
+    assert_eq!(names.len(), 1, "unexpected extraneous: {names:?}");
     assert!(names.contains(&"requests".to_string()));
 }
 
@@ -434,7 +435,7 @@ fn test_installed_local_required_local() {
 /// except if the pyproject.toml file, or some other source files we won't check here is newer than the cache
 /// NOTE: We are skipping that test since it is flaky on linux
 /// uv checks ctime on unix systems
-/// During debug, we noticed that some times ctime isn't updated, and we couldn't find a relieable way to ensure that
+/// During debug, we noticed that some times ctime isn't updated, and we couldn't find a reliable way to ensure that
 /// At this time, we believe this to be a problem with our test, not with pixi or uv.
 /// If user encounter this problem we should investigate this again
 #[cfg(not(target_os = "linux"))]
@@ -760,7 +761,7 @@ fn test_uv_refresh() {
     let plan = harness::install_planner();
     let plan = plan.with_uv_refresh(uv_cache::Refresh::from_args(
         Some(true),
-        vec![uv_pep508::PackageName::from_str("aiofiles").unwrap()],
+        vec![uv_normalize::PackageName::from_str("aiofiles").unwrap()],
     ));
     let required_dists = required.to_required_dists();
     let installs = plan

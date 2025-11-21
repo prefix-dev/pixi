@@ -127,6 +127,7 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
     | `PIXI_HOME`          | The location of the binary folder.                                                 | `$HOME/.pixi`         |
     | `PIXI_ARCH`          | The architecture the Pixi version was built for.                                   | `uname -m`            |
     | `PIXI_NO_PATH_UPDATE`| If set the `$PATH` will not be updated to add `pixi` to it.                        |                       |
+    | `PIXI_DOWNLOAD_URL`  | Overrides the download URL for the Pixi binary (useful for mirrors or custom builds). | GitHub releases, e.g. [linux-64](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-unknown-linux-musl.tar.gz)       |
     | `TMP_DIR`            | The temporary directory the script uses to download to and unpack the binary from. | `/tmp`                |
 
     For example, on Apple Silicon, you can force the installation of the x86 version:
@@ -147,6 +148,7 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
     | `PIXI_VERSION`       | The version of Pixi getting installed, can be used to up- or down-grade.          | `latest`                    |
     | `PIXI_HOME`          | The location of the installation.                                                 | `$Env:USERPROFILE\.pixi`    |
     | `PIXI_NO_PATH_UPDATE`| If set, the `$PATH` will not be updated to add `pixi` to it.                      | `false`                     |
+    | `PIXI_DOWNLOAD_URL`  | Overrides the download URL for the Pixi binary (useful for mirrors or custom builds). | GitHub releases, e.g. [win-64](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-pc-windows-msvc.zip)           |
 
     For example, set the version:
     ```powershell

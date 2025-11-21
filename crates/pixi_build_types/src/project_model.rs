@@ -141,7 +141,7 @@ impl Display for TargetSelectorV1 {
             TargetSelectorV1::Linux => write!(f, "linux"),
             TargetSelectorV1::Win => write!(f, "win"),
             TargetSelectorV1::MacOs => write!(f, "macos"),
-            TargetSelectorV1::Platform(p) => write!(f, "{}", p),
+            TargetSelectorV1::Platform(p) => write!(f, "{p}"),
         }
     }
 }
@@ -284,10 +284,10 @@ impl std::fmt::Debug for UrlSpecV1 {
 
         debug_struct.field("url", &self.url);
         if let Some(md5) = &self.md5 {
-            debug_struct.field("md5", &format!("{:x}", md5));
+            debug_struct.field("md5", &format!("{md5:x}"));
         }
         if let Some(sha256) = &self.sha256 {
-            debug_struct.field("sha256", &format!("{:x}", sha256));
+            debug_struct.field("sha256", &format!("{sha256:x}"));
         }
         debug_struct.finish()
     }
@@ -404,10 +404,10 @@ impl std::fmt::Debug for BinaryPackageSpecV1 {
             debug_struct.field("subdir", subdir);
         }
         if let Some(md5) = &self.md5 {
-            debug_struct.field("md5", &format!("{:x}", md5));
+            debug_struct.field("md5", &format!("{md5:x}"));
         }
         if let Some(sha256) = &self.sha256 {
-            debug_struct.field("sha256", &format!("{:x}", sha256));
+            debug_struct.field("sha256", &format!("{sha256:x}"));
         }
 
         debug_struct.finish()
@@ -879,7 +879,7 @@ mod tests {
         let serialized = serde_json::to_string(&targets).unwrap();
 
         for platform in platform_strs {
-            assert!(serialized.contains(platform), "Missing: {}", platform);
+            assert!(serialized.contains(platform), "Missing: {platform}");
         }
     }
 

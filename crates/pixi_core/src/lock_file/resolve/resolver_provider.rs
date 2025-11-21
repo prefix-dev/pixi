@@ -74,6 +74,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                     }
                 },
                 yanked: None,
+                zstd: None,
             };
 
             let source_dist = RegistrySourceDist {
@@ -145,7 +146,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                         version,
                         requires_dist: vec![].into(),
                         requires_python: None,
-                        provides_extras: iden.extras.iter().cloned().collect(),
+                        provides_extra: iden.extras.iter().cloned().collect(),
                         dependency_groups: Default::default(),
                         dynamic: false,
                     },

@@ -5,7 +5,7 @@ expression: document.to_string()
 [project]
 name = "test"
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = []
 platforms = []
 

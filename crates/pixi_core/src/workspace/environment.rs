@@ -940,4 +940,181 @@ mod tests {
             Platform::Win32
         );
     }
+
+    #[test]
+    pub fn test_solve_strategy() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        platforms = []
+        channels = []
+        solve-strategy = "lowest-direct"
+
+        [feature.lowest]
+        solve-strategy = "lowest"
+
+        [feature.highest]
+        solve-strategy = "highest"
+        
+        [feature.no_strategy]
+
+        [environments]
+        lowest = ["lowest"]
+        highest = ["highest"]
+        combined-declared = ["lowest", "highest"]
+        combined-undeclared-first = ["no_strategy", "lowest"]
+        combined-undeclared-last = ["lowest", "no_strategy"]
+        undeclared-default = ["no_strategy"]
+        undeclared-no-default = { features = ["no_strategy"], no-default-feature = true }
+        "#;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
+
+        assert_eq!(
+            workspace.default_environment().solve_strategy(),
+            pixi_manifest::SolveStrategy::LowestDirect
+        );
+
+        assert_eq!(
+            workspace.environment("lowest").unwrap().solve_strategy(),
+            pixi_manifest::SolveStrategy::Lowest
+        );
+
+        assert_eq!(
+            workspace.environment("highest").unwrap().solve_strategy(),
+            pixi_manifest::SolveStrategy::Highest
+        );
+
+        assert_eq!(
+            workspace
+                .environment("combined-declared")
+                .unwrap()
+                .solve_strategy(),
+            pixi_manifest::SolveStrategy::Lowest
+        );
+
+        assert_eq!(
+            workspace
+                .environment("combined-undeclared-first")
+                .unwrap()
+                .solve_strategy(),
+            pixi_manifest::SolveStrategy::Lowest
+        );
+
+        assert_eq!(
+            workspace
+                .environment("combined-undeclared-last")
+                .unwrap()
+                .solve_strategy(),
+            pixi_manifest::SolveStrategy::Lowest
+        );
+
+        assert_eq!(
+            workspace
+                .environment("undeclared-default")
+                .unwrap()
+                .solve_strategy(),
+            pixi_manifest::SolveStrategy::LowestDirect
+        );
+
+        assert_eq!(
+            workspace
+                .environment("undeclared-no-default")
+                .unwrap()
+                .solve_strategy(),
+            pixi_manifest::SolveStrategy::Highest
+        );
+    }
+
+    /// Test that combining channel priorities from multiple features
+    /// results in a ChannelPriorityCombinationError if the priorities conflict.
+    #[test]
+    fn test_channel_priority_compatibility() {
+        use crate::workspace::grouped_environment::GroupedEnvironment;
+
+        // First part - priorities are compatible
+        {
+            let contents = r#"
+            [project]
+            name = "test"
+            platforms = ["linux-64"]
+            channels = ["conda-forge"]
+            channel-priority = "disabled"
+
+            [feature.feat1]
+            channel-priority = "disabled"  # Is ok as it's the same as the default
+
+            [environments]
+            test = ["feat1"]
+            "#;
+
+            let workspace = Workspace::from_str(Path::new("pixi.toml"), contents).unwrap();
+            let env = workspace.environment("test").unwrap();
+            let grouped_env = GroupedEnvironment::from(env);
+
+            // This should not return an error because both features have the same channel-priority
+            let result = grouped_env.channel_priority();
+            assert!(
+                result.is_ok(),
+                "Channel priorities were expected to be compatible"
+            );
+        }
+        // Second part, priorities conflict
+        {
+            let contents = r#"
+            [project]
+            name = "test"
+            platforms = ["linux-64"]
+            channels = ["conda-forge"]
+            channel-priority = "disabled"
+
+            [feature.feat1]
+            channel-priority = "strict"  # Conflicts with the default
+
+            [environments]
+            test = ["feat1"]
+            "#;
+
+            let workspace = Workspace::from_str(Path::new("pixi.toml"), contents).unwrap();
+            let env = workspace.environment("test").unwrap();
+            let grouped_env = GroupedEnvironment::from(env);
+
+            // This should return an error because the features have conflicting channel-priorities
+            let result = grouped_env.channel_priority();
+            assert!(
+                result.is_err(),
+                "Channel priorities were expected to be incompatible"
+            );
+        }
+        // Third part, there is a default priority, but the feature doesn't have a priority set.
+        {
+            let contents = r#"
+            [project]
+            name = "test"
+            platforms = ["linux-64"]
+            channels = ["conda-forge"]
+            channel-priority = "disabled"
+
+            # Adding a dependency, just so the feature has at least some data
+            [feature.feat1.dependencies]
+            python = ">=3.13"
+
+            [environments]
+            test = ["feat1"]
+            "#;
+
+            let workspace = Workspace::from_str(Path::new("pixi.toml"), contents).unwrap();
+            let env = workspace.environment("test").unwrap();
+            let grouped_env = GroupedEnvironment::from(env);
+
+            // This should not return an error because the default feature sets the priority
+            let result = grouped_env.channel_priority();
+            assert_eq!(
+                result.unwrap(),
+                Some(pixi_manifest::ChannelPriority::Disabled),
+                "Channel priorities were expected to be compatible"
+            );
+        }
+    }
 }

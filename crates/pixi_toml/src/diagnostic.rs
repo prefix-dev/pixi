@@ -28,7 +28,7 @@ impl Display for TomlDiagnostic {
                     "Unexpected keys, expected only {}",
                     expected
                         .iter()
-                        .format_with(", ", |key, f| f(&format_args!("'{}'", key)))
+                        .format_with(", ", |key, f| f(&format_args!("'{key}'")))
                 )
             }
             toml_span::ErrorKind::UnexpectedValue { expected, .. } => {
@@ -37,7 +37,7 @@ impl Display for TomlDiagnostic {
                     "Expected one of {}",
                     expected
                         .iter()
-                        .format_with(", ", |key, f| f(&format_args!("'{}'", key)))
+                        .format_with(", ", |key, f| f(&format_args!("'{key}'")))
                 )
             }
             _ => write!(f, "{}", &self.0),

@@ -10,17 +10,18 @@ use std::{
 };
 
 use crate::{
-    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
-    CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult, Reporter,
-    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher,
+    CommandDispatcherError, CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult,
+    Reporter, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
     SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceBuildError, SourceBuildResult,
     SourceBuildSpec, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
-        BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcher, CommandDispatcherChannel,
-        CommandDispatcherContext, CommandDispatcherData, CommandDispatcherError, ForegroundMessage,
+        BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcherChannel,
+        CommandDispatcherContext, CommandDispatcherData, ForegroundMessage,
         InstallPixiEnvironmentId, InstantiatedToolEnvId, SolveCondaEnvironmentId,
         SolvePixiEnvironmentId, SourceBuildCacheStatusId, SourceBuildId, SourceMetadataId,
+        url::{UrlCheckout, UrlError},
     },
     executor::ExecutorFutures,
     install_pixi::InstallPixiEnvironmentError,
@@ -32,10 +33,11 @@ use futures::{StreamExt, future::LocalBoxFuture};
 use itertools::Itertools;
 use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
 use pixi_record::PixiRecord;
+use pixi_spec::UrlSpec;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
-mod backend_build_source;
+mod backend_source_build;
 mod build_backend_metadata;
 mod git;
 mod install_pixi;
@@ -45,6 +47,7 @@ mod solve_pixi;
 mod source_build;
 mod source_build_cache_status;
 mod source_metadata;
+mod url;
 
 /// Runs the command_dispatcher background task
 pub(crate) struct CommandDispatcherProcessor {
@@ -112,6 +115,10 @@ pub(crate) struct CommandDispatcherProcessor {
     /// out.
     git_checkouts: HashMap<RepositoryReference, PendingGitCheckout>,
 
+    /// Url checkouts in the process of being checked out, or already
+    /// checked out.
+    url_checkouts: HashMap<::url::Url, PendingUrlCheckout>,
+
     /// Source builds that are currently being processed.
     source_build:
         HashMap<SourceBuildId, PendingDeduplicatingTask<SourceBuildResult, SourceBuildError>>,
@@ -142,51 +149,48 @@ pub(crate) struct CommandDispatcherProcessor {
     reporter: Option<Box<dyn Reporter>>,
 }
 
+type BoxedDispatcherResult<T, E> = Box<Result<T, CommandDispatcherError<E>>>;
+
 /// A result of a task that was executed by the command_dispatcher background
 /// task.
 enum TaskResult {
     SolveCondaEnvironment(
         SolveCondaEnvironmentId,
-        Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>>,
+        BoxedDispatcherResult<Vec<PixiRecord>, SolveCondaEnvironmentError>,
     ),
     SolvePixiEnvironment(
         SolvePixiEnvironmentId,
-        Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>>,
+        BoxedDispatcherResult<Vec<PixiRecord>, SolvePixiEnvironmentError>,
     ),
     BuildBackendMetadata(
         BuildBackendMetadataId,
-        Result<Arc<BuildBackendMetadata>, CommandDispatcherError<BuildBackendMetadataError>>,
+        BoxedDispatcherResult<Arc<BuildBackendMetadata>, BuildBackendMetadataError>,
     ),
     SourceMetadata(
         SourceMetadataId,
-        Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
+        BoxedDispatcherResult<Arc<SourceMetadata>, SourceMetadataError>,
     ),
-    GitCheckedOut(
-        RepositoryReference,
-        Result<Fetch, CommandDispatcherError<GitError>>,
-    ),
+    GitCheckedOut(RepositoryReference, BoxedDispatcherResult<Fetch, GitError>),
+    UrlCheckedOut(::url::Url, BoxedDispatcherResult<UrlCheckout, UrlError>),
     InstallPixiEnvironment(
         InstallPixiEnvironmentId,
-        Result<InstallPixiEnvironmentResult, CommandDispatcherError<InstallPixiEnvironmentError>>,
+        BoxedDispatcherResult<InstallPixiEnvironmentResult, InstallPixiEnvironmentError>,
     ),
     InstantiateToolEnv(
         InstantiatedToolEnvId,
-        Result<
-            InstantiateToolEnvironmentResult,
-            CommandDispatcherError<InstantiateToolEnvironmentError>,
-        >,
+        BoxedDispatcherResult<InstantiateToolEnvironmentResult, InstantiateToolEnvironmentError>,
     ),
     SourceBuild(
         SourceBuildId,
-        Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>>,
+        BoxedDispatcherResult<SourceBuildResult, SourceBuildError>,
     ),
     QuerySourceBuildCache(
         SourceBuildCacheStatusId,
-        Result<SourceBuildCacheEntry, CommandDispatcherError<SourceBuildCacheStatusError>>,
+        BoxedDispatcherResult<Arc<SourceBuildCacheEntry>, SourceBuildCacheStatusError>,
     ),
     BackendSourceBuild(
         BackendSourceBuildId,
-        Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>>,
+        BoxedDispatcherResult<BackendBuiltSource, BackendSourceBuildError>,
     ),
 }
 
@@ -200,6 +204,23 @@ enum PendingGitCheckout {
 
     /// The repository was checked out and the result is available.
     CheckedOut(Fetch),
+
+    /// A previous attempt failed
+    Errored,
+}
+
+// We store spec here to double-check that hashes are correct.
+struct PendingUrlWaiter {
+    spec: UrlSpec,
+    tx: oneshot::Sender<Result<UrlCheckout, UrlError>>,
+}
+
+enum PendingUrlCheckout {
+    /// The checkout is still ongoing.
+    Pending(Option<reporter::UrlCheckoutId>, Vec<PendingUrlWaiter>),
+
+    /// The URL was checked out and the result is available.
+    CheckedOut(UrlCheckout),
 
     /// A previous attempt failed
     Errored,
@@ -325,6 +346,7 @@ impl CommandDispatcherProcessor {
                 instantiated_tool_envs_reporters: HashMap::default(),
                 instantiated_tool_cache_keys: HashMap::default(),
                 git_checkouts: HashMap::default(),
+                url_checkouts: HashMap::default(),
                 source_build: HashMap::default(),
                 source_build_reporters: HashMap::default(),
                 source_build_ids: HashMap::default(),
@@ -386,6 +408,7 @@ impl CommandDispatcherProcessor {
             }
             ForegroundMessage::BuildBackendMetadata(task) => self.on_build_backend_metadata(task),
             ForegroundMessage::GitCheckout(task) => self.on_checkout_git(task),
+            ForegroundMessage::UrlCheckout(task) => self.on_checkout_url(task),
             ForegroundMessage::SourceBuild(task) => self.on_source_build(task),
             ForegroundMessage::QuerySourceBuildCache(task) => {
                 self.on_source_build_cache_status(task)
@@ -403,28 +426,29 @@ impl CommandDispatcherProcessor {
     fn on_result(&mut self, result: TaskResult) {
         match result {
             TaskResult::SolveCondaEnvironment(id, result) => {
-                self.on_solve_conda_environment_result(id, result)
+                self.on_solve_conda_environment_result(id, *result)
             }
             TaskResult::SolvePixiEnvironment(id, result) => {
-                self.on_solve_pixi_environment_result(id, result)
+                self.on_solve_pixi_environment_result(id, *result)
             }
             TaskResult::InstallPixiEnvironment(id, result) => {
-                self.on_install_pixi_environment_result(id, result)
+                self.on_install_pixi_environment_result(id, *result)
             }
             TaskResult::BuildBackendMetadata(id, result) => {
-                self.on_build_backend_metadata_result(id, result)
+                self.on_build_backend_metadata_result(id, *result)
             }
-            TaskResult::GitCheckedOut(url, result) => self.on_git_checked_out(url, result),
+            TaskResult::GitCheckedOut(url, result) => self.on_git_checked_out(url, *result),
+            TaskResult::UrlCheckedOut(url, result) => self.on_url_checked_out(url, *result),
             TaskResult::InstantiateToolEnv(id, result) => {
-                self.on_instantiate_tool_environment_result(id, result)
+                self.on_instantiate_tool_environment_result(id, *result)
             }
-            TaskResult::SourceBuild(id, result) => self.on_source_build_result(id, result),
-            TaskResult::SourceMetadata(id, result) => self.on_source_metadata_result(id, result),
+            TaskResult::SourceBuild(id, result) => self.on_source_build_result(id, *result),
+            TaskResult::SourceMetadata(id, result) => self.on_source_metadata_result(id, *result),
             TaskResult::BackendSourceBuild(id, result) => {
-                self.on_backend_source_build_result(id, result)
+                self.on_backend_source_build_result(id, *result)
             }
             TaskResult::QuerySourceBuildCache(id, result) => {
-                self.on_source_build_cache_status_result(id, result)
+                self.on_source_build_cache_status_result(id, *result)
             }
         }
     }

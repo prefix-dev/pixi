@@ -141,10 +141,9 @@ fn replace_fish_completion(script: &str) -> Cow<str> {
     // Adds tab completion to the pixi run command.
     let bin_name = pixi_utils::executable_name();
     let addition = format!(
-        "complete -c {} -n \"__fish_seen_subcommand_from run\" -f -a \"(string split ' ' ({} task list --machine-readable  2> /dev/null))\"",
-        bin_name, bin_name
+        "complete -c {bin_name} -n \"__fish_seen_subcommand_from run\" -f -a \"(string split ' ' ({bin_name} task list --machine-readable  2> /dev/null))\""
     );
-    let new_script = format!("{}{}\n", script, addition);
+    let new_script = format!("{script}{addition}\n");
     let pattern = r#"-n "__fish_seen_subcommand_from run""#;
     let replacement = r#"-n "__fish_seen_subcommand_from run; or __fish_seen_subcommand_from r""#;
     let re = Regex::new(pattern).expect("should be able to compile the regex");
@@ -158,8 +157,7 @@ fn replace_nushell_completion(script: &str) -> Cow<str> {
     // NOTE THIS IS FORMATTED BY HAND
     let bin_name = pixi_utils::executable_name();
     let pattern = format!(
-        r#"(#.*\n  export extern "{} run".*\n.*...task: string)([^\]]*--environment\(-e\): string)([^\]]*\n  \])"#,
-        bin_name
+        r#"(#.*\n  export extern "{bin_name} run".*\n.*...task: string)([^\]]*--environment\(-e\): string)([^\]]*\n  \])"#
     );
     let replacement = r#"
   def "nu-complete BIN_NAME run" [] {
@@ -280,7 +278,7 @@ _arguments "${_arguments_options[@]}" \
         let result = replace_bash_completion(script);
         let replacement = format!("{} task list", pixi_utils::executable_name());
         let zsh_arg_name = format!("{}__", pixi_utils::executable_name().replace("-", "__"));
-        println!("{}", result);
+        println!("{result}");
         insta::with_settings!({filters => vec![
             (replacement.as_str(), "pixi task list"),
             (zsh_arg_name.as_str(), "[PIXI COMMAND]"),
@@ -319,7 +317,7 @@ _arguments "${_arguments_options[@]}" \
         let result = replace_nushell_completion(script);
         let replacement = format!("{} run", pixi_utils::executable_name());
         let nu_complete_run = format!("nu-complete {} run", pixi_utils::executable_name());
-        println!("{}", result);
+        println!("{result}");
         insta::with_settings!({filters => vec![
             (replacement.as_str(), "[PIXI RUN]"),
             (nu_complete_run.as_str(), "[nu_complete_run PIXI COMMAND]"),

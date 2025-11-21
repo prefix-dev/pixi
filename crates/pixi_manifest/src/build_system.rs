@@ -106,7 +106,47 @@ mod tests {
               "https://prefix.dev/pixi-build-backends",
               "https://prefix.dev/conda-forge",
             ]
-            source = { git = "https://github.com/conda-forge/numpy-feedstock" }
+            source = { git = "https://github.com/conda-forge/numpy-feedstock", rev ="ee87916a49d5e96d4f322f68c3650e8ff6b8866b" }
+            "#;
+
+        let build = PackageBuild::from_toml_str(toml).unwrap();
+        assert_eq!(
+            build.value.backend.name.as_source(),
+            "pixi-build-rattler-build"
+        );
+        assert!(build.value.source.is_some());
+        assert!(build.value.source.unwrap().is_git());
+    }
+
+    #[test]
+    fn deserialize_build_with_git_source_branch() {
+        let toml = r#"
+            backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
+            channels = [
+              "https://prefix.dev/pixi-build-backends",
+              "https://prefix.dev/conda-forge",
+            ]
+            source = { git = "https://github.com/conda-forge/numpy-feedstock", branch = "main" }
+            "#;
+
+        let build = PackageBuild::from_toml_str(toml).unwrap();
+        assert_eq!(
+            build.value.backend.name.as_source(),
+            "pixi-build-rattler-build"
+        );
+        assert!(build.value.source.is_some());
+        assert!(build.value.source.unwrap().is_git());
+    }
+
+    #[test]
+    fn deserialize_build_with_git_source_tag() {
+        let toml = r#"
+            backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
+            channels = [
+              "https://prefix.dev/pixi-build-backends",
+              "https://prefix.dev/conda-forge",
+            ]
+            source = { git = "https://github.com/conda-forge/numpy-feedstock", tag = "v1.0.0" }
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
@@ -270,13 +310,12 @@ mod tests {
             let toml = format!(
                 r#"
                 backend = {{ name = "pixi-build-rattler-build", version = "0.1.*" }}
-                source = {{ path = "{}" }}
-                "#,
-                path
+                source = {{ path = "{path}" }}
+                "#
             );
 
             let build = PackageBuild::from_toml_str(&toml).unwrap();
-            assert!(build.value.source.is_some(), "Failed for path: {}", path);
+            assert!(build.value.source.is_some(), "Failed for path: {path}");
 
             if let Some(source) = &build.value.source {
                 match &source {
@@ -285,8 +324,7 @@ mod tests {
                         assert_eq!(
                             path_spec.path.as_str(),
                             path,
-                            "Path mismatch for input: {}",
-                            path
+                            "Path mismatch for input: {path}"
                         );
 
                         // Verify it can be resolved (using a dummy workspace root)
@@ -306,7 +344,7 @@ mod tests {
                             resolved.display()
                         );
                     }
-                    _ => panic!("Expected a path source spec for: {}", path),
+                    _ => panic!("Expected a path source spec for: {path}"),
                 }
             }
         }

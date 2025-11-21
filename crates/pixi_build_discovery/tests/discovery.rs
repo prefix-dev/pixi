@@ -20,7 +20,7 @@ fn redact_path(value: &str) -> String {
     let str_skipped = display_skipped.to_string();
     let prettified_norm = str_skipped.replace(r"\\", r"/").replace(r"\", r"/");
     let prettified = prettified_norm.trim_end_matches(['/', '\\']);
-    format!("file://<ROOT>/{}", prettified)
+    format!("file://<ROOT>/{prettified}")
 }
 
 /// This macro is used to assert the discovery of a backend and compare it with a snapshot.

@@ -17,7 +17,7 @@ use crate::{
     pypi::pypi_options::PypiOptions,
     toml::{manifest::ExternalWorkspaceProperties, platform::TomlPlatform, preview::TomlPreview},
     utils::PixiSpanned,
-    workspace::{BuildVariantSource, ChannelPriority},
+    workspace::{BuildVariantSource, ChannelPriority, SolveStrategy},
 };
 
 #[derive(Debug, Clone)]
@@ -37,6 +37,7 @@ pub struct TomlWorkspace {
     pub authors: Option<Vec<String>>,
     pub channels: IndexSet<PrioritizedChannel>,
     pub channel_priority: Option<ChannelPriority>,
+    pub solve_strategy: Option<SolveStrategy>,
     pub platforms: Spanned<IndexSet<Platform>>,
     pub license: Option<Spanned<String>>,
     pub license_file: Option<Spanned<PathBuf>>,
@@ -130,6 +131,7 @@ impl TomlWorkspace {
             documentation: self.documentation.or(external.documentation),
             channels: self.channels,
             channel_priority: self.channel_priority,
+            solve_strategy: self.solve_strategy,
             platforms: self.platforms.value,
             conda_pypi_map: self.conda_pypi_map,
             pypi_options: self.pypi_options,
@@ -201,6 +203,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             .required::<TomlIndexSet<_>>("channels")
             .map(TomlIndexSet::into_inner)?;
         let channel_priority = th.optional("channel-priority");
+        let solve_strategy = th
+            .optional::<TomlWith<_, TomlFromStr<_>>>("solve-strategy")
+            .map(TomlWith::into_inner);
         let platforms = th
             .optional::<TomlWith<_, Spanned<TomlIndexSet<TomlPlatform>>>>("platforms")
             .map(TomlWith::into_inner);
@@ -252,6 +257,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             authors,
             channels,
             channel_priority,
+            solve_strategy,
             platforms: platforms.unwrap_or_default(),
             license,
             license_file,

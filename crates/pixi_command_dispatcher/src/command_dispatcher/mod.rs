@@ -20,7 +20,8 @@ use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
-use pixi_spec::{SourceLocationSpec, SourceSpec};
+use pixi_spec::{SourceLocationSpec, UrlSpec};
+use pixi_url::UrlResolver;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 use rattler_networking::LazyClient;
@@ -28,6 +29,7 @@ use rattler_repodata_gateway::Gateway;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use typed_path::Utf8TypedPath;
+use url::UrlCheckoutTask;
 
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, Executor,
@@ -54,6 +56,7 @@ mod builder;
 mod error;
 mod git;
 mod instantiate_backend;
+pub mod url;
 
 /// The command dispatcher is responsible for synchronizing requests between
 /// different conda environments.
@@ -110,6 +113,9 @@ pub(crate) struct CommandDispatcherData {
 
     /// The resolver of git repositories.
     pub git_resolver: GitResolver,
+
+    /// The resolver of url archives.
+    pub url_resolver: UrlResolver,
 
     /// The base directory to use if relative paths are discovered.
     pub root_dir: PathBuf,
@@ -223,6 +229,7 @@ pub(crate) struct SourceBuildCacheStatusId(pub usize);
 pub(crate) struct InstantiatedToolEnvId(pub usize);
 
 /// A message send to the dispatch task.
+#[allow(clippy::large_enum_variant)]
 #[derive(derive_more::From)]
 pub(crate) enum ForegroundMessage {
     SolveCondaEnvironment(SolveCondaEnvironmentTask),
@@ -233,6 +240,7 @@ pub(crate) enum ForegroundMessage {
     SourceBuild(SourceBuildTask),
     QuerySourceBuildCache(SourceBuildCacheStatusTask),
     GitCheckout(GitCheckoutTask),
+    UrlCheckout(UrlCheckoutTask),
     InstallPixiEnvironment(InstallPixiEnvironmentTask),
     InstantiateToolEnvironment(Task<InstantiateToolEnvironmentSpec>),
     ClearReporter(oneshot::Sender<()>),
@@ -286,9 +294,9 @@ impl TaskSpec for SourceBuildSpec {
     type Error = SourceBuildError;
 }
 
-pub(crate) type BackendSourceBuildTask = Task<BackendSourceBuildSpec>;
+pub(crate) type BackendSourceBuildTask = Task<Box<BackendSourceBuildSpec>>;
 
-impl TaskSpec for BackendSourceBuildSpec {
+impl TaskSpec for Box<BackendSourceBuildSpec> {
     type Output = BackendBuiltSource;
     type Error = BackendSourceBuildError;
 }
@@ -511,7 +519,7 @@ impl CommandDispatcher {
         &self,
         spec: BackendSourceBuildSpec,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
-        self.execute_task(spec).await
+        self.execute_task(Box::new(spec)).await
     }
 
     /// Solves a particular pixi environment specified by `PixiEnvironmentSpec`.
@@ -581,15 +589,27 @@ impl CommandDispatcher {
         self.execute_task(spec).await
     }
 
-    /// Checks out a particular source based on a source spec.
+    /// Checks out a particular source based on a source location spec.
     ///
     /// This function resolves the source specification to a concrete checkout
     /// by:
-    /// 1. For path sources: Resolving relative paths against the root directory
+    /// 1. For path sources: Resolving relative paths against the root directory or against an alternative root path
+    ///
+    /// i.e. in the case of an out-of-tree build.
+    /// Some examples for different inputs:
+    /// - `/foo/bar` => `/foo/bar` (absolute paths are unchanged)
+    /// - `./bar` => `<root_dir>/bar`
+    /// - `bar` => `<root_dir>/bar` (or `<alternative_root>/bar` if provided)
+    /// - `../bar` => `<alternative_root>/../bar` (normalized, validated for security)
+    /// - `~/bar` => `<home_dir>/bar`
+    ///
+    /// Usually:
+    /// * `root_dir` => workspace root directory (parent of workspace manifest)
+    /// * `alternative_root` => package root directory (parent of package manifest)
+    ///
     /// 2. For git sources: Cloning or fetching the repository and checking out
     ///    the specified reference
-    /// 3. For URL sources: Downloading and extracting the archive (currently
-    ///    unimplemented)
+    /// 3. For URL sources: Downloading and extracting the archive
     ///
     /// The function handles path normalization and ensures security by
     /// preventing directory traversal attacks. It also manages caching of
@@ -597,16 +617,22 @@ impl CommandDispatcher {
     /// same source is used multiple times.
     pub async fn pin_and_checkout(
         &self,
-        source_spec: SourceSpec,
+        source_location_spec: SourceLocationSpec,
+        alternative_root: Option<&Path>,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
-        match source_spec.location {
+        match source_location_spec {
             SourceLocationSpec::Url(url) => {
-                unimplemented!("fetching URL sources ({}) is not yet implemented", url.url)
+                self.pin_and_checkout_url(UrlSpec {
+                    url: url.url,
+                    md5: url.md5,
+                    sha256: url.sha256,
+                })
+                .await
             }
             SourceLocationSpec::Path(path) => {
                 let source_path = self
                     .data
-                    .resolve_typed_path(path.path.to_path())
+                    .resolve_typed_path(path.path.to_path(), alternative_root)
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
@@ -629,7 +655,6 @@ impl CommandDispatcher {
     /// - For path sources: Resolves and validates the path
     /// - For git sources: Checks out the specific revision
     /// - For URL sources: Extracts the archive with the exact checksum
-    ///   (unimplemented)
     pub async fn checkout_pinned_source(
         &self,
         pinned_spec: PinnedSourceSpec,
@@ -638,7 +663,7 @@ impl CommandDispatcher {
             PinnedSourceSpec::Path(ref path) => {
                 let source_path = self
                     .data
-                    .resolve_typed_path(path.path.to_path())
+                    .resolve_typed_path(path.path.to_path(), None)
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
@@ -647,9 +672,7 @@ impl CommandDispatcher {
                 })
             }
             PinnedSourceSpec::Git(git_spec) => self.checkout_pinned_git(git_spec).await,
-            PinnedSourceSpec::Url(_) => {
-                unimplemented!("fetching URL sources is not yet implemented")
-            }
+            PinnedSourceSpec::Url(url_spec) => self.checkout_pinned_url(url_spec).await,
         }
     }
 
@@ -673,7 +696,11 @@ impl CommandDispatcherData {
     ///
     /// This function does not check if the path exists and also does not follow
     /// symlinks.
-    fn resolve_typed_path(&self, path_spec: Utf8TypedPath) -> Result<PathBuf, InvalidPathError> {
+    fn resolve_typed_path(
+        &self,
+        path_spec: Utf8TypedPath,
+        alternative_root: Option<&Path>,
+    ) -> Result<PathBuf, InvalidPathError> {
         if path_spec.is_absolute() {
             Ok(Path::new(path_spec.as_str()).to_path_buf())
         } else if let Ok(user_path) = path_spec.strip_prefix("~/") {
@@ -683,7 +710,20 @@ impl CommandDispatcherData {
             debug_assert!(home_dir.is_absolute());
             normalize_absolute_path(&home_dir.join(Path::new(user_path.as_str())))
         } else {
-            let root_dir = self.root_dir.as_path();
+            let root_dir = match alternative_root {
+                Some(root_path) => {
+                    debug_assert!(
+                        root_path.is_absolute(),
+                        "alternative_root must be absolute, got: {root_path:?}"
+                    );
+                    debug_assert!(
+                        !root_path.is_file(),
+                        "alternative_root should be a directory, not a file: {root_path:?}"
+                    );
+                    root_path
+                }
+                None => self.root_dir.as_path(),
+            };
             let native_path = Path::new(path_spec.as_str());
             debug_assert!(root_dir.is_absolute());
             normalize_absolute_path(&root_dir.join(native_path))

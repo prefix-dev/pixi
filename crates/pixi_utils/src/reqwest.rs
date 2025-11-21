@@ -75,7 +75,7 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
             url.clone()
         } else {
             // Do not use `join` because it removes the last element
-            format!("{}/", url)
+            format!("{url}/")
                 .parse()
                 .expect("Failed to add trailing slash to URL")
         }

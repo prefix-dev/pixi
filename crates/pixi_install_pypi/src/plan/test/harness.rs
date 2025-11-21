@@ -12,7 +12,9 @@ use tempfile::TempDir;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_distribution_filename::WheelFilename;
-use uv_distribution_types::{InstalledDirectUrlDist, InstalledDist, InstalledRegistryDist};
+use uv_distribution_types::{
+    InstalledDirectUrlDist, InstalledDist, InstalledDistKind, InstalledRegistryDist,
+};
 use uv_pypi_types::DirectUrl::VcsUrl;
 use uv_pypi_types::{ArchiveInfo, DirectUrl, ParsedGitUrl, VcsInfo, VcsKind};
 use uv_redacted::DisplaySafeUrl;
@@ -25,7 +27,7 @@ struct InstalledDistBuilder;
 
 impl InstalledDistBuilder {
     pub fn registry<S: AsRef<str>>(name: S, version: S, path: PathBuf) -> InstalledDist {
-        let name = uv_pep508::PackageName::from_owned(name.as_ref().to_owned())
+        let name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("unable to normalize");
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
@@ -35,8 +37,9 @@ impl InstalledDistBuilder {
             version,
             path: path.into(),
             cache_info: None,
+            build_info: None,
         };
-        InstalledDist::Registry(registry)
+        InstalledDist::from(InstalledDistKind::Registry(registry))
     }
 
     pub fn directory<S: AsRef<str>>(
@@ -46,7 +49,7 @@ impl InstalledDistBuilder {
         source_path: PathBuf,
         editable: bool,
     ) -> (InstalledDist, DirectUrl) {
-        let name = uv_pep508::PackageName::from_owned(name.as_ref().to_owned())
+        let name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("unable to normalize");
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
@@ -68,8 +71,12 @@ impl InstalledDistBuilder {
             editable,
             path: install_path.into(),
             cache_info: None,
+            build_info: None,
         };
-        (InstalledDist::Url(installed_direct_url), direct_url)
+        (
+            InstalledDist::from(InstalledDistKind::Url(installed_direct_url)),
+            direct_url,
+        )
     }
 
     pub fn archive<S: AsRef<str>>(
@@ -78,7 +85,7 @@ impl InstalledDistBuilder {
         install_path: PathBuf,
         url: Url,
     ) -> (InstalledDist, DirectUrl) {
-        let name = uv_pep508::PackageName::from_owned(name.as_ref().to_owned())
+        let name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("unable to normalize");
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
@@ -100,8 +107,12 @@ impl InstalledDistBuilder {
             editable: false,
             path: install_path.into(),
             cache_info: None,
+            build_info: None,
         };
-        (InstalledDist::Url(installed_direct_url), direct_url)
+        (
+            InstalledDist::from(InstalledDistKind::Url(installed_direct_url)),
+            direct_url,
+        )
     }
 
     pub fn git<S: AsRef<str>>(
@@ -110,7 +121,7 @@ impl InstalledDistBuilder {
         install_path: PathBuf,
         url: Url,
     ) -> (InstalledDist, DirectUrl) {
-        let name = uv_pep508::PackageName::from_owned(name.as_ref().to_owned())
+        let name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("unable to normalize");
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
@@ -145,8 +156,12 @@ impl InstalledDistBuilder {
             path: install_path.into(),
             editable: false,
             cache_info: None,
+            build_info: None,
         };
-        (InstalledDist::Url(installed_direct_url), direct_url)
+        (
+            InstalledDist::from(InstalledDistKind::Url(installed_direct_url)),
+            direct_url,
+        )
     }
 }
 
@@ -219,7 +234,7 @@ impl MockedSitePackages {
         opts: InstalledDistOptions,
     ) -> PathBuf {
         // Create the dist-info directory
-        let dist_info = format!("{}-{}.dist-info", name, version);
+        let dist_info = format!("{name}-{version}.dist-info");
         let dist_info = self.fake_site_packages.path().join(dist_info);
         fs_err::create_dir_all(&dist_info).expect("should create dist-info");
 
@@ -233,7 +248,7 @@ impl MockedSitePackages {
             .replace("{name}", name)
             .replace("{version}", version);
         if let Some(requires_python) = opts.requires_python() {
-            let requires_python = format!("\nRequires-Python: {}", requires_python);
+            let requires_python = format!("\nRequires-Python: {requires_python}");
             minimal_metadata.push_str(&requires_python);
         }
         let mut file = std::fs::OpenOptions::new()
@@ -382,7 +397,7 @@ impl PyPIPackageDataBuilder {
     fn url<S: AsRef<str>>(name: S, version: S, url: Url, url_type: UrlType) -> PypiPackageData {
         // Create new url with direct+ in the scheme
         let url = if matches!(url_type, UrlType::Direct) {
-            Url::parse(&format!("direct+{}", url)).unwrap()
+            Url::parse(&format!("direct+{url}")).unwrap()
         } else {
             url
         };
@@ -428,6 +443,7 @@ impl<'a> DistCache<'a> for AllCached {
                     path: PathBuf::new().into(),
                     hashes: vec![].into(),
                     cache_info: Default::default(),
+                    build_info: None,
                 };
                 Ok(Some(uv_distribution_types::CachedDist::Registry(dist)))
             }
@@ -441,6 +457,7 @@ impl<'a> DistCache<'a> for AllCached {
                     path: PathBuf::new().into(),
                     hashes: vec![].into(),
                     cache_info: Default::default(),
+                    build_info: None,
                 };
                 Ok(Some(uv_distribution_types::CachedDist::Registry(dist)))
             }
@@ -570,7 +587,7 @@ pub fn fake_pyproject_toml(
 /// Generate an empty wheel file in a temp dir
 pub fn empty_wheel(name: &str) -> (TempDir, std::fs::File, PathBuf) {
     let temp_dir = tempfile::tempdir().unwrap();
-    let wheel_path = temp_dir.path().join(format!("{}.whl", name));
+    let wheel_path = temp_dir.path().join(format!("{name}.whl"));
     let wheel = std::fs::File::create(wheel_path.clone()).unwrap();
     (temp_dir, wheel, wheel_path)
 }

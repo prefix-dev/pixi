@@ -48,7 +48,7 @@ impl PyProjectManifest {
     pub fn from_path(path: &PathBuf) -> Result<Self, Report> {
         let source = fs_err::read_to_string(path)
             .into_diagnostic()
-            .wrap_err_with(|| format!("Failed to read file: {:?}", path))?;
+            .wrap_err_with(|| format!("Failed to read file: {path:?}"))?;
         Self::from_toml_str(&source).into_diagnostic()
     }
 
@@ -72,7 +72,7 @@ impl PyProjectManifest {
     }
 
     /// Returns the project name from, in order of priority
-    ///  - the `[tool.pixi.project]` table
+    ///  - the `[tool.pixi.workspace]` table
     ///  - the `[project]` table
     ///  - the `[tool.poetry]` table
     pub fn name(&self) -> Option<&str> {
@@ -283,7 +283,7 @@ fn get_package_defaults(
                 authors
                     .into_iter()
                     .map(|contact| match contact {
-                        Contact::NameEmail { name, email } => format!("{} <{}>", name, email),
+                        Contact::NameEmail { name, email } => format!("{name} <{email}>"),
                         Contact::Name { name } => name,
                         Contact::Email { email } => email,
                     })
@@ -332,7 +332,7 @@ mod tests {
             { name = "Author", email = "author@bla.com" }
         ]
 
-        [tool.pixi.project]
+        [tool.pixi.workspace]
         channels = ["stable"]
         platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
         license = "MIT"

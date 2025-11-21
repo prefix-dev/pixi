@@ -25,10 +25,10 @@ impl Display for GitSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.git)?;
         if let Some(rev) = &self.rev {
-            write!(f, " @ {}", rev)?;
+            write!(f, " @ {rev}")?;
         }
         if let Some(subdir) = &self.subdirectory {
-            write!(f, " in {}", subdir)?;
+            write!(f, " in {subdir}")?;
         }
         Ok(())
     }
@@ -90,9 +90,9 @@ impl GitReference {
 impl Display for GitReference {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GitReference::Branch(branch) => write!(f, "{}", branch),
-            GitReference::Tag(tag) => write!(f, "{}", tag),
-            GitReference::Rev(rev) => write!(f, "{}", rev),
+            GitReference::Branch(branch) => write!(f, "{branch}"),
+            GitReference::Tag(tag) => write!(f, "{tag}"),
+            GitReference::Rev(rev) => write!(f, "{rev}"),
             GitReference::DefaultBranch => write!(f, "HEAD"),
         }
     }

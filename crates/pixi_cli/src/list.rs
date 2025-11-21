@@ -21,8 +21,10 @@ use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
 use rattler_lock::{CondaPackageData, LockedPackageRef, PypiPackageData, UrlOrPath};
 use serde::Serialize;
-use uv_configuration::ConfigSettings;
 use uv_distribution::RegistryWheelIndex;
+use uv_distribution_types::{
+    ConfigSettings, ExtraBuildRequires, ExtraBuildVariables, PackageConfigSettings,
+};
 
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
@@ -34,7 +36,7 @@ pub enum SortBy {
     Kind,
 }
 
-/// List workspace's packages.
+/// List the packages of the current workspace
 ///
 /// Highlighted packages are explicit dependencies.
 #[derive(Debug, Parser)]
@@ -222,6 +224,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let uv_context;
     let index_locations;
     let config_settings = ConfigSettings::default();
+    let package_config_settings = PackageConfigSettings::default();
+    let extra_build_requires = ExtraBuildRequires::default();
+    let extra_build_variables = ExtraBuildVariables::default();
+
     let mut registry_index = if let Some(python_record) = python_record {
         if environment.has_pypi_dependencies() {
             uv_context = UvResolutionContext::from_config(workspace.config())?;
@@ -239,6 +245,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &index_locations,
                 &uv_types::HashStrategy::None,
                 &config_settings,
+                &package_config_settings,
+                &extra_build_requires,
+                &extra_build_variables,
             ))
         } else {
             None
@@ -331,7 +340,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
     let mut writer = tabwriter::TabWriter::new(stdout());
 
-    let header_style = console::Style::new().bold();
+    let header_style = console::Style::new().bold().cyan();
     writeln!(
         writer,
         "{}\t{}\t{}\t{}\t{}\t{}",
@@ -391,7 +400,7 @@ fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {
     }
     .expect("Cannot serialize packages to JSON");
 
-    println!("{}", json_string);
+    println!("{json_string}");
 }
 
 /// Return the size and source location of the pypi package
