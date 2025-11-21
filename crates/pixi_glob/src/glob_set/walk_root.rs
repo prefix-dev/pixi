@@ -260,15 +260,30 @@ pub fn split_path_and_glob(input: &str) -> (&str, &str) {
 }
 
 /// Normalize paths like `../.././` into paths like `../../`
+/// Also resolves components with parent dir like `recipe/..` into an empty path
 pub fn normalize_relative(path: &Path) -> PathBuf {
-    let mut out = PathBuf::new();
+    let mut out = Vec::new();
     for comp in path.components() {
         match comp {
             Component::CurDir => {}
-            _ => out.push(comp.as_os_str()),
+            Component::ParentDir => {
+                // Pop the last normal component if present, drop if at root, otherwise keep the ParentDir
+                match out.last() {
+                    Some(Component::Normal(_)) => {
+                        out.pop();
+                    }
+                    Some(Component::RootDir) => {
+                        // Can't go above root directory - ignore this ParentDir
+                    }
+                    _ => {
+                        out.push(comp);
+                    }
+                }
+            }
+            _ => out.push(comp),
         }
     }
-    out
+    out.iter().collect()
 }
 
 #[cfg(test)]
@@ -329,6 +344,27 @@ mod tests {
         assert_eq!(
             normalize_relative(Path::new("./.././.././")),
             Path::new("../../")
+        );
+        // Test that recipe/.. normalizes to empty path
+        assert_eq!(normalize_relative(Path::new("recipe/../")), Path::new(""));
+        // Test that foo/bar/../baz normalizes to foo/baz
+        assert_eq!(
+            normalize_relative(Path::new("foo/bar/../baz")),
+            Path::new("foo/baz")
+        );
+        // Test that ../recipe/.. normalizes to ..
+        assert_eq!(
+            normalize_relative(Path::new("../recipe/..")),
+            Path::new("..")
+        );
+        // Test absolute paths with .. (can't go above root)
+        assert_eq!(normalize_relative(Path::new("/..")), Path::new("/"));
+        assert_eq!(normalize_relative(Path::new("/../foo")), Path::new("/foo"));
+        assert_eq!(normalize_relative(Path::new("/foo/..")), Path::new("/"));
+        assert_eq!(normalize_relative(Path::new("/.")), Path::new("/"));
+        assert_eq!(
+            normalize_relative(Path::new("/foo/bar/../..")),
+            Path::new("/")
         );
     }
 
@@ -440,6 +476,27 @@ mod tests {
           - pattern: baz/pixi.toml
             negated: false
           - pattern: "*.{cc,cpp}"
+            negated: false
+        "###
+        );
+    }
+
+    #[test]
+    fn test_recipe_parent_dir_glob() {
+        // This test verifies that globs like "recipe/../**" are properly normalized
+        // to just "**" instead of incorrectly becoming "recipe/**"
+        let globs = ["recipe/**", "recipe/../**"];
+
+        let walk_roots = WalkRoot::build(globs).expect("build should succeed");
+
+        assert_yaml_snapshot!(
+            snapshot_walk_roots(&walk_roots, Path::new("workspace")),
+            @r###"
+        root: workspace
+        globs:
+          - pattern: recipe/**
+            negated: false
+          - pattern: "**"
             negated: false
         "###
         );

@@ -411,7 +411,6 @@ impl SourceBuildCacheStatusSpec {
                 return Ok(CachedBuildStatus::Stale(cached_build));
             }
         }
-
         Ok(CachedBuildStatus::UpToDate(cached_build))
     }
 }
