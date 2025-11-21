@@ -11,6 +11,7 @@ version = "0.1.0"
 
 [dependencies]
 fs-err = { workspace = true }
+itertools = { workspace = true }
 ordermap = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_build_types = { workspace = true }

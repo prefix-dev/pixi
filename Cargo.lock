@@ -4650,6 +4650,7 @@ name = "pixi_build_backend_passthrough"
 version = "0.1.0"
 dependencies = [
  "fs-err",
+ "itertools 0.14.0",
  "ordermap",
  "pixi_build_frontend",
  "pixi_build_types",
@@ -5318,9 +5319,11 @@ name = "pixi_record"
 version = "0.1.0"
 dependencies = [
  "file_url",
+ "itertools 0.14.0",
  "miette 7.6.0",
  "pixi_git",
  "pixi_spec",
+ "pixi_spec_containers",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_lock",

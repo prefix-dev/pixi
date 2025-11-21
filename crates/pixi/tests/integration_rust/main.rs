@@ -3,6 +3,7 @@ use std::sync::Once;
 mod add_tests;
 mod build_tests;
 mod common;
+mod develop_dependencies_tests;
 mod init_tests;
 mod install_filter_tests;
 mod install_tests;
