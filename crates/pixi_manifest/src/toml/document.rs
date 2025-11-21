@@ -305,7 +305,7 @@ dependencies = { dummy = "3.11.*" }
     fn test_feature_names_with_dots_issue_3171() {
         // Test case for issue #3171: Feature names with dots should be properly quoted
         let toml = r#"
-[tool.pixi.project]
+[tool.pixi.workspace]
 "#;
         let mut manifest = TomlDocument::new(DocumentMut::from_str(toml).unwrap());
         let result_table = manifest
@@ -329,7 +329,7 @@ dependencies = { dummy = "3.11.*" }
     fn test_feature_names_with_dots_inline_table_issue_3171() {
         // Test case for issue #3171 using insert_into_inline_table
         let toml = r#"
-[tool.pixi.project]
+[tool.pixi.workspace]
 "#;
         let mut manifest = TomlDocument::new(DocumentMut::from_str(toml).unwrap());
         manifest
