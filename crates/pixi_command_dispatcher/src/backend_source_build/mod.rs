@@ -149,6 +149,16 @@ impl BackendSourceBuildSpec {
         channel_config: ChannelConfig,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
+        let backend_span = tracing::info_span!(
+            target: "pixi::backend",
+            "backend-build",
+            backend = backend.identifier(),
+            package = %record.name.as_normalized(),
+            version = %record.version,
+            build = %record.build,
+        );
+        let _backend_guard = backend_span.enter();
+
         let built_package = backend
             .conda_build_v1(
                 CondaBuildV1Params {

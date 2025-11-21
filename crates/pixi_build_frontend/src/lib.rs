@@ -1,7 +1,7 @@
 mod backend_override;
 mod jsonrpc;
 
-mod backend;
+pub mod backend;
 pub mod error;
 pub mod tool;
 
