@@ -1043,6 +1043,9 @@ mod tests {
     use url::Url;
 
     use crate::{PinnedGitCheckout, PinnedGitSpec, SourceMismatchError};
+    use std::path::Path;
+
+    use crate::{PinnedPathSpec, PinnedSourceSpec};
 
     #[test]
     fn test_spec_satisfies() {
@@ -1604,85 +1607,79 @@ mod tests {
         }
     }
 
-    mod make_relative_to {
-        use std::path::Path;
+    #[test]
+    fn test_relative_to_relative() {
+        // Both paths are relative - after resolution they become absolute, then relative path is computed
+        let workspace_root = Path::new("/workspace");
 
-        use crate::{PinnedPathSpec, PinnedSourceSpec};
+        let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "foo/bar".into(),
+        });
+        let base_spec = PinnedSourceSpec::Path(PinnedPathSpec { path: "foo".into() });
 
-        #[test]
-        fn test_relative_to_relative() {
-            // Both paths are relative - after resolution they become absolute, then relative path is computed
-            let workspace_root = Path::new("/workspace");
+        let result = this_spec.make_relative_to(&base_spec, workspace_root);
 
-            let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
-                path: "foo/bar".into(),
-            });
-            let base_spec = PinnedSourceSpec::Path(PinnedPathSpec { path: "foo".into() });
+        // Both resolve to /workspace/foo/bar and /workspace/foo
+        // Relative path should be "bar"
+        let path = result.expect("Should return Some");
+        assert_eq!(path.as_str(), "bar");
+    }
 
-            let result = this_spec.make_relative_to(&base_spec, workspace_root);
+    #[test]
+    fn test_absolute_to_absolute() {
+        // Both paths are absolute
+        let workspace_root = Path::new("/workspace");
 
-            // Both resolve to /workspace/foo/bar and /workspace/foo
-            // Relative path should be "bar"
-            let path = result.expect("Should return Some");
-            assert_eq!(path.as_str(), "bar");
-        }
+        let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "/foo/bar/baz".into(),
+        });
+        let base_spec = PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "/foo/bar".into(),
+        });
 
-        #[test]
-        fn test_absolute_to_absolute() {
-            // Both paths are absolute
-            let workspace_root = Path::new("/workspace");
+        let result = this_spec.make_relative_to(&base_spec, workspace_root);
 
-            let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
-                path: "/foo/bar/baz".into(),
-            });
-            let base_spec = PinnedSourceSpec::Path(PinnedPathSpec {
-                path: "/foo/bar".into(),
-            });
+        // Should compute relative path
+        let path = result.expect("Should return Some");
+        assert_eq!(path.as_str(), "baz");
+    }
 
-            let result = this_spec.make_relative_to(&base_spec, workspace_root);
+    #[test]
+    fn test_relative_to_absolute() {
+        // Self is relative, base is absolute - after resolution they're both absolute
+        let workspace_root = Path::new("/workspace");
 
-            // Should compute relative path
-            let path = result.expect("Should return Some");
-            assert_eq!(path.as_str(), "baz");
-        }
+        let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "foo/bar".into(), // Resolves to /workspace/foo/bar
+        });
+        let base_spec = PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "/other/path".into(), // Already absolute
+        });
 
-        #[test]
-        fn test_relative_to_absolute() {
-            // Self is relative, base is absolute - after resolution they're both absolute
-            let workspace_root = Path::new("/workspace");
+        let result = this_spec.make_relative_to(&base_spec, workspace_root);
 
-            let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
-                path: "foo/bar".into(), // Resolves to /workspace/foo/bar
-            });
-            let base_spec = PinnedSourceSpec::Path(PinnedPathSpec {
-                path: "/other/path".into(), // Already absolute
-            });
+        // Both are absolute after resolution, pathdiff should compute relative path
+        let path = result.expect("Should return Some");
+        // From /other/path to /workspace/foo/bar
+        assert_eq!(path.as_str(), "../../workspace/foo/bar");
+    }
 
-            let result = this_spec.make_relative_to(&base_spec, workspace_root);
+    #[test]
+    fn test_absolute_with_parent_navigation() {
+        // Test paths that require .. navigation
+        let workspace_root = Path::new("/workspace");
 
-            // Both are absolute after resolution, pathdiff should compute relative path
-            let path = result.expect("Should return Some");
-            // From /other/path to /workspace/foo/bar
-            assert_eq!(path.as_str(), "../../workspace/foo/bar");
-        }
+        let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "/foo/bar/qux".into(),
+        });
+        let base_spec = PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "/foo/baz/quux".into(),
+        });
 
-        #[test]
-        fn test_absolute_with_parent_navigation() {
-            // Test paths that require .. navigation
-            let workspace_root = Path::new("/workspace");
+        let result = this_spec.make_relative_to(&base_spec, workspace_root);
 
-            let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
-                path: "/foo/bar/qux".into(),
-            });
-            let base_spec = PinnedSourceSpec::Path(PinnedPathSpec {
-                path: "/foo/baz/quux".into(),
-            });
-
-            let result = this_spec.make_relative_to(&base_spec, workspace_root);
-
-            let path = result.expect("Should return Some");
-            // From /foo/baz/quux to /foo/bar/qux requires ../../bar/qux
-            assert_eq!(path.as_str(), "../../bar/qux");
-        }
+        let path = result.expect("Should return Some");
+        // From /foo/baz/quux to /foo/bar/qux requires ../../bar/qux
+        assert_eq!(path.as_str(), "../../bar/qux");
     }
 }
