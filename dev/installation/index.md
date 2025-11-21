@@ -126,6 +126,7 @@ The installation script has several options that can be manipulated through envi
 | `PIXI_ARCH`           | The architecture the Pixi version was built for.                                      | `uname -m`                                                                                                                          |
 | `PIXI_NO_PATH_UPDATE` | If set the `$PATH` will not be updated to add `pixi` to it.                           |                                                                                                                                     |
 | `PIXI_DOWNLOAD_URL`   | Overrides the download URL for the Pixi binary (useful for mirrors or custom builds). | GitHub releases, e.g. [linux-64](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-unknown-linux-musl.tar.gz) |
+| `NETRC`               | Path to a custom `.netrc` file for authentication with private repositories.          |                                                                                                                                     |
 | `TMP_DIR`             | The temporary directory the script uses to download to and unpack the binary from.    | `/tmp`                                                                                                                              |
 
 For example, on Apple Silicon, you can force the installation of the x86 version:
@@ -142,6 +143,41 @@ curl -fsSL https://pixi.sh/install.sh | PIXI_VERSION=v0.18.0 bash
 
 ```
 
+#### Using `.netrc` for Authentication
+
+If you need to download Pixi from a private repository that requires authentication, you can use a `.netrc` file instead of hardcoding credentials in the `PIXI_DOWNLOAD_URL`.
+
+The install script automatically uses `.netrc` for authentication with `curl` and `wget`. By default, it looks for `~/.netrc`. You can specify a custom location using the `NETRC` environment variable:
+
+```shell
+# Use the default ~/.netrc file
+curl -fsSL https://pixi.sh/install.sh | PIXI_DOWNLOAD_URL=https://private.example.com/pixi-latest.tar.gz bash
+
+```
+
+```shell
+# Use a custom .netrc file
+curl -fsSL https://pixi.sh/install.sh | NETRC=/path/to/custom/.netrc PIXI_DOWNLOAD_URL=https://private.example.com/pixi-latest.tar.gz bash
+
+```
+
+Your `.netrc` file should contain credentials in the following format:
+
+```text
+machine private.example.com
+login your-username
+password your-token-or-password
+
+```
+
+Security Recommendation
+
+Using `.netrc` is more secure than embedding credentials directly in the `PIXI_DOWNLOAD_URL` (e.g., `https://user:pass@example.com/file`), as it keeps credentials separate from the URL and prevents them from appearing in logs or process listings.
+
+Security Note
+
+The install script automatically masks any credentials embedded in the download URL when displaying messages, replacing them with `***:***@` to prevent credentials from appearing in logs or console output.
+
 The installation script has several options that can be manipulated through environment variables.
 
 | Environment variable  | Description                                                                           | Default Value                                                                                                               |
@@ -157,6 +193,19 @@ For example, set the version:
 $env:PIXI_VERSION='v0.18.0'; powershell -ExecutionPolicy Bypass -Command "iwr -useb https://pixi.sh/install.ps1 | iex"
 
 ```
+
+#### Authentication for Private Repositories
+
+If you need to download Pixi from a private repository that requires authentication, you can embed credentials in the `PIXI_DOWNLOAD_URL`. The install script will automatically mask credentials in its output for security.
+
+```powershell
+$env:PIXI_DOWNLOAD_URL='https://username:token@private.example.com/pixi-latest.zip'; powershell -ExecutionPolicy Bypass -Command "iwr -useb https://pixi.sh/install.ps1 | iex"
+
+```
+
+Security Note
+
+The PowerShell install script automatically masks any credentials embedded in the download URL when displaying messages, replacing them with `***:***@` to prevent credentials from appearing in logs or console output.
 
 ## Autocompletion
 
