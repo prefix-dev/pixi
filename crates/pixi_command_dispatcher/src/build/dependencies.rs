@@ -287,12 +287,13 @@ fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
     specs
         .iter()
         .filter_map(move |spec| {
-            let (Some(name), spec) = MatchSpec::from_str(spec, ParseStrictness::Lenient)
+            let (Some(name_matcher), spec) = MatchSpec::from_str(spec, ParseStrictness::Lenient)
                 .ok()?
                 .into_nameless()
             else {
                 return None;
             };
+            let name = name_matcher.as_exact().cloned()?;
             if ignore.by_name.contains(&name) {
                 return None;
             }

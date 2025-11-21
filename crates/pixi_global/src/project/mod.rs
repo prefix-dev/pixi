@@ -893,7 +893,7 @@ impl Project {
                         .ok_or_else(|| {
                             miette::miette!("Couldn't convert {spec:?} to nameless match spec.")
                         })?,
-                    Some(name.clone()),
+                    Some(name.clone().into()),
                 );
                 Ok(match_spec)
             })
