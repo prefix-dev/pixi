@@ -16,7 +16,6 @@ use pixi_record::{
     SourceMismatchError,
 };
 use pixi_spec::{PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError};
-use pixi_spec::{PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
 use pixi_utils::variants::VariantConfig;
 use pixi_uv_conversions::{
     AsPep508Error, as_uv_req, into_pixi_reference, pep508_requirement_to_uv_requirement,
@@ -1065,7 +1064,9 @@ async fn resolve_single_dev_dependency(
     variants: std::collections::BTreeMap<String, Vec<String>>,
     variant_files: Vec<PathBuf>,
 ) -> Result<Vec<Dependency>, PlatformUnsat> {
-    let pinned_source = command_dispatcher.pin_and_checkout(source_spec).await?;
+    let pinned_source = command_dispatcher
+        .pin_and_checkout(source_spec.location, None)
+        .await?;
 
     // Create the spec for getting dev source metadata
     let spec = DevSourceMetadataSpec {
