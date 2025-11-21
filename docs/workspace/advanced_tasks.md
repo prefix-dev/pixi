@@ -276,7 +276,7 @@ In addition to task arguments, Pixi automatically provides a `pixi` object in th
 |----------|-------------|---------------|
 | `pixi.platform` | The platform name for the environment in which the task will run | `linux-64`, `osx-arm64`, `win-64` |
 | `pixi.environment` | The name of the current environment (when available) | `default`, `prod`, `test` |
-| `pixi.manifest-path` | Absolute path to the manifest file (use bracket notation) | `/path/to/project/pixi.toml` |
+| `pixi.manifest_path` | Absolute path to the manifest file | `/path/to/project/pixi.toml` |
 | `pixi.version` | The version of pixi being used | `0.59.0` |
 | `pixi.is_win` | Boolean flag indicating if the platform is Windows | `true` or `false` |
 | `pixi.is_unix` | Boolean flag indicating if the platform is Unix-like | `true` or `false` |
@@ -297,8 +297,8 @@ install = { cmd = "{% if pixi.is_win %}install.bat{% else %}./install.sh{% endif
 # Environment-aware tasks
 deploy = { cmd = "deploy.sh --env {{ pixi.environment }}", args = [] }
 
-# Using manifest path (note the bracket notation due to the hyphen)
-validate = { cmd = "validator --manifest {{ pixi[\"manifest-path\"] }}", args = [] }
+# Using manifest path
+validate = { cmd = "validator --manifest {{ pixi.manifest_path }}", args = [] }
 ```
 
 The pixi variables can also be combined with task arguments:

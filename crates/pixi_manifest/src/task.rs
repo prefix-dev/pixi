@@ -551,7 +551,7 @@ impl<'a> TaskRenderContext<'a> {
         // Add manifest path if available
         if let Some(path) = self.manifest_path {
             pixi_vars.insert(
-                "manifest-path".to_string(),
+                "manifest_path".to_string(),
                 minijinja::Value::from(path.display().to_string()),
             );
         }
@@ -1117,8 +1117,8 @@ mod tests {
         let t = TemplateString::from("{{ pixi.environment }}");
         assert_eq!(t.render(&context).unwrap(), "test-env");
 
-        // Test manifest-path
-        let t = TemplateString::from("{{ pixi[\"manifest-path\"] }}");
+        // Test manifest_path
+        let t = TemplateString::from("{{ pixi.manifest_path }}");
         assert_eq!(t.render(&context).unwrap(), "/tmp/pixi.toml");
 
         // Test version
