@@ -176,7 +176,7 @@ If `conda-forge` is not present in `conda-pypi-map` `pixi` will use `prefix.dev`
 conda-pypi-map = { conda-forge = "https://example.com/mapping", "https://repo.prefix.dev/robostack" = "local/robostack_mapping.json"}
 ```
 
-If you want to disable the mapping logic you can add an empty map to the list:
+It is also possible to disable fetching external mpping by adding an empty map to the list
 
 ```toml
 conda-pypi-map = { conda-forge = "map.json" }
