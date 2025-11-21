@@ -282,7 +282,7 @@ impl PixiEnvironmentSpec {
                 let spec = DevSourceMetadataSpec {
                     package_name,
                     backend_metadata: BuildBackendMetadataSpec {
-                        source: pinned_source.pinned,
+                        manifest_source: pinned_source.pinned,
                         channel_config,
                         channels,
                         build_environment,
