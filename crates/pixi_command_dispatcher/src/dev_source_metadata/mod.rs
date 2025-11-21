@@ -39,7 +39,7 @@ pub struct DevSourceMetadata {
 pub enum DevSourceMetadataError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    BuildBackendMetadata(#[from] BuildBackendMetadataError),
+    BuildBackendMetadata(#[from] Box<BuildBackendMetadataError>),
 
     #[error(
         "the build backend does not support the `conda/outputs` procedure, which is required for dev sources"
@@ -70,6 +70,7 @@ impl DevSourceMetadataSpec {
         let build_backend_metadata = command_dispatcher
             .build_backend_metadata(self.backend_metadata.clone())
             .await
+            .map_err_with(Box::new)
             .map_err_with(DevSourceMetadataError::BuildBackendMetadata)?;
 
         // We only support the Outputs protocol for dev sources

@@ -574,9 +574,7 @@ mod tests {
                     .iter()
                     .any(|v| v.get("python").unwrap() == expected_python
                         && v.get("numpy").unwrap() == expected_numpy),
-                "Expected combination ({}, {}) not found",
-                expected_python,
-                expected_numpy
+                "Expected combination ({expected_python}, {expected_numpy}) not found"
             );
         }
     }

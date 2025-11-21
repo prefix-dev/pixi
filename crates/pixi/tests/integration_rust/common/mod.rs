@@ -683,6 +683,7 @@ impl PixiControl {
     pub fn build(&self) -> BuildBuilder {
         BuildBuilder {
             args: build::Args {
+                build_manifest: Default::default(),
                 backend_override: Default::default(),
                 config_cli: Default::default(),
                 lock_and_install_config: Default::default(),

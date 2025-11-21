@@ -243,7 +243,7 @@ impl SolveCondaEnvironmentSpec {
                         )
                     },
                     url: url.clone(),
-                    file_name: format!("{}-0-{}.devsource", prefixed_name, build_string),
+                    file_name: format!("{prefixed_name}-0-{build_string}.devsource"),
                     channel: None,
                 };
                 url_to_dev_source.insert(url, (dev_source, repodata_record));
@@ -340,7 +340,7 @@ fn unique_dev_source_url(dev_source: &pixi_record::DevSourceRecord) -> Url {
     pairs.append_pair("name", dev_source.name.as_source());
 
     for (key, value) in &dev_source.variants {
-        pairs.append_pair(&format!("_{}", key), value);
+        pairs.append_pair(&format!("_{key}"), value);
     }
 
     drop(pairs);
@@ -358,7 +358,7 @@ fn dev_source_build_string(dev_source: &pixi_record::DevSourceRecord) -> String 
     let mut hasher = DefaultHasher::new();
     dev_source.variants.hash(&mut hasher);
     let hash = hasher.finish();
-    format!("{:x}", hash)
+    format!("{hash:x}")
 }
 
 #[derive(Debug, thiserror::Error)]
