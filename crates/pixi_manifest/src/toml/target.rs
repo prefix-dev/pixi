@@ -86,8 +86,7 @@ impl TomlTarget {
             .transpose()
             .map_err(|e| {
                 TomlError::Generic(GenericError::new(format!(
-                    "failed to parse dev dependency: {}",
-                    e
+                    "failed to parse dev dependency: {e}",
                 )))
             })?;
 
