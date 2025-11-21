@@ -263,12 +263,6 @@ impl PinnedSourceSpec {
                 // Normalize the path (resolve . and ..)
                 let normalized = crate::path_utils::normalize_path(&target_path_abs);
                 // Convert back to a path that's either absolute or relative to workspace
-                dbg!(
-                    &base_absolute,
-                    &normalized,
-                    &relative_std_path,
-                    &target_path_abs
-                );
                 let path_spec = normalized.strip_prefix(workspace_root).expect(
                     "the workspace_root should be part of the source build path at this point",
                 );
@@ -304,7 +298,7 @@ impl PinnedSourceSpec {
                 Some(PinnedSourceSpec::Git(PinnedGitSpec {
                     git: base_git.git.clone(),
                     source: PinnedGitCheckout {
-                        commit: base_git.source.commit.clone(),
+                        commit: base_git.source.commit,
                         subdirectory,
                         reference: base_git.source.reference.clone(),
                     },
@@ -625,7 +619,7 @@ impl PinnedPathSpec {
     pub fn resolve(&self, workspace_root: &Path) -> PathBuf {
         let native_path = Path::new(self.path.as_str());
         if self.path.is_absolute() {
-            return PathBuf::from(native_path);
+            PathBuf::from(native_path)
         } else {
             workspace_root.join(native_path)
         }

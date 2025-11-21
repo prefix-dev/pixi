@@ -182,13 +182,12 @@ impl SourceRecord {
                     }
                 };
 
-                dbg!("GET HERE");
                 // Try to resolve relative to manifest_source, or use absolute path if that fails
                 PinnedSourceSpec::from_relative_to(path_unix.to_path_buf(), &manifest_source, workspace_root)
-                    .unwrap_or_else(|| {
+                    .unwrap_or(
                         // If from_relative_to returns None (absolute paths), use as-is
                         PinnedSourceSpec::Path(crate::PinnedPathSpec { path })
-                    })
+                    )
             }
         });
 
@@ -539,6 +538,7 @@ mod tests {
         let snapshot_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
             "src/snapshots/pixi_record__source_record__tests__roundtrip_conda_source_data.snap",
         );
+        #[allow(clippy::disallowed_methods)]
         let snap = std::fs::read_to_string(snapshot_path).expect("failed to read snapshot file");
         // Skip insta frontmatter (two --- delimiters) and return the lock file contents
         snap.splitn(3, "---")
