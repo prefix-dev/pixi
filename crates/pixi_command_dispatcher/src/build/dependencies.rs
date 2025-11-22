@@ -318,6 +318,7 @@ fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     sha256: None,
                     url: _,
                     license: None,
+                    condition: None,
                 } => BinarySpec::Version(version.unwrap_or(VersionSpec::Any)),
                 NamelessMatchSpec {
                     version,
@@ -336,6 +337,7 @@ fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     // Explicitly ignored
                     namespace: _,
                     extras: _,
+                    condition: _,
                 } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
                     version,
                     build,
