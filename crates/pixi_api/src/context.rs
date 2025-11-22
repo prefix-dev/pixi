@@ -2,17 +2,19 @@ use std::collections::HashMap;
 
 use indexmap::{IndexMap, IndexSet};
 use miette::IntoDiagnostic;
-use pixi_core::workspace::WorkspaceMut;
+use pixi_core::workspace::{PypiDeps, UpdateDeps, WorkspaceMut};
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
-    EnvironmentName, Feature, FeatureName, PrioritizedChannel, TargetSelector, Task, TaskName,
+    EnvironmentName, Feature, FeatureName, PrioritizedChannel, SpecType, TargetSelector, Task,
+    TaskName,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
 
 use crate::interface::Interface;
-use crate::workspace::{InitOptions, ReinstallOptions};
+use crate::workspace::add::GitOptions;
+use crate::workspace::{DependencyOptions, InitOptions, ReinstallOptions};
 
 pub struct DefaultContext<I: Interface> {
     interface: I,
@@ -140,6 +142,84 @@ impl<I: Interface> WorkspaceContext<I> {
             .await
     }
 
+    pub async fn add_conda_deps(
+        &self,
+        specs: IndexMap<PackageName, MatchSpec>,
+        spec_type: SpecType,
+        dep_options: DependencyOptions,
+        git_options: GitOptions,
+    ) -> miette::Result<Option<UpdateDeps>> {
+        crate::workspace::add::add_conda_dep(
+            &self.interface,
+            self.workspace_mut()?,
+            specs,
+            spec_type,
+            dep_options,
+            git_options,
+        )
+        .await
+    }
+
+    pub async fn add_pypi_deps(
+        &self,
+        pypi_deps: PypiDeps,
+        editable: bool,
+        options: DependencyOptions,
+    ) -> miette::Result<Option<UpdateDeps>> {
+        crate::workspace::add::add_pypi_dep(
+            &self.interface,
+            self.workspace_mut()?,
+            pypi_deps,
+            editable,
+            options,
+        )
+        .await
+    }
+
+    pub async fn remove_conda_deps(
+        &self,
+        specs: IndexMap<PackageName, MatchSpec>,
+        spec_type: SpecType,
+        dep_options: DependencyOptions,
+    ) -> miette::Result<()> {
+        crate::workspace::remove::remove_conda_deps(
+            &self.interface,
+            self.workspace_mut()?,
+            specs,
+            spec_type,
+            dep_options,
+        )
+        .await
+    }
+
+    pub async fn remove_pypi_deps(
+        &self,
+        pypi_deps: PypiDeps,
+        options: DependencyOptions,
+    ) -> miette::Result<()> {
+        crate::workspace::remove::remove_pypi_deps(
+            &self.interface,
+            self.workspace_mut()?,
+            pypi_deps,
+            options,
+        )
+        .await
+    }
+
+    pub async fn reinstall(
+        &self,
+        options: ReinstallOptions,
+        lock_file_usage: LockFileUsage,
+    ) -> miette::Result<()> {
+        crate::workspace::reinstall::reinstall(
+            &self.interface,
+            &self.workspace,
+            options,
+            lock_file_usage,
+        )
+        .await
+    }
+
     pub async fn list_tasks(
         &self,
         environment: Option<EnvironmentName>,
@@ -197,21 +277,6 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
-    pub async fn reinstall(
-        &self,
-        options: ReinstallOptions,
-        lock_file_usage: LockFileUsage,
-    ) -> miette::Result<()> {
-        crate::workspace::reinstall::reinstall(
-            &self.interface,
-            &self.workspace,
-            options,
-            lock_file_usage,
-        )
-        .await
-    }
-
-    /// Returns all matching package versions sorted by version
     pub async fn search_exact(
         &self,
         match_spec: MatchSpec,

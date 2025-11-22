@@ -1,5 +1,10 @@
 //! This module contains everything which is related to a Pixi workspace.
 
+pub(crate) mod add;
+pub use add::{DependencyOptions, GitOptions};
+
+pub(crate) mod remove;
+
 pub(crate) mod init;
 pub use init::{GitAttributes, InitOptions, ManifestFormat};
 
