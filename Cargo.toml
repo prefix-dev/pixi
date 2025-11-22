@@ -102,7 +102,6 @@ pixi_progress = { path = "crates/pixi_progress" }
 pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
 pixi_python_status = { path = "crates/pixi_python_status" }
 pixi_record = { path = "crates/pixi_record" }
-pixi_variant = { path = "crates/pixi_variant" }
 pixi_reporters = { path = "crates/pixi_reporters" }
 pixi_spec = { path = "crates/pixi_spec" }
 pixi_spec_containers = { path = "crates/pixi_spec_containers" }
@@ -114,11 +113,12 @@ pixi_url = { path = "crates/pixi_url" }
 pixi_utils = { path = "crates/pixi_utils", default-features = false }
 pixi_uv_context = { path = "crates/pixi_uv_context" }
 pixi_uv_conversions = { path = "crates/pixi_uv_conversions" }
+pixi_variant = { path = "crates/pixi_variant" }
 pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
 pyproject-toml = "0.13.7"
 rand = { version = "0.9.1", default-features = false }
-rattler = { version = "0.39.0", default-features = false }
+rattler = { version = "0.39.3", default-features = false }
 rattler_cache = { version = "0.6.2", default-features = false }
 rattler_conda_types = { version = "0.42.0", default-features = false, features = [
   "rayon",
