@@ -93,17 +93,52 @@ workspace manifest.
 
 ### `tls-no-verify`
 
-When set to true, the TLS certificates are not verified.
+When set to true, TLS certificate verification is disabled for both Conda and PyPI package operations.
 
 !!! warning
 
-    This is a security risk and should only be used for testing purposes or internal networks.
+    This is a security risk and should only be used for testing purposes, internal networks with self-signed certificates, or when troubleshooting certificate validation issues.
 
-You can override this from the CLI with `--tls-no-verify`.
+This option affects:
+
+- **Conda channels**: Disables certificate verification when downloading packages and repodata from Conda channels
+- **PyPI registries**: Disables certificate verification when resolving and installing PyPI packages from index URLs (including `index-url` and `extra-index-urls`)
+
+#### Common use cases
+
+- **Windows certificate issues**: Resolves certificate validation errors on Windows systems where the system certificate store may not include required root certificates
+- **Corporate networks**: Allows usage behind corporate proxies with SSL inspection or self-signed certificates
+- **Internal registries**: Enables access to internal package registries with self-signed or custom certificates
+- **Testing environments**: Facilitates testing with local or development package servers
+
+#### Configuration
+
+You can configure this option globally or override it from the command line with `--tls-no-verify`.
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:tls-no-verify"
 ```
+
+#### Examples
+
+Set globally for all projects:
+```shell
+pixi config set tls-no-verify true --global
+```
+
+Set locally for a specific project:
+```shell
+pixi config set tls-no-verify true --local
+```
+
+Use as a command-line flag for a single operation:
+```shell
+pixi add --pypi boto3 --tls-no-verify
+pixi install --tls-no-verify
+```
+
+!!! note "Alternative for PyPI-only hosts"
+    If you only need to bypass certificate verification for specific PyPI hosts, consider using the `allow-insecure-host` option in [`pypi-config`](#pypi-config) instead, which provides more granular control.
 
 ### `authentication-override-file`
 
@@ -233,7 +268,7 @@ To setup a certain number of defaults for the usage of PyPI registries. You can 
   `pixi init`.
 - `keyring-provider`: Allows the use of the [keyring](https://pypi.org/project/keyring/) python package to store and
   retrieve credentials.
-- `allow-insecure-host`: Allow insecure connections to host.
+- `allow-insecure-host`: Allow insecure HTTP connections (not HTTPS) to specific PyPI hosts. This is useful for local or internal PyPI servers that don't use HTTPS.
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:pypi-config"
@@ -243,6 +278,9 @@ To setup a certain number of defaults for the usage of PyPI registries. You can 
 Unlike pip, these settings, with the exception of `keyring-provider` will only modify the `pixi.toml`/`pyproject.toml`
 file and are not globally interpreted when not present in the manifest.
 This is because we want to keep the manifest file as complete and reproducible as possible.
+
+!!! tip "TLS Certificate Verification"
+    If you need to disable TLS certificate verification for PyPI registries (e.g., for self-signed certificates or to resolve Windows certificate issues), use the global [`tls-no-verify`](#tls-no-verify) option. The `allow-insecure-host` option is for HTTP-only connections, while `tls-no-verify` disables certificate validation for HTTPS connections.
 
 ### `s3-options`
 
