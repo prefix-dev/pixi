@@ -31,6 +31,7 @@ use pixi_consts::consts::{self};
 use pixi_core::repodata::Repodata;
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::global_multi_progress;
+use pixi_record::PixiRecord;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::{BinarySpec, PathBinarySpec};
 use pixi_spec_containers::DependencyMap;
@@ -75,6 +76,10 @@ mod manifest;
 mod parsed_manifest;
 pub use global_spec::{FromMatchSpecError, GlobalSpec};
 use pixi_utils::reqwest::{LazyReqwestClient, build_lazy_reqwest_clients};
+use rattler_lock::{
+    Channel, CondaBinaryData, CondaPackageData, LockFile, LockedPackage, ParseCondaLockError,
+    UrlOrPath,
+};
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum CommandDispatcherError {
@@ -109,6 +114,7 @@ pub enum InferPackageNameError {
 }
 
 pub(crate) const MANIFESTS_DIR: &str = "manifests";
+const GLOBAL_LOCK_FILE_NAME: &str = "pixi-global.lock";
 
 /// The pixi global project, this main struct to interact with the pixi global
 /// project. This struct holds the `Manifest` and has functions to modify
@@ -120,6 +126,8 @@ pub struct Project {
     pub root: PathBuf,
     /// The manifest for the project
     pub manifest: Manifest,
+    /// The lock file for the project
+    lock_file: LockFile,
     /// The global configuration as loaded from the config file(s)
     pub config: Config,
     /// Root directory of the global environments
@@ -311,11 +319,42 @@ impl Project {
         let mut config = Config::load_global();
         config.channel_config.root_dir = root.clone();
 
+        // Load the lock file if it exists
+        let lock_file_path = root.join(GLOBAL_LOCK_FILE_NAME);
+        let lock_file = if lock_file_path.is_file() {
+            match LockFile::from_path(&lock_file_path) {
+                Ok(lock_file) => {
+                    tracing::debug!("Loaded global lock file from {}", lock_file_path.display());
+                    lock_file
+                }
+                Err(err) => {
+                    match err {
+                        ParseCondaLockError::IncompatibleVersion {
+                            lock_file_version,
+                            max_supported_version,
+                        } => {
+                            tracing::warn!(
+                                "Lock file version {lock_file_version} is newer than maximum supported version {max_supported_version}. Ignoring lock file."
+                            );
+                        }
+                        _ => {
+                            tracing::warn!("Failed to load lock file: {err}. Ignoring lock file.");
+                        }
+                    }
+                    LockFile::default()
+                }
+            }
+        } else {
+            tracing::debug!("No lock file found at {}", lock_file_path.display());
+            LockFile::default()
+        };
+
         let client = OnceCell::new();
         let repodata_gateway = OnceCell::new();
         Self {
             root,
             manifest,
+            lock_file,
             config,
             env_root,
             bin_dir,
@@ -376,7 +415,11 @@ impl Project {
             }
         }
 
-        Self::from_path(&manifest_path, env_root, bin_dir)
+        let mut project = Self::from_path(&manifest_path, env_root, bin_dir)?;
+        project
+            .populate_missing_lock_environments_from_existing_prefixes()
+            .await?;
+        Ok(project)
     }
 
     async fn try_from_existing_installation(
@@ -437,7 +480,11 @@ impl Project {
         tokio_fs::write(&manifest_path, &toml)
             .await
             .into_diagnostic()?;
-        Self::from_str(manifest_path, &toml, env_root, bin_dir)
+        let mut project = Self::from_str(manifest_path, &toml, env_root, bin_dir)?;
+        project
+            .populate_missing_lock_environments_from_existing_prefixes()
+            .await?;
+        Ok(project)
     }
 
     /// Get default dir for the pixi global manifest
@@ -518,6 +565,96 @@ impl Project {
         Ok(Prefix::new(self.environment_dir(env_name).await?.path()))
     }
 
+    /// Returns the path to the global lock file
+    pub fn lock_file_path(&self) -> PathBuf {
+        self.root.join(GLOBAL_LOCK_FILE_NAME)
+    }
+
+    /// Returns a reference to the lock file
+    pub fn lock_file(&self) -> &LockFile {
+        &self.lock_file
+    }
+
+    /// Writes the lock file to disk
+    pub fn write_lock_file(&self) -> miette::Result<()> {
+        let lock_file_path = self.lock_file_path();
+        self.lock_file
+            .to_path(&lock_file_path)
+            .into_diagnostic()
+            .context(format!(
+                "failed to write global lock file to {}",
+                lock_file_path.display()
+            ))
+    }
+
+    /// Computes the lock file for a specific environment with the given records
+    pub fn compute_lock_file_for_environment(
+        &self,
+        env_name: &EnvironmentName,
+        records: Vec<PixiRecord>,
+        platform: Platform,
+        channels: Vec<rattler_conda_types::Channel>,
+    ) -> miette::Result<LockFile> {
+        // Convert channels
+        let lock_channels: Vec<Channel> = channels
+            .iter()
+            .map(|ch| Channel::from(ch.base_url.as_str()))
+            .collect();
+
+        // Convert PixiRecords to LockedPackage
+        let locked_packages: Vec<LockedPackage> = records
+            .into_iter()
+            .map(|record| {
+                let pkg = record.package_record().clone();
+
+                // Construct a filename
+                let file_name = format!(
+                    "{}-{}-{}.conda",
+                    pkg.name.as_normalized(),
+                    pkg.version,
+                    pkg.build
+                );
+
+                // Build CondaBinaryData
+                let conda = CondaPackageData::Binary(CondaBinaryData {
+                    package_record: pkg,
+                    location: UrlOrPath::Path(file_name.clone().into()),
+                    file_name,
+                    channel: None,
+                });
+
+                Ok(LockedPackage::from(conda))
+            })
+            .collect::<miette::Result<Vec<_>>>()?;
+
+        // Build new lock file
+        let mut builder = rattler_lock::LockFileBuilder::new();
+
+        let env_name_str = env_name.to_string();
+
+        // Preserve other environments
+        for (other_env, other_data) in self.lock_file.environments() {
+            if other_env != env_name_str {
+                builder.set_channels(other_env, other_data.channels().to_vec());
+                for (plat, pkgs) in other_data.packages_by_platform() {
+                    for pkg in pkgs {
+                        builder.add_package(other_env, plat, pkg.into());
+                    }
+                }
+            }
+        }
+
+        // Set channels for this environment
+        builder.set_channels(&env_name_str, lock_channels);
+
+        // Add updated packages
+        for lp in locked_packages {
+            builder.add_package(&env_name_str, platform, lp);
+        }
+
+        Ok(builder.finish())
+    }
+
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
     pub fn authenticated_client(&self) -> miette::Result<&LazyClient> {
@@ -563,7 +700,7 @@ impl Project {
     pub async fn install_environment(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<EnvironmentUpdate> {
+    ) -> miette::Result<(LockFile, EnvironmentUpdate)> {
         self.install_environment_with_options(env_name, false).await
     }
 
@@ -571,7 +708,7 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
         force_reinstall: bool,
-    ) -> miette::Result<EnvironmentUpdate> {
+    ) -> miette::Result<(LockFile, EnvironmentUpdate)> {
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
@@ -599,9 +736,9 @@ impl Project {
 
         let command_dispatcher = self.command_dispatcher()?;
 
-        let channels = channels
-            .into_iter()
-            .map(|channel| channel.base_url.clone())
+        let channels_urls = channels
+            .iter()
+            .map(|c| c.base_url.clone())
             .collect::<Vec<_>>();
 
         let build_environment = BuildEnvironment::simple(
@@ -613,7 +750,7 @@ impl Project {
             name: Some(env_name.to_string()),
             dependencies: pixi_specs,
             build_environment: build_environment.clone(),
-            channels: channels.clone(),
+            channels: channels_urls.clone(),
             channel_config: self.config.global_channel_config().clone(),
             ..Default::default()
         };
@@ -637,11 +774,11 @@ impl Project {
         let result = command_dispatcher
             .install_pixi_environment(InstallPixiEnvironmentSpec {
                 name: env_name.to_string(),
-                records: pixi_records,
+                records: pixi_records.clone(),
                 prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
                     .into_diagnostic()?,
                 build_environment,
-                channels,
+                channels: channels_urls,
                 channel_config: self.config.global_channel_config().clone(),
                 enabled_protocols: EnabledProtocols::default(),
                 installed: None,
@@ -654,8 +791,15 @@ impl Project {
 
         command_dispatcher.clear_reporter().await;
 
+        // Update lock file with the installed packages
+        let new_lock =
+            self.compute_lock_file_for_environment(env_name, pixi_records, platform, channels)?;
+
         let install_changes = get_install_changes(result.transaction);
-        Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
+        Ok((
+            new_lock,
+            EnvironmentUpdate::new(install_changes, dependencies_names),
+        ))
     }
 
     /// Remove an environment from the manifest and the global installation.
@@ -704,6 +848,26 @@ impl Project {
             let completions_dir = super::completions::CompletionsDir::from_env().await?;
             completions_dir.prune_old_completions()?;
         }
+
+        // Update the global lock file to drop this environment.
+        let env_name_str = env_name.to_string();
+        let mut builder = rattler_lock::LockFileBuilder::new();
+
+        for (name, env) in self.lock_file.environments() {
+            if name != env_name_str {
+                // Preserve all other environments as-is.
+                builder.set_channels(name, env.channels().to_vec());
+                for (platform, pkgs) in env.packages_by_platform() {
+                    for pkg in pkgs {
+                        builder.add_package(name, platform, pkg.into());
+                    }
+                }
+            }
+        }
+
+        // Replace in-memory lockfile and persist it.
+        self.lock_file = builder.finish();
+        self.write_lock_file()?;
 
         state_changes.insert_change(env_name, StateChange::RemovedEnvironment);
 
@@ -1078,19 +1242,18 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
         removed_packages: Option<Vec<PackageName>>,
-    ) -> miette::Result<StateChanges> {
+    ) -> miette::Result<(LockFile, StateChanges)> {
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
-        if self.environment_in_sync(env_name).await? {
-            tracing::debug!(
-                "Environment {} specs already up to date with global manifest",
-                env_name.fancy_display()
-            );
-        } else {
+        let mut new_lock = None;
+
+        if !self.environment_in_sync(env_name).await? {
             tracing::debug!(
                 "Environment {} specs not up to date with global manifest",
                 env_name.fancy_display()
             );
-            let mut environment_update = self.install_environment(env_name).await?;
+            let (computed_lock, mut environment_update) =
+                self.install_environment(env_name).await?;
+            new_lock = Some(computed_lock);
 
             if let Some(removed_packages) = removed_packages {
                 environment_update.add_removed_packages(removed_packages.to_vec());
@@ -1099,6 +1262,11 @@ impl Project {
             state_changes.insert_change(
                 env_name,
                 StateChange::UpdatedEnvironment(environment_update),
+            );
+        } else {
+            tracing::debug!(
+                "Environment {} specs are up to date with global manifest",
+                env_name.fancy_display()
             );
         }
 
@@ -1111,7 +1279,9 @@ impl Project {
         // Sync completions
         state_changes |= self.sync_completions(env_name).await?;
 
-        Ok(state_changes)
+        // If no installation was required, lock file remains unchanged
+        let lock = new_lock.unwrap_or_else(|| self.lock_file.clone());
+        Ok((lock, state_changes))
     }
 
     /// Delete scripts in the bin folder that are broken
@@ -1466,6 +1636,122 @@ impl Project {
                 _ => Err(InferPackageNameError::UnsupportedSpecType),
             },
         }
+    }
+    /// Ensure that every environment defined in the manifest has a corresponding
+    /// entry in the global lock file.
+    ///
+    /// This is mainly used when upgrading from a Pixi version that did not
+    /// create a `pixi-global.lock` yet. In that case the manifest already
+    /// describes multiple environments, but the lock file may be completely
+    /// empty or only contain a subset of them.
+    ///
+    /// The method inspects the existing environment prefixes on disk and
+    /// synthesizes lockfile entries for any environment that is present in the
+    /// manifest but missing from the lockfile. Existing lockfile entries are
+    /// preserved unchanged.
+    pub async fn populate_missing_lock_environments_from_existing_prefixes(
+        &mut self,
+    ) -> miette::Result<()> {
+        // Collect the set of environments already present in the lockfile.
+        let existing_locked_envs: HashSet<String> = self
+            .lock_file
+            .environments()
+            .map(|(name, _)| name.to_string())
+            .collect();
+
+        // Determine which manifest environments are missing from the lockfile.
+        let missing_envs: Vec<(&EnvironmentName, &ParsedEnvironment)> = self
+            .manifest
+            .parsed
+            .envs
+            .iter()
+            .filter(|(env_name, _)| {
+                let name = env_name.to_string();
+                !existing_locked_envs.contains(&name)
+            })
+            .collect();
+
+        // Nothing to do: the lockfile already has all environments.
+        if missing_envs.is_empty() {
+            return Ok(());
+        }
+
+        let mut builder = rattler_lock::LockFileBuilder::new();
+
+        // First copy all existing environments from the current lockfile.
+        for (env_name, env_data) in self.lock_file.environments() {
+            builder.set_channels(env_name, env_data.channels().to_vec());
+            for (platform, packages) in env_data.packages_by_platform() {
+                for pkg in packages {
+                    builder.add_package(env_name, platform, pkg.into());
+                }
+            }
+        }
+
+        // Now synthesize lock entries for environments that are missing but have
+        // an installed prefix on disk.
+        for (env_name, parsed_env) in missing_envs {
+            let env_name_str = env_name.to_string();
+            let env_dir_path = self.env_root.path().join(env_name_str.as_str());
+
+            // Only consider environments that actually exist as a conda prefix.
+            let conda_meta = env_dir_path.join(consts::CONDA_META_DIR);
+            if !conda_meta.try_exists().into_diagnostic()? {
+                continue;
+            }
+
+            let prefix = Prefix::new(&env_dir_path);
+            let records = match prefix.find_installed_packages() {
+                Ok(records) if !records.is_empty() => records,
+                _ => continue,
+            };
+
+            // Derive channels from the manifest definition
+            let channels = parsed_env
+                .channels()
+                .into_iter()
+                .map(|channel| {
+                    channel
+                        .clone()
+                        .into_channel(self.config.global_channel_config())
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .into_diagnostic()?;
+
+            let lock_channels: Vec<Channel> = channels
+                .iter()
+                .map(|ch| Channel::from(ch.base_url.as_str()))
+                .collect();
+
+            builder.set_channels(&env_name_str, lock_channels);
+
+            let platform = parsed_env.platform.unwrap_or_else(Platform::current);
+
+            for record in records {
+                let pkg = record.repodata_record.package_record.clone();
+                let file_name = record.repodata_record.file_name.clone();
+
+                let conda = CondaPackageData::Binary(CondaBinaryData {
+                    package_record: pkg,
+                    // We only need a stable, reproducible filename here. This
+                    // mirrors what `compute_lock_file_for_environment` does.
+                    location: UrlOrPath::Path(file_name.clone().into()),
+                    file_name,
+                    channel: None,
+                });
+
+                let locked = LockedPackage::from(conda);
+                builder.add_package(&env_name_str, platform, locked);
+            }
+        }
+
+        // Replace the in-memory lockfile and persist it. Even if we didn't
+        // discover any prefixes for the missing envs, this is equivalent to
+        // the old lockfile because we copied all existing environments above.
+        self.lock_file = builder.finish();
+        self.write_lock_file()?;
+
+        Ok(())
     }
 }
 

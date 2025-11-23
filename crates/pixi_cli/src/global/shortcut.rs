@@ -1,7 +1,7 @@
 use crate::global::revert_environment_after_error;
 use clap::Parser;
 use fancy_display::FancyDisplay;
-use miette::Context;
+use miette::{Context, IntoDiagnostic};
 use pixi_config::{Config, ConfigCli};
 use pixi_global::Project;
 use pixi_global::{EnvironmentName, StateChanges};
@@ -69,7 +69,11 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
         for name in &args.packages {
             project.manifest.add_shortcut(env_name, name)?;
         }
-        state_changes |= project.sync_environment(env_name, None).await?;
+        let (lockfile, sync_changes) = project.sync_environment(env_name, None).await?;
+        state_changes |= sync_changes;
+        lockfile
+            .to_path(&project.lock_file_path())
+            .into_diagnostic()?;
         Ok(state_changes)
     }
 
@@ -118,7 +122,12 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
                 })?;
         }
 
-        state_changes |= project.sync_environment(env_name, None).await?;
+        let (lockfile, sync_changes) = project.sync_environment(env_name, None).await?;
+        state_changes |= sync_changes;
+        lockfile
+            .to_path(&project.lock_file_path())
+            .into_diagnostic()?;
+
         project.manifest.save().await?;
         Ok(state_changes)
     }

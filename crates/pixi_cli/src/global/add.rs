@@ -2,6 +2,7 @@ use crate::global::global_specs::GlobalSpecs;
 use crate::global::revert_environment_after_error;
 
 use clap::Parser;
+use miette::IntoDiagnostic;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::project::GlobalSpec;
 use pixi_global::{EnvironmentName, Mapping, Project, StateChange, StateChanges};
@@ -65,7 +66,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // Sync environment
-        let sync_changes = project.sync_environment(env_name, None).await?;
+        let (lockfile, sync_changes) = project.sync_environment(env_name, None).await?;
+
+        lockfile
+            .to_path(&project.lock_file_path())
+            .into_diagnostic()?;
 
         // Figure out added packages and their corresponding versions from EnvironmentUpdate
         let requested_package_names: Vec<_> =

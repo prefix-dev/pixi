@@ -1,6 +1,6 @@
 use clap::Parser;
 use itertools::Itertools;
-use miette::Context;
+use miette::{Context, IntoDiagnostic};
 use pixi_config::{Config, ConfigCli};
 use pixi_global::{EnvironmentName, ExposedName, Project, StateChanges};
 use rattler_conda_types::MatchSpec;
@@ -99,9 +99,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // Sync environment
-        let state_changes = project
+        let (lockfile, state_changes) = project
             .sync_environment(env_name, Some(removed_dependencies))
             .await?;
+
+        lockfile
+            .to_path(&project.lock_file_path())
+            .into_diagnostic()?;
 
         project.manifest.save().await?;
         Ok(state_changes)

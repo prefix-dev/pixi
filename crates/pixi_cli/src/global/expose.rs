@@ -1,6 +1,6 @@
 use clap::Parser;
 use itertools::Itertools;
-use miette::Context;
+use miette::{Context, IntoDiagnostic};
 use pixi_config::{Config, ConfigCli};
 use pixi_global::{self, EnvironmentName, ExposedName, Mapping, StateChanges};
 
@@ -84,7 +84,9 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
         for mapping in &args.mappings {
             project.manifest.add_exposed_mapping(env_name, mapping)?;
         }
-        state_changes |= project.sync_environment(env_name, None).await?;
+        let (_, sync_changes) = project.sync_environment(env_name, None).await?;
+        state_changes |= sync_changes;
+
         project.manifest.save().await?;
         Ok(state_changes)
     }
@@ -123,7 +125,13 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
         project
             .manifest
             .remove_exposed_name(env_name, exposed_name)?;
-        state_changes |= project.sync_environment(env_name, None).await?;
+        let (lockfile, sync_changes) = project.sync_environment(env_name, None).await?;
+        state_changes |= sync_changes;
+
+        lockfile
+            .to_path(&project.lock_file_path())
+            .into_diagnostic()?;
+
         project.manifest.save().await?;
         Ok(state_changes)
     }
