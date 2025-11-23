@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use miette::Report;
+use miette::{IntoDiagnostic, Report};
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::global::{global_specs::GlobalSpecs, revert_environment_after_error};
@@ -228,7 +228,11 @@ async fn setup_environment(
     }
 
     // Installing the environment to be able to find the bin paths later
-    let environment_update = project.install_environment(env_name).await?;
+    let (new_lock, environment_update) = project.install_environment(env_name).await?;
+
+    new_lock
+        .to_path(&project.lock_file_path())
+        .into_diagnostic()?;
 
     // Sync exposed name
     sync_exposed_names(env_name, project, args).await?;

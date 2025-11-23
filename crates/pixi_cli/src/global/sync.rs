@@ -1,5 +1,6 @@
 use clap::Parser;
 use fancy_display::FancyDisplay;
+use miette::IntoDiagnostic;
 use pixi_config::{Config, ConfigCli};
 
 /// Sync global manifest with installed environments
@@ -39,13 +40,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let mut errors = Vec::new();
-    for env_name in project.environments().keys() {
-        match project.sync_environment(env_name, None).await {
-            Ok(state_change) => {
-                if state_change.has_changed() {
-                    has_changed = true;
-                    state_change.report();
+
+    let env_names: Vec<_> = project.environments().keys().cloned().collect();
+
+    for env_name in env_names {
+        match project.sync_environment(&env_name, None).await {
+            Ok((lockfile, state_changes)) => {
+                if state_changes.has_changed() {
+                    state_changes.report();
                 }
+                lockfile
+                    .to_path(&project.lock_file_path())
+                    .into_diagnostic()?;
             }
             Err(err) => errors.push((env_name, err)),
         }
