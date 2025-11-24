@@ -47,7 +47,7 @@ flowchart TD
     B --> C{Loop Over Channels}
     C --> D{Package in This Channel?}
     D -->|No| C
-    D -->|Yes| E{"This the first channel
+    D -->|Yes| E{"Is this the first channel
      for this package?"}
     E -->|Yes| F[Include Package in Candidates]
     E -->|No| G[Exclude Package from Candidates]

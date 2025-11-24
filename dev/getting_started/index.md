@@ -1,6 +1,6 @@
 # Basic usage of Pixi
 
-Pixi can do alot of things, but it is designed to be simple to use. Let's go through the basic usage of Pixi.
+Pixi can do a lot of things, but it is designed to be simple to use. Let's go through the basic usage of Pixi.
 
 ## Managing workspaces
 
@@ -68,7 +68,7 @@ Pixi can run cross-platform tasks using it's built-in task runner. This can be a
 - [`pixi run`](../reference/cli/pixi/run/) - Run a task or command
 - [`pixi task add`](../reference/cli/pixi/task/add/) - Add a new task to the manifest
 
-Tasks can have other tasks as dependencies. Here is an example of a more complex task usecase pixi.toml
+Tasks can have other tasks as dependencies. Here is an example of a more complex task use case pixi.toml
 
 ```toml
 [tasks]

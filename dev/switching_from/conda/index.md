@@ -58,7 +58,7 @@ bat pixi.toml
 
 Never install `pip` with `pixi global`
 
-Installations with `pixi global` get their own isolated environment. Installing `pip` with `pixi global` will create a new isolated environment with its own `pip` binary. Using that `pip` binary will install packages in the `pip` environment, making it unreachable form anywhere as you can't activate it.
+Installations with `pixi global` get their own isolated environment. Installing `pip` with `pixi global` will create a new isolated environment with its own `pip` binary. Using that `pip` binary will install packages in the `pip` environment, making it unreachable from anywhere as you can't activate it.
 
 ## Automated switching
 
@@ -79,6 +79,6 @@ Additionally you can export a [conda explicit specification](../../reference/cli
 
 Encountering issues? Here are solutions to some common problems when being used to the `conda` workflow:
 
-- Dependency `is excluded because due to strict channel priority not using this option from: 'https://conda.anaconda.org/conda-forge/'` This error occurs when the package is in multiple channels. `pixi` uses a strict channel priority. See [channel priority](../../advanced/channel_logic/) for more information.
+- Dependency `is excluded due to strict channel priority not using this option from: 'https://conda.anaconda.org/conda-forge/'` This error occurs when the package is in multiple channels. `pixi` uses a strict channel priority. See [channel priority](../../advanced/channel_logic/) for more information.
 - `pixi global install pip`, pip doesn't work. `pip` is installed in the global isolated environment. Use `pixi add pip` in a workspace to install `pip` in the workspace environment and use that workspace.
 - `pixi global install <Any Library>` -> `import <Any Library>` -> `ModuleNotFoundError: No module named '<Any Library>'` The library is installed in the global isolated environment. Use `pixi add <Any Library>` in a workspace to install the library in the workspace environment and use that workspace.

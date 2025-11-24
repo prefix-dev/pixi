@@ -356,7 +356,7 @@ The above invocation will automatically download the latest version of `pixi`, e
 Or run:
 
 ```powershell
-powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm -useb https://pixi.sh/install.ps1 | iex"
 
 ```
 
@@ -448,7 +448,7 @@ cargo test
 
 ```
 
-If you have any issues building because of the dependency on `rattler` checkout its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
+If you have any issues building because of the dependency on `rattler` check out its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 
 ## Installer Script Options
 
@@ -610,7 +610,7 @@ Before un-installation you might want to delete any previous files pixi has inst
    cd path/to/workspace && pixi clean
 
    ```
-1. Remove the `pixi` and it's global environments
+1. Remove the `pixi` and its global environments
    ```shell
    rm -r ~/.pixi
 
@@ -621,7 +621,7 @@ Before un-installation you might want to delete any previous files pixi has inst
 
 # Basic usage of Pixi
 
-Pixi can do alot of things, but it is designed to be simple to use. Let's go through the basic usage of Pixi.
+Pixi can do a lot of things, but it is designed to be simple to use. Let's go through the basic usage of Pixi.
 
 ## Managing workspaces
 
@@ -689,7 +689,7 @@ Pixi can run cross-platform tasks using it's built-in task runner. This can be a
 - [`pixi run`](../reference/cli/pixi/run/) - Run a task or command
 - [`pixi task add`](../reference/cli/pixi/task/add/) - Add a new task to the manifest
 
-Tasks can have other tasks as dependencies. Here is an example of a more complex task usecase pixi.toml
+Tasks can have other tasks as dependencies. Here is an example of a more complex task use case pixi.toml
 
 ```toml
 [tasks]
@@ -776,7 +776,7 @@ version = "0.1.0"
 
 Do you want autocompletion of the manifest file?
 
-As `pixi.toml` has a JSON schema, it is possible to use IDE’s like VSCode to edit the field with autocompletion. Install the [Even Better TOML VSCode extension](https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml) to get the best experience. Or use the integrated schema support in PyCharm.
+As `pixi.toml` has a JSON schema, it is possible to use IDEs like VSCode to edit the field with autocompletion. Install the [Even Better TOML VSCode extension](https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml) to get the best experience. Or use the integrated schema support in PyCharm.
 
 ## Managing dependencies
 
@@ -3138,7 +3138,7 @@ bat pixi.toml
 
 Never install `pip` with `pixi global`
 
-Installations with `pixi global` get their own isolated environment. Installing `pip` with `pixi global` will create a new isolated environment with its own `pip` binary. Using that `pip` binary will install packages in the `pip` environment, making it unreachable form anywhere as you can't activate it.
+Installations with `pixi global` get their own isolated environment. Installing `pip` with `pixi global` will create a new isolated environment with its own `pip` binary. Using that `pip` binary will install packages in the `pip` environment, making it unreachable from anywhere as you can't activate it.
 
 ## Automated switching
 
@@ -3159,7 +3159,7 @@ Additionally you can export a [conda explicit specification](../../reference/cli
 
 Encountering issues? Here are solutions to some common problems when being used to the `conda` workflow:
 
-- Dependency `is excluded because due to strict channel priority not using this option from: 'https://conda.anaconda.org/conda-forge/'` This error occurs when the package is in multiple channels. `pixi` uses a strict channel priority. See [channel priority](../../advanced/channel_logic/) for more information.
+- Dependency `is excluded due to strict channel priority not using this option from: 'https://conda.anaconda.org/conda-forge/'` This error occurs when the package is in multiple channels. `pixi` uses a strict channel priority. See [channel priority](../../advanced/channel_logic/) for more information.
 - `pixi global install pip`, pip doesn't work. `pip` is installed in the global isolated environment. Use `pixi add pip` in a workspace to install `pip` in the workspace environment and use that workspace.
 - `pixi global install <Any Library>` -> `import <Any Library>` -> `ModuleNotFoundError: No module named '<Any Library>'` The library is installed in the global isolated environment. Use `pixi add <Any Library>` in a workspace to install the library in the workspace environment and use that workspace.
 
@@ -8845,7 +8845,7 @@ flowchart TD
     B --> C{Loop Over Channels}
     C --> D{Package in This Channel?}
     D -->|No| C
-    D -->|Yes| E{"This the first channel
+    D -->|Yes| E{"Is this the first channel
      for this package?"}
     E -->|Yes| F[Include Package in Candidates]
     E -->|No| G[Exclude Package from Candidates]
@@ -19564,7 +19564,7 @@ To further customize the look and feel of your badge, you can add `&style=<custo
 
 ## What is the difference with `conda`, `mamba`, `poetry`, `pip`
 
-| Tool   | Installs python | Builds packages | Runs predefined tasks | Has lock files builtin | Fast | Use without python                                                      |
+| Tool   | Installs Python | Builds packages | Runs predefined tasks | Has lock files builtin | Fast | Use without python                                                      |
 | ------ | --------------- | --------------- | --------------------- | ---------------------- | ---- | ----------------------------------------------------------------------- |
 | Conda  | ✅              | ❌              | ❌                    | ❌                     | ❌   | ❌                                                                      |
 | Mamba  | ✅              | ❌              | ❌                    | ❌                     | ✅   | [✅](https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html) |

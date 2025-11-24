@@ -1,6 +1,6 @@
 ## What is the difference with `conda`, `mamba`, `poetry`, `pip`
 
-| Tool   | Installs python | Builds packages | Runs predefined tasks | Has lock files builtin | Fast | Use without python                                                      |
+| Tool   | Installs Python | Builds packages | Runs predefined tasks | Has lock files builtin | Fast | Use without python                                                      |
 | ------ | --------------- | --------------- | --------------------- | ---------------------- | ---- | ----------------------------------------------------------------------- |
 | Conda  | ✅              | ❌              | ❌                    | ❌                     | ❌   | ❌                                                                      |
 | Mamba  | ✅              | ❌              | ❌                    | ❌                     | ✅   | [✅](https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html) |

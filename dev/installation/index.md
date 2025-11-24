@@ -21,7 +21,7 @@ The above invocation will automatically download the latest version of `pixi`, e
 Or run:
 
 ```powershell
-powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm -useb https://pixi.sh/install.ps1 | iex"
 
 ```
 
@@ -113,7 +113,7 @@ cargo test
 
 ```
 
-If you have any issues building because of the dependency on `rattler` checkout its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
+If you have any issues building because of the dependency on `rattler` check out its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 
 ## Installer Script Options
 
@@ -275,7 +275,7 @@ Before un-installation you might want to delete any previous files pixi has inst
    cd path/to/workspace && pixi clean
 
    ```
-1. Remove the `pixi` and it's global environments
+1. Remove the `pixi` and its global environments
    ```shell
    rm -r ~/.pixi
 

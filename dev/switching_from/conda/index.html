@@ -2954,7 +2954,7 @@ It creates a single isolated environment for the given requirement and installs 
 <p class="admonition-title">Never install <code>pip</code> with <code>pixi global</code></p>
 <p>Installations with <code>pixi global</code> get their own isolated environment.
 Installing <code>pip</code> with <code>pixi global</code> will create a new isolated environment with its own <code>pip</code> binary.
-Using that <code>pip</code> binary will install packages in the <code>pip</code> environment, making it unreachable form anywhere as you can't activate it.</p>
+Using that <code>pip</code> binary will install packages in the <code>pip</code> environment, making it unreachable from anywhere as you can't activate it.</p>
 </div>
 <h2 id="automated-switching">Automated switching<a class="headerlink" href="#automated-switching" title="Permanent link">#</a></h2>
 <p>You can import <code>environment.yml</code> files into a Pixi workspace — see our <a href="../../tutorials/import/">import tutorial</a>.</p>
@@ -2968,7 +2968,7 @@ Additionally you can export a <a href="../../reference/cli/pixi/workspace/export
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">#</a></h2>
 <p>Encountering issues? Here are solutions to some common problems when being used to the <code>conda</code> workflow:</p>
 <ul>
-<li>Dependency <code>is excluded because due to strict channel priority not using this option from: 'https://conda.anaconda.org/conda-forge/'</code>
+<li>Dependency <code>is excluded due to strict channel priority not using this option from: 'https://conda.anaconda.org/conda-forge/'</code>
   This error occurs when the package is in multiple channels. <code>pixi</code> uses a strict channel priority. See <a href="../../advanced/channel_logic/">channel priority</a> for more information.</li>
 <li><code>pixi global install pip</code>, pip doesn't work.
   <code>pip</code> is installed in the global isolated environment. Use <code>pixi add pip</code> in a workspace to install <code>pip</code> in the workspace environment and use that workspace.</li>

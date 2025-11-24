@@ -2863,7 +2863,7 @@ This means that there are a lot of packages available, but it also means that th
 </tbody>
 </table>
 <h2 id="uv-by-astral"><code>uv</code> by Astral<a class="headerlink" href="#uv-by-astral" title="Permanent link">#</a></h2>
-<p>Pixi uses the <a href="https:://github.com/astral-sh/uv"><code>uv</code></a> library to handle PyPI packages.
+<p>Pixi uses the <a href="https://github.com/astral-sh/uv"><code>uv</code></a> library to handle PyPI packages.
 Pixi doesn't install <code>uv</code> (the tool) itself: because both tools are built in Rust, it is used as a library.</p>
 <p>We're extremely grateful to the <a href="https://astral.sh">Astral</a> team for their work on <code>uv</code>, which is a great library that allows us to handle PyPI packages in a much better way than before.</p>
 <p>Initially, next to <code>pixi</code> we were building a library called <code>rip</code> which had the same goals as <code>uv</code>, but we decided to switch to <code>uv</code> because it quickly became a more mature library, and it has a lot of features that we need.</p>
@@ -2875,7 +2875,7 @@ Pixi doesn't install <code>uv</code> (the tool) itself: because both tools are b
 <p>Because Pixi supports both ecosystems, it currently needs two different solvers to handle the dependencies.</p>
 <ul>
 <li>The <a href="https://github.com/prefix-dev/resolvo"><code>resolvo</code></a> library is used to solve the conda dependencies. Implemented in <a href="https://github.com/conda/rattler"><code>rattler</code></a>.</li>
-<li>The <a href="https://github.com/pubgrub-rs/pubgrub"><code>PubGrub</code></a> library is used to solve the PyPI dependencies. Implemented in <a href="https:://github.com/astral-sh/uv"><code>uv</code></a>.</li>
+<li>The <a href="https://github.com/pubgrub-rs/pubgrub"><code>PubGrub</code></a> library is used to solve the PyPI dependencies. Implemented in <a href="https://github.com/astral-sh/uv"><code>uv</code></a>.</li>
 </ul>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
