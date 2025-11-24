@@ -220,7 +220,7 @@ impl SourceMetadataCollector {
             Ok(metadata) => metadata,
         };
 
-        let source_metadata = dbg!(source_metadata);
+        // let source_metadata = dbg!(source_metadata);
 
         // Make sure that a package with the name defined in spec is available from the
         // backend.

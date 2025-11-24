@@ -295,8 +295,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .build_backend_metadata(backend_metadata_spec.clone())
         .await?;
 
-    dbg!(&backend_metadata);
-
     // Determine all the outputs available from the build backend.
     let packages = backend_metadata.metadata.outputs();
 

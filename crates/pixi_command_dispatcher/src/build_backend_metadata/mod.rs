@@ -25,8 +25,11 @@ use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
     build::{SourceRecordOrCheckout, WorkDirKey},
-    cache::build_backend_metadata::{
-        self, BuildBackendMetadataKey, CachedCondaMetadata, MetadataKind,
+    cache::{
+        build_backend_metadata::{
+            self, BuildBackendMetadataKey, CachedCondaMetadata, MetadataKind,
+        },
+        common::MetadataCache,
     },
 };
 use pixi_build_discovery::BackendSpec;
@@ -96,6 +99,12 @@ pub struct BuildBackendMetadata {
 
     /// The metadata that was acquired from the build backend.
     pub metadata: CachedCondaMetadata,
+
+    /// Whether caching should be skipped for this backend.
+    ///
+    /// This is true for System backends and path-based (mutable) backends
+    /// which can change between runs.
+    pub skip_cache: bool,
 }
 
 impl BuildBackendMetadataSpec {
@@ -204,6 +213,7 @@ impl BuildBackendMetadataSpec {
                     cache_entry,
                     manifest_source: manifest_source_checkout.pinned,
                     build_source,
+                    skip_cache,
                 });
             }
         } else {
@@ -265,6 +275,7 @@ impl BuildBackendMetadataSpec {
             build_source,
             metadata,
             cache_entry,
+            skip_cache,
         })
     }
 
@@ -418,7 +429,7 @@ impl BuildBackendMetadataSpec {
     async fn call_conda_outputs(
         self,
         command_dispatcher: CommandDispatcher,
-        source_checkout: SourceCheckout,
+        build_source_checkout: SourceCheckout,
         backend: Backend,
         additional_glob_hash: Vec<u8>,
         mut log_sink: UnboundedSender<String>,
@@ -433,7 +444,7 @@ impl BuildBackendMetadataSpec {
             work_directory: command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {
                     source: SourceRecordOrCheckout::Checkout {
-                        checkout: source_checkout.clone(),
+                        checkout: build_source_checkout.clone(),
                     },
                     host_platform: self.build_environment.host_platform,
                     build_backend: backend_identifier.clone(),
@@ -470,17 +481,17 @@ impl BuildBackendMetadataSpec {
         let input_globs = extend_input_globs_with_variant_files(
             outputs.input_globs.clone(),
             &self.variant_files,
-            &source_checkout,
+            &build_source_checkout,
         );
         tracing::debug!(
             backend = %backend_identifier,
-            source = %source_checkout.pinned,
+            source = %build_source_checkout.pinned,
             glob_count = input_globs.len(),
             "computing metadata input hash",
         );
         let input_hash = Self::compute_input_hash(
             command_dispatcher,
-            &source_checkout,
+            &build_source_checkout,
             input_globs,
             additional_glob_hash,
         )
@@ -492,6 +503,7 @@ impl BuildBackendMetadataSpec {
             metadata: MetadataKind::Outputs {
                 outputs: outputs.outputs,
             },
+            build_source_checkout,
         })
     }
 

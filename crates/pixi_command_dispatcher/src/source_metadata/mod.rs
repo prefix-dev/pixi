@@ -10,6 +10,7 @@ use futures::TryStreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
+use pixi_glob::GlobHashKey;
 use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
@@ -25,10 +26,11 @@ use tracing::instrument;
 use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
-    SolvePixiEnvironmentError,
+    SolvePixiEnvironmentError, SourceCheckout,
     build::{Dependencies, DependenciesError, PixiRunExports, conversion},
     cache::{
         build_backend_metadata::MetadataKind,
+        common::MetadataCache,
         source_metadata::{self, CachedSourceMetadata, Metadata, SourceMetadataKey},
     },
     executor::ExecutorFutures,
@@ -94,24 +96,37 @@ impl SourceMetadataSpec {
         );
 
         let cache_key = self.cache_key();
-        let (metadata, cache_entry) = command_dispatcher
+
+        // Get the skip_cache flag from the build backend metadata
+        let skip_cache = build_backend_metadata.skip_cache;
+
+        let (metadata, mut cache_entry) = command_dispatcher
             .source_metadata_cache()
             .entry(&cache_key)
             .await
             .map_err(SourceMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
 
-        if let Some(metadata) = metadata {
-            tracing::debug!(
-                "Using cached source metadata for package {}",
-                self.package.as_source()
-            );
-            return Ok(SourceMetadata {
-                manifest_source: build_backend_metadata.manifest_source.clone(),
-                build_source: build_backend_metadata.build_source.clone(),
+        if !skip_cache {
+            if let Some(metadata) = Self::verify_cache_freshness(
+                &build_backend_metadata.metadata.build_source_checkout,
+                &command_dispatcher,
                 metadata,
-                cache_entry,
-            });
+                &[],
+            )
+            .await?
+            {
+                tracing::debug!(
+                    "Using cached source metadata for package {}",
+                    self.package.as_source()
+                );
+                return Ok(SourceMetadata {
+                    manifest_source: build_backend_metadata.manifest_source.clone(),
+                    build_source: build_backend_metadata.build_source.clone(),
+                    metadata,
+                    cache_entry,
+                });
+            }
         }
 
         match &build_backend_metadata.metadata.metadata {
@@ -134,6 +149,13 @@ impl SourceMetadataSpec {
                         skipped_packages: Default::default(),
                     },
                 };
+
+                // Store the metadata in the cache for later retrieval
+                cache_entry
+                    .write(cached_source_metadata.clone())
+                    .await
+                    .map_err(SourceMetadataError::Cache)
+                    .map_err(CommandDispatcherError::Failed)?;
 
                 Ok(SourceMetadata {
                     manifest_source: build_backend_metadata.manifest_source.clone(),
@@ -170,6 +192,13 @@ impl SourceMetadataSpec {
                     },
                 };
 
+                // Store the metadata in the cache for later retrieval
+                cache_entry
+                    .write(cached_source_metadata.clone())
+                    .await
+                    .map_err(SourceMetadataError::Cache)
+                    .map_err(CommandDispatcherError::Failed)?;
+
                 Ok(SourceMetadata {
                     cache_entry,
                     metadata: cached_source_metadata,
@@ -188,6 +217,59 @@ impl SourceMetadataSpec {
             build_variants: self.backend_metadata.variants.clone().unwrap_or_default(),
             enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
             pinned_source: self.backend_metadata.manifest_source.clone(),
+        }
+    }
+
+    async fn verify_cache_freshness(
+        source_checkout: &SourceCheckout,
+        command_dispatcher: &CommandDispatcher,
+        metadata: Option<CachedSourceMetadata>,
+        additional_glob_hash: &[u8],
+    ) -> Result<Option<CachedSourceMetadata>, CommandDispatcherError<SourceMetadataError>> {
+        let Some(metadata) = metadata else {
+            return Ok(None);
+        };
+
+        // let metadata_kind = match metadata.metadata {
+        //     MetadataKind::GetMetadata { .. } => "conda/getMetadata",
+        //     MetadataKind::Outputs { .. } => {
+        //         pixi_build_types::procedures::conda_outputs::METHOD_NAME
+        //     }
+        // };
+
+        let Some(input_globs) = &metadata.input_hash else {
+            // No input hash so just assume it is still valid.
+            tracing::trace!(
+                "found cached {} response.",
+                source_checkout.path.to_string_lossy()
+            );
+            return Ok(Some(metadata));
+        };
+
+        // Check if the input hash is still valid.
+        let new_hash = command_dispatcher
+            .glob_hash_cache()
+            .compute_hash(GlobHashKey::new(
+                source_checkout.path.clone(),
+                input_globs.globs.clone(),
+                additional_glob_hash.to_vec(),
+            ))
+            .await
+            .map_err(SourceMetadataError::GlobHash)
+            .map_err(CommandDispatcherError::Failed)?;
+
+        if new_hash.hash == input_globs.hash {
+            tracing::trace!(
+                "found up-to-date {} cached response..",
+                source_checkout.path.to_string_lossy()
+            );
+            Ok(Some(metadata))
+        } else {
+            tracing::trace!(
+                "found stale {} response..",
+                source_checkout.path.to_string_lossy()
+            );
+            Ok(None)
         }
     }
 
@@ -585,6 +667,9 @@ pub enum SourceMetadataError {
 
     #[error("the dependencies of some packages in the environment form a cycle")]
     Cycle(Cycle),
+
+    #[error("could not compute hash of input files")]
+    GlobHash(#[from] pixi_glob::GlobHashError),
 
     #[error(transparent)]
     Cache(#[from] source_metadata::SourceMetadataCacheError),
