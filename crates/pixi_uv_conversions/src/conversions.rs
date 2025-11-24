@@ -12,7 +12,7 @@ use pixi_manifest::pypi::pypi_options::{
 };
 use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
 use pixi_spec::GitReference as PixiReference;
-use std::fmt::Write;
+use std::{collections::HashSet, fmt::Write};
 use uv_configuration::BuildOptions;
 use uv_configuration::TrustedHost;
 use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
@@ -546,18 +546,50 @@ pub fn configure_insecure_hosts_for_tls_bypass(
     index_locations: &IndexLocations,
 ) -> Vec<TrustedHost> {
     let mut allow_insecure_hosts = base_insecure_hosts;
+    let mut seen: HashSet<String> = allow_insecure_hosts
+        .iter()
+        .map(|host| host.to_string().to_ascii_lowercase())
+        .collect();
 
     if tls_no_verify {
         // When tls_no_verify is enabled, add all index hosts to the insecure list
         // This is a workaround since UV doesn't have a global SSL disable option
-        for index_url in index_locations.allowed_indexes() {
-            if let Some(host) = index_url.url().host_str() {
+        //
+        // We use allowed_indexes() instead of known_indexes() because:
+        // - allowed_indexes() returns only indexes that will actually be used for package resolution
+        // - It deduplicates by name, excluding overridden/duplicate index definitions
+        // - This matches uv's authentication behavior and ensures we only bypass TLS for actively used indexes
+        let mut has_pypi_org_index = false;
+
+        let mut push_host = |host: &str, allow_insecure_hosts: &mut Vec<TrustedHost>| {
+            let key = host.to_ascii_lowercase();
+            if seen.insert(key.clone()) {
                 match to_uv_trusted_host(host) {
                     Ok(trusted_host) => allow_insecure_hosts.push(trusted_host),
-                    Err(e) => tracing::warn!("Failed to add host {} as insecure: {}", host, e),
+                    Err(e) => tracing::warn!("Failed to add host {} as trusted: {}", host, e),
                 }
             }
+        };
+
+        for index_url in index_locations.allowed_indexes() {
+            if let Some(host) = index_url.url().host_str() {
+                has_pypi_org_index |= host.eq_ignore_ascii_case("pypi.org");
+                push_host(host, &mut allow_insecure_hosts);
+            }
         }
+
+        // Add hosts from find-links/flat indexes (if they are http/https)
+        for flat_index in index_locations.flat_indexes() {
+            if let Some(host) = flat_index.url().host_str() {
+                push_host(host, &mut allow_insecure_hosts);
+            }
+        }
+
+        // Add the default PyPI download host when using the main PyPI index.
+        if has_pypi_org_index {
+            push_host("files.pythonhosted.org", &mut allow_insecure_hosts);
+        }
+
         tracing::warn!(
             "TLS verification is disabled for PyPI operations. This is insecure and should only be used for testing or internal networks."
         );
@@ -617,10 +649,11 @@ mod tests {
         );
 
         // Should have added both hosts
-        assert_eq!(result.len(), 2);
+        assert_eq!(result.len(), 3);
         let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
         assert!(host_names.contains(&"pypi.org".to_string()));
         assert!(host_names.contains(&"test-index.example.com".to_string()));
+        assert!(host_names.contains(&"files.pythonhosted.org".to_string()));
     }
 
     #[test]
@@ -664,9 +697,26 @@ mod tests {
         );
 
         // Should have preserved existing host and added new one
-        assert_eq!(result.len(), 2);
+        assert_eq!(result.len(), 3);
         let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
         assert!(host_names.contains(&"existing.example.com".to_string()));
         assert!(host_names.contains(&"pypi.org".to_string()));
+        assert!(host_names.contains(&"files.pythonhosted.org".to_string()));
+    }
+
+    #[test]
+    fn test_configure_insecure_hosts_for_flat_index_hosts() {
+        // Flat index hosted on a custom domain should be added when tls_no_verify is enabled
+        let flat_index = Index::from_find_links(IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://packages.example.org/simple/")
+                .unwrap()
+                .into(),
+        )));
+        let index_locations = IndexLocations::new(vec![], vec![flat_index], true);
+
+        let result = configure_insecure_hosts_for_tls_bypass(vec![], true, &index_locations);
+
+        let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
+        assert!(host_names.contains(&"packages.example.org".to_string()));
     }
 }

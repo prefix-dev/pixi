@@ -106,27 +106,3 @@ impl UvResolutionContext {
         self
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_uv_resolution_context_has_tls_no_verify_field() {
-        // Test that the UvResolutionContext struct has the tls_no_verify field
-        // This is a simple compilation test to ensure our structural changes are correct
-        let _check_field_exists = |context: &UvResolutionContext| -> bool { context.tls_no_verify };
-
-        // This test passes just by compiling successfully
-    }
-
-    #[test]
-    fn test_uv_resolution_context_default_tls_behavior() {
-        // Create a minimal UvResolutionContext to test default values
-        // We can't easily create a full workspace in unit tests, so we focus on
-        // testing the individual components
-
-        // Test the function used to create UvResolutionContext works with our changes
-        // This validates that our structural changes don't break the creation process
-    }
-}
