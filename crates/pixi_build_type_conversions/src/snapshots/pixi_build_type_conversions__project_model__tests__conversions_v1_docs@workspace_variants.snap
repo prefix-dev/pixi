@@ -31,6 +31,20 @@ expression: project_model
               "url": null,
               "license": null
             }
+          },
+          "python": {
+            "binary": {
+              "version": "*",
+              "build": null,
+              "buildNumber": null,
+              "fileName": null,
+              "channel": null,
+              "subdir": null,
+              "md5": null,
+              "sha256": null,
+              "url": null,
+              "license": null
+            }
           }
         },
         "buildDependencies": {},

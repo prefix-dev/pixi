@@ -128,7 +128,11 @@ pub fn get_activator<'p>(
     if !missing_scripts.is_empty() {
         tracing::warn!(
             "Could not find activation scripts: {}",
-            missing_scripts.iter().map(|p| p.display()).format(", ")
+            missing_scripts
+                .iter()
+                .map(|p| p.display())
+                .format(", ")
+                .to_string()
         );
     }
 
