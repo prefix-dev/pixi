@@ -3354,12 +3354,21 @@ workspace manifest.</p>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">source-completion-scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </span></code></pre></div>
 <h3 id="tls-no-verify"><code>tls-no-verify</code><a class="headerlink" href="#tls-no-verify" title="Permanent link">#</a></h3>
-<p>When set to true, the TLS certificates are not verified.</p>
+<p>When set to true, TLS certificate verification is disabled for all network connections, including both conda channels and PyPI registries.
+You can override this from the CLI with <code>--tls-no-verify</code>.</p>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
 <p>This is a security risk and should only be used for testing purposes or internal networks.</p>
 </div>
-<p>You can override this from the CLI with <code>--tls-no-verify</code>.</p>
+<p>This is a global setting that affects all connections. 
+If you only need to bypass TLS verification for specific PyPI hosts, consider using <a href="#pypi-config"><code>pypi-config.allow-insecure-host</code></a> instead for more granular control.</p>
+<div class="admonition note">
+<p class="admonition-title">Implementation detail and limitations</p>
+<p>For PyPI operations, since uv does not support a global TLS verification disable flag, pixi automatically adds all configured PyPI index hosts to the trusted hosts list when <code>tls-no-verify</code> is enabled. 
+For the main PyPI index, <code>files.pythonhosted.org</code> (the download host) is also automatically added.
+<strong>Important limitation:</strong> If your custom PyPI index redirects package downloads to a different host (e.g., a separate CDN or artifact server), that download host will not be automatically trusted, even with <code>tls-no-verify</code> set. 
+In these cases, you <em>must</em> manually add the download host to <a href="#pypi-config"><code>pypi-config.allow-insecure-host</code></a>.</p>
+</div>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">tls-no-verify</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </span></code></pre></div>
 <h3 id="authentication-override-file"><code>authentication-override-file</code><a class="headerlink" href="#authentication-override-file" title="Permanent link">#</a></h3>
@@ -3478,7 +3487,7 @@ Now <code>proxy-config</code> table supports the following options:</p>
   <code>pixi init</code>.</li>
 <li><code>keyring-provider</code>: Allows the use of the <a href="https://pypi.org/project/keyring/">keyring</a> python package to store and
   retrieve credentials.</li>
-<li><code>allow-insecure-host</code>: Allow insecure connections to host.</li>
+<li><code>allow-insecure-host</code>: A list of host names (without protocol or port) for which TLS certificate verification should be disabled when accessing PyPI registries. This is useful when working with internal PyPI mirrors that use self-signed certificates. For disabling TLS verification globally for all connections, use <a href="#tls-no-verify"><code>tls-no-verify</code></a> instead.</li>
 </ul>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[pypi-config]</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># Main index url</span>
