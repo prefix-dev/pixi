@@ -10,7 +10,6 @@ use futures::TryStreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
-use pixi_glob::GlobHashKey;
 use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
@@ -26,7 +25,7 @@ use tracing::instrument;
 use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
-    SolvePixiEnvironmentError, SourceCheckout,
+    SolvePixiEnvironmentError,
     build::{Dependencies, DependenciesError, PixiRunExports, conversion},
     cache::{
         build_backend_metadata::MetadataKind,
@@ -107,14 +106,12 @@ impl SourceMetadataSpec {
             .map_err(SourceMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
 
+        tracing::debug!("should we skip cache: {}", skip_cache);
+
         if !skip_cache {
-            if let Some(cached_metadata) = Self::verify_cache_freshness(
-                &build_backend_metadata.metadata.build_source_checkout,
-                &command_dispatcher,
-                metadata,
-                &[],
-            )
-            .await?
+            if let Some(cached_metadata) =
+                Self::verify_cache_freshness(&build_backend_metadata.metadata.input_hash, metadata)
+                    .await?
             {
                 tracing::debug!(
                     "Using cached source metadata for package {}",
@@ -221,54 +218,31 @@ impl SourceMetadataSpec {
     }
 
     async fn verify_cache_freshness(
-        source_checkout: &SourceCheckout,
-        command_dispatcher: &CommandDispatcher,
-        metadata: Option<CachedSourceMetadata>,
-        additional_glob_hash: &[u8],
+        current_input_hash: &Option<InputHash>,
+        cached_metadata: Option<CachedSourceMetadata>,
     ) -> Result<Option<CachedSourceMetadata>, CommandDispatcherError<SourceMetadataError>> {
-        let Some(metadata) = metadata else {
+        let Some(cached_metadata) = cached_metadata else {
+            tracing::debug!("no cached metadata passed.");
             return Ok(None);
         };
 
-        // let metadata_kind = match metadata.metadata {
-        //     MetadataKind::GetMetadata { .. } => "conda/getMetadata",
-        //     MetadataKind::Outputs { .. } => {
-        //         pixi_build_types::procedures::conda_outputs::METHOD_NAME
-        //     }
-        // };
-
-        let Some(input_globs) = &metadata.input_hash else {
-            // No input hash so just assume it is still valid.
-            tracing::trace!(
-                "found cached {} response.",
-                source_checkout.path.to_string_lossy()
-            );
-            return Ok(Some(metadata));
+        // If neither has an input hash, consider it fresh
+        let (Some(current_hash), Some(cached_hash)) =
+            (current_input_hash, &cached_metadata.input_hash)
+        else {
+            tracing::trace!("no input hash to compare, assuming cache is fresh");
+            return Ok(Some(cached_metadata));
         };
 
-        // Check if the input hash is still valid.
-        let new_hash = command_dispatcher
-            .glob_hash_cache()
-            .compute_hash(GlobHashKey::new(
-                source_checkout.path.clone(),
-                input_globs.globs.clone(),
-                additional_glob_hash.to_vec(),
-            ))
-            .await
-            .map_err(SourceMetadataError::GlobHash)
-            .map_err(CommandDispatcherError::Failed)?;
+        tracing::debug!("current input hash : {:x}", current_hash.hash);
+        tracing::debug!("cached input hash : {:x}", cached_hash.hash);
 
-        if new_hash.hash == input_globs.hash {
-            tracing::trace!(
-                "found up-to-date {} cached response..",
-                source_checkout.path.to_string_lossy()
-            );
-            Ok(Some(metadata))
+        // Compare the hashes directly
+        if current_hash.hash == cached_hash.hash {
+            tracing::trace!("found up-to-date cached response");
+            Ok(Some(cached_metadata))
         } else {
-            tracing::trace!(
-                "found stale {} response..",
-                source_checkout.path.to_string_lossy()
-            );
+            tracing::trace!("found stale cached response");
             Ok(None)
         }
     }
@@ -667,9 +641,6 @@ pub enum SourceMetadataError {
 
     #[error("the dependencies of some packages in the environment form a cycle")]
     Cycle(Cycle),
-
-    #[error("could not compute hash of input files")]
-    GlobHash(#[from] pixi_glob::GlobHashError),
 
     #[error(transparent)]
     Cache(#[from] source_metadata::SourceMetadataCacheError),
