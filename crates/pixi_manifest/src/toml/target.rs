@@ -104,7 +104,10 @@ impl TomlTarget {
                     // Convert IndexMap to DependencyMap
                     index_map.into_iter().collect()
                 }),
-                dev_dependencies,
+                dev_dependencies: dev_dependencies.map(|index_map| {
+                    // Convert IndexMap to DependencyMap
+                    index_map.into_iter().collect()
+                }),
                 activation: self.activation,
                 tasks: self.tasks,
             },

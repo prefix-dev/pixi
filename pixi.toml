@@ -255,9 +255,6 @@ description = "Build build-backends used for testing purposes"
 [feature.dist.dependencies]
 zig = ">=0.15.1,<0.16"
 
-# [feature.pixi-build.dependencies]
-# pixi = { path = "." }
-
 
 #
 # Environment descriptions
@@ -283,7 +280,7 @@ lint = { features = [
   "schema",
   "pypi-gen",
 ], no-default-feature = true, solve-group = "default" }
-# pixi-build = { features = ["pixi-build"], no-default-feature = true }
+
 pypi-gen = { features = ["pypi-gen"] }
 recipes = { features = ["recipes"], no-default-feature = true }
 schema = { features = [

@@ -2,7 +2,7 @@ use std::fmt::Display;
 use std::path::PathBuf;
 
 use fancy_display::FancyDisplay;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use itertools::Either;
 use pixi_consts::consts;
 use pixi_manifest::{
@@ -132,7 +132,7 @@ impl<'p> GroupedEnvironment<'p> {
     pub fn combined_dev_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<PackageName, SourceSpec> {
+    ) -> IndexMap<PackageName, IndexSet<SourceSpec>> {
         let mut result = IndexMap::new();
         for feature in self.features().rev() {
             if let Some(deps) = feature.dev_dependencies(platform) {
