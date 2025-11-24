@@ -154,7 +154,7 @@ fn build_env_yaml(
             .try_into_nameless_match_spec(config)
             .into_diagnostic()?
         {
-            let spec = MatchSpec::from_nameless(nameless_spec, Some(name.clone()));
+            let spec = MatchSpec::from_nameless(nameless_spec, Some(name.clone().into()));
             env_yaml
                 .dependencies
                 .push(MatchSpecOrSubSection::MatchSpec(Box::new(spec)));

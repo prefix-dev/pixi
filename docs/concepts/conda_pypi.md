@@ -30,7 +30,7 @@ Here is a non-exhaustive comparison of the features of conda and PyPI ecosystems
 | Package index | [`conda-forge`](https://prefix.dev/channels/conda-forge), [`bioconda`](https://prefix.dev/channels/bioconda), and more | [pypi.org](https://pypi.org) |
 
 ## `uv` by Astral
-Pixi uses the [`uv`](https:://github.com/astral-sh/uv) library to handle PyPI packages.
+Pixi uses the [`uv`](https://github.com/astral-sh/uv) library to handle PyPI packages.
 Pixi doesn't install `uv` (the tool) itself: because both tools are built in Rust, it is used as a library.
 
 We're extremely grateful to the [Astral](https://astral.sh) team for their work on `uv`, which is a great library that allows us to handle PyPI packages in a much better way than before.
@@ -44,7 +44,7 @@ Initially, next to `pixi` we were building a library called `rip` which had the 
 Because Pixi supports both ecosystems, it currently needs two different solvers to handle the dependencies.
 
 - The [`resolvo`](https://github.com/prefix-dev/resolvo) library is used to solve the conda dependencies. Implemented in [`rattler`](https://github.com/conda/rattler).
-- The [`PubGrub`](https://github.com/pubgrub-rs/pubgrub) library is used to solve the PyPI dependencies. Implemented in [`uv`](https:://github.com/astral-sh/uv).
+- The [`PubGrub`](https://github.com/pubgrub-rs/pubgrub) library is used to solve the PyPI dependencies. Implemented in [`uv`](https://github.com/astral-sh/uv).
 
 !!! Note
     The holy grail of Pixi is to have a single solver that can handle both ecosystems.

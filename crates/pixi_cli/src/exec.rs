@@ -264,7 +264,7 @@ pub async fn create_exec_prefix(
             let guessed_package_name = specs[specs.len() - 1]
                 .name
                 .as_ref()
-                .map(|name| name.as_source())
+                .and_then(|name| name.as_exact().map(|n| n.as_source()))
                 .unwrap_or("<unknown>");
             tracing::debug!(
                 "Solver failed with guessed package '{}', retrying without it: {}",
@@ -335,7 +335,7 @@ fn list_exec_environment(
                 specs
                     .clone()
                     .into_iter()
-                    .filter_map(|spec| spec.name) // Extract the name if it exists
+                    .filter_map(|spec| spec.name.and_then(|n| n.as_exact().cloned())) // Extract exact name if it exists
                     .collect_vec()
                     .contains(&record.package_record.name),
             )
@@ -374,7 +374,11 @@ fn guess_package_spec(command: &str) -> MatchSpec {
     );
 
     MatchSpec {
-        name: Some(PackageName::from_str(&command).expect("all illegal characters were removed")),
+        name: Some(
+            PackageName::from_str(&command)
+                .expect("all illegal characters were removed")
+                .into(),
+        ),
         ..Default::default()
     }
 }

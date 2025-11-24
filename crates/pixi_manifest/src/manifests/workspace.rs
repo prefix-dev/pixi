@@ -2641,7 +2641,7 @@ bar = "*"
         let spec = &MatchSpec::from_str("baz >=1.2.3", Strict).unwrap();
 
         let (name, spec) = spec.clone().into_nameless();
-        let name = name.unwrap();
+        let name = name.unwrap().as_exact().unwrap().clone();
 
         let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
 
@@ -2678,7 +2678,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                &name.unwrap(),
+                name.unwrap().as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Run,
                 &[],
@@ -2713,7 +2713,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                &package_name.unwrap(),
+                package_name.unwrap().as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Run,
                 &[Platform::Linux64],
@@ -2749,7 +2749,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                &package_name.unwrap(),
+                package_name.unwrap().as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Build,
                 &[Platform::Linux64],
