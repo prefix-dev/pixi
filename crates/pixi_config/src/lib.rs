@@ -332,11 +332,37 @@ pub struct S3Options {
     pub force_path_style: bool,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum DetachedEnvironments {
     Boolean(bool),
     Path(PathBuf),
+}
+
+impl<'de> Deserialize<'de> for DetachedEnvironments {
+    /// When deserialising, resolve paths if any.
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Helper {
+            Boolean(bool),
+            Path(PathBuf),
+        }
+
+        let helper = Helper::deserialize(deserializer)?;
+        let result = match helper {
+            Helper::Boolean(b) => DetachedEnvironments::Boolean(b),
+            Helper::Path(p) => DetachedEnvironments::Path(p),
+        };
+
+        // Resolve the path if any, else return a clone of the boolean variant.
+        result.resolve_path().map_err(|e| {
+            serde::de::Error::custom(format!("Failed to resolve detached-environments path: {e}"))
+        })
+    }
 }
 impl DetachedEnvironments {
     pub fn is_false(&self) -> bool {
@@ -355,7 +381,46 @@ impl DetachedEnvironments {
             _ => Ok(None),
         }
     }
+
+    /// If `self` is the `DetachedEnvironments::Path` variant, expands `~`
+    /// to the absolute path to the home directory
+    pub fn resolve_path(&self) -> miette::Result<Self> {
+        match self {
+            DetachedEnvironments::Boolean(_) => Ok(self.clone()),
+            DetachedEnvironments::Path(p) => {
+                let mut path = p.clone();
+                // If the path starts with ~, expand it to the home directory
+                if path.to_string_lossy().starts_with("~") {
+                    let home_dir = dirs::home_dir().ok_or_else(|| {
+                        miette!(
+                            "Could not resolve home directory for '~' in path {}",
+                            path.display()
+                        )
+                    })?;
+                    // Safe unwrap as we checked if it starts with ~
+                    path = home_dir.join(path.strip_prefix("~").unwrap());
+                }
+                Ok(DetachedEnvironments::Path(path))
+            }
+        }
+    }
+
+    pub fn validate(&self) -> miette::Result<()> {
+        match self {
+            DetachedEnvironments::Boolean(_) => {}
+            DetachedEnvironments::Path(path) => {
+                if !path.is_absolute() {
+                    return Err(miette!(
+                        "The `detached-environments` path must be an absolute path: {}",
+                        path.display()
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
 }
+
 impl Default for DetachedEnvironments {
     fn default() -> Self {
         DetachedEnvironments::Boolean(false)
@@ -1210,18 +1275,8 @@ impl Config {
     /// Validate the config file.
     pub fn validate(&self) -> miette::Result<()> {
         // Validate the detached environments directory is set correctly
-        if let Some(detached_environments) = self.detached_environments.clone() {
-            match detached_environments {
-                DetachedEnvironments::Boolean(_) => {}
-                DetachedEnvironments::Path(path) => {
-                    if !path.is_absolute() {
-                        return Err(miette!(
-                            "The `detached-environments` path must be an absolute path: {}",
-                            path.display()
-                        ));
-                    }
-                }
-            }
+        if let Some(detached_environments) = self.detached_environments.as_ref() {
+            detached_environments.validate()?
         }
 
         Ok(())
@@ -1524,11 +1579,15 @@ impl Config {
                     .unwrap_or_default();
             }
             "detached-environments" => {
-                self.detached_environments = value.map(|v| match v.as_str() {
-                    "true" => DetachedEnvironments::Boolean(true),
-                    "false" => DetachedEnvironments::Boolean(false),
-                    _ => DetachedEnvironments::Path(PathBuf::from(v)),
-                });
+                self.detached_environments = value
+                    .map(|v| {
+                        Ok::<_, miette::Report>(match v.as_str() {
+                            "true" => DetachedEnvironments::Boolean(true),
+                            "false" => DetachedEnvironments::Boolean(false),
+                            _ => DetachedEnvironments::Path(PathBuf::from(v)).resolve_path()?,
+                        })
+                    })
+                    .transpose()?;
             }
             "pinning-strategy" => {
                 self.pinning_strategy = value
@@ -1963,6 +2022,60 @@ UNUSED = "unused"
         let toml = format!("pinning-strategy = \"{input}\"");
         let (config, _) = Config::from_toml(&toml, None).unwrap();
         assert_eq!(config.pinning_strategy, Some(expected));
+    }
+
+    /// Assert that usage of `~` in `detached_environments` is correctly expanded
+    /// to the absolute path to the home directory.
+    #[test]
+    fn test_detached_environments_resolve_home_dir() {
+        let home_dir = dirs::home_dir().expect("Failed to resolve home directory");
+        let toml = r#"detached-environments = "~/my/envs""#;
+
+        let expected_detached_envs_path = home_dir.join("my/envs");
+
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        let actual_detached_envs_path = config.detached_environments().path().unwrap().unwrap();
+
+        assert_eq!(actual_detached_envs_path, expected_detached_envs_path);
+    }
+
+    /// Assert that an absolute path in `detached_environments` is preserved.
+    #[test]
+    fn test_detached_environments_abs_path() {
+        let toml = r#"detached-environments = "/home/me/envs""#;
+
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        let actual_detached_envs_path = config.detached_environments().path().unwrap().unwrap();
+        let expected_detached_envs_path = PathBuf::from("/home/me/envs");
+        assert_eq!(actual_detached_envs_path, expected_detached_envs_path);
+    }
+
+    /// Assert that en error is thrown if a relative path is used in `detached_environments`.
+    #[test]
+    fn test_detached_environments_relative_path() {
+        let toml = r#"detached-environments = "./relative_path/""#;
+
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        let result = config.validate();
+        assert!(result.is_err());
+        let error_message = result.unwrap_err().to_string();
+        assert_eq!(
+            error_message,
+            "The `detached-environments` path must be an absolute path: ./relative_path/"
+        );
+    }
+
+    /// Assert that a boolean in `detached_environments` is preserved.
+    #[test]
+    fn test_detached_environments_bool() {
+        let toml = r#"detached-environments = true"#;
+
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+
+        assert_eq!(
+            config.detached_environments(),
+            DetachedEnvironments::Boolean(true)
+        );
     }
 
     #[test]
