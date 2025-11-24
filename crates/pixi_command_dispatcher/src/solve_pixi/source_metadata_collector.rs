@@ -125,7 +125,7 @@ impl SourceMetadataCollector {
             let (source_metadata, mut chain) = source_metadata?;
 
             // Process transitive dependencies
-            for record in &source_metadata.metadata.metadata.records {
+            for record in &source_metadata.cached_metadata.metadata.records {
                 chain.push(record.package_record.name.clone());
                 let anchor = SourceAnchor::from(SourceSpec::from(record.manifest_source.clone()));
                 for depend in &record.package_record.depends {
@@ -224,12 +224,16 @@ impl SourceMetadataCollector {
 
         // Make sure that a package with the name defined in spec is available from the
         // backend.
-        if source_metadata.metadata.metadata.records.is_empty() {
+        if source_metadata.cached_metadata.metadata.records.is_empty() {
             return Err(CommandDispatcherError::Failed(
                 CollectSourceMetadataError::PackageMetadataNotFound {
                     help: Self::create_metadata_not_found_help(
                         &name,
-                        source_metadata.metadata.metadata.skipped_packages.clone(),
+                        source_metadata
+                            .cached_metadata
+                            .metadata
+                            .skipped_packages
+                            .clone(),
                     ),
                     name,
                     pinned_source: Box::new(source_metadata.manifest_source.clone()),

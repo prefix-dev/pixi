@@ -64,7 +64,7 @@ pub struct SourceMetadata {
     pub cache_entry: source_metadata::CacheEntry,
 
     /// The metadata that was acquired from the build backend.
-    pub metadata: CachedSourceMetadata,
+    pub cached_metadata: CachedSourceMetadata,
 }
 
 impl SourceMetadataSpec {
@@ -108,7 +108,7 @@ impl SourceMetadataSpec {
             .map_err(CommandDispatcherError::Failed)?;
 
         if !skip_cache {
-            if let Some(metadata) = Self::verify_cache_freshness(
+            if let Some(cached_metadata) = Self::verify_cache_freshness(
                 &build_backend_metadata.metadata.build_source_checkout,
                 &command_dispatcher,
                 metadata,
@@ -123,7 +123,7 @@ impl SourceMetadataSpec {
                 return Ok(SourceMetadata {
                     manifest_source: build_backend_metadata.manifest_source.clone(),
                     build_source: build_backend_metadata.build_source.clone(),
-                    metadata,
+                    cached_metadata,
                     cache_entry,
                 });
             }
@@ -160,7 +160,7 @@ impl SourceMetadataSpec {
                 Ok(SourceMetadata {
                     manifest_source: build_backend_metadata.manifest_source.clone(),
                     cache_entry,
-                    metadata: cached_source_metadata,
+                    cached_metadata: cached_source_metadata,
                     build_source: build_backend_metadata.build_source.clone(),
                 })
             }
@@ -201,7 +201,7 @@ impl SourceMetadataSpec {
 
                 Ok(SourceMetadata {
                     cache_entry,
-                    metadata: cached_source_metadata,
+                    cached_metadata: cached_source_metadata,
                     manifest_source: build_backend_metadata.manifest_source.clone(),
                     build_source: build_backend_metadata.build_source.clone(),
                 })
