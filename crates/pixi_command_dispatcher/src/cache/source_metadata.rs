@@ -42,6 +42,9 @@ pub enum SourceMetadataCacheError {
 /// the metadata of a source checkout. This is used to bucket the metadata.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct SourceMetadataKey {
+    /// The name of the package to retrieve metadata from.
+    pub package: PackageName,
+
     /// The URLs of the channels that were used.
     pub channel_urls: Vec<ChannelUrl>,
 
@@ -139,7 +142,4 @@ impl CachedMetadata for CachedSourceMetadata {}
 pub struct Metadata {
     /// All the source records for this particular package.
     pub records: Vec<SourceRecord>,
-
-    /// All package names that where skipped but the backend could provide.
-    pub skipped_packages: Vec<PackageName>,
 }

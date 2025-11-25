@@ -106,8 +106,6 @@ impl SourceMetadataSpec {
             .map_err(SourceMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
 
-        tracing::debug!("should we skip cache: {}", skip_cache);
-
         if !skip_cache {
             if let Some(cached_metadata) =
                 Self::verify_cache_freshness(&build_backend_metadata.metadata.input_hash, metadata)
@@ -142,8 +140,6 @@ impl SourceMetadataSpec {
                     input_hash: build_backend_metadata.metadata.input_hash.clone(),
                     metadata: Metadata {
                         records: records.clone(),
-                        // As the GetMetadata kind returns all records at once and we don't solve them we can skip this.
-                        skipped_packages: Default::default(),
                     },
                 };
 
@@ -162,11 +158,9 @@ impl SourceMetadataSpec {
                 })
             }
             MetadataKind::Outputs { outputs } => {
-                let mut skipped_packages = vec![];
                 let mut futures = ExecutorFutures::new(command_dispatcher.executor());
                 for output in outputs {
                     if output.metadata.name != self.package {
-                        skipped_packages.push(output.metadata.name.clone());
                         continue;
                     }
                     futures.push(self.resolve_output(
@@ -184,8 +178,6 @@ impl SourceMetadataSpec {
                     input_hash: build_backend_metadata.metadata.input_hash.clone(),
                     metadata: Metadata {
                         records: futures.try_collect().await?,
-                        // As the GetMetadata kind returns all records at once and we don't solve them we can skip this.
-                        skipped_packages,
                     },
                 };
 
@@ -209,6 +201,7 @@ impl SourceMetadataSpec {
     /// Computes the cache key for this instance
     pub(crate) fn cache_key(&self) -> SourceMetadataKey {
         SourceMetadataKey {
+            package: self.package.clone(),
             channel_urls: self.backend_metadata.channels.clone(),
             build_environment: self.backend_metadata.build_environment.clone(),
             build_variants: self.backend_metadata.variants.clone().unwrap_or_default(),
@@ -233,9 +226,6 @@ impl SourceMetadataSpec {
             tracing::trace!("no input hash to compare, assuming cache is fresh");
             return Ok(Some(cached_metadata));
         };
-
-        tracing::debug!("current input hash : {:x}", current_hash.hash);
-        tracing::debug!("cached input hash : {:x}", cached_hash.hash);
 
         // Compare the hashes directly
         if current_hash.hash == cached_hash.hash {

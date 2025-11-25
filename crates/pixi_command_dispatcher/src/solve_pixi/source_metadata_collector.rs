@@ -56,8 +56,8 @@ pub enum CollectSourceMetadataError {
     PackageMetadataNotFound {
         name: rattler_conda_types::PackageName,
         pinned_source: Box<PinnedSourceSpec>,
-        #[help]
-        help: String,
+        // #[help]
+        // help: String,
     },
     #[error("failed to checkout source for package '{name}'")]
     SourceCheckoutError {
@@ -227,14 +227,14 @@ impl SourceMetadataCollector {
         if source_metadata.cached_metadata.metadata.records.is_empty() {
             return Err(CommandDispatcherError::Failed(
                 CollectSourceMetadataError::PackageMetadataNotFound {
-                    help: Self::create_metadata_not_found_help(
-                        &name,
-                        source_metadata
-                            .cached_metadata
-                            .metadata
-                            .skipped_packages
-                            .clone(),
-                    ),
+                    // help: Self::create_metadata_not_found_help(
+                    //     &name,
+                    //     source_metadata
+                    //         .cached_metadata
+                    //         .metadata
+                    //         .skipped_packages
+                    //         .clone(),
+                    // ),
                     name,
                     pinned_source: Box::new(source_metadata.manifest_source.clone()),
                 },
@@ -242,36 +242,5 @@ impl SourceMetadataCollector {
         }
 
         Ok((source_metadata, chain))
-    }
-
-    /// Create a help message for the user when the requested package is not
-    /// found in the metadata returned by a backend.
-    fn create_metadata_not_found_help(
-        name: &rattler_conda_types::PackageName,
-        skipped_packages: Vec<rattler_conda_types::PackageName>,
-    ) -> String {
-        skipped_packages
-            .into_iter()
-            .map(|skipped_name| {
-                (
-                    strsim::jaro(skipped_name.as_normalized(), name.as_normalized()),
-                    skipped_name,
-                )
-            })
-            .max_by(|(score_a, _), (score_b, _)| {
-                score_a
-                    .partial_cmp(score_b)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .map(|(_, record)| record)
-            .map_or_else(
-                || String::from("No packages are provided by the build-backend"),
-                |skipped_name| {
-                    format!(
-                        "The build backend does provide other packages, did you mean '{}'?",
-                        skipped_name.as_normalized(),
-                    )
-                },
-            )
     }
 }
