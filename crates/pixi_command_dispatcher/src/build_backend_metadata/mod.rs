@@ -207,7 +207,6 @@ impl BuildBackendMetadataSpec {
             )
             .await?
             {
-                // Cache hit - return immediately (no lock held)
                 return Ok(BuildBackendMetadata {
                     metadata,
                     manifest_source: manifest_source_checkout.pinned,
@@ -274,13 +273,11 @@ impl BuildBackendMetadataSpec {
             .map_err(CommandDispatcherError::Failed)?
         {
             build_backend_metadata::WriteResult::Written => {
-                // Successfully wrote cache
                 tracing::trace!("Cache updated successfully");
             }
             build_backend_metadata::WriteResult::Conflict(_other_metadata) => {
                 // Another process computed and cached metadata while we were computing.
-                // This is fine - we use our computed result since we already did the work.
-                // The cache will be used by future requests.
+                // We use our computed result.
                 tracing::debug!(
                     "Cache was updated by another process during computation (version conflict), using our computed result"
                 );
