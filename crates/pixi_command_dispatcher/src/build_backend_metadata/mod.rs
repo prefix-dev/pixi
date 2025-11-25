@@ -183,7 +183,7 @@ impl BuildBackendMetadataSpec {
         );
 
         // Check the source metadata cache, short circuit if there is a cache hit that
-        // is still fresh. Lock is released immediately after reading.
+        // is still fresh.
         let cache_key = self.cache_key();
         let cache_read_result = command_dispatcher
             .build_backend_metadata_cache()
@@ -194,7 +194,8 @@ impl BuildBackendMetadataSpec {
 
         let (cached_metadata, cache_version) = match cache_read_result {
             Some((metadata, version)) => (Some(metadata), version),
-            None => (None, 0), // Start at version 0 if no cache exists
+            // Start at cache version 0 if no cache exists
+            None => (None, 0),
         };
 
         if !skip_cache {
@@ -251,7 +252,7 @@ impl BuildBackendMetadataSpec {
             "Using `{}` procedure to get metadata information",
             pixi_build_types::procedures::conda_outputs::METHOD_NAME
         );
-        let metadata = self
+        let mut metadata = self
             .call_conda_outputs(
                 command_dispatcher.clone(),
                 build_source_checkout,
@@ -260,6 +261,8 @@ impl BuildBackendMetadataSpec {
                 log_sink,
             )
             .await?;
+
+        metadata.cache_version = cache_version;
 
         // Try to store the metadata in the cache with version checking.
         // If another process updated the cache while we were computing, we get a conflict.
@@ -364,12 +367,8 @@ impl BuildBackendMetadataSpec {
         };
 
         let Some(input_globs) = &metadata.input_hash else {
-            // No input hash means we cannot verify cache freshness, so assume it is still valid.
-            // This happens for new cache entries created after removing input_hash from lock files.
-            // If the cache is stale, it will be detected during the actual build process.
-            tracing::trace!(
-                "found cached `{metadata_kind}` response (no input hash for validation)."
-            );
+            // No input hash so just assume it is still valid.
+            tracing::trace!("found cached `{metadata_kind}` response.");
             return Ok(Some(metadata));
         };
 
@@ -517,7 +516,7 @@ impl BuildBackendMetadataSpec {
         Ok(CachedCondaMetadata {
             id: random(),
             input_hash: input_hash.clone(),
-            cache_version: 0, // Will be set by try_write when caching
+            cache_version: 0,
             metadata: MetadataKind::Outputs {
                 outputs: outputs.outputs,
             },

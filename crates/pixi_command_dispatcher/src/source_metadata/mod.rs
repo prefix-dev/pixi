@@ -82,19 +82,10 @@ impl SourceMetadataSpec {
         reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<SourceMetadata, CommandDispatcherError<SourceMetadataError>> {
         // Get the metadata from the build backend.
-        tracing::debug!(
-            "requesting source metadata for {}",
-            self.package.as_source()
-        );
         let build_backend_metadata = command_dispatcher
             .build_backend_metadata(self.backend_metadata.clone())
             .await
             .map_err_with(SourceMetadataError::BuildBackendMetadata);
-
-        tracing::debug!(
-            "build backend metadata received {}",
-            self.package.as_source()
-        );
 
         let build_backend_metadata = build_backend_metadata?;
 

@@ -92,7 +92,7 @@ impl From<SourceRecord> for CondaPackageData {
             package_record: value.package_record,
             location: value.manifest_source.clone().into(),
             package_build_source,
-            // Don't write input_hash to lock file to reduce churn
+            // Don't write input_hash to lock file
             input: None,
             sources: value
                 .sources
@@ -147,7 +147,6 @@ impl TryFrom<CondaSourceData> for SourceRecord {
             package_record: value.package_record,
             manifest_source: value.location.try_into()?,
             // Ignore input_hash from lock file (backwards compatibility)
-            // Input hash is now calculated during SAT check, not stored
             input_hash: None,
             build_source: pinned_source_spec,
             sources: value

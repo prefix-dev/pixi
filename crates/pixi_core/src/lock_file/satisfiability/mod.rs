@@ -1693,21 +1693,12 @@ pub(crate) async fn verify_package_platform_satisfiability(
         }
     }
 
-    // Check if all source packages are still up-to-date by requesting metadata from the build backend.
-    // The build backend will compute the input hash internally and validate against its cache.
-    // We compare the resulting package metadata with what's in the lock file.
-    // Note: We don't fail the SAT check on source changes, just log them for detection.
+    // Check if all source packages are still up-to-date.
     for source_record in locked_pixi_records
         .records
         .iter()
         .filter_map(PixiRecord::as_source)
     {
-        // Skip validation if source_record.input_hash exists (for backwards compatibility with old lock files)
-        // In normal operation, source_record.input_hash is always None since we don't read it from lock file
-        if source_record.input_hash.is_some() {
-            continue;
-        }
-
         // Get variant configuration
         let VariantConfig { variants, .. } = environment
             .workspace()
@@ -1757,14 +1748,15 @@ pub(crate) async fn verify_package_platform_satisfiability(
             },
         };
 
-        // Request source metadata (this will handle caching and input hash validation internally)
-        // If the source isn't available locally or we can't get metadata, skip validation
+        // Request source metadata to verify if it its still matches the locked one
         let current_source_metadata = command_dispatcher
             .source_metadata(source_metadata_spec)
             .await
             .map_err(|e| Box::new(PlatformUnsat::SourceMetadata(e)))?;
 
         // Find the record that matches our locked package name
+        // (nichmor): In my testing, it is always and array of one element.
+        // should we just pop the first one?
         let current_record = current_source_metadata
             .records
             .iter()
@@ -1788,8 +1780,6 @@ pub(crate) async fn verify_package_platform_satisfiability(
             &current_record.package_record,
             &source_record.package_record,
         );
-
-        // let matches = current_record == source_record;
 
         if !matches {
             let manifest_path = source_record
@@ -1859,12 +1849,11 @@ pub(crate) async fn verify_package_platform_satisfiability(
     })
 }
 
-/// Verify that the locked package build sources match the environment manifest.
+/// Verify that two package records from source packages match.
 fn verify_if_source_records_matches(
     current_record: &PackageRecord,
     locked_record: &PackageRecord,
 ) -> bool {
-    // Check if the current record matches what's in the lock file
     current_record.name == locked_record.name
         && current_record.version == locked_record.version
         && current_record.build == locked_record.build
