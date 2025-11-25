@@ -395,6 +395,54 @@ task5 = { cmd = "{% for name in names | split %} echo {{ name }};{% endfor %}", 
 
 ```
 
+#### Pixi Variables
+
+In addition to task arguments, Pixi automatically provides a `pixi` object in the MiniJinja context with system variables:
+
+| Variable                | Description                                                      | Example Value                     |
+| ----------------------- | ---------------------------------------------------------------- | --------------------------------- |
+| `pixi.platform`         | The platform name for the environment in which the task will run | `linux-64`, `osx-arm64`, `win-64` |
+| `pixi.environment.name` | The name of the current environment (when available)             | `default`, `prod`, `test`         |
+| `pixi.manifest_path`    | Absolute path to the manifest file                               | `/path/to/project/pixi.toml`      |
+| `pixi.version`          | The version of pixi being used                                   | `0.59.0`                          |
+| `pixi.is_win`           | Boolean flag indicating if the platform is Windows               | `true` or `false`                 |
+| `pixi.is_unix`          | Boolean flag indicating if the platform is Unix-like             | `true` or `false`                 |
+| `pixi.is_linux`         | Boolean flag indicating if the platform is Linux                 | `true` or `false`                 |
+| `pixi.is_osx`           | Boolean flag indicating if the platform is macOS                 | `true` or `false`                 |
+
+These variables are particularly useful for creating platform-specific or environment-aware tasks:
+
+pixi.toml
+
+```toml
+[tasks]
+# Platform-specific commands
+build = { cmd = "cargo build --target {{ pixi.platform }}", args = [] }
+download-binary = { cmd = "curl -O https://example.com/binary-{{ pixi.platform }}.tar.gz", args = [] }
+# Conditional execution based on platform
+install = { cmd = "{% if pixi.is_win %}install.bat{% else %}./install.sh{% endif %}", args = [] }
+# Environment-aware tasks
+deploy = { cmd = "deploy.sh --env {{ pixi.environment.name }}", args = [] }
+# Using manifest path
+validate = { cmd = "validator --manifest {{ pixi.manifest_path }}", args = [] }
+
+```
+
+The pixi variables can also be combined with task arguments:
+
+pixi.toml
+
+```toml
+[tasks]
+deploy = {
+    cmd = "deploy.sh --platform {{ pixi.platform }} --env {{ environment }} --version {{ pixi.version }}",
+    args = [{ arg = "environment", default = "staging" }]
+}
+
+```
+
+When running tasks with typed arguments, the platform will automatically reflect the best platform for the environment where the task executes.
+
 For more information about available filters and template syntax, see the [MiniJinja documentation](https://docs.rs/minijinja/latest/minijinja/filters/index.html).
 
 ## Task Names
