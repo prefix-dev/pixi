@@ -72,9 +72,6 @@ impl fmt::Display for TaskNode<'_> {
             self.name.clone().unwrap_or("CUSTOM COMMAND".into())
         )?;
         write!(f, ", environment: {}", self.run_environment.name())?;
-        if let Ok(Some(command)) = self.task.as_single_command(self.args.as_ref()) {
-            write!(f, "command: `{command}`,",)?;
-        }
         write!(
             f,
             ", additional arguments: `{}`",
@@ -100,8 +97,11 @@ impl TaskNode<'_> {
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
     #[cfg(test)]
-    pub(crate) fn full_command(&self) -> miette::Result<Option<String>> {
-        let mut cmd = self.task.as_single_command(self.args.as_ref())?;
+    pub(crate) fn full_command(
+        &self,
+        context: &pixi_manifest::task::TaskRenderContext,
+    ) -> miette::Result<Option<String>> {
+        let mut cmd = self.task.as_single_command(context)?;
 
         if let Some(ArgValues::FreeFormArgs(additional_args)) = &self.args {
             if !additional_args.is_empty() {
@@ -334,7 +334,13 @@ impl<'p> TaskGraph<'p> {
             // Iterate over all the dependencies of the node and add them to the graph.
             let mut node_dependencies = Vec::with_capacity(dependencies.len());
             for dependency in dependencies {
-                let dependency = TypedDependency::from_dependency(&dependency, node.args.as_ref())?;
+                let context = pixi_manifest::task::TaskRenderContext {
+                    platform: node.run_environment.best_platform(),
+                    environment_name: node.run_environment.name(),
+                    manifest_path: None, // manifest_path not available at TaskNode level
+                    args: node.args.as_ref(),
+                };
+                let dependency = TypedDependency::from_dependency(&dependency, &context)?;
                 // Check if we visited this node before already.
                 if let Some(&task_id) = task_name_with_args_to_node.get(&dependency) {
                     node_dependencies.push(GraphDependency(
@@ -609,8 +615,16 @@ mod test {
         graph
             .topological_order()
             .into_iter()
-            .map(|task| &graph[task])
-            .filter_map(|task| task.full_command().ok().flatten())
+            .map(|task_id| &graph[task_id])
+            .filter_map(|task| {
+                let context = pixi_manifest::task::TaskRenderContext {
+                    platform: task.run_environment.best_platform(),
+                    environment_name: task.run_environment.name(),
+                    manifest_path: Some(&project.workspace.provenance.path),
+                    args: task.args.as_ref(),
+                };
+                task.full_command(&context).ok().flatten()
+            })
             .collect()
     }
 
