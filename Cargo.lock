@@ -1325,8 +1325,6 @@ checksum = "a1d728cc89cf3aee9ff92b05e62b19ee65a02b5702cff7d5a377e32c6ae29d8d"
 [[package]]
 name = "coalesced_map"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cf5a7a58a9d5b914bddb0a3a2bd920af2be897114dc8128af022af81fc43b8b"
 dependencies = [
  "dashmap",
  "tokio",
@@ -2170,8 +2168,6 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "765662dc0b26e038099a5a1529f5d48443111eea45377c312be892997651710e"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -3014,7 +3010,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.1",
+ "socket2 0.5.10",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -3034,7 +3030,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.59.0",
 ]
 
 [[package]]
@@ -4387,8 +4383,6 @@ checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
 [[package]]
 name = "path_resolver"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3604448dbdd00c6884479c066f040f503bf26f6b58de5358b5d2376ef4e78d11"
 dependencies = [
  "ahash",
  "fs-err",
@@ -5324,6 +5318,7 @@ dependencies = [
  "pathdiff",
  "pixi_git",
  "pixi_spec",
+ "pixi_variant",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_lock",
@@ -5513,6 +5508,7 @@ dependencies = [
  "pep508_rs",
  "pixi_config",
  "pixi_consts",
+ "pixi_variant",
  "rattler_conda_types",
  "rattler_networking",
  "rattler_shell",
@@ -5588,6 +5584,17 @@ dependencies = [
  "uv-redacted",
  "uv-resolver",
  "uv-types",
+]
+
+[[package]]
+name = "pixi_variant"
+version = "0.1.0"
+dependencies = [
+ "pixi_build_types",
+ "rattler_lock",
+ "serde",
+ "serde_json",
+ "serde_yaml",
 ]
 
 [[package]]
@@ -5939,7 +5946,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.6.1",
+ "socket2 0.5.10",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -5976,7 +5983,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.1",
+ "socket2 0.5.10",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -6087,9 +6094,7 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.39.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79ad296e3f6d892f83173282ad344923166ab31f3f2f2a508ade9769bedb697e"
+version = "0.39.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -6132,9 +6137,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25c74aab37055f449a5e9f2026ca6d366489bc2d00a19fb57f2a0ab1a30db873"
+version = "0.6.2"
 dependencies = [
  "ahash",
  "anyhow",
@@ -6165,9 +6168,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.41.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "418a1c6c147e3a80a4db6589f1a6a0737c0321e467d351ac99ba599b34a76c09"
+version = "0.42.0"
 dependencies = [
  "ahash",
  "chrono",
@@ -6208,8 +6209,6 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3dd76e371c2abd364cde7172105fdb6036d8d09df9cddeda5153846e2e964959"
 dependencies = [
  "blake2",
  "digest",
@@ -6226,9 +6225,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.26.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "946895fb0b222364eb55fb2bb7d3b512761ec96dcdd326533b45fdfb2288c6a9"
+version = "0.26.5"
 dependencies = [
  "ahash",
  "chrono",
@@ -6253,8 +6250,6 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "988d5d7ace4fb1d7549008236cf08de95e8ea2f1f80754109324a08c31e6dc6a"
 dependencies = [
  "quote",
  "syn",
@@ -6262,9 +6257,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_menuinst"
-version = "0.2.37"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "041187c633fd0b966ae52e9818b96e854399fc14748f5f93804b4d5bbfc52403"
+version = "0.2.38"
 dependencies = [
  "chrono",
  "configparser",
@@ -6292,9 +6285,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.25.24"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5089544b59bf93619cfed047dbbbdfad3112e9c885855ea480d0468e6c51e8c8"
+version = "0.25.25"
 dependencies = [
  "anyhow",
  "async-once-cell",
@@ -6324,14 +6315,14 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.23.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "567c57ec45f9430334d29c4a4c6351cca5291f94da0a8ecc931c41b0fc1e0cb8"
+version = "0.23.17"
 dependencies = [
  "bzip2 0.6.1",
  "chrono",
  "fs-err",
  "futures-util",
+ "getrandom 0.2.16",
+ "getrandom 0.3.4",
  "num_cpus",
  "rattler_conda_types",
  "rattler_digest",
@@ -6355,8 +6346,6 @@ dependencies = [
 [[package]]
 name = "rattler_pty"
 version = "0.2.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86a84e6b351c46c7588bb8f5c90994be23d5c3c31cf87f9ec903cd91d9fc4246"
 dependencies = [
  "libc",
  "nix 0.30.1",
@@ -6367,8 +6356,6 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3aa5057629aeb20861919e9ae56875985d58028f3c6f433a20b5ded086e1cec5"
 dependencies = [
  "reqwest",
  "reqwest-middleware",
@@ -6377,9 +6364,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.25.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc836e919309df6ef721b8dd27fc1ae02bd2935e2cd7dc4ff891b53bda8ac44a"
+version = "0.25.3"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -6437,9 +6422,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.25.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b48c856bcd60153f74b119279e38bd655469062d188c0e1e0a0025658ae91f2c"
+version = "0.25.11"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -6458,9 +6441,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "3.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99378561669240aa07a43edbdcdc8f07c74dd1134c7fd72d31f83a69d3736e17"
+version = "4.0.0"
 dependencies = [
  "chrono",
  "futures",
@@ -6476,9 +6457,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "2.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db14e31fc93d75b4ba4d60b69cd9771558407f86a47b9307e89635de0f2c137a"
+version = "2.3.0"
 dependencies = [
  "archspec",
  "libloading",
@@ -7683,8 +7662,6 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55c0b0b683828aa9d4f5c0e59b0c856a12c30a65b5f1ca4292664734d76fa9c2"
 dependencies = [
  "tokio",
 ]
@@ -7951,7 +7928,7 @@ dependencies = [
  "ntapi",
  "objc2-core-foundation",
  "objc2-io-kit",
- "windows 0.61.3",
+ "windows 0.59.0",
 ]
 
 [[package]]

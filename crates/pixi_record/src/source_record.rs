@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     path::Path,
     str::FromStr,
 };
@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use typed_path::{Utf8TypedPathBuf, Utf8UnixPathBuf};
 use url::Url;
 
-use crate::{ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec};
+use crate::{ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec, VariantValue};
 
 /// A record of a conda package that still requires building.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -29,6 +29,9 @@ pub struct SourceRecord {
     /// This is used when the manifest is not in the same location as the
     /// source files.
     pub build_source: Option<PinnedSourceSpec>,
+
+    /// The variants that uniquely identify the way this package was built.
+    pub variants: Option<BTreeMap<String, VariantValue>>,
 
     /// The hash of the input that was used to build the metadata of the
     /// package. This can be used to verify that the metadata is still valid.
@@ -113,6 +116,9 @@ impl SourceRecord {
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
+            variants: self
+                .variants
+                .map(|variants| variants.into_iter().map(|(k, v)| (k, v.into())).collect()),
         }
     }
 
@@ -204,6 +210,12 @@ impl SourceRecord {
                 .into_iter()
                 .map(|(k, v)| (k, SourceSpec::from(v)))
                 .collect(),
+            variants: data.variants.map(|variants| {
+                variants
+                    .into_iter()
+                    .map(|(k, v)| (k, VariantValue::from(v)))
+                    .collect()
+            }),
         })
     }
 }
@@ -313,6 +325,7 @@ mod tests {
             build_source: Some(build_source),
             input_hash: None,
             sources: Default::default(),
+            variants: None,
         };
 
         // Convert to CondaPackageData (serialization)
@@ -392,6 +405,7 @@ mod tests {
             build_source: Some(build_source),
             input_hash: None,
             sources: Default::default(),
+            variants: None,
         };
 
         // Convert to CondaPackageData (serialization)
@@ -477,6 +491,7 @@ mod tests {
             build_source: Some(build_source),
             input_hash: None,
             sources: Default::default(),
+            variants: None,
         };
 
         // Convert to CondaPackageData (serialization)

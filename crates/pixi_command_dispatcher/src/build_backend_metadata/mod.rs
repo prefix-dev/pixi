@@ -13,7 +13,7 @@ use pixi_build_discovery::{CommandSpec, EnabledProtocols};
 use pixi_build_frontend::Backend;
 use pixi_build_types::{ProjectModelV1, procedures::conda_outputs::CondaOutputsParams};
 use pixi_glob::GlobHashKey;
-use pixi_record::{InputHash, PinnedSourceSpec};
+use pixi_record::{InputHash, PinnedSourceSpec, VariantValue};
 use pixi_spec::{SourceAnchor, SourceSpec};
 use rand::random;
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
@@ -73,7 +73,7 @@ pub struct BuildBackendMetadataSpec {
     pub build_environment: BuildEnvironment,
 
     /// Variant configuration
-    pub variants: Option<BTreeMap<String, Vec<String>>>,
+    pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
 
     /// Variant file paths provided by the workspace.
     pub variant_files: Option<Vec<PathBuf>>,
@@ -179,7 +179,7 @@ impl BuildBackendMetadataSpec {
         // Calculate the hash of the project model
         let additional_glob_hash = calculate_additional_glob_hash(
             &discovered_backend.init_params.project_model,
-            &self.variants,
+            &self.variant_configuration,
         );
 
         // Check if we should skip the metadata cache for this backend
@@ -437,7 +437,20 @@ impl BuildBackendMetadataSpec {
             channels: self.channels,
             host_platform: self.build_environment.host_platform,
             build_platform: self.build_environment.build_platform,
-            variant_configuration: self.variants.clone(),
+            variant_configuration: self.variant_configuration.map(|variants| {
+                variants
+                    .iter()
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            v.iter()
+                                .cloned()
+                                .map(pixi_build_types::VariantValue::from)
+                                .collect(),
+                        )
+                    })
+                    .collect()
+            }),
             variant_files: self.variant_files.clone(),
             work_directory: command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {
@@ -540,7 +553,7 @@ impl BuildBackendMetadataSpec {
         SourceMetadataKey {
             channel_urls: self.channels.clone(),
             build_environment: self.build_environment.clone(),
-            build_variants: self.variants.clone().unwrap_or_default(),
+            build_variants: self.variant_configuration.clone().unwrap_or_default(),
             enabled_protocols: self.enabled_protocols.clone(),
             pinned_source: self.manifest_source.clone(),
         }
@@ -608,7 +621,7 @@ pub enum BuildBackendMetadataError {
 /// Computes an additional hash to be used in glob hash
 pub fn calculate_additional_glob_hash(
     project_model: &Option<ProjectModelV1>,
-    variants: &Option<BTreeMap<String, Vec<String>>>,
+    variants: &Option<BTreeMap<String, Vec<VariantValue>>>,
 ) -> Vec<u8> {
     let mut hasher = Xxh3::new();
     if let Some(project_model) = project_model {
@@ -632,7 +645,7 @@ mod tests {
     use rattler_conda_types::{NoArchType, PackageName, Platform, Version};
     use std::collections::BTreeMap;
 
-    fn create_test_output(name: &str, variant: BTreeMap<String, String>) -> CondaOutput {
+    fn create_test_output(name: &str, variant: BTreeMap<String, VariantValue>) -> CondaOutput {
         CondaOutput {
             metadata: CondaOutputMetadata {
                 name: PackageName::try_from(name).unwrap(),
@@ -665,11 +678,11 @@ mod tests {
         let outputs = vec![
             create_test_output(
                 "mypackage",
-                BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+                BTreeMap::from([("python".to_string(), VariantValue::from("3.11"))]),
             ),
             create_test_output(
                 "mypackage",
-                BTreeMap::from([("python".to_string(), "3.12".to_string())]),
+                BTreeMap::from([("python".to_string(), VariantValue::from("3.12"))]),
             ),
         ];
 
@@ -686,11 +699,11 @@ mod tests {
         let outputs = vec![
             create_test_output(
                 "mypackage",
-                BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+                BTreeMap::from([("python".to_string(), VariantValue::from("3.11"))]),
             ),
             create_test_output(
                 "mypackage",
-                BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+                BTreeMap::from([("python".to_string(), VariantValue::from("3.11"))]),
             ),
         ];
 
@@ -733,11 +746,11 @@ mod tests {
         let outputs = vec![
             create_test_output(
                 "package-a",
-                BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+                BTreeMap::from([("python".to_string(), VariantValue::from("3.11"))]),
             ),
             create_test_output(
                 "package-b",
-                BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+                BTreeMap::from([("python".to_string(), VariantValue::from("3.11"))]),
             ),
         ];
 
@@ -753,7 +766,7 @@ mod tests {
         // Test case: a single output should always pass
         let outputs = vec![create_test_output(
             "mypackage",
-            BTreeMap::from([("python".to_string(), "3.11".to_string())]),
+            BTreeMap::from([("python".to_string(), VariantValue::from("3.11"))]),
         )];
 
         let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
@@ -770,22 +783,22 @@ mod tests {
             create_test_output(
                 "mypackage",
                 BTreeMap::from([
-                    ("python".to_string(), "3.11".to_string()),
-                    ("cuda".to_string(), "11.8".to_string()),
+                    ("python".to_string(), VariantValue::from("3.11")),
+                    ("cuda".to_string(), VariantValue::from("11.8")),
                 ]),
             ),
             create_test_output(
                 "mypackage",
                 BTreeMap::from([
-                    ("python".to_string(), "3.11".to_string()),
-                    ("cuda".to_string(), "12.0".to_string()),
+                    ("python".to_string(), VariantValue::from("3.11")),
+                    ("cuda".to_string(), VariantValue::from("12.0")),
                 ]),
             ),
             create_test_output(
                 "mypackage",
                 BTreeMap::from([
-                    ("python".to_string(), "3.11".to_string()),
-                    ("cuda".to_string(), "11.8".to_string()),
+                    ("python".to_string(), VariantValue::from("3.11")),
+                    ("cuda".to_string(), VariantValue::from("11.8")),
                 ]),
             ),
         ];

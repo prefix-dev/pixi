@@ -9,7 +9,7 @@ use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
-use pixi_record::{PinnedSourceSpec, PixiRecord};
+use pixi_record::{PinnedSourceSpec, PixiRecord, VariantValue};
 use pixi_spec::{SourceAnchor, SourceLocationSpec, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageRecord,
@@ -73,10 +73,16 @@ pub struct SourceBuildSpec {
     pub build_profile: BuildProfile,
 
     /// Build variants to use during the build
-    pub variants: Option<BTreeMap<String, Vec<String>>>,
+    pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
 
     /// Build variant file contents to use during the build
     pub variant_files: Option<Vec<PathBuf>>,
+
+    /// The specific variant values to match against when selecting an output.
+    /// If provided, output matching uses (name, subdir, variants) instead of
+    /// (name, version, build, subdir). The variants must be a subset of the
+    /// output's variants.
+    pub variants: Option<BTreeMap<String, VariantValue>>,
 
     /// The directory where to place the built package.
     pub output_directory: Option<PathBuf>,
@@ -498,6 +504,22 @@ impl SourceBuildSpec {
         let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
         let host_platform = self.build_environment.host_platform;
         let build_platform = self.build_environment.build_platform;
+        let editable = self.editable();
+
+        let pixi_build_variant_config = self.variant_configuration.as_ref().map(|variants| {
+            variants
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        v.iter()
+                            .cloned()
+                            .map(pixi_build_types::VariantValue::from)
+                            .collect(),
+                    )
+                })
+                .collect()
+        });
 
         // Request the metadata from the backend.
         // TODO: Can we somehow cache this metadata?
@@ -506,7 +528,7 @@ impl SourceBuildSpec {
                 CondaOutputsParams {
                     host_platform,
                     build_platform,
-                    variant_configuration: self.variants.clone(),
+                    variant_configuration: pixi_build_variant_config,
                     variant_files: self.variant_files.clone(),
                     work_directory: work_directory.clone(),
                     channels: self.channels.clone(),
@@ -521,23 +543,51 @@ impl SourceBuildSpec {
             .map_err(CommandDispatcherError::Failed)?;
 
         // Find the output that we want to build.
-        let output = outputs
-            .outputs
-            .into_iter()
-            .find(|output| {
-                output.metadata.name == self.package.name
-                    && output.metadata.version == self.package.version
-                    && output.metadata.build == self.package.build
-                    && output.metadata.subdir.as_str() == self.package.subdir
-            })
-            .ok_or_else(|| {
-                CommandDispatcherError::Failed(SourceBuildError::MissingOutput {
-                    subdir: self.package.subdir.clone(),
-                    name: self.package.name.as_normalized().to_string(),
-                    version: self.package.version.to_string(),
-                    build: self.package.build.clone(),
+        let output = if let Some(variants) = &self.variants {
+            tracing::error!("Variants: {:?}", &self.variants);
+            // Match by (name, variants) - variants must be a subset of output variants.
+            // The target_platform variant determines the subdir, so we don't need to check it separately.
+            outputs
+                .outputs
+                .into_iter()
+                .find(|output| {
+                    let name_match = output.metadata.name == self.package.name;
+                    let variants_match = variants.iter().all(|(key, value)| {
+                        output
+                            .metadata
+                            .variant
+                            .get(key)
+                            .map(|v| value == v)
+                            .unwrap_or(false)
+                    });
+                    name_match && variants_match
                 })
-            })?;
+                .ok_or_else(|| {
+                    CommandDispatcherError::Failed(SourceBuildError::MissingOutputForVariants {
+                        name: self.package.name.as_normalized().to_string(),
+                        variants: variants.clone(),
+                    })
+                })?
+        } else {
+            // Match by (name, version, build, subdir)
+            outputs
+                .outputs
+                .into_iter()
+                .find(|output| {
+                    output.metadata.name == self.package.name
+                        && output.metadata.version == self.package.version
+                        && output.metadata.build == self.package.build
+                        && output.metadata.subdir.as_str() == self.package.subdir
+                })
+                .ok_or_else(|| {
+                    CommandDispatcherError::Failed(SourceBuildError::MissingOutput {
+                        subdir: self.package.subdir.clone(),
+                        name: self.package.name.as_normalized().to_string(),
+                        version: self.package.version.to_string(),
+                        build: self.package.build.clone(),
+                    })
+                })?
+        };
 
         // Create a variant-specific work directory by including the actual variant values
         // in the work directory key.
@@ -636,7 +686,7 @@ impl SourceBuildSpec {
                         force_reinstall: Default::default(),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
-                        variants: self.variants.clone(),
+                        variant_configuration: self.variant_configuration.clone(),
                         variant_files: self.variant_files.clone(),
                         enabled_protocols: self.enabled_protocols.clone(),
                     })
@@ -667,9 +717,9 @@ impl SourceBuildSpec {
                         force_reinstall: Default::default(),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
-                        variants: self.variants.clone(),
-                        variant_files: self.variant_files.clone(),
-                        enabled_protocols: self.enabled_protocols.clone(),
+                        variant_configuration: self.variant_configuration,
+                        variant_files: self.variant_files,
+                        enabled_protocols: self.enabled_protocols,
                     })
                     .await
                     .map_err_with(Box::new)
@@ -704,7 +754,7 @@ impl SourceBuildSpec {
         let built_source = command_dispatcher
             .backend_source_build(BackendSourceBuildSpec {
                 method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
-                    editable: self.editable(),
+                    editable,
                     dependencies,
                     run_exports,
                     build_prefix: BackendSourceBuildPrefix {
@@ -783,7 +833,7 @@ impl SourceBuildSpec {
                 channel_priority: Default::default(),
                 exclude_newer: None,
                 channel_config: self.channel_config.clone(),
-                variants: self.variants.clone(),
+                variant_configuration: self.variant_configuration.clone(),
                 variant_files: self.variant_files.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 preferred_build_source: BTreeMap::new(),
@@ -902,6 +952,14 @@ pub enum SourceBuildError {
         name: String,
         version: String,
         build: String,
+    },
+
+    #[error(
+        "The build backend does not provide an output matching: {name} with variants {variants:?}."
+    )]
+    MissingOutputForVariants {
+        name: String,
+        variants: BTreeMap<String, VariantValue>,
     },
 
     #[error(

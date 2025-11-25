@@ -408,7 +408,9 @@ pub enum SolveCondaEnvironmentError {
         source: Box<CommandDispatcherError<SolvePixiEnvironmentError>>,
     },
 
-    #[error("failed to map conda packages to their PyPI equivalents. This mapping is required when using PyPI dependencies alongside conda packages.")]
+    #[error(
+        "failed to map conda packages to their PyPI equivalents. This mapping is required when using PyPI dependencies alongside conda packages."
+    )]
     #[diagnostic(transparent)]
     PypiMappingFailed(#[source] Box<dyn Diagnostic + Send + Sync + 'static>),
 
@@ -2192,7 +2194,7 @@ async fn spawn_solve_conda_environment_task(
 
     // Determine the build variants
     let VariantConfig {
-        variants,
+        variant_configuration,
         variant_files,
     } = group.workspace().variants(platform)?;
 
@@ -2212,7 +2214,7 @@ async fn spawn_solve_conda_environment_task(
             channel_priority: channel_priority.into(),
             exclude_newer,
             channel_config,
-            variants: Some(variants),
+            variant_configuration: Some(variant_configuration),
             variant_files: Some(variant_files),
             enabled_protocols: Default::default(),
             preferred_build_source: pin_overrides,

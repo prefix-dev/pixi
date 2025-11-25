@@ -47,7 +47,10 @@ use pixi_manifest::{
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_lazy_reqwest_clients;
-use pixi_utils::{reqwest::LazyReqwestClient, variants::VariantConfig};
+use pixi_utils::{
+    reqwest::LazyReqwestClient,
+    variants::{VariantConfig, VariantValue},
+};
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, LockedPackageRef};
@@ -486,7 +489,7 @@ impl Workspace {
     /// Returns the resolved variant configuration for a given platform.
     pub fn variants(&self, platform: Platform) -> Result<VariantConfig, VariantsError> {
         // Get inline variants for all targets
-        let mut variants = BTreeMap::new();
+        let mut variant_configuration: BTreeMap<String, Vec<VariantValue>> = BTreeMap::new();
         // Resolves from most specific to least specific.
         for build_variants in self
             .workspace
@@ -498,7 +501,9 @@ impl Workspace {
         {
             // Update the hash map, but only items that are not already in the map.
             for (key, value) in build_variants {
-                variants.entry(key.clone()).or_insert_with(|| value.clone());
+                variant_configuration
+                    .entry(key.clone())
+                    .or_insert_with(|| value.iter().cloned().map(VariantValue::from).collect());
             }
         }
 
@@ -515,7 +520,7 @@ impl Workspace {
             .collect();
 
         Ok(VariantConfig {
-            variants,
+            variant_configuration,
             variant_files,
         })
     }

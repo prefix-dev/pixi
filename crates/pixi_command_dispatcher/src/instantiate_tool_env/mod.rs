@@ -13,6 +13,7 @@ use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::{
     PIXI_BUILD_API_VERSION_NAME, PIXI_BUILD_API_VERSION_SPEC, PixiBuildApiVersion,
 };
+use pixi_record::VariantValue;
 use pixi_spec::{BinarySpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::AsyncPrefixGuard;
@@ -59,7 +60,7 @@ pub struct InstantiateToolEnvironmentSpec {
     pub channel_config: ChannelConfig,
 
     /// Build variants
-    pub variants: Option<BTreeMap<String, Vec<String>>>,
+    pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
 
     /// Build variant file contents
     pub variant_files: Option<Vec<PathBuf>>,
@@ -92,7 +93,7 @@ impl Hash for InstantiateToolEnvironmentSpec {
             exclude_newer,
             channel_config,
             enabled_protocols,
-            variants,
+            variant_configuration: variants,
             variant_files,
         } = self;
         name.hash(state);
@@ -137,7 +138,7 @@ impl InstantiateToolEnvironmentSpec {
             exclude_newer: None,
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
             enabled_protocols: EnabledProtocols::default(),
-            variants: None,
+            variant_configuration: None,
             variant_files: None,
         }
     }
@@ -213,7 +214,7 @@ impl InstantiateToolEnvironmentSpec {
                 enabled_protocols: self.enabled_protocols.clone(),
                 installed: Vec::new(), // Install from scratch
                 channel_priority: ChannelPriority::default(),
-                variants: self.variants.clone(),
+                variant_configuration: self.variant_configuration.clone(),
                 variant_files: self.variant_files.clone(),
                 strategy: SolveStrategy::default(),
                 preferred_build_source: BTreeMap::new(),
@@ -276,7 +277,7 @@ impl InstantiateToolEnvironmentSpec {
                 force_reinstall: Default::default(),
                 channels: self.channels,
                 channel_config: self.channel_config,
-                variants: self.variants,
+                variant_configuration: self.variant_configuration,
                 variant_files: self.variant_files,
                 enabled_protocols: self.enabled_protocols,
             })

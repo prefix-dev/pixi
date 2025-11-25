@@ -1548,14 +1548,17 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .map_err(PlatformUnsat::BackendDiscovery)
         .map_err(Box::new)?;
 
-        let VariantConfig { variants, .. } = environment
+        let VariantConfig {
+            variant_configuration,
+            ..
+        } = environment
             .workspace()
             .variants(platform)
             .map_err(|err| Box::new(err.into()))?;
 
         let additional_glob_hash = calculate_additional_glob_hash(
             &discovered_backend.init_params.project_model,
-            &Some(variants),
+            &Some(variant_configuration),
         );
 
         let input_hash = input_hash_cache
