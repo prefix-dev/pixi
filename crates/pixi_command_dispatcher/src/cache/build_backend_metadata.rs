@@ -41,6 +41,16 @@ pub enum BuildBackendMetadataCacheError {
     IoError(String, PathBuf, #[source] std::io::Error),
 }
 
+/// Result of attempting to write to the cache with version checking.
+#[derive(Debug)]
+pub enum WriteResult {
+    /// The cache was successfully written.
+    Written,
+    /// The cache was updated by another process during computation.
+    /// Contains the metadata that was written by the other process.
+    Conflict(CachedCondaMetadata),
+}
+
 /// Defines additional input besides the source files that are used to compute
 /// the metadata of a source checkout. This is used to bucket the metadata.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -130,6 +140,11 @@ pub struct CachedCondaMetadata {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input_hash: Option<InputHash>,
+
+    /// Version number for optimistic locking. Incremented with each cache update.
+    /// Used to detect when another process has updated the cache during computation.
+    #[serde(default)]
+    pub cache_version: u64,
 
     #[serde(flatten)]
     pub metadata: MetadataKind,

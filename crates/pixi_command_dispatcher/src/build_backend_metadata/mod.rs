@@ -90,13 +90,6 @@ pub struct BuildBackendMetadata {
     /// The source checkout from which we want to build package.
     pub build_source: Option<PinnedSourceSpec>,
 
-    /// The cache entry that contains the metadata acquired from the build
-    /// backend.
-    ///
-    /// As long as the cache entry is not dropped, the metadata cannot be
-    /// accessed by another process.
-    pub cache_entry: build_backend_metadata::CacheEntry,
-
     /// The metadata that was acquired from the build backend.
     pub metadata: CachedCondaMetadata,
 
@@ -190,27 +183,32 @@ impl BuildBackendMetadataSpec {
         );
 
         // Check the source metadata cache, short circuit if there is a cache hit that
-        // is still fresh.
+        // is still fresh. Lock is released immediately after reading.
         let cache_key = self.cache_key();
-        let (metadata, mut cache_entry) = command_dispatcher
+        let cache_read_result = command_dispatcher
             .build_backend_metadata_cache()
-            .entry(&cache_key)
+            .read(&cache_key)
             .await
             .map_err(BuildBackendMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
+
+        let (cached_metadata, cache_version) = match cache_read_result {
+            Some((metadata, version)) => (Some(metadata), version),
+            None => (None, 0), // Start at version 0 if no cache exists
+        };
 
         if !skip_cache {
             if let Some(metadata) = Self::verify_cache_freshness(
                 &build_source_checkout,
                 &command_dispatcher,
-                metadata,
+                cached_metadata,
                 &additional_glob_hash,
             )
             .await?
             {
+                // Cache hit - return immediately (no lock held)
                 return Ok(BuildBackendMetadata {
                     metadata,
-                    cache_entry,
                     manifest_source: manifest_source_checkout.pinned,
                     build_source,
                     skip_cache,
@@ -255,7 +253,7 @@ impl BuildBackendMetadataSpec {
         );
         let metadata = self
             .call_conda_outputs(
-                command_dispatcher,
+                command_dispatcher.clone(),
                 build_source_checkout,
                 backend,
                 additional_glob_hash,
@@ -263,18 +261,33 @@ impl BuildBackendMetadataSpec {
             )
             .await?;
 
-        // Store the metadata in the cache for later retrieval
-        cache_entry
-            .write(metadata.clone())
+        // Try to store the metadata in the cache with version checking.
+        // If another process updated the cache while we were computing, we get a conflict.
+        match command_dispatcher
+            .build_backend_metadata_cache()
+            .try_write(&cache_key, metadata.clone(), cache_version)
             .await
             .map_err(BuildBackendMetadataError::Cache)
-            .map_err(CommandDispatcherError::Failed)?;
+            .map_err(CommandDispatcherError::Failed)?
+        {
+            build_backend_metadata::WriteResult::Written => {
+                // Successfully wrote cache
+                tracing::trace!("Cache updated successfully");
+            }
+            build_backend_metadata::WriteResult::Conflict(_other_metadata) => {
+                // Another process computed and cached metadata while we were computing.
+                // This is fine - we use our computed result since we already did the work.
+                // The cache will be used by future requests.
+                tracing::debug!(
+                    "Cache was updated by another process during computation (version conflict), using our computed result"
+                );
+            }
+        }
 
         Ok(BuildBackendMetadata {
             manifest_source,
             build_source,
             metadata,
-            cache_entry,
             skip_cache,
         })
     }
@@ -351,8 +364,12 @@ impl BuildBackendMetadataSpec {
         };
 
         let Some(input_globs) = &metadata.input_hash else {
-            // No input hash so just assume it is still valid.
-            tracing::trace!("found cached `{metadata_kind}` response.");
+            // No input hash means we cannot verify cache freshness, so assume it is still valid.
+            // This happens for new cache entries created after removing input_hash from lock files.
+            // If the cache is stale, it will be detected during the actual build process.
+            tracing::trace!(
+                "found cached `{metadata_kind}` response (no input hash for validation)."
+            );
             return Ok(Some(metadata));
         };
 
@@ -500,6 +517,7 @@ impl BuildBackendMetadataSpec {
         Ok(CachedCondaMetadata {
             id: random(),
             input_hash: input_hash.clone(),
+            cache_version: 0, // Will be set by try_write when caching
             metadata: MetadataKind::Outputs {
                 outputs: outputs.outputs,
             },

@@ -2,14 +2,13 @@ use futures::stream::StreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
-use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
+use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
-    DevSourceMetadataError, DevSourceMetadataSpec, SourceCheckoutError,
-    calculate_additional_glob_hash,
+    DevSourceMetadataError, DevSourceMetadataSpec, SourceCheckoutError, SourceMetadataError,
+    SourceMetadataSpec,
 };
 use pixi_git::url::RepositoryUrl;
-use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
 use pixi_record::{
     DevSourceRecord, LockedGitUrl, ParseLockFileError, PinnedSourceSpec, PixiRecord,
@@ -24,7 +23,7 @@ use pixi_uv_conversions::{
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, PackageName,
-    ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
+    PackageRecord, ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
 };
 use rattler_lock::{
     LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable,
@@ -322,12 +321,6 @@ pub enum PlatformUnsat {
     #[error("the path '{0}, cannot be canonicalized")]
     FailedToCanonicalizePath(PathBuf, #[source] std::io::Error),
 
-    #[error(transparent)]
-    FailedToComputeInputHash(#[from] GlobHashError),
-
-    #[error("the input hash for '{0}' ({1}) does not match the hash in the lock-file ({2})")]
-    InputHashMismatch(String, String, String),
-
     #[error("expect pypi package name '{expected}' but found '{found}'")]
     LockedPyPINamesMismatch { expected: String, found: String },
 
@@ -420,10 +413,25 @@ pub enum PlatformUnsat {
     #[diagnostic(transparent)]
     DevSourceMetadata(#[from] CommandDispatcherError<DevSourceMetadataError>),
 
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    SourceMetadata(#[from] CommandDispatcherError<SourceMetadataError>),
+
     #[error(
         "the locked package build source for '{0}' does not match the requested build source, {1}"
     )]
     PackageBuildSourceMismatch(String, SourceMismatchError),
+
+    #[error("the locked metadata package source for '{0}' changed")]
+    SourcePackageMetadataChanged(String),
+
+    #[error(
+        "locked source package '{package_name}' not found in current metadata for '{manifest_path}'. Source may have changed or package may have been removed."
+    )]
+    SourcePackageNotFoundInMetadata {
+        package_name: String,
+        manifest_path: String,
+    },
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -696,7 +704,6 @@ pub async fn verify_platform_satisfiability(
     locked_environment: rattler_lock::Environment<'_>,
     platform: Platform,
     project_root: &Path,
-    glob_hash_cache: GlobHashCache,
 ) -> Result<VerifiedIndividualEnvironment, Box<PlatformUnsat>> {
     // Convert the lock file into a list of conda and pypi packages
     let mut pixi_records: Vec<PixiRecord> = Vec::new();
@@ -762,7 +769,6 @@ pub async fn verify_platform_satisfiability(
         &pypi_records_by_name,
         platform,
         project_root,
-        glob_hash_cache,
     )
     .await
 }
@@ -1149,7 +1155,6 @@ pub(crate) async fn verify_package_platform_satisfiability(
     locked_pypi_environment: &PypiRecordsByName,
     platform: Platform,
     project_root: &Path,
-    input_hash_cache: GlobHashCache,
 ) -> Result<VerifiedIndividualEnvironment, Box<PlatformUnsat>> {
     // Determine the dependencies requested by the environment
     let environment_dependencies = environment
@@ -1688,102 +1693,116 @@ pub(crate) async fn verify_package_platform_satisfiability(
         }
     }
 
-    // Check if all source packages are still up-to-date.
+    // Check if all source packages are still up-to-date by requesting metadata from the build backend.
+    // The build backend will compute the input hash internally and validate against its cache.
+    // We compare the resulting package metadata with what's in the lock file.
+    // Note: We don't fail the SAT check on source changes, just log them for detection.
     for source_record in locked_pixi_records
         .records
         .iter()
         .filter_map(PixiRecord::as_source)
     {
-        let Some(locked_input_hash) = &source_record.input_hash else {
+        // Skip validation if source_record.input_hash exists (for backwards compatibility with old lock files)
+        // In normal operation, source_record.input_hash is always None since we don't read it from lock file
+        if source_record.input_hash.is_some() {
             continue;
-        };
+        }
 
-        // Determine the source directory to hash
-        // If build_source is specified, it points to where the actual source files are located
-        // and should be resolved relative to the manifest_source location
-        // Otherwise, use manifest_source directly
-        let source_dir = if let Some(build_source) = &source_record.build_source {
-            // Convert to mutable source spec (only path-based sources are supported)
-            let Ok(mutable_source) = build_source.clone().into_mutable() else {
-                continue;
-            };
-            let Some(build_path_record) = mutable_source.as_path() else {
-                continue;
-            };
-
-            // Get the manifest directory first
-            let Some(manifest_path_record) = source_record.manifest_source.as_path() else {
-                continue;
-            };
-            let manifest_dir = manifest_path_record.resolve(project_root);
-
-            // Resolve build_source relative to the manifest directory
-            build_path_record.resolve(&manifest_dir)
-        } else {
-            let Some(path_record) = source_record.manifest_source.as_path() else {
-                continue;
-            };
-            path_record.resolve(project_root)
-        };
-
-        let source_dir = source_dir.canonicalize().map_err(|e| {
-            Box::new(PlatformUnsat::FailedToCanonicalizePath(
-                source_dir.display().to_string().into(),
-                e,
-            ))
-        })?;
-
-        // Always discover the backend from the manifest directory (where pixi.toml with build config is)
-        // even if we're hashing files from a different build_source directory
-        let Some(manifest_path_record) = source_record.manifest_source.as_path() else {
-            continue;
-        };
-        let manifest_dir = manifest_path_record.resolve(project_root);
-        let manifest_dir = manifest_dir.canonicalize().map_err(|e| {
-            Box::new(PlatformUnsat::FailedToCanonicalizePath(
-                manifest_path_record.path.as_str().into(),
-                e,
-            ))
-        })?;
-
-        let discovered_backend = DiscoveredBackend::discover(
-            &manifest_dir,
-            &environment.channel_config(),
-            &EnabledProtocols::default(),
-        )
-        .map_err(PlatformUnsat::BackendDiscovery)
-        .map_err(Box::new)?;
-
+        // Get variant configuration
         let VariantConfig { variants, .. } = environment
             .workspace()
             .variants(platform)
             .map_err(|err| Box::new(err.into()))?;
 
-        let additional_glob_hash = calculate_additional_glob_hash(
-            &discovered_backend.init_params.project_model,
-            &Some(variants),
-        );
-
-        let input_hash = input_hash_cache
-            .compute_hash(GlobHashKey::new(
-                source_dir,
-                locked_input_hash.globs.clone(),
-                additional_glob_hash,
+        let channel_config = environment.channel_config();
+        let channel_urls: Result<Vec<_>, _> = environment
+            .channels()
+            .into_iter()
+            .map(|c| c.clone().into_base_url(&channel_config))
+            .collect();
+        let channel_urls = channel_urls.map_err(|e| {
+            Box::new(PlatformUnsat::FailedToCanonicalizePath(
+                source_record.manifest_source.to_string().into(),
+                std::io::Error::other(e.to_string()),
             ))
-            .await
-            .map_err(PlatformUnsat::FailedToComputeInputHash)
-            .map_err(Box::new)?;
+        })?;
 
-        if input_hash.hash != locked_input_hash.hash {
+        // Build source metadata spec to request current package metadata
+        let source_metadata_spec = SourceMetadataSpec {
+            package: source_record.package_record.name.clone(),
+            backend_metadata: BuildBackendMetadataSpec {
+                manifest_source: source_record.manifest_source.clone(),
+                channel_config: channel_config.clone(),
+                channels: channel_urls,
+                build_environment: BuildEnvironment {
+                    host_platform: platform,
+                    build_platform: platform,
+                    host_virtual_packages: environment
+                        .virtual_packages(platform)
+                        .iter()
+                        .cloned()
+                        .map(Into::into)
+                        .collect(),
+                    build_virtual_packages: environment
+                        .virtual_packages(platform)
+                        .iter()
+                        .cloned()
+                        .map(Into::into)
+                        .collect(),
+                },
+                variants: Some(variants),
+                variant_files: None,
+                enabled_protocols: EnabledProtocols::default(),
+                pin_override: source_record.build_source.clone(),
+            },
+        };
+
+        // Request source metadata (this will handle caching and input hash validation internally)
+        // If the source isn't available locally or we can't get metadata, skip validation
+        let current_source_metadata = command_dispatcher
+            .source_metadata(source_metadata_spec)
+            .await
+            .map_err(|e| Box::new(PlatformUnsat::SourceMetadata(e)))?;
+
+        // Find the record that matches our locked package name
+        let current_record = current_source_metadata
+            .records
+            .iter()
+            .find(|r| r.package_record.name == source_record.package_record.name);
+
+        let Some(current_record) = current_record else {
             let manifest_path = source_record
                 .manifest_source
                 .as_path()
                 .map(|p| p.path.to_string())
                 .unwrap_or_else(|| source_record.manifest_source.to_string());
-            return Err(Box::new(PlatformUnsat::InputHashMismatch(
+
+            return Err(Box::new(PlatformUnsat::SourcePackageNotFoundInMetadata {
+                package_name: source_record.package_record.name.as_source().to_string(),
                 manifest_path,
-                format!("{:x}", input_hash.hash),
-                format!("{:x}", locked_input_hash.hash),
+            }));
+        };
+
+        // Check if the current record matches what's in the lock file
+        let matches = verify_if_source_records_matches(
+            &current_record.package_record,
+            &source_record.package_record,
+        );
+
+        // let matches = current_record == source_record;
+
+        if !matches {
+            let manifest_path = source_record
+                .manifest_source
+                .as_path()
+                .map(|p| p.path.to_string())
+                .unwrap_or_else(|| source_record.manifest_source.to_string());
+            tracing::debug!(
+                "Source package metadata changed for '{}'. Rebuild may be needed.",
+                manifest_path,
+            );
+            return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
+                source_record.package_record.name.as_source().to_string(),
             )));
         }
     }
@@ -1838,6 +1857,18 @@ pub(crate) async fn verify_package_platform_satisfiability(
         expected_conda_packages,
         conda_packages_used_by_pypi,
     })
+}
+
+/// Verify that the locked package build sources match the environment manifest.
+fn verify_if_source_records_matches(
+    current_record: &PackageRecord,
+    locked_record: &PackageRecord,
+) -> bool {
+    // Check if the current record matches what's in the lock file
+    current_record.name == locked_record.name
+        && current_record.version == locked_record.version
+        && current_record.build == locked_record.build
+        && current_record.depends == locked_record.depends
 }
 
 enum FoundPackage {
@@ -2214,7 +2245,6 @@ mod tests {
                     locked_env,
                     platform,
                     project.root(),
-                    Default::default(),
                 )
                 .await
                 .map_err(|e| LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e))?;

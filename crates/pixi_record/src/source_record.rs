@@ -42,7 +42,7 @@ pub struct SourceRecord {
 /// Defines the hash of the input files that were used to build the metadata of
 /// the record. If reevaluating and hashing the globs results in a different
 /// hash, the metadata is considered invalid.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct InputHash {
     /// The hash of the input files that matched the globs.
     #[serde(
@@ -92,11 +92,8 @@ impl From<SourceRecord> for CondaPackageData {
             package_record: value.package_record,
             location: value.manifest_source.clone().into(),
             package_build_source,
-            input: value.input_hash.map(|i| rattler_lock::InputHash {
-                hash: i.hash,
-                // TODO: fix this in rattler
-                globs: Vec::from_iter(i.globs),
-            }),
+            // Don't write input_hash to lock file to reduce churn
+            input: None,
             sources: value
                 .sources
                 .into_iter()
@@ -149,10 +146,9 @@ impl TryFrom<CondaSourceData> for SourceRecord {
         Ok(Self {
             package_record: value.package_record,
             manifest_source: value.location.try_into()?,
-            input_hash: value.input.map(|hash| InputHash {
-                hash: hash.hash,
-                globs: BTreeSet::from_iter(hash.globs),
-            }),
+            // Ignore input_hash from lock file (backwards compatibility)
+            // Input hash is now calculated during SAT check, not stored
+            input_hash: None,
             build_source: pinned_source_spec,
             sources: value
                 .sources

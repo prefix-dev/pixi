@@ -299,7 +299,6 @@ impl Workspace {
             self,
             command_dispatcher.clone(),
             &lock_file,
-            glob_hash_cache.clone(),
         )
         .await;
         if outdated.is_empty() {
@@ -1297,7 +1296,6 @@ impl<'p> UpdateContextBuilder<'p> {
                     project,
                     self.command_dispatcher.clone(),
                     &lock_file,
-                    glob_hash_cache.clone(),
                 )
                 .await
             }
