@@ -332,38 +332,13 @@ pub struct S3Options {
     pub force_path_style: bool,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum DetachedEnvironments {
     Boolean(bool),
     Path(PathBuf),
 }
 
-impl<'de> Deserialize<'de> for DetachedEnvironments {
-    /// When deserialising, resolve paths if any.
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Helper {
-            Boolean(bool),
-            Path(PathBuf),
-        }
-
-        let helper = Helper::deserialize(deserializer)?;
-        let result = match helper {
-            Helper::Boolean(b) => DetachedEnvironments::Boolean(b),
-            Helper::Path(p) => DetachedEnvironments::Path(p),
-        };
-
-        // Resolve the path if any, else return a clone of the boolean variant.
-        result.resolve_path().map_err(|e| {
-            serde::de::Error::custom(format!("Failed to resolve detached-environments path: {e}"))
-        })
-    }
-}
 impl DetachedEnvironments {
     pub fn is_false(&self) -> bool {
         matches!(self, DetachedEnvironments::Boolean(false))
@@ -372,9 +347,10 @@ impl DetachedEnvironments {
     // Get the path to the detached-environments directory. None means the default
     // directory.
     pub fn path(&self) -> miette::Result<Option<PathBuf>> {
-        match self {
+        let resolved_self = self.resolve_path()?;
+        match resolved_self {
             DetachedEnvironments::Path(p) => Ok(Some(p.clone())),
-            DetachedEnvironments::Boolean(b) if *b => {
+            DetachedEnvironments::Boolean(b) if b => {
                 let path = get_cache_dir()?.join(consts::ENVIRONMENTS_DIR);
                 Ok(Some(path))
             }
@@ -383,7 +359,8 @@ impl DetachedEnvironments {
     }
 
     /// If `self` is the `DetachedEnvironments::Path` variant, expands `~`
-    /// to the absolute path to the home directory
+    /// to the absolute path to the home directory, otherwise clone the boolean
+    /// variant.
     pub fn resolve_path(&self) -> miette::Result<Self> {
         match self {
             DetachedEnvironments::Boolean(_) => Ok(self.clone()),
@@ -406,7 +383,10 @@ impl DetachedEnvironments {
     }
 
     pub fn validate(&self) -> miette::Result<()> {
-        match self {
+        // Resolve the path variant (if present) prior to validating it.
+        let resolved_self = self.resolve_path()?;
+
+        match resolved_self {
             DetachedEnvironments::Boolean(_) => {}
             DetachedEnvironments::Path(path) => {
                 if !path.is_absolute() {
