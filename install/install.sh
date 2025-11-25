@@ -241,7 +241,7 @@ __wrap__() {
 
         *)
             echo "warn: Could not update shell $(basename "$SHELL")" >&2
-            echo "      Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command." >&2
+            echo "      Please permanently add '${PIXI_BIN_DIR}' to your \$PATH to enable the 'pixi' command." >&2
             ;;
         esac
     fi
