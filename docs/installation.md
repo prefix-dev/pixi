@@ -22,7 +22,7 @@ To install `pixi` you can run the following command in your terminal:
     Or run:
 
     ```powershell
-    powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
+    powershell -ExecutionPolicy Bypass -c "irm -useb https://pixi.sh/install.ps1 | iex"
     ```
 
     ??? note "What does this do?"
@@ -111,7 +111,7 @@ cargo build
 cargo test
 ```
 
-If you have any issues building because of the dependency on `rattler` checkout
+If you have any issues building because of the dependency on `rattler` check out
 its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 
 
@@ -257,7 +257,7 @@ Before un-installation you might want to delete any previous files pixi has inst
     ```shell
     cd path/to/workspace && pixi clean
     ```
-3. Remove the `pixi` and it's global environments
+3. Remove the `pixi` and its global environments
     ```shell
     rm -r ~/.pixi
     ```

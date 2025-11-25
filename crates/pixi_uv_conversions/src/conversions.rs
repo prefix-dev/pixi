@@ -12,8 +12,9 @@ use pixi_manifest::pypi::pypi_options::{
 };
 use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
 use pixi_spec::GitReference as PixiReference;
-use std::fmt::Write;
+use std::{collections::HashSet, fmt::Write};
 use uv_configuration::BuildOptions;
+use uv_configuration::TrustedHost;
 use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep508::{VerbatimUrl, VerbatimUrlError};
@@ -536,6 +537,67 @@ pub fn to_uv_trusted_host(
     Ok(uv_configuration::TrustedHost::from_str(trusted_host)?)
 }
 
+/// Configure insecure hosts for TLS verification bypass
+/// This function handles the logic for when tls_no_verify is enabled,
+/// adding all index hosts to the insecure list as a workaround since UV doesn't have a global SSL disable option
+pub fn configure_insecure_hosts_for_tls_bypass(
+    base_insecure_hosts: Vec<TrustedHost>,
+    tls_no_verify: bool,
+    index_locations: &IndexLocations,
+) -> Vec<TrustedHost> {
+    let mut allow_insecure_hosts = base_insecure_hosts;
+    let mut seen: HashSet<String> = allow_insecure_hosts
+        .iter()
+        .map(|host| host.to_string().to_ascii_lowercase())
+        .collect();
+
+    if tls_no_verify {
+        // When tls_no_verify is enabled, add all index hosts to the insecure list
+        // This is a workaround since UV doesn't have a global SSL disable option
+        //
+        // We use allowed_indexes() instead of known_indexes() because:
+        // - allowed_indexes() returns only indexes that will actually be used for package resolution
+        // - It deduplicates by name, excluding overridden/duplicate index definitions
+        // - This matches uv's authentication behavior and ensures we only bypass TLS for actively used indexes
+        let mut has_pypi_org_index = false;
+
+        let mut push_host = |host: &str, allow_insecure_hosts: &mut Vec<TrustedHost>| {
+            let key = host.to_ascii_lowercase();
+            if seen.insert(key.clone()) {
+                match to_uv_trusted_host(host) {
+                    Ok(trusted_host) => allow_insecure_hosts.push(trusted_host),
+                    Err(e) => tracing::warn!("Failed to add host {} as trusted: {}", host, e),
+                }
+            }
+        };
+
+        for index_url in index_locations.allowed_indexes() {
+            if let Some(host) = index_url.url().host_str() {
+                has_pypi_org_index |= host.eq_ignore_ascii_case("pypi.org");
+                push_host(host, &mut allow_insecure_hosts);
+            }
+        }
+
+        // Add hosts from find-links/flat indexes (if they are http/https)
+        for flat_index in index_locations.flat_indexes() {
+            if let Some(host) = flat_index.url().host_str() {
+                push_host(host, &mut allow_insecure_hosts);
+            }
+        }
+
+        // Add the default PyPI download host when using the main PyPI index.
+        if has_pypi_org_index {
+            push_host("files.pythonhosted.org", &mut allow_insecure_hosts);
+        }
+
+        tracing::warn!(
+            "TLS verification is disabled for PyPI operations. This is insecure and should only be used for testing or internal networks."
+        );
+    }
+
+    allow_insecure_hosts
+}
+
 /// Converts a date to a `uv_resolver::ExcludeNewer`
 /// since 0.8.2 uv also allows this per package,
 /// but we only support the global one for now
@@ -552,4 +614,109 @@ pub fn to_exclude_newer(exclude_newer: chrono::DateTime<chrono::Utc>) -> uv_reso
     // Will convert into a global ExcludeNewer
     // ..into is needed to convert into the uv timestamp type
     uv_resolver::ExcludeNewer::global(timestamp.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use url::Url;
+    use uv_distribution_types::{Index, IndexUrl};
+
+    #[test]
+    fn test_configure_insecure_hosts_for_tls_bypass_enabled() {
+        // Create test index locations
+        let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://pypi.org/simple/").unwrap().into(),
+        ));
+        let extra_index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://test-index.example.com/simple/")
+                .unwrap()
+                .into(),
+        ));
+
+        let indexes = vec![
+            Index::from_index_url(index_url),
+            Index::from_extra_index_url(extra_index_url),
+        ];
+        let index_locations = IndexLocations::new(indexes, vec![], false);
+
+        // Test with tls_no_verify enabled
+        let base_hosts = vec![];
+        let result = configure_insecure_hosts_for_tls_bypass(
+            base_hosts,
+            true, // tls_no_verify = true
+            &index_locations,
+        );
+
+        // Should have added both hosts
+        assert_eq!(result.len(), 3);
+        let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
+        assert!(host_names.contains(&"pypi.org".to_string()));
+        assert!(host_names.contains(&"test-index.example.com".to_string()));
+        assert!(host_names.contains(&"files.pythonhosted.org".to_string()));
+    }
+
+    #[test]
+    fn test_configure_insecure_hosts_for_tls_bypass_disabled() {
+        // Create test index locations
+        let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://pypi.org/simple/").unwrap().into(),
+        ));
+        let indexes = vec![Index::from_index_url(index_url)];
+        let index_locations = IndexLocations::new(indexes, vec![], false);
+
+        // Test with tls_no_verify disabled
+        let base_hosts = vec![];
+        let result = configure_insecure_hosts_for_tls_bypass(
+            base_hosts,
+            false, // tls_no_verify = false
+            &index_locations,
+        );
+
+        // Should not have added any hosts
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_configure_insecure_hosts_for_tls_bypass_preserves_existing() {
+        // Create test index locations
+        let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://pypi.org/simple/").unwrap().into(),
+        ));
+        let indexes = vec![Index::from_index_url(index_url)];
+        let index_locations = IndexLocations::new(indexes, vec![], false);
+
+        // Start with existing trusted host
+        let existing_host = to_uv_trusted_host("existing.example.com").unwrap();
+        let base_hosts = vec![existing_host];
+
+        let result = configure_insecure_hosts_for_tls_bypass(
+            base_hosts,
+            true, // tls_no_verify = true
+            &index_locations,
+        );
+
+        // Should have preserved existing host and added new one
+        assert_eq!(result.len(), 3);
+        let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
+        assert!(host_names.contains(&"existing.example.com".to_string()));
+        assert!(host_names.contains(&"pypi.org".to_string()));
+        assert!(host_names.contains(&"files.pythonhosted.org".to_string()));
+    }
+
+    #[test]
+    fn test_configure_insecure_hosts_for_flat_index_hosts() {
+        // Flat index hosted on a custom domain should be added when tls_no_verify is enabled
+        let flat_index = Index::from_find_links(IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://packages.example.org/simple/")
+                .unwrap()
+                .into(),
+        )));
+        let index_locations = IndexLocations::new(vec![], vec![flat_index], true);
+
+        let result = configure_insecure_hosts_for_tls_bypass(vec![], true, &index_locations);
+
+        let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
+        assert!(host_names.contains(&"packages.example.org".to_string()));
+    }
 }
