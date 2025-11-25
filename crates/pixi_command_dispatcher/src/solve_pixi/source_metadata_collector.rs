@@ -56,8 +56,6 @@ pub enum CollectSourceMetadataError {
     PackageMetadataNotFound {
         name: rattler_conda_types::PackageName,
         pinned_source: Box<PinnedSourceSpec>,
-        // #[help]
-        // help: String,
     },
     #[error("failed to checkout source for package '{name}'")]
     SourceCheckoutError {
@@ -227,14 +225,6 @@ impl SourceMetadataCollector {
         if source_metadata.cached_metadata.metadata.records.is_empty() {
             return Err(CommandDispatcherError::Failed(
                 CollectSourceMetadataError::PackageMetadataNotFound {
-                    // help: Self::create_metadata_not_found_help(
-                    //     &name,
-                    //     source_metadata
-                    //         .cached_metadata
-                    //         .metadata
-                    //         .skipped_packages
-                    //         .clone(),
-                    // ),
                     name,
                     pinned_source: Box::new(source_metadata.manifest_source.clone()),
                 },
