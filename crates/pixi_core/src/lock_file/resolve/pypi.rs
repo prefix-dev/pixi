@@ -333,14 +333,14 @@ pub async fn resolve_pypi(
     if !conda_python_packages.is_empty() {
         tracing::info!(
             "the following python packages are assumed to be installed by conda: {conda_python_packages}",
-            conda_python_packages =
-                conda_python_packages
-                    .values()
-                    .format_with(", ", |(_, p), f| f(&format_args!(
-                        "{name} {version}",
-                        name = &p.name.as_source(),
-                        version = &p.version
-                    )))
+            conda_python_packages = conda_python_packages
+                .values()
+                .format_with(", ", |(_, p), f| f(&format_args!(
+                    "{name} {version}",
+                    name = &p.name.as_source(),
+                    version = &p.version
+                )))
+                .to_string()
         );
     } else {
         tracing::info!("there are no python packages installed by conda");
