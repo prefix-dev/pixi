@@ -1694,107 +1694,124 @@ pub(crate) async fn verify_package_platform_satisfiability(
     }
 
     // Check if all source packages are still up-to-date.
-    for source_record in locked_pixi_records
+    // Process all source packages concurrently for better performance.
+    let source_records: Vec<_> = locked_pixi_records
         .records
         .iter()
         .filter_map(PixiRecord::as_source)
-    {
-        // Get variant configuration
-        let VariantConfig { variants, .. } = environment
-            .workspace()
-            .variants(platform)
-            .map_err(|err| Box::new(err.into()))?;
+        .collect();
 
-        let channel_config = environment.channel_config();
-        let channel_urls: Result<Vec<_>, _> = environment
-            .channels()
-            .into_iter()
-            .map(|c| c.clone().into_base_url(&channel_config))
-            .collect();
-        let channel_urls = channel_urls.map_err(|e| {
-            Box::new(PlatformUnsat::FailedToCanonicalizePath(
-                source_record.manifest_source.to_string().into(),
-                std::io::Error::other(e.to_string()),
-            ))
-        })?;
+    // Get variant configuration once (it's the same for all packages)
+    let VariantConfig { variants, .. } = environment
+        .workspace()
+        .variants(platform)
+        .map_err(|err| Box::new(err.into()))?;
 
-        // Build source metadata spec to request current package metadata
-        let source_metadata_spec = SourceMetadataSpec {
-            package: source_record.package_record.name.clone(),
-            backend_metadata: BuildBackendMetadataSpec {
-                manifest_source: source_record.manifest_source.clone(),
-                channel_config: channel_config.clone(),
-                channels: channel_urls,
-                build_environment: BuildEnvironment {
-                    host_platform: platform,
-                    build_platform: platform,
-                    host_virtual_packages: environment
-                        .virtual_packages(platform)
-                        .iter()
-                        .cloned()
-                        .map(Into::into)
-                        .collect(),
-                    build_virtual_packages: environment
-                        .virtual_packages(platform)
-                        .iter()
-                        .cloned()
-                        .map(Into::into)
-                        .collect(),
+    let channel_config = environment.channel_config();
+    let channel_urls: Result<Vec<_>, _> = environment
+        .channels()
+        .into_iter()
+        .map(|c| c.clone().into_base_url(&channel_config))
+        .collect();
+    let channel_urls = channel_urls.map_err(|e| {
+        Box::new(PlatformUnsat::FailedToCanonicalizePath(
+            "channel".into(),
+            std::io::Error::other(e.to_string()),
+        ))
+    })?;
+
+    let virtual_packages: Vec<_> = environment
+        .virtual_packages(platform)
+        .iter()
+        .cloned()
+        .map(Into::into)
+        .collect();
+
+    // Process all source records concurrently
+    let mut results = futures::stream::iter(source_records.into_iter().map(|source_record| {
+        let command_dispatcher = command_dispatcher.clone();
+        let channel_config = channel_config.clone();
+        let channel_urls = channel_urls.clone();
+        let variants = variants.clone();
+        let virtual_packages = virtual_packages.clone();
+
+        async move {
+            // Build source metadata spec to request current package metadata
+            let source_metadata_spec = SourceMetadataSpec {
+                package: source_record.package_record.name.clone(),
+                backend_metadata: BuildBackendMetadataSpec {
+                    manifest_source: source_record.manifest_source.clone(),
+                    channel_config,
+                    channels: channel_urls,
+                    build_environment: BuildEnvironment {
+                        host_platform: platform,
+                        build_platform: platform,
+                        host_virtual_packages: virtual_packages.clone(),
+                        build_virtual_packages: virtual_packages,
+                    },
+                    variants: Some(variants),
+                    variant_files: None,
+                    enabled_protocols: EnabledProtocols::default(),
+                    pin_override: source_record.build_source.clone(),
                 },
-                variants: Some(variants),
-                variant_files: None,
-                enabled_protocols: EnabledProtocols::default(),
-                pin_override: source_record.build_source.clone(),
-            },
-        };
+            };
 
-        // Request source metadata to verify if it its still matches the locked one
-        let current_source_metadata = command_dispatcher
-            .source_metadata(source_metadata_spec)
-            .await
-            .map_err(|e| Box::new(PlatformUnsat::SourceMetadata(e)))?;
+            // Request source metadata to verify if it its still matches the locked one
+            let current_source_metadata = command_dispatcher
+                .source_metadata(source_metadata_spec)
+                .await
+                .map_err(|e| Box::new(PlatformUnsat::SourceMetadata(e)))?;
 
-        // Find the record that matches our locked package name
-        // (nichmor): In my testing, it is always and array of one element.
-        // should we just pop the first one?
-        let current_record = current_source_metadata
-            .records
-            .iter()
-            .find(|r| r.package_record.name == source_record.package_record.name);
+            // Find the record that matches our locked package name
+            // (nichmor): In my testing, it is always and array of one element.
+            // should we just pop the first one?
+            let current_record = current_source_metadata
+                .records
+                .iter()
+                .find(|r| r.package_record.name == source_record.package_record.name);
 
-        let Some(current_record) = current_record else {
-            let manifest_path = source_record
-                .manifest_source
-                .as_path()
-                .map(|p| p.path.to_string())
-                .unwrap_or_else(|| source_record.manifest_source.to_string());
+            let Some(current_record) = current_record else {
+                let manifest_path = source_record
+                    .manifest_source
+                    .as_path()
+                    .map(|p| p.path.to_string())
+                    .unwrap_or_else(|| source_record.manifest_source.to_string());
 
-            return Err(Box::new(PlatformUnsat::SourcePackageNotFoundInMetadata {
-                package_name: source_record.package_record.name.as_source().to_string(),
-                manifest_path,
-            }));
-        };
+                return Err(Box::new(PlatformUnsat::SourcePackageNotFoundInMetadata {
+                    package_name: source_record.package_record.name.as_source().to_string(),
+                    manifest_path,
+                }));
+            };
 
-        // Check if the current record matches what's in the lock file
-        let matches = verify_if_source_records_matches(
-            &current_record.package_record,
-            &source_record.package_record,
-        );
-
-        if !matches {
-            let manifest_path = source_record
-                .manifest_source
-                .as_path()
-                .map(|p| p.path.to_string())
-                .unwrap_or_else(|| source_record.manifest_source.to_string());
-            tracing::debug!(
-                "Source package metadata changed for '{}'. Rebuild may be needed.",
-                manifest_path,
+            // Check if the current record matches what's in the lock file
+            let matches = verify_if_source_records_matches(
+                &current_record.package_record,
+                &source_record.package_record,
             );
-            return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
-                source_record.package_record.name.as_source().to_string(),
-            )));
+
+            if !matches {
+                let manifest_path = source_record
+                    .manifest_source
+                    .as_path()
+                    .map(|p| p.path.to_string())
+                    .unwrap_or_else(|| source_record.manifest_source.to_string());
+                tracing::debug!(
+                    "Source package metadata changed for '{}'. Rebuild may be needed.",
+                    manifest_path,
+                );
+                return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
+                    source_record.package_record.name.as_source().to_string(),
+                )));
+            }
+
+            Ok(())
         }
+    }))
+    .buffer_unordered(10);
+
+    // Check results and fail fast on first error
+    while let Some(result) = results.next().await {
+        result?;
     }
 
     // Now that we checked all conda requirements, check if there were any pypi issues.
