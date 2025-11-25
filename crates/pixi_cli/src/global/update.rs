@@ -1,6 +1,7 @@
 use crate::global::revert_environment_after_error;
 use clap::Parser;
 use fancy_display::FancyDisplay;
+use miette::IntoDiagnostic;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::common::check_all_exposed;
 use pixi_global::project::ExposedType;
@@ -49,7 +50,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         };
 
         // Reinstall the environment
-        let environment_update = project.install_environment(env_name).await?;
+        let (lockfile, environment_update) = project.install_environment(env_name).await?;
+
+        lockfile
+            .to_path(&project.lock_file_path())
+            .into_diagnostic()?;
 
         let mut state_changes = StateChanges::default();
 
