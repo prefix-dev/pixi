@@ -16,10 +16,13 @@ use crate::{
     BuildEnvironment, PackageIdentifier, SourceCheckout, build::source_checkout_cache_key,
 };
 
-use super::common::{CacheError, CacheKey, CachedMetadata, MetadataCache};
+use super::common::{
+    CacheError, CacheKey, CachedMetadata, MetadataCache, VersionedMetadata,
+    WriteResult as CommonWriteResult,
+};
 
-// Re-export CacheEntry with the correct generic type for this cache
-pub type CacheEntry = super::common::CacheEntry<BuildBackendMetadataCache>;
+// Re-export WriteResult with the correct type
+pub type WriteResult = CommonWriteResult<CachedCondaMetadata>;
 
 /// A cache for caching the metadata of a source checkout.
 ///
@@ -39,16 +42,6 @@ pub enum BuildBackendMetadataCacheError {
     /// An I/O error occurred while reading or writing the cache.
     #[error("an IO error occurred while {0} {1}")]
     IoError(String, PathBuf, #[source] std::io::Error),
-}
-
-/// Result of attempting to write to the cache with version checking.
-#[derive(Debug)]
-pub enum WriteResult {
-    /// The cache was successfully written.
-    Written,
-    /// The cache was updated by another process during computation.
-    /// Contains the metadata that was written by the other process.
-    Conflict(CachedCondaMetadata),
 }
 
 /// Defines additional input besides the source files that are used to compute
@@ -154,6 +147,16 @@ pub struct CachedCondaMetadata {
 }
 
 impl CachedMetadata for CachedCondaMetadata {}
+
+impl VersionedMetadata for CachedCondaMetadata {
+    fn cache_version(&self) -> u64 {
+        self.cache_version
+    }
+
+    fn set_cache_version(&mut self, version: u64) {
+        self.cache_version = version;
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]

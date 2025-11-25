@@ -1,10 +1,9 @@
 use std::{
     io::SeekFrom,
-    marker::PhantomData,
     path::{Path, PathBuf},
 };
 
-use async_fd_lock::{LockWrite, RwLockWriteGuard};
+use async_fd_lock::LockWrite;
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
@@ -33,38 +32,37 @@ pub trait MetadataCache: Clone + Sized {
     /// Returns the name of the cache file (e.g., "metadata.json")
     fn cache_file_name(&self) -> &'static str;
 
-    /// Returns the cache entry for the given key.
+    /// Reads the cached metadata for the given key without holding the lock.
+    /// Returns the metadata and its version number if it exists.
     ///
-    /// Returns the cached metadata if it exists and is still valid and a
-    /// [`CacheEntry`] that can be used to update the cache. As long as the
-    /// [`CacheEntry`] is held, another process cannot update the cache.
-    async fn entry(
-        &self,
-        input: &Self::Key,
-    ) -> Result<(Option<Self::Metadata>, CacheEntry<Self>), Self::Error> {
-        // Locate the cache file and lock it.
+    /// The lock is released immediately after reading, so the metadata may
+    /// become stale. Use `try_write` with version checking to detect if the
+    /// cache was updated by another process.
+    async fn read(&self, input: &Self::Key) -> Result<Option<(Self::Metadata, u64)>, Self::Error>
+    where
+        Self::Metadata: VersionedMetadata,
+    {
+        // Locate the cache file
         let cache_dir = self.root().join(input.hash_key());
-        tokio::fs::create_dir_all(&cache_dir).await.map_err(|e| {
-            Self::Error::from_io_error("creating cache directory".to_string(), cache_dir.clone(), e)
-        })?;
-
-        // Try to acquire a lock on the cache file.
         let cache_file_path = cache_dir.join(self.cache_file_name());
-        let cache_file = tokio::fs::OpenOptions::new()
-            .write(true)
-            .read(true)
-            .truncate(false)
-            .create(true)
-            .open(&cache_file_path)
-            .await
-            .map_err(|e| {
-                Self::Error::from_io_error(
-                    "opening cache file".to_string(),
-                    cache_file_path.clone(),
-                    e,
-                )
-            })?;
 
+        // Try to open the cache file (may not exist yet)
+        let cache_file = match tokio::fs::File::open(&cache_file_path).await {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // Cache doesn't exist yet
+                return Ok(None);
+            }
+            Err(e) => {
+                return Err(Self::Error::from_io_error(
+                    "opening cache file".to_string(),
+                    cache_file_path,
+                    e,
+                ));
+            }
+        };
+
+        // Acquire lock briefly
         let mut locked_cache_file = cache_file.lock_write().await.map_err(|e| {
             Self::Error::from_io_error(
                 "locking cache file".to_string(),
@@ -73,7 +71,7 @@ pub trait MetadataCache: Clone + Sized {
             )
         })?;
 
-        // Try to parse the contents of the file
+        // Read contents while holding lock
         let mut cache_file_contents = String::new();
         locked_cache_file
             .read_to_string(&mut cache_file_contents)
@@ -86,15 +84,143 @@ pub trait MetadataCache: Clone + Sized {
                 )
             })?;
 
-        let metadata = serde_json::from_str(&cache_file_contents).ok();
-        Ok((
-            metadata,
-            CacheEntry {
-                file: locked_cache_file,
-                path: cache_file_path,
-                _phantom: PhantomData,
-            },
-        ))
+        // Release lock immediately
+        drop(locked_cache_file);
+
+        // Parse after lock is released
+        let metadata: Self::Metadata = match serde_json::from_str(&cache_file_contents) {
+            Ok(m) => m,
+            Err(_) => return Ok(None), // Invalid cache
+        };
+
+        let version = metadata.cache_version();
+        Ok(Some((metadata, version)))
+    }
+
+    /// Tries to write metadata to the cache with optimistic locking.
+    ///
+    /// This method checks if the cache version matches the expected version
+    /// before writing. If another process has updated the cache since it was
+    /// read, this method returns `WriteResult::Conflict` with the newer metadata.
+    ///
+    /// The lock is held only during the version check and write operation.
+    async fn try_write(
+        &self,
+        input: &Self::Key,
+        metadata: Self::Metadata,
+        expected_version: u64,
+    ) -> Result<WriteResult<Self::Metadata>, Self::Error>
+    where
+        Self::Metadata: VersionedMetadata,
+    {
+        // Locate the cache file
+        let cache_dir = self.root().join(input.hash_key());
+        tokio::fs::create_dir_all(&cache_dir).await.map_err(|e| {
+            Self::Error::from_io_error("creating cache directory".to_string(), cache_dir.clone(), e)
+        })?;
+
+        let cache_file_path = cache_dir.join(self.cache_file_name());
+
+        // Open or create the cache file
+        let cache_file = tokio::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&cache_file_path)
+            .await
+            .map_err(|e| {
+                Self::Error::from_io_error(
+                    "opening cache file".to_string(),
+                    cache_file_path.clone(),
+                    e,
+                )
+            })?;
+
+        // Acquire lock
+        let mut locked_cache_file = cache_file.lock_write().await.map_err(|e| {
+            Self::Error::from_io_error(
+                "locking cache file".to_string(),
+                cache_file_path.clone(),
+                e.error,
+            )
+        })?;
+
+        // Check if cache was updated by another process
+        let mut current_contents = String::new();
+        locked_cache_file
+            .read_to_string(&mut current_contents)
+            .await
+            .map_err(|e| {
+                Self::Error::from_io_error(
+                    "reading cache file".to_string(),
+                    cache_file_path.clone(),
+                    e,
+                )
+            })?;
+
+        // Version check: if cache exists and has different version, return conflict
+        if !current_contents.is_empty() {
+            if let Ok(current_metadata) = serde_json::from_str::<Self::Metadata>(&current_contents)
+            {
+                if current_metadata.cache_version() != expected_version {
+                    // Cache was updated by another process
+                    drop(locked_cache_file);
+                    return Ok(WriteResult::Conflict(current_metadata));
+                }
+            }
+        }
+
+        // Version matches (or cache is empty), write new data
+        let mut new_metadata = metadata;
+        new_metadata.set_cache_version(expected_version + 1);
+
+        // Serialize the new metadata
+        let bytes =
+            serde_json::to_vec(&new_metadata).expect("serialization to JSON should not fail");
+
+        // Write to file
+        locked_cache_file
+            .seek(SeekFrom::Start(0))
+            .await
+            .map_err(|e| {
+                Self::Error::from_io_error(
+                    "seeking to start of cache file".to_string(),
+                    cache_file_path.clone(),
+                    e,
+                )
+            })?;
+
+        locked_cache_file.write_all(&bytes).await.map_err(|e| {
+            Self::Error::from_io_error(
+                "writing metadata to cache file".to_string(),
+                cache_file_path.clone(),
+                e,
+            )
+        })?;
+
+        // Truncate file to new size
+        locked_cache_file
+            .inner_mut()
+            .set_len(bytes.len() as u64)
+            .await
+            .map_err(|e| {
+                Self::Error::from_io_error(
+                    "setting length of cache file".to_string(),
+                    cache_file_path.clone(),
+                    e,
+                )
+            })?;
+
+        // Flush to ensure data is written
+        locked_cache_file.flush().await.map_err(|e| {
+            Self::Error::from_io_error("flushing cache file".to_string(), cache_file_path, e)
+        })?;
+
+        // Release lock
+        drop(locked_cache_file);
+
+        Ok(WriteResult::Written)
     }
 }
 
@@ -109,56 +235,27 @@ pub trait CacheKey {
 /// Implementors must be serializable and deserializable.
 pub trait CachedMetadata: Serialize + DeserializeOwned {}
 
+/// Trait for cached metadata that supports versioning for optimistic locking.
+pub trait VersionedMetadata: CachedMetadata {
+    /// Gets the current cache version
+    fn cache_version(&self) -> u64;
+
+    /// Sets the cache version
+    fn set_cache_version(&mut self, version: u64);
+}
+
+/// Result of attempting to write to the cache with version checking.
+#[derive(Debug)]
+pub enum WriteResult<M> {
+    /// The cache was successfully written.
+    Written,
+    /// The cache was updated by another process during computation.
+    /// Contains the metadata that was written by the other process.
+    Conflict(M),
+}
+
 /// Error trait to ensure consistent error handling across cache implementations.
 pub trait CacheError: std::error::Error + Sized {
     /// Creates an error from an I/O error with context about the operation
     fn from_io_error(operation: String, path: PathBuf, error: std::io::Error) -> Self;
-}
-
-/// A cache entry returned by [`MetadataCache::entry`] which enables
-/// updating the cache.
-///
-/// As long as this entry is held, no other process can access this cache entry.
-#[derive(Debug)]
-pub struct CacheEntry<C: MetadataCache> {
-    file: RwLockWriteGuard<tokio::fs::File>,
-    path: PathBuf,
-    _phantom: PhantomData<C>,
-}
-
-impl<C: MetadataCache> CacheEntry<C> {
-    /// Writes the given metadata to the cache.
-    pub async fn write(&mut self, metadata: C::Metadata) -> Result<(), C::Error> {
-        self.file.seek(SeekFrom::Start(0)).await.map_err(|e| {
-            C::Error::from_io_error(
-                "seeking to start of cache file".to_string(),
-                self.path.clone(),
-                e,
-            )
-        })?;
-
-        let bytes = serde_json::to_vec(&metadata).expect("serialization to JSON should not fail");
-
-        self.file.write_all(&bytes).await.map_err(|e| {
-            C::Error::from_io_error(
-                "writing metadata to cache file".to_string(),
-                self.path.clone(),
-                e,
-            )
-        })?;
-
-        self.file
-            .inner_mut()
-            .set_len(bytes.len() as u64)
-            .await
-            .map_err(|e| {
-                C::Error::from_io_error(
-                    "setting length of cache file".to_string(),
-                    self.path.clone(),
-                    e,
-                )
-            })?;
-
-        Ok(())
-    }
 }

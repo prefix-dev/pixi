@@ -58,11 +58,12 @@ pub use backend_source_build::{
     BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildMethod,
     BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method,
 };
-pub use build::{BuildEnvironment, CachedCondaMetadata, MetadataKind};
+pub use build::BuildEnvironment;
 pub use build_backend_metadata::calculate_additional_glob_hash;
 pub use build_backend_metadata::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
 };
+pub use cache::build_backend_metadata::{CachedCondaMetadata, MetadataKind};
 pub use cache_dirs::CacheDirs;
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,

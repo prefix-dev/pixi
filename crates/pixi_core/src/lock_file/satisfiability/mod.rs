@@ -1766,6 +1766,8 @@ pub(crate) async fn verify_package_platform_satisfiability(
             // (nichmor): In my testing, it is always and array of one element.
             // should we just pop the first one?
             let current_record = current_source_metadata
+                .cached_metadata
+                .metadata
                 .records
                 .iter()
                 .find(|r| r.package_record.name == source_record.package_record.name);

@@ -55,13 +55,6 @@ pub struct SourceMetadata {
     /// this is used mainly for out-of-tree builds
     pub build_source: Option<PinnedSourceSpec>,
 
-    /// The cache entry that contains the metadata acquired from the build
-    /// backend.
-    ///
-    /// As long as the cache entry is not dropped, the metadata cannot be
-    /// accessed by another process.
-    pub cache_entry: source_metadata::CacheEntry,
-
     /// The metadata that was acquired from the build backend.
     pub cached_metadata: CachedSourceMetadata,
 }
@@ -99,17 +92,25 @@ impl SourceMetadataSpec {
         // Get the skip_cache flag from the build backend metadata
         let skip_cache = build_backend_metadata.skip_cache;
 
-        let (metadata, mut cache_entry) = command_dispatcher
+        let cache_read_result = command_dispatcher
             .source_metadata_cache()
-            .entry(&cache_key)
+            .read(&cache_key)
             .await
             .map_err(SourceMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
 
+        let (cached_metadata, cache_version) = match cache_read_result {
+            Some((metadata, version)) => (Some(metadata), version),
+            // Start at cache version 0 if no cache exists
+            None => (None, 0),
+        };
+
         if !skip_cache {
-            if let Some(cached_metadata) =
-                Self::verify_cache_freshness(&build_backend_metadata.metadata.input_hash, metadata)
-                    .await?
+            if let Some(cached_metadata) = Self::verify_cache_freshness(
+                &build_backend_metadata.metadata.input_hash,
+                cached_metadata,
+            )
+            .await?
             {
                 tracing::debug!(
                     "Using cached source metadata for package {}",
@@ -119,7 +120,6 @@ impl SourceMetadataSpec {
                     manifest_source: build_backend_metadata.manifest_source.clone(),
                     build_source: build_backend_metadata.build_source.clone(),
                     cached_metadata,
-                    cache_entry,
                 });
             }
         }
@@ -137,22 +137,33 @@ impl SourceMetadataSpec {
 
                 let cached_source_metadata = CachedSourceMetadata {
                     id: random(),
+                    cache_version,
                     input_hash: build_backend_metadata.metadata.input_hash.clone(),
                     metadata: Metadata {
                         records: records.clone(),
                     },
                 };
 
-                // Store the metadata in the cache for later retrieval
-                cache_entry
-                    .write(cached_source_metadata.clone())
+                // Try to store the metadata in the cache with version checking
+                match command_dispatcher
+                    .source_metadata_cache()
+                    .try_write(&cache_key, cached_source_metadata.clone(), cache_version)
                     .await
                     .map_err(SourceMetadataError::Cache)
-                    .map_err(CommandDispatcherError::Failed)?;
+                    .map_err(CommandDispatcherError::Failed)?
+                {
+                    source_metadata::WriteResult::Written => {
+                        tracing::trace!("Cache updated successfully");
+                    }
+                    source_metadata::WriteResult::Conflict(_other_metadata) => {
+                        tracing::debug!(
+                            "Cache was updated by another process during computation (version conflict), using our computed result"
+                        );
+                    }
+                }
 
                 Ok(SourceMetadata {
                     manifest_source: build_backend_metadata.manifest_source.clone(),
-                    cache_entry,
                     cached_metadata: cached_source_metadata,
                     build_source: build_backend_metadata.build_source.clone(),
                 })
@@ -175,21 +186,32 @@ impl SourceMetadataSpec {
 
                 let cached_source_metadata = CachedSourceMetadata {
                     id: random(),
+                    cache_version,
                     input_hash: build_backend_metadata.metadata.input_hash.clone(),
                     metadata: Metadata {
                         records: futures.try_collect().await?,
                     },
                 };
 
-                // Store the metadata in the cache for later retrieval
-                cache_entry
-                    .write(cached_source_metadata.clone())
+                // Try to store the metadata in the cache with version checking
+                match command_dispatcher
+                    .source_metadata_cache()
+                    .try_write(&cache_key, cached_source_metadata.clone(), cache_version)
                     .await
                     .map_err(SourceMetadataError::Cache)
-                    .map_err(CommandDispatcherError::Failed)?;
+                    .map_err(CommandDispatcherError::Failed)?
+                {
+                    source_metadata::WriteResult::Written => {
+                        tracing::trace!("Cache updated successfully");
+                    }
+                    source_metadata::WriteResult::Conflict(_other_metadata) => {
+                        tracing::debug!(
+                            "Cache was updated by another process during computation (version conflict), using our computed result"
+                        );
+                    }
+                }
 
                 Ok(SourceMetadata {
-                    cache_entry,
                     cached_metadata: cached_source_metadata,
                     manifest_source: build_backend_metadata.manifest_source.clone(),
                     build_source: build_backend_metadata.build_source.clone(),
