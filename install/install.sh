@@ -29,7 +29,7 @@ __wrap__() {
     case "$PIXI_HOME" in
     '~' | '~'/*) PIXI_HOME="${HOME-}${PIXI_HOME#\~}" ;; # expand tilde
     esac
-    BIN_DIR="$PIXI_HOME/bin"
+    PIXI_BIN_DIR="${PIXI_BIN_DIR:-$PIXI_HOME/bin}"
 
     REPOURL="${PIXI_REPOURL:-https://github.com/prefix-dev/pixi}"
     PLATFORM="$(uname -s)"
@@ -165,9 +165,9 @@ __wrap__() {
     fi
 
     # Extract pixi from the downloaded file
-    mkdir -p "$BIN_DIR"
+    mkdir -p "$PIXI_BIN_DIR"
     if [ "${EXTENSION-}" = ".zip" ]; then
-        unzip "$TEMP_FILE" -d "$BIN_DIR"
+        unzip "$TEMP_FILE" -d "$PIXI_BIN_DIR"
     elif [ "${EXTENSION-}" = ".tar.gz" ]; then
         # Extract to a temporary directory first
         TEMP_DIR=$(mktemp -d)
@@ -175,21 +175,21 @@ __wrap__() {
 
         # Find and move the `pixi` binary, making sure to handle the case where it's in a subdirectory
         if [ -f "$TEMP_DIR/pixi" ]; then
-            mv "$TEMP_DIR/pixi" "$BIN_DIR/"
+            mv "$TEMP_DIR/pixi" "$PIXI_BIN_DIR/"
         else
-            mv "$(find "$TEMP_DIR" -type f -name pixi)" "$BIN_DIR/"
+            mv "$(find "$TEMP_DIR" -type f -name pixi)" "$PIXI_BIN_DIR/"
         fi
 
-        chmod +x "$BIN_DIR/pixi"
+        chmod +x "$PIXI_BIN_DIR/pixi"
         rm -rf "$TEMP_DIR"
     elif [ "${EXTENSION-}" = ".exe" ]; then
-        cp -f "$TEMP_FILE" "$BIN_DIR/pixi.exe"
+        cp -f "$TEMP_FILE" "$PIXI_BIN_DIR/pixi.exe"
     else
         chmod +x "$TEMP_FILE"
-        cp -f "$TEMP_FILE" "$BIN_DIR/pixi"
+        cp -f "$TEMP_FILE" "$PIXI_BIN_DIR/pixi"
     fi
 
-    echo "The 'pixi' binary is installed into '${BIN_DIR}'"
+    echo "The 'pixi' binary is installed into '${PIXI_BIN_DIR}'"
 
     # shell update can be suppressed by `PIXI_NO_PATH_UPDATE` env var
     if [ -n "${PIXI_NO_PATH_UPDATE:-}" ]; then
@@ -215,28 +215,28 @@ __wrap__() {
         case "$(basename "${SHELL-}")" in
         bash)
             # Default to bashrc as that is used in non login shells instead of the profile.
-            LINE="export PATH=\"${BIN_DIR}:\$PATH\""
+            LINE="export PATH=\"${PIXI_BIN_DIR}:\$PATH\""
             update_shell ~/.bashrc "$LINE"
             ;;
 
         fish)
-            LINE="fish_add_path ${BIN_DIR}"
+            LINE="fish_add_path ${PIXI_BIN_DIR}"
             update_shell ~/.config/fish/config.fish "$LINE"
             ;;
 
         zsh)
-            LINE="export PATH=\"${BIN_DIR}:\$PATH\""
+            LINE="export PATH=\"${PIXI_BIN_DIR}:\$PATH\""
             update_shell ~/.zshrc "$LINE"
             ;;
 
         tcsh)
-            LINE="set path = ( ${BIN_DIR} \$path )"
+            LINE="set path = ( ${PIXI_BIN_DIR} \$path )"
             update_shell ~/.tcshrc "$LINE"
             ;;
 
         '')
             echo "warn: Could not detect shell type." >&2
-            echo "      Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command." >&2
+            echo "      Please permanently add '${PIXI_BIN_DIR}' to your \$PATH to enable the 'pixi' command." >&2
             ;;
 
         *)
