@@ -143,13 +143,13 @@ impl<I: Interface> WorkspaceContext<I> {
         dep_options: DependencyOptions,
         git_options: GitOptions,
     ) -> miette::Result<Option<UpdateDeps>> {
-        crate::workspace::add::add_conda_dep(
+        Box::pin(crate::workspace::add::add_conda_dep(
             self.workspace_mut()?,
             specs,
             spec_type,
             dep_options,
             git_options,
-        )
+        ))
         .await
     }
 
@@ -159,8 +159,13 @@ impl<I: Interface> WorkspaceContext<I> {
         editable: bool,
         options: DependencyOptions,
     ) -> miette::Result<Option<UpdateDeps>> {
-        crate::workspace::add::add_pypi_dep(self.workspace_mut()?, pypi_deps, editable, options)
-            .await
+        Box::pin(crate::workspace::add::add_pypi_dep(
+            self.workspace_mut()?,
+            pypi_deps,
+            editable,
+            options,
+        ))
+        .await
     }
 
     pub async fn remove_conda_deps(
@@ -169,12 +174,12 @@ impl<I: Interface> WorkspaceContext<I> {
         spec_type: SpecType,
         dep_options: DependencyOptions,
     ) -> miette::Result<()> {
-        crate::workspace::remove::remove_conda_deps(
+        Box::pin(crate::workspace::remove::remove_conda_deps(
             self.workspace_mut()?,
             specs,
             spec_type,
             dep_options,
-        )
+        ))
         .await
     }
 
@@ -183,7 +188,12 @@ impl<I: Interface> WorkspaceContext<I> {
         pypi_deps: PypiDeps,
         options: DependencyOptions,
     ) -> miette::Result<()> {
-        crate::workspace::remove::remove_pypi_deps(self.workspace_mut()?, pypi_deps, options).await
+        Box::pin(crate::workspace::remove::remove_pypi_deps(
+            self.workspace_mut()?,
+            pypi_deps,
+            options,
+        ))
+        .await
     }
 
     pub async fn reinstall(
