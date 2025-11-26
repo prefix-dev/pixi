@@ -1,5 +1,6 @@
 use crate::environment::EnvironmentIdx;
 use indexmap::{Equivalent, IndexMap};
+use serde::{Deserialize, Serialize};
 use std::hash::Hash;
 use std::ops::Index;
 
@@ -24,7 +25,7 @@ impl Index<SolveGroupIdx> for SolveGroups {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct SolveGroupIdx(pub(crate) usize);
 

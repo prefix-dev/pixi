@@ -70,6 +70,7 @@ fn to_pixi_spec_v1(
                 // These are currently explicitly ignored in the conversion
                 namespace: _,
                 extras: _,
+                condition: _,
             } = binary.try_into_nameless_match_spec(channel_config)?;
             pbt::PackageSpecV1::Binary(Box::new(pbt::BinaryPackageSpecV1 {
                 version,
