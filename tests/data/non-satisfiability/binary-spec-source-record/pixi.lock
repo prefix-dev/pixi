@@ -18,6 +18,10 @@ packages:
   depends:
   - vc >=14.1,<15
   - vc14_runtime >=14.16.27033
+  input:
+    hash: a3c04eab345d02c20c544f694526f0ed92e07d7b0ebfe0f55ad5e6b752259223
+    globs:
+    - pixi.toml
 - conda: https://conda.anaconda.org/conda-forge/win-64/ucrt-10.0.22621.0-h57928b3_1.conda
   sha256: db8dead3dd30fb1a032737554ce91e2819b43496a0db09927edf01c32b577450
   md5: 6797b005cd0f439c4c5c9ac565783700

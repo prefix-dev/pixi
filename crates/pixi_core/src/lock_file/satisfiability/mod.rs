@@ -422,7 +422,7 @@ pub enum PlatformUnsat {
     )]
     PackageBuildSourceMismatch(String, SourceMismatchError),
 
-    #[error("the locked metadata package source for '{0}' changed")]
+    #[error("the locked metadata of '{0}' package changed")]
     SourcePackageMetadataChanged(String),
 
     #[error(
