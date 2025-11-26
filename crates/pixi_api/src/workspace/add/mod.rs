@@ -8,14 +8,11 @@ use pixi_manifest::{FeatureName, KnownPreviewFeature, SpecType};
 use pixi_spec::{GitSpec, SourceLocationSpec, SourceSpec};
 use rattler_conda_types::{MatchSpec, PackageName};
 
-use crate::interface::Interface;
-
 mod options;
 
 pub use options::{DependencyOptions, GitOptions};
 
-pub async fn add_conda_dep<I: Interface>(
-    _interface: &I,
+pub async fn add_conda_dep(
     mut workspace: WorkspaceMut,
     specs: IndexMap<PackageName, MatchSpec>,
     spec_type: SpecType,
@@ -108,8 +105,7 @@ pub async fn add_conda_dep<I: Interface>(
     Ok(update_deps)
 }
 
-pub async fn add_pypi_dep<I: Interface>(
-    _interface: &I,
+pub async fn add_pypi_dep(
     mut workspace: WorkspaceMut,
     pypi_deps: PypiDeps,
     editable: bool,
