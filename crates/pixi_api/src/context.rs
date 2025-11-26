@@ -17,12 +17,14 @@ use crate::workspace::add::GitOptions;
 use crate::workspace::{DependencyOptions, InitOptions, ReinstallOptions};
 
 pub struct DefaultContext<I: Interface> {
-    interface: I,
+    _interface: I,
 }
 
 impl<I: Interface> DefaultContext<I> {
     pub fn new(interface: I) -> Self {
-        Self { interface }
+        Self {
+            _interface: interface,
+        }
     }
 
     /// Returns all matching package versions sorted by version
@@ -32,14 +34,7 @@ impl<I: Interface> DefaultContext<I> {
         channels: IndexSet<Channel>,
         platform: Platform,
     ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-        crate::workspace::search::search_exact(
-            &self.interface,
-            None,
-            match_spec,
-            channels,
-            platform,
-        )
-        .await
+        crate::workspace::search::search_exact(None, match_spec, channels, platform).await
     }
 
     /// Returns all matching packages with their latest versions
@@ -49,8 +44,7 @@ impl<I: Interface> DefaultContext<I> {
         channels: IndexSet<Channel>,
         platform: Platform,
     ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-        crate::workspace::search::search_wildcard(&self.interface, None, search, channels, platform)
-            .await
+        crate::workspace::search::search_wildcard(None, search, channels, platform).await
     }
 }
 
@@ -150,7 +144,6 @@ impl<I: Interface> WorkspaceContext<I> {
         git_options: GitOptions,
     ) -> miette::Result<Option<UpdateDeps>> {
         crate::workspace::add::add_conda_dep(
-            &self.interface,
             self.workspace_mut()?,
             specs,
             spec_type,
@@ -166,14 +159,8 @@ impl<I: Interface> WorkspaceContext<I> {
         editable: bool,
         options: DependencyOptions,
     ) -> miette::Result<Option<UpdateDeps>> {
-        crate::workspace::add::add_pypi_dep(
-            &self.interface,
-            self.workspace_mut()?,
-            pypi_deps,
-            editable,
-            options,
-        )
-        .await
+        crate::workspace::add::add_pypi_dep(self.workspace_mut()?, pypi_deps, editable, options)
+            .await
     }
 
     pub async fn remove_conda_deps(
@@ -183,7 +170,6 @@ impl<I: Interface> WorkspaceContext<I> {
         dep_options: DependencyOptions,
     ) -> miette::Result<()> {
         crate::workspace::remove::remove_conda_deps(
-            &self.interface,
             self.workspace_mut()?,
             specs,
             spec_type,
@@ -197,13 +183,7 @@ impl<I: Interface> WorkspaceContext<I> {
         pypi_deps: PypiDeps,
         options: DependencyOptions,
     ) -> miette::Result<()> {
-        crate::workspace::remove::remove_pypi_deps(
-            &self.interface,
-            self.workspace_mut()?,
-            pypi_deps,
-            options,
-        )
-        .await
+        crate::workspace::remove::remove_pypi_deps(self.workspace_mut()?, pypi_deps, options).await
     }
 
     pub async fn reinstall(
@@ -224,7 +204,7 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         environment: Option<EnvironmentName>,
     ) -> miette::Result<HashMap<EnvironmentName, HashMap<TaskName, Task>>> {
-        crate::workspace::task::list_tasks(&self.interface, &self.workspace, environment).await
+        crate::workspace::task::list_tasks(&self.workspace, environment).await
     }
 
     pub async fn add_task(
@@ -284,7 +264,6 @@ impl<I: Interface> WorkspaceContext<I> {
         platform: Platform,
     ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
         crate::workspace::search::search_exact(
-            &self.interface,
             Some(&self.workspace),
             match_spec,
             channels,
@@ -300,13 +279,7 @@ impl<I: Interface> WorkspaceContext<I> {
         channels: IndexSet<Channel>,
         platform: Platform,
     ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-        crate::workspace::search::search_wildcard(
-            &self.interface,
-            Some(&self.workspace),
-            search,
-            channels,
-            platform,
-        )
-        .await
+        crate::workspace::search::search_wildcard(Some(&self.workspace), search, channels, platform)
+            .await
     }
 }

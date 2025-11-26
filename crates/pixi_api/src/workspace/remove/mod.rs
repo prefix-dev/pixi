@@ -9,10 +9,9 @@ use pixi_core::{
 use pixi_manifest::{FeaturesExt, SpecType};
 use rattler_conda_types::{MatchSpec, PackageName};
 
-use crate::{interface::Interface, workspace::DependencyOptions};
+use crate::workspace::DependencyOptions;
 
-pub async fn remove_conda_deps<I: Interface>(
-    _interface: &I,
+pub async fn remove_conda_deps(
     mut workspace: WorkspaceMut,
     specs: IndexMap<PackageName, MatchSpec>,
     spec_type: SpecType,
@@ -71,8 +70,7 @@ pub async fn remove_conda_deps<I: Interface>(
     Ok(())
 }
 
-pub async fn remove_pypi_deps<I: Interface>(
-    _interface: &I,
+pub async fn remove_pypi_deps(
     mut workspace: WorkspaceMut,
     pypi_deps: PypiDeps,
     options: DependencyOptions,
