@@ -17,7 +17,7 @@ test = "sdl_example -h"
 
 [package]
 authors = ["Bas Zalmstra <bas@prefix.dev>"]
-description = "Showcases how to create a simple C++ executable with Pixi jora"
+description = "Showcases how to create a simple C++ executable with Pixi"
 name = "sdl_example"
 version = "0.1.0"
 
