@@ -122,6 +122,9 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
         let index_strategy = th
             .optional::<TomlEnum<_>>("index-strategy")
             .map(TomlEnum::into_inner);
+        let prerelease_mode = th
+            .optional::<TomlEnum<_>>("prerelease-mode")
+            .map(TomlEnum::into_inner);
 
         let no_build = th.optional::<NoBuild>("no-build");
         let dependency_overrides = th
@@ -138,6 +141,7 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
             find_links,
             no_build_isolation,
             index_strategy,
+            prerelease_mode,
             no_build,
             dependency_overrides,
             no_binary,
@@ -286,6 +290,7 @@ mod test {
                     "pkg2".parse().unwrap()
                 ]),
                 index_strategy: None,
+                prerelease_mode: None,
                 no_build: Default::default(),
                 dependency_overrides: Some(indexmap::IndexMap::from_iter([(
                     PypiPackageName::from_str("numpy").unwrap(),
@@ -309,6 +314,7 @@ mod test {
         ]
         no-build-isolation = ["sigma"]
         index-strategy = "first-index"
+        prerelease-mode = "allow"
         no-build = true
         no-binary = ["package1", "package2"]
         "#;

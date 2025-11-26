@@ -873,3 +873,127 @@ async fn test_uv_index_correctly_parsed() {
             .contains(&simple.index_path().display().to_string())
     );
 }
+
+/// Tests that prerelease-mode = "allow" allows pre-release versions to be resolved.
+/// Without this setting, the resolver would skip pre-releases unless explicitly requested.
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_prerelease_mode_allow() {
+    setup_tracing();
+
+    // Build a local simple index with both a stable and prerelease version
+    let simple = PyPIDatabase::new()
+        .with(PyPIPackage::new("testpkg", "1.0.0"))
+        .with(PyPIPackage::new("testpkg", "2.0.0a1")) // Pre-release version
+        .into_simple_index()
+        .expect("failed to create local simple index");
+
+    let platform = Platform::current();
+
+    let mut package_db = PackageDatabase::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+    let channel_url = channel.url();
+
+    // With prerelease-mode = "allow", the resolver should pick the pre-release 2.0.0a1
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [project]
+        name = "prerelease-test"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        testpkg = "*"
+
+        [pypi-options]
+        index-url = "{index_url}"
+        prerelease-mode = "allow"
+        "#,
+        platform = platform,
+        channel_url = channel_url,
+        index_url = simple.index_url(),
+    ))
+    .unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // With prerelease-mode = "allow", we should get the pre-release version 2.0.0a1
+    // because it's the highest version available
+    let locked_version = lock_file
+        .get_pypi_package_version("default", platform, "testpkg")
+        .expect("testpkg should be in lock file");
+    assert_eq!(
+        locked_version.to_string(),
+        "2.0.0a1",
+        "With prerelease-mode = 'allow', the pre-release version should be selected"
+    );
+}
+
+/// Tests that prerelease-mode = "disallow" prevents pre-release versions from being resolved.
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_prerelease_mode_disallow() {
+    setup_tracing();
+
+    // Build a local simple index with both a stable and prerelease version
+    let simple = PyPIDatabase::new()
+        .with(PyPIPackage::new("testpkg", "1.0.0"))
+        .with(PyPIPackage::new("testpkg", "2.0.0a1")) // Pre-release version
+        .into_simple_index()
+        .expect("failed to create local simple index");
+
+    let platform = Platform::current();
+
+    let mut package_db = PackageDatabase::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+    let channel_url = channel.url();
+
+    // With prerelease-mode = "disallow", the resolver should pick the stable 1.0.0
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [project]
+        name = "prerelease-test"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        testpkg = "*"
+
+        [pypi-options]
+        index-url = "{index_url}"
+        prerelease-mode = "disallow"
+        "#,
+        platform = platform,
+        channel_url = channel_url,
+        index_url = simple.index_url(),
+    ))
+    .unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // With prerelease-mode = "disallow", we should get the stable version 1.0.0
+    let locked_version = lock_file
+        .get_pypi_package_version("default", platform, "testpkg")
+        .expect("testpkg should be in lock file");
+    assert_eq!(
+        locked_version.to_string(),
+        "1.0.0",
+        "With prerelease-mode = 'disallow', the stable version should be selected"
+    );
+}
