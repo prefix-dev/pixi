@@ -581,7 +581,7 @@ impl WorkspaceManifestMut<'_> {
         channels: impl IntoIterator<Item = PrioritizedChannel>,
         feature_name: &FeatureName,
         prepend: bool,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<IndexSet<PrioritizedChannel>> {
         // First collect all the new channels
         let to_add: IndexSet<_> = channels.into_iter().collect();
 
@@ -625,7 +625,7 @@ impl WorkspaceManifestMut<'_> {
             channels.push(Value::from(channel));
         }
 
-        Ok(())
+        Ok(new)
     }
 
     /// Remove the specified channels to the manifest.
