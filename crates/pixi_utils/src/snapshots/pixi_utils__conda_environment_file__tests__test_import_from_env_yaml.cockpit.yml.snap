@@ -26,6 +26,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -48,6 +49,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -78,6 +80,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -108,6 +111,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -138,6 +142,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -168,6 +173,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -198,6 +204,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -228,6 +235,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -258,6 +266,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -288,6 +297,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -318,6 +328,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -348,6 +359,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -378,6 +390,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -408,6 +421,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -438,6 +452,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -468,6 +483,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -498,6 +514,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -528,6 +545,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -558,6 +576,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -598,6 +617,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
@@ -628,6 +648,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
         ],
         [
