@@ -9,6 +9,7 @@ use ordermap::OrderMap;
 use pixi_build_type_conversions::{to_project_model_v1, to_target_selector_v1};
 use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
 use pixi_config::Config;
+use pixi_consts::consts::{RATTLER_BUILD_DIRS, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES};
 use pixi_manifest::{
     DiscoveryStart, ExplicitManifestError, PackageManifest, PrioritizedChannel, WithProvenance,
     WorkspaceDiscoverer, WorkspaceDiscoveryError, WorkspaceManifest,
@@ -22,10 +23,6 @@ use crate::{
     BackendSpec,
     backend_spec::{CommandSpec, EnvironmentSpec, JsonRpcBackendSpec},
 };
-
-const RATTLER_BUILD_FILE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
-const RATTLER_BUILD_DIRS: [&str; 2] = ["", "recipe"];
-const ROS_BACKEND_FILE_NAMES: [&str; 1] = ["package.xml"];
 
 /// Describes a backend discovered for a given source location.
 #[derive(Debug, Clone)]
@@ -118,9 +115,12 @@ pub enum DiscoveryError {
 
     #[error("the source directory '{0}', does not contain a supported manifest")]
     #[diagnostic(help(
-        "Ensure that the source directory contains a valid pixi.toml or recipe.yaml file."
+        "Ensure that the source directory contains a valid pixi.toml, pyproject.toml, recipe.yaml, package.xml or mojoproject.toml file."
     ))]
     FailedToDiscover(String),
+
+    #[error("the manifest path '{0}', does not have a parent directory")]
+    NoParentDir(PathBuf),
 }
 
 impl DiscoveredBackend {
@@ -327,14 +327,9 @@ impl DiscoveredBackend {
             ));
         };
 
-        Self::from_package_and_workspace(
-            // source_path,
-            &package_manifest,
-            &manifests.workspace,
-            channel_config,
-        )
-        .map_err(DiscoveryError::SpecConversionError)
-        .map(Some)
+        Self::from_package_and_workspace(&package_manifest, &manifests.workspace, channel_config)
+            .map_err(DiscoveryError::SpecConversionError)
+            .map(Some)
     }
 
     /// Try to discover a rattler build recipe in the repository.
@@ -376,7 +371,12 @@ impl DiscoveredBackend {
                 workspace_root: source_dir.clone(),
                 build_source: None,
                 source_anchor: source_dir,
-                manifest_path: package_xml_absolute_path,
+                manifest_path: package_xml_absolute_path
+                    .parent()
+                    .ok_or(DiscoveryError::NoParentDir(
+                        package_xml_absolute_path.clone(),
+                    ))?
+                    .to_path_buf(),
                 project_model: Some(ProjectModelV1::default()),
                 configuration: None,
                 target_configuration: None,

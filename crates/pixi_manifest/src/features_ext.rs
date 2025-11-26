@@ -68,7 +68,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             .collect()
     }
 
-    /// Returns the channel priority, error on multiple values, return None if
+    /// Returns the channel priority, error on multiple, different values, return None if
     /// no value is set.
     ///
     /// When using multiple channel priorities over different features we should
@@ -77,7 +77,8 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         let mut channel_priority = None;
         for feature in self.features() {
             if let Some(priority) = feature.channel_priority {
-                if channel_priority == Some(priority) {
+                // If we already have a priority and it's different, error
+                if channel_priority.is_some() && channel_priority != Some(priority) {
                     return Err(ChannelPriorityCombinationError);
                 }
                 channel_priority = Some(priority);

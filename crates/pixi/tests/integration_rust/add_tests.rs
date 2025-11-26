@@ -89,19 +89,19 @@ async fn add_with_channel() {
 
     let pixi = PixiControl::new().unwrap();
 
-    pixi.init().no_fast_prefix_overwrite(true).await.unwrap();
+    pixi.init().await.unwrap();
 
-    pixi.add("https://prefix.dev/conda-forge::py_rattler")
+    pixi.add("https://prefix.dev/conda-forge::_openmp_mutex")
         .with_install(false)
         .with_frozen(true)
         .await
         .unwrap();
 
     pixi.project_channel_add()
-        .with_channel("https://conda.anaconda.org/conda-forge")
+        .with_channel("https://prefix.dev/robostack-kilted")
         .await
         .unwrap();
-    pixi.add("https://conda.anaconda.org/conda-forge::_r-mutex")
+    pixi.add("https://prefix.dev/robostack-kilted::ros2-distro-mutex")
         .with_install(false)
         .await
         .unwrap();
@@ -113,17 +113,17 @@ async fn add_with_channel() {
         .into_specs();
 
     let (name, spec) = specs.next().unwrap();
-    assert_eq!(name, PackageName::try_from("py_rattler").unwrap());
+    assert_eq!(name, PackageName::try_from("_openmp_mutex").unwrap());
     assert_eq!(
         spec.into_detailed().unwrap().channel.unwrap().as_str(),
         "https://prefix.dev/conda-forge"
     );
 
     let (name, spec) = specs.next().unwrap();
-    assert_eq!(name, PackageName::try_from("_r-mutex").unwrap());
+    assert_eq!(name, PackageName::try_from("ros2-distro-mutex").unwrap());
     assert_eq!(
         spec.into_detailed().unwrap().channel.unwrap().as_str(),
-        "conda-forge"
+        "https://prefix.dev/robostack-kilted"
     );
 }
 

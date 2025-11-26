@@ -9,8 +9,8 @@ repository.workspace = true
 version = "0.1.0"
 
 [features]
-slow_integration_tests = []
 self_update = []
+slow_integration_tests = []
 
 [dependencies]
 async-once-cell = { workspace = true }

@@ -13,62 +13,55 @@ pub enum SourceAnchor {
     Workspace,
 
     /// The source is relative to another source package.
-    Source(SourceSpec),
+    Source(SourceLocationSpec),
 }
 
 impl From<SourceSpec> for SourceAnchor {
     fn from(value: SourceSpec) -> Self {
+        SourceAnchor::Source(value.location)
+    }
+}
+
+impl From<SourceLocationSpec> for SourceAnchor {
+    fn from(value: SourceLocationSpec) -> Self {
         SourceAnchor::Source(value)
     }
 }
 
 impl SourceAnchor {
-    /// Resolve a source spec relative to this anchor.
-    pub fn resolve(&self, spec: SourceSpec) -> SourceSpec {
+    /// Resolve a source location spec relative to this anchor.
+    pub fn resolve(&self, spec: SourceLocationSpec) -> SourceLocationSpec {
         // If this instance is already anchored to the workspace we can simply return
         // immediately.
         let SourceAnchor::Source(base) = self else {
-            return match spec.location {
-                SourceLocationSpec::Url(url) => SourceSpec {
-                    location: SourceLocationSpec::Url(url),
-                },
-                SourceLocationSpec::Git(git) => SourceSpec {
-                    location: SourceLocationSpec::Git(git),
-                },
+            return match spec {
+                SourceLocationSpec::Url(url) => SourceLocationSpec::Url(url),
+                SourceLocationSpec::Git(git) => SourceLocationSpec::Git(git),
                 SourceLocationSpec::Path(PathSourceSpec { path }) => {
-                    SourceSpec {
-                        location: SourceLocationSpec::Path(PathSourceSpec {
-                            // Normalize the input path.
-                            path: normalize_typed(path.to_path()),
-                        }),
-                    }
+                    SourceLocationSpec::Path(PathSourceSpec {
+                        // Normalize the input path.
+                        path: normalize_typed(path.to_path()),
+                    })
                 }
             };
         };
 
         // Only path specs can be relative.
-        let SourceSpec {
-            location: SourceLocationSpec::Path(PathSourceSpec { path }),
-        } = spec
-        else {
+        let SourceLocationSpec::Path(PathSourceSpec { path }) = spec else {
             return spec;
         };
 
         // If the path is absolute we can just return it.
         if path.is_absolute() || path.starts_with("~") {
-            return SourceSpec {
-                location: SourceLocationSpec::Path(PathSourceSpec { path }),
-            };
+            return SourceLocationSpec::Path(PathSourceSpec { path });
         }
 
-        match &base.location {
+        match base {
             SourceLocationSpec::Path(PathSourceSpec { path: base }) => {
                 let relative_path = normalize_typed(base.join(path).to_path());
-                SourceSpec {
-                    location: SourceLocationSpec::Path(PathSourceSpec {
-                        path: relative_path,
-                    }),
-                }
+                SourceLocationSpec::Path(PathSourceSpec {
+                    path: relative_path,
+                })
             }
             SourceLocationSpec::Url(UrlSourceSpec { .. }) => {
                 unimplemented!("Cannot resolve relative paths for URL sources")
@@ -83,13 +76,11 @@ impl SourceAnchor {
                         .join(path)
                         .to_path(),
                 );
-                SourceSpec {
-                    location: SourceLocationSpec::Git(GitSpec {
-                        git: git.clone(),
-                        rev: rev.clone(),
-                        subdirectory: Some(relative_subdir.to_string()),
-                    }),
-                }
+                SourceLocationSpec::Git(GitSpec {
+                    git: git.clone(),
+                    rev: rev.clone(),
+                    subdirectory: Some(relative_subdir.to_string()),
+                })
             }
         }
     }

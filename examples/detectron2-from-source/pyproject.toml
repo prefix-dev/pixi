@@ -1,4 +1,4 @@
-[workspace]
+[project]
 authors = [{ name = "Tim de Jager", email = "tim@prefix.dev" }]
 dependencies = [
   "detectron2 @ git+https://github.com/facebookresearch/detectron2.git@bcfd464d0c810f0442d91a349c0f6df945467143",
@@ -12,8 +12,8 @@ version = "0.1.0"
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
-[tool.pixi.project]
-channels = ["conda-forge"]
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
 platforms = ["osx-arm64", "osx-64", "linux-64"]
 
 [tool.pixi.dependencies]

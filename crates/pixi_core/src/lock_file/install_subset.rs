@@ -53,7 +53,14 @@ impl<'a> From<LockedPackageRef<'a>> for PackageNode {
                         dep_spec
                             .parse::<rattler_conda_types::MatchSpec>()
                             .ok()
-                            .and_then(|spec| spec.name.map(|name| name.as_normalized().to_string()))
+                            .and_then(|spec| {
+                                spec.name.map(|name| {
+                                    name.as_exact()
+                                        .expect("depends can only contain exact package names")
+                                        .as_normalized()
+                                        .to_string()
+                                })
+                            })
                     })
                     .collect()
             }

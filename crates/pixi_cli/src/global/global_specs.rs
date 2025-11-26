@@ -178,10 +178,14 @@ impl GlobalSpecs {
             self.specs
                 .iter()
                 .map(|spec_str| {
-                    MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?
+                    let name = MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?
                         .name
-                        .ok_or(GlobalSpecsConversionError::NameRequired)
-                        .map(|name| pixi_global::project::GlobalSpec::new(name, pixi_spec.clone()))
+                        .and_then(|matcher| matcher.as_exact().cloned())
+                        .ok_or(GlobalSpecsConversionError::NameRequired)?;
+                    Ok(pixi_global::project::GlobalSpec::new(
+                        name,
+                        pixi_spec.clone(),
+                    ))
                 })
                 .collect()
         } else {

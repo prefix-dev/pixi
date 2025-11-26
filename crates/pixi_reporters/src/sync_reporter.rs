@@ -476,6 +476,24 @@ impl rattler::install::Reporter for InstallReporter {
         self.combined.lock().on_link_complete(self.id, index)
     }
 
+    fn on_post_link_start(&self, _package_name: &str, _script_path: &str) -> usize {
+        // Return a dummy index since we don't track post-link scripts
+        0
+    }
+
+    fn on_post_link_complete(&self, _index: usize, _success: bool) {
+        // No-op since we don't track post-link scripts
+    }
+
+    fn on_pre_unlink_start(&self, _package_name: &str, _script_path: &str) -> usize {
+        // Return a dummy index since we don't track pre-unlink scripts
+        0
+    }
+
+    fn on_pre_unlink_complete(&self, _index: usize, _success: bool) {
+        // No-op since we don't track pre-unlink scripts
+    }
+
     fn on_transaction_operation_complete(&self, operation: usize) {
         self.combined
             .lock()

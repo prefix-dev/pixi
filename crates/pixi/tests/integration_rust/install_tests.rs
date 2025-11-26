@@ -362,21 +362,18 @@ async fn install_frozen_skip() {
     setup_tracing();
 
     // Create a project with a local python dependency 'no-build-editable'
-    // and a local conda dependency 'python_rich'
+    // and a local conda dependency 'simple-package'
     let current_platform = Platform::current();
     let manifest = format!(
         r#"
         [workspace]
-        channels = ["conda-forge"]
-        description = "Add a short description here"
-        name = "pyproject"
+        channels = ["https://prefix.dev/conda-forge"]
         platforms = ["{current_platform}"]
         preview = ["pixi-build"]
-        version = "0.1.0"
 
         [dependencies]
         python = "*"
-        python_rich = {{ path = "./python" }}
+        simple-package = {{ path = "./simple-package" }}
 
         [pypi-dependencies]
         no-build-editable = {{ path = "./no-build-editable" }}
@@ -388,7 +385,7 @@ async fn install_frozen_skip() {
     let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
 
     fs_extra::dir::copy(
-        workspace_root.join("docs/source_files/pixi_workspaces/pixi_build/python"),
+        workspace_root.join("tests/data/pixi-build/simple-package"),
         pixi.workspace_path(),
         &fs_extra::dir::CopyOptions::new(),
     )
@@ -403,10 +400,10 @@ async fn install_frozen_skip() {
 
     pixi.update_lock_file().await.unwrap();
 
-    // Check that neither 'python_rich' nor 'no-build-editable' are installed when skipped
+    // Check that neither 'simple-package' nor 'no-build-editable' are installed when skipped
     pixi.install()
         .with_frozen()
-        .with_skipped(vec!["no-build-editable".into(), "python_rich".into()])
+        .with_skipped(vec!["no-build-editable".into(), "simple-package".into()])
         .await
         .unwrap();
 
@@ -415,13 +412,13 @@ async fn install_frozen_skip() {
     let env = create_uv_environment(&prefix_path, &cache);
 
     assert!(!is_pypi_package_installed(&env, "no-build-editable"));
-    assert!(!is_conda_package_installed(&prefix_path, "python_rich").await);
+    assert!(!is_conda_package_installed(&prefix_path, "simple-package").await);
 
-    // Check that 'no-build-editable' and 'python_rich' are installed after a followup normal install
+    // Check that 'no-build-editable' and 'simple-package' are installed after a followup normal install
     pixi.install().with_frozen().await.unwrap();
 
     assert!(is_pypi_package_installed(&env, "no-build-editable"));
-    assert!(is_conda_package_installed(&prefix_path, "python_rich").await);
+    assert!(is_conda_package_installed(&prefix_path, "simple-package").await);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

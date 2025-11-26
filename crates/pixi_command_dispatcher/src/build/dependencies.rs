@@ -8,7 +8,7 @@ use pixi_build_types::{
     },
 };
 use pixi_record::PixiRecord;
-use pixi_spec::{BinarySpec, DetailedSpec, PixiSpec, SourceAnchor, UrlBinarySpec};
+use pixi_spec::{BinarySpec, DetailedSpec, PixiSpec, SourceAnchor, SourceSpec, UrlBinarySpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     InvalidPackageNameError, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName,
@@ -95,12 +95,12 @@ impl Dependencies {
             })?;
             match conversion::from_package_spec_v1(depend.spec.clone()).into_source_or_binary() {
                 Either::Left(source) => {
-                    let source = if let Some(anchor) = &source_anchor {
-                        anchor.resolve(source)
+                    let location = if let Some(anchor) = &source_anchor {
+                        anchor.resolve(source.location)
                     } else {
-                        source
+                        source.location
                     };
-                    dependencies.insert(name, PixiSpec::from(source).into());
+                    dependencies.insert(name, PixiSpec::from(SourceSpec { location }).into());
                 }
                 Either::Right(binary) => {
                     dependencies.insert(name, PixiSpec::from(binary).into());
@@ -287,12 +287,13 @@ fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
     specs
         .iter()
         .filter_map(move |spec| {
-            let (Some(name), spec) = MatchSpec::from_str(spec, ParseStrictness::Lenient)
+            let (Some(name_matcher), spec) = MatchSpec::from_str(spec, ParseStrictness::Lenient)
                 .ok()?
                 .into_nameless()
             else {
                 return None;
             };
+            let name = name_matcher.as_exact().cloned()?;
             if ignore.by_name.contains(&name) {
                 return None;
             }

@@ -10,6 +10,7 @@ on:
       - ".github/workflows/docs.yml"
       - "mkdocs.yml"
       - "pixi.*"
+      - "install/*"
     tags:
       - v**
   pull_request:
@@ -20,6 +21,7 @@ on:
       - ".github/workflows/docs.yml"
       - "mkdocs.yml"
       - "pixi.*"
+      - "install/*"
   workflow_dispatch:
     inputs:
       tag:
@@ -40,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
         with:
           submodules: recursive
 
@@ -60,7 +62,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
         with:
           # fetch everything so we can checkout the tag
           fetch-depth: 0
@@ -101,7 +103,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
         with:
           # fetch everything so we can checkout the tag
           fetch-depth: 0

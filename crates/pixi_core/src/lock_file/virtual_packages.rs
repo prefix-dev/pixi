@@ -4,7 +4,7 @@ use miette::Diagnostic;
 use pixi_manifest::EnvironmentName;
 use pypi_modifiers::pypi_tags::{PyPITagError, get_tags_from_machine, is_python_record};
 use rattler_conda_types::ParseStrictness::Lenient;
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Matches, PackageRecord};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Matches, PackageName, PackageRecord};
 use rattler_conda_types::{ParseMatchSpecError, Platform};
 use rattler_lock::{ConversionError, LockFile, PypiPackageData};
 use rattler_virtual_packages::{
@@ -32,10 +32,14 @@ impl VirtualPackageNotFoundError {
         required_package: &MatchSpec,
         system_virtual_packages: &Vec<&GenericVirtualPackage>,
     ) -> Self {
+        let glibc = PackageName::from_str("__glibc").expect("__glibc is a valid package name");
+        let cuda = PackageName::from_str("__cuda").expect("__cuda is a valid package name");
+        let osx = PackageName::from_str("__osx").expect("__osx is a valid package name");
+
         let override_var = if required_package
             .name
             .as_ref()
-            .is_some_and(|name| name.as_normalized() == "__glibc")
+            .is_some_and(|name| name.matches(&glibc))
         {
             // TODO: would be awesome to set the version based on the required version.
             // 2.17 is used as it's a good default
@@ -43,13 +47,13 @@ impl VirtualPackageNotFoundError {
         } else if required_package
             .name
             .as_ref()
-            .is_some_and(|name| name.as_normalized() == "__cuda")
+            .is_some_and(|name| name.matches(&cuda))
         {
             Some("`CONDA_OVERRIDE_CUDA=12.0`")
         } else if required_package
             .name
             .as_ref()
-            .is_some_and(|name| name.as_normalized() == "__osx")
+            .is_some_and(|name| name.matches(&osx))
         {
             Some("`CONDA_OVERRIDE_OSX=10.15`")
         } else {
@@ -214,11 +218,11 @@ pub(crate) fn validate_system_meets_environment_requirements(
     // Check if all the required virtual conda packages match the system virtual packages
     for required in required_virtual_packages {
         // Check if the package name is in our accepted list
-        let is_accepted = required
-            .name
-            .as_ref()
-            .iter()
-            .any(|name| ACCEPTED_VIRTUAL_PACKAGES.contains(&name.as_normalized()));
+        let is_accepted = required.name.as_ref().iter().any(|name| {
+            name.as_exact()
+                .map(|n| ACCEPTED_VIRTUAL_PACKAGES.contains(&n.as_normalized()))
+                .unwrap_or(false)
+        });
 
         // Skip if not in accepted packages
         if !is_accepted {
@@ -229,8 +233,10 @@ pub(crate) fn validate_system_meets_environment_requirements(
             continue;
         }
 
-        let name = if let Some(name) = required.name.as_ref() {
-            name
+        let name = if let Some(name_matcher) = required.name.as_ref() {
+            name_matcher
+                .as_exact()
+                .expect("virtual package names must be exact")
         } else {
             continue;
         };

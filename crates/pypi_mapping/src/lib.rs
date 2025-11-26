@@ -154,10 +154,22 @@ impl MappingClientBuilder {
 
 #[derive(Debug, Error)]
 pub enum MappingError {
-    #[error(transparent)]
-    IoError(#[from] std::io::Error),
-    #[error(transparent)]
-    Reqwest(#[from] reqwest_middleware::Error),
+    #[error("failed to access conda-pypi mapping cache or configuration files")]
+    IoError(#[source] std::io::Error),
+    #[error("failed to fetch conda-pypi mapping from remote source")]
+    Reqwest(#[source] reqwest_middleware::Error),
+}
+
+impl From<std::io::Error> for MappingError {
+    fn from(err: std::io::Error) -> Self {
+        MappingError::IoError(err)
+    }
+}
+
+impl From<reqwest_middleware::Error> for MappingError {
+    fn from(err: reqwest_middleware::Error) -> Self {
+        MappingError::Reqwest(err)
+    }
 }
 
 impl MappingClient {
@@ -170,7 +182,7 @@ impl MappingClient {
             mode: CacheMode::Default,
             manager: CACacheManager {
                 path: get_cache_dir()
-                    .expect("missing cache directory")
+                    .expect("failed to determine cache directory for conda-pypi mappings. Please ensure PIXI_CACHE_DIR or XDG_CACHE_HOME is set, or that ~/.cache exists.")
                     .join(pixi_consts::consts::CONDA_PYPI_MAPPING_CACHE_DIR),
                 remove_opts: Default::default(),
             },
@@ -276,7 +288,9 @@ impl MappingClient {
             let (record, mut derived_purls) = next.into_diagnostic()?;
 
             // As a last resort use the verbatim conda-forge purls.
-            if derived_purls.is_none() {
+            // But only if we're not using a custom mapping, since custom mapping
+            // should be exclusive - only packages explicitly in the mapping get purls.
+            if derived_purls.is_none() && !matches!(mapping_source, MappingSource::Custom(_)) {
                 derived_purls = CondaForgeVerbatim
                     .derive_purls(record, &metrics)
                     .await

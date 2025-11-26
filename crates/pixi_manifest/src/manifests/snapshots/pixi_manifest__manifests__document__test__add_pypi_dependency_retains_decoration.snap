@@ -15,7 +15,7 @@ dev = [
     "pyyaml>=6.1.0", # dev inline comment
 ]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = []
 platforms = []
 

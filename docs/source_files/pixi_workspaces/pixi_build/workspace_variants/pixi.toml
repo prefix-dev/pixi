@@ -37,8 +37,12 @@ version = "0.1.0"
 [package.build]
 backend = { name = "pixi-build-python", version = "==0.4.0" }
 
+[package.build.config]
+noarch = false
+
 [package.host-dependencies]
 hatchling = "==1.26.3"
+python = "*"
 
 [package.run-dependencies]
 cpp_math = { path = "packages/cpp_math" }

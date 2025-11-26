@@ -77,7 +77,7 @@ impl ManifestDocument {
         let empty_content = r#"
         [project]
         name = "test"
-        [tool.pixi.project]
+        [tool.pixi.workspace]
         channels = []
         platforms = []
         "#
@@ -821,7 +821,7 @@ mod test {
         let manifest_content = r#"[project]
 name = "test"
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = []
 platforms = []
 
@@ -873,7 +873,7 @@ dev = [
     "PyYaML>=6.0", # dev inline comment
 ]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = []
 platforms = []
 

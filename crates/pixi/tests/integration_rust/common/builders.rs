@@ -619,6 +619,44 @@ pub struct BuildBuilder {
     pub args: build::Args,
 }
 
+impl BuildBuilder {
+    /// Set the target platform for the build
+    pub fn with_target_platform(mut self, platform: Platform) -> Self {
+        self.args.target_platform = platform;
+        self
+    }
+
+    /// Set the build platform for the build
+    pub fn with_build_platform(mut self, platform: Platform) -> Self {
+        self.args.build_platform = platform;
+        self
+    }
+
+    /// Set the output directory for built artifacts
+    pub fn with_output_dir(mut self, output_dir: impl Into<PathBuf>) -> Self {
+        self.args.output_dir = output_dir.into();
+        self
+    }
+
+    /// Set the build directory for incremental builds
+    pub fn with_build_dir(mut self, build_dir: impl Into<PathBuf>) -> Self {
+        self.args.build_dir = Some(build_dir.into());
+        self
+    }
+
+    /// Set whether to clean the build directory before building
+    pub fn with_clean(mut self, clean: bool) -> Self {
+        self.args.clean = clean;
+        self
+    }
+
+    /// Set the path to the package manifest or directory
+    pub fn with_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.args.path = Some(path.into());
+        self
+    }
+}
+
 impl IntoFuture for BuildBuilder {
     type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
