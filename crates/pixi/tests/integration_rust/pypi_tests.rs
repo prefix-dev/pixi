@@ -877,7 +877,6 @@ async fn test_uv_index_correctly_parsed() {
 /// Tests that prerelease-mode = "allow" allows pre-release versions to be resolved.
 /// Without this setting, the resolver would skip pre-releases unless explicitly requested.
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_prerelease_mode_allow() {
     setup_tracing();
 
@@ -939,7 +938,6 @@ async fn test_prerelease_mode_allow() {
 
 /// Tests that prerelease-mode = "disallow" prevents pre-release versions from being resolved.
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_prerelease_mode_disallow() {
     setup_tracing();
 
