@@ -124,7 +124,7 @@ rattler_conda_types = { version = "0.42.0", default-features = false, features =
   "rayon",
 ] }
 rattler_digest = { version = "1.2.0", default-features = false }
-rattler_lock = { version = "0.26.2", default-features = false }
+rattler_lock = { version = "0.26.7", default-features = false }
 rattler_menuinst = { version = "0.2.35", default-features = false }
 rattler_networking = { version = "0.25.22", default-features = false, features = [
   "dirs",
@@ -133,8 +133,8 @@ rattler_networking = { version = "0.25.22", default-features = false, features =
 rattler_package_streaming = { version = "0.23.14", default-features = false }
 rattler_repodata_gateway = { version = "0.25.0", default-features = false }
 rattler_shell = { version = "0.25.8", default-features = false }
-rattler_solve = { version = "4.0.0", default-features = false }
-rattler_virtual_packages = { version = "2.2.6", default-features = false }
+rattler_solve = { version = "4.1.0", default-features = false }
+rattler_virtual_packages = { version = "2.3.0", default-features = false }
 rayon = "1.10.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", default-features = false }
@@ -222,24 +222,6 @@ reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", 
 reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
 
-# pixi-rattler-patches - START
-# pixi-rattler-original-versions: {"coalesced_map": "0.1.2", "file_url": "0.2.6", "rattler": "0.39.1", "rattler_cache": "0.6.0", "rattler_conda_types": "0.41.1", "rattler_digest": "1.2.0", "rattler_lock": "0.26.1", "rattler_menuinst": "0.2.23", "rattler_networking": "0.25.21", "rattler_package_streaming": "0.23.13", "rattler_repodata_gateway": "0.25.1", "rattler_shell": "0.25.7", "rattler_solve": "3.1.1", "rattler_virtual_packages": "2.2.5", "simple_spawn_blocking": "1.1.0"}
-coalesced_map = { path = "../rattler/crates/coalesced_map" }
-file_url = { path = "../rattler/crates/file_url" }
-rattler = { path = "../rattler/crates/rattler" }
-rattler_cache = { path = "../rattler/crates/rattler_cache" }
-rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
-rattler_digest = { path = "../rattler/crates/rattler_digest" }
-rattler_lock = { path = "../rattler/crates/rattler_lock" }
-rattler_menuinst = { path = "../rattler/crates/rattler_menuinst" }
-rattler_networking = { path = "../rattler/crates/rattler_networking" }
-rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
-rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
-rattler_shell = { path = "../rattler/crates/rattler_shell" }
-rattler_solve = { path = "../rattler/crates/rattler_solve" }
-rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
-simple_spawn_blocking = { path = "../rattler/crates/simple_spawn_blocking" }
-# pixi-rattler-patches - END
 [profile.ci]
 codegen-units = 16
 inherits = "release"

@@ -543,51 +543,23 @@ impl SourceBuildSpec {
             .map_err(CommandDispatcherError::Failed)?;
 
         // Find the output that we want to build.
-        let output = if let Some(variants) = &self.variants {
-            tracing::error!("Variants: {:?}", &self.variants);
-            // Match by (name, variants) - variants must be a subset of output variants.
-            // The target_platform variant determines the subdir, so we don't need to check it separately.
-            outputs
-                .outputs
-                .into_iter()
-                .find(|output| {
-                    let name_match = output.metadata.name == self.package.name;
-                    let variants_match = variants.iter().all(|(key, value)| {
-                        output
-                            .metadata
-                            .variant
-                            .get(key)
-                            .map(|v| value == v)
-                            .unwrap_or(false)
-                    });
-                    name_match && variants_match
+        let output = outputs
+            .outputs
+            .into_iter()
+            .find(|output| {
+                output.metadata.name == self.package.name
+                    && output.metadata.version == self.package.version
+                    && output.metadata.build == self.package.build
+                    && output.metadata.subdir.as_str() == self.package.subdir
+            })
+            .ok_or_else(|| {
+                CommandDispatcherError::Failed(SourceBuildError::MissingOutput {
+                    subdir: self.package.subdir.clone(),
+                    name: self.package.name.as_normalized().to_string(),
+                    version: self.package.version.to_string(),
+                    build: self.package.build.clone(),
                 })
-                .ok_or_else(|| {
-                    CommandDispatcherError::Failed(SourceBuildError::MissingOutputForVariants {
-                        name: self.package.name.as_normalized().to_string(),
-                        variants: variants.clone(),
-                    })
-                })?
-        } else {
-            // Match by (name, version, build, subdir)
-            outputs
-                .outputs
-                .into_iter()
-                .find(|output| {
-                    output.metadata.name == self.package.name
-                        && output.metadata.version == self.package.version
-                        && output.metadata.build == self.package.build
-                        && output.metadata.subdir.as_str() == self.package.subdir
-                })
-                .ok_or_else(|| {
-                    CommandDispatcherError::Failed(SourceBuildError::MissingOutput {
-                        subdir: self.package.subdir.clone(),
-                        name: self.package.name.as_normalized().to_string(),
-                        version: self.package.version.to_string(),
-                        build: self.package.build.clone(),
-                    })
-                })?
-        };
+            })?;
 
         // Create a variant-specific work directory by including the actual variant values
         // in the work directory key.
