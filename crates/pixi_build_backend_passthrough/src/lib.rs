@@ -77,8 +77,6 @@ impl InMemoryBackend for PassthroughBackend {
         params: CondaOutputsParams,
         _output_stream: &(dyn BackendOutputStream + Send + 'static),
     ) -> Result<CondaOutputsResult, Box<CommunicationError>> {
-        eprintln!("PassthroughBackend: Starting conda_outputs");
-
         Ok(CondaOutputsResult {
             outputs: vec![CondaOutput {
                 metadata: CondaOutputMetadata {
@@ -158,7 +156,6 @@ impl InMemoryBackend for PassthroughBackend {
         params: CondaBuildV1Params,
         _output_stream: &(dyn BackendOutputStream + Send + 'static),
     ) -> Result<CondaBuildV1Result, Box<CommunicationError>> {
-        eprintln!("PassthroughBackend: Starting conda_build_v1");
         let (Some(index_json), Some(package)) = (&self.index_json, &self.config.package) else {
             return Err(Box::new(
                 BackendError::new("no 'package' configured for passthrough backend").into(),

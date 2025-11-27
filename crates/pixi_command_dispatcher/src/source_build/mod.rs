@@ -369,22 +369,12 @@ impl SourceBuildSpec {
                 output_file
             }
             Err(_err) => {
-                tracing::error!(
-                    "failed to canonicalize backend output_file: {} (error: {:?})",
-                    built_source.output_file.display(),
-                    _err
-                );
                 return Err(CommandDispatcherError::Failed(
                     SourceBuildError::MissingOutputFile(built_source.output_file),
                 ));
             }
         };
 
-        tracing::debug!(
-            "checking if output_file parent ({:?}) == output_directory ({})",
-            output_file.parent(),
-            output_directory.display()
-        );
         if output_file.parent() != Some(&output_directory) {
             // Take the file name of the file and move it to the output directory.
             let file_name = built_source
@@ -392,12 +382,6 @@ impl SourceBuildSpec {
                 .file_name()
                 .expect("the build backend did not return a file name");
             let destination = output_directory.join(file_name);
-            tracing::debug!(
-                source = %source_for_logging,
-                from = %output_file.display(),
-                to = %destination.display(),
-                "moving built source package to output directory",
-            );
             if let Err(err) = move_file(&output_file, &destination) {
                 return Err(CommandDispatcherError::Failed(SourceBuildError::Move(
                     output_file,
@@ -406,12 +390,6 @@ impl SourceBuildSpec {
                 )));
             }
             built_source.output_file = destination;
-            tracing::debug!(
-                "moved file, updated output_file to: {}",
-                built_source.output_file.display()
-            );
-        } else {
-            tracing::debug!("file is already in output_directory, no move needed");
         }
 
         // TODO: Instead of reading this from the resulting file, maybe we can construct

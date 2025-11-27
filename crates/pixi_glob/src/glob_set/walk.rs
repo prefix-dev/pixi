@@ -85,12 +85,6 @@ pub fn walk_globs(
         .map(|g| anchor_literal_pattern(g.to_pattern()))
         .collect_vec();
 
-    tracing::debug!(
-        root = ?effective_walk_root,
-        patterns = ?glob_patterns,
-        "walking globs",
-    );
-
     // Always add ignore hidden folders unless the user explicitly included them
     // because we add patterns as overrides, which overrides any `WalkBuilder` settings.
     let ignore_patterns = set_ignore_hidden_patterns(&glob_patterns);
