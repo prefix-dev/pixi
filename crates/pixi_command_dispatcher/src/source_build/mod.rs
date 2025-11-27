@@ -193,12 +193,6 @@ impl SourceBuildSpec {
                 );
                 // dont matter if we force it , we can reuse the cache entry
                 let output_file = build_cache.cache_dir.join(&cached_build.record.file_name);
-                tracing::debug!(
-                    "constructed cached path new : cache_dir={}, file_name={}, full_path={}",
-                    build_cache.cache_dir.display(),
-                    &cached_build.record.file_name,
-                    output_file.display()
-                );
                 return Ok(SourceBuildResult {
                     output_file,
                     record: cached_build.record.clone(),
