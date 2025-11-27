@@ -138,6 +138,7 @@ impl SourceMetadataSpec {
                 let cached_source_metadata = CachedSourceMetadata {
                     id: random(),
                     input_hash: build_backend_metadata.metadata.input_hash.clone(),
+                    build_variants: self.backend_metadata.variants.clone(),
                     metadata: Metadata {
                         records: records.clone(),
                     },
@@ -176,6 +177,7 @@ impl SourceMetadataSpec {
                 let cached_source_metadata = CachedSourceMetadata {
                     id: random(),
                     input_hash: build_backend_metadata.metadata.input_hash.clone(),
+                    build_variants: self.backend_metadata.variants.clone(),
                     metadata: Metadata {
                         records: futures.try_collect().await?,
                     },
@@ -204,7 +206,6 @@ impl SourceMetadataSpec {
             package: self.package.clone(),
             channel_urls: self.backend_metadata.channels.clone(),
             build_environment: self.backend_metadata.build_environment.clone(),
-            build_variants: self.backend_metadata.variants.clone().unwrap_or_default(),
             enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
             pinned_source: self.backend_metadata.manifest_source.clone(),
         }

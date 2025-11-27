@@ -51,9 +51,6 @@ pub struct SourceMetadataKey {
     /// The build environment
     pub build_environment: BuildEnvironment,
 
-    /// The variants that were used
-    pub build_variants: BTreeMap<String, Vec<String>>,
-
     /// The protocols that are enabled for source packages
     pub enabled_protocols: EnabledProtocols,
 
@@ -99,11 +96,11 @@ impl CacheKey for SourceMetadataKey {
         self.build_environment
             .host_virtual_packages
             .hash(&mut hasher);
-        self.build_variants.hash(&mut hasher);
         self.enabled_protocols.hash(&mut hasher);
         let source_dir = source_checkout_cache_key(&self.pinned_source);
         format!(
-            "{source_dir}/{}-{}",
+            "{source_dir}/{}/{}-{}",
+            self.package.as_normalized(),
             self.build_environment.host_platform,
             URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())
         )
@@ -130,6 +127,10 @@ pub struct CachedSourceMetadata {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input_hash: Option<InputHash>,
+
+    /// The build variants that were used to generate this metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_variants: Option<BTreeMap<String, Vec<String>>>,
 
     #[serde(flatten)]
     pub metadata: Metadata,
