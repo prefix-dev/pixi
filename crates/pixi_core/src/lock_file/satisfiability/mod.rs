@@ -685,9 +685,7 @@ pub async fn verify_platform_satisfiability(
             LockedPackageRef::Conda(conda) => {
                 let url = conda.location().clone();
                 pixi_records.push(
-                    conda
-                        .clone()
-                        .try_into()
+                    PixiRecord::from_conda_package_data(conda.clone(), project_root)
                         .map_err(|e| PlatformUnsat::CorruptedEntry(url.to_string(), e))?,
                 );
             }
@@ -1159,7 +1157,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         match find_matching_package(
                             locked_pixi_records,
                             &virtual_packages,
-                            MatchSpec::from_nameless(spec, Some(name)),
+                            MatchSpec::from_nameless(spec, Some(name.into())),
                             source,
                         )? {
                             Some(pkg) => pkg,
@@ -1327,14 +1325,20 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     if let Some((source, package_name)) = record
                         .as_source()
                         .and_then(|record| Some((record, spec.name.as_ref()?)))
-                        .and_then(|(record, package_name)| {
+                        .and_then(|(record, package_name_matcher)| {
+                            let package_name = package_name_matcher
+                                .as_exact()
+                                .expect("depends can only contain exact package names");
                             Some((
                                 record.sources.get(package_name.as_normalized())?,
                                 package_name,
                             ))
                         })
                     {
-                        let anchored_source = anchor.resolve(source.clone());
+                        let anchored_location = anchor.resolve(source.location.clone());
+                        let anchored_source = SourceSpec {
+                            location: anchored_location,
+                        };
                         conda_queue.push(Dependency::CondaSource(
                             package_name.clone(),
                             spec,
@@ -1507,14 +1511,8 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 continue;
             };
 
-            // Get the manifest directory first
-            let Some(manifest_path_record) = source_record.manifest_source.as_path() else {
-                continue;
-            };
-            let manifest_dir = manifest_path_record.resolve(project_root);
-
             // Resolve build_source relative to the manifest directory
-            build_path_record.resolve(&manifest_dir)
+            build_path_record.resolve(project_root)
         } else {
             let Some(path_record) = source_record.manifest_source.as_path() else {
                 continue;
@@ -1675,7 +1673,10 @@ fn find_matching_package(
                 Some(idx) => idx,
             }
         }
-        Some(name) => {
+        Some(name_matcher) => {
+            let name = name_matcher
+                .as_exact()
+                .expect("depends can only contain exact package names");
             match locked_pixi_records
                 .index_by_name(name)
                 .map(|idx| (idx, &locked_pixi_records.records[idx]))
@@ -1771,7 +1772,7 @@ trait MatchesMatchspec {
 impl MatchesMatchspec for GenericVirtualPackage {
     fn matches(&self, spec: &MatchSpec) -> bool {
         if let Some(name) = &spec.name {
-            if name != &self.name {
+            if !name.matches(&self.name) {
                 return false;
             }
         }

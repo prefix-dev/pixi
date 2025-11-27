@@ -1,15 +1,16 @@
 use std::path::PathBuf;
 
 use miette::Diagnostic;
-use pixi_build_discovery::{
-    BackendInitializationParams, BackendSpec, CommandSpec, EnabledProtocols,
-};
+use ordermap::OrderMap;
+use pixi_build_discovery::{BackendSpec, CommandSpec, EnabledProtocols};
 use pixi_build_frontend::{
     Backend, BackendOverride, json_rpc,
     json_rpc::{CommunicationError, JsonRpcBackend},
     tool::{IsolatedTool, SystemTool, Tool},
 };
-use pixi_build_types::{PixiBuildApiVersion, procedures::initialize::InitializeParams};
+use pixi_build_types::{
+    PixiBuildApiVersion, ProjectModelV1, TargetSelectorV1, procedures::initialize::InitializeParams,
+};
 use pixi_spec::SpecConversionError;
 use rattler_conda_types::ChannelConfig;
 use rattler_shell::{
@@ -33,8 +34,20 @@ pub struct InstantiateBackendSpec {
     /// The backend specification
     pub backend_spec: BackendSpec,
 
-    /// The parameters to initialize the backend with
-    pub init_params: BackendInitializationParams,
+    /// The root directory of the workspace.
+    pub workspace_root: PathBuf,
+
+    /// The absolute path of the discovered manifest
+    pub manifest_path: PathBuf,
+
+    /// Optionally, the manifest of the discovered package.
+    pub project_model: Option<ProjectModelV1>,
+
+    /// Additional configuration that applies to the backend.
+    pub configuration: Option<serde_json::Value>,
+
+    /// Targets that apply to the backend.
+    pub target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
 
     /// The source directory to use for the backend
     pub build_source_dir: PathBuf,
@@ -55,15 +68,13 @@ impl CommandDispatcher {
     ) -> Result<Backend, CommandDispatcherError<InstantiateBackendError>> {
         let BackendSpec::JsonRpc(backend_spec) = spec.backend_spec;
 
-        let source_dir = spec.build_source_dir;
-
         // Canonicalize the source_dir to ensure it's a fully resolved absolute path
         // without any relative components like ".." or "."
-        let source_dir = dunce::canonicalize(&source_dir).map_err(|e| {
+        let source_dir = dunce::canonicalize(&spec.build_source_dir).map_err(|e| {
             CommandDispatcherError::Failed(InstantiateBackendError::SpecConversionError(
                 SpecConversionError::InvalidPath(format!(
                     "failed to canonicalize source directory '{}': {}",
-                    source_dir.display(),
+                    spec.build_source_dir.display(),
                     e
                 )),
             ))
@@ -79,13 +90,13 @@ impl CommandDispatcher {
                 if let Some(in_mem) = backend {
                     let memory = in_mem
                         .initialize(InitializeParams {
-                            manifest_path: spec.init_params.manifest_path,
+                            manifest_path: spec.manifest_path,
                             source_dir: Some(source_dir),
-                            workspace_root: Some(spec.init_params.workspace_root),
+                            workspace_root: Some(spec.workspace_root),
                             cache_directory: Some(self.cache_dirs().root().clone()),
-                            project_model: spec.init_params.project_model.map(Into::into),
-                            configuration: spec.init_params.configuration,
-                            target_configuration: spec.init_params.target_configuration,
+                            project_model: spec.project_model.map(Into::into),
+                            configuration: spec.configuration,
+                            target_configuration: spec.target_configuration,
                         })
                         .map_err(InstantiateBackendError::InMemoryError)
                         .map_err(CommandDispatcherError::Failed)?;
@@ -165,7 +176,6 @@ impl CommandDispatcher {
         // Make sure that the project model is compatible with the API version.
         if !api_version.supports_name_none()
             && spec
-                .init_params
                 .project_model
                 .as_ref()
                 .is_some_and(|p| p.name.is_none())
@@ -177,11 +187,11 @@ impl CommandDispatcher {
 
         JsonRpcBackend::setup(
             source_dir,
-            spec.init_params.manifest_path,
-            spec.init_params.workspace_root,
-            spec.init_params.project_model,
-            spec.init_params.configuration,
-            spec.init_params.target_configuration,
+            spec.manifest_path,
+            spec.workspace_root,
+            spec.project_model,
+            spec.configuration,
+            spec.target_configuration,
             Some(self.cache_dirs().root().clone()),
             tool,
         )

@@ -362,14 +362,14 @@ impl PixiSpec {
 ///
 /// This type only represents source packages. Use [`PixiSpec`] to represent
 /// both binary and source packages.
-#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SourceSpec {
     /// The location of the source.
     pub location: SourceLocationSpec,
 }
 
 /// A specification for a source location.
-#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 pub enum SourceLocationSpec {
     /// The spec is represented as an archive that can be downloaded from the

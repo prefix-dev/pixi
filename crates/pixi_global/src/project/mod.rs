@@ -918,7 +918,7 @@ impl Project {
                         .ok_or_else(|| {
                             miette::miette!("Couldn't convert {spec:?} to nameless match spec.")
                         })?,
-                    Some(name.clone()),
+                    Some(name.clone().into()),
                 );
                 Ok(match_spec)
             })
@@ -1398,7 +1398,7 @@ impl Project {
     ) -> Result<PackageName, InferPackageNameError> {
         let command_dispatcher = self.command_dispatcher()?;
         let checkout = command_dispatcher
-            .pin_and_checkout(source_spec.location, None)
+            .pin_and_checkout(source_spec.location)
             .await
             .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
 
@@ -1407,6 +1407,7 @@ impl Project {
         // Create the metadata spec
         let metadata_spec = BuildBackendMetadataSpec {
             manifest_source: pinned_source_spec,
+            preferred_build_source: None,
             channel_config: self.global_channel_config().clone(),
             channels: self
                 .config()
@@ -1418,7 +1419,6 @@ impl Project {
             variants: None,
             variant_files: None,
             enabled_protocols: Default::default(),
-            pin_override: None,
         };
 
         // Get the metadata using the command dispatcher
