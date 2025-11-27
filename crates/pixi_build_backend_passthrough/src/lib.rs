@@ -300,219 +300,119 @@ pub struct PassthroughBackendConfig {
     pub build_globs: Option<BTreeSet<String>>,
 }
 
-/// An observable variant of the PassthroughBackend that emits events through a
+/// Observer that allows collecting backend events from an ObservableBackend.
+/// Use the `get_events` method to retrieve all available events.
+pub struct BackendObserver {
+    receiver: tokio::sync::mpsc::UnboundedReceiver<BackendEvent>,
+}
+
+impl BackendObserver {
+    /// Collects all available events from the channel using try_recv.
+    /// This is non-blocking and returns immediately with all events that
+    /// are currently in the channel.
+    pub fn events(&mut self) -> Vec<BackendEvent> {
+        let mut events = Vec::new();
+        while let Ok(event) = self.receiver.try_recv() {
+            events.push(event);
+        }
+        events
+    }
+}
+
+/// An observable wrapper around any InMemoryBackend that emits events through a
 /// channel when methods are called. This is useful for testing to verify that
 /// specific backend methods were invoked.
-pub struct ObservablePassthroughBackend {
-    project_model: ProjectModelV1,
-    config: PassthroughBackendConfig,
-    source_dir: PathBuf,
-    index_json: Option<IndexJson>,
+pub struct ObservableBackend<T: InMemoryBackend> {
+    inner: T,
     event_sender: tokio::sync::mpsc::UnboundedSender<BackendEvent>,
 }
 
-impl ObservablePassthroughBackend {
-    /// Returns an object that can be used to instantiate an
-    /// [`ObservablePassthroughBackend`] with the provided event sender.
-    pub fn instantiator(
-        event_sender: tokio::sync::mpsc::UnboundedSender<BackendEvent>,
-    ) -> impl InMemoryBackendInstantiator<Backend = Self> {
-        ObservablePassthroughBackendInstantiator { event_sender }
+impl<T: InMemoryBackend> ObservableBackend<T> {
+    /// Creates a new instantiator for an ObservableBackend wrapping the given backend.
+    /// Returns both the instantiator and a BackendObserver for collecting events.
+    pub fn instantiator<I>(
+        inner_instantiator: I,
+    ) -> (
+        impl InMemoryBackendInstantiator<Backend = Self>,
+        BackendObserver,
+    )
+    where
+        I: InMemoryBackendInstantiator<Backend = T>,
+    {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<BackendEvent>();
+        let observer = BackendObserver { receiver: rx };
+        let instantiator = ObservableBackendInstantiator {
+            inner_instantiator,
+            event_sender: tx,
+        };
+        (instantiator, observer)
     }
 }
 
-impl InMemoryBackend for ObservablePassthroughBackend {
+impl<T: InMemoryBackend> InMemoryBackend for ObservableBackend<T> {
     fn capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities {
-            provides_conda_outputs: Some(true),
-            provides_conda_build_v1: Some(true),
-            ..BackendCapabilities::default()
-        }
+        self.inner.capabilities()
     }
 
     fn identifier(&self) -> &str {
-        "observable-passthrough"
+        self.inner.identifier()
     }
 
     fn conda_outputs(
         &self,
         params: CondaOutputsParams,
-        _output_stream: &(dyn BackendOutputStream + Send + 'static),
+        output_stream: &(dyn BackendOutputStream + Send + 'static),
     ) -> Result<CondaOutputsResult, Box<CommunicationError>> {
         // Emit event
         let _ = self.event_sender.send(BackendEvent::CondaOutputsCalled);
 
-        Ok(CondaOutputsResult {
-            outputs: vec![CondaOutput {
-                metadata: CondaOutputMetadata {
-                    name: self
-                        .project_model
-                        .name
-                        .as_ref()
-                        .map(|name| PackageName::try_from(name.as_str()).unwrap())
-                        .unwrap_or_else(|| {
-                            self.index_json
-                                .as_ref()
-                                .map(|j| j.name.clone())
-                                .unwrap_or_else(|| {
-                                    PackageName::try_from("pixi-package_name").unwrap()
-                                })
-                        }),
-                    version: self
-                        .project_model
-                        .version
-                        .as_ref()
-                        .or_else(|| self.index_json.as_ref().map(|j| j.version.version()))
-                        .cloned()
-                        .unwrap_or_else(|| Version::major(0))
-                        .into(),
-                    build: self
-                        .index_json
-                        .as_ref()
-                        .map(|j| j.build.clone())
-                        .unwrap_or_default(),
-                    build_number: self
-                        .index_json
-                        .as_ref()
-                        .map(|j| j.build_number)
-                        .unwrap_or_default(),
-                    subdir: self
-                        .index_json
-                        .as_ref()
-                        .and_then(|j| j.subdir.as_deref())
-                        .map(|subdir| subdir.parse().unwrap())
-                        .unwrap_or(Platform::NoArch),
-                    license: self.project_model.license.clone(),
-                    license_family: None,
-                    noarch: self
-                        .index_json
-                        .as_ref()
-                        .map(|j| j.noarch)
-                        .unwrap_or_default(),
-                    purls: None,
-                    python_site_packages_path: None,
-                    variant: Default::default(),
-                },
-                build_dependencies: Some(extract_dependencies(
-                    &self.project_model.targets,
-                    |t| t.build_dependencies.as_ref(),
-                    params.host_platform,
-                )),
-                host_dependencies: Some(extract_dependencies(
-                    &self.project_model.targets,
-                    |t| t.host_dependencies.as_ref(),
-                    params.host_platform,
-                )),
-                run_dependencies: extract_dependencies(
-                    &self.project_model.targets,
-                    |t| t.run_dependencies.as_ref(),
-                    params.host_platform,
-                ),
-                ignore_run_exports: Default::default(),
-                run_exports: Default::default(),
-                input_globs: None,
-            }],
-            input_globs: Default::default(),
-        })
+        // Delegate to the inner backend
+        self.inner.conda_outputs(params, output_stream)
     }
 
     fn conda_build_v1(
         &self,
         params: CondaBuildV1Params,
-        _output_stream: &(dyn BackendOutputStream + Send + 'static),
+        output_stream: &(dyn BackendOutputStream + Send + 'static),
     ) -> Result<CondaBuildV1Result, Box<CommunicationError>> {
         // Emit event
         let _ = self.event_sender.send(BackendEvent::CondaBuildV1Called);
 
-        let (Some(index_json), Some(package)) = (&self.index_json, &self.config.package) else {
-            return Err(Box::new(
-                BackendError::new("no 'package' configured for passthrough backend").into(),
-            ));
-        };
-        let absolute_path = self.source_dir.join(package);
-        let output_file = params
-            .output_directory
-            .unwrap_or(params.work_directory)
-            .join(package);
-        fs_err::copy(absolute_path, &output_file).unwrap();
-
-        Ok(CondaBuildV1Result {
-            output_file,
-            input_globs: self.config.build_globs.clone().unwrap_or_default(),
-            name: index_json.name.as_normalized().to_owned(),
-            version: index_json.version.clone(),
-            build: index_json.build.clone(),
-            subdir: index_json
-                .subdir
-                .as_ref()
-                .expect("missing subdir in index.json")
-                .parse()
-                .expect("invalid subdir in index.json"),
-        })
+        // Delegate to the inner backend
+        self.inner.conda_build_v1(params, output_stream)
     }
 }
 
 /// An implementation of the [`InMemoryBackendInstantiator`] that creates an
-/// [`ObservablePassthroughBackend`].
-pub struct ObservablePassthroughBackendInstantiator {
+/// [`ObservableBackend`] wrapping any other backend.
+pub struct ObservableBackendInstantiator<I, T>
+where
+    I: InMemoryBackendInstantiator<Backend = T>,
+    T: InMemoryBackend,
+{
+    inner_instantiator: I,
     event_sender: tokio::sync::mpsc::UnboundedSender<BackendEvent>,
 }
 
-impl InMemoryBackendInstantiator for ObservablePassthroughBackendInstantiator {
-    type Backend = ObservablePassthroughBackend;
+impl<I, T> InMemoryBackendInstantiator for ObservableBackendInstantiator<I, T>
+where
+    I: InMemoryBackendInstantiator<Backend = T>,
+    T: InMemoryBackend,
+{
+    type Backend = ObservableBackend<T>;
 
     fn initialize(
         &self,
         params: InitializeParams,
     ) -> Result<Self::Backend, Box<CommunicationError>> {
-        let project_model = match params.project_model {
-            Some(VersionedProjectModel::V1(project_model)) => project_model,
-            _ => {
-                return Err(Box::new(CommunicationError::BackendError(
-                    BackendError::new(
-                        "ObservablePassthrough backend only supports project model v1",
-                    ),
-                )));
-            }
-        };
-
-        let config = match params.configuration {
-            Some(config) => serde_json::from_value(config).expect("Failed to parse configuration"),
-            None => PassthroughBackendConfig::default(),
-        };
-
-        // Read the package file if it is specified
-        let source_dir = params.source_dir.expect("Missing source directory");
-        let index_json = match &config.package {
-            Some(path) => {
-                let path = source_dir.join(path);
-                match rattler_package_streaming::seek::read_package_file(&path) {
-                    Err(err) => {
-                        return Err(Box::new(
-                            BackendError::new(format!(
-                                "failed to read '{}' file: {}",
-                                path.display(),
-                                err
-                            ))
-                            .into(),
-                        ));
-                    }
-                    Ok(index_json) => Some(index_json),
-                }
-            }
-            None => None,
-        };
-
-        Ok(ObservablePassthroughBackend {
-            project_model,
-            config,
-            source_dir,
-            index_json,
+        let inner = self.inner_instantiator.initialize(params)?;
+        Ok(ObservableBackend {
+            inner,
             event_sender: self.event_sender.clone(),
         })
     }
 
     fn identifier(&self) -> &str {
-        "observable-passthrough"
+        self.inner_instantiator.identifier()
     }
 }
