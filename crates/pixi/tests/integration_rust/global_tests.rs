@@ -18,7 +18,9 @@ async fn test_source_package_with_passthrough_backend_for_global() {
         .unwrap()
         .with_backend_override(backend_override);
 
-    let root_dir = workspaces_dir().join("source-backends").join("package-e");
+    let root_dir = workspaces_dir()
+        .join("source-backends")
+        .join("source-package");
 
     // First install - should trigger conda_build_v1
     pixi.global_install()
