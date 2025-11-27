@@ -21,6 +21,7 @@ use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
 use pixi_build_discovery::EnabledProtocols;
+use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec,
     Limits, PixiEnvironmentSpec,
@@ -73,7 +74,6 @@ mod global_spec;
 mod manifest;
 mod parsed_manifest;
 pub use global_spec::{FromMatchSpecError, GlobalSpec};
-use pixi_build_frontend::BackendOverride;
 use pixi_utils::reqwest::{LazyReqwestClient, build_lazy_reqwest_clients};
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
@@ -139,6 +139,8 @@ pub struct Project {
     /// The command dispatcher for solving environments
     /// This is wrapped in a `OnceCell` to allow for lazy initialization.
     command_dispatcher: OnceCell<CommandDispatcher>,
+    /// Optional backend override for testing purposes
+    backend_override: Option<BackendOverride>,
 }
 
 impl Debug for Project {
@@ -321,6 +323,7 @@ impl Project {
             repodata_gateway,
             concurrent_downloads_semaphore: OnceCell::new(),
             command_dispatcher: OnceCell::new(),
+            backend_override: None,
         }
     }
 
@@ -484,6 +487,14 @@ impl Project {
         C: Into<Config>,
     {
         self.config = self.config.merge_config(config.into());
+        self
+    }
+
+    /// Set the backend override for this project (primarily for testing)
+    pub fn with_backend_override(mut self, backend_override: BackendOverride) -> Self {
+        self.backend_override = Some(backend_override);
+        // Clear the command dispatcher so it will be re-initialized with the new backend override
+        self.command_dispatcher = OnceCell::new();
         self
     }
 
@@ -1365,11 +1376,12 @@ impl Project {
                     max_concurrent_solves: self.config().max_concurrent_solves().into(),
                     ..Limits::default()
                 })
-                .with_backend_overrides(
+                .with_backend_overrides(self.backend_override.clone().unwrap_or_else(|| {
                     BackendOverride::from_env()
-                        .map_err(|e| CommandDispatcherError::BackendOverride(e.into()))?
-                        .unwrap_or_default(),
-                )
+                        .ok()
+                        .flatten()
+                        .unwrap_or_default()
+                }))
                 .execute_link_scripts(match self.config.run_post_link_scripts() {
                     RunPostLinkScripts::Insecure => true,
                     RunPostLinkScripts::False => false,

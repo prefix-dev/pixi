@@ -24,7 +24,7 @@ use crate::build::source_checkout_cache_key;
 /// A cache for caching build artifacts of a source checkout.
 #[derive(Clone)]
 pub struct BuildCache {
-    root: PathBuf,
+    pub(crate) root: PathBuf,
 }
 
 #[derive(Debug, Error)]
