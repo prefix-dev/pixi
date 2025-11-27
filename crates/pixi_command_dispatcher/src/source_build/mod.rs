@@ -169,12 +169,6 @@ impl SourceBuildSpec {
                         "using cached up-to-date source build",
                     );
                     let output_file = build_cache.cache_dir.join(&cached_build.record.file_name);
-                    eprintln!(
-                        "constructed cached path up to date: cache_dir={}, file_name={}, full_path={}",
-                        build_cache.cache_dir.display(),
-                        &cached_build.record.file_name,
-                        output_file.display()
-                    );
                     return Ok(SourceBuildResult {
                         output_file,
                         record: cached_build.record.clone(),

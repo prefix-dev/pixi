@@ -1,66 +1,81 @@
 use crate::common::{PixiControl, workspaces_dir};
 use crate::setup_tracing;
-use pixi_build_backend_passthrough::PassthroughBackend;
+use pixi_build_backend_passthrough::{BackendEvent, ObservablePassthroughBackend};
 use pixi_build_frontend::BackendOverride;
-use std::io::Read;
+use std::time::Duration;
 
 /// Test that force-reinstall triggers rebuilding the package
 #[tokio::test]
 async fn test_source_package_with_passthrough_backend_for_global() {
     setup_tracing();
 
-    // Create a PixiControl instance with PassthroughBackend
-    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    // Create a channel to receive backend events
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<BackendEvent>();
+
+    // Create a PixiControl instance with ObservablePassthroughBackend
+    let backend_override =
+        BackendOverride::from_memory(ObservablePassthroughBackend::instantiator(tx));
     let pixi = PixiControl::new()
         .unwrap()
         .with_backend_override(backend_override);
 
     let root_dir = workspaces_dir().join("source-backends").join("package-e");
 
-    // Capture stderr
-    let mut stderr = gag::BufferRedirect::stderr().unwrap();
-
+    // First install - should trigger conda_build_v1
     pixi.global_install()
         .with_path(root_dir.to_string_lossy())
         .await
         .unwrap();
 
-    // Read captured stderr to validate that we started to build the package
-    let mut captured_stderr = String::new();
-    stderr.read_to_string(&mut captured_stderr).unwrap();
+    // Verify that conda_build_v1 was called (with timeout)
+    let mut events = vec![];
+    let deadline = tokio::time::Instant::now() + Duration::from_millis(1);
 
-    drop(stderr);
+    loop {
+        tokio::select! {
+            Some(event) = rx.recv() => events.push(event),
+            _ = tokio::time::sleep_until(deadline) => break,
+        }
+    }
 
-    // Validate that expected content was printed
-    assert!(captured_stderr.contains("PassthroughBackend: Starting conda_build_v1"));
+    assert!(events.contains(&BackendEvent::CondaBuildV1Called));
 
-    let mut stderr2 = gag::BufferRedirect::stderr().unwrap();
-    captured_stderr.clear();
-
+    // Second install - should NOT trigger conda_build_v1 (package is cached)
     pixi.global_install()
         .with_path(root_dir.to_string_lossy())
         .await
         .unwrap();
 
-    stderr2.read_to_string(&mut captured_stderr).unwrap();
-    drop(stderr2);
+    // Verify that conda_build_v1 was *NOT* called (with timeout)
+    let mut events = vec![];
+    let deadline = tokio::time::Instant::now() + Duration::from_millis(1);
 
-    // On second install, we should already reuse the built package
-    assert!(!captured_stderr.contains("PassthroughBackend: Starting conda_build_v1"));
+    loop {
+        tokio::select! {
+            Some(event) = rx.recv() => events.push(event),
+            _ = tokio::time::sleep_until(deadline) => break,
+        }
+    }
 
-    // Third install with force reinstall should trigger a source rebuild
-    let mut stderr = gag::BufferRedirect::stderr().unwrap();
-    captured_stderr.clear();
+    assert!(!events.contains(&BackendEvent::CondaBuildV1Called));
 
+    // Third install with force-reinstall - should trigger conda_build_v1 again
     pixi.global_install()
         .with_path(root_dir.to_string_lossy())
         .with_force_reinstall(true)
         .await
         .unwrap();
 
-    stderr.read_to_string(&mut captured_stderr).unwrap();
+    // Verify that conda_build_v1 was called again (with timeout)
+    let mut events = vec![];
+    let deadline = tokio::time::Instant::now() + Duration::from_millis(1);
 
-    drop(stderr);
+    loop {
+        tokio::select! {
+            Some(event) = rx.recv() => events.push(event),
+            _ = tokio::time::sleep_until(deadline) => break,
+        }
+    }
 
-    assert!(captured_stderr.contains("PassthroughBackend: Starting conda_build_v1"));
+    assert!(events.contains(&BackendEvent::CondaBuildV1Called));
 }
