@@ -638,6 +638,7 @@ pub fn calculate_additional_glob_hash(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pixi_build_types::VariantValue;
     use pixi_build_types::procedures::conda_outputs::{
         CondaOutput, CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
         CondaOutputRunExports,

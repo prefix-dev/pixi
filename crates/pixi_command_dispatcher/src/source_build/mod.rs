@@ -927,14 +927,6 @@ pub enum SourceBuildError {
     },
 
     #[error(
-        "The build backend does not provide an output matching: {name} with variants {variants:?}."
-    )]
-    MissingOutputForVariants {
-        name: String,
-        variants: BTreeMap<String, VariantValue>,
-    },
-
-    #[error(
         "The build backend returned a path for the build package ({0}), but the path does not exist."
     )]
     MissingOutputFile(PathBuf),

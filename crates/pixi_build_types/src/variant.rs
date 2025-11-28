@@ -114,3 +114,9 @@ impl From<u64> for VariantValue {
         VariantValue::Int(value as i64)
     }
 }
+
+impl<'a> From<&'a str> for VariantValue {
+    fn from(value: &'a str) -> Self {
+        VariantValue::String(value.to_owned())
+    }
+}
