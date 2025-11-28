@@ -116,9 +116,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut workspace = workspace.modify()?;
 
-    // Add a channel
-    let channel = args.channel;
-    workspace.manifest().add_channels([PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from(channel.unwrap_or_default()))).clone()], &FeatureName::DEFAULT, false)?;
+    // Add a channel if specified
+    if args.channel.is_some() {
+        let channel = args.channel;
+        workspace.manifest().add_channels(
+            [PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from(channel.unwrap_or_default()))).clone()],
+            &FeatureName::DEFAULT, 
+            false)?;
+    }
     
     // Add the platform if it is not already present
     workspace
