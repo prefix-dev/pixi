@@ -1220,7 +1220,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         });
                     }
 
-                    if !identifier.satisfies(&requirement)? {
+                    // Use the overridden requirement if specified (e.g. for pytorch/torch)
+                    let requirement_to_check = dependency_overrides
+                        .get(&requirement.name)
+                        .cloned()
+                        .unwrap_or(requirement.clone());
+
+                    if !identifier.satisfies(&requirement_to_check)? {
                         // The record does not match the spec, the lock-file is inconsistent.
                         delayed_pypi_error.get_or_insert_with(|| {
                             Box::new(PlatformUnsat::CondaUnsatisfiableRequirement(
