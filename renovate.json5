@@ -33,13 +33,13 @@
       "enabled": false
     },
     {
-      "groupName": "Cargo lockfile maintenance",
+      "groupName": "cargo lockfile maintenance",
       "matchManagers": ["cargo"],
       "matchUpdateTypes": ["lockFileMaintenance"],
       "enabled": false
     },
     {
-      "groupName": "Cargo patch updates",
+      "groupName": "cargo patches",
       "matchManagers": ["cargo"],
       "matchUpdateTypes": ["patch"]
     },
@@ -52,8 +52,7 @@
     },
     {
       "description": "Update uv crates together",
-      "matchPackageNames": ["uv*", "reqwest-middleware", "reqwest-retry"],
-      "matchManagers": ["cargo"],
+      "matchSourceUrls": ["https://github.com/astral-sh/uv{/,}**"],
       "groupName": "uv",
       "addLabels": ["uv"]
     }
