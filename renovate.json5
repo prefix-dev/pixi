@@ -5,6 +5,7 @@
   "enabledManagers": ["github-actions", "pixi", "cargo"],
   "commitMessagePrefix": "chore(ci):",
   "ignorePaths": ["**/examples/**", "**/docs/**", "**/tests/**"],
+  "labels": ["dependencies"],
   "packageRules": [
     {
       "groupName": "GitHub Actions",
@@ -32,19 +33,21 @@
       "enabled": false
     },
     {
-      "groupName": "Cargo",
-      "matchManagers": ["cargo"]
+      "groupName": "Cargo patch & lockfile maintenance",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["patch", "lockFileMaintenance"]
     },
     {
-      "groupName": "Cargo-Lock",
+      "description": "We want a separate PR for all rattler crates",
+      "matchPackageNames": ["rattler*", "file_url", "coalesced_map", "path_resolver", "simple_spawn_blocking"],
       "matchManagers": ["cargo"],
-      "matchUpdateTypes": ["lockFileMaintenance"]
+      "groupName": "rattler"
     },
     {
-      "description": "We want a separate PR for rattler crates",
-      "matchPackageNames": ["rattler*", "file_url"],
+      "description": "Update uv crates together",
+      "matchPackageNames": ["uv*"],
       "matchManagers": ["cargo"],
-      "enabled": false
+      "groupName": "uv"
     }
   ]
 }
