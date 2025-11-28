@@ -356,6 +356,14 @@ impl SourceMetadataSpec {
                 .into_iter()
                 .map(|(name, source)| (name.as_source().to_string(), source))
                 .collect(),
+            variants: Some(
+                output
+                    .metadata
+                    .variant
+                    .iter()
+                    .map(|(k, v)| (k.clone(), pixi_record::VariantValue::from(v.clone())))
+                    .collect(),
+            ),
         })
     }
 
@@ -396,7 +404,7 @@ impl SourceMetadataSpec {
                 channel_priority: Default::default(),
                 exclude_newer: None,
                 channel_config: self.backend_metadata.channel_config.clone(),
-                variants: self.backend_metadata.variants.clone(),
+                variant_configuration: self.backend_metadata.variant_configuration.clone(),
                 variant_files: self.backend_metadata.variant_files.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
                 preferred_build_source,

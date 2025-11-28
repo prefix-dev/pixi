@@ -153,7 +153,7 @@ pub async fn simple_test() {
                     .into(),
             ],
             channel_config: default_channel_config(),
-            variants: None,
+            variant_configuration: None,
             variant_files: None,
             enabled_protocols: Default::default(),
         })

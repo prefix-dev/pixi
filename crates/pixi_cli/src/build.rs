@@ -200,7 +200,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Determine the variant configuration for the build.
     let VariantConfig {
-        variants,
+        variant_configuration,
         variant_files,
     } = workspace.variants(args.target_platform)?;
 
@@ -274,7 +274,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         channels: channels.clone(),
         channel_config: channel_config.clone(),
         build_environment: build_environment.clone(),
-        variants: Some(variants.clone()),
+        variant_configuration: Some(variant_configuration.clone()),
         variant_files: Some(variant_files.clone()),
         enabled_protocols: Default::default(),
     };
@@ -305,8 +305,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),
-                variants: Some(variants.clone()),
+                variant_configuration: Some(variant_configuration.clone()),
                 variant_files: Some(variant_files.clone()),
+                // Fresh builds don't have pre-existing variants to match against
+                variants: None,
                 enabled_protocols: Default::default(),
                 work_directory: None,
                 clean: args.clean,

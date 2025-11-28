@@ -2004,6 +2004,7 @@ impl<'p> UpdateContext<'p> {
                         .unwrap_or_default()
                         .into(),
                     exclude_newer: grouped_env.exclude_newer(),
+                    pypi_prerelease_mode: None,
                 },
             );
 
@@ -2194,7 +2195,7 @@ async fn spawn_solve_conda_environment_task(
 
     // Determine the build variants
     let VariantConfig {
-        variants,
+        variant_configuration,
         variant_files,
     } = group.workspace().variants(platform)?;
 
@@ -2214,7 +2215,7 @@ async fn spawn_solve_conda_environment_task(
             channel_priority: channel_priority.into(),
             exclude_newer,
             channel_config,
-            variants: Some(variants),
+            variant_configuration: Some(variant_configuration),
             variant_files: Some(variant_files),
             enabled_protocols: Default::default(),
             preferred_build_source: pin_overrides,

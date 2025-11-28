@@ -311,6 +311,7 @@ fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     build_number: None,
                     file_name: None,
                     extras: None,
+                    condition: None,
                     channel: None,
                     subdir: None,
                     namespace: None,
@@ -336,6 +337,7 @@ fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     // Explicitly ignored
                     namespace: _,
                     extras: _,
+                    condition: _,
                 } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
                     version,
                     build,

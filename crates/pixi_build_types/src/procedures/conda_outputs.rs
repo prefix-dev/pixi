@@ -16,7 +16,7 @@ use rattler_conda_types::{ChannelUrl, NoArchType, PackageName, Platform, Version
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{BinaryPackageSpecV1, PackageSpecV1, project_model::NamedSpecV1};
+use crate::{BinaryPackageSpecV1, PackageSpecV1, VariantValue, project_model::NamedSpecV1};
 
 pub const METHOD_NAME: &str = "conda/outputs";
 
@@ -47,7 +47,7 @@ pub struct CondaOutputsParams {
     pub build_platform: Platform,
 
     /// The possible variants by the pixi workspace.
-    pub variant_configuration: Option<BTreeMap<String, Vec<String>>>,
+    pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
 
     /// The variant file paths that were provided by the pixi workspace.
     pub variant_files: Option<Vec<PathBuf>>,
@@ -152,7 +152,7 @@ pub struct CondaOutputMetadata {
     pub python_site_packages_path: Option<String>,
 
     /// The variants that were used for this output.
-    pub variant: BTreeMap<String, String>,
+    pub variant: BTreeMap<String, VariantValue>,
 }
 
 /// Describes dependencies, constraints and source dependencies for a particular

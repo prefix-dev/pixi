@@ -647,7 +647,7 @@ impl Project {
                 installed: None,
                 ignore_packages: None,
                 force_reinstall: force_reinstall_packages,
-                variants: None,
+                variant_configuration: None,
                 variant_files: None,
             })
             .await?;
@@ -1416,7 +1416,7 @@ impl Project {
                 .filter_map(|c| c.clone().into_base_url(self.global_channel_config()).ok())
                 .collect(),
             build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
-            variants: None,
+            variant_configuration: None,
             variant_files: None,
             enabled_protocols: Default::default(),
         };
