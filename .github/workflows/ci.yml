@@ -810,7 +810,7 @@ jobs:
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
       - name: Setup latest Alpine Linux
-        uses: jirutka/setup-alpine@de807bada44fc7dce6bbd00672b92827aa5f3c99 # v1
+        uses: jirutka/setup-alpine@cf5fddcea495dcc19c0f991c6f6fa6a7abf3d50a # v1.3.0
       - name: "Install"
         run: |
           uname -a
@@ -829,7 +829,7 @@ jobs:
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
       - name: Setup latest Alpine Linux
-        uses: jirutka/setup-alpine@cf5fddcea495dcc19c0f991c6f6fa6a7abf3d50a # v1
+        uses: jirutka/setup-alpine@cf5fddcea495dcc19c0f991c6f6fa6a7abf3d50a # v1.3.0
       - name: "Install"
         run: |
           uname -a
