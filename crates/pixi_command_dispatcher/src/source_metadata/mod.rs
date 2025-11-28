@@ -107,9 +107,12 @@ impl SourceMetadataSpec {
             .map_err(CommandDispatcherError::Failed)?;
 
         if !skip_cache {
-            if let Some(cached_metadata) =
-                Self::verify_cache_freshness(&build_backend_metadata.metadata.input_hash, metadata)
-                    .await?
+            if let Some(cached_metadata) = Self::verify_cache_freshness(
+                &build_backend_metadata.metadata.input_hash,
+                metadata,
+                &self.backend_metadata.variants,
+            )
+            .await?
             {
                 tracing::debug!(
                     "Using cached source metadata for package {}",
@@ -214,11 +217,18 @@ impl SourceMetadataSpec {
     async fn verify_cache_freshness(
         current_input_hash: &Option<InputHash>,
         cached_metadata: Option<CachedSourceMetadata>,
+        requested_variants: &Option<BTreeMap<String, Vec<String>>>,
     ) -> Result<Option<CachedSourceMetadata>, CommandDispatcherError<SourceMetadataError>> {
         let Some(cached_metadata) = cached_metadata else {
             tracing::debug!("no cached metadata passed.");
             return Ok(None);
         };
+
+        // Check if the build variants match
+        if cached_metadata.build_variants != *requested_variants {
+            tracing::trace!("found cached response with different variants, invalidating cache.");
+            return Ok(None);
+        }
 
         // If neither has an input hash, consider it fresh
         let (Some(current_hash), Some(cached_hash)) =
