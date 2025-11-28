@@ -28,7 +28,7 @@ use pixi_cli::{
     cli_config::{
         DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
     },
-    init, install, lock, remove, search, task, update, workspace,
+    global, init, install, lock, remove, search, task, update, workspace,
 };
 use pixi_core::DependencyType;
 use std::{
@@ -38,6 +38,7 @@ use std::{
     pin::Pin,
     str::FromStr,
 };
+use typed_path::Utf8NativePathBuf;
 
 use futures::FutureExt;
 use pixi_manifest::{EnvironmentName, FeatureName, SpecType, task::Dependency};
@@ -663,5 +664,54 @@ impl IntoFuture for BuildBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         build::execute(self.args).boxed_local()
+    }
+}
+
+/// Contains the arguments to pass to [`global::execute()`]. Call `.await` to call
+/// the CLI execute method and await the result at the same time.
+pub struct GlobalInstallBuilder {
+    args: global::install::Args,
+    tmpdir: PathBuf,
+}
+
+impl GlobalInstallBuilder {
+    /// Create a new GlobalInstallBuilder
+    pub fn new(
+        tmpdir: PathBuf,
+        backend_override: Option<pixi_build_frontend::BackendOverride>,
+    ) -> Self {
+        let mut args = global::install::Args::default();
+        args.backend_override = backend_override;
+        Self { args, tmpdir }
+    }
+
+    pub fn with_path(mut self, path: impl ToString) -> Self {
+        self.args.packages.path = Some(Into::<Utf8NativePathBuf>::into(path.to_string()));
+        self
+    }
+
+    pub fn with_force_reinstall(mut self, force_reinstall: bool) -> Self {
+        self.args.force_reinstall = force_reinstall;
+        self
+    }
+}
+
+impl IntoFuture for GlobalInstallBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        let args = global::Args {
+            command: global::Command::Install(self.args),
+        };
+
+        temp_env::async_with_vars(
+            [
+                ("PIXI_HOME", Some(self.tmpdir.clone())),
+                ("PIXI_CACHE_DIR", Some(self.tmpdir.clone())),
+            ],
+            async { global::execute(args).await },
+        )
+        .boxed_local()
     }
 }

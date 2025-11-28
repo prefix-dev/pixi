@@ -168,8 +168,9 @@ impl SourceBuildSpec {
                         output = %cached_build.record.file_name,
                         "using cached up-to-date source build",
                     );
+                    let output_file = build_cache.cache_dir.join(&cached_build.record.file_name);
                     return Ok(SourceBuildResult {
-                        output_file: build_cache.cache_dir.join(&cached_build.record.file_name),
+                        output_file,
                         record: cached_build.record.clone(),
                     });
                 }
@@ -190,9 +191,10 @@ impl SourceBuildSpec {
                     output = %cached_build.record.file_name,
                     "using cached new source build",
                 );
-                // dont matter if we forceit , we can reuse the cache entry
+                // dont matter if we force it , we can reuse the cache entry
+                let output_file = build_cache.cache_dir.join(&cached_build.record.file_name);
                 return Ok(SourceBuildResult {
-                    output_file: build_cache.cache_dir.join(&cached_build.record.file_name),
+                    output_file,
                     record: cached_build.record.clone(),
                 });
             }
@@ -351,8 +353,15 @@ impl SourceBuildSpec {
             .map_err_with(SourceBuildError::CreateOutputDirectory)?;
 
         // The output file should also exist.
+        tracing::debug!(
+            "backend returned output_file: {}",
+            built_source.output_file.display()
+        );
         let output_file = match fs_err::canonicalize(&built_source.output_file) {
-            Ok(output_file) => output_file,
+            Ok(output_file) => {
+                tracing::debug!("canonicalized to: {}", output_file.display());
+                output_file
+            }
             Err(_err) => {
                 return Err(CommandDispatcherError::Failed(
                     SourceBuildError::MissingOutputFile(built_source.output_file),

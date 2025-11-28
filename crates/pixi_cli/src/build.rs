@@ -21,7 +21,6 @@ use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
 use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
-use tempfile::tempdir;
 
 use crate::cli_config::LockAndInstallConfig;
 
@@ -296,18 +295,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )
         })?;
 
-    // Create a temporary directory to hold build outputs
-    let temp_output_dir = tempdir()
-        .into_diagnostic()
-        .context("failed to create temporary output directory for build artifacts")?;
-
     // Build the individual packages
     for package in packages {
         let built_package = command_dispatcher
             .source_build(SourceBuildSpec {
                 package,
-                // Build into a temporary directory first
-                output_directory: Some(temp_output_dir.path().to_path_buf()),
+                output_directory: None,
                 source: SourceCodeLocation::new(manifest_source.clone(), None),
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
@@ -334,12 +327,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .expect("built package should have a file name");
         let dest_path = args.output_dir.join(file_name);
 
-        // Move the .conda artifact into the requested directory.
-        // If a simple rename fails (e.g., across filesystems), fall back to copy+remove.
-        if let Err(_e) = fs_err::rename(&package_path, &dest_path) {
-            fs_err::copy(&package_path, &dest_path).into_diagnostic()?;
-            fs_err::remove_file(&package_path).into_diagnostic()?;
-        }
+        // Copy the .conda artifact into the requested directory.
+        // We use copy instead of move to preserve the cache for subsequent builds.
+        fs_err::copy(&package_path, &dest_path).into_diagnostic()?;
 
         // Print success relative to the user-requested output directory
         let output_dir = dunce::canonicalize(&args.output_dir)
