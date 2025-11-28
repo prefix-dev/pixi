@@ -28,7 +28,7 @@
     },
     {
       "description": "We want to update Rust manually and keep it in sync with rust-toolchain",
-      "matchPackageNames": "rust",
+      "matchPackageNames": ["rust"],
       "matchManagers": ["pixi"],
       "enabled": false
     },
@@ -46,7 +46,7 @@
     },
     {
       "description": "Update uv crates together",
-      "matchPackageNames": ["uv*"],
+      "matchPackageNames": ["uv*", "reqwest-middleware", "reqwest-retry"],
       "matchManagers": ["cargo"],
       "groupName": "uv",
       "addLabels": ["uv"]
