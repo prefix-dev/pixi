@@ -1,6 +1,6 @@
 # Basic usage of Pixi
 
-Pixi can do alot of things, but it is designed to be simple to use.
+Pixi can do a lot of things, but it is designed to be simple to use.
 Let's go through the basic usage of Pixi.
 
 ## Managing workspaces
@@ -68,7 +68,7 @@ This can be a predefined task or any normal executable.
 - [`pixi task add`](./reference/cli/pixi/task/add.md) - Add a new task to the manifest
 
 Tasks can have other tasks as dependencies.
-Here is an example of a more complex task usecase
+Here is an example of a more complex task use case
 ```toml title="pixi.toml"
 [tasks]
 build = "make build"

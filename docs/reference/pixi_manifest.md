@@ -173,7 +173,17 @@ Example:
 If `conda-forge` is not present in `conda-pypi-map` `pixi` will use `prefix.dev` mapping for it.
 
 ```toml
-conda-pypi-map = { "conda-forge" = "https://example.com/mapping", "https://repo.prefix.dev/robostack" = "local/robostack_mapping.json"}
+conda-pypi-map = { conda-forge = "https://example.com/mapping", "https://repo.prefix.dev/robostack" = "local/robostack_mapping.json"}
+```
+
+It is also possible to disable fetching external mpping by adding an empty map to the list
+
+```toml
+conda-pypi-map = { conda-forge = "map.json" }
+```
+
+```json title="map.json"
+{}
 ```
 
 ### `channel-priority` (optional)
@@ -235,7 +245,7 @@ solve-strategy = "lowest"
     [feature.one]
     solve-strategy = "lowest"
     [feature.two]
-    solve-strategy = "lowest-direct"    
+    solve-strategy = "lowest-direct"
     [environments]
     combined = ["two", "one"] # <- The solve strategy from feature `two` is used
     ```

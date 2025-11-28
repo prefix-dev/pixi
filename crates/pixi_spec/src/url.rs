@@ -108,7 +108,7 @@ impl Display for UrlSpec {
 
 /// A specification of a source archive from a URL.
 #[serde_as]
-#[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct UrlSourceSpec {
     /// The URL of the package
     pub url: Url,

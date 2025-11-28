@@ -428,7 +428,7 @@ pub fn parse_specs_for_platform(
                 Some((
                     name.clone(),
                     (
-                        MatchSpec::from_nameless(nameless_match_spec, Some(name)),
+                        MatchSpec::from_nameless(nameless_match_spec, Some(name.clone().into())),
                         spec_type,
                     ),
                 ))

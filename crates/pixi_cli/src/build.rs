@@ -7,6 +7,7 @@ use miette::{Context, IntoDiagnostic};
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
+    build::SourceCodeLocation,
 };
 use pixi_config::ConfigCli;
 use pixi_consts::consts::{
@@ -270,13 +271,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Create the build backend metadata specification.
     let backend_metadata_spec = BuildBackendMetadataSpec {
         manifest_source: manifest_source.clone(),
+        preferred_build_source: None,
         channels: channels.clone(),
         channel_config: channel_config.clone(),
         build_environment: build_environment.clone(),
         variants: Some(variants.clone()),
         variant_files: Some(variant_files.clone()),
         enabled_protocols: Default::default(),
-        pin_override: None,
     };
     let backend_metadata = command_dispatcher
         .build_backend_metadata(backend_metadata_spec.clone())
@@ -307,8 +308,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 package,
                 // Build into a temporary directory first
                 output_directory: Some(temp_output_dir.path().to_path_buf()),
-                manifest_source: manifest_source.clone(),
-                build_source: None,
+                source: SourceCodeLocation::new(manifest_source.clone(), None),
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),
