@@ -494,8 +494,10 @@ fn workspace_cannot_be_false() -> GenericError {
 #[cfg(test)]
 mod test {
     use assert_matches::assert_matches;
+    use fs_err as fs;
     use insta::assert_snapshot;
     use pixi_test_utils::format_parse_error;
+    use tempfile::TempDir;
 
     use super::*;
     use crate::toml::FromTomlStr;
@@ -851,13 +853,13 @@ mod test {
         let input = r#"
         name = "package-name"
         version = "1.0.0"
-        
+
         [build.config]
         test = "test_normal"
-        
+
         [build.target.unix.config]
         test = "test_unix"
-        
+
         [build]
         backend = { name = "bla", version = "1.0" }
         "#;
@@ -877,13 +879,13 @@ mod test {
         let input = r#"
         name = "package-name"
         version = "1.0.0"
-        
+
         [build.configuration]
         test = "test_normal"
-        
+
         [build.target.unix.configuration]
         test = "test_unix"
-        
+
         [build]
         backend = { name = "bla", version = "1.0" }
         "#;
@@ -927,7 +929,7 @@ mod test {
                 Some(path),
             )
         });
-        assert!(result.is_ok(), "Expected success but got: {:?}", result);
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
     }
 
     #[test]
@@ -954,7 +956,7 @@ mod test {
                 Some(path),
             )
         });
-        assert!(result.is_ok(), "Expected success but got: {:?}", result);
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
     }
 
     #[test]
@@ -979,7 +981,7 @@ mod test {
                 Some(path),
             )
         });
-        assert!(result.is_ok(), "Expected success but got: {:?}", result);
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
     }
 
     #[test]
@@ -1012,9 +1014,6 @@ mod test {
     fn test_license_file_validation_succeeds_without_build_source() {
         // When no build.source is specified, license-file should be validated
         // against the manifest directory
-        use std::fs;
-        use tempfile::TempDir;
-
         let temp_dir = TempDir::new().unwrap();
         let license_path = temp_dir.path().join("LICENSE.txt");
         fs::write(&license_path, "MIT License").unwrap();
@@ -1036,7 +1035,7 @@ mod test {
                 Some(temp_dir.path()),
             )
         });
-        assert!(result.is_ok(), "Expected success but got: {:?}", result);
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
 
         // Verify the license_file path is set correctly
         let manifest = result.unwrap().value;
@@ -1047,9 +1046,6 @@ mod test {
     fn test_license_file_validation_succeeds_with_path_source() {
         // When build.source is a path, license-file should be validated
         // against the resolved path source directory
-        use std::fs;
-        use tempfile::TempDir;
-
         // Create manifest directory
         let manifest_dir = TempDir::new().unwrap();
 
@@ -1081,7 +1077,7 @@ mod test {
                 Some(manifest_dir.path()),
             )
         });
-        assert!(result.is_ok(), "Expected success but got: {:?}", result);
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
 
         // Verify the license_file path is set correctly
         let manifest = result.unwrap().value;
@@ -1092,9 +1088,6 @@ mod test {
     fn test_readme_validation_succeeds_without_build_source() {
         // When no build.source is specified, readme should be validated
         // against the manifest directory
-        use std::fs;
-        use tempfile::TempDir;
-
         let temp_dir = TempDir::new().unwrap();
         let readme_path = temp_dir.path().join("README.md");
         fs::write(&readme_path, "# My Package").unwrap();
@@ -1116,7 +1109,7 @@ mod test {
                 Some(temp_dir.path()),
             )
         });
-        assert!(result.is_ok(), "Expected success but got: {:?}", result);
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
 
         // Verify the readme path is set correctly
         let manifest = result.unwrap().value;
