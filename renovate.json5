@@ -42,12 +42,14 @@
       "matchPackageNames": ["rattler*", "file_url", "coalesced_map", "path_resolver", "simple_spawn_blocking"],
       "matchManagers": ["cargo"],
       "groupName": "rattler"
+      "addLabels": ["rattler"]
     },
     {
       "description": "Update uv crates together",
       "matchPackageNames": ["uv*"],
       "matchManagers": ["cargo"],
-      "groupName": "uv"
+      "groupName": "uv",
+      "addLabels": ["uv"]
     }
   ]
 }
