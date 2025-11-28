@@ -10,10 +10,13 @@ use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_frontend::{Backend, json_rpc::CommunicationError};
-use pixi_build_types::procedures::conda_build_v1::{
-    CondaBuildV1Dependency, CondaBuildV1DependencyRunExportSource, CondaBuildV1DependencySource,
-    CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Prefix, CondaBuildV1PrefixPackage,
-    CondaBuildV1Result, CondaBuildV1RunExports,
+use pixi_build_types::{
+    VariantValue,
+    procedures::conda_build_v1::{
+        CondaBuildV1Dependency, CondaBuildV1DependencyRunExportSource,
+        CondaBuildV1DependencySource, CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Prefix,
+        CondaBuildV1PrefixPackage, CondaBuildV1Result, CondaBuildV1RunExports,
+    },
 };
 use pixi_record::PinnedSourceSpec;
 use pixi_spec::{BinarySpec, PixiSpec, SpecConversionError};
@@ -79,10 +82,7 @@ pub struct BackendSourceBuildV1Method {
     pub run_exports: PixiRunExports,
 
     /// The variant to build
-    /// TODO: This should move to the `SourceRecord` in the future. The variant
-    /// is an essential part to identity a particular output of a source
-    /// package.
-    pub variant: BTreeMap<String, String>,
+    pub variant: BTreeMap<String, VariantValue>,
 
     /// The directory where to place the built package. This is used as a hint
     /// for the backend, it may still place the package elsewhere.
@@ -353,7 +353,10 @@ fn convert_pixi_spec_to_match_spec(
         Either::Left(source) => source.to_nameless_match_spec(),
         Either::Right(binary) => binary.try_into_nameless_match_spec(channel_config)?,
     };
-    Ok(MatchSpec::from_nameless(nameless_spec, Some(package_name)))
+    Ok(MatchSpec::from_nameless(
+        nameless_spec,
+        Some(package_name.into()),
+    ))
 }
 
 fn convert_binary_spec_to_match_spec(
@@ -362,7 +365,10 @@ fn convert_binary_spec_to_match_spec(
     channel_config: &ChannelConfig,
 ) -> Result<MatchSpec, SpecConversionError> {
     let nameless_spec = spec.try_into_nameless_match_spec(channel_config)?;
-    Ok(MatchSpec::from_nameless(nameless_spec, Some(package_name)))
+    Ok(MatchSpec::from_nameless(
+        nameless_spec,
+        Some(package_name.into()),
+    ))
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]

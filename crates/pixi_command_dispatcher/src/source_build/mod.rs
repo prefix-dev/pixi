@@ -9,7 +9,7 @@ use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
-use pixi_record::{PinnedSourceSpec, PixiRecord};
+use pixi_record::{PinnedSourceSpec, PixiRecord, VariantValue};
 use pixi_spec::{SourceAnchor, SourceLocationSpec, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageRecord,
@@ -33,7 +33,7 @@ use crate::{
     build::{
         BuildCacheError, BuildHostEnvironment, BuildHostPackage, CachedBuild,
         CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, PackageBuildInputHash,
-        PixiRunExports, SourceRecordOrCheckout, WorkDirKey, move_file,
+        PixiRunExports, SourceCodeLocation, SourceRecordOrCheckout, WorkDirKey, move_file,
     },
     package_identifier::PackageIdentifier,
 };
@@ -51,12 +51,8 @@ pub struct SourceBuildSpec {
     /// The source to build
     pub package: PackageIdentifier,
 
-    /// The location of the source code to build.
-    pub manifest_source: PinnedSourceSpec,
-
-    /// Optional source spec of sources which will be built.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub build_source: Option<PinnedSourceSpec>,
+    /// The manifest and optional build source location.
+    pub source: SourceCodeLocation,
 
     /// The channel configuration to use when resolving metadata
     pub channel_config: ChannelConfig,
@@ -77,10 +73,16 @@ pub struct SourceBuildSpec {
     pub build_profile: BuildProfile,
 
     /// Build variants to use during the build
-    pub variants: Option<BTreeMap<String, Vec<String>>>,
+    pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
 
     /// Build variant file contents to use during the build
     pub variant_files: Option<Vec<PathBuf>>,
+
+    /// The specific variant values to match against when selecting an output.
+    /// If provided, output matching uses (name, subdir, variants) instead of
+    /// (name, version, build, subdir). The variants must be a subset of the
+    /// output's variants.
+    pub variants: Option<BTreeMap<String, VariantValue>>,
 
     /// The directory where to place the built package.
     pub output_directory: Option<PathBuf>,
@@ -124,7 +126,8 @@ impl SourceBuildSpec {
         skip_all,
         name = "source-build",
         fields(
-            source= %self.manifest_source,
+            manifest_source = %self.source.manifest_source(),
+            build_source = ?self.source.build_source(),
             package = %self.package,
         )
     )]
@@ -134,6 +137,8 @@ impl SourceBuildSpec {
         reporter: Option<Arc<dyn RunExportsReporter>>,
         log_sink: UnboundedSender<String>,
     ) -> Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>> {
+        let manifest_source = self.source.manifest_source().clone();
+
         // If the output directory is not set, we want to use the build cache. Read the
         // build cache in that case.
         let (output_directory, build_cache) = if let Some(output_directory) =
@@ -147,7 +152,7 @@ impl SourceBuildSpec {
                 .source_build_cache_status(SourceBuildCacheStatusSpec {
                     package: self.package.clone(),
                     build_environment: self.build_environment.clone(),
-                    source: self.manifest_source.clone(),
+                    source: self.source.clone(),
                     channels: self.channels.clone(),
                     channel_config: self.channel_config.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
@@ -163,14 +168,15 @@ impl SourceBuildSpec {
                 if !self.force {
                     // If the build is up to date, we can return the cached build.
                     tracing::debug!(
-                        source = %self.manifest_source,
+                        source = %self.source.manifest_source(),
                         package = ?cached_build.record.package_record.name,
                         build = %cached_build.record.package_record.build,
                         output = %cached_build.record.file_name,
                         "using cached up-to-date source build",
                     );
+                    let output_file = build_cache.cache_dir.join(&cached_build.record.file_name);
                     return Ok(SourceBuildResult {
-                        output_file: build_cache.cache_dir.join(&cached_build.record.file_name),
+                        output_file,
                         record: cached_build.record.clone(),
                     });
                 }
@@ -185,15 +191,16 @@ impl SourceBuildSpec {
                     self.package.name.as_normalized()
                 );
                 tracing::debug!(
-                    source = %self.manifest_source,
+                    source = %self.source.manifest_source(),
                     package = ?cached_build.record.package_record.name,
                     build = %cached_build.record.package_record.build,
                     output = %cached_build.record.file_name,
                     "using cached new source build",
                 );
-                // dont matter if we forceit , we can reuse the cache entry
+                // dont matter if we force it , we can reuse the cache entry
+                let output_file = build_cache.cache_dir.join(&cached_build.record.file_name);
                 return Ok(SourceBuildResult {
-                    output_file: build_cache.cache_dir.join(&cached_build.record.file_name),
+                    output_file,
                     record: cached_build.record.clone(),
                 });
             }
@@ -201,7 +208,7 @@ impl SourceBuildSpec {
             match &*build_cache.cached_build.lock().await {
                 CachedBuildStatus::Stale(existing) => {
                     tracing::debug!(
-                        source = %self.manifest_source,
+                        source = %self.source.manifest_source(),
                         package = ?existing.record.package_record.name,
                         build = %existing.record.package_record.build,
                         "rebuilding stale source build",
@@ -209,7 +216,7 @@ impl SourceBuildSpec {
                 }
                 CachedBuildStatus::Missing => {
                     tracing::debug!(
-                        source = %self.manifest_source,
+                        source = %self.source.manifest_source(),
                         "no cached source build; starting fresh build",
                     );
                 }
@@ -221,7 +228,7 @@ impl SourceBuildSpec {
 
         // Check out the source code.
         let manifest_source_checkout = command_dispatcher
-            .checkout_pinned_source(self.manifest_source.clone())
+            .checkout_pinned_source(manifest_source.clone())
             .await
             .map_err_with(SourceBuildError::SourceCheckout)?;
 
@@ -243,7 +250,7 @@ impl SourceBuildSpec {
 
         // Ensure legacy lock entries that missed the git subdirectory pick it up from the
         // manifest so we check out the correct directory.
-        let mut build_source = self.build_source.clone();
+        let mut build_source = self.source.build_source().cloned();
         if let (Some(PinnedSourceSpec::Git(pinned_git)), Some(SourceLocationSpec::Git(git_spec))) = (
             build_source.as_mut(),
             discovered_backend.init_params.build_source.clone(),
@@ -257,53 +264,45 @@ impl SourceBuildSpec {
         // 1. Lock file `package_build_source`. Since we're running lock file update before building package it should pin source in there.
         // 2. Manifest package build. This can happen if package isn't added to the dependencies of manifest, so no pinning happens in that case.
         // 3. Manifest source. Just assume that source is located at the same directory as the manifest.
-        let build_source_dir = if let Some(pinned_build_source) = build_source {
-            let build_source_checkout = command_dispatcher
+        let build_source_checkout = if let Some(pinned_build_source) = build_source {
+            &command_dispatcher
                 .checkout_pinned_source(pinned_build_source)
                 .await
-                .map_err_with(SourceBuildError::SourceCheckout)?;
-            build_source_checkout.path
+                .map_err_with(SourceBuildError::SourceCheckout)?
         } else if let Some(manifest_build_source) =
             discovered_backend.init_params.build_source.clone()
         {
-            let build_source_checkout = command_dispatcher
-                .pin_and_checkout(
-                    manifest_build_source,
-                    Some(
-                        discovered_backend
-                            .init_params
-                            .manifest_path
-                            .parent()
-                            .ok_or_else(|| {
-                                SourceCheckoutError::ParentDir(
-                                    discovered_backend.init_params.manifest_path.clone(),
-                                )
-                            })
-                            .map_err(SourceBuildError::SourceCheckout)
-                            .map_err(CommandDispatcherError::Failed)?,
-                    ),
-                )
+            let manifest_source_anchor =
+                SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
+            let resolved_build_source = manifest_source_anchor.resolve(manifest_build_source);
+            &command_dispatcher
+                .pin_and_checkout(resolved_build_source)
                 .await
-                .map_err_with(SourceBuildError::SourceCheckout)?;
-            build_source_checkout.path
+                .map_err_with(SourceBuildError::SourceCheckout)?
         } else {
-            manifest_source_checkout.path
+            &manifest_source_checkout
         };
 
         // Instantiate the backend with the discovered information.
-        let backend =
-            command_dispatcher
-                .instantiate_backend(InstantiateBackendSpec {
-                    backend_spec: discovered_backend.backend_spec.clone().resolve(
-                        SourceAnchor::from(SourceSpec::from(self.manifest_source.clone())),
-                    ),
-                    init_params: discovered_backend.init_params.clone(),
-                    build_source_dir,
-                    channel_config: self.channel_config.clone(),
-                    enabled_protocols: self.enabled_protocols.clone(),
-                })
-                .await
-                .map_err_with(SourceBuildError::Initialize)?;
+        let backend = command_dispatcher
+            .instantiate_backend(InstantiateBackendSpec {
+                backend_spec: discovered_backend
+                    .backend_spec
+                    .clone()
+                    .resolve(SourceAnchor::from(SourceSpec::from(
+                        manifest_source.clone(),
+                    ))),
+                build_source_dir: build_source_checkout.path.clone(),
+                channel_config: self.channel_config.clone(),
+                enabled_protocols: self.enabled_protocols.clone(),
+                workspace_root: discovered_backend.init_params.workspace_root.clone(),
+                manifest_path: discovered_backend.init_params.manifest_path.clone(),
+                project_model: discovered_backend.init_params.project_model.clone(),
+                configuration: discovered_backend.init_params.configuration.clone(),
+                target_configuration: discovered_backend.init_params.target_configuration.clone(),
+            })
+            .await
+            .map_err_with(SourceBuildError::Initialize)?;
 
         // Determine the working directory for the build.
         let work_directory = match std::mem::take(&mut self.work_directory) {
@@ -311,7 +310,7 @@ impl SourceBuildSpec {
             None => command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {
                     source: SourceRecordOrCheckout::Record {
-                        pinned: self.manifest_source.clone(),
+                        pinned: manifest_source.clone(),
                         package_name: self.package.name.clone(),
                     },
                     host_platform: self.build_environment.host_platform,
@@ -321,7 +320,7 @@ impl SourceBuildSpec {
             ),
         };
         tracing::debug!(
-            source = %self.manifest_source,
+            source = %manifest_source,
             work_directory = %work_directory.display(),
             backend = backend.identifier(),
             "using work directory for source build",
@@ -337,7 +336,7 @@ impl SourceBuildSpec {
         }
 
         // Build the package using the v1 build method.
-        let source_for_logging = self.manifest_source.clone();
+        let source_for_logging = manifest_source.clone();
         let mut built_source = self
             .build_v1(
                 command_dispatcher,
@@ -360,8 +359,15 @@ impl SourceBuildSpec {
             .map_err_with(SourceBuildError::CreateOutputDirectory)?;
 
         // The output file should also exist.
+        tracing::debug!(
+            "backend returned output_file: {}",
+            built_source.output_file.display()
+        );
         let output_file = match fs_err::canonicalize(&built_source.output_file) {
-            Ok(output_file) => output_file,
+            Ok(output_file) => {
+                tracing::debug!("canonicalized to: {}", output_file.display());
+                output_file
+            }
             Err(_err) => {
                 return Err(CommandDispatcherError::Failed(
                     SourceBuildError::MissingOutputFile(built_source.output_file),
@@ -478,7 +484,10 @@ impl SourceBuildSpec {
                         .expect("the source record should be present in the result sources");
                     BuildHostPackage {
                         repodata_record,
-                        source: Some(source.manifest_source),
+                        source: Some(SourceCodeLocation::new(
+                            source.manifest_source,
+                            source.build_source,
+                        )),
                     }
                 }
             })
@@ -487,7 +496,7 @@ impl SourceBuildSpec {
 
     /// Returns whether the package should be built in an editable mode.
     fn editable(&self) -> bool {
-        self.build_profile == BuildProfile::Development && self.manifest_source.is_mutable()
+        self.build_profile == BuildProfile::Development && self.source.source_code().is_mutable()
     }
 
     async fn build_v1(
@@ -499,9 +508,27 @@ impl SourceBuildSpec {
         reporter: Option<Arc<dyn RunExportsReporter>>,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<BuiltPackage, CommandDispatcherError<SourceBuildError>> {
-        let source_anchor = SourceAnchor::from(SourceSpec::from(self.manifest_source.clone()));
+        let manifest_source = self.source.manifest_source().clone();
+
+        let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
         let host_platform = self.build_environment.host_platform;
         let build_platform = self.build_environment.build_platform;
+        let editable = self.editable();
+
+        let pixi_build_variant_config = self.variant_configuration.as_ref().map(|variants| {
+            variants
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        v.iter()
+                            .cloned()
+                            .map(pixi_build_types::VariantValue::from)
+                            .collect(),
+                    )
+                })
+                .collect()
+        });
 
         // Request the metadata from the backend.
         // TODO: Can we somehow cache this metadata?
@@ -510,7 +537,7 @@ impl SourceBuildSpec {
                 CondaOutputsParams {
                     host_platform,
                     build_platform,
-                    variant_configuration: self.variants.clone(),
+                    variant_configuration: pixi_build_variant_config,
                     variant_files: self.variant_files.clone(),
                     work_directory: work_directory.clone(),
                     channels: self.channels.clone(),
@@ -542,6 +569,18 @@ impl SourceBuildSpec {
                     build: self.package.build.clone(),
                 })
             })?;
+
+        // Create a variant-specific work directory by including the actual variant values
+        // in the work directory key.
+        // This ensures different variants get separate work directories,
+        // preventing files like .pyc accumulation across builds (when using multiple python variants).
+        let variant_work_dir_hash = WorkDirKey::variant_key(&output.metadata.variant);
+
+        // not using set_file_name as it requires &mut self
+        let work_directory = PathBuf::from(format!(
+            "{}-{variant_work_dir_hash}",
+            work_directory.to_string_lossy()
+        ));
 
         // Determine final directories for everything.
         let directories = Directories::new(&work_directory, host_platform);
@@ -628,7 +667,7 @@ impl SourceBuildSpec {
                         force_reinstall: Default::default(),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
-                        variants: self.variants.clone(),
+                        variant_configuration: self.variant_configuration.clone(),
                         variant_files: self.variant_files.clone(),
                         enabled_protocols: self.enabled_protocols.clone(),
                     })
@@ -659,9 +698,9 @@ impl SourceBuildSpec {
                         force_reinstall: Default::default(),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
-                        variants: self.variants.clone(),
-                        variant_files: self.variant_files.clone(),
-                        enabled_protocols: self.enabled_protocols.clone(),
+                        variant_configuration: self.variant_configuration,
+                        variant_files: self.variant_files,
+                        enabled_protocols: self.enabled_protocols,
                     })
                     .await
                     .map_err_with(Box::new)
@@ -696,7 +735,7 @@ impl SourceBuildSpec {
         let built_source = command_dispatcher
             .backend_source_build(BackendSourceBuildSpec {
                 method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
-                    editable: self.editable(),
+                    editable,
                     dependencies,
                     run_exports,
                     build_prefix: BackendSourceBuildPrefix {
@@ -722,7 +761,7 @@ impl SourceBuildSpec {
                 }),
                 backend,
                 package: self.package,
-                source: self.manifest_source,
+                source: manifest_source,
                 work_directory,
                 channels: self.channels,
                 channel_config: self.channel_config,
@@ -775,10 +814,10 @@ impl SourceBuildSpec {
                 channel_priority: Default::default(),
                 exclude_newer: None,
                 channel_config: self.channel_config.clone(),
-                variants: self.variants.clone(),
+                variant_configuration: self.variant_configuration.clone(),
                 variant_files: self.variant_files.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
-                pin_overrides: BTreeMap::new(),
+                preferred_build_source: BTreeMap::new(),
             })
             .await
     }

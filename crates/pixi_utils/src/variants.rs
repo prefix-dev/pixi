@@ -1,5 +1,7 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
+pub use pixi_variant::VariantValue;
+
 /// An alias for variant configuration. This maps a variant name to a list of
 /// options.
 ///
@@ -15,7 +17,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 #[derive(Debug, Clone)]
 pub struct VariantConfig {
     /// Inline variant configuration
-    pub variants: BTreeMap<String, Vec<String>>,
+    pub variant_configuration: BTreeMap<String, Vec<VariantValue>>,
 
     /// Absolute paths to external variant files.
     pub variant_files: Vec<PathBuf>,

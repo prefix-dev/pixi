@@ -1,0 +1,12 @@
+[project]
+name = "consumer"
+version = "0.1.0"
+description = "Test package that requires a strict version of attrs"
+requires-python = ">= 3.11"
+# This strict version requirement will be overridden by
+# pypi-options.dependency-overrides in the parent pixi.toml
+dependencies = ["attrs==23.1.0"]
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]

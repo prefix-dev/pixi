@@ -39,7 +39,7 @@ version = "0.1.0"
 ```
 
 ??? tip "Do you want autocompletion of the manifest file?"
-    As `pixi.toml` has a JSON schema, it is possible to use IDE’s like VSCode to edit the field with autocompletion.
+    As `pixi.toml` has a JSON schema, it is possible to use IDEs like VSCode to edit the field with autocompletion.
     Install the [Even Better TOML VSCode extension](https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml) to get the best experience.
     Or use the integrated schema support in PyCharm.
 
