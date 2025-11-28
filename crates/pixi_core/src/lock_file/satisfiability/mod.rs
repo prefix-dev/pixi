@@ -31,8 +31,8 @@ use rattler_conda_types::{
     ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
 };
 use rattler_lock::{
-    LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable,
-    UrlOrPath,
+    LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData, PypiPrereleaseMode,
+    PypiSourceTreeHashable, UrlOrPath,
 };
 use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
@@ -93,6 +93,16 @@ pub enum EnvironmentUnsat {
         expected_priority: rattler_solve::ChannelPriority,
     },
 
+    #[error(
+        "the lock-file was solved with a different PyPI prerelease mode ({locked_mode}) than the one selected ({expected_mode})",
+        locked_mode = fmt_pypi_prerelease_mode(*.locked_mode),
+        expected_mode = fmt_pypi_prerelease_mode(*.expected_mode),
+    )]
+    PypiPrereleaseModeMismatch {
+        locked_mode: PypiPrereleaseMode,
+        expected_mode: PypiPrereleaseMode,
+    },
+
     #[error(transparent)]
     ExcludeNewerMismatch(#[from] ExcludeNewerMismatch),
 }
@@ -109,6 +119,16 @@ fn fmt_solve_strategy(strategy: rattler_solve::SolveStrategy) -> &'static str {
         rattler_solve::SolveStrategy::Highest => "highest",
         rattler_solve::SolveStrategy::LowestVersion => "lowest-version",
         rattler_solve::SolveStrategy::LowestVersionDirect => "lowest-version-direct",
+    }
+}
+
+fn fmt_pypi_prerelease_mode(mode: PypiPrereleaseMode) -> &'static str {
+    match mode {
+        PypiPrereleaseMode::Disallow => "disallow",
+        PypiPrereleaseMode::Allow => "allow",
+        PypiPrereleaseMode::IfNecessary => "if-necessary",
+        PypiPrereleaseMode::Explicit => "explicit",
+        PypiPrereleaseMode::IfNecessaryOrExplicit => "if-necessary-or-explicit",
     }
 }
 
@@ -512,6 +532,21 @@ pub fn verify_environment_satisfiability(
         return Err(EnvironmentUnsat::ChannelPriorityMismatch {
             locked_priority: locked_environment.solve_options().channel_priority,
             expected_priority: expected_channel_priority,
+        });
+    }
+
+    let locked_prerelease_mode = locked_environment
+        .solve_options()
+        .pypi_prerelease_mode
+        .unwrap_or_default();
+    let expected_prerelease_mode = grouped_env
+        .pypi_options()
+        .prerelease_mode
+        .unwrap_or_default();
+    if locked_prerelease_mode != expected_prerelease_mode {
+        return Err(EnvironmentUnsat::PypiPrereleaseModeMismatch {
+            locked_mode: locked_prerelease_mode,
+            expected_mode: expected_prerelease_mode,
         });
     }
 

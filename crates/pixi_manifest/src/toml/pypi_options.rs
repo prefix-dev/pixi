@@ -1,7 +1,12 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{
+    fmt::{self, Display},
+    path::PathBuf,
+    str::FromStr,
+};
 
 use indexmap::IndexSet;
 use pixi_toml::{TomlEnum, TomlFromStr, TomlIndexMap, TomlWith};
+use strum::VariantNames;
 use toml_span::{
     DeserError, ErrorKind, Value,
     de_helpers::{TableHelper, expected},
@@ -10,7 +15,8 @@ use toml_span::{
 use url::Url;
 
 use crate::pypi::pypi_options::{
-    FindLinksUrlOrPath, NoBinary, NoBuild, NoBuildIsolation, PypiOptions,
+    FindLinksUrlOrPath, NoBinary, NoBuild, NoBuildIsolation, PrereleaseMode, PypiOptions,
+    prerelease_mode_to_str,
 };
 
 /// A helper struct to deserialize a [`pep508_rs::PackageName`] from a TOML
@@ -29,6 +35,40 @@ impl<'de> toml_span::Deserialize<'de> for Pep508PackageName {
         })?;
         Ok(Self(package_name))
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PrereleaseModeToml(PrereleaseMode);
+
+impl Display for PrereleaseModeToml {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(prerelease_mode_to_str(&self.0))
+    }
+}
+
+impl FromStr for PrereleaseModeToml {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "disallow" => Ok(Self(PrereleaseMode::Disallow)),
+            "allow" => Ok(Self(PrereleaseMode::Allow)),
+            "if-necessary" => Ok(Self(PrereleaseMode::IfNecessary)),
+            "explicit" => Ok(Self(PrereleaseMode::Explicit)),
+            "if-necessary-or-explicit" => Ok(Self(PrereleaseMode::IfNecessaryOrExplicit)),
+            _ => Err("invalid prerelease mode"),
+        }
+    }
+}
+
+impl VariantNames for PrereleaseModeToml {
+    const VARIANTS: &'static [&'static str] = &[
+        "disallow",
+        "allow",
+        "if-necessary",
+        "explicit",
+        "if-necessary-or-explicit",
+    ];
 }
 
 impl<'de> toml_span::Deserialize<'de> for NoBuild {
@@ -123,8 +163,8 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
             .optional::<TomlEnum<_>>("index-strategy")
             .map(TomlEnum::into_inner);
         let prerelease_mode = th
-            .optional::<TomlEnum<_>>("prerelease-mode")
-            .map(TomlEnum::into_inner);
+            .optional::<TomlEnum<PrereleaseModeToml>>("prerelease-mode")
+            .map(|mode| mode.into_inner().0);
 
         let no_build = th.optional::<NoBuild>("no-build");
         let dependency_overrides = th

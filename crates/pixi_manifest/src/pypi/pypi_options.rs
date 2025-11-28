@@ -4,43 +4,15 @@ use indexmap::IndexMap;
 use indexmap::IndexSet;
 use pep508_rs::PackageName;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
+use rattler_lock::PypiPrereleaseMode;
 use serde::{Serialize, Serializer, ser::SerializeSeq};
 use thiserror::Error;
 use url::Url;
 
-// taken from: https://docs.astral.sh/uv/reference/settings/#prerelease
 /// The strategy to use when considering pre-release versions during dependency
-/// resolution.
-#[derive(
-    Default,
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    strum::Display,
-    strum::EnumString,
-    strum::VariantNames,
-)]
-#[strum(serialize_all = "kebab-case")]
-#[serde(rename_all = "kebab-case")]
-pub enum PrereleaseMode {
-    /// Disallow all pre-release versions.
-    Disallow,
-    /// Allow all pre-release versions.
-    Allow,
-    /// Allow pre-release versions if all versions of a package are pre-release.
-    IfNecessary,
-    /// Allow pre-release versions for first-party packages with explicit
-    /// pre-release markers in their version requirements.
-    Explicit,
-    /// Allow pre-release versions if all versions of a package are pre-release,
-    /// or if the package has an explicit pre-release marker in its version
-    /// requirements. This is the default behavior.
-    #[default]
-    IfNecessaryOrExplicit,
-}
+/// resolution. Re-exported from `rattler_lock` so the same enum is shared across
+/// lock writing/reading and manifest parsing.
+pub type PrereleaseMode = PypiPrereleaseMode;
 
 // taken from: https://docs.astral.sh/uv/reference/settings/#index-strategy
 /// The strategy to use when resolving against multiple index URLs.
@@ -255,8 +227,8 @@ impl PypiOptions {
         let prerelease_mode =
             merge_single_option(&self.prerelease_mode, &other.prerelease_mode, |a, b| {
                 PypiOptionsMergeError::MultiplePrereleaseModes {
-                    first: a.to_string(),
-                    second: b.to_string(),
+                    first: prerelease_mode_to_str(a).to_string(),
+                    second: prerelease_mode_to_str(b).to_string(),
                 }
             })?;
 
@@ -368,6 +340,16 @@ pub enum PypiOptionsMergeError {
         "multiple prerelease modes are not supported, found both {first} and {second} across multiple pypi options"
     )]
     MultiplePrereleaseModes { first: String, second: String },
+}
+
+pub(crate) fn prerelease_mode_to_str(mode: &PrereleaseMode) -> &'static str {
+    match mode {
+        PrereleaseMode::Disallow => "disallow",
+        PrereleaseMode::Allow => "allow",
+        PrereleaseMode::IfNecessary => "if-necessary",
+        PrereleaseMode::Explicit => "explicit",
+        PrereleaseMode::IfNecessaryOrExplicit => "if-necessary-or-explicit",
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
