@@ -11,7 +11,7 @@ use futures::StreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_record::{PixiRecord, SourceRecord};
+use pixi_record::{PixiRecord, SourceRecord, VariantValue};
 use rattler::install::{
     InstallationResultRecord, Installer, InstallerError, Transaction,
     link_script::{LinkScriptError, PrePostLinkResult},
@@ -63,7 +63,7 @@ pub struct InstallPixiEnvironmentSpec {
     pub channel_config: ChannelConfig,
 
     /// Build variants to use during the solve
-    pub variants: Option<BTreeMap<String, Vec<String>>>,
+    pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
 
     /// Build variant file contents to use during the solve
     pub variant_files: Option<Vec<PathBuf>>,
@@ -110,7 +110,7 @@ impl InstallPixiEnvironmentSpec {
             force_reinstall: HashSet::new(),
             channels: Vec::new(),
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
-            variants: None,
+            variant_configuration: None,
             variant_files: None,
             enabled_protocols: EnabledProtocols::default(),
         }
@@ -213,6 +213,7 @@ impl InstallPixiEnvironmentSpec {
         let force = self
             .force_reinstall
             .contains(&source_record.package_record.name);
+
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
                 source: SourceCodeLocation::new(
@@ -223,8 +224,9 @@ impl InstallPixiEnvironmentSpec {
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
                 build_environment: self.build_environment.clone(),
-                variants: self.variants.clone(),
+                variant_configuration: self.variant_configuration.clone(),
                 variant_files: self.variant_files.clone(),
+                variants: source_record.variants.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 output_directory: None,
                 work_directory: None,

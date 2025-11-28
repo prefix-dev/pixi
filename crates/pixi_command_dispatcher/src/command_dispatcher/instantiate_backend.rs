@@ -134,7 +134,7 @@ impl CommandDispatcher {
                         },
                         channels: env_spec.channels,
                         exclude_newer: None,
-                        variants: None,
+                        variant_configuration: None,
                         variant_files: None,
                         channel_config: spec.channel_config,
                         enabled_protocols: spec.enabled_protocols,

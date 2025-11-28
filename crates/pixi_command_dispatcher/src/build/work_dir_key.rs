@@ -73,7 +73,7 @@ impl WorkDirKey {
         }
     }
 
-    pub fn variant_key(variant_key: &BTreeMap<String, String>) -> String {
+    pub fn variant_key(variant_key: &BTreeMap<String, impl Hash>) -> String {
         let mut hasher = Xxh3::new();
         for (key, value) in variant_key {
             key.hash(&mut hasher);

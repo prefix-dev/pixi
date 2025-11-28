@@ -160,6 +160,7 @@ pub(crate) fn package_metadata_to_source_records(
                     run_exports: None,
                     experimental_extra_depends: Default::default(),
                 },
+                variants: None,
             }
         })
         .collect()

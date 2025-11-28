@@ -31,6 +31,7 @@ is_executable = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pep508_rs = { workspace = true }
+pixi_variant = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 rattler_conda_types = { workspace = true }

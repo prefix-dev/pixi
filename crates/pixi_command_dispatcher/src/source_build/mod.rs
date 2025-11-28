@@ -9,7 +9,7 @@ use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
-use pixi_record::{PinnedSourceSpec, PixiRecord};
+use pixi_record::{PinnedSourceSpec, PixiRecord, VariantValue};
 use pixi_spec::{SourceAnchor, SourceLocationSpec, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageRecord,
@@ -73,10 +73,16 @@ pub struct SourceBuildSpec {
     pub build_profile: BuildProfile,
 
     /// Build variants to use during the build
-    pub variants: Option<BTreeMap<String, Vec<String>>>,
+    pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
 
     /// Build variant file contents to use during the build
     pub variant_files: Option<Vec<PathBuf>>,
+
+    /// The specific variant values to match against when selecting an output.
+    /// If provided, output matching uses (name, subdir, variants) instead of
+    /// (name, version, build, subdir). The variants must be a subset of the
+    /// output's variants.
+    pub variants: Option<BTreeMap<String, VariantValue>>,
 
     /// The directory where to place the built package.
     pub output_directory: Option<PathBuf>,
@@ -168,8 +174,9 @@ impl SourceBuildSpec {
                         output = %cached_build.record.file_name,
                         "using cached up-to-date source build",
                     );
+                    let output_file = build_cache.cache_dir.join(&cached_build.record.file_name);
                     return Ok(SourceBuildResult {
-                        output_file: build_cache.cache_dir.join(&cached_build.record.file_name),
+                        output_file,
                         record: cached_build.record.clone(),
                     });
                 }
@@ -190,9 +197,10 @@ impl SourceBuildSpec {
                     output = %cached_build.record.file_name,
                     "using cached new source build",
                 );
-                // dont matter if we forceit , we can reuse the cache entry
+                // dont matter if we force it , we can reuse the cache entry
+                let output_file = build_cache.cache_dir.join(&cached_build.record.file_name);
                 return Ok(SourceBuildResult {
-                    output_file: build_cache.cache_dir.join(&cached_build.record.file_name),
+                    output_file,
                     record: cached_build.record.clone(),
                 });
             }
@@ -351,8 +359,15 @@ impl SourceBuildSpec {
             .map_err_with(SourceBuildError::CreateOutputDirectory)?;
 
         // The output file should also exist.
+        tracing::debug!(
+            "backend returned output_file: {}",
+            built_source.output_file.display()
+        );
         let output_file = match fs_err::canonicalize(&built_source.output_file) {
-            Ok(output_file) => output_file,
+            Ok(output_file) => {
+                tracing::debug!("canonicalized to: {}", output_file.display());
+                output_file
+            }
             Err(_err) => {
                 return Err(CommandDispatcherError::Failed(
                     SourceBuildError::MissingOutputFile(built_source.output_file),
@@ -498,6 +513,22 @@ impl SourceBuildSpec {
         let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
         let host_platform = self.build_environment.host_platform;
         let build_platform = self.build_environment.build_platform;
+        let editable = self.editable();
+
+        let pixi_build_variant_config = self.variant_configuration.as_ref().map(|variants| {
+            variants
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        v.iter()
+                            .cloned()
+                            .map(pixi_build_types::VariantValue::from)
+                            .collect(),
+                    )
+                })
+                .collect()
+        });
 
         // Request the metadata from the backend.
         // TODO: Can we somehow cache this metadata?
@@ -506,7 +537,7 @@ impl SourceBuildSpec {
                 CondaOutputsParams {
                     host_platform,
                     build_platform,
-                    variant_configuration: self.variants.clone(),
+                    variant_configuration: pixi_build_variant_config,
                     variant_files: self.variant_files.clone(),
                     work_directory: work_directory.clone(),
                     channels: self.channels.clone(),
@@ -636,7 +667,7 @@ impl SourceBuildSpec {
                         force_reinstall: Default::default(),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
-                        variants: self.variants.clone(),
+                        variant_configuration: self.variant_configuration.clone(),
                         variant_files: self.variant_files.clone(),
                         enabled_protocols: self.enabled_protocols.clone(),
                     })
@@ -667,9 +698,9 @@ impl SourceBuildSpec {
                         force_reinstall: Default::default(),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
-                        variants: self.variants.clone(),
-                        variant_files: self.variant_files.clone(),
-                        enabled_protocols: self.enabled_protocols.clone(),
+                        variant_configuration: self.variant_configuration,
+                        variant_files: self.variant_files,
+                        enabled_protocols: self.enabled_protocols,
                     })
                     .await
                     .map_err_with(Box::new)
@@ -704,7 +735,7 @@ impl SourceBuildSpec {
         let built_source = command_dispatcher
             .backend_source_build(BackendSourceBuildSpec {
                 method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
-                    editable: self.editable(),
+                    editable,
                     dependencies,
                     run_exports,
                     build_prefix: BackendSourceBuildPrefix {
@@ -783,7 +814,7 @@ impl SourceBuildSpec {
                 channel_priority: Default::default(),
                 exclude_newer: None,
                 channel_config: self.channel_config.clone(),
-                variants: self.variants.clone(),
+                variant_configuration: self.variant_configuration.clone(),
                 variant_files: self.variant_files.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 preferred_build_source: BTreeMap::new(),

@@ -102,6 +102,7 @@ pixi_progress = { path = "crates/pixi_progress" }
 pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
 pixi_python_status = { path = "crates/pixi_python_status" }
 pixi_record = { path = "crates/pixi_record" }
+pixi_variant = { path = "crates/pixi_variant" }
 pixi_reporters = { path = "crates/pixi_reporters" }
 pixi_spec = { path = "crates/pixi_spec" }
 pixi_spec_containers = { path = "crates/pixi_spec_containers" }
@@ -117,23 +118,23 @@ pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
 pyproject-toml = "0.13.7"
 rand = { version = "0.9.1", default-features = false }
-rattler = { version = "0.39.1", default-features = false }
-rattler_cache = { version = "0.6.0", default-features = false }
-rattler_conda_types = { version = "0.41.1", default-features = false, features = [
+rattler = { version = "0.39.0", default-features = false }
+rattler_cache = { version = "0.6.2", default-features = false }
+rattler_conda_types = { version = "0.42.0", default-features = false, features = [
   "rayon",
 ] }
 rattler_digest = { version = "1.2.0", default-features = false }
-rattler_lock = { version = "0.26.1", default-features = false }
-rattler_menuinst = { version = "0.2.23", default-features = false }
-rattler_networking = { version = "0.25.21", default-features = false, features = [
+rattler_lock = { version = "0.26.7", default-features = false }
+rattler_menuinst = { version = "0.2.35", default-features = false }
+rattler_networking = { version = "0.25.22", default-features = false, features = [
   "dirs",
   "google-cloud-auth",
 ] }
-rattler_package_streaming = { version = "0.23.13", default-features = false }
-rattler_repodata_gateway = { version = "0.25.1", default-features = false }
-rattler_shell = { version = "0.25.7", default-features = false }
-rattler_solve = { version = "3.1.1", default-features = false }
-rattler_virtual_packages = { version = "2.2.5", default-features = false }
+rattler_package_streaming = { version = "0.23.14", default-features = false }
+rattler_repodata_gateway = { version = "0.25.0", default-features = false }
+rattler_shell = { version = "0.25.8", default-features = false }
+rattler_solve = { version = "4.1.0", default-features = false }
+rattler_virtual_packages = { version = "2.3.0", default-features = false }
 rayon = "1.10.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", default-features = false }
