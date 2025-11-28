@@ -33,9 +33,15 @@
       "enabled": false
     },
     {
-      "groupName": "Cargo patch & lockfile maintenance",
+      "groupName": "Cargo lockfile maintenance",
       "matchManagers": ["cargo"],
-      "matchUpdateTypes": ["patch", "lockFileMaintenance"]
+      "matchUpdateTypes": ["lockFileMaintenance"]
+      "enabled": false, # Disable because we use batch patch updates.
+    },
+    {
+      "groupName": "Cargo patch updates",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["patch"]
     },
     {
       "description": "We want a separate PR for all rattler crates",
