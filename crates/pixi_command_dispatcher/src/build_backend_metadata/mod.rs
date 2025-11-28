@@ -504,6 +504,7 @@ impl BuildBackendMetadataSpec {
                 outputs: outputs.outputs,
             },
             build_source_checkout,
+            build_variants: self.variants.clone(),
         })
     }
 
@@ -543,7 +544,6 @@ impl BuildBackendMetadataSpec {
         BuildBackendMetadataKey {
             channel_urls: self.channels.clone(),
             build_environment: self.build_environment.clone(),
-            build_variants: self.variants.clone().unwrap_or_default(),
             enabled_protocols: self.enabled_protocols.clone(),
             pinned_source: self.manifest_source.clone(),
         }

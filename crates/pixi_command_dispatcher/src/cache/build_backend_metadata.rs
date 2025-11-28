@@ -51,9 +51,6 @@ pub struct BuildBackendMetadataKey {
     /// The build environment
     pub build_environment: BuildEnvironment,
 
-    /// The variants that were used
-    pub build_variants: BTreeMap<String, Vec<String>>,
-
     /// The protocols that are enabled for source packages
     pub enabled_protocols: EnabledProtocols,
 
@@ -99,7 +96,6 @@ impl CacheKey for BuildBackendMetadataKey {
         self.build_environment
             .host_virtual_packages
             .hash(&mut hasher);
-        self.build_variants.hash(&mut hasher);
         self.enabled_protocols.hash(&mut hasher);
         let source_dir = source_checkout_cache_key(&self.pinned_source);
         format!(
@@ -136,6 +132,10 @@ pub struct CachedCondaMetadata {
 
     /// Location of the source checkout that was used to generate this metadata.
     pub build_source_checkout: SourceCheckout,
+
+    /// The build variants that were used to generate this metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_variants: Option<BTreeMap<String, Vec<String>>>,
 }
 
 impl CachedMetadata for CachedCondaMetadata {}
