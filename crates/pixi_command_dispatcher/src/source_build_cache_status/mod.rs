@@ -411,11 +411,9 @@ impl SourceBuildCacheStatusSpec {
                 }
             }
             GlobModificationTime::NoMatches => {
-                tracing::debug!("package is stale, no files match the source globs",);
                 return Ok(CachedBuildStatus::Stale(cached_build));
             }
         }
-
         Ok(CachedBuildStatus::UpToDate(cached_build))
     }
 }

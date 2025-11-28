@@ -10,6 +10,7 @@ on:
       - ".github/workflows/docs.yml"
       - "mkdocs.yml"
       - "pixi.*"
+      - "install/*"
     tags:
       - v**
   pull_request:
@@ -20,6 +21,7 @@ on:
       - ".github/workflows/docs.yml"
       - "mkdocs.yml"
       - "pixi.*"
+      - "install/*"
   workflow_dispatch:
     inputs:
       tag:

@@ -213,6 +213,7 @@ impl InstallPixiEnvironmentSpec {
         let force = self
             .force_reinstall
             .contains(&source_record.package_record.name);
+
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
                 source: SourceCodeLocation::new(
