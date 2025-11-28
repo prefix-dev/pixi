@@ -35,8 +35,8 @@
     {
       "groupName": "Cargo lockfile maintenance",
       "matchManagers": ["cargo"],
-      "matchUpdateTypes": ["lockFileMaintenance"]
-      "enabled": false, # Disable because we use batch patch updates.
+      "matchUpdateTypes": ["lockFileMaintenance"],
+      "enabled": false
     },
     {
       "groupName": "Cargo patch updates",
