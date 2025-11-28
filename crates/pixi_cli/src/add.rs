@@ -3,9 +3,9 @@ use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use pixi_config::ConfigCli;
 use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace, workspace::DependencyType};
-use pixi_manifest::{FeatureName, KnownPreviewFeature, SpecType, PrioritizedChannel};
+use pixi_manifest::{FeatureName, KnownPreviewFeature, PrioritizedChannel, SpecType};
 use pixi_spec::{GitSpec, SourceLocationSpec, SourceSpec};
-use rattler_conda_types::{MatchSpec, PackageName, NamedChannelOrUrl};
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName};
 
 use crate::{
     cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
@@ -96,7 +96,6 @@ pub struct Args {
     // Specify channel
     #[arg(long)]
     pub channel: Option<String>,
-
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -120,11 +119,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if args.channel.is_some() {
         let channel = args.channel;
         workspace.manifest().add_channels(
-            [PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from(channel.unwrap_or_default()))).clone()],
-            &FeatureName::DEFAULT, 
-            false)?;
+            [
+                PrioritizedChannel::from(NamedChannelOrUrl::Name(channel.unwrap_or_default()))
+                    .clone(),
+            ],
+            &FeatureName::DEFAULT,
+            false,
+        )?;
     }
-    
+
     // Add the platform if it is not already present
     workspace
         .manifest()
