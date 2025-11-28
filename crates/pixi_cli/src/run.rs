@@ -5,9 +5,6 @@ use std::{
     string::String,
 };
 
-#[cfg(unix)]
-use std::io::IsTerminal;
-
 use clap::Parser;
 use deno_task_shell::KillSignal;
 use dialoguer::theme::ColorfulTheme;
@@ -540,13 +537,10 @@ async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
 
     // listen and forward every signal we support
     let mut futures = Vec::with_capacity(SIGNALS.len());
-    let is_interactive = std::io::stdin().is_terminal();
     for signo in SIGNALS.iter().copied() {
-        if signo == libc::SIGKILL
-            || signo == libc::SIGSTOP
-            || (signo == libc::SIGINT && is_interactive)
-        {
-            continue; // skip, can't listen to these
+        // SIGKILL and SIGSTOP cannot be caught or blocked
+        if signo == libc::SIGKILL || signo == libc::SIGSTOP {
+            continue;
         }
 
         let kill_signal = kill_signal.clone();
