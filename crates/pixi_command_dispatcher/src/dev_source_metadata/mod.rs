@@ -8,8 +8,10 @@ use tracing::instrument;
 
 use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher, CommandDispatcherError,
-    CommandDispatcherErrorResultExt, build::source_metadata_cache::MetadataKind,
+    CommandDispatcherErrorResultExt,
 };
+
+use crate::cache::build_backend_metadata::MetadataKind;
 
 /// A specification for retrieving dev source metadata.
 ///

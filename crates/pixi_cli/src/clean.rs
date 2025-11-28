@@ -198,7 +198,7 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
         dirs.push(cache_dir.join(consts::CACHED_BUILD_WORK_DIR));
         dirs.push(cache_dir.join(consts::CACHED_BUILD_BACKENDS));
         dirs.push(cache_dir.join(consts::CACHED_SOURCE_BUILDS));
-        dirs.push(cache_dir.join(consts::CACHED_SOURCE_METADATA));
+        dirs.push(cache_dir.join(consts::CACHED_BUILD_BACKEND_METADATA));
         dirs.push(cache_dir.join(consts::CACHED_PACKAGES));
     }
     if dirs.is_empty() && (args.assume_yes || dialoguer::Confirm::new()

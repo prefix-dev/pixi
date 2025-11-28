@@ -2,7 +2,8 @@ use std::path::PathBuf;
 
 use pixi_consts::consts;
 
-use crate::build::{BuildCache, source_metadata_cache::SourceMetadataCache};
+use crate::build::BuildCache;
+use crate::cache::build_backend_metadata::BuildBackendMetadataCache;
 
 pub struct CacheDirs {
     /// The root cache directory, all other cache directories are derived from
@@ -26,6 +27,9 @@ pub struct CacheDirs {
     /// The directory where git repositories are cached.
     git: Option<PathBuf>,
 
+    /// The location where to store build backend metadata information.
+    build_backend_metadata: Option<PathBuf>,
+
     /// The directory where url archives are cached.
     url: Option<PathBuf>,
 
@@ -46,6 +50,7 @@ impl CacheDirs {
             work_dirs: None,
             packages: None,
             git: None,
+            build_backend_metadata: None,
             url: None,
             source_metadata: None,
             source_builds: None,
@@ -127,12 +132,23 @@ impl CacheDirs {
     }
 
     /// Returns the directory where source metadata is cached.
+    pub fn build_backend_metadata(&self) -> PathBuf {
+        self.build_backend_metadata.clone().unwrap_or_else(|| {
+            self.build().join(format!(
+                "{}-{}",
+                consts::CACHED_BUILD_BACKEND_METADATA,
+                BuildBackendMetadataCache::CACHE_SUFFIX
+            ))
+        })
+    }
+
+    /// Returns the directory where source metadata is cached.
     pub fn source_metadata(&self) -> PathBuf {
         self.source_metadata.clone().unwrap_or_else(|| {
             self.build().join(format!(
                 "{}-{}",
                 consts::CACHED_SOURCE_METADATA,
-                SourceMetadataCache::CACHE_SUFFIX
+                BuildBackendMetadataCache::CACHE_SUFFIX
             ))
         })
     }

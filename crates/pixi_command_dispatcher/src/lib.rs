@@ -35,6 +35,7 @@
 mod backend_source_build;
 pub mod build;
 mod build_backend_metadata;
+mod cache;
 mod cache_dirs;
 mod command_dispatcher;
 mod command_dispatcher_processor;
