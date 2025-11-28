@@ -6,7 +6,7 @@ use std::{
 };
 
 use clap::Parser;
-use deno_task_shell::KillSignal;
+use deno_task_shell::{KillSignal, ProcessSignaler};
 use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
 use indicatif::ProgressDrawTarget;
@@ -400,7 +400,10 @@ async fn execute_task(
         return Ok(());
     };
     let cwd = task.working_directory()?;
-    let execute_future = deno_task_shell::execute(
+
+    // Use execute_with_signaler to get access to child process PIDs for
+    // proper signal forwarding based on process groups.
+    let (process_signaler, execute_future) = deno_task_shell::execute_with_signaler(
         script,
         command_env.clone(),
         cwd,
@@ -409,7 +412,8 @@ async fn execute_task(
     );
 
     // Execute the process and forward signals.
-    let status_code = run_future_forwarding_signals(kill_signal, execute_future).await;
+    let status_code =
+        run_future_forwarding_signals(kill_signal, process_signaler, execute_future).await;
     if status_code != 0 {
         return Err(TaskExecutionError::NonZeroExitCode(status_code));
     }
@@ -477,6 +481,7 @@ fn reset_cursor() {
 /// Signal listeners and ctrl+c listening will be setup.
 pub async fn run_future_forwarding_signals<TOutput>(
     #[cfg_attr(windows, allow(unused_variables))] kill_signal: KillSignal,
+    #[cfg_attr(windows, allow(unused_variables))] process_signaler: ProcessSignaler,
     future: impl std::future::Future<Output = TOutput>,
 ) -> TOutput {
     fn spawn_future_with_cancellation(
@@ -501,7 +506,10 @@ pub async fn run_future_forwarding_signals<TOutput>(
             spawn_future_with_cancellation(listen_ctrl_c_windows(), token.clone());
 
             #[cfg(unix)]
-            spawn_future_with_cancellation(listen_and_forward_all_signals(kill_signal), token);
+            spawn_future_with_cancellation(
+                listen_and_forward_all_signals(kill_signal, process_signaler),
+                token,
+            );
 
             future.await
         })
@@ -517,23 +525,28 @@ async fn listen_ctrl_c_windows() {
     while let Ok(()) = tokio::signal::ctrl_c().await {}
 }
 
-/// Listens to all incoming signals and forwards all of them, except
-/// some cases.
+/// Listens to all incoming signals and forwards them to the child process.
 ///
-/// Note that we don't handle `SIGINT` correctly, if the subprocess changes
-/// its PGID, then the system won't forward CTRL+C automatically.
-/// However, we should do that to ensure consistent behaviour.
+/// For SIGINT in interactive mode when the child is in the same process group,
+/// we add a small delay before forwarding. This gives the terminal driver time
+/// to deliver SIGINT directly to the child (in the case of CTRL+C), while still
+/// ensuring that signals sent via `kill -INT` are forwarded.
 ///
-/// To resolve this we should patch `deno_task_shell` to return PID
-/// from which we could get PGID and do things right.
-///
-/// Resulting approach should mimic
-/// https://github.com/astral-sh/uv/blob/9d17dfa3537312b928f94479f632891f918c4760/crates/uv/src/child.rs#L156C21-L168C77.
+/// This approach mimics UV's signal handling:
+/// https://github.com/astral-sh/uv/blob/9d17dfa3537312b928f94479f632891f918c4760/crates/uv/src/child.rs#L156C21-L168C77
 #[cfg(unix)]
-async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
-    use futures::FutureExt;
+async fn listen_and_forward_all_signals(
+    kill_signal: KillSignal,
+    process_signaler: ProcessSignaler,
+) {
+    use std::io::IsTerminal;
+    use std::time::Duration;
 
+    use futures::FutureExt;
     use pixi_core::signals::SIGNALS;
+
+    let is_interactive = std::io::stdin().is_terminal();
+    let our_pgid = unsafe { libc::getpgid(0) };
 
     // listen and forward every signal we support
     let mut futures = Vec::with_capacity(SIGNALS.len());
@@ -544,6 +557,7 @@ async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
         }
 
         let kill_signal = kill_signal.clone();
+        let process_signaler = process_signaler.clone();
         futures.push(
             async move {
                 let Ok(mut stream) = tokio::signal::unix::signal(signo.into()) else {
@@ -551,6 +565,20 @@ async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
                 };
                 let signal_kind = signo.into();
                 while let Some(()) = stream.recv().await {
+                    // For SIGINT in interactive mode when child is in same process
+                    // group, add a delay to let the terminal deliver the signal first.
+                    // This avoids double-delivery for CTRL+C while ensuring `kill -INT`
+                    // still works (since the child won't have received it from terminal).
+                    if signo == libc::SIGINT && is_interactive {
+                        if let Some(child_pid) = process_signaler.current_pid() {
+                            let child_pgid = unsafe { libc::getpgid(child_pid as i32) };
+                            if child_pgid == our_pgid {
+                                // Child is in same process group. Add a small delay
+                                // to let the terminal deliver the signal first.
+                                tokio::time::sleep(Duration::from_millis(100)).await;
+                            }
+                        }
+                    }
                     kill_signal.send(signal_kind);
                 }
             }

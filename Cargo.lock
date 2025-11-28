@@ -1789,8 +1789,7 @@ dependencies = [
 [[package]]
 name = "deno_task_shell"
 version = "0.26.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcb3527b0dc64fb6c1cb19023ef92a949b54c735c37af9bfb9fe4095922278da"
+source = "git+https://github.com/wolfv/deno_task_shell?branch=process-signaler#f6bf4ed48ad778b17ebaa042caa99775ea6ea52f"
 dependencies = [
  "anyhow",
  "deno_path_util",
@@ -1798,7 +1797,6 @@ dependencies = [
  "glob",
  "monch",
  "nix 0.29.0",
- "os_pipe",
  "path-dedot",
  "sys_traits",
  "thiserror 2.0.17",
@@ -4395,16 +4393,6 @@ dependencies = [
  "indexmap 2.12.0",
  "serde",
  "serde_core",
-]
-
-[[package]]
-name = "os_pipe"
-version = "1.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
-dependencies = [
- "libc",
- "windows-sys 0.61.2",
 ]
 
 [[package]]
