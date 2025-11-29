@@ -84,6 +84,9 @@ PypiOptions {
     index_strategy: Some(
         FirstIndex,
     ),
+    prerelease_mode: Some(
+        Allow,
+    ),
     no_build: Some(
         All,
     ),

@@ -10,6 +10,7 @@ PypiOptions {
         {},
     ),
     index_strategy: None,
+    prerelease_mode: None,
     no_build: Some(
         Packages(
             {

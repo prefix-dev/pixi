@@ -1588,6 +1588,39 @@
             ],
             true
           ]
+        },
+        "prerelease-mode": {
+          "title": "Prerelease-Mode",
+          "description": "The strategy to use when considering pre-release versions",
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "disallow"
+            },
+            {
+              "type": "string",
+              "const": "allow"
+            },
+            {
+              "type": "string",
+              "const": "if-necessary"
+            },
+            {
+              "type": "string",
+              "const": "explicit"
+            },
+            {
+              "type": "string",
+              "const": "if-necessary-or-explicit"
+            }
+          ],
+          "examples": [
+            "disallow",
+            "allow",
+            "if-necessary",
+            "explicit",
+            "if-necessary-or-explicit"
+          ]
         }
       }
     },

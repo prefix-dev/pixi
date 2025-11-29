@@ -15,6 +15,7 @@ no-build-isolation:
   - foo
   - bar
 index-strategy: ~
+prerelease-mode: ~
 no-build: all
 dependency-overrides:
   pkg1: "==1.0.0"
