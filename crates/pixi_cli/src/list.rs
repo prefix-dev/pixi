@@ -34,6 +34,7 @@ pub enum SortBy {
     Size,
     Name,
     Kind,
+    License,
 }
 
 /// List the packages of the current workspace
@@ -79,6 +80,10 @@ pub struct Args {
     /// Only list packages that are explicitly defined in the workspace.
     #[arg(short = 'x', long)]
     pub explicit: bool,
+
+    /// Show the license column in the output.
+    #[arg(long)]
+    pub show_license: bool,
 }
 
 fn serde_skip_is_editable(editable: &bool) -> bool {
@@ -118,6 +123,8 @@ struct PackageToOutput {
     size_bytes: Option<u64>,
     kind: KindPackage,
     source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    license: Option<String>,
     is_explicit: bool,
     #[serde(skip_serializing_if = "serde_skip_is_editable")]
     is_editable: bool,
@@ -173,6 +180,13 @@ impl PackageExt {
         match self {
             Self::Conda(value) => value.record().version.as_str(),
             Self::PyPI(value, _) => value.version.to_string().into(),
+        }
+    }
+
+    pub fn license(&self) -> Cow<'_, str> {
+        match self {
+            Self::Conda(value) => value.record().license.as_deref().unwrap_or("").into(),
+            Self::PyPI(_value, _) => String::from("").into(),
         }
     }
 }
@@ -271,7 +285,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut packages_to_output = locked_deps_ext
         .iter()
-        .map(|p| create_package_to_output(p, &project_dependency_names, registry_index.as_mut()))
+        .map(|p| {
+            create_package_to_output(
+                p,
+                &project_dependency_names,
+                registry_index.as_mut(),
+                args.show_license,
+            )
+        })
         .collect::<Result<Vec<PackageToOutput>, _>>()?;
 
     // Filter packages by regex if needed
@@ -303,6 +324,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         SortBy::Kind => {
             packages_to_output.sort_by(|a, b| a.kind.cmp(&b.kind));
         }
+        SortBy::License => {
+            packages_to_output.sort_by(|a, b| a.license.cmp(&b.license));
+        }
     }
 
     if packages_to_output.is_empty() {
@@ -323,7 +347,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // print packages as table
-        print_packages_as_table(&packages_to_output)
+        print_packages_as_table(&packages_to_output, args.show_license)
             .map_err(|e| {
                 if e.kind() == std::io::ErrorKind::BrokenPipe {
                     std::process::exit(0);
@@ -337,11 +361,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
+fn print_packages_as_table(packages: &Vec<PackageToOutput>, show_license: bool) -> io::Result<()> {
     let mut writer = tabwriter::TabWriter::new(stdout());
 
     let header_style = console::Style::new().bold().cyan();
-    writeln!(
+    write!(
         writer,
         "{}\t{}\t{}\t{}\t{}\t{}",
         header_style.apply_to("Package"),
@@ -349,8 +373,13 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
         header_style.apply_to("Build"),
         header_style.apply_to("Size"),
         header_style.apply_to("Kind"),
-        header_style.apply_to("Source")
+        header_style.apply_to("Source"),
     )?;
+    if show_license {
+        writeln!(writer, "\t{}", header_style.apply_to("License"))?;
+    } else {
+        writeln!(writer)?;
+    }
 
     for package in packages {
         if package.is_explicit {
@@ -373,7 +402,7 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
             .map(|size| human_bytes(size as f64))
             .unwrap_or_default();
 
-        writeln!(
+        write!(
             writer,
             "\t{}\t{}\t{}\t{}\t{}{}",
             &package.version,
@@ -385,8 +414,13 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
                 format!(" {}", console::style("(editable)").fg(Color::Yellow))
             } else {
                 "".to_string()
-            }
+            },
         )?;
+        if show_license {
+            writeln!(writer, "\t{}", package.license.as_deref().unwrap_or(""))?;
+        } else {
+            writeln!(writer)?;
+        }
     }
 
     writer.flush()
@@ -418,10 +452,16 @@ fn create_package_to_output<'a, 'b>(
     package: &'b PackageExt,
     project_dependency_names: &'a [String],
     registry_index: Option<&'a mut RegistryWheelIndex<'b>>,
+    show_license: bool,
 ) -> miette::Result<PackageToOutput> {
     let name = package.name().to_string();
     let version = package.version().into_owned();
     let kind = KindPackage::from(package);
+    let license = if show_license {
+        Some(package.license().into_owned())
+    } else {
+        None
+    };
 
     let build = match package {
         PackageExt::Conda(pkg) => Some(pkg.record().build.clone()),
@@ -471,6 +511,7 @@ fn create_package_to_output<'a, 'b>(
         size_bytes,
         kind,
         source,
+        license,
         is_explicit,
         is_editable,
     })
