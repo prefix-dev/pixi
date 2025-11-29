@@ -172,6 +172,8 @@ impl Backend {
     }
 }
 
+pub mod logs;
+
 pub trait BackendOutputStream {
     fn on_line(&mut self, line: String);
 }

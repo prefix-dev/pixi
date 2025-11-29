@@ -1,0 +1,1 @@
+{"timestamp":"fake time","level":"DEBUG","target":"pixi_build_backend::flattened","message":"flattened message","answer":42,"threadName":"main","spans":[{"name":"flattened_span","context":"demo"}]}

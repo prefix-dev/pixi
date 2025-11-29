@@ -25,9 +25,12 @@ indicatif = { workspace = true }
 # Utilities
 human_bytes = { workspace = true }
 regex = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 tracing = { workspace = true }
 
 # Pixi ecosystem
+pixi_build_frontend = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
 pixi_git = { workspace = true }
 pixi_progress = { workspace = true }
