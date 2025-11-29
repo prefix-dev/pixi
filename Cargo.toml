@@ -23,7 +23,7 @@ assert_matches = "1.5.0"
 async-fd-lock = "0.2.0"
 async-once-cell = "0.5.4"
 async-trait = "0.1.86"
-axum = "0.7"
+axum = "0.8"
 barrier_cell = { path = "crates/barrier_cell" }
 base64 = "0.22.1"
 bytes = "1.10.0"
