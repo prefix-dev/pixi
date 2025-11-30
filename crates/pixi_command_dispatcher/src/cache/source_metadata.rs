@@ -11,12 +11,14 @@ use rattler_conda_types::{ChannelUrl, PackageName};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{BuildEnvironment, build::source_checkout_cache_key};
+use crate::{BuildEnvironment, build::source_checkout_cache_key, cache::common::VersionedMetadata};
 
-use super::common::{CacheError, CacheKey, CachedMetadata, MetadataCache};
+use super::common::{
+    CacheError, CacheKey, CachedMetadata, MetadataCache, WriteResult as CommonWriteResult,
+};
 
-// Re-export CacheEntry with the correct generic type for this cache
-pub type CacheEntry = super::common::CacheEntry<SourceMetadataCache>;
+// Re-export WriteResult with the correct type
+pub type WriteResult = CommonWriteResult<CachedSourceMetadata>;
 
 /// A cache for caching the metadata of a source checkout.
 ///
@@ -125,6 +127,11 @@ pub struct CachedSourceMetadata {
     /// invalidated if the metadata changes.
     pub id: u64,
 
+    /// Version number for optimistic locking. Incremented with each cache update.
+    /// Used to detect when another process has updated the cache during computation.
+    #[serde(default)]
+    pub cache_version: u64,
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input_hash: Option<InputHash>,
 
@@ -137,6 +144,16 @@ pub struct CachedSourceMetadata {
 }
 
 impl CachedMetadata for CachedSourceMetadata {}
+
+impl VersionedMetadata for CachedSourceMetadata {
+    fn cache_version(&self) -> u64 {
+        self.cache_version
+    }
+
+    fn set_cache_version(&mut self, version: u64) {
+        self.cache_version = version;
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]

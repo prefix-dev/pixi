@@ -69,13 +69,10 @@ packages:
 - conda: build-config
   name: out-of-tree-package
   version: 0.1.0
-  build: hbf21a9e_0
+  build: hb0f4dca_0
   subdir: linux-64
   depends:
   - libstdcxx >=15
   - libgcc >=15
-  input:
-    hash: 616e7d8611fa803e6655c354f183d6f4b405e94adcabc83c260d8b9da5e3c9d8
-    globs: []
   package_build_source:
     path: ../source-files

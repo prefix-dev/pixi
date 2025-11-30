@@ -11,7 +11,7 @@ use rattler_conda_types::PackageName;
 
 use itertools::{Either, Itertools};
 
-use crate::{InputHash, PinnedSourceSpec};
+use crate::PinnedSourceSpec;
 
 /// A resolved development source record representing a specific output from a source package.
 ///
@@ -25,9 +25,6 @@ pub struct DevSourceRecord {
 
     /// The pinned source this record came from
     pub source: PinnedSourceSpec,
-
-    /// Hash of input files used to generate this metadata
-    pub input_hash: Option<InputHash>,
 
     /// Variants used when computing dependencies. This is used to uniquely identify this record.
     pub variants: BTreeMap<String, String>,

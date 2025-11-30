@@ -16,10 +16,13 @@ use crate::{
     BuildEnvironment, PackageIdentifier, SourceCheckout, build::source_checkout_cache_key,
 };
 
-use super::common::{CacheError, CacheKey, CachedMetadata, MetadataCache};
+use super::common::{
+    CacheError, CacheKey, CachedMetadata, MetadataCache, VersionedMetadata,
+    WriteResult as CommonWriteResult,
+};
 
-// Re-export CacheEntry with the correct generic type for this cache
-pub type CacheEntry = super::common::CacheEntry<BuildBackendMetadataCache>;
+// Re-export WriteResult with the correct type
+pub type WriteResult = CommonWriteResult<CachedCondaMetadata>;
 
 /// A cache for caching the metadata of a source checkout.
 ///
@@ -127,6 +130,11 @@ pub struct CachedCondaMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input_hash: Option<InputHash>,
 
+    /// Version number for optimistic locking. Incremented with each cache update.
+    /// Used to detect when another process has updated the cache during computation.
+    #[serde(default)]
+    pub cache_version: u64,
+
     #[serde(flatten)]
     pub metadata: MetadataKind,
 
@@ -139,6 +147,16 @@ pub struct CachedCondaMetadata {
 }
 
 impl CachedMetadata for CachedCondaMetadata {}
+
+impl VersionedMetadata for CachedCondaMetadata {
+    fn cache_version(&self) -> u64 {
+        self.cache_version
+    }
+
+    fn set_cache_version(&mut self, version: u64) {
+        self.cache_version = version;
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]

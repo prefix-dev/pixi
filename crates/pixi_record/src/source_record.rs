@@ -27,13 +27,6 @@ pub struct SourceRecord {
     /// This is used when the manifest is not in the same location ad
     pub build_source: Option<PinnedSourceSpec>,
 
-    /// The hash of the input that was used to build the metadata of the
-    /// package. This can be used to verify that the metadata is still valid.
-    ///
-    /// If this is `None`, the input hash was not computed or is not relevant
-    /// for this record. The record can always be considered up to date.
-    pub input_hash: Option<InputHash>,
-
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
     pub sources: HashMap<String, SourceSpec>,
@@ -92,11 +85,8 @@ impl From<SourceRecord> for CondaPackageData {
             package_record: value.package_record,
             location: value.manifest_source.clone().into(),
             package_build_source,
-            input: value.input_hash.map(|i| rattler_lock::InputHash {
-                hash: i.hash,
-                // TODO: fix this in rattler
-                globs: Vec::from_iter(i.globs),
-            }),
+            // Don't write input_hash to lock file
+            input: None,
             sources: value
                 .sources
                 .into_iter()
@@ -149,10 +139,6 @@ impl TryFrom<CondaSourceData> for SourceRecord {
         Ok(Self {
             package_record: value.package_record,
             manifest_source: value.location.try_into()?,
-            input_hash: value.input.map(|hash| InputHash {
-                hash: hash.hash,
-                globs: BTreeSet::from_iter(hash.globs),
-            }),
             build_source: pinned_source_spec,
             sources: value
                 .sources
@@ -234,7 +220,6 @@ mod tests {
             package_record,
             manifest_source: pinned_source.clone(),
             build_source: Some(pinned_source.clone()),
-            input_hash: None,
             sources: Default::default(),
         };
 
