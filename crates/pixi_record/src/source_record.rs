@@ -14,7 +14,7 @@ use typed_path::Utf8TypedPathBuf;
 use crate::{ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec};
 
 /// A record of a conda package that still requires building.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SourceRecord {
     /// Information about the conda package. This is metadata of the package
     /// after it has been build.
