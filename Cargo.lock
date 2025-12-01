@@ -5309,7 +5309,6 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "percent-encoding",
- "pixi_config",
  "pixi_consts",
  "pixi_git",
  "pixi_manifest",

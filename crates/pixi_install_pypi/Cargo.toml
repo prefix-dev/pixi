@@ -20,7 +20,6 @@ miette = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 percent-encoding = { workspace = true }
-pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
@@ -66,7 +65,7 @@ uv-types = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
-insta = { workspace = true, features = ["yaml", "glob", "filters"] }
+insta = { workspace = true, features = ["filters", "glob", "yaml"] }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
