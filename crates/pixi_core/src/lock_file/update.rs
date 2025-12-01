@@ -2006,7 +2006,7 @@ impl<'p> UpdateContext<'p> {
                         .unwrap_or_default()
                         .into(),
                     exclude_newer: grouped_env.exclude_newer(),
-                    pypi_prerelease_mode: Some(pypi_prerelease_mode),
+                    pypi_prerelease_mode: Some(pypi_prerelease_mode.into()),
                 },
             );
 
