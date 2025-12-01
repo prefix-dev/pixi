@@ -13,8 +13,7 @@ use rattler_conda_types::Platform;
 
 use crate::interface::Interface;
 
-pub async fn list_tasks<I: Interface>(
-    _interface: &I,
+pub async fn list_tasks(
     workspace: &Workspace,
     environment: Option<EnvironmentName>,
 ) -> miette::Result<HashMap<EnvironmentName, HashMap<TaskName, Task>>> {
