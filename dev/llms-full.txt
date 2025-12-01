@@ -10444,6 +10444,7 @@ The options that can be defined are:
 - `no-build`: don't build source distributions.
 - `no-binary`: don't use pre-build wheels.
 - `index-strategy`: allows for specifying the index strategy to use.
+- `prerelease-mode`: controls whether pre-release versions are allowed during dependency resolution.
 
 These options are explained in the sections below. Most of these options are taken directly or with slight modifications from the [uv settings](https://docs.astral.sh/uv/reference/settings/). If any are missing that you need feel free to create an issue [requesting](https://github.com/prefix-dev/pixi/issues) them.
 
@@ -10574,6 +10575,32 @@ Only one `index-strategy` can be defined per environment or solve-group, otherwi
 PyPI only
 
 The `index-strategy` only changes PyPI package resolution and not conda package resolution.
+
+### Prerelease Mode
+
+The strategy to use when considering pre-release versions during dependency resolution. Description taken from the [uv documentation](https://docs.astral.sh/uv/reference/settings/#prerelease).
+
+By default, `pixi` will allow pre-release versions when a package only has pre-release versions available, or when a pre-release version is explicitly requested in the version specifier (e.g., `>=1.0.0a1`).
+
+One prerelease mode per environment
+
+Only one `prerelease-mode` can be defined per environment or solve-group, otherwise, an error will be shown.
+
+#### Possible values:
+
+- **"disallow"**: Disallow all pre-release versions.
+- **"allow"**: Allow all pre-release versions.
+- **"if-necessary"**: Allow pre-release versions if all versions of a package are pre-release.
+- **"explicit"**: Allow pre-release versions for first-party packages with explicit pre-release markers in their version requirements.
+- **"if-necessary-or-explicit"** (default): Allow pre-release versions if all versions of a package are pre-release, or if the package has an explicit pre-release marker in its version requirements.
+
+Example:
+
+```toml
+[pypi-options]
+prerelease-mode = "allow"  # Allow all pre-release versions
+
+```
 
 ## The `dependencies` table(s)
 
