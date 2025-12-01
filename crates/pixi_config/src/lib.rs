@@ -2756,7 +2756,7 @@ UNUSED = "unused"
     fn test_native_certs_default() {
         let config = Config::default();
         // Default should be false (use bundled webpki-roots)
-        assert_eq!(config.native_certs(), false);
+        assert!(!config.native_certs());
         assert_eq!(config.native_certs, None);
     }
 
