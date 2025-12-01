@@ -108,18 +108,32 @@ static DEFAULT_REQWEST_TIMEOUT_SEC: Duration = Duration::from_secs(5 * 60);
 static DEFAULT_REQWEST_IDLE_PER_HOST: usize = 20;
 
 pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest::ClientBuilder> {
+    let config_owned;
+    let config_ref = match config {
+        Some(c) => c,
+        None => {
+            config_owned = Config::load_global();
+            &config_owned
+        }
+    };
+
+    let native_certs = config_ref.native_certs();
+
     let mut builder = Client::builder()
         .pool_max_idle_per_host(DEFAULT_REQWEST_IDLE_PER_HOST)
         .user_agent(DEFAULT_REQWEST_USER_AGENT.as_str())
         .read_timeout(DEFAULT_REQWEST_TIMEOUT_SEC)
-        .use_rustls_tls();
+        .use_rustls_tls()
+        .tls_built_in_root_certs(false); // Disable auto-loading to choose explicitly
 
-    let proxies = if let Some(config) = config {
-        config.get_proxies()
+    // Choose certificate source based on native_certs setting
+    if native_certs {
+        builder = builder.tls_built_in_native_certs(true);
     } else {
-        Config::load_global().get_proxies()
+        builder = builder.tls_built_in_webpki_certs(true);
     }
-    .into_diagnostic()?;
+
+    let proxies = config_ref.get_proxies().into_diagnostic()?;
 
     for p in proxies {
         builder = builder.proxy(p);
