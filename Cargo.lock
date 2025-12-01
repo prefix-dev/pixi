@@ -4758,6 +4758,7 @@ dependencies = [
  "itertools 0.14.0",
  "miette 7.6.0",
  "minijinja",
+ "pep508_rs",
  "pixi_config",
  "pixi_consts",
  "pixi_core",
