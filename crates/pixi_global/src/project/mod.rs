@@ -1246,7 +1246,12 @@ impl Project {
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
         let mut new_lock = None;
 
-        if !self.environment_in_sync(env_name).await? {
+        if self.environment_in_sync(env_name).await? {
+            tracing::debug!(
+                "Environment {} specs are up to date with global manifest",
+                env_name.fancy_display()
+            );
+        } else {
             tracing::debug!(
                 "Environment {} specs not up to date with global manifest",
                 env_name.fancy_display()
@@ -1262,11 +1267,6 @@ impl Project {
             state_changes.insert_change(
                 env_name,
                 StateChange::UpdatedEnvironment(environment_update),
-            );
-        } else {
-            tracing::debug!(
-                "Environment {} specs are up to date with global manifest",
-                env_name.fancy_display()
             );
         }
 
