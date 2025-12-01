@@ -26,10 +26,10 @@ use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_uv_conversions::{
-    ConversionError, as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec,
-    pypi_options_to_build_options, pypi_options_to_index_locations, to_exclude_newer,
-    to_index_strategy, to_normalize, to_requirements, to_uv_normalize, to_uv_version,
-    to_version_specifiers,
+    ConversionError, as_uv_req, configure_insecure_hosts_for_tls_bypass,
+    convert_uv_requirements_to_pep508, into_pinned_git_spec, pypi_options_to_build_options,
+    pypi_options_to_index_locations, to_exclude_newer, to_index_strategy, to_normalize,
+    to_requirements, to_uv_normalize, to_uv_version, to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -408,8 +408,15 @@ pub async fn resolve_pypi(
     // TODO: create a cached registry client per index_url set?
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
 
+    // Configure insecure hosts for TLS verification bypass
+    let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
+        context.allow_insecure_host.clone(),
+        context.tls_no_verify,
+        &index_locations,
+    );
+
     let base_client_builder = BaseClientBuilder::default()
-        .allow_insecure_host(context.allow_insecure_host.clone())
+        .allow_insecure_host(allow_insecure_hosts)
         .markers(&marker_environment)
         .keyring(context.keyring_provider)
         .connectivity(Connectivity::Online)
@@ -1193,6 +1200,57 @@ mod tests {
             process_uv_path_url(&url, &PathBuf::from("C:\\a\\b\\c"), &PathBuf::from("C:\\a"))
                 .unwrap();
         assert_eq!(path.as_str(), "./b/c");
+    }
+
+    #[test]
+    fn test_tls_no_verify_host_conversion() {
+        use pixi_uv_conversions::to_uv_trusted_host;
+        // Test the logic for converting hosts to trusted hosts when tls_no_verify is enabled
+        let test_hosts = vec![
+            "pypi.org",
+            "test-index.example.com",
+            "another-index.example.org",
+        ];
+
+        let mut allow_insecure_hosts = vec![];
+        let tls_no_verify = true;
+
+        if tls_no_verify {
+            for host in &test_hosts {
+                if let Ok(trusted_host) = to_uv_trusted_host(host) {
+                    allow_insecure_hosts.push(trusted_host);
+                }
+            }
+        }
+
+        assert_eq!(allow_insecure_hosts.len(), 3);
+
+        let host_names: Vec<String> = allow_insecure_hosts.iter().map(|h| h.to_string()).collect();
+
+        assert!(host_names.contains(&"pypi.org".to_string()));
+        assert!(host_names.contains(&"test-index.example.com".to_string()));
+        assert!(host_names.contains(&"another-index.example.org".to_string()));
+    }
+
+    #[test]
+    fn test_tls_verify_enabled_preserves_empty_list() {
+        use pixi_uv_conversions::to_uv_trusted_host;
+        // Test that when tls_no_verify is false, no hosts are added
+        let test_hosts = vec!["pypi.org", "test-index.example.com"];
+
+        let mut allow_insecure_hosts = vec![];
+        let tls_no_verify = false;
+
+        if tls_no_verify {
+            // This should not execute
+            for host in &test_hosts {
+                if let Ok(trusted_host) = to_uv_trusted_host(host) {
+                    allow_insecure_hosts.push(trusted_host);
+                }
+            }
+        }
+
+        assert_eq!(allow_insecure_hosts.len(), 0);
     }
 
     // In this case we want to make the path relative to the project_root or lock

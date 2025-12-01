@@ -19,3 +19,4 @@ rattler_conda_types = { workspace = true }
 rattler_package_streaming = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }

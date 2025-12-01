@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 
 use pixi_spec::{BinarySpec, PixiSpec, SourceSpec};
 use pixi_spec_containers::DependencyMap;
+use pixi_variant::VariantValue;
 use rattler_conda_types::PackageName;
 
 use itertools::{Either, Itertools};
@@ -30,7 +31,7 @@ pub struct DevSourceRecord {
     pub input_hash: Option<InputHash>,
 
     /// Variants used when computing dependencies. This is used to uniquely identify this record.
-    pub variants: BTreeMap<String, String>,
+    pub variants: BTreeMap<String, VariantValue>,
 
     /// All dependencies (build, host, and run combined)
     pub dependencies: DependencyMap<PackageName, PixiSpec>,

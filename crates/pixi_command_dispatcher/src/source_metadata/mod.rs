@@ -10,7 +10,8 @@ use futures::TryStreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
-use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
+use pixi_record::VariantValue;
+use pixi_record::{InputHash, PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rand::random;
@@ -26,7 +27,7 @@ use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
     SolvePixiEnvironmentError,
-    build::{Dependencies, DependenciesError, PixiRunExports, conversion},
+    build::{Dependencies, DependenciesError, PixiRunExports, SourceCodeLocation, conversion},
     cache::{
         build_backend_metadata::MetadataKind,
         common::MetadataCache,
@@ -47,13 +48,8 @@ pub struct SourceMetadataSpec {
 /// The result of building a particular source record.
 #[derive(Debug)]
 pub struct SourceMetadata {
-    /// Information about the source checkout that was used to build the
-    /// package.
-    pub manifest_source: PinnedSourceSpec,
-
-    /// The optional location of where the actual source code is located,
-    /// this is used mainly for out-of-tree builds
-    pub build_source: Option<PinnedSourceSpec>,
+    /// Manifest and optional build source location for this metadata.
+    pub source: SourceCodeLocation,
 
     /// The cache entry that contains the metadata acquired from the build
     /// backend.
@@ -71,7 +67,8 @@ impl SourceMetadataSpec {
         skip_all,
         name = "source-metadata",
         fields(
-            source= %self.backend_metadata.manifest_source,
+            manifest_source= %self.backend_metadata.manifest_source,
+            preferred_build_source=?self.backend_metadata.preferred_build_source,
             name = %self.package.as_source(),
             platform = %self.backend_metadata.build_environment.host_platform,
         )
@@ -110,7 +107,7 @@ impl SourceMetadataSpec {
             if let Some(cached_metadata) = Self::verify_cache_freshness(
                 &build_backend_metadata.metadata.input_hash,
                 metadata,
-                &self.backend_metadata.variants,
+                &self.backend_metadata.variant_configuration,
             )
             .await?
             {
@@ -119,8 +116,7 @@ impl SourceMetadataSpec {
                     self.package.as_source()
                 );
                 return Ok(SourceMetadata {
-                    manifest_source: build_backend_metadata.manifest_source.clone(),
-                    build_source: build_backend_metadata.build_source.clone(),
+                    source: build_backend_metadata.source.clone(),
                     cached_metadata,
                     cache_entry,
                 });
@@ -129,10 +125,11 @@ impl SourceMetadataSpec {
 
         match &build_backend_metadata.metadata.metadata {
             MetadataKind::GetMetadata { packages } => {
+                let source_location = build_backend_metadata.source.clone();
                 // Convert the metadata to source records.
                 let records = conversion::package_metadata_to_source_records(
-                    &build_backend_metadata.manifest_source,
-                    build_backend_metadata.build_source.as_ref(),
+                    source_location.manifest_source(),
+                    source_location.build_source(),
                     packages,
                     &self.package,
                     &build_backend_metadata.metadata.input_hash,
@@ -141,7 +138,7 @@ impl SourceMetadataSpec {
                 let cached_source_metadata = CachedSourceMetadata {
                     id: random(),
                     input_hash: build_backend_metadata.metadata.input_hash.clone(),
-                    build_variants: self.backend_metadata.variants.clone(),
+                    build_variants: self.backend_metadata.variant_configuration.clone(),
                     metadata: Metadata {
                         records: records.clone(),
                     },
@@ -155,14 +152,14 @@ impl SourceMetadataSpec {
                     .map_err(CommandDispatcherError::Failed)?;
 
                 Ok(SourceMetadata {
-                    manifest_source: build_backend_metadata.manifest_source.clone(),
                     cache_entry,
                     cached_metadata: cached_source_metadata,
-                    build_source: build_backend_metadata.build_source.clone(),
+                    source: source_location,
                 })
             }
             MetadataKind::Outputs { outputs } => {
                 let mut futures = ExecutorFutures::new(command_dispatcher.executor());
+                let source_location = build_backend_metadata.source.clone();
                 for output in outputs {
                     if output.metadata.name != self.package {
                         continue;
@@ -171,8 +168,7 @@ impl SourceMetadataSpec {
                         &command_dispatcher,
                         output,
                         build_backend_metadata.metadata.input_hash.clone(),
-                        build_backend_metadata.manifest_source.clone(),
-                        build_backend_metadata.build_source.clone(),
+                        source_location.clone(),
                         reporter.clone(),
                     ));
                 }
@@ -180,7 +176,7 @@ impl SourceMetadataSpec {
                 let cached_source_metadata = CachedSourceMetadata {
                     id: random(),
                     input_hash: build_backend_metadata.metadata.input_hash.clone(),
-                    build_variants: self.backend_metadata.variants.clone(),
+                    build_variants: self.backend_metadata.variant_configuration.clone(),
                     metadata: Metadata {
                         records: futures.try_collect().await?,
                     },
@@ -196,8 +192,7 @@ impl SourceMetadataSpec {
                 Ok(SourceMetadata {
                     cache_entry,
                     cached_metadata: cached_source_metadata,
-                    manifest_source: build_backend_metadata.manifest_source.clone(),
-                    build_source: build_backend_metadata.build_source.clone(),
+                    source: source_location,
                 })
             }
         }
@@ -217,7 +212,7 @@ impl SourceMetadataSpec {
     async fn verify_cache_freshness(
         current_input_hash: &Option<InputHash>,
         cached_metadata: Option<CachedSourceMetadata>,
-        requested_variants: &Option<BTreeMap<String, Vec<String>>>,
+        requested_variants: &Option<BTreeMap<String, Vec<VariantValue>>>,
     ) -> Result<Option<CachedSourceMetadata>, CommandDispatcherError<SourceMetadataError>> {
         let Some(cached_metadata) = cached_metadata else {
             tracing::debug!("no cached metadata passed.");
@@ -253,10 +248,11 @@ impl SourceMetadataSpec {
         command_dispatcher: &CommandDispatcher,
         output: &CondaOutput,
         input_hash: Option<InputHash>,
-        manifest_source: PinnedSourceSpec,
-        build_source: Option<PinnedSourceSpec>,
+        source: SourceCodeLocation,
         reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
+        let manifest_source = source.manifest_source().clone();
+        let build_source = source.build_source().cloned();
         let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
 
         // Solve the build environment for the output.
@@ -369,14 +365,14 @@ impl SourceMetadataSpec {
                     };
                     Ok(MatchSpec::from_nameless(
                         source.to_nameless_match_spec(),
-                        Some(name.clone()),
+                        Some(name.clone().into()),
                     ))
                 }
                 Either::Right(binary) => {
                     let spec = binary
                         .try_into_nameless_match_spec(&self.backend_metadata.channel_config)
                         .map_err(SourceMetadataError::SpecConversionError)?;
-                    Ok(MatchSpec::from_nameless(spec, Some(name.clone())))
+                    Ok(MatchSpec::from_nameless(spec, Some(name.clone().into())))
                 }
             }
         };
@@ -404,7 +400,7 @@ impl SourceMetadataSpec {
                     let nameless_spec = spec
                         .try_into_nameless_match_spec(&self.backend_metadata.channel_config)
                         .map_err(SourceMetadataError::SpecConversionError)?;
-                    Ok(MatchSpec::from_nameless(nameless_spec, Some(name)).to_string())
+                    Ok(MatchSpec::from_nameless(nameless_spec, Some(name.into())).to_string())
                 })
                 .collect::<Result<Vec<_>, SourceMetadataError>>()
                 .map_err(CommandDispatcherError::Failed)
@@ -479,6 +475,14 @@ impl SourceMetadataSpec {
                 .into_iter()
                 .map(|(name, source)| (name.as_source().to_string(), source))
                 .collect(),
+            variants: Some(
+                output
+                    .metadata
+                    .variant
+                    .iter()
+                    .map(|(k, v)| (k.clone(), pixi_record::VariantValue::from(v.clone())))
+                    .collect(),
+            ),
         })
     }
 
@@ -493,9 +497,9 @@ impl SourceMetadataSpec {
         if dependencies.dependencies.is_empty() {
             return Ok(vec![]);
         }
-        let pin_overrides = self
+        let preferred_build_source = self
             .backend_metadata
-            .pin_override
+            .preferred_build_source
             .as_ref()
             .map(|pinned| BTreeMap::from([(pkg_name.clone(), pinned.clone())]))
             .unwrap_or_default();
@@ -520,10 +524,10 @@ impl SourceMetadataSpec {
                 channel_priority: Default::default(),
                 exclude_newer: None,
                 channel_config: self.backend_metadata.channel_config.clone(),
-                variants: self.backend_metadata.variants.clone(),
+                variant_configuration: self.backend_metadata.variant_configuration.clone(),
                 variant_files: self.backend_metadata.variant_files.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
-                pin_overrides,
+                preferred_build_source,
             })
             .await
         {
@@ -569,7 +573,7 @@ impl PackageRecordDependencies {
             .map(|(name, spec)| {
                 Ok(MatchSpec::from_nameless(
                     spec.value.try_into_nameless_match_spec(channel_config)?,
-                    Some(name),
+                    Some(name.into()),
                 ))
             })
             .map_ok(|spec| spec.to_string())
@@ -581,7 +585,7 @@ impl PackageRecordDependencies {
                 Either::Left(source) => {
                     depends.push(
                         MatchSpec {
-                            name: Some(name.clone()),
+                            name: Some(name.clone().into()),
                             ..MatchSpec::default()
                         }
                         .to_string(),
@@ -590,7 +594,7 @@ impl PackageRecordDependencies {
                 }
                 Either::Right(binary) => {
                     if let Ok(spec) = binary.try_into_nameless_match_spec(channel_config) {
-                        depends.push(MatchSpec::from_nameless(spec, Some(name)).to_string());
+                        depends.push(MatchSpec::from_nameless(spec, Some(name.into())).to_string());
                     }
                 }
             }

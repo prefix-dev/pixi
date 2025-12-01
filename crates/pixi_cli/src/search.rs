@@ -287,21 +287,32 @@ fn print_package_info<W: Write>(
     }
 
     if let Some(run_exports) = package.package_record.run_exports.as_ref() {
-        writeln!(out, "\nRun exports:")?;
-        let mut print_run_exports = |name: &str, run_exports: &[String]| {
-            if !run_exports.is_empty() {
-                writeln!(out, "  {name}:")?;
-                for run_export in run_exports {
-                    writeln!(out, "   - {run_export}")?;
+        // Check if all run_exports fields are empty
+        let has_any_exports = !run_exports.noarch.is_empty()
+            || !run_exports.strong.is_empty()
+            || !run_exports.weak.is_empty()
+            || !run_exports.strong_constrains.is_empty()
+            || !run_exports.weak_constrains.is_empty();
+
+        if has_any_exports {
+            writeln!(out, "\nRun exports:")?;
+            let mut print_run_exports = |name: &str, run_exports: &[String]| {
+                if !run_exports.is_empty() {
+                    writeln!(out, "  {name}:")?;
+                    for run_export in run_exports {
+                        writeln!(out, "   - {run_export}")?;
+                    }
                 }
-            }
-            Ok::<(), std::io::Error>(())
-        };
-        print_run_exports("noarch", &run_exports.noarch)?;
-        print_run_exports("strong", &run_exports.strong)?;
-        print_run_exports("weak", &run_exports.weak)?;
-        print_run_exports("strong constrains", &run_exports.strong_constrains)?;
-        print_run_exports("weak constrains", &run_exports.weak_constrains)?;
+                Ok::<(), std::io::Error>(())
+            };
+            print_run_exports("noarch", &run_exports.noarch)?;
+            print_run_exports("strong", &run_exports.strong)?;
+            print_run_exports("weak", &run_exports.weak)?;
+            print_run_exports("strong constrains", &run_exports.strong_constrains)?;
+            print_run_exports("weak constrains", &run_exports.weak_constrains)?;
+        } else {
+            writeln!(out, "\nRun exports: not available in repodata")?;
+        }
     } else {
         writeln!(out, "\nRun exports: not available in repodata")?;
     }

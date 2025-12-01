@@ -19,7 +19,7 @@ use pixi_build_frontend::{
 };
 use pixi_build_types::{
     BackendCapabilities, BinaryPackageSpecV1, NamedSpecV1, PackageSpecV1, ProjectModelV1,
-    SourcePackageName, TargetSelectorV1, TargetV1, TargetsV1, VersionedProjectModel,
+    SourcePackageName, TargetSelectorV1, TargetV1, TargetsV1, VariantValue, VersionedProjectModel,
     procedures::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{
@@ -33,6 +33,15 @@ use rattler_conda_types::{PackageName, Platform, Version, VersionSpec, package::
 use serde::Deserialize;
 
 const BACKEND_NAME: &str = "passthrough";
+
+/// Events that can be emitted by the observable backend during method calls.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BackendEvent {
+    /// Emitted when `conda_build_v1` is called
+    CondaBuildV1Called,
+    /// Emitted when `conda_outputs` is called
+    CondaOutputsCalled,
+}
 
 /// An in-memory build backend that simply passes along the information from the
 /// project model to the `conda/outputs` API without any modifications. This
@@ -136,7 +145,7 @@ fn generate_variant_outputs(
     }
 
     // Get variant values for each key from the configuration
-    let variant_values: Vec<(String, Vec<String>)> = variant_keys
+    let variant_values: Vec<(String, Vec<VariantValue>)> = variant_keys
         .into_iter()
         .filter_map(|key| {
             params
@@ -253,8 +262,8 @@ fn is_star_requirement(spec: &PackageSpecV1) -> bool {
 /// - {python: "3.11", numpy: "1.0"}
 /// - {python: "3.11", numpy: "2.0"}
 fn generate_variant_combinations(
-    variant_values: &[(String, Vec<String>)],
-) -> Vec<BTreeMap<String, String>> {
+    variant_values: &[(String, Vec<VariantValue>)],
+) -> Vec<BTreeMap<String, VariantValue>> {
     use itertools::Itertools;
 
     if variant_values.is_empty() {
@@ -288,7 +297,7 @@ fn create_output(
     project_model: &ProjectModelV1,
     index_json: &Option<IndexJson>,
     params: &CondaOutputsParams,
-    variant: &BTreeMap<String, String>,
+    variant: &BTreeMap<String, VariantValue>,
 ) -> CondaOutput {
     CondaOutput {
         metadata: CondaOutputMetadata {
@@ -357,7 +366,7 @@ fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, 
     targets: &Option<TargetsV1>,
     extract: F,
     platform: Platform,
-    variant: &BTreeMap<String, String>,
+    variant: &BTreeMap<String, VariantValue>,
 ) -> CondaOutputDependencies {
     let depends = targets
         .iter()
@@ -383,7 +392,7 @@ fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, 
                             PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1 {
                                 version: Some(
                                     rattler_conda_types::VersionSpec::from_str(
-                                        variant_value,
+                                        variant_value.to_string().as_str(),
                                         rattler_conda_types::ParseStrictness::Lenient,
                                     )
                                     .unwrap(),
@@ -493,6 +502,123 @@ pub struct PassthroughBackendConfig {
     pub build_globs: Option<BTreeSet<String>>,
 }
 
+/// Observer that allows collecting backend events from an ObservableBackend.
+/// Use the `get_events` method to retrieve all available events.
+pub struct BackendObserver {
+    receiver: tokio::sync::mpsc::UnboundedReceiver<BackendEvent>,
+}
+
+impl BackendObserver {
+    /// Collects all available events from the channel using try_recv.
+    /// This is non-blocking and returns immediately with all events that
+    /// are currently in the channel.
+    pub fn events(&mut self) -> Vec<BackendEvent> {
+        let mut events = Vec::new();
+        while let Ok(event) = self.receiver.try_recv() {
+            events.push(event);
+        }
+        events
+    }
+}
+
+/// An observable wrapper around any InMemoryBackend that emits events through a
+/// channel when methods are called. This is useful for testing to verify that
+/// specific backend methods were invoked.
+pub struct ObservableBackend<T: InMemoryBackend> {
+    inner: T,
+    event_sender: tokio::sync::mpsc::UnboundedSender<BackendEvent>,
+}
+
+impl<T: InMemoryBackend> ObservableBackend<T> {
+    /// Creates a new instantiator for an ObservableBackend wrapping the given backend.
+    /// Returns both the instantiator and a BackendObserver for collecting events.
+    pub fn instantiator<I>(
+        inner_instantiator: I,
+    ) -> (
+        impl InMemoryBackendInstantiator<Backend = Self>,
+        BackendObserver,
+    )
+    where
+        I: InMemoryBackendInstantiator<Backend = T>,
+    {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<BackendEvent>();
+        let observer = BackendObserver { receiver: rx };
+        let instantiator = ObservableBackendInstantiator {
+            inner_instantiator,
+            event_sender: tx,
+        };
+        (instantiator, observer)
+    }
+}
+
+impl<T: InMemoryBackend> InMemoryBackend for ObservableBackend<T> {
+    fn capabilities(&self) -> BackendCapabilities {
+        self.inner.capabilities()
+    }
+
+    fn identifier(&self) -> &str {
+        self.inner.identifier()
+    }
+
+    fn conda_outputs(
+        &self,
+        params: CondaOutputsParams,
+        output_stream: &(dyn BackendOutputStream + Send + 'static),
+    ) -> Result<CondaOutputsResult, Box<CommunicationError>> {
+        // Emit event
+        let _ = self.event_sender.send(BackendEvent::CondaOutputsCalled);
+
+        // Delegate to the inner backend
+        self.inner.conda_outputs(params, output_stream)
+    }
+
+    fn conda_build_v1(
+        &self,
+        params: CondaBuildV1Params,
+        output_stream: &(dyn BackendOutputStream + Send + 'static),
+    ) -> Result<CondaBuildV1Result, Box<CommunicationError>> {
+        // Emit event
+        let _ = self.event_sender.send(BackendEvent::CondaBuildV1Called);
+
+        // Delegate to the inner backend
+        self.inner.conda_build_v1(params, output_stream)
+    }
+}
+
+/// An implementation of the [`InMemoryBackendInstantiator`] that creates an
+/// [`ObservableBackend`] wrapping any other backend.
+pub struct ObservableBackendInstantiator<I, T>
+where
+    I: InMemoryBackendInstantiator<Backend = T>,
+    T: InMemoryBackend,
+{
+    inner_instantiator: I,
+    event_sender: tokio::sync::mpsc::UnboundedSender<BackendEvent>,
+}
+
+impl<I, T> InMemoryBackendInstantiator for ObservableBackendInstantiator<I, T>
+where
+    I: InMemoryBackendInstantiator<Backend = T>,
+    T: InMemoryBackend,
+{
+    type Backend = ObservableBackend<T>;
+
+    fn initialize(
+        &self,
+        params: InitializeParams,
+    ) -> Result<Self::Backend, Box<CommunicationError>> {
+        let inner = self.inner_instantiator.initialize(params)?;
+        Ok(ObservableBackend {
+            inner,
+            event_sender: self.event_sender.clone(),
+        })
+    }
+
+    fn identifier(&self) -> &str {
+        self.inner_instantiator.identifier()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -537,12 +663,15 @@ mod tests {
     fn test_generate_variant_combinations_single() {
         let variants = generate_variant_combinations(&[(
             "python".to_string(),
-            vec!["3.10".to_string(), "3.11".to_string()],
+            vec![
+                VariantValue::String("3.10".to_string()),
+                VariantValue::String("3.11".to_string()),
+            ],
         )]);
 
         assert_eq!(variants.len(), 2);
-        assert_eq!(variants[0].get("python").unwrap(), "3.10");
-        assert_eq!(variants[1].get("python").unwrap(), "3.11");
+        assert_eq!(variants[0].get("python").unwrap().to_string(), "3.10");
+        assert_eq!(variants[1].get("python").unwrap().to_string(), "3.11");
     }
 
     #[test]
@@ -550,11 +679,17 @@ mod tests {
         let variants = generate_variant_combinations(&[
             (
                 "python".to_string(),
-                vec!["3.10".to_string(), "3.11".to_string()],
+                vec![
+                    VariantValue::String("3.10".to_string()),
+                    VariantValue::String("3.11".to_string()),
+                ],
             ),
             (
                 "numpy".to_string(),
-                vec!["1.0".to_string(), "2.0".to_string()],
+                vec![
+                    VariantValue::String("1.0".to_string()),
+                    VariantValue::String("2.0".to_string()),
+                ],
             ),
         ]);
 
@@ -572,8 +707,8 @@ mod tests {
             assert!(
                 variants
                     .iter()
-                    .any(|v| v.get("python").unwrap() == expected_python
-                        && v.get("numpy").unwrap() == expected_numpy),
+                    .any(|v| v.get("python").unwrap().to_string() == expected_python
+                        && v.get("numpy").unwrap().to_string() == expected_numpy),
                 "Expected combination ({expected_python}, {expected_numpy}) not found"
             );
         }
@@ -584,15 +719,24 @@ mod tests {
         let variants = generate_variant_combinations(&[
             (
                 "python".to_string(),
-                vec!["3.10".to_string(), "3.11".to_string()],
+                vec![
+                    VariantValue::String("3.10".to_string()),
+                    VariantValue::String("3.11".to_string()),
+                ],
             ),
             (
                 "numpy".to_string(),
-                vec!["1.0".to_string(), "2.0".to_string()],
+                vec![
+                    VariantValue::String("1.0".to_string()),
+                    VariantValue::String("2.0".to_string()),
+                ],
             ),
             (
                 "os".to_string(),
-                vec!["linux".to_string(), "windows".to_string()],
+                vec![
+                    VariantValue::String("linux".to_string()),
+                    VariantValue::String("windows".to_string()),
+                ],
             ),
         ]);
 
@@ -610,13 +754,19 @@ mod tests {
     #[test]
     fn test_generate_variant_combinations_single_value() {
         let variants = generate_variant_combinations(&[
-            ("python".to_string(), vec!["3.10".to_string()]),
-            ("numpy".to_string(), vec!["1.0".to_string()]),
+            (
+                "python".to_string(),
+                vec![VariantValue::String("3.10".to_string())],
+            ),
+            (
+                "numpy".to_string(),
+                vec![VariantValue::String("1.0".to_string())],
+            ),
         ]);
 
         // Should generate only 1 combination
         assert_eq!(variants.len(), 1);
-        assert_eq!(variants[0].get("python").unwrap(), "3.10");
-        assert_eq!(variants[0].get("numpy").unwrap(), "1.0");
+        assert_eq!(variants[0].get("python").unwrap().to_string(), "3.10");
+        assert_eq!(variants[0].get("numpy").unwrap().to_string(), "1.0");
     }
 }

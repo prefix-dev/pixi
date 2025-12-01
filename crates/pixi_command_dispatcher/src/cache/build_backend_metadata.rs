@@ -7,7 +7,7 @@ use std::{
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::{CondaPackageMetadata, procedures::conda_outputs::CondaOutput};
-use pixi_record::{InputHash, PinnedSourceSpec};
+use pixi_record::{InputHash, PinnedSourceSpec, VariantValue};
 use rattler_conda_types::ChannelUrl;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -135,7 +135,7 @@ pub struct CachedCondaMetadata {
 
     /// The build variants that were used to generate this metadata.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub build_variants: Option<BTreeMap<String, Vec<String>>>,
+    pub build_variants: Option<BTreeMap<String, Vec<VariantValue>>>,
 }
 
 impl CachedMetadata for CachedCondaMetadata {}
