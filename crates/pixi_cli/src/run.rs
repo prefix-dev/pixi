@@ -521,11 +521,9 @@ async fn listen_ctrl_c_windows() {
 /// Listens to all incoming signals and forwards them to the child process.
 ///
 /// Signal forwarding follows UV's approach:
-/// - In interactive mode (stdin is TTY), we pass our PGID with the signal.
-///   If the child is in the same PGID, deno_task_shell skips forwarding because
-///   the terminal driver already delivered the signal to the entire process group.
-/// - In non-interactive mode, we always forward signals since there's no terminal
-///   driver involved and `kill -INT <pid>` is the expected way to send signals.
+/// - SIGINT in interactive mode: Include PGID so deno_task_shell can skip
+///   forwarding if the child is in the same PGID (terminal already sent it).
+/// - All other signals: Always forward unconditionally.
 ///
 /// Trade-off: `kill -INT <pixi>` won't work in interactive mode when the child
 /// is in the same PGID. Use CTRL+C instead, or `kill -TERM` which always forwards.
@@ -555,9 +553,11 @@ async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
                 };
                 let signal_kind = signo.into();
                 while let Some(()) = stream.recv().await {
-                    // In interactive mode, include our PGID so deno_task_shell
-                    // can handle same-PGID scenarios (CTRL+C vs kill -INT)
-                    if is_interactive {
+                    // Only SIGINT gets PGID-aware handling in interactive mode.
+                    // The terminal driver sends SIGINT to the process group on Ctrl+C,
+                    // so we skip forwarding if the child is in the same PGID.
+                    // All other signals are forwarded unconditionally.
+                    if is_interactive && signo == libc::SIGINT {
                         kill_signal.send_from_pgid(signal_kind, our_pgid);
                     } else {
                         kill_signal.send(signal_kind);
