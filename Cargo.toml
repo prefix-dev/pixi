@@ -118,7 +118,7 @@ pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
 pyproject-toml = "0.13.7"
 rand = { version = "0.9.1", default-features = false }
-rattler = { version = "0.39.3", default-features = false }
+rattler = { version = "0.39.0", default-features = false }
 rattler_cache = { version = "0.6.2", default-features = false }
 rattler_conda_types = { version = "0.42.0", default-features = false, features = [
   "rayon",
