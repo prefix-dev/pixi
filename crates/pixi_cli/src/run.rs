@@ -5,9 +5,6 @@ use std::{
     string::String,
 };
 
-#[cfg(unix)]
-use std::io::IsTerminal;
-
 use clap::Parser;
 use deno_task_shell::KillSignal;
 use dialoguer::theme::ColorfulTheme;
@@ -403,6 +400,7 @@ async fn execute_task(
         return Ok(());
     };
     let cwd = task.working_directory()?;
+
     let execute_future = deno_task_shell::execute(
         script,
         command_env.clone(),
@@ -520,33 +518,31 @@ async fn listen_ctrl_c_windows() {
     while let Ok(()) = tokio::signal::ctrl_c().await {}
 }
 
-/// Listens to all incoming signals and forwards all of them, except
-/// some cases.
+/// Listens to all incoming signals and forwards them to the child process.
 ///
-/// Note that we don't handle `SIGINT` correctly, if the subprocess changes
-/// its PGID, then the system won't forward CTRL+C automatically.
-/// However, we should do that to ensure consistent behaviour.
+/// Signal forwarding follows UV's approach:
+/// - SIGINT in interactive mode: Include PGID so deno_task_shell can skip
+///   forwarding if the child is in the same PGID (terminal already sent it).
+/// - All other signals: Always forward unconditionally.
 ///
-/// To resolve this we should patch `deno_task_shell` to return PID
-/// from which we could get PGID and do things right.
-///
-/// Resulting approach should mimic
-/// https://github.com/astral-sh/uv/blob/9d17dfa3537312b928f94479f632891f918c4760/crates/uv/src/child.rs#L156C21-L168C77.
+/// Trade-off: `kill -INT <pixi>` won't work in interactive mode when the child
+/// is in the same PGID. Use CTRL+C instead, or `kill -TERM` which always forwards.
 #[cfg(unix)]
 async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
-    use futures::FutureExt;
+    use std::io::IsTerminal;
 
+    use futures::FutureExt;
     use pixi_core::signals::SIGNALS;
+
+    let is_interactive = std::io::stdin().is_terminal();
+    let our_pgid = unsafe { libc::getpgid(0) };
 
     // listen and forward every signal we support
     let mut futures = Vec::with_capacity(SIGNALS.len());
-    let is_interactive = std::io::stdin().is_terminal();
     for signo in SIGNALS.iter().copied() {
-        if signo == libc::SIGKILL
-            || signo == libc::SIGSTOP
-            || (signo == libc::SIGINT && is_interactive)
-        {
-            continue; // skip, can't listen to these
+        // SIGKILL and SIGSTOP cannot be caught or blocked
+        if signo == libc::SIGKILL || signo == libc::SIGSTOP {
+            continue;
         }
 
         let kill_signal = kill_signal.clone();
@@ -557,7 +553,15 @@ async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
                 };
                 let signal_kind = signo.into();
                 while let Some(()) = stream.recv().await {
-                    kill_signal.send(signal_kind);
+                    // Only SIGINT gets PGID-aware handling in interactive mode.
+                    // The terminal driver sends SIGINT to the process group on Ctrl+C,
+                    // so we skip forwarding if the child is in the same PGID.
+                    // All other signals are forwarded unconditionally.
+                    if is_interactive && signo == libc::SIGINT {
+                        kill_signal.send_from_pgid(signal_kind, our_pgid);
+                    } else {
+                        kill_signal.send(signal_kind);
+                    }
                 }
             }
             .boxed_local(),
