@@ -102,7 +102,6 @@ pixi_progress = { path = "crates/pixi_progress" }
 pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
 pixi_python_status = { path = "crates/pixi_python_status" }
 pixi_record = { path = "crates/pixi_record" }
-pixi_variant = { path = "crates/pixi_variant" }
 pixi_reporters = { path = "crates/pixi_reporters" }
 pixi_spec = { path = "crates/pixi_spec" }
 pixi_spec_containers = { path = "crates/pixi_spec_containers" }
@@ -114,6 +113,7 @@ pixi_url = { path = "crates/pixi_url" }
 pixi_utils = { path = "crates/pixi_utils", default-features = false }
 pixi_uv_context = { path = "crates/pixi_uv_context" }
 pixi_uv_conversions = { path = "crates/pixi_uv_conversions" }
+pixi_variant = { path = "crates/pixi_variant" }
 pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
 pyproject-toml = "0.13.7"
@@ -134,6 +134,9 @@ rattler_package_streaming = { version = "0.23.14", default-features = false }
 rattler_repodata_gateway = { version = "0.25.0", default-features = false }
 rattler_shell = { version = "0.25.8", default-features = false }
 rattler_solve = { version = "4.1.0", default-features = false }
+rattler_upload = { version = "0.4.5", default-features = false, features = [
+  "s3",
+] }
 rattler_virtual_packages = { version = "2.3.0", default-features = false }
 rayon = "1.10.0"
 regex = "1.11.1"
