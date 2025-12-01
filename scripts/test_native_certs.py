@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 """
-Test script for the native-certs feature.
+Test script for the tls-root-certs feature.
 
 Sets up a local HTTPS PyPI server with a custom CA (via mkcert) to verify that:
-- native-certs=false: Fails (mkcert CA not in webpki-roots)
-- native-certs=true: Succeeds (mkcert CA in system trust store)
+- tls-root-certs=webpki: Fails (mkcert CA not in webpki-roots)
+- tls-root-certs=native: Succeeds (mkcert CA in system trust store)
 
 Requirements:
 - Docker running
@@ -196,15 +196,15 @@ def create_nginx_config(test_dir: Path) -> Path:
     return config_file
 
 
-def run_pixi_test(pixi_bin: str, project_dir: Path, native_certs: bool) -> tuple[bool, str]:
-    """Run pixi install with specified native-certs setting."""
+def run_pixi_test(pixi_bin: str, project_dir: Path, tls_root_certs: str) -> tuple[bool, str]:
+    """Run pixi install with specified tls-root-certs setting."""
     # Clean up lock file
     lock_file = project_dir / "pixi.lock"
     if lock_file.exists():
         lock_file.unlink()
 
     env = os.environ.copy()
-    env["PIXI_NATIVE_CERTS"] = str(native_certs).lower()
+    env["PIXI_TLS_ROOT_CERTS"] = tls_root_certs
 
     result = subprocess.run(
         [pixi_bin, "install"],
@@ -218,7 +218,7 @@ def run_pixi_test(pixi_bin: str, project_dir: Path, native_certs: bool) -> tuple
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Test native-certs feature")
+    parser = argparse.ArgumentParser(description="Test tls-root-certs feature")
     parser.add_argument(
         "--pixi-bin",
         default=os.environ.get("PIXI_BIN", "pixi"),
@@ -237,7 +237,7 @@ def main() -> int:
         pixi_bin = Path.cwd() / pixi_bin
     args.pixi_bin = str(pixi_bin.resolve())
 
-    console.print(Panel("[bold]Native Certs Feature Test[/bold]", style="yellow"))
+    console.print(Panel("[bold]TLS Root Certs Feature Test[/bold]", style="yellow"))
 
     if not check_prerequisites():
         return 1
@@ -282,10 +282,10 @@ def main() -> int:
             # Run tests
             console.print(Panel("[bold]Running Tests[/bold]", style="yellow"))
 
-            # Test A: Without native-certs (should fail)
-            console.print("\n[yellow]Test A: Without native-certs (should FAIL)[/yellow]")
+            # Test A: With webpki certs (should fail)
+            console.print("\n[yellow]Test A: With tls-root-certs=webpki (should FAIL)[/yellow]")
             console.print("The CA is NOT in webpki-roots, so this should fail\n")
-            success_a, output_a = run_pixi_test(args.pixi_bin, project_dir, native_certs=False)
+            success_a, output_a = run_pixi_test(args.pixi_bin, project_dir, tls_root_certs="webpki")
             cert_error = any(term in output_a.lower() for term in ["certificate", "ssl", "tls"])
             test_a_passed = not success_a or cert_error
             if test_a_passed:
@@ -293,10 +293,10 @@ def main() -> int:
             else:
                 console.print("[red]✗ Test A FAILED: Unexpected success[/red]")
 
-            # Test B: With native-certs (should succeed)
-            console.print("\n[yellow]Test B: With native-certs=true (should SUCCEED)[/yellow]")
+            # Test B: With native certs (should succeed)
+            console.print("\n[yellow]Test B: With tls-root-certs=native (should SUCCEED)[/yellow]")
             console.print("The CA IS in the system trust store, so this should work\n")
-            success_b, output_b = run_pixi_test(args.pixi_bin, project_dir, native_certs=True)
+            success_b, output_b = run_pixi_test(args.pixi_bin, project_dir, tls_root_certs="native")
             test_b_passed = success_b
             if test_b_passed:
                 console.print("[green]✓ Test B PASSED: Install succeeded with native certs[/green]")
@@ -309,14 +309,14 @@ def main() -> int:
 
         if test_a_passed and test_b_passed:
             console.print("[green]All tests PASSED![/green]")
-            console.print("\nThe native-certs feature is working correctly:")
-            console.print("  - native-certs=false: Uses webpki-roots (mkcert CA not trusted)")
-            console.print("  - native-certs=true:  Uses system store (mkcert CA trusted)")
+            console.print("\nThe tls-root-certs feature is working correctly:")
+            console.print("  - tls-root-certs=webpki: Uses webpki-roots (mkcert CA not trusted)")
+            console.print("  - tls-root-certs=native: Uses system store (mkcert CA trusted)")
             return 0
         else:
             console.print("[red]Some tests FAILED[/red]")
-            console.print(f"Test A (should fail without native-certs): {test_a_passed}")
-            console.print(f"Test B (should pass with native-certs):    {test_b_passed}")
+            console.print(f"Test A (should fail with tls-root-certs=webpki): {test_a_passed}")
+            console.print(f"Test B (should pass with tls-root-certs=native): {test_b_passed}")
             return 1
 
     except Exception as e:

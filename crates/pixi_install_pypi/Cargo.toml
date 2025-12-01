@@ -20,6 +20,7 @@ miette = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 percent-encoding = { workspace = true }
+pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }

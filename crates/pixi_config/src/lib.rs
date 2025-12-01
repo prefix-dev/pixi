@@ -27,6 +27,44 @@ use url::Url;
 
 const EXPERIMENTAL: &str = "experimental";
 
+/// Controls which root certificates to use for TLS connections.
+///
+/// - `Webpki`: Use bundled Mozilla root certificates (portable, works everywhere)
+/// - `Native`: Use the system's certificate store (includes corporate CAs)
+/// - `All`: Use both webpki and native certificates (union of both sources)
+///
+/// Note: This setting only has an effect when pixi is built with the `rustls-tls` feature.
+/// When built with `native-tls`, system certificates are always used regardless of this setting.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TlsRootCerts {
+    /// Use bundled Mozilla root certificates
+    #[default]
+    Webpki,
+    /// Use the system's native certificate store
+    Native,
+    /// Use both webpki and native certificates
+    All,
+}
+
+impl FromStr for TlsRootCerts {
+    type Err = serde::de::value::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::deserialize(s.into_deserializer())
+    }
+}
+
+impl std::fmt::Display for TlsRootCerts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TlsRootCerts::Webpki => write!(f, "webpki"),
+            TlsRootCerts::Native => write!(f, "native"),
+            TlsRootCerts::All => write!(f, "all"),
+        }
+    }
+}
+
 pub fn default_channel_config() -> ChannelConfig {
     ChannelConfig::default_with_root_dir(
         std::env::current_dir().expect("Could not retrieve the current directory"),
@@ -148,9 +186,9 @@ pub struct ConfigCli {
     #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     tls_no_verify: bool,
 
-    /// Use the system's native certificates instead of bundled webpki roots.
-    #[arg(long, action = ArgAction::SetTrue, env = "PIXI_NATIVE_CERTS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    native_certs: bool,
+    /// Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both).
+    #[arg(long, env = "PIXI_TLS_ROOT_CERTS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    tls_root_certs: Option<TlsRootCerts>,
 
     /// Use environment activation cache (experimental)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
@@ -689,11 +727,10 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tls_no_verify: Option<bool>,
 
-    /// If set to true, pixi will use the system's native certificates
-    /// instead of bundled webpki roots.
+    /// Which TLS root certificates to use for HTTPS connections.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub native_certs: Option<bool>,
+    pub tls_root_certs: Option<TlsRootCerts>,
 
     #[serde(default)]
     #[serde(skip_serializing_if = "HashMap::is_empty")]
@@ -793,7 +830,7 @@ impl Default for Config {
             default_channels: Vec::new(),
             authentication_override_file: None,
             tls_no_verify: None,
-            native_certs: None,
+            tls_root_certs: None,
             mirrors: HashMap::new(),
             loaded_from: Vec::new(),
             channel_config: default_channel_config(),
@@ -821,7 +858,7 @@ impl From<ConfigCli> for Config {
     fn from(cli: ConfigCli) -> Self {
         Self {
             tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
-            native_certs: if cli.native_certs { Some(true) } else { None },
+            tls_root_certs: cli.tls_root_certs,
             authentication_override_file: cli.auth_file,
             pypi_config: cli
                 .pypi_keyring_provider
@@ -1369,7 +1406,7 @@ impl Config {
             "shell.force-activate",
             "shell.source-completion-scripts",
             "tls-no-verify",
-            "native-certs",
+            "tls-root-certs",
             "tool-platform",
         ]
     }
@@ -1388,7 +1425,7 @@ impl Config {
                 other.default_channels
             },
             tls_no_verify: other.tls_no_verify.or(self.tls_no_verify),
-            native_certs: other.native_certs.or(self.native_certs),
+            tls_root_certs: other.tls_root_certs.or(self.tls_root_certs),
             authentication_override_file: other
                 .authentication_override_file
                 .or(self.authentication_override_file),
@@ -1441,9 +1478,9 @@ impl Config {
         self.tls_no_verify.unwrap_or(false)
     }
 
-    /// Retrieve the value for the native_certs field (defaults to false).
-    pub fn native_certs(&self) -> bool {
-        self.native_certs.unwrap_or(false)
+    /// Retrieve the value for the tls_root_certs field (defaults to Webpki).
+    pub fn tls_root_certs(&self) -> TlsRootCerts {
+        self.tls_root_certs.unwrap_or_default()
     }
 
     /// Retrieve the value for the change_ps1 field (defaults to true).
@@ -1570,8 +1607,11 @@ impl Config {
             "tls-no-verify" => {
                 self.tls_no_verify = value.map(|v| v.parse()).transpose().into_diagnostic()?;
             }
-            "native-certs" => {
-                self.native_certs = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            "tls-root-certs" => {
+                self.tls_root_certs = value
+                    .map(|v| TlsRootCerts::from_str(v.as_str()))
+                    .transpose()
+                    .into_diagnostic()?;
             }
             "mirrors" => {
                 self.mirrors = value
@@ -1982,7 +2022,7 @@ mod tests {
         let toml = format!(
             r#"default-channels = ["conda-forge"]
 tls-no-verify = true
-native-certs = true
+tls-root-certs = "native"
 detached-environments = "{}"
 pinning-strategy = "no-pin"
 concurrency.solves = 5
@@ -1996,7 +2036,7 @@ UNUSED = "unused"
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
         );
         assert_eq!(config.tls_no_verify, Some(true));
-        assert_eq!(config.native_certs, Some(true));
+        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Native));
         assert_eq!(
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
@@ -2087,7 +2127,7 @@ UNUSED = "unused"
         // Test with all CLI options enabled
         let cli = ConfigCli {
             tls_no_verify: true,
-            native_certs: true,
+            tls_root_certs: Some(TlsRootCerts::Native),
             auth_file: None,
             pypi_keyring_provider: Some(KeyringProvider::Subprocess),
             concurrent_solves: Some(8),
@@ -2098,7 +2138,7 @@ UNUSED = "unused"
         };
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
-        assert_eq!(config.native_certs, Some(true));
+        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Native));
         assert_eq!(
             config.pypi_config().keyring_provider,
             Some(KeyringProvider::Subprocess)
@@ -2117,7 +2157,7 @@ UNUSED = "unused"
 
         let cli = ConfigCli {
             tls_no_verify: false,
-            native_certs: false,
+            tls_root_certs: None,
             auth_file: Some(PathBuf::from("path.json")),
             pypi_keyring_provider: None,
             concurrent_solves: None,
@@ -2129,7 +2169,7 @@ UNUSED = "unused"
 
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, None);
-        assert_eq!(config.native_certs, None);
+        assert_eq!(config.tls_root_certs, None);
         assert_eq!(
             config.authentication_override_file,
             Some(PathBuf::from("path.json"))
@@ -2228,7 +2268,7 @@ UNUSED = "unused"
             default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
-            native_certs: Some(true),
+            tls_root_certs: Some(TlsRootCerts::Native),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
             concurrency: ConcurrencyConfig {
                 solves: 5,
@@ -2718,11 +2758,11 @@ UNUSED = "unused"
             .unwrap();
         assert_eq!(config.tls_no_verify, Some(true));
 
-        // Test native-certs
+        // Test tls-root-certs
         config
-            .set("native-certs", Some("true".to_string()))
+            .set("tls-root-certs", Some("native".to_string()))
             .unwrap();
-        assert_eq!(config.native_certs, Some(true));
+        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Native));
 
         // Test mirrors
         config
@@ -2752,11 +2792,11 @@ UNUSED = "unused"
     }
 
     #[test]
-    fn test_native_certs_default() {
+    fn test_tls_root_certs_default() {
         let config = Config::default();
-        // Default should be false (use bundled webpki-roots)
-        assert!(!config.native_certs());
-        assert_eq!(config.native_certs, None);
+        // Default should be Webpki (bundled Mozilla roots)
+        assert_eq!(config.tls_root_certs(), TlsRootCerts::Webpki);
+        assert_eq!(config.tls_root_certs, None);
     }
 
     #[rstest]

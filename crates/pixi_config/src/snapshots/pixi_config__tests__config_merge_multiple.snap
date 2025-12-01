@@ -18,7 +18,7 @@ Config {
     tls_no_verify: Some(
         false,
     ),
-    native_certs: None,
+    tls_root_certs: None,
     mirrors: {
         Url {
             scheme: "https",

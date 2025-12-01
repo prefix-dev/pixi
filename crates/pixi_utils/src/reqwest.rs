@@ -107,21 +107,67 @@ static DEFAULT_REQWEST_USER_AGENT: LazyLock<String> =
 static DEFAULT_REQWEST_TIMEOUT_SEC: Duration = Duration::from_secs(5 * 60);
 static DEFAULT_REQWEST_IDLE_PER_HOST: usize = 20;
 
+/// Returns whether UV should use native TLS (system certificates).
+///
+/// For `native-tls` builds, this always returns `true` since the system TLS library is used.
+/// For `rustls-tls` builds, this returns `true` if the config is set to `Native` or `All`.
+pub fn should_use_native_tls_for_uv(config: &Config) -> bool {
+    #[cfg(feature = "native-tls")]
+    {
+        let _ = config;
+        return true;
+    }
+
+    #[cfg(not(feature = "native-tls"))]
+    {
+        matches!(
+            config.tls_root_certs(),
+            pixi_config::TlsRootCerts::Native | pixi_config::TlsRootCerts::All
+        )
+    }
+}
+
 pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest::ClientBuilder> {
-    let native_certs = config.map(|c| c.native_certs()).unwrap_or(false);
+    use pixi_config::TlsRootCerts;
 
     let mut builder = Client::builder()
         .pool_max_idle_per_host(DEFAULT_REQWEST_IDLE_PER_HOST)
         .user_agent(DEFAULT_REQWEST_USER_AGENT.as_str())
-        .read_timeout(DEFAULT_REQWEST_TIMEOUT_SEC)
-        .use_rustls_tls()
-        .tls_built_in_root_certs(false); // Disable auto-loading to choose explicitly
+        .read_timeout(DEFAULT_REQWEST_TIMEOUT_SEC);
 
-    // Choose certificate source based on native_certs setting
-    if native_certs {
-        builder = builder.tls_built_in_native_certs(true);
-    } else {
-        builder = builder.tls_built_in_webpki_certs(true);
+    #[cfg(feature = "native-tls")]
+    {
+        // With native-tls, the system's TLS library handles certificates.
+        // The tls-root-certs setting has no effect - warn if it's explicitly set.
+        if let Some(tls_root_certs) = config.and_then(|c| c.tls_root_certs) {
+            tracing::warn!(
+                "tls-root-certs is set to '{}' but has no effect with native-tls builds. \
+                 System certificates are always used.",
+                tls_root_certs
+            );
+        }
+        builder = builder.use_native_tls();
+    }
+
+    #[cfg(feature = "rustls-tls")]
+    {
+        let tls_root_certs = config.map(|c| c.tls_root_certs()).unwrap_or_default();
+
+        builder = builder.use_rustls_tls().tls_built_in_root_certs(false); // Disable auto-loading to choose explicitly
+
+        match tls_root_certs {
+            TlsRootCerts::Webpki => {
+                builder = builder.tls_built_in_webpki_certs(true);
+            }
+            TlsRootCerts::Native => {
+                builder = builder.tls_built_in_native_certs(true);
+            }
+            TlsRootCerts::All => {
+                builder = builder
+                    .tls_built_in_webpki_certs(true)
+                    .tls_built_in_native_certs(true);
+            }
+        }
     }
 
     let proxies = config

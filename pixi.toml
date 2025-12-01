@@ -257,7 +257,9 @@ rich = ">=14,<15"
 testcontainers = ">=4,<5"
 
 [feature.native-certs-test.tasks]
-test-native-certs = { cmd = "python scripts/test_native_certs.py --pixi-bin $CARGO_TARGET_DIR/release/pixi", description = "Test native-certs feature with local HTTPS PyPI server (run 'pixi run build-release' first)" }
+test-native-certs = { cmd = "python scripts/test_native_certs.py --pixi-bin $CARGO_TARGET_DIR/release/pixi", description = "Test native-certs feature with local HTTPS PyPI server", depends-on = [
+  "build-release",
+] }
 
 #
 # Environment descriptions
@@ -290,8 +292,5 @@ schema = { features = [
   "pytest",
 ], no-default-feature = true, solve-group = "default" }
 test-export = { features = ["micromamba"], no-default-feature = true }
-test-native-certs = { features = [
-  "native-certs-test",
-  "build",
-], no-default-feature = true }
+test-native-certs = { features = ["native-certs-test", "build"] }
 trampoline = { features = ["trampoline"], no-default-feature = true }
