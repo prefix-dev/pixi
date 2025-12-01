@@ -1979,6 +1979,8 @@ impl<'p> UpdateContext<'p> {
         for environment in project.environments() {
             let environment_name = environment.name().to_string();
             let grouped_env = GroupedEnvironment::from(environment.clone());
+            let grouped_pypi_options = grouped_env.pypi_options();
+            let pypi_prerelease_mode = grouped_pypi_options.prerelease_mode.unwrap_or_default();
 
             let channel_config = project.channel_config();
             let channels: Vec<String> = grouped_env
@@ -2004,7 +2006,7 @@ impl<'p> UpdateContext<'p> {
                         .unwrap_or_default()
                         .into(),
                     exclude_newer: grouped_env.exclude_newer(),
-                    pypi_prerelease_mode: None,
+                    pypi_prerelease_mode: Some(pypi_prerelease_mode.into()),
                 },
             );
 
@@ -2035,7 +2037,7 @@ impl<'p> UpdateContext<'p> {
             // Store the indexes that were used to solve the environment. But only if there
             // are pypi packages.
             if has_pypi_records {
-                builder.set_pypi_indexes(&environment_name, grouped_env.pypi_options().into());
+                builder.set_pypi_indexes(&environment_name, grouped_pypi_options.into());
             }
         }
 
