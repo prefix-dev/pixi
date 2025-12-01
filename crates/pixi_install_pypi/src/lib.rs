@@ -351,6 +351,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .allow_insecure_host(allow_insecure_hosts)
             .keyring(self.context_config.uv_context.keyring_provider)
             .connectivity(Connectivity::Online)
+            .native_tls(self.context_config.uv_context.native_certs)
             .extra_middleware(self.context_config.uv_context.extra_middleware.clone());
 
         let mut uv_client_builder = RegistryClientBuilder::new(
