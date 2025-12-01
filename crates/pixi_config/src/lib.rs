@@ -692,7 +692,6 @@ pub struct Config {
     /// If set to true, pixi will use the system's native certificates
     /// instead of bundled webpki roots.
     #[serde(default)]
-    #[serde(alias = "native_certs")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
     pub native_certs: Option<bool>,
 
