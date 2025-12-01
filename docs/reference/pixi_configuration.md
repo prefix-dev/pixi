@@ -115,6 +115,28 @@ If you only need to bypass TLS verification for specific PyPI hosts, consider us
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:tls-no-verify"
 ```
 
+### `tls-root-certs`
+
+Controls which TLS root certificates are used for HTTPS connections. This affects both conda channels and PyPI registries.
+
+Available options:
+
+- `webpki` (default): Uses bundled Mozilla root certificates. This is the most portable option.
+- `native`: Uses the system certificate store. Required for corporate environments with custom CA certificates.
+- `all`: Uses both bundled Mozilla certificates and the system certificate store.
+
+You can override this from the CLI with `--tls-root-certs`.
+
+!!! note "Build-dependent behavior"
+
+    This setting only has an effect with `rustls-tls` builds (standalone pixi binaries from GitHub releases).
+    For `native-tls` builds (conda-forge packages), the system's TLS library is used, which always uses system certificates.
+    In this case, the setting is accepted but has no effect.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:tls-root-certs"
+```
+
 ### `authentication-override-file`
 
 Override from where the authentication information is loaded.
