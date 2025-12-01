@@ -138,7 +138,7 @@ pub enum ParseLockFileError {
     InvalidRecordUrl(UrlOrPath, #[source] file_url::FileURLParseError),
 
     #[error(transparent)]
-    PinnedSourceSpecError(#[from] pinned_source::ParseError),
+    PinnedSourceSpecError(#[from] Box<pinned_source::ParseError>),
 }
 
 impl Matches<PixiRecord> for NamelessMatchSpec {

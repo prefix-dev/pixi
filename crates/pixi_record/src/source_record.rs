@@ -64,41 +64,48 @@ impl SourceRecord {
     /// However, when saving in the lock-file make these relative to the package manifest.
     /// This should be used when writing to the lock file.
     pub fn into_conda_source_data(self, workspace_root: &Path) -> CondaSourceData {
-        let package_build_source = if let Some(package_build_source) = self.build_source.clone() {
-            // See if we can make it relative
-            let package_build_source_path = package_build_source
-                .clone()
-                .make_relative_to(&self.manifest_source, workspace_root)
-                .map(|path| PackageBuildSource::Path {
-                    path: Utf8TypedPathBuf::Unix(path),
-                });
-
-            if package_build_source_path.is_none() {
-                match package_build_source {
-                    PinnedSourceSpec::Url(pinned_url_spec) => Some(PackageBuildSource::Url {
-                        url: pinned_url_spec.url,
-                        sha256: pinned_url_spec.sha256,
-                        subdir: pinned_url_spec.subdirectory.map(Utf8TypedPathBuf::from),
-                    }),
-                    PinnedSourceSpec::Git(pinned_git_spec) => Some(PackageBuildSource::Git {
-                        url: pinned_git_spec.git,
-                        spec: to_git_shallow(&pinned_git_spec.source.reference),
-                        rev: pinned_git_spec.source.commit.to_string(),
-                        subdir: pinned_git_spec
-                            .source
-                            .subdirectory
-                            .map(Utf8TypedPathBuf::from),
-                    }),
-                    PinnedSourceSpec::Path(pinned_path_spec) => Some(PackageBuildSource::Path {
-                        path: pinned_path_spec.path,
-                    }),
+        let package_build_source = self.build_source.clone().map(|build_source| {
+            match build_source {
+                PinnedSourceSpec::Url(pinned_url_spec) => PackageBuildSource::Url {
+                    url: pinned_url_spec.url,
+                    sha256: pinned_url_spec.sha256,
+                    subdir: pinned_url_spec.subdirectory.map(Utf8TypedPathBuf::from),
+                },
+                PinnedSourceSpec::Git(pinned_git_spec) => {
+                    // Prefer a relative path when the build source is the same repo/commit as the manifest.
+                    if let Some(path) = PinnedSourceSpec::Git(pinned_git_spec.clone())
+                        .make_relative_to(&self.manifest_source, workspace_root)
+                    {
+                        PackageBuildSource::Path {
+                            path: Utf8TypedPathBuf::Unix(path),
+                        }
+                    } else {
+                        PackageBuildSource::Git {
+                            url: pinned_git_spec.git,
+                            spec: to_git_shallow(&pinned_git_spec.source.reference),
+                            rev: pinned_git_spec.source.commit.to_string(),
+                            subdir: pinned_git_spec
+                                .source
+                                .subdirectory
+                                .map(Utf8TypedPathBuf::from),
+                        }
+                    }
                 }
-            } else {
-                package_build_source_path
+                PinnedSourceSpec::Path(pinned_path_spec) => {
+                    if let Some(path) = PinnedSourceSpec::Path(pinned_path_spec.clone())
+                        .make_relative_to(&self.manifest_source, workspace_root)
+                    {
+                        PackageBuildSource::Path {
+                            path: Utf8TypedPathBuf::Unix(path),
+                        }
+                    } else {
+                        PackageBuildSource::Path {
+                            path: pinned_path_spec.path,
+                        }
+                    }
+                }
             }
-        } else {
-            None
-        };
+        });
 
         CondaSourceData {
             package_record: self.package_record,
@@ -126,7 +133,7 @@ impl SourceRecord {
         data: CondaSourceData,
         workspace_root: &std::path::Path,
     ) -> Result<Self, ParseLockFileError> {
-        let manifest_source: PinnedSourceSpec = data.location.try_into()?;
+        let manifest_source: PinnedSourceSpec = data.location.try_into().map_err(Box::new)?;
 
         let build_source = data.package_build_source.map(|source| match source {
             PackageBuildSource::Git {
@@ -621,6 +628,8 @@ mod tests {
 
     #[test]
     fn package_build_source_roundtrip_preserves_url_subdirectory() {
+        let workspace_root = std::path::Path::new("/workspace");
+
         let package_record: PackageRecord = serde_json::from_value(json!({
             "name": "example",
             "version": "1.0.0",
@@ -646,9 +655,7 @@ mod tests {
             sources: Default::default(),
         };
 
-        let CondaPackageData::Source(conda_source) = record.clone().into() else {
-            panic!("expected source package data");
-        };
+        let conda_source = record.clone().into_conda_source_data(workspace_root);
 
         let package_build_source = conda_source
             .package_build_source
@@ -656,11 +663,12 @@ mod tests {
             .expect("expected package build source");
 
         let PackageBuildSource::Url { subdir, .. } = package_build_source else {
-            panic!("expected url package build source");
+            panic!("expected url package build source for pinned archive");
         };
         assert_eq!(subdir.as_ref().map(|s| s.as_str()), Some("nested/path"));
 
-        let roundtrip = SourceRecord::try_from(conda_source).expect("roundtrip should succeed");
+        let roundtrip = SourceRecord::from_conda_source_data(conda_source, workspace_root)
+            .expect("roundtrip should succeed");
         let Some(PinnedSourceSpec::Url(roundtrip_url)) = roundtrip.build_source else {
             panic!("expected url pinned source");
         };
