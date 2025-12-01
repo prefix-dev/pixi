@@ -33,6 +33,9 @@ pixi global expose remove [OPTIONS] [EXPOSED_NAME]...
 :  Run post-link scripts (insecure)
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
+- <a id="arg---native-certs" href="#arg---native-certs">`--native-certs`</a>
+:  Use the system's native certificates instead of bundled webpki roots
+<br>**env**: `PIXI_NATIVE_CERTS`
 - <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
 :  Use environment activation cache (experimental)
 
