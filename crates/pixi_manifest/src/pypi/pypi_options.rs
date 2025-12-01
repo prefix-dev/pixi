@@ -8,6 +8,37 @@ use serde::{Serialize, Serializer, ser::SerializeSeq};
 use thiserror::Error;
 use url::Url;
 
+/// The strategy to use when considering pre-release versions during dependency
+/// resolution.
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    strum::Display,
+    strum::EnumString,
+    strum::VariantNames,
+)]
+#[strum(serialize_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
+pub enum PrereleaseMode {
+    /// Don't allow pre-releases
+    Disallow,
+    /// Allow all pre-releases
+    Allow,
+    /// Allow pre-releases if no stable version available
+    IfNecessary,
+    /// Only allow explicit pre-releases
+    Explicit,
+    /// Either necessary or explicitly requested (default)
+    #[default]
+    IfNecessaryOrExplicit,
+}
+
 // taken from: https://docs.astral.sh/uv/reference/settings/#index-strategy
 /// The strategy to use when resolving against multiple index URLs.
 /// By default, uv will stop at the first index on which a given package is
@@ -133,6 +164,9 @@ pub struct PypiOptions {
     pub no_build_isolation: NoBuildIsolation,
     /// The strategy to use when resolving against multiple index URLs.
     pub index_strategy: Option<IndexStrategy>,
+    /// The strategy for handling pre-release versions during dependency
+    /// resolution.
+    pub prerelease_mode: Option<PrereleaseMode>,
     /// Don't build sdist for all or certain packages
     pub no_build: Option<NoBuild>,
     /// Dependency overrides
@@ -153,6 +187,7 @@ impl PypiOptions {
         flat_indexes: Option<Vec<FindLinksUrlOrPath>>,
         no_build_isolation: NoBuildIsolation,
         index_strategy: Option<IndexStrategy>,
+        prerelease_mode: Option<PrereleaseMode>,
         no_build: Option<NoBuild>,
         dependency_overrides: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
         no_binary: Option<NoBinary>,
@@ -163,6 +198,7 @@ impl PypiOptions {
             find_links: flat_indexes,
             no_build_isolation,
             index_strategy,
+            prerelease_mode,
             no_build,
             dependency_overrides,
             no_binary,
@@ -213,6 +249,14 @@ impl PypiOptions {
                 }
             })?;
 
+        let prerelease_mode =
+            merge_single_option(&self.prerelease_mode, &other.prerelease_mode, |a, b| {
+                PypiOptionsMergeError::MultiplePrereleaseModes {
+                    first: a.to_string(),
+                    second: b.to_string(),
+                }
+            })?;
+
         // Ordered lists, deduplicated
         let extra_indexes = merge_list_dedup(&self.extra_index_urls, &other.extra_index_urls);
         let flat_indexes = merge_list_dedup(&self.find_links, &other.find_links);
@@ -232,6 +276,7 @@ impl PypiOptions {
             find_links: flat_indexes,
             no_build_isolation,
             index_strategy,
+            prerelease_mode,
             no_build,
             dependency_overrides,
             no_binary,
@@ -306,6 +351,36 @@ impl From<&PypiOptions> for rattler_lock::PypiIndexes {
     }
 }
 
+#[cfg(feature = "rattler_lock")]
+impl From<PrereleaseMode> for rattler_lock::PypiPrereleaseMode {
+    fn from(value: PrereleaseMode) -> Self {
+        match value {
+            PrereleaseMode::Disallow => rattler_lock::PypiPrereleaseMode::Disallow,
+            PrereleaseMode::Allow => rattler_lock::PypiPrereleaseMode::Allow,
+            PrereleaseMode::IfNecessary => rattler_lock::PypiPrereleaseMode::IfNecessary,
+            PrereleaseMode::Explicit => rattler_lock::PypiPrereleaseMode::Explicit,
+            PrereleaseMode::IfNecessaryOrExplicit => {
+                rattler_lock::PypiPrereleaseMode::IfNecessaryOrExplicit
+            }
+        }
+    }
+}
+
+#[cfg(feature = "rattler_lock")]
+impl From<rattler_lock::PypiPrereleaseMode> for PrereleaseMode {
+    fn from(value: rattler_lock::PypiPrereleaseMode) -> Self {
+        match value {
+            rattler_lock::PypiPrereleaseMode::Disallow => PrereleaseMode::Disallow,
+            rattler_lock::PypiPrereleaseMode::Allow => PrereleaseMode::Allow,
+            rattler_lock::PypiPrereleaseMode::IfNecessary => PrereleaseMode::IfNecessary,
+            rattler_lock::PypiPrereleaseMode::Explicit => PrereleaseMode::Explicit,
+            rattler_lock::PypiPrereleaseMode::IfNecessaryOrExplicit => {
+                PrereleaseMode::IfNecessaryOrExplicit
+            }
+        }
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum PypiOptionsMergeError {
     #[error(
@@ -316,6 +391,10 @@ pub enum PypiOptionsMergeError {
         "multiple index strategies are not supported, found both {first} and {second} across multiple pypi options"
     )]
     MultipleIndexStrategies { first: String, second: String },
+    #[error(
+        "multiple prerelease modes are not supported, found both {first} and {second} across multiple pypi options"
+    )]
+    MultiplePrereleaseModes { first: String, second: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -407,6 +486,7 @@ mod tests {
                 "bar".parse().unwrap(),
             ]),
             index_strategy: None,
+            prerelease_mode: None,
             no_build: None,
             dependency_overrides: Some(IndexMap::from_iter([
                 (
@@ -431,6 +511,7 @@ mod tests {
             ]),
             no_build_isolation: NoBuildIsolation::from_iter(["foo".parse().unwrap()]),
             index_strategy: None,
+            prerelease_mode: None,
             no_build: Some(NoBuild::All),
             dependency_overrides: Some(IndexMap::from_iter([
                 (
@@ -537,6 +618,7 @@ mod tests {
             find_links: None,
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: None,
+            prerelease_mode: None,
             no_build: Default::default(),
             dependency_overrides: None,
             no_binary: Default::default(),
@@ -549,6 +631,7 @@ mod tests {
             find_links: None,
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: None,
+            prerelease_mode: None,
             no_build: Default::default(),
             dependency_overrides: None,
             no_binary: Default::default(),
@@ -569,6 +652,7 @@ mod tests {
             find_links: None,
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: Some(IndexStrategy::FirstIndex),
+            prerelease_mode: None,
             no_build: Default::default(),
             dependency_overrides: None,
             no_binary: Default::default(),
@@ -581,6 +665,7 @@ mod tests {
             find_links: None,
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: Some(IndexStrategy::UnsafeBestMatch),
+            prerelease_mode: None,
             no_build: Default::default(),
             dependency_overrides: None,
             no_binary: Default::default(),
@@ -588,6 +673,40 @@ mod tests {
 
         // Merge the two options
         // This should error because there are two index strategies
+        let merged_opts = opts.union(&opts2);
+        insta::assert_snapshot!(merged_opts.err().unwrap());
+    }
+
+    #[test]
+    fn test_error_on_multiple_prerelease_modes() {
+        // Create the first set of options
+        let opts = PypiOptions {
+            index_url: None,
+            extra_index_urls: None,
+            find_links: None,
+            no_build_isolation: NoBuildIsolation::default(),
+            index_strategy: None,
+            prerelease_mode: Some(PrereleaseMode::Allow),
+            no_build: Default::default(),
+            dependency_overrides: None,
+            no_binary: Default::default(),
+        };
+
+        // Create the second set of options
+        let opts2 = PypiOptions {
+            index_url: None,
+            extra_index_urls: None,
+            find_links: None,
+            no_build_isolation: NoBuildIsolation::default(),
+            index_strategy: None,
+            prerelease_mode: Some(PrereleaseMode::Disallow),
+            no_build: Default::default(),
+            dependency_overrides: None,
+            no_binary: Default::default(),
+        };
+
+        // Merge the two options
+        // This should error because there are two prerelease modes
         let merged_opts = opts.union(&opts2);
         insta::assert_snapshot!(merged_opts.err().unwrap());
     }

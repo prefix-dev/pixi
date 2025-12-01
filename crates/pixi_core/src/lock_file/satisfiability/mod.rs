@@ -15,7 +15,10 @@ use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use pixi_command_dispatcher::calculate_additional_glob_hash;
 use pixi_git::url::RepositoryUrl;
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
-use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
+use pixi_manifest::{
+    FeaturesExt,
+    pypi::pypi_options::{NoBuild, PrereleaseMode},
+};
 use pixi_record::{
     LockedGitUrl, ParseLockFileError, PinnedSourceSpec, PixiRecord, SourceMismatchError,
 };
@@ -91,6 +94,14 @@ pub enum EnvironmentUnsat {
     ChannelPriorityMismatch {
         locked_priority: rattler_solve::ChannelPriority,
         expected_priority: rattler_solve::ChannelPriority,
+    },
+
+    #[error(
+        "the lock-file was solved with a different PyPI prerelease mode ({locked_mode}) than the one selected ({expected_mode})"
+    )]
+    PypiPrereleaseModeMismatch {
+        locked_mode: PrereleaseMode,
+        expected_mode: PrereleaseMode,
     },
 
     #[error(transparent)]
@@ -512,6 +523,22 @@ pub fn verify_environment_satisfiability(
         return Err(EnvironmentUnsat::ChannelPriorityMismatch {
             locked_priority: locked_environment.solve_options().channel_priority,
             expected_priority: expected_channel_priority,
+        });
+    }
+
+    let locked_prerelease_mode = locked_environment
+        .solve_options()
+        .pypi_prerelease_mode
+        .unwrap_or_default()
+        .into();
+    let expected_prerelease_mode = grouped_env
+        .pypi_options()
+        .prerelease_mode
+        .unwrap_or_default();
+    if locked_prerelease_mode != expected_prerelease_mode {
+        return Err(EnvironmentUnsat::PypiPrereleaseModeMismatch {
+            locked_mode: locked_prerelease_mode,
+            expected_mode: expected_prerelease_mode,
         });
     }
 
