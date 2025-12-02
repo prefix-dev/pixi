@@ -156,7 +156,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // After installing, we always want to list the changed environments
     list_all_global_environments(
-        &mut last_updated_project,
+        &last_updated_project,
         Some(env_to_specs.into_keys().collect()),
         Some(&env_changes),
         None,
