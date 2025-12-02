@@ -589,6 +589,8 @@ impl<'p> LockFileDerivedData<'p> {
         environment: &Environment<'p>,
         hash: &LockedEnvironmentHash,
     ) -> Option<Result<Prefix, Report>> {
+        // Try to read the cached environment file; if it doesn't exist or is
+        // unparsable, we can't use the quick path.
         let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) else {
             tracing::debug!(
                 "Environment file not found or parsable for '{}'",
@@ -597,38 +599,45 @@ impl<'p> LockFileDerivedData<'p> {
             return None;
         };
 
+        // If the hash in the environment file matches the hash derived from the
+        // current lock-file, the environment is *../potentially* up-to-date.
         if environment_file.environment_lock_file_hash == *hash {
-            // If we contain source packages from conda or PyPI we update the prefix by
-            // default
-            let contains_conda_source_pkgs = self.lock_file.environments().any(|(_, env)| {
-                env.conda_packages(Platform::current())
-                    .is_some_and(|mut packages| {
-                        packages.any(|package| package.as_source().is_some())
-                    })
-            });
-
-            // Check if we have source packages from PyPI
-            // that is a directory, this is basically the only kind of source dependency
-            // that you'll modify on a general basis.
+            // Conda *source* packages are now fully represented in the lock-file,
+            // including their input hash and globs. That means the lock-file hash
+            // already captures changes to source inputs, and we can safely rely
+            // on it here.
+            //
+            // PyPI "source" dependencies that are path-based directories are
+            // different: users frequently edit those without updating the lock-file,
+            // so we still treat them as requiring a full revalidation.
             let contains_pypi_source_pkgs = environment
                 .pypi_dependencies(Some(Platform::current()))
                 .iter()
-                .any(|(_, req)| {
-                    req.iter()
-                        .any(|dep| dep.as_path().map(|p| p.is_dir()).unwrap_or_default())
+                .any(|(_, reqs)| {
+                    reqs.iter()
+                        .any(|dep| dep.as_path().map(|p| p.is_dir()).unwrap_or(false))
                 });
-            if contains_conda_source_pkgs || contains_pypi_source_pkgs {
+
+            if contains_pypi_source_pkgs {
                 tracing::debug!(
-                    "Lock file contains source packages: ignore lock file hash and update the prefix"
+                    "Environment '{}' contains editable PyPI path dependencies; \
+                     skipping quick validation and forcing prefix revalidation",
+                    environment.name().fancy_display()
                 );
+                // Fall through to `None` so the caller goes through `update_prefix`.
             } else {
                 tracing::info!(
                     "Environment '{}' is up-to-date with lock file hash",
                     environment.name().fancy_display()
                 );
+                // Quick path: lock-file hash matches, and we don't have editable
+                // PyPI sources that might have changed behind the lock's back.
                 return Some(Ok(Prefix::new(environment.dir())));
             }
         }
+
+        // Either the hash didn't match or we decided we can't trust it (editable
+        // PyPI deps). Force a full prefix update.
         None
     }
 
