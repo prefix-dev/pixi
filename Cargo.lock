@@ -5248,7 +5248,6 @@ dependencies = [
  "pixi_utils",
  "pixi_uv_context",
  "pixi_uv_conversions",
- "pixi_variant",
  "pypi_mapping",
  "pypi_modifiers",
  "rattler",

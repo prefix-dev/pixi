@@ -54,7 +54,6 @@ pixi_spec = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_context = { workspace = true }
 pixi_uv_conversions = { workspace = true }
-pixi_variant = { workspace = true }
 pypi_mapping = { workspace = true }
 pypi_modifiers = { workspace = true }
 rattler = { workspace = true }
