@@ -25,8 +25,7 @@ impl<T: AsyncWrite + MaybeSend + Unpin + 'static> TransportSenderT for Sender<T>
     async fn send(&mut self, msg: String) -> Result<(), Self::Error> {
         let mut sanitized = msg.replace('\n', "");
         sanitized.push('\n');
-        let _n = self.0.write_all(sanitized.as_bytes()).await?;
-        Ok(())
+        self.0.write_all(sanitized.as_bytes()).await
     }
 }
 
@@ -42,13 +41,12 @@ impl<T: AsyncRead + MaybeSend + Unpin + 'static> TransportReceiverT for Receiver
     type Error = std::io::Error;
 
     async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error> {
-        let response = self
-            .0
+        self.0
             .next()
             .await
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "EOF"))?
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        Ok(ReceivedMessage::Text(response))
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+            .map(ReceivedMessage::Text)
     }
 }
 
