@@ -153,9 +153,9 @@ fn replace_fish_completion(script: &str) -> Cow<str> {
 
 /// Replace the parts of the nushell completion script that need different functionality.
 fn replace_nushell_completion(script: &str) -> Cow<str> {
-    fn insert_after_module<'a, 'b>(input: &'a str, insert: &'b str) -> Cow<'a, str> {
+    fn insert_after_module<'a>(input: &'a str, insert: &str) -> Cow<'a, str> {
         // Match the literal line
-        let re = Regex::new(r"(?m)^module completions \{").unwrap();
+        let re = Regex::new(r"(?m)^module completions \{").expect("static regex must be valid");
 
         re.replace(input, |caps: &regex::Captures| {
             format!("{}{}\n", &caps[0], insert)
@@ -185,11 +185,10 @@ fn replace_nushell_completion(script: &str) -> Cow<str> {
         //   ty   = type token
         //   tail = rest of the line (comment + spacing)
         let pattern = format!(
-            r#"(?ms)(export extern "(?P<cmd>[^"]+)" \[[^\]]*?^\s*{flag}\s*:\s*)(?P<ty>[^\s#@]+)(?P<tail>[^\n]*)"#,
-            flag = flag_escaped,
+            r#"(?ms)(export extern "(?P<cmd>[^"]+)" \[[^\]]*?^\s*{flag_escaped}\s*:\s*)(?P<ty>[^\s#@]+)(?P<tail>[^\n]*)"#,
         );
 
-        let re = Regex::new(&pattern).unwrap();
+        let re = Regex::new(&pattern).expect("static regex must be valid");
 
         re.replace_all(input, |caps: &Captures| {
             let cmd = &caps["cmd"];
@@ -218,11 +217,10 @@ fn replace_nushell_completion(script: &str) -> Cow<str> {
         //   1 = prefix up to and including "string"
         //   2 = rest of line (comments, whitespace)
         let pattern = format!(
-            r#"(?ms)(export extern "{cmd}" \[[^\]]*?^\s*\.{{3}}{arg}:\s*string)([^\n]*)"#,
-            cmd = cmd_escaped,
+            r#"(?ms)(export extern "{cmd_escaped}" \[[^\]]*?^\s*\.{{3}}{arg}:\s*string)([^\n]*)"#,
         );
 
-        let re = Regex::new(&pattern).unwrap();
+        let re = Regex::new(&pattern).expect("static regex must be valid");
 
         re.replace_all(input, |caps: &Captures| {
             let prefix = &caps[1]; // "...task: string"
@@ -261,10 +259,7 @@ fn replace_nushell_completion(script: &str) -> Cow<str> {
             // --environment means something else for pixi global
             None
         } else {
-            return Some(format!(
-                r#"@"nu-complete {bin_name} run environment""#,
-                bin_name = bin_name
-            ));
+            Some(format!(r#"@"nu-complete {bin_name} run environment""#))
         }
     });
 
