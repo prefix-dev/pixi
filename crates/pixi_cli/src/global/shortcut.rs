@@ -1,7 +1,7 @@
 use crate::global::revert_environment_after_error;
 use clap::Parser;
 use fancy_display::FancyDisplay;
-use miette::{Context, IntoDiagnostic};
+use miette::Context;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::Project;
 use pixi_global::{EnvironmentName, StateChanges};
@@ -69,11 +69,8 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
         for name in &args.packages {
             project.manifest.add_shortcut(env_name, name)?;
         }
-        let (lockfile, sync_changes) = project.sync_environment(env_name, None).await?;
+        let sync_changes = project.sync_environment(env_name, None).await?;
         state_changes |= sync_changes;
-        lockfile
-            .to_path(&project.lock_file_path())
-            .into_diagnostic()?;
         Ok(state_changes)
     }
 
@@ -85,8 +82,9 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
             Ok(())
         }
         Err(err) => {
+            let mut project_to_revert_to = project_modified;
             if let Err(revert_err) =
-                revert_environment_after_error(&args.environment, &project_original).await
+                revert_environment_after_error(&args.environment, &mut project_to_revert_to).await
             {
                 tracing::warn!("Reverting of the operation failed");
                 tracing::info!("Reversion error: {:?}", revert_err);
@@ -122,11 +120,8 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
                 })?;
         }
 
-        let (lockfile, sync_changes) = project.sync_environment(env_name, None).await?;
+        let sync_changes = project.sync_environment(env_name, None).await?;
         state_changes |= sync_changes;
-        lockfile
-            .to_path(&project.lock_file_path())
-            .into_diagnostic()?;
 
         project.manifest.save().await?;
         Ok(state_changes)
@@ -178,7 +173,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
             }
             Err(err) => {
                 if let Err(revert_err) =
-                    revert_environment_after_error(&env_name, &last_updated_project).await
+                    revert_environment_after_error(&env_name, &mut last_updated_project).await
                 {
                     tracing::warn!("Reverting of the operation failed");
                     tracing::info!("Reversion error: {:?}", revert_err);

@@ -588,13 +588,13 @@ impl Project {
     }
 
     /// Computes the lock file for a specific environment with the given records
-    pub fn compute_lock_file_for_environment(
-        &self,
+    pub fn update_lock_file_for_environment(
+        &mut self,
         env_name: &EnvironmentName,
         records: Vec<PixiRecord>,
         platform: Platform,
         channels: Vec<rattler_conda_types::Channel>,
-    ) -> miette::Result<LockFile> {
+    ) -> miette::Result<()> {
         // Convert channels
         let lock_channels: Vec<Channel> = channels
             .iter()
@@ -652,7 +652,11 @@ impl Project {
             builder.add_package(&env_name_str, platform, lp);
         }
 
-        Ok(builder.finish())
+        // Update lock file
+        self.lock_file = builder.finish();
+        self.write_lock_file()?;
+
+        Ok(())
     }
 
     /// Create an authenticated reqwest client for this project
@@ -698,17 +702,17 @@ impl Project {
     }
 
     pub async fn install_environment(
-        &self,
+        &mut self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<(LockFile, EnvironmentUpdate)> {
+    ) -> miette::Result<EnvironmentUpdate> {
         self.install_environment_with_options(env_name, false).await
     }
 
     pub async fn install_environment_with_options(
-        &self,
+        &mut self,
         env_name: &EnvironmentName,
         force_reinstall: bool,
-    ) -> miette::Result<(LockFile, EnvironmentUpdate)> {
+    ) -> miette::Result<EnvironmentUpdate> {
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
@@ -792,14 +796,10 @@ impl Project {
         command_dispatcher.clear_reporter().await;
 
         // Update lock file with the installed packages
-        let new_lock =
-            self.compute_lock_file_for_environment(env_name, pixi_records, platform, channels)?;
+        self.update_lock_file_for_environment(env_name, pixi_records, platform, channels)?;
 
         let install_changes = get_install_changes(result.transaction);
-        Ok((
-            new_lock,
-            EnvironmentUpdate::new(install_changes, dependencies_names),
-        ))
+        Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
     }
 
     /// Remove an environment from the manifest and the global installation.
@@ -1239,12 +1239,11 @@ impl Project {
     /// Syncs the parsed environment with the installation.
     /// Returns the state_changes if it succeeded, or an error if it didn't.
     pub async fn sync_environment(
-        &self,
+        &mut self,
         env_name: &EnvironmentName,
         removed_packages: Option<Vec<PackageName>>,
-    ) -> miette::Result<(LockFile, StateChanges)> {
+    ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
-        let mut new_lock = None;
 
         if self.environment_in_sync(env_name).await? {
             tracing::debug!(
@@ -1256,9 +1255,7 @@ impl Project {
                 "Environment {} specs not up to date with global manifest",
                 env_name.fancy_display()
             );
-            let (computed_lock, mut environment_update) =
-                self.install_environment(env_name).await?;
-            new_lock = Some(computed_lock);
+            let mut environment_update = self.install_environment(env_name).await?;
 
             if let Some(removed_packages) = removed_packages {
                 environment_update.add_removed_packages(removed_packages.to_vec());
@@ -1279,9 +1276,7 @@ impl Project {
         // Sync completions
         state_changes |= self.sync_completions(env_name).await?;
 
-        // If no installation was required, lock file remains unchanged
-        let lock = new_lock.unwrap_or_else(|| self.lock_file.clone());
-        Ok((lock, state_changes))
+        Ok(state_changes)
     }
 
     /// Delete scripts in the bin folder that are broken

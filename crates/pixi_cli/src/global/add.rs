@@ -2,7 +2,6 @@ use crate::global::global_specs::GlobalSpecs;
 use crate::global::revert_environment_after_error;
 
 use clap::Parser;
-use miette::IntoDiagnostic;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::project::GlobalSpec;
 use pixi_global::{EnvironmentName, Mapping, Project, StateChange, StateChanges};
@@ -66,11 +65,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // Sync environment
-        let (lockfile, sync_changes) = project.sync_environment(env_name, None).await?;
-
-        lockfile
-            .to_path(&project.lock_file_path())
-            .into_diagnostic()?;
+        let sync_changes = project.sync_environment(env_name, None).await?;
 
         // Figure out added packages and their corresponding versions from EnvironmentUpdate
         let requested_package_names: Vec<_> =
@@ -130,8 +125,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Ok(())
         }
         Err(err) => {
+            let mut project_to_revert_to = project_modified;
             if let Err(revert_err) =
-                revert_environment_after_error(&args.environment, &project_original).await
+                revert_environment_after_error(&args.environment, &mut project_to_revert_to).await
             {
                 tracing::warn!("Reverting of the operation failed");
                 tracing::info!("Reversion error: {:?}", revert_err);

@@ -1,6 +1,5 @@
 use clap::Parser;
 
-use miette::IntoDiagnostic;
 use pixi_global::EnvironmentName;
 
 mod add;
@@ -80,17 +79,13 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
 /// Reverts the changes made to the project for a specific environment after an error occurred.
 async fn revert_environment_after_error(
     env_name: &EnvironmentName,
-    project_to_revert_to: &pixi_global::Project,
+    project_to_revert_to: &mut pixi_global::Project,
 ) -> miette::Result<()> {
     if project_to_revert_to.environment(env_name).is_some() {
         // We don't want to report on changes done by the reversion
-        let (lockfile, _changes) = project_to_revert_to
+        let _changes = project_to_revert_to
             .sync_environment(env_name, None)
             .await?;
-
-        lockfile
-            .to_path(&project_to_revert_to.lock_file_path())
-            .into_diagnostic()?;
     }
     Ok(())
 }

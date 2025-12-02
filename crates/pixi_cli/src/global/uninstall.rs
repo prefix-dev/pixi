@@ -50,7 +50,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Err(err) => {
                 // Revert any partial change for this environment, then continue
                 if let Err(revert_err) =
-                    revert_environment_after_error(env_name, &last_updated_project).await
+                    revert_environment_after_error(env_name, &mut last_updated_project).await
                 {
                     tracing::warn!("Reverting of the operation failed");
                     tracing::info!("Reversion error: {:?}", revert_err);

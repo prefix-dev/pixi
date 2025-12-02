@@ -1,6 +1,6 @@
 use clap::Parser;
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
+use miette::Context;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::{EnvironmentName, ExposedName, Project, StateChanges};
 use rattler_conda_types::MatchSpec;
@@ -99,13 +99,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // Sync environment
-        let (lockfile, state_changes) = project
+        let state_changes = project
             .sync_environment(env_name, Some(removed_dependencies))
             .await?;
-
-        lockfile
-            .to_path(&project.lock_file_path())
-            .into_diagnostic()?;
 
         project.manifest.save().await?;
         Ok(state_changes)
@@ -126,8 +122,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             state_changes.report();
         }
         Err(err) => {
+            let mut project_to_revert_to = project_original;
             if let Err(revert_err) =
-                revert_environment_after_error(env_name, &project_original).await
+                revert_environment_after_error(env_name, &mut project_to_revert_to).await
             {
                 tracing::warn!("Reverting of the operation failed");
                 tracing::info!("Reversion error: {:?}", revert_err);

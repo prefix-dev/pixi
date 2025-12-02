@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, Report};
+use miette::Report;
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::global::{global_specs::GlobalSpecs, revert_environment_after_error};
@@ -144,7 +144,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Err(err) => {
                 if let Err(revert_err) =
-                    revert_environment_after_error(env_name, &last_updated_project).await
+                    revert_environment_after_error(env_name, &mut last_updated_project).await
                 {
                     tracing::warn!("Reverting of the operation failed");
                     tracing::info!("Reversion error: {:?}", revert_err);
@@ -156,7 +156,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // After installing, we always want to list the changed environments
     list_all_global_environments(
-        &last_updated_project,
+        &mut last_updated_project,
         Some(env_to_specs.into_keys().collect()),
         Some(&env_changes),
         None,
@@ -236,13 +236,9 @@ async fn setup_environment(
     }
 
     // Installing the environment to be able to find the bin paths later
-    let (new_lock, environment_update) = project
+    let environment_update = project
         .install_environment_with_options(env_name, args.force_reinstall)
         .await?;
-
-    new_lock
-        .to_path(&project.lock_file_path())
-        .into_diagnostic()?;
 
     // Sync exposed name
     sync_exposed_names(env_name, project, args).await?;
