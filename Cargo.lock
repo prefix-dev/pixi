@@ -1382,7 +1382,6 @@ dependencies = [
  "encode_unicode",
  "libc",
  "once_cell",
- "unicode-width 0.2.2",
  "windows-sys 0.59.0",
 ]
 
@@ -1853,14 +1852,13 @@ checksum = "abd57806937c9cc163efc8ea3910e00a62e2aeb0b8119f1793a978088f8f6b04"
 
 [[package]]
 name = "dialoguer"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "658bce805d770f407bc62102fca7c2c64ceef2fbcb2b8bd19d2765ce093980de"
+checksum = "25f104b501bf2364e78d0d3974cbc774f738f5865306ed128e1e0d7499c0ad96"
 dependencies = [
- "console 0.15.11",
+ "console 0.16.1",
  "shell-words",
  "tempfile",
- "thiserror 1.0.69",
  "zeroize",
 ]
 
@@ -2182,7 +2180,7 @@ dependencies = [
 name = "fancy_display"
 version = "0.1.0"
 dependencies = [
- "console 0.15.11",
+ "console 0.16.1",
 ]
 
 [[package]]
@@ -4725,7 +4723,7 @@ dependencies = [
 name = "pixi_api"
 version = "0.1.0"
 dependencies = [
- "console 0.15.11",
+ "console 0.16.1",
  "dunce",
  "fancy_display",
  "fs-err",
@@ -4851,7 +4849,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "clap_complete_nushell",
- "console 0.15.11",
+ "console 0.16.1",
  "console-subscriber",
  "ctrlc",
  "deno_task_shell",
@@ -5004,7 +5002,7 @@ name = "pixi_config"
 version = "0.1.0"
 dependencies = [
  "clap",
- "console 0.15.11",
+ "console 0.16.1",
  "dirs",
  "fs-err",
  "insta",
@@ -5030,7 +5028,7 @@ dependencies = [
 name = "pixi_consts"
 version = "0.1.0"
 dependencies = [
- "console 0.15.11",
+ "console 0.16.1",
  "rattler_cache",
  "rattler_conda_types",
  "url",
@@ -5044,7 +5042,7 @@ dependencies = [
  "async-trait",
  "barrier_cell",
  "chrono",
- "console 0.15.11",
+ "console 0.16.1",
  "dashmap",
  "dialoguer",
  "dunce",
@@ -5149,7 +5147,7 @@ name = "pixi_diff"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "console 0.15.11",
+ "console 0.16.1",
  "indexmap 2.12.0",
  "itertools 0.14.0",
  "pixi_consts",
@@ -5217,7 +5215,7 @@ name = "pixi_global"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "console 0.15.11",
+ "console 0.16.1",
  "dirs",
  "dunce",
  "fake",
@@ -5275,7 +5273,7 @@ dependencies = [
  "ahash",
  "assert_matches",
  "chrono",
- "console 0.15.11",
+ "console 0.16.1",
  "csv",
  "fancy_display",
  "fs-err",
@@ -5337,7 +5335,7 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "chrono",
- "console 0.15.11",
+ "console 0.16.1",
  "dunce",
  "fancy_display",
  "fs-err",
@@ -5452,7 +5450,7 @@ dependencies = [
 name = "pixi_reporters"
 version = "0.1.0"
 dependencies = [
- "console 0.15.11",
+ "console 0.16.1",
  "futures",
  "human_bytes",
  "indexmap 2.12.0",
