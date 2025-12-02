@@ -1391,7 +1391,6 @@ dependencies = [
  "encode_unicode",
  "libc",
  "once_cell",
- "unicode-width 0.2.2",
  "windows-sys 0.59.0",
 ]
 
@@ -2196,7 +2195,7 @@ dependencies = [
 name = "fancy_display"
 version = "0.1.0"
 dependencies = [
- "console 0.15.11",
+ "console 0.16.1",
 ]
 
 [[package]]
@@ -4756,7 +4755,7 @@ dependencies = [
 name = "pixi_api"
 version = "0.1.0"
 dependencies = [
- "console 0.15.11",
+ "console 0.16.1",
  "dunce",
  "fancy_display",
  "fs-err",
@@ -4882,7 +4881,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "clap_complete_nushell",
- "console 0.15.11",
+ "console 0.16.1",
  "console-subscriber",
  "ctrlc",
  "deno_task_shell",
@@ -5035,7 +5034,7 @@ name = "pixi_config"
 version = "0.1.0"
 dependencies = [
  "clap",
- "console 0.15.11",
+ "console 0.16.1",
  "dirs",
  "fs-err",
  "insta",
@@ -5061,7 +5060,7 @@ dependencies = [
 name = "pixi_consts"
 version = "0.1.0"
 dependencies = [
- "console 0.15.11",
+ "console 0.16.1",
  "rattler_cache",
  "rattler_conda_types",
  "url",
@@ -5075,7 +5074,7 @@ dependencies = [
  "async-trait",
  "barrier_cell",
  "chrono",
- "console 0.15.11",
+ "console 0.16.1",
  "dashmap",
  "dialoguer",
  "dunce",
@@ -5180,7 +5179,7 @@ name = "pixi_diff"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "console 0.15.11",
+ "console 0.16.1",
  "indexmap 2.12.1",
  "itertools 0.14.0",
  "pixi_consts",
@@ -5248,7 +5247,7 @@ name = "pixi_global"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "console 0.15.11",
+ "console 0.16.1",
  "dirs",
  "dunce",
  "fake",
@@ -5306,7 +5305,7 @@ dependencies = [
  "ahash",
  "assert_matches",
  "chrono",
- "console 0.15.11",
+ "console 0.16.1",
  "csv",
  "fancy_display",
  "fs-err",
@@ -5368,7 +5367,7 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "chrono",
- "console 0.15.11",
+ "console 0.16.1",
  "dunce",
  "fancy_display",
  "fs-err",
@@ -5483,7 +5482,7 @@ dependencies = [
 name = "pixi_reporters"
 version = "0.1.0"
 dependencies = [
- "console 0.15.11",
+ "console 0.16.1",
  "futures",
  "human_bytes",
  "indexmap 2.12.1",
