@@ -166,7 +166,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
     let pixi = PixiControl::new().unwrap();
 
     // Create local git fixture with two commits
-    let fixture = GitRepoFixture::new();
+    let fixture = GitRepoFixture::new("minimal-pypi-package");
 
     // Create a new project using our package database.
     pixi.init()
@@ -210,7 +210,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
         .expect("expected git url to have a fragment");
 
     // Modify this fragment to simulate an older commit (first commit of fixture)
-    lock_file_str = lock_file_str.replace(fragment, &fixture.first_commit);
+    lock_file_str = lock_file_str.replace(fragment, fixture.first_commit());
 
     lock_file_str = lock_file_str.replace(&pkg_version, "0.1.0");
 
@@ -238,7 +238,8 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
         .fragment()
         .expect("expected git url to have a fragment");
     assert_eq!(
-        fixture.first_commit, new_fragment,
+        fixture.first_commit(),
+        new_fragment,
         "expected git pypi package to not be updated when updating conda packages"
     );
 }
@@ -250,7 +251,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
     let pixi = PixiControl::new().unwrap();
 
     // Create local git fixture with two commits
-    let fixture = GitRepoFixture::new();
+    let fixture = GitRepoFixture::new("minimal-pypi-package");
 
     // Create a new project using our package database.
     pixi.init()
@@ -264,7 +265,8 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
     // Add a `pinned` git pypi dependency using local fixture (pinned to first commit)
     pixi.add_pypi(&format!(
         "minimal-package @ {}@{}",
-        fixture.url, fixture.first_commit
+        fixture.url,
+        fixture.first_commit()
     ))
     .await
     .unwrap();
@@ -297,7 +299,7 @@ async fn test_update_git_pypi_when_requested() {
     let pixi = PixiControl::new().unwrap();
 
     // Create local git fixture with two commits
-    let fixture = GitRepoFixture::new();
+    let fixture = GitRepoFixture::new("minimal-pypi-package");
 
     // Create a new project using our package database.
     pixi.init()
@@ -311,7 +313,8 @@ async fn test_update_git_pypi_when_requested() {
     // Add a `pinned` git pypi dependency using local fixture (pinned to first commit)
     pixi.add_pypi(&format!(
         "minimal-package @ {}@{}",
-        fixture.url, fixture.first_commit
+        fixture.url,
+        fixture.first_commit()
     ))
     .await
     .unwrap();
@@ -323,7 +326,7 @@ async fn test_update_git_pypi_when_requested() {
 
     // remove the pin from the dependency
     let new_manifest_txt =
-        manifest_txt.replace(&format!(", rev = \"{}\"", fixture.first_commit), "");
+        manifest_txt.replace(&format!(", rev = \"{}\"", fixture.first_commit()), "");
 
     tokio::fs::write(pixi.manifest_path(), new_manifest_txt)
         .await
@@ -351,5 +354,5 @@ async fn test_update_git_pypi_when_requested() {
         .expect("expected git url to have a fragment");
 
     // We expect the fragment to be the latest commit, not the first
-    assert_eq!(pkg_fragment, fixture.latest_commit);
+    assert_eq!(pkg_fragment, fixture.latest_commit());
 }
