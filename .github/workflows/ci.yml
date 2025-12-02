@@ -197,7 +197,7 @@ jobs:
     timeout-minutes: 15
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
       - uses: prefix-dev/setup-pixi@main
@@ -219,7 +219,7 @@ jobs:
     timeout-minutes: 30
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow')}} # Only run on the main branch
-    runs-on: macos-13
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
       - uses: prefix-dev/setup-pixi@main
@@ -296,7 +296,7 @@ jobs:
   build-binary-macos-aarch64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: macos-14
+    runs-on: macos-15
     name: "build binary | macos aarch64"
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
@@ -318,7 +318,7 @@ jobs:
   build-binary-macos-x86_64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }} # Only run on the main branch
-    runs-on: macos-13
+    runs-on: macos-15-intel
     name: "build binary | macos x86_64"
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
@@ -434,7 +434,7 @@ jobs:
   test-pytest-macos-aarch64:
     timeout-minutes: 10
     name: Pytest | macos aarch64
-    runs-on: macos-14
+    runs-on: macos-15
     needs: build-binary-macos-aarch64
     env:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
@@ -517,7 +517,7 @@ jobs:
   test-integration-macos-aarch64:
     timeout-minutes: 30
     name: Integration tests | macos aarch64
-    runs-on: macos-14
+    runs-on: macos-15
     needs: build-binary-macos-aarch64
     if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
     env:
@@ -643,7 +643,7 @@ jobs:
   test-downstream-macos-aarch64:
     timeout-minutes: 15
     name: Downstream tests | macos aarch64
-    runs-on: macos-14
+    runs-on: macos-15
     needs: build-binary-macos-aarch64
     if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
     env:
@@ -777,7 +777,7 @@ jobs:
     with:
       sha: ${{ github.sha }}
       arch: macos-aarch64
-      runs-on: macos-14
+      runs-on: macos-15
 
   #
   # Test unix installer on some platforms
@@ -786,7 +786,7 @@ jobs:
   test-install-sh-nix:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-14]
+        os: [ubuntu-latest, macos-15]
     name: install.sh | ${{ matrix.os }}
     needs:
       - determine_changes
@@ -982,7 +982,7 @@ jobs:
   test-build-macos-aarch64:
     timeout-minutes: 10
     name: Test pixi-build macOS aarch64
-    runs-on: macos-14
+    runs-on: macos-15
     needs: build-binary-macos-aarch64
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
