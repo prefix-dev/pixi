@@ -39,11 +39,11 @@ jobs:
 
           - name: "macOS-x86"
             target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-15-intel
 
           - name: "macOS-arm"
             target: aarch64-apple-darwin
-            os: macos-14
+            os: macos-15
 
           - name: "Windows"
             target: x86_64-pc-windows-msvc
