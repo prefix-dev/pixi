@@ -48,7 +48,6 @@ This release adds important bugfixes and changes in the discovery logic. Pixi Bu
 ```toml
 [dependencies]
 package = { path = "/path/to/recipe.yaml" }
-
 ```
 
 This still works, but we stopped hardcoding the channel for the backends. Now, it will first try to find a workspace manifest and extract its channels. If that doesn't work, it will fallback to the default channels in your Pixi config.
@@ -87,7 +86,6 @@ build-variants-files = [
     "./pinning/conda_build_config.yaml",
     "./variants/overrides.yaml",
 ]
-
 ```
 
 Read more about this feature in the [docs](https://pixi.sh/dev/reference/pixi_manifest/#build-variants-files-optional).
@@ -146,7 +144,6 @@ Install a `.conda` package directly using `pixi global install`:
 
 ```text
 pixi global install --path /path/to/package-name.conda
-
 ```
 
 #### Added
@@ -314,10 +311,10 @@ And you can install subsets of packages now works, for both conda and pypi packa
 ```bash
 # Define which packages you want to install and which you want to skip.
 pixi install --only packageA --only packageB --skip packageC
+
 # Using this modified environment without updating it again can be done with:
 pixi run --as-is my_command
 pixi shell --as-is
-
 ```
 
 #### Breaking Change
@@ -328,7 +325,6 @@ Only for users using `preview = ["pixi-build"]`: In [#4410](https://github.com/p
 [package]
 name = "my-package" # This is now optional
 version = "0.1.0" # This is now optional
-
 ```
 
 Soon, the backends will be able to automatically get those values from `pyproject.toml`, `Cargo.toml`, `package.xml` etc. However, this results in the lockfiles not being `--locked` anymore. Running `pixi lock` or `pixi update` should fix this!
@@ -444,7 +440,6 @@ You can now use `pixi global` to install source dependencies.
 
 ```text
 pixi global install --path path/to/my-package my-package
-
 ```
 
 At the moment, you still have to specify the package name, which we will improve on later!
@@ -650,7 +645,6 @@ This release enables `pixi` to pick up extensions that are installed as `pixi-`.
 ```shell
 pixi global install pixi-pack
 pixi pack
-
 ```
 
 It also allows you to use `pixi exec` more easily:
@@ -659,7 +653,6 @@ It also allows you to use `pixi exec` more easily:
 pixi exec --with numpy python -c "import numpy; print(numpy.__version__)"
 # Previous command is equivalent to:
 pixi exec --spec numpy --spec python python -c "import numpy; print(numpy.__version__)"
-
 ```
 
 #### Added
@@ -775,7 +768,6 @@ Support for recursive source run dependencies when using `pixi build`. This mean
 ```toml
 [package.run-dependencies]
 cpp_math = { path = "packages/cpp_math" }
-
 ```
 
 #### Added
@@ -934,7 +926,6 @@ task3 = { cmd = "echo {{ a + b }}", args = ["a", { arg = "b", default = "!" }] }
 task4 = { cmd = "{% for name in names | split %} echo {{ name }};{% endfor %}", args = [
   "names",
 ] }
-
 ```
 
 - Shortened composition of tasks with `depends-on` key.
@@ -943,7 +934,6 @@ task4 = { cmd = "{% for name in names | split %} echo {{ name }};{% endfor %}", 
 [tasks]
 test-all = [{ task = "test", args = ["all"] }]
 # Equivalent to: test-all = { depends-on = [{task = "test", args = ["all"] }]}
-
 ```
 
 - The `depends-on` key can now include the environment that the task should run in.
@@ -955,7 +945,6 @@ test-all = [
   { task = "test", environment = "py311" },
   { task = "test", environment = "py312" },
 ]
-
 ```
 
 #### Added
@@ -1033,7 +1022,6 @@ Let's say you define this manifest:
 [tasks.install]
 cmd = "cargo install {{ type }} --path {{ path }}"
 args = ["path", { arg = "type", default = "--release" }] # `path` is mandatory, `type` is optional with a default
-
 ```
 
 Both of the invocations now work, since `type` is optional:
@@ -1041,7 +1029,6 @@ Both of the invocations now work, since `type` is optional:
 ```bash
 pixi run install /path/to/manifest
 pixi run install /path/to/manifest --debug
-
 ```
 
 If you don't specify `args` for your tasks everything which you append to the CLI will also be appended to the task.
@@ -1049,7 +1036,6 @@ If you don't specify `args` for your tasks everything which you append to the CL
 ```toml
 [tasks.install]
 cmd = "cargo install"
-
 ```
 
 Therefore, running `pixi run install --debug --path /path/to/manifest` will lead to `cargo install --debug --path /path/to/manifest` being run inside the environment. This was already the behavior before this release, so existing tasks should continue to work.
@@ -1287,9 +1273,9 @@ This release introduces an improved way of [dealing with Virtual Packages](https
 ```toml
 [system-requirements]
 cuda = "12"
+
 [dependencies]
 python = "*"
-
 ```
 
 Now this setup also works on non-CUDA machines, because it only stops if the packages themselves actually depend on CUDA. This is a first step to make the use of system-requirements/virtual-packages more flexible.
@@ -1350,11 +1336,11 @@ This release add support for S3 backends. You can configure a custom S3 backend 
 # pixi.toml
 [project]
 channels = ["s3://my-bucket/custom-channel"]
+
 [project.s3-options.my-bucket]
 endpoint-url = "https://my-s3-host"
 region = "us-east-1"
 force-path-style = false
-
 ```
 
 #### Changed
@@ -1566,12 +1552,12 @@ This release also brings a [performance boost](https://github.com/prefix-dev/pix
 Summary
   pixi-0.40.1 list --no-install ran
    12.65 ± 0.46 times faster than pixi-0.40.0 list --no-install
+
 # Windows
   pixi-0.40.1 list --no-install ran
     1.66 ± 0.07 times faster than pixi-0.40.0 list --no-install
     1.67 ± 0.09 times faster than pixi-0.39.5 list --no-install
     2.10 ± 0.09 times faster than pixi-0.39.4 list --no-install
-
 ```
 
 #### Fixed
@@ -1610,7 +1596,6 @@ Manifest file parsing has been significantly improved. Errors will now be cleare
         3 │
           ╰────
          help: Did you mean 'unsafe-first-match'?
-
 ```
 
 #### Breaking Change Alert:
@@ -1627,7 +1612,6 @@ Error:
     ·                                                        ╰── replace this with 'depends-on'
  23 │   "build-release",
     ╰────
-
 ```
 
 #### Added
@@ -1672,7 +1656,6 @@ Some numbers from the `resolvo` PR, based on the resolve test dataset:
 - Median Solve Time: 'pixi v0.39.5' was 1.33 times faster than 'pixi v0.39.4'
 - 25th Percentile: 'pixi v0.39.5' was 1.22 times faster than 'pixi v0.39.4'
 - 75th Percentile: 'pixi v0.39.5' was 2.28 times faster than 'pixi v0.39.4'
-
 ```
 
 #### Added
@@ -1877,21 +1860,24 @@ It can be turned on by `preview = "pixi-build"` in your `pixi.toml` file. It's u
 #### ✨ Highlights
 
 - Specify `pypi-index` per pypi-dependency
+
   ```toml
   [pypi-dependencies]
   pytorch ={ version = "*", index = "https://download.pytorch.org/whl/cu118" }
-
   ```
+
 - `[dependency-groups]` (PEP735) support in `pyproject.toml`
+
   ```toml
   [dependency-groups]
   test = ["pytest"]
   docs = ["sphinx"]
   dev = [{include-group = "test"}, {include-group = "docs"}]
+
   [tool.pixi.environments]
   dev = ["dev"]
-
   ```
+
 - Much improved `pixi search` output!
 
 #### Added
@@ -2119,27 +2105,28 @@ Test it out with:
 ```shell
 # Normal feature
 pixi global install ipython
+
 # New features
 pixi global install \
     --environment science \           # Defined the environment name
     --expose scipython=ipython \      # Expose binaries under custom names
     ipython scipy                     # Define multiple dependencies for one environment
-
 ```
 
 This should result in a manifest in `$HOME/.pixi/manifests/pixi-global.toml`:
 
 ```toml
 version = 1
+
 [envs.ipython]
 channels = ["conda-forge"]
 dependencies = { ipython = "*" }
 exposed = { ipython = "ipython", ipython3 = "ipython3" }
+
 [envs.science]
 channels = ["conda-forge"]
 dependencies = { ipython = "*", scipy = "*" }
 exposed = { scipython = "ipython" }
-
 ```
 
 #### 📖 Documentation
@@ -3329,7 +3316,6 @@ Now, `solve-groups` can be used in `[environments]` to ensure dependency alignme
 [environments]
 test = { features = ["prod", "test"], solve-groups = ["group1"] }
 prod = { features = ["prod"], solve-groups = ["group1"] }
-
 ```
 
 This setup simplifies managing dependencies that must be consistent across `test` and `production`.
@@ -3400,7 +3386,6 @@ This release is pretty crazy in amount of features! The major ones are:
 > PIXI_PACKAGE_MANIFEST -> PIXI_PROJECT_MANIFEST
 > PIXI_PACKAGE_VERSION -> PIXI_PROJECT_VERSION
 > PIXI_PACKAGE_PLATFORMS -> PIXI_ENVIRONMENT_PLATFORMS
->
 > ```
 >
 > Check documentation here: https://pixi.sh/environment/

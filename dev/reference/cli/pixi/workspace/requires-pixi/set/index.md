@@ -1,4 +1,4 @@
-# `[pixi](../../../) [workspace](../../) [requires-pixi](../) set`
+# `pixi workspace requires-pixi set`
 
 ## About
 
@@ -8,14 +8,15 @@ Set the pixi minimum version requirement
 
 ```text
 pixi workspace requires-pixi set <VERSION>
-
 ```
 
 ## Arguments
 
-- [`<VERSION>`](#arg-%3CVERSION%3E) The required pixi version
+- [`<VERSION>`](#arg-%3CVERSION%3E) : The required pixi version
 
+  ```
   **required**: `true`
+  ```
 
 ## Description
 

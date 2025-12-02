@@ -1,4 +1,4 @@
-# `[pixi](../../) [global](../) shortcut`
+# `pixi global shortcut`
 
 ## About
 
@@ -8,7 +8,6 @@ Interact with the shortcuts on your machine
 
 ```text
 pixi global shortcut <COMMAND>
-
 ```
 
 ## Subcommands

@@ -22,10 +22,10 @@ pyproject.toml
 [project]
 name = "my_project"
 requires-python = ">=3.9"
+
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
-
 ```
 
 Which is equivalent to:
@@ -37,9 +37,9 @@ equivalent pixi.toml
 name = "my_project"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+
 [dependencies]
 python = ">=3.9"
-
 ```
 
 ## Dependency section
@@ -59,10 +59,10 @@ dependencies = [
     "pandas",
     "matplotlib",
 ]
+
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
-
 ```
 
 Which is equivalent to:
@@ -74,13 +74,14 @@ equivalent pixi.toml
 name = "my_project"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+
 [pypi-dependencies]
 numpy = "*"
 pandas = "*"
 matplotlib = "*"
+
 [dependencies]
 python = ">=3.9"
-
 ```
 
 You can overwrite these with conda dependencies by adding them to the `dependencies` field:
@@ -96,14 +97,15 @@ dependencies = [
     "pandas",
     "matplotlib",
 ]
+
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+
 [tool.pixi.dependencies]
 numpy = "*"
 pandas = "*"
 matplotlib = "*"
-
 ```
 
 This would result in the conda dependencies being installed and the pypi dependencies being ignored. As Pixi takes the conda dependencies over the pypi dependencies.
@@ -122,10 +124,10 @@ pyproject.toml
 [project]
 name = "my_project"
 dependencies = ["package1"]
+
 [project.optional-dependencies]
 test = ["pytest"]
 all = ["package2","my_project[test]"]
-
 ```
 
 Running `pixi init` in that project folder will transform the `pyproject.toml` file into:
@@ -136,17 +138,19 @@ pyproject.toml
 [project]
 name = "my_project"
 dependencies = ["package1"]
+
 [project.optional-dependencies]
 test = ["pytest"]
 all = ["package2","my_project[test]"]
+
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64"] # if executed on linux
+
 [tool.pixi.environments]
 default = {features = [], solve-group = "default"}
 test = {features = ["test"], solve-group = "default"}
 all = {features = ["all"], solve-group = "default"}
-
 ```
 
 In this example, three environments will be created by pixi:
@@ -169,11 +173,11 @@ For instance, imagine you have a project folder with a `pyproject.toml` file sim
 [project]
 name = "my_project"
 dependencies = ["package1"]
+
 [dependency-groups]
 test = ["pytest"]
 docs = ["sphinx"]
 dev = [{include-group = "test"}, {include-group = "docs"}]
-
 ```
 
 Running `pixi init` in that project folder will transform the `pyproject.toml` file into:
@@ -182,19 +186,21 @@ Running `pixi init` in that project folder will transform the `pyproject.toml` f
 [project]
 name = "my_project"
 dependencies = ["package1"]
+
 [dependency-groups]
 test = ["pytest"]
 docs = ["sphinx"]
 dev = [{include-group = "test"}, {include-group = "docs"}]
+
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64"] # if executed on linux
+
 [tool.pixi.environments]
 default = {features = [], solve-group = "default"}
 test = {features = ["test"], solve-group = "default"}
 docs = {features = ["docs"], solve-group = "default"}
 dev = {features = ["dev"], solve-group = "default"}
-
 ```
 
 In this example, four environments will be created by pixi:
@@ -222,24 +228,30 @@ dependencies = [
     "matplotlib",
     "ruff",
 ]
+
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+
 [tool.pixi.dependencies]
 compilers = "*"
 cmake = "*"
+
 [tool.pixi.tasks]
 start = "python my_project/main.py"
 lint = "ruff lint"
+
 [tool.pixi.system-requirements]
 cuda = "11.0"
+
 [tool.pixi.feature.test.dependencies]
 pytest = "*"
+
 [tool.pixi.feature.test.tasks]
 test = "pytest"
+
 [tool.pixi.environments]
 test = ["test"]
-
 ```
 
 ## Build-system section
@@ -254,7 +266,6 @@ pyproject.toml
 [build-system]
 requires = ["setuptools >= 40.8.0"]
 build-backend = "setuptools.build_meta:__legacy__"
-
 ```
 
 Including a `[build-system]` section is **highly recommended**. If you are not sure of the [build-backend](https://packaging.python.org/en/latest/tutorials/packaging-projects/#choosing-build-backend) you want to use, including the `[build-system]` section below in your `pyproject.toml` is a good starting point. `pixi init --format pyproject` defaults to `hatchling`. The advantages of `hatchling` over `setuptools` are outlined on its [website](https://hatch.pypa.io/latest/why/#build-backend).
@@ -265,7 +276,6 @@ pyproject.toml
 [build-system]
 build-backend = "hatchling.build"
 requires = ["hatchling"]
-
 ```
 
 ## Development dependencies with `[tool.uv.sources]`
@@ -288,7 +298,6 @@ Given a source tree:
 │   └── pyproject.toml (has a dependency on b)
 └── b
     └── pyproject.toml
-
 ```
 
 Concretely what this looks like in the `pyproject.toml` for `main_project`:
@@ -296,7 +305,6 @@ Concretely what this looks like in the `pyproject.toml` for `main_project`:
 ```toml
 [tool.pixi.pypi-dependencies]
 a = { path = "../a" }
-
 ```
 
 Then the `pyproject.toml` for `a` should contain a `[tool.uv.sources]` section.
@@ -306,12 +314,12 @@ Then the `pyproject.toml` for `a` should contain a `[tool.uv.sources]` section.
 name = "a"
 # other fields
 dependencies = ["flask", "b"]
+
 [tool.uv.sources]
 # Override the default source for flask with main git branch
 flask = { git = "github.com/pallets/flask", branch = "main" }
 # Reference to b
 b = { path = "../b" }
-
 ```
 
 More information about what is allowed in this sections is available in the [uv docs](https://docs.astral.sh/uv/concepts/projects/dependencies/#dependency-sources)

@@ -5,21 +5,18 @@ Using JupyterLab with Pixi is very simple. You can just create a new Pixi worksp
 ```bash
 pixi init
 pixi add jupyterlab
-
 ```
 
 This will create a new Pixi workspace and add the `jupyterlab` package to it. You can then start JupyterLab using the following command:
 
 ```bash
 pixi run jupyter lab
-
 ```
 
 If you want to add more "kernels" to JupyterLab, you can simply add them to your current workspace – as well as any dependencies from the scientific stack you might need.
 
 ```bash
 pixi add bash_kernel ipywidgets matplotlib numpy pandas  # ...
-
 ```
 
 ### What kernels are available?
@@ -45,7 +42,6 @@ To get started, create a Pixi workspace, add `jupyterlab` and `pixi-kernel` and 
 pixi init
 pixi add jupyterlab pixi-kernel
 pixi run jupyter lab
-
 ```
 
 This will start JupyterLab and open it in your browser.

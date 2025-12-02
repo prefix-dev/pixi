@@ -1,4 +1,4 @@
-# `[pixi](../../) [workspace](../) system-requirements`
+# `pixi workspace system-requirements`
 
 ## About
 
@@ -8,7 +8,6 @@ Commands to manage workspace system requirements
 
 ```text
 pixi workspace system-requirements [OPTIONS] <COMMAND>
-
 ```
 
 ## Subcommands
@@ -20,4 +19,4 @@ pixi workspace system-requirements [OPTIONS] <COMMAND>
 
 ## Global Options
 
-- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory

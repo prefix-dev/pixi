@@ -17,7 +17,6 @@ pixi.toml
 ```toml
 [dependencies]
 python_rich = { path = "." }
-
 ```
 
 The file tree looks like this:
@@ -36,7 +35,6 @@ The file tree looks like this:
 └── src
     └── python_rich
         └── __init__.py
-
 ```
 
 In order to allow multiple Python versions we first have to change the Python version requirement of `cpp_math` from `3.12.*` to `*`.
@@ -48,7 +46,6 @@ packages/cpp_math/pixi.toml
 cmake = ">=3.20, <3.27"
 nanobind = ">=2.4.0, <2.5.0"
 python = "*"                 # (1)!
-
 ```
 
 1. Used to be "3.12.\*"
@@ -60,7 +57,6 @@ pixi.toml
 ```toml
 [workspace.build-variants]
 python = ["3.11.*", "3.12.*"]
-
 ```
 
 If we'd run `pixi install` now, we'd leave it up to Pixi whether to use Python 3.11 or 3.12. In practice, you'll want to create multiple environments specifying a different dependency version. In our case this allows us to test our setup against both Python 3.11 and 3.12.
@@ -70,12 +66,13 @@ pixi.toml
 ```toml
 [feature.py311.dependencies]
 python = "3.11.*"
+
 [feature.py312.dependencies]
 python = "3.12.*"
+
 [environments]
 py311 = ["py311"]
 py312 = ["py312"]
-
 ```
 
 By running `pixi list` we can see the Python version used in each environment. You can also see that the `Build` string of `cpp_math` differ between `py311` and `py312`. That means that a different package has been built for each variant. Since `python_rich` only contains Python source code, a single build can be used for multiple Python versions. The package is `noarch`. Therefore, the build string is the same.
@@ -86,7 +83,6 @@ Package            Version     Build               Size       Kind   Source
 python             3.11.11     h9e4cc4f_1_cpython  29.2 MiB   conda  python
 cpp_math           0.1.0       py311h43a39b2_0                conda  cpp_math
 python_rich        0.1.0       pyhbf21a9e_0                   conda  python_rich
-
 ```
 
 ```pwsh
@@ -95,7 +91,6 @@ Package            Version     Build               Size       Kind   Source
 python             3.12.8      h9e4cc4f_1_cpython  30.1 MiB   conda  python
 cpp_math           0.1.0       py312h2078e5b_0                conda  cpp_math
 python_rich        0.1.0       pyhbf21a9e_0                   conda  python_rich
-
 ```
 
 ## Conclusion

@@ -1,4 +1,4 @@
-# `[pixi](../../) [global](../) list`
+# `pixi global list`
 
 ## About
 
@@ -8,44 +8,49 @@ Lists global environments with their dependencies and exposed commands. Can also
 
 ```text
 pixi global list [OPTIONS] [REGEX]
-
 ```
 
 ## Arguments
 
-- [`<REGEX>`](#arg-%3CREGEX%3E) List only packages matching a regular expression. Without regex syntax it acts like a `contains` filter
+- [`<REGEX>`](#arg-%3CREGEX%3E) : List only packages matching a regular expression. Without regex syntax it acts like a `contains` filter
 
 ## Options
 
-- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) Allows listing all the packages installed in a specific environment, with an output similar to `pixi list`
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : Allows listing all the packages installed in a specific environment, with an output similar to `pixi list`
 
-- [`--sort-by <SORT_BY>`](#arg---sort-by) Sorting strategy for the package table of an environment
+- [`--sort-by <SORT_BY>`](#arg---sort-by) : Sorting strategy for the package table of an environment
 
+  ```
   **default**: `name`
-
+    
   **options**: `size`, `name`
+  ```
 
 ## Config Options
 
-- [`--auth-file <AUTH_FILE>`](#arg---auth-file) Path to the file containing the authentication token
+- [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
 
-- [`--concurrent-downloads <CONCURRENT_DOWNLOADS>`](#arg---concurrent-downloads) Max concurrent network requests, default is `50`
+- [`--concurrent-downloads <CONCURRENT_DOWNLOADS>`](#arg---concurrent-downloads) : Max concurrent network requests, default is `50`
 
-- [`--concurrent-solves <CONCURRENT_SOLVES>`](#arg---concurrent-solves) Max concurrent solves, default is the number of CPUs
+- [`--concurrent-solves <CONCURRENT_SOLVES>`](#arg---concurrent-solves) : Max concurrent solves, default is the number of CPUs
 
-- [`--pinning-strategy <PINNING_STRATEGY>`](#arg---pinning-strategy) Set pinning strategy
+- [`--pinning-strategy <PINNING_STRATEGY>`](#arg---pinning-strategy) : Set pinning strategy
 
+  ```
   **options**: `semver`, `minor`, `major`, `latest-up`, `exact-version`, `no-pin`
+  ```
 
-- [`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`](#arg---pypi-keyring-provider) Specifies whether to use the keyring to look up credentials for PyPI
+- [`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`](#arg---pypi-keyring-provider) : Specifies whether to use the keyring to look up credentials for PyPI
 
+  ```
   **options**: `disabled`, `subprocess`
+  ```
 
-- [`--run-post-link-scripts`](#arg---run-post-link-scripts) Run post-link scripts (insecure)
+- [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
-- [`--tls-no-verify`](#arg---tls-no-verify) Do not verify the TLS certificate of the server
+- [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
-- [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) Use environment activation cache (experimental)
+- [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
 ## Description
 
@@ -68,7 +73,6 @@ We'll only show the dependencies and exposed binaries of the environment if they
 
 ```text
 pixi global list
-
 ```
 
 Results in:
@@ -85,14 +89,12 @@ Global environments at /home/user/.pixi:
 ├── vim: 9.1.0611
 │   └─ exposes: ex, rview, rvim, view, vim, vimdiff, vimtutor, xxd
 └── zoxide: 0.9.6
-
 ```
 
 Here is an example of list of a single environment:
 
 ```text
 pixi g list -e pixi-pack
-
 ```
 
 Results in:
@@ -109,10 +111,10 @@ libgomp          14.1.0     h77fa898_1   449.4 KiB
 openssl          3.3.2      hb9d3cd8_0   2.8 MiB
 pixi-pack        0.1.8      hc762bcd_0   4.3 MiB
 Package          Version    Build        Size
+
 Exposes:
 pixi-pack
 Channels:
 conda-forge
 Platform: linux-64
-
 ```

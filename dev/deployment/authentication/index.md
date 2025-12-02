@@ -2,8 +2,10 @@ You can authenticate Pixi with a server like prefix.dev, a private quetz instanc
 
 ```shell
 Usage: pixi auth login [OPTIONS] <HOST>
+
 Arguments:
   <HOST>  The host to authenticate with (e.g. repo.prefix.dev)
+
 Options:
       --token <TOKEN>                                The token to use (for authentication with prefix.dev)
       --username <USERNAME>                          The username to use (for basic HTTP authentication)
@@ -17,7 +19,6 @@ Options:
       --color <COLOR>                                Whether the log needs to be colored [env: PIXI_COLOR=] [default: auto] [possible values: always, never, auto]
       --no-progress                                  Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
   -h, --help                                         Print help
-
 ```
 
 The different options are "token", "conda-token" and "username + password".
@@ -34,21 +35,18 @@ Login to prefix.dev:
 
 ```shell
 pixi auth login prefix.dev --token pfx_jj8WDzvnuTHEGdAhwRZMC1Ag8gSto8
-
 ```
 
 Login to anaconda.org:
 
 ```shell
 pixi auth login anaconda.org --conda-token xy-72b914cc-c105-4ec7-a969-ab21d23480ed
-
 ```
 
 Login to a basic HTTP secured server:
 
 ```shell
 pixi auth login myserver.com --username user --password password
-
 ```
 
 Login to an S3 bucket:
@@ -57,7 +55,6 @@ Login to an S3 bucket:
 pixi auth login s3://my-bucket --s3-access-key-id <access-key-id> --s3-secret-access-key <secret-access-key>
 # if your key uses a session token, you can also use:
 pixi auth login s3://my-bucket --s3-access-key-id <access-key-id> --s3-secret-access-key <secret-access-key> --s3-session-token <session-token>
-
 ```
 
 Note
@@ -88,7 +85,6 @@ E.g.
 export RATTLER_AUTH_FILE=$HOME/credentials.json
 # You can also specify the file in the command line
 pixi global install --auth-file $HOME/credentials.json ...
-
 ```
 
 Note
@@ -119,7 +115,6 @@ The JSON should follow the following format:
         }
     }
 }
-
 ```
 
 Note: if you use a wildcard in the host, any subdomain will match (e.g. `*.prefix.dev` also matches `repo.prefix.dev`).
@@ -145,22 +140,18 @@ To install keyring you can use `pixi global install`:
 
 ```shell
 pixi global install keyring
-
 ```
 
 ```shell
 pixi global install keyring --with keyrings.google-artifactregistry-auth
-
 ```
 
 ```shell
 pixi global install keyring --with keyrings.artifacts
-
 ```
 
 ```shell
 pixi global install keyring --with keyrings.codeartifact
-
 ```
 
 For other registries, you will need to adapt these instructions to add the right keyring backend.
@@ -172,7 +163,6 @@ Use keyring to store your credentials e.g:
 ```shell
 keyring set https://my-index/simple your_username
 # prompt will appear for your password
-
 ```
 
 Add the following configuration to your Pixi manifest, making sure to include `your_username@` in the URL of the registry:
@@ -180,7 +170,6 @@ Add the following configuration to your Pixi manifest, making sure to include `y
 ```toml
 [pypi-options]
 index-url = "https://your_username@custom-registry.com/simple"
-
 ```
 
 After making sure you are logged in, for instance by running `gcloud auth login`, add the following configuration to your Pixi manifest:
@@ -188,7 +177,6 @@ After making sure you are logged in, for instance by running `gcloud auth login`
 ```toml
 [pypi-options]
 extra-index-urls = ["https://oauth2accesstoken@<location>-python.pkg.dev/<project>/<repository>/simple"]
-
 ```
 
 Note
@@ -197,7 +185,6 @@ To find this URL more easily, you can use the `gcloud` command:
 
 ```shell
 gcloud artifacts print-settings python --project=<project> --repository=<repository> --location=<location>
-
 ```
 
 After following the [`keyrings.artifacts` instructions](https://github.com/jslorrma/keyrings.artifacts?tab=readme-ov-file#usage) and making sure that keyring works correctly, add the following configuration to your Pixi manifest:
@@ -205,7 +192,6 @@ After following the [`keyrings.artifacts` instructions](https://github.com/jslor
 ```toml
 [pypi-options]
 extra-index-urls = ["https://VssSessionToken@pkgs.dev.azure.com/{organization}/{project}/_packaging/{feed}/pypi/simple/"]
-
 ```
 
 Ensure you are logged in e.g via `aws sso login` and add the following configuration to your Pixi manifest:
@@ -213,7 +199,6 @@ Ensure you are logged in e.g via `aws sso login` and add the following configura
 ```toml
 [pypi-options]
 extra-index-urls = ["https://aws@<your-domain>-<your-account>.d.codeartifact.<your-region>.amazonaws.com/pypi/<your-repository>/simple/"]
-
 ```
 
 #### Installing your environment
@@ -223,7 +208,6 @@ Either configure your [Global Config](../../reference/pixi_configuration/#pypi-c
 ```shell
 # From an existing pixi workspace
 pixi install --pypi-keyring-provider subprocess
-
 ```
 
 ### `.netrc` file
@@ -240,7 +224,6 @@ In the `.netrc` file, you store authentication details like this:
 machine registry-name
 login admin
 password admin
-
 ```
 
 For more details, you can access the [.netrc docs](https://www.ibm.com/docs/en/aix/7.2?topic=formats-netrc-file-format-tcpip).

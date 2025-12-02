@@ -26,7 +26,6 @@ For some advanced use-cases, you can activate the environment in the current she
 
 ```shell
 ~/myenv > eval "$(pixi shell-hook)"
-
 ```
 
 ## Environment vs Workspace
@@ -43,7 +42,6 @@ This workspace-centric approach allows for easy sharing and collaboration, as th
 pixi config set detached-environments true
 # or a specific location
 pixi config set detached-environments /path/to/envs
-
 ```
 
 This doesn't allow you to activate the environments using `pixi shell -n` but it will make the installation of the environments go to the same folder.
@@ -53,7 +51,6 @@ This doesn't allow you to activate the environments using `pixi shell -n` but it
 ```shell
 pixi global install bat
 bat pixi.toml
-
 ```
 
 Never install `pip` with `pixi global`
@@ -70,7 +67,6 @@ If you are working with Conda users or systems, you can [export your environment
 
 ```shell
 pixi workspace export conda-environment
-
 ```
 
 Additionally you can export a [conda explicit specification](../../reference/cli/pixi/workspace/export/).

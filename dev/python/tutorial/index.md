@@ -14,7 +14,6 @@ Let's start out by creating a new project that uses a `pyproject.toml` file.
 
 ```shell
 pixi init pixi-py --format pyproject
-
 ```
 
 This creates a project directory with the following structure:
@@ -25,7 +24,6 @@ pixi-py
 └── src
     └── pixi_py
         └── __init__.py
-
 ```
 
 The `pyproject.toml` for the project looks like this:
@@ -36,16 +34,19 @@ dependencies = []
 name = "pixi-py"
 requires-python = ">= 3.11"
 version = "0.1.0"
+
 [build-system]
 build-backend = "hatchling.build"
 requires = ["hatchling"]
+
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["osx-arm64"]
+
 [tool.pixi.pypi-dependencies]
 pixi_py = { path = ".", editable = true }
-[tool.pixi.tasks]
 
+[tool.pixi.tasks]
 ```
 
 This project uses a src-layout, but Pixi supports both [flat- and src-layouts](https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout).
@@ -62,7 +63,6 @@ These first entries were added to the `pyproject.toml` file:
 channels = ["conda-forge"]
 # This is your machine platform by default
 platforms = ["osx-arm64"]
-
 ```
 
 The `channels` and `platforms` are added to the `[tool.pixi.workspace]` section. Channels like `conda-forge` manage packages similar to PyPI but allow for different packages across languages. The keyword `platforms` determines which platforms the workspace supports.
@@ -73,7 +73,6 @@ The `pixi_py` package itself is added as an `editable` dependency. This means th
 # Editable installs
 [tool.pixi.pypi-dependencies]
 pixi-py = { path = ".", editable = true }
-
 ```
 
 In pixi, unlike other package managers, this is explicitly stated in the `pyproject.toml` file. The main reason being so that you can choose which environment this package should be included in.
@@ -85,7 +84,6 @@ Our projects usually depend on other packages.
 ```shell
 cd pixi-py # Move into the project directory
 pixi add black
-
 ```
 
 This will add the `black` package as a Conda package to the `pyproject.toml` file. Which will result in the following addition to the `pyproject.toml`:
@@ -93,7 +91,6 @@ This will add the `black` package as a Conda package to the `pyproject.toml` fil
 ```toml
 [tool.pixi.dependencies]
 black = ">=25.1.0,<26"  # (1)!
-
 ```
 
 1. Or the latest version that is available on the [conda-forge](https://prefix.dev/channels/conda-forge/packages/black) channel.
@@ -102,7 +99,6 @@ But we can also be strict about the version that should be used.
 
 ```shell
 pixi add black=25
-
 ```
 
 resulting in:
@@ -110,35 +106,30 @@ resulting in:
 ```toml
 [tool.pixi.dependencies]
 black = "25.*"
-
 ```
 
 Sometimes there are packages that aren't available on conda channels but are published on PyPI.
 
 ```shell
 pixi add black --pypi
-
 ```
 
 which results in the addition to the `dependencies` key in the `pyproject.toml`
 
 ```toml
 dependencies = ["black"]
-
 ```
 
 When using the `pypi-dependencies` you can make use of the `optional-dependencies` that other packages make available as extras. For example, `flask` makes the `async` dependencies option, which can be added with the `--pypi` keyword:
 
 ```shell
 pixi add "flask[async]==3.1.0" --pypi
-
 ```
 
 which updates the `dependencies` entry to
 
 ```toml
 dependencies = ["black", "flask[async]==3.1.0"]
-
 ```
 
 Extras in `pixi.toml`
@@ -148,7 +139,6 @@ This tutorial focuses on the use of the `pyproject.toml`, but in case you're cur
 ```toml
 [pypi-dependencies]
 flask = { version = "==3.1.0", extras = ["async"] }
-
 ```
 
 ### Installation: `pixi install`
@@ -157,7 +147,6 @@ Pixi always ensures the environment is up-to-date with the `pyproject.toml` file
 
 ```shell
 pixi install
-
 ```
 
 We now have a new directory called `.pixi` in the workspace root. The environment is a Conda environment with all the Conda and PyPI dependencies installed into it.
@@ -199,7 +188,6 @@ readline         8.2         h92ec313_1          244.5 KiB  conda  readline
 tk               8.6.13      h5083fa2_1          3 MiB      conda  tk
 tzdata           2025a       h78e105d_0          120 KiB    conda  tzdata
 werkzeug         3.1.3                           743 KiB    pypi   werkzeug-3.1.3-py3-none-any.whl
-
 ```
 
 Here, you can see the different conda and Pypi packages listed. As you can see, the `pixi-py` package that we are working on is installed in editable mode. Every environment in Pixi is isolated but reuses files that are hard-linked from a central cache directory. This means that you can have multiple environments with the same packages but only have the individual files stored once on disk.
@@ -214,7 +202,6 @@ If you want to use a free-threaded Python interpreter, you can add the `python-f
 
 ```text
 pixi add python-freethreading
-
 ```
 
 This ensures that a free-threaded version of Python is installed in the environment. This might not work with other packages that are not thread-safe yet. You can read more about free-threaded Python [here](https://docs.python.org/3/howto/free-threading-python.html).
@@ -227,7 +214,6 @@ Let's add a dependency-group, which Pixi calls a `feature`, named `test`. And ad
 
 ```shell
 pixi add --pypi --feature test pytest
-
 ```
 
 This results in the package being added to the `dependency-groups` following the [PEP 735](https://peps.python.org/pep-0735/).
@@ -235,7 +221,6 @@ This results in the package being added to the `dependency-groups` following the
 ```toml
 [dependency-groups]
 test = ["pytest"]
-
 ```
 
 After we have added the `dependency-groups` to the `pyproject.toml`, Pixi sees these as a [`feature`](../../reference/pixi_manifest/#the-feature-and-environments-tables), which can contain a collection of `dependencies`, `tasks`, `channels`, and more.
@@ -243,7 +228,6 @@ After we have added the `dependency-groups` to the `pyproject.toml`, Pixi sees t
 ```shell
 pixi workspace environment add default --solve-group default --force
 pixi workspace environment add test --feature test --solve-group default
-
 ```
 
 Which results in:
@@ -252,7 +236,6 @@ Which results in:
 [tool.pixi.environments]
 default = { solve-group = "default" }
 test = { features = ["test"], solve-group = "default" }
-
 ```
 
 Solve Groups
@@ -264,7 +247,6 @@ Without specifying the environment name, Pixi will default to the `default` envi
 ```shell
 pixi install --environment test
 pixi run --environment test pytest
-
 ```
 
 ## Getting code to run
@@ -273,32 +255,30 @@ Let's add some code to the `pixi_py` package. We will add a new function to the 
 
 ```python
 from rich import print
+
 def hello():
     return "Hello, [bold magenta]World[/bold magenta]!", ":vampire:"
+
 def say_hello():
     print(*hello())
-
 ```
 
 Now add the `rich` dependency from PyPI
 
 ```shell
 pixi add --pypi rich
-
 ```
 
 Let's see if this works by running:
 
 ```shell
 pixi run python -c 'import pixi_py; pixi_py.say_hello()'
-
 ```
 
 Which should output:
 
 ```shell
 Hello, World! 🧛
-
 ```
 
 Slow?
@@ -321,21 +301,19 @@ Giving us the following project structure:
 │       └── __init__.py
 ├── pyproject.toml
 └── tests/test_me.py
-
 ```
 
 ```python
 from pixi_py import hello
+
 def test_pixi_py():
     assert hello() == ("Hello, [bold magenta]World[/bold magenta]!", ":vampire:")
-
 ```
 
 Let's add an easy task for running the tests.
 
 ```shell
 pixi task add --feature test test "pytest"
-
 ```
 
 So Pixi has a task system to make it easy to run commands. Similar to `npm` scripts or something you would specify in a `Justfile`.
@@ -346,7 +324,6 @@ Tasks are a cool Pixi feature that is powerful and runs in a cross-platform shel
 
 ```shell
 pixi run test
-
 ```
 
 results in the following output:
@@ -358,9 +335,10 @@ platform darwin -- Python 3.12.2, pytest-8.1.1, pluggy-1.4.0
 rootdir: /private/tmp/pixi-py
 configfile: pyproject.toml
 collected 1 item
-test_me.py .                                                                                                                                                                                                    [100%]
-================================================================================================== 1 passed in 0.00s =================================================================================================
 
+test_me.py .                                                                                                                                                                                                    [100%]
+
+================================================================================================== 1 passed in 0.00s =================================================================================================
 ```
 
 Why didn't I have to specify the environment?
@@ -377,7 +355,6 @@ Let's compare the output of the test and default environments. We add the `--exp
 pixi list --explicit --environment test
 # vs. default environment
 pixi list --explicit
-
 ```
 
 We see that the `test` environment has:
@@ -387,7 +364,6 @@ package          version       build               size       kind   source
 ...
 pytest           8.1.1                             1.1 mib    pypi   pytest-8.1.1-py3-none-any.whl
 ...
-
 ```
 
 However, the default environment is missing the `pytest` package. This way, you can finetune your environments to only have the packages that are needed for that environment. E.g. you could also have a `dev` environment that has `pytest` and `ruff` installed, but you could omit these from the `prod` environment. There is a [docker](https://github.com/prefix-dev/pixi/tree/main/examples/docker) example that shows how to set up a minimal `prod` environment and copy from there.
@@ -398,7 +374,6 @@ Last thing, Pixi provides the ability for `pypi` packages to depend on `conda` p
 
 ```shell
 pixi list pygments
-
 ```
 
 Note that it was installed as a `pypi` package:
@@ -406,21 +381,18 @@ Note that it was installed as a `pypi` package:
 ```shell
 Package          Version       Build               Size       Kind   Source
 pygments         2.17.2                            4.1 MiB    pypi   pygments-2.17.2-py3-none-any.http.whl
-
 ```
 
 This is a dependency of the `rich` package. As you can see by running:
 
 ```shell
 pixi tree --invert pygments
-
 ```
 
 Let's explicitly add `pygments` to the `pyproject.toml` file.
 
 ```shell
 pixi add pygments
-
 ```
 
 This will add the following to the `pyproject.toml` file:
@@ -428,14 +400,12 @@ This will add the following to the `pyproject.toml` file:
 ```toml
 [tool.pixi.dependencies]
 pygments = "=2.19.1,<3"
-
 ```
 
 We can now see that the `pygments` package is now installed as a conda package.
 
 ```shell
 pixi list pygments
-
 ```
 
 Now results in:
@@ -443,14 +413,12 @@ Now results in:
 ```shell
 Package   Version  Build         Size       Kind   Source
 pygments  2.19.1   pyhd8ed1ab_0  867.8 KiB  conda  pygments
-
 ```
 
 This way, PyPI dependencies and conda dependencies can be mixed and matched to seamlessly interoperate.
 
 ```shell
 pixi run python -c 'import pixi_py; pixi_py.say_hello()'
-
 ```
 
 And it still works!

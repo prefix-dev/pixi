@@ -1,4 +1,4 @@
-# `[pixi](../../../) [workspace](../../) [requires-pixi](../) unset`
+# `pixi workspace requires-pixi unset`
 
 ## About
 
@@ -8,5 +8,4 @@ Remove the pixi minimum version requirement
 
 ```text
 pixi workspace requires-pixi unset
-
 ```

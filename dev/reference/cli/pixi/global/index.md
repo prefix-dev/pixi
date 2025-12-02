@@ -1,4 +1,4 @@
-# `[pixi](../) global`
+# `pixi global`
 
 ## About
 
@@ -14,7 +14,6 @@ Binaries and environments installed globally are stored in `~/.pixi` by default,
 
 ```text
 pixi global <COMMAND>
-
 ```
 
 ## Subcommands

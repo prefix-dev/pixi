@@ -10,7 +10,6 @@ linux  = "4.18"
 libc   = { family = "glibc", version = "2.28" }
 cuda   = "12"
 macos  = "13.0"
-
 ```
 
 This results in a workspace that can run on:
@@ -47,7 +46,6 @@ For example [`cuda-version-12.9-h4f385c5_3.conda`](https://conda-metadata-app.st
 ```text
 cudatoolkit 12.9|12.9.*
 __cuda >=12
-
 ```
 
 ## Default System Requirements
@@ -59,7 +57,6 @@ The following configurations outline the default system requirements for differe
 [system-requirements]
 linux = "4.18"
 libc = { family = "glibc", version = "2.28" }
-
 ```
 
 Windows currently has no minimal system requirements defined. If your workspace requires specific Windows configurations, you should define them accordingly.
@@ -68,14 +65,12 @@ Windows currently has no minimal system requirements defined. If your workspace 
 # Default system requirements for macOS
 [system-requirements]
 macos = "13.0"
-
 ```
 
 ```toml
 # Default system requirements for macOS ARM64
 [system-requirements]
 macos = "13.0"
-
 ```
 
 ## Customizing System Requirements
@@ -88,7 +83,6 @@ If you're encountering an error like:
 
 ```bash
 × The current system has a mismatching virtual package. The workspace requires '__linux' to be at least version '4.18' but the system has version '4.12.14'
-
 ```
 
 This indicates that the workspace's system requirements are higher than your current system's specifications. To resolve this, you can lower the system requirements in your workspace's configuration:
@@ -96,7 +90,6 @@ This indicates that the workspace's system requirements are higher than your cur
 ```toml
 [system-requirements]
 linux = "4.12.14"
-
 ```
 
 This adjustment informs the dependency resolver to accommodate the older system version.
@@ -110,7 +103,6 @@ Example Configuration
 ```toml
 [system-requirements]
 cuda = "12"  # Replace "12" with the specific CUDA version you intend to use
-
 ```
 
 1. Can `system-requirements` enforce a specific CUDA runtime version?
@@ -123,9 +115,9 @@ This can be set per `feature` in the `the manifest` file.
 ```toml
 [feature.cuda.system-requirements]
 cuda = "12"
+
 [environments]
 cuda = ["cuda"]
-
 ```
 
 ### Available Override Options

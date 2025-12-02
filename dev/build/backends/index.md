@@ -14,7 +14,6 @@ channels = [
 ]
 name = "pixi-build-python"
 version = "0.1.*"
-
 ```
 
 For custom backend channels, you can add the channel to the `channels` section of the manifest file:
@@ -26,7 +25,6 @@ channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
-
 ```
 
 ### Overriding the Build Backend

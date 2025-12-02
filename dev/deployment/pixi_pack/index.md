@@ -4,7 +4,6 @@ Both tools can be installed via
 
 ```bash
 pixi global install pixi-pack pixi-unpack
-
 ```
 
 Or by downloading our pre-built binaries from the [releases page](https://github.com/Quantco/pixi-pack/releases).
@@ -14,7 +13,6 @@ Instead of installing `pixi-pack` and `pixi-unpack` globally, you can also use `
 ```bash
 pixi exec pixi-pack
 pixi exec pixi-unpack environment.tar
-
 ```
 
 You can also write `pixi pack` (and `pixi unpack`) if you have `pixi`, and `pixi-pack` and `pixi-unpack` installed globally.
@@ -23,7 +21,6 @@ You can pack an environment with
 
 ```bash
 pixi-pack --environment prod --platform linux-64 pixi.toml
-
 ```
 
 This will create an `environment.tar` file that contains all conda packages required to create the environment.
@@ -41,7 +38,6 @@ This will create an `environment.tar` file that contains all conda packages requ
 |         ├── ca-certificates-2024.2.2-hbcca054_0.conda
 |         ├── ...
 |         └── repodata.json
-
 ```
 
 ### `pixi-unpack`: Unpacking an environment
@@ -58,7 +54,6 @@ $ cat activate.sh
 export PATH="/home/user/project/env/bin:..."
 export CONDA_PREFIX="/home/user/project/env"
 . "/home/user/project/env/etc/conda/activate.d/activate_custom_package.sh"
-
 ```
 
 ### Cross-platform Packs
@@ -67,7 +62,6 @@ Since `pixi-pack` just downloads the `.conda` and `.tar.bz2` files from the cond
 
 ```bash
 pixi-pack --platform win-64
-
 ```
 
 Note
@@ -87,7 +81,6 @@ $ ls
 env/
 activate.sh
 environment.sh
-
 ```
 
 ```powershell
@@ -99,7 +92,6 @@ PS > ls
 env/
 activate.sh
 environment.ps1
-
 ```
 
 #### Custom pixi-unpack executable path
@@ -117,14 +109,12 @@ Using a URL:
 
 ```bash
 pixi-pack --create-executable --pixi-unpack-source https://my.mirror/pixi-pack/pixi-unpack-x86_64-unknown-linux-musl
-
 ```
 
 Using a path:
 
 ```bash
 pixi-pack --create-executable --pixi-unpack-source ./pixi-unpack-x86_64-unknown-linux-musl
-
 ```
 
 Note
@@ -137,7 +127,6 @@ You can inject additional packages into the environment that are not specified i
 
 ```bash
 pixi-pack --inject local-package-1.0.0-hbefa133_0.conda pixi.toml
-
 ```
 
 This can be particularly useful if you build the package itself and want to include the built package in the environment but still want to use `pixi.lock` from the workspace.
@@ -150,7 +139,6 @@ The `--inject` option also supports wheels.
 
 ```bash
 pixi-pack --ignore-pypi-non-wheel --inject my_webserver-0.1.0-py3-none-any.whl
-
 ```
 
 Warning
@@ -166,7 +154,6 @@ config.toml
 ```toml
 [mirrors]
 "https://conda.anaconda.org/conda-forge" = ["https://my.artifactory/conda-forge"]
-
 ```
 
 If you are using [S3 in pixi](../s3/), you can also add the appropriate S3 config in your config file and reference it.
@@ -178,7 +165,6 @@ config.toml
 endpoint-url = "https://s3.eu-central-1.amazonaws.com"
 region = "eu-central-1"
 force-path-style = false
-
 ```
 
 ### Setting maximum number of parallel downloads
@@ -186,7 +172,6 @@ force-path-style = false
 ```toml
 [concurrency]
 downloads = 5
-
 ```
 
 Use `pixi-pack --config config.toml` to use the custom configuration file. See [pixi docs](../../reference/pixi_configuration/#concurrency) for more information.
@@ -197,7 +182,6 @@ You can cache downloaded packages to speed up subsequent pack operations by usin
 
 ```bash
 pixi-pack --use-cache ~/.pixi-pack/cache
-
 ```
 
 This will store all downloaded packages in the specified directory and reuse them in future pack operations. The cache follows the same structure as conda channels, organizing packages by platform subdirectories (e.g., linux-64, win-64, etc.).
@@ -218,7 +202,6 @@ tar -xvf environment.tar
 micromamba create -p ./env --file environment.yml
 # or
 conda env create -p ./env --file environment.yml
-
 ```
 
 Note

@@ -27,14 +27,12 @@ pixi init hello-world
 cd hello-world
 pixi add python
 pixi run python -c 'print("Hello World!")'
-
 ```
 
 Install your favorite tools with a single command.
 
 ```shell
 pixi global install gh nvim ipython btop ripgrep
-
 ```
 
 ______________________________________________________________________
@@ -72,7 +70,6 @@ To install `pixi`, run:
 
 ```bash
 curl -fsSL https://pixi.sh/install.sh | sh
-
 ```
 
 [Download installer](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-pc-windows-msvc.msi)
@@ -81,7 +78,6 @@ Or run:
 
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
-
 ```
 
 Now restart your terminal or shell!
@@ -103,37 +99,35 @@ ______________________________________________________________________
    ```text
    pixi init hello-world
    cd hello-world
-
    ```
 
 1. **Add dependencies:**
 
    ```text
    pixi add cowpy python
-
    ```
 
-1. **Create your script:** hello.py
+1. **Create your script:**
+
+   hello.py
 
    ```py
    from cowpy.cow import Cowacter
+
    message = Cowacter().milk("Hello Pixi fans!")
    print(message)
-
    ```
 
 1. **Add a task:**
 
    ```text
    pixi task add start python hello.py
-
    ```
 
 1. **Run the task:**
 
    ```text
    pixi run start
-
    ```
 
    ```text
@@ -146,7 +140,6 @@ ______________________________________________________________________
              (__)\       )\/\
                ||----w |
                ||     ||
-
    ```
 
 1. **Entry the environment shell:**
@@ -155,7 +148,6 @@ ______________________________________________________________________
    pixi shell
    python hello.py
    exit
-
    ```
 
 More details on how to use Pixi with Python can be found in the [Python tutorial](python/tutorial/).
@@ -166,28 +158,24 @@ More details on how to use Pixi with Python can be found in the [Python tutorial
 
    ```text
    pixi add rust
-
    ```
 
 1. **Create your workspace:**
 
    ```text
    pixi run cargo init
-
    ```
 
 1. **Add a task:**
 
    ```text
    pixi task add start cargo run
-
    ```
 
 1. **Run the task:**
 
    ```text
    pixi run start
-
    ```
 
    ```text
@@ -195,7 +183,6 @@ More details on how to use Pixi with Python can be found in the [Python tutorial
        Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
         Running `target/debug/pixi-rust`
    Hello, world!
-
    ```
 
 This is more of an example to show off how easy it is to use Pixi with Rust. Not a recommended way to build Rust projects. More details on how to use Pixi with Rust can be found in the [Rust tutorial](tutorials/rust/).
@@ -205,41 +192,37 @@ This is more of an example to show off how easy it is to use Pixi with Rust. Not
    ```text
    pixi init pixi-node
    cd pixi-node
-
    ```
 
 1. **Add dependencies:**
 
    ```text
    pixi add nodejs
-
    ```
 
-1. **Create your script:** hello.js
+1. **Create your script:**
+
+   hello.js
 
    ```js
    console.log("Hello Pixi fans!");
-
    ```
 
 1. **Add a task:**
 
    ```text
    pixi task add start "node hello.js"
-
    ```
 
 1. **Run the task:**
 
    ```text
    pixi run start
-
    ```
 
    ```text
    ✨ Pixi task (start): node hello.js
    Hello Pixi fans!
-
    ```
 
 1. **Initialize a workspace:**
@@ -247,14 +230,12 @@ This is more of an example to show off how easy it is to use Pixi with Rust. Not
    ```text
    pixi init pixi-ros2 -c https://prefix.dev/conda-forge -c "https://prefix.dev/robostack-humble"
    cd pixi-ros2
-
    ```
 
 1. **Add dependencies:**
 
    ```text
    pixi add ros-humble-desktop
-
    ```
 
    This might take a minute
@@ -265,23 +246,23 @@ This is more of an example to show off how easy it is to use Pixi with Rust. Not
 
    ```text
    pixi run rviz2
-
    ```
 
 More details on how to use Pixi with ROS2 can be found in the [ROS2 tutorial](tutorials/ros2/).
 
 1. Install all your favorite tools with a single command:
+
    ```shell
    pixi global install terraform ansible k9s make
-
    ```
+
 1. Use them everywhere:
+
    ```shell
    ansible --version
    terraform --version
    k9s version
    make --version
-
    ```
 
 ______________________________________________________________________

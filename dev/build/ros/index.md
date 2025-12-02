@@ -14,19 +14,21 @@ Initialize a new workspace and install the ROS 2 CLI so you can scaffold package
 pixi init ros_ws --channel https://prefix.dev/robostack-jazzy --channel https://prefix.dev/conda-forge
 cd ros_ws
 pixi add ros-jazzy-ros2run
-
 ```
 
 This adds the `ros2` cli command to your Pixi environment.
 
-In all examples below, ensure the [build preview](../../reference/pixi_manifest/#preview-features) is enabled in your workspace manifest: ros_ws/pixi.toml
+In all examples below, ensure the [build preview](../../reference/pixi_manifest/#preview-features) is enabled in your workspace manifest:
+
+ros_ws/pixi.toml
 
 ```toml
 preview = ["pixi-build"]
-
 ```
 
-Resulting workspace manifest: ros_ws/pixi.toml
+Resulting workspace manifest:
+
+ros_ws/pixi.toml
 
 ```toml
 [workspace]
@@ -40,9 +42,9 @@ platforms = [
   "linux-64",
 ] # Your platform here, e.g. "linux-64", "osx-arm64", "win-64"
 preview = ["pixi-build"]
+
 [dependencies]
 ros-jazzy-ros2run = ">=0.32.4,<0.33"
-
 ```
 
 ## Creating a Python ROS package
@@ -55,7 +57,6 @@ Use the ROS CLI to generate an `ament_python` package skeleton within the worksp
 
 ```bash
 pixi run ros2 pkg create --build-type ament_python --destination-directory src --node-name my_python_node my_python_ros_pkg
-
 ```
 
 You should now have something like:
@@ -73,7 +74,6 @@ ros_ws/
         └── my_python_ros_pkg/
             ├── __init__.py
             └── my_python_node.py
-
 ```
 
 ### Add Pixi package info to the new package
@@ -90,9 +90,9 @@ channels = [
 ]
 name = "pixi-build-ros"
 version = "*"
+
 [package.build.config]
 distro = "jazzy"
-
 ```
 
 Notes:
@@ -111,7 +111,6 @@ ros_ws/pixi.toml
 [dependencies]
 ros-jazzy-ros2run = ">=0.32.4,<0.33"
 ros-jazzy-my-python-ros-pkg = { path = "src/my_python_ros_pkg" }
-
 ```
 
 ### Testing your package
@@ -120,14 +119,12 @@ Now install and run:
 
 ```bash
 pixi run ros2 run my_python_ros_pkg my_python_node
-
 ```
 
 Outputs:
 
 ```bash
 Hi from my_python_ros_pkg.
-
 ```
 
 ## Create a CMake ROS package
@@ -138,7 +135,6 @@ Creating a C++ or mixed package using `ament_cmake`.
 
 ```bash
 pixi run ros2 pkg create --build-type ament_cmake --destination-directory src --node-name my_cmake_node my_cmake_ros_pkg
-
 ```
 
 ### Add the pixi package info
@@ -155,9 +151,9 @@ channels = [
 ]
 name = "pixi-build-ros"
 version = "*"
+
 [package.build.config]
 distro = "jazzy"
-
 ```
 
 ### Add the package to the pixi workspace
@@ -171,7 +167,6 @@ ros_ws/pixi.toml
 ros-jazzy-ros2run = ">=0.32.4,<0.33"
 ros-jazzy-my-python-ros-pkg = { path = "src/my_python_ros_pkg" }
 ros-jazzy-my-cmake-ros-pkg = { path = "src/my_cmake_ros_pkg" }
-
 ```
 
 ### Testing your package
@@ -180,14 +175,12 @@ Now install and run:
 
 ```bash
 pixi run ros2 run my_cmake_ros_pkg my_cmake_node
-
 ```
 
 Outputs:
 
 ```bash
 hello world my_cmake_ros_pkg package
-
 ```
 
 ## Building a ROS conda package
@@ -200,7 +193,6 @@ pixi build
 # then
 cd ../my_cmake_ros_pkg
 pixi build
-
 ```
 
 You can now upload these artifacts to a conda channel and depend on them from other Pixi workspaces.

@@ -31,6 +31,7 @@ For more examples, take a look at [pavelzw/pixi-docker-example](https://github.c
 
 ```Dockerfile
 FROM ghcr.io/prefix-dev/pixi:0.41.4 AS build
+
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
 COPY . .
@@ -43,6 +44,7 @@ RUN echo "#!/bin/bash" > /app/entrypoint.sh
 RUN cat /shell-hook >> /app/entrypoint.sh
 # extend the shell-hook script to run the command passed to the container
 RUN echo 'exec "$@"' >> /app/entrypoint.sh
+
 FROM ubuntu:24.04 AS production
 WORKDIR /app
 # only copy the production environment into prod container
@@ -51,9 +53,9 @@ COPY --from=build /app/.pixi/envs/prod /app/.pixi/envs/prod
 COPY --from=build --chmod=0755 /app/entrypoint.sh /app/entrypoint.sh
 # copy your project code into the container as well
 COPY ./my_project /app/my_project
+
 EXPOSE 8000
 ENTRYPOINT [ "/app/entrypoint.sh" ]
 # run your app inside the pixi environment
 CMD [ "uvicorn", "my_project:app", "--host", "0.0.0.0" ]
-
 ```

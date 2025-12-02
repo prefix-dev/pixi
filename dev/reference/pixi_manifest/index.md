@@ -31,7 +31,6 @@ The minimally required information in the `workspace` table is:
 channels = ["conda-forge"]
 name = "project-name"
 platforms = ["linux-64"]
-
 ```
 
 ### `channels`
@@ -40,21 +39,18 @@ This is a list that defines the channels used to fetch the packages from. If you
 
 ```toml
 channels = ["conda-forge", "robostack", "bioconda", "nvidia", "pytorch"]
-
 ```
 
 Channels situated on the file system are also supported with **absolute** file paths:
 
 ```toml
 channels = ["conda-forge", "file:///home/user/staged-recipes/build_artifacts"]
-
 ```
 
 To access private or public channels on [prefix.dev](https://prefix.dev/channels) or [Quetz](https://github.com/mamba-org/quetz) use the url including the hostname:
 
 ```toml
 channels = ["conda-forge", "https://repo.prefix.dev/channel-name"]
-
 ```
 
 ### `platforms`
@@ -63,7 +59,6 @@ Defines the list of platforms that the workspace supports. Pixi solves the depen
 
 ```toml
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
-
 ```
 
 The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html)
@@ -78,7 +73,6 @@ The name of the workspace. If the name is not specified, the name of the directo
 
 ```toml
 name = "project-name"
-
 ```
 
 ### `version` (optional)
@@ -87,7 +81,6 @@ The version of the workspace. This should be a valid version based on the conda 
 
 ```toml
 version = "1.2.3"
-
 ```
 
 ### `authors` (optional)
@@ -96,7 +89,6 @@ This is a list of authors of the workspace.
 
 ```toml
 authors = ["John Doe <j.doe@prefix.dev>", "Marie Curie <mss1867@gmail.com>"]
-
 ```
 
 ### `description` (optional)
@@ -105,7 +97,6 @@ This should contain a short description of the workspace.
 
 ```toml
 description = "A simple description"
-
 ```
 
 ### `license` (optional)
@@ -114,7 +105,6 @@ The license as a valid [SPDX](https://spdx.org/licenses/) string (e.g. MIT AND A
 
 ```toml
 license = "MIT"
-
 ```
 
 ### `license-file` (optional)
@@ -123,7 +113,6 @@ Relative path to the license file.
 
 ```toml
 license-file = "LICENSE.md"
-
 ```
 
 ### `readme` (optional)
@@ -132,7 +121,6 @@ Relative path to the README file.
 
 ```toml
 readme = "README.md"
-
 ```
 
 ### `homepage` (optional)
@@ -141,7 +129,6 @@ URL of the workspace homepage.
 
 ```toml
 homepage = "https://pixi.sh"
-
 ```
 
 ### `repository` (optional)
@@ -150,7 +137,6 @@ URL of the workspace source repository.
 
 ```toml
 repository = "https://github.com/prefix-dev/pixi"
-
 ```
 
 ### `documentation` (optional)
@@ -159,7 +145,6 @@ URL of the workspace documentation.
 
 ```toml
 documentation = "https://pixi.sh"
-
 ```
 
 ### `conda-pypi-map` (optional)
@@ -173,28 +158,24 @@ local/robostack_mapping.json
   "jupyter-ros": "my-name-from-mapping",
   "boltons": "boltons-pypi"
 }
-
 ```
 
 If `conda-forge` is not present in `conda-pypi-map` `pixi` will use `prefix.dev` mapping for it.
 
 ```toml
 conda-pypi-map = { conda-forge = "https://example.com/mapping", "https://repo.prefix.dev/robostack" = "local/robostack_mapping.json"}
-
 ```
 
 It is also possible to disable fetching external mpping by adding an empty map to the list
 
 ```toml
 conda-pypi-map = { conda-forge = "map.json" }
-
 ```
 
 map.json
 
 ```json
 {}
-
 ```
 
 ### `channel-priority` (optional)
@@ -213,7 +194,6 @@ Options:
 
 ```toml
 channel-priority = "disabled"
-
 ```
 
 `channel-priority = "disabled"` is a security risk
@@ -226,7 +206,6 @@ Disabling channel priority may lead to unpredictable dependency resolutions. Thi
 channels = ["conda-forge", "channel-name"]
 [dependencies]
 package = {version = "*", channel = "channel-name"}
-
 ```
 
 ### `solve-strategy` (optional)
@@ -243,7 +222,6 @@ Options:
 
 ```toml
 solve-strategy = "lowest"
-
 ```
 
 Note
@@ -257,7 +235,6 @@ solve-strategy = "lowest"
 solve-strategy = "lowest-direct"
 [environments]
 combined = ["two", "one"] # <- The solve strategy from feature `two` is used
-
 ```
 
 ### `requires-pixi` (optional)
@@ -269,7 +246,6 @@ For example, with the following manifest, `pixi shell` will fail on `pixi 0.39.0
 ```toml
 [workspace]
 requires-pixi = ">=0.40"
-
 ```
 
 The upper bound can also be limit like this:
@@ -277,7 +253,6 @@ The upper bound can also be limit like this:
 ```toml
 [workspace]
 requires-pixi = ">=0.40,<1.0"
-
 ```
 
 Note
@@ -306,7 +281,6 @@ Build variants require the `pixi-build` preview feature to be enabled:
 ```toml
 [workspace]
 preview = ["pixi-build"]
-
 ```
 
 Build variants allow you to specify different dependency versions for building packages in your workspace, creating a "build matrix" that targets multiple configurations. This is particularly useful for testing packages against different compiler versions, Python versions, or other critical dependencies.
@@ -319,7 +293,6 @@ Build variants are defined as key-value pairs where each key represents a depend
 [workspace.build-variants]
 python = ["3.11.*", "3.12.*"]
 c_compiler_version = ["11.4", "14.0"]
-
 ```
 
 #### How Build Variants Work
@@ -338,15 +311,16 @@ Build variants can also be specified per-platform:
 ```toml
 [workspace.build-variants]
 python = ["3.11.*", "3.12.*"]
+
 # Windows-specific variants
 [workspace.target.win-64.build-variants]
 python = ["3.11.*"]  # Only Python 3.11 on Windows
 c_compiler = ["vs2019"]
+
 # Linux-specific variants
 [workspace.target.linux-64.build-variants]
 c_compiler = ["gcc"]
 c_compiler_version = ["11.4", "13.0"]
-
 ```
 
 #### Common Use Cases
@@ -367,7 +341,6 @@ Build variant files require the `pixi-build` preview feature to be enabled:
 ```toml
 [workspace]
 preview = ["pixi-build"]
-
 ```
 
 Use `build-variants-files` to reference external variant definitions from YAML files. Paths are resolved relative to the workspace root and processed in the listed order—entries from earlier files take precedence over values loaded from later ones.
@@ -378,7 +351,6 @@ build-variants-files = [
     "./pinning/conda_build_config.yaml",
     "./variants/overrides.yaml",
 ]
-
 ```
 
 Each entry must point to either a `conda_build_config.yaml` or another `.yaml` file that defines build variants. If the file is called `conda_build_config.yaml`, it will attempt to parse it with a subset of [`conda-build`'s variant syntax](https://docs.conda.io/projects/conda-build/en/stable/resources/variants.html#using-variants-with-the-conda-build-api). Otherwise, it will use `rattler-build`'s syntax as outlined in the [rattler-build documentation](https://rattler.build/latest/variants/#variant-configuration).
@@ -398,7 +370,6 @@ build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "fro
 run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
 format = { cmd="black $INIT_CWD" } # runs black where you run pixi run format
 clean-env = { cmd = "python isolated.py", clean-env = true} # Only on Unix!
-
 ```
 
 You can modify this table using [`pixi task`](../cli/pixi/task/).
@@ -420,7 +391,6 @@ For example, we can define a unix system with a specific minimal libc version.
 ```toml
 [system-requirements]
 libc = "2.28"
-
 ```
 
 or make the workspace depend on a specific version of `cuda`:
@@ -428,7 +398,6 @@ or make the workspace depend on a specific version of `cuda`:
 ```toml
 [system-requirements]
 cuda = "12"
-
 ```
 
 The options are:
@@ -476,7 +445,6 @@ An example:
 index-url = "https://pypi.org/simple"
 extra-index-urls = ["https://example.com/simple"]
 find-links = [{path = './links'}]
-
 ```
 
 There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry) in the Pixi repository, that make use of this feature.
@@ -492,11 +460,12 @@ Even though build isolation is a good default. One can choose to **not** isolate
 ```toml
 [dependencies]
 pytorch = "2.4.0"
+
 [pypi-options]
 no-build-isolation = ["detectron2"]
+
 [pypi-dependencies]
 detectron2 = { git = "https://github.com/facebookresearch/detectron2.git", rev = "5b72c27ae39f99db75d43f18fd1312e1ea934e60"}
-
 ```
 
 Setting `no-build-isolation` also affects the order in which PyPI packages are installed. Packages are installed in that order:
@@ -510,7 +479,6 @@ It is also possible to remove all packages from build isolation by setting the `
 ```toml
 [pypi-options]
 no-build-isolation = true
-
 ```
 
 Conda dependencies define the build environment
@@ -527,7 +495,6 @@ Can be either set per package or globally.
 [pypi-options]
 # No sdists allowed
 no-build = true # default is false
-
 ```
 
 or:
@@ -535,7 +502,6 @@ or:
 ```toml
 [pypi-options]
 no-build = ["package1", "package2"]
-
 ```
 
 When features are merged, the following priority is adhered: `no-build = true` > `no-build = ["package1", "package2"]` > `no-build = false` So, to expand: if `no-build = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
@@ -552,7 +518,6 @@ Can be either set per package or globally.
 [pypi-options]
 # Never use pre-build wheels
 no-binary = true # default is false
-
 ```
 
 or:
@@ -560,7 +525,6 @@ or:
 ```toml
 [pypi-options]
 no-binary = ["package1", "package2"]
-
 ```
 
 When features are merged, the following priority is adhered: `no-binary = true` > `no-binary = ["package1", "package2"]` > `no-binary = false` So, to expand: if `no-binary = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
@@ -608,7 +572,6 @@ Example:
 ```toml
 [pypi-options]
 prerelease-mode = "allow"  # Allow all pre-release versions
-
 ```
 
 ## The `dependencies` table(s)
@@ -634,7 +597,6 @@ package1 = "~=1.2.3"
 package2 = ">1.2,<=1.4"
 # Bigger or equal than 1.2.3 or lower not including 1.0.0
 package3 = ">=1.2.3|<1.0.0"
-
 ```
 
 Dependencies can also be defined as a mapping where it is using a [matchspec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.NamelessMatchSpec.html):
@@ -642,7 +604,6 @@ Dependencies can also be defined as a mapping where it is using a [matchspec](ht
 ```toml
 package0 = { version = ">=1.2.3", channel="conda-forge" }
 package1 = { version = ">=1.2.3", build="py34_0" }
-
 ```
 
 Tip
@@ -662,7 +623,6 @@ Add any conda package dependency that you want to install into the environment. 
 python = ">3.9,<=3.11"
 rust = "==1.72"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-
 ```
 
 ### `pypi-dependencies`
@@ -690,29 +650,36 @@ These dependencies don't follow the conda matchspec specification. The `version`
 # When using pypi-dependencies, python is needed to resolve pypi dependencies
 # make sure to include this
 python = ">=3.6"
+
 [pypi-dependencies]
 fastapi = "*"  # This means any version (the wildcard `*` is a pixi addition, not part of the specification)
 pre-commit = "~=3.5.0" # This is a single version specifier
 # Using the toml map allows the user to add `extras`
 pandas = { version = ">=1.0.0", extras = ["dataframe", "sql"]}
+
 # git dependencies
 # With ssh
 flask = { git = "ssh://git@github.com/pallets/flask" }
 # With https and a specific revision
 httpx = { git = "https://github.com/encode/httpx.git", rev = "c7c13f18a5af4c64c649881b2fe8dbd72a519c32"}
+
 # With https and a specific branch
 boltons = { git = "https://github.com/mahmoud/boltons.git", branch = "master" }
+
 # With https and a specific tag
 boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0" }
+
 # With https, specific tag and some subdirectory
 boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0", subdirectory = "some-subdir" }
+
 # You can also directly add a source dependency from a path, tip keep this relative to the root of the workspace.
 minimal-project = { path = "./minimal-project", editable = true}
+
 # You can also use a direct url, to either a `.tar.gz` or `.zip`, or a `.whl` file
 click = { url = "https://github.com/pallets/click/releases/download/8.1.7/click-8.1.7-py3-none-any.whl" }
+
 # You can also just the default git repo, it will checkout the default branch
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
-
 ```
 
 Using git SSH URLs
@@ -732,7 +699,6 @@ pandas = { version = ">=1.0.0", extras = ["dataframe", "sql"]}
 pytest = { git = "URL", extras = ["dev"]}
 black = { url = "URL", extras = ["cli"]}
 minimal-project = { path = "./minimal-project", editable = true, extras = ["dev"]}
-
 ```
 
 ##### `version`
@@ -743,7 +709,6 @@ The version of the package to install. e.g. `">=1.0.0"` or `*` which stands for 
 py-rattler = "*"
 ruff = "~=1.0.0"
 pytest = {version = "*", extras = ["dev"]}
-
 ```
 
 ##### `index`
@@ -754,7 +719,6 @@ For example, to use some other than the official Python Package Index (PyPI) at 
 
 ```toml
 torch = { version = "*", index = "https://download.pytorch.org/whl/cu118" }
-
 ```
 
 This is useful for PyTorch specifically, as the registries are pinned to different CUDA versions. Learn more about installing PyTorch [here](../../python/pytorch/).
@@ -773,7 +737,6 @@ Use `git` in combination with `rev` or `subdirectory`:
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
 httpx = { git = "https://github.com/encode/httpx.git", rev = "c7c13f18a5af4c64c649881b2fe8dbd72a519c32"}
 py-rattler = { git = "ssh://git@github.com/conda/rattler.git", subdirectory = "py-rattler" }
-
 ```
 
 ##### `path`
@@ -784,7 +747,6 @@ Set `editable` to `true` to install in editable mode, this is highly recommended
 
 ```toml
 minimal-project = { path = "./minimal-project", editable = true}
-
 ```
 
 ##### `url`
@@ -793,7 +755,6 @@ A URL to install a wheel or sdist directly from an url.
 
 ```toml
 pandas = {url = "https://files.pythonhosted.org/packages/3d/59/2afa81b9fb300c90531803c0fd43ff4548074fa3e8d0f747ef63b3b5e77a/pandas-2.2.1.tar.gz"}
-
 ```
 
 Did you know you can use: `add --pypi`?
@@ -833,18 +794,21 @@ If you have scripts or env variable per platform use the [target](#the-target-ta
 [activation]
 scripts = ["env_setup.sh"]
 env = { ENV_VAR = "value" }
+
 # To support windows platforms as well add the following
 [target.win-64.activation]
 scripts = ["env_setup.bat"]
+
 [target.linux-64.activation.env]
 ENV_VAR = "linux-value"
+
 # You can also reference existing environment variables, but this has
 # to be done separately for unix-like operating systems and Windows
 [target.unix.activation.env]
 ENV_VAR = "$OTHER_ENV_VAR/unix-value"
+
 [target.win.activation.env]
 ENV_VAR = "%OTHER_ENV_VAR%\\windows-value"
-
 ```
 
 ## The `target` table
@@ -872,9 +836,9 @@ To make it a bit more clear, let's look at an example below. Currently, Pixi com
 [dependencies]
 cmake = "3.26.4"
 python = "3.10"
+
 [target.osx.dependencies]
 python = "3.11"
-
 ```
 
 Here are some more examples:
@@ -882,15 +846,18 @@ Here are some more examples:
 ```toml
 [target.win-64.activation]
 scripts = ["setup.bat"]
+
 [target.win-64.dependencies]
 msmpi = "~=10.1.1"
+
 [target.win-64.build-dependencies]
 vs2022_win-64 = "19.36.32532"
+
 [target.win-64.tasks]
 tmp = "echo $TEMP"
+
 [target.osx-64.dependencies]
 clang = ">=16.0.6"
-
 ```
 
 ## The `feature` and `environments` tables
@@ -902,9 +869,9 @@ Simplest example
 ```toml
 [feature.test.dependencies]
 pytest = "*"
+
 [environments]
 test = ["test"]
-
 ```
 
 This will create an environment called `test` that has `pytest` installed.
@@ -940,7 +907,6 @@ platforms = ["linux-64", "osx-arm64"]
 system-requirements = {cuda = "12"}
 tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
-
 ```
 
 Cuda feature table example but written as separate tables
@@ -948,22 +914,27 @@ Cuda feature table example but written as separate tables
 ```toml
 [feature.cuda.activation]
 scripts = ["cuda_activation.sh"]
+
 [feature.cuda.dependencies]
 cuda = "x.y.z"
 cudnn = "12.0"
+
 [feature.cuda.pypi-dependencies]
 torch = "==1.9.0"
+
 [feature.cuda.system-requirements]
 cuda = "12"
+
 [feature.cuda.tasks]
 warmup = "python warmup.py"
+
 [feature.cuda.target.osx-arm64.dependencies]
 mlx = "x.y.z"
+
 # Channels and Platforms are not available as separate tables as they are implemented as lists
 [feature.cuda]
 channels = ["nvidia"]
 platforms = ["linux-64", "osx-arm64"]
-
 ```
 
 ### The `environments` table
@@ -983,7 +954,6 @@ Full environments table specification
 test = {features = ["test"], solve-group = "test"}
 prod = {features = ["prod"], solve-group = "test"}
 lint = {features = ["lint"], no-default-feature = true}
-
 ```
 
 As shown in the example above, in the simplest of cases, it is possible to define an environment only by listing its features:
@@ -993,7 +963,6 @@ Simplest example
 ```toml
 [environments]
 test = ["test"]
-
 ```
 
 is equivalent to
@@ -1003,7 +972,6 @@ Simplest example expanded
 ```toml
 [environments]
 test = {features = ["test"]}
-
 ```
 
 When an environment comprises several features (including the default feature):
@@ -1027,7 +995,6 @@ An example of a preview feature in the manifest:
 ```toml
 [workspace]
 preview = ["pixi-build"]
-
 ```
 
 Preview features in the documentation will be marked as such on the relevant pages.
@@ -1041,7 +1008,6 @@ Important note
 ```toml
 [workspace]
 preview = ["pixi-build"]
-
 ```
 
 The package section can be added to a workspace manifest to define the package that is built by Pixi.
@@ -1081,7 +1047,6 @@ license = "MIT"
 license-file = "LICENSE"
 readme = "README.md"
 repository = "https://github.com/user/repo"
-
 ```
 
 Workspace inheritance
@@ -1091,9 +1056,9 @@ Most extra fields can be inherited from the workspace manifest. This means that 
 ```toml
 [workspace]
 name = "my-workspace"
+
 [package]
 name = { workspace = true } # Inherit the name from the workspace
-
 ```
 
 ### `build` table
@@ -1123,7 +1088,6 @@ backend = { name = "pixi-build-cmake", version = "0.3.*" }
 # not required:
 channels = ["https://prefix.dev/conda-forge"]
 config = { key = "value" }                    # Optional configuration, specific to the build backend
-
 ```
 
 #### Target-specific build configuration example
@@ -1133,16 +1097,18 @@ For platform-specific build configuration, use the `[package.build.target.<platf
 ```toml
 [package.build]
 backend = { name = "pixi-build-cmake", version = "0.3.*" }
+
 [package.build.config]
 # Base configuration applied to all platforms
 extra-args = ["-DCMAKE_BUILD_TYPE=Release"]
+
 [package.build.target.linux-64.config]
 # Linux-specific configuration
 extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DLINUX_FLAG=ON"]
+
 [package.build.target.win-64.config]
 # Windows-specific configuration
 extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DWIN_FLAG=ON"]
-
 ```
 
 ### The `build` `host` and `run` dependencies tables
@@ -1173,7 +1139,6 @@ When using SSH URLs in git dependencies, make sure to have your SSH key added to
 [package.build-dependencies]
 cmake = "*"
 git = "*"
-
 ```
 
 ### `host-dependencies`
@@ -1190,7 +1155,6 @@ Following packages are typical examples for host dependencies:
 ```toml
 [package.host-dependencies]
 python = "*"
-
 ```
 
 ### `run-dependencies`
@@ -1204,5 +1168,4 @@ The `run-dependencies` are the packages that will be installed in the environmen
 ```toml
 [package.run-dependencies]
 rich = ">=13.9.4,<14"
-
 ```

@@ -19,16 +19,18 @@ configure = { cmd = [
     "-B",
     ".build",
 ] }
+
 # Depend on other tasks
 build = { cmd = ["ninja", "-C", ".build"], depends-on = ["configure"] }
+
 # Using environment variables
 run = "python main.py $PIXI_PROJECT_ROOT"
 set = "export VAR=hello && echo $VAR"
+
 # Cross platform file operations
 copy = "cp pixi.toml pixi_backup.toml"
 clean = "rm pixi_backup.toml"
 move = "mv pixi.toml backup.toml"
-
 ```
 
 ## Depends on
@@ -43,7 +45,6 @@ Checkout our [`cpp_sdl` example](https://github.com/prefix-dev/pixi/tree/main/ex
 pixi task add configure "cmake -G Ninja -S . -B .build"
 pixi task add build "ninja -C .build" --depends-on configure
 pixi task add start ".build/bin/sdl_example" --depends-on build
-
 ```
 
 Results in the following lines added to the `pixi.toml`
@@ -58,7 +59,6 @@ configure = "cmake -G Ninja -S . -B .build"
 build = { cmd = "ninja -C .build", depends-on = ["configure"] }
 # Start the built executable
 start = { cmd = ".build/bin/sdl_example", depends-on = ["build"] }
-
 ```
 
 The tasks will be executed after each other:
@@ -74,7 +74,6 @@ With this logic, you can also create aliases as you don't have to specify any co
 ```shell
 pixi task add fmt ruff
 pixi task add lint pylint
-
 ```
 
 pixi.toml
@@ -83,7 +82,6 @@ pixi.toml
 [tasks]
 fmt = "ruff"
 lint = "pylint"
-
 ```
 
 Hiding Tasks
@@ -98,7 +96,6 @@ Executing:
 
 ```text
 pixi task alias style fmt lint
-
 ```
 
 results in the following `pixi.toml`:
@@ -110,14 +107,12 @@ pixi.toml
 fmt = "ruff"
 lint = "pylint"
 style = [{ task = "fmt" }, { task = "lint" }]
-
 ```
 
 Now you can run both tools with one command.
 
 ```shell
 pixi run style
-
 ```
 
 ### Environment specification for task dependencies
@@ -129,27 +124,29 @@ pixi.toml
 ```toml
 [tasks]
 test = "python --version"
+
 [feature.py311.dependencies]
 python = "3.11.*"
+
 [feature.py312.dependencies]
 python = "3.12.*"
+
 [environments]
 py311 = ["py311"]
 py312 = ["py312"]
+
 # Task that depends on other tasks in different environments
 [tasks.test-all]
 depends-on = [
   { task = "test", environment = "py311" },
   { task = "test", environment = "py312" },
 ]
-
 ```
 
 This allows you to run tasks in different environments as part of a single pipeline. When you run the main task, Pixi ensures each dependent task uses its specified environment:
 
 ```shell
 pixi run test-all
-
 ```
 
 The environment specified for a task dependency takes precedence over the environment specified via the CLI `--environment` flag. This means even if you run `pixi run test-all --environment py312`, the first dependency will still run in the `py311` environment as specified in the TOML file.
@@ -168,14 +165,12 @@ By default, tasks are executed from the Pixi workspace root. To change this, use
 ├── pixi.toml
 └── scripts
     └── bar.py
-
 ```
 
 To add a task that runs the `bar.py` file from the `scripts` directory, use:
 
 ```shell
 pixi task add bar "python bar.py" --cwd scripts
-
 ```
 
 This will add the following line to [manifest file](../../reference/pixi_manifest/):
@@ -185,7 +180,6 @@ pixi.toml
 ```toml
 [tasks]
 bar = { cmd = "python bar.py", cwd = "scripts" }
-
 ```
 
 ## Task Arguments
@@ -220,6 +214,7 @@ pixi.toml
 [tasks.greet]
 args = ["name"]
 cmd = "echo Hello, {{ name }}!"
+
 # Task with optional arguments (default values)
 [tasks.build]
 args = [
@@ -227,11 +222,11 @@ args = [
   { "arg" = "mode", "default" = "development" },
 ]
 cmd = "echo Building {{ project }} with {{ mode }} mode"
+
 # Task with mixed required and optional arguments
 [tasks.deploy]
 args = ["service", { "arg" = "environment", "default" = "staging" }]
 cmd = "echo Deploying {{ service }} to {{ environment }}"
-
 ```
 
 Argument naming restrictions
@@ -246,18 +241,20 @@ When running a task, provide arguments in the order they are defined:
 # Required argument
 pixi run greet John
 ✨ Pixi task (greet in default): echo Hello, John!
+
 # Default values are used when omitted
 pixi run build
 ✨ Pixi task (build in default): echo Building my-app in development mode
+
 # Override default values
 pixi run build my-project production
 ✨ Pixi task (build in default): echo Building my-project in production mode
+
 # Mixed argument types
 pixi run deploy auth-service
 ✨ Pixi task (deploy in default): echo Deploying auth-service to staging
 pixi run deploy auth-service production
 ✨ Pixi task (deploy in default): echo Deploying auth-service to production
-
 ```
 
 ### Passing Arguments to Dependent Tasks
@@ -274,9 +271,11 @@ args = [
   { arg = "flag", default = "--normal" },      # Installation flag
 ]
 cmd = "echo Installing with manifest {{ path }} and flag {{ flag }}"
+
 # Dependent task specifying positional arguments for the base task
 [tasks.install-release]
 depends-on = [{ task = "install", args = ["/path/to/manifest", "--debug"] }]
+
 # Task with multiple dependencies, passing different arguments
 [tasks.deploy]
 cmd = "echo Deploying"
@@ -288,7 +287,6 @@ depends-on = [
   ] },
   # Other dependent tasks can be added here
 ]
-
 ```
 
 When executing a dependent task, the arguments are passed to the dependency:
@@ -296,10 +294,10 @@ When executing a dependent task, the arguments are passed to the dependency:
 ```shell
 pixi run install-release
 ✨ Pixi task (install in default): echo Installing with manifest /path/to/manifest and flag --debug
+
 pixi run deploy
 ✨ Pixi task (install in default): echo Installing with manifest /custom/path and flag --verbose
 ✨ Pixi task (deploy in default): echo Deploying
-
 ```
 
 When a dependent task doesn't specify all arguments, the default values are used for the missing ones:
@@ -313,16 +311,15 @@ args = [
   { "arg" = "arg2", "default" = "default2" }, # Second argument with default
 ]
 cmd = "echo Base task with {{ arg1 }} and {{ arg2 }}"
+
 [tasks.partial-override]
 # Only override the first argument
 depends-on = [{ "task" = "base-task", "args" = ["override1"] }]
-
 ```
 
 ```shell
 pixi run partial-override
 ✨ Pixi task (base-task in default): echo Base task with override1 and default2
-
 ```
 
 For a dependent task to accept arguments to pass to the dependency, you can use the same syntax as passing arguments to the command:
@@ -336,16 +333,17 @@ args = [
   { "arg" = "arg2", "default" = "default2" }, # Second argument with default
 ]
 cmd = "echo Base task with {{ arg1 }} and {{ arg2 }}"
+
 [tasks.partial-override]
 # Only override the first argument
 depends-on = [{ "task" = "base-task", "args" = ["override1"] }]
+
 [tasks.partial-override-with-arg]
 # Only override the first argument
 args = [
   { arg = "arg2", default = "new-default2" }, # Argument with new default
 ]
 depends-on = [{ task = "base-task", args = ["override1", "{{ arg2 }}"] }]
-
 ```
 
 ```shell
@@ -353,7 +351,6 @@ pixi run partial-override-with-arg
 ✨ Pixi task (base-task in default): echo Base task with override1 and new-default2
 pixi run partial-override-with-arg cli-arg
 ✨ Pixi task (base-task in default): echo Base task with override1 and cli-arg
-
 ```
 
 ### MiniJinja Templating for Task Arguments
@@ -367,7 +364,6 @@ pixi.toml
 ```toml
 [tasks]
 greet = { cmd = "echo Hello, {{ name }}!", args = ["name"] }
-
 ```
 
 You can also use filters to transform argument values:
@@ -392,7 +388,6 @@ task4 = { cmd = """echo {% if "win" in platform  %}windows{% else %}unix{% endif
 task5 = { cmd = "{% for name in names | split %} echo {{ name }};{% endfor %}", args = [
   "names",
 ] }
-
 ```
 
 #### Pixi Variables
@@ -419,13 +414,15 @@ pixi.toml
 # Platform-specific commands
 build = { cmd = "cargo build --target {{ pixi.platform }}", args = [] }
 download-binary = { cmd = "curl -O https://example.com/binary-{{ pixi.platform }}.tar.gz", args = [] }
+
 # Conditional execution based on platform
 install = { cmd = "{% if pixi.is_win %}install.bat{% else %}./install.sh{% endif %}", args = [] }
+
 # Environment-aware tasks
 deploy = { cmd = "deploy.sh --env {{ pixi.environment.name }}", args = [] }
+
 # Using manifest path
 validate = { cmd = "validator --manifest {{ pixi.manifest_path }}", args = [] }
-
 ```
 
 The pixi variables can also be combined with task arguments:
@@ -438,7 +435,6 @@ deploy = {
     cmd = "deploy.sh --platform {{ pixi.platform }} --env {{ environment }} --version {{ pixi.version }}",
     args = [{ arg = "environment", default = "staging" }]
 }
-
 ```
 
 When running tasks with typed arguments, the platform will automatically reflect the best platform for the environment where the task executes.
@@ -462,6 +458,7 @@ pixi.toml
 [tasks._git-clone]
 args = ["url"]
 cmd = "echo git clone {{ url }}"
+
 # Hidden task that clones a dependency
 [tasks._clone-subproject]
 depends-on = [
@@ -469,11 +466,11 @@ depends-on = [
     "https://git.hub/org/subproject.git",
   ] },
 ]
+
 # Task to build the project which depends on cloning a dependency
 [tasks.build]
 cmd = "echo Building project"
 depends-on = ["_clone-subproject"]
-
 ```
 
 ## Caching
@@ -496,10 +493,12 @@ pixi.toml
 [tasks]
 # This task will only run if the `main.py` file has changed.
 run = { cmd = "python main.py", inputs = ["main.py"] }
+
 # This task will remember the result of the `curl` command and not run it again if the file `data.csv` already exists.
 download_data = { cmd = "curl -o data.csv https://example.com/data.csv", outputs = [
   "data.csv",
 ] }
+
 # This task will only run if the `src` directory has changed and will remember the result of the `make` command.
 build = { cmd = "make", inputs = [
   "src/*.cpp",
@@ -507,6 +506,7 @@ build = { cmd = "make", inputs = [
 ], outputs = [
   "build/app.exe",
 ] }
+
 # Process a specific file based on the provided argument
 process-file = { cmd = "python process.py inputs/{{ filename }}.txt --output outputs/{{ filename }}.processed", args = [
   "filename",
@@ -515,7 +515,6 @@ process-file = { cmd = "python process.py inputs/{{ filename }}.txt --output out
 ], outputs = [
   "outputs/{{ filename }}.processed",
 ] }
-
 ```
 
 When using template variables in inputs/outputs, Pixi expands the templates using the provided arguments or environment variables, and uses the resolved paths for caching decisions. This allows you to create generic tasks that can handle different files without duplicating task configurations:
@@ -523,11 +522,12 @@ When using template variables in inputs/outputs, Pixi expands the templates usin
 ```shell
 # First run processes the file and caches the result
 pixi run process-file data1
+
 # Second run with the same argument uses the cached result
 pixi run process-file data1  # [cache hit]
+
 # Run with a different argument processes a different file
 pixi run process-file data2
-
 ```
 
 Note: if you want to debug the globs you can use the `--verbose` flag to see which files are selected.
@@ -535,7 +535,6 @@ Note: if you want to debug the globs you can use the `--verbose` flag to see whi
 ```shell
 # shows info logs of all files that were selected by the globs
 pixi run -v start
-
 ```
 
 ## Environment Variables
@@ -563,14 +562,12 @@ pixi.toml
 ```toml
 [tasks]
 echo = { cmd = "echo $ARGUMENT", env = { ARGUMENT = "hello" } }
-
 ```
 
 ```shell
 ARGUMENT=world pixi run echo
 ✨ Pixi task (echo in default): echo $ARGUMENT
 world
-
 ```
 
 you can now recreate this behaviour like:
@@ -580,14 +577,12 @@ pixi.toml
 ```toml
 [tasks]
 echo = { cmd = "echo {{ ARGUMENT }}", args = [{"arg" = "ARGUMENT", "default" = "hello" }] }
-
 ```
 
 ```shell
 pixi run echo world
 ✨ Pixi task (echo): echo world
 world
-
 ```
 
 ## Clean environment
@@ -597,7 +592,6 @@ You can make sure the environment of a task is "Pixi only". Here Pixi will only 
 ```toml
 [tasks]
 clean_command = { cmd = "python run_in_isolated_env.py", clean-env = true }
-
 ```
 
 This setting can also be set from the command line with `pixi run --clean-env TASK_NAME`.

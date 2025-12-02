@@ -8,7 +8,6 @@ R packages are usually prefixed with `r-` in the conda-forge channel. To install
 pixi add r-<package-name>
 # for example
 pixi add r-ggplot2
-
 ```
 
 ## Using R packages in RStudio
@@ -24,16 +23,18 @@ The full example can be found here: [RStudio example](https://github.com/prefix-
 name = "r"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-64", "osx-arm64"]
+
 [target.linux.tasks]
 rstudio = "rstudio"
+
 [target.osx.tasks]
 rstudio = "open -a rstudio"
 # or alternatively with the full path:
 # rstudio = "/Applications/RStudio.app/Contents/MacOS/RStudio"
+
 [dependencies]
 r = ">=4.3,<5"
 r-ggplot2 = ">=3.5.0,<3.6"
-
 ```
 
 Once RStudio has loaded, you can execute the following R code that uses the `ggplot2` package:
@@ -41,14 +42,15 @@ Once RStudio has loaded, you can execute the following R code that uses the `ggp
 ```R
 # Load the ggplot2 package
 library(ggplot2)
+
 # Load the built-in 'mtcars' dataset
 data <- mtcars
+
 # Create a scatterplot of 'mpg' vs 'wt'
 ggplot(data, aes(x = wt, y = mpg)) +
   geom_point() +
   labs(x = "Weight (1000 lbs)", y = "Miles per Gallon") +
   ggtitle("Fuel Efficiency vs. Weight")
-
 ```
 
 Note

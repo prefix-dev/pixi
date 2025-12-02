@@ -8,7 +8,6 @@ The `pixi` command is the main entry point for the Pixi CLI.
 
 ```text
 pixi [OPTIONS] [COMMAND]
-
 ```
 
 ## Subcommands
@@ -45,24 +44,28 @@ pixi [OPTIONS] [COMMAND]
 
 ## Global Options
 
-- [`--help (-h)`](#arg---help) Display help information
+- [`--help (-h)`](#arg---help) : Display help information
 
-- [`--verbose (-v)`](#arg---verbose) Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
+- [`--verbose (-v)`](#arg---verbose) : Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
 
-- [`--quiet (-q)`](#arg---quiet) Decrease logging verbosity (quiet mode)
+- [`--quiet (-q)`](#arg---quiet) : Decrease logging verbosity (quiet mode)
 
-- [`--color <COLOR>`](#arg---color) Whether the log needs to be colored
+- [`--color <COLOR>`](#arg---color) : Whether the log needs to be colored
 
+  ```
   **env**: `PIXI_COLOR`
-
+    
   **default**: `auto`
-
+    
   **options**: `always`, `never`, `auto`
+  ```
 
-- [`--no-progress`](#arg---no-progress) Hide all progress bars, always turned on if stderr is not a terminal
+- [`--no-progress`](#arg---no-progress) : Hide all progress bars, always turned on if stderr is not a terminal
 
+  ```
   **env**: `PIXI_NO_PROGRESS`
-
+    
   **default**: `false`
+  ```
 
-- [`--list`](#arg---list) List all installed commands (built-in and extensions)
+- [`--list`](#arg---list) : List all installed commands (built-in and extensions)

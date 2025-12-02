@@ -1,4 +1,4 @@
-# `[pixi](../../../) [workspace](../../) [version](../) patch`
+# `pixi workspace version patch`
 
 ## About
 
@@ -8,5 +8,4 @@ Bump the workspace version to PATCH
 
 ```text
 pixi workspace version patch
-
 ```

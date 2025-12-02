@@ -1,4 +1,4 @@
-# `[pixi](../) clean`
+# `pixi clean`
 
 ## About
 
@@ -8,7 +8,6 @@ Cleanup the environments
 
 ```text
 pixi clean [OPTIONS] [COMMAND]
-
 ```
 
 ## Subcommands
@@ -19,13 +18,13 @@ pixi clean [OPTIONS] [COMMAND]
 
 ## Options
 
-- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) The environment directory to remove
-- [`--activation-cache`](#arg---activation-cache) Only remove the activation cache
-- [`--build`](#arg---build) Only remove the pixi-build cache
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment directory to remove
+- [`--activation-cache`](#arg---activation-cache) : Only remove the activation cache
+- [`--build`](#arg---build) : Only remove the pixi-build cache
 
 ## Global Options
 
-- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 ## Description
 

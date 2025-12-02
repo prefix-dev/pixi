@@ -4,20 +4,20 @@ You can install `pixi-install-to-prefix` with:
 
 ```bash
 pixi global install pixi-install-to-prefix
-
 ```
 
 Instead of installing `pixi-install-to-prefix` globally, you can also use `pixi exec` to run `pixi-install-to-prefix` in a temporary environment:
 
 ```bash
 pixi exec pixi-install-to-prefix ./my-environment
-
 ```
 
 ```text
 Usage: pixi-install-to-prefix [OPTIONS] <PREFIX>
+
 Arguments:
   <PREFIX>  The path to the prefix where you want to install the environment
+
 Options:
   -l, --lockfile <LOCKFILE>        The path to the pixi lockfile [default: pixi.lock]
   -e, --environment <ENVIRONMENT>  The name of the pixi environment to install [default: default]
@@ -28,5 +28,4 @@ Options:
   -v, --verbose...                 Increase logging verbosity
   -q, --quiet...                   Decrease logging verbosity
   -h, --help                       Print help
-
 ```

@@ -12,13 +12,16 @@ To get started, create a new GitHub Actions workflow file in your repository.
 
 ```yaml
 name: Update lockfiles
+
 permissions: # (1)!
   contents: write
   pull-requests: write
+
 on:
   workflow_dispatch:
   schedule:
     - cron: 0 5 1 * * # (2)!
+
 jobs:
   pixi-update:
     runs-on: ubuntu-latest
@@ -44,7 +47,6 @@ jobs:
           labels: pixi
           delete-branch: true
           add-paths: pixi.lock
-
 ```
 
 1. Needed for `peter-evans/create-pull-request`

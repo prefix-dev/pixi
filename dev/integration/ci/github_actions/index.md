@@ -10,7 +10,6 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
 - run: pixi run test
-
 ```
 
 Pin your action versions
@@ -32,7 +31,6 @@ updates:
       dependencies:
         patterns:
           - "*"
-
 ```
 
 1. or `daily`, `weekly`
@@ -60,7 +58,6 @@ In order to not exceed the [10 GB cache size limit](https://docs.github.com/en/a
   with:
     cache: true
     cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
-
 ```
 
 ### Multiple environments
@@ -72,18 +69,20 @@ With pixi, you can create multiple environments for different requirements. You 
 name = "my-package"
 channels = ["conda-forge"]
 platforms = ["linux-64"]
+
 [dependencies]
 python = ">=3.11"
 pip = "*"
 polars = ">=0.14.24,<0.21"
+
 [feature.py311.dependencies]
 python = "3.11.*"
 [feature.py312.dependencies]
 python = "3.12.*"
+
 [environments]
 py311 = ["py311"]
 py312 = ["py312"]
-
 ```
 
 #### Multiple environments using a matrix
@@ -101,7 +100,6 @@ test:
   - uses: prefix-dev/setup-pixi@v0.9.2
     with:
       environments: ${{ matrix.environment }}
-
 ```
 
 #### Install multiple environments in one job
@@ -117,14 +115,12 @@ The following example will install both the `py311` and the `py312` environment 
 - run: |
   pixi run -e py311 test
   pixi run -e py312 test
-
 ```
 
 1. separated by spaces, equivalent to
 
    ```yaml
    environments: py311 py312
-
    ```
 
 Caching behavior if you don't specify environments
@@ -144,7 +140,6 @@ You can specify `pixi global install` commands by setting the `global-environmen
 - run: |
     gcloud --version
     keyring --list-backends
-
 ```
 
 ### Authentication
@@ -172,7 +167,6 @@ Specify the token using the `auth-token` input argument. This form of authentica
   with:
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
-
 ```
 
 #### Username and password
@@ -185,7 +179,6 @@ Specify the username and password using the `auth-username` and `auth-password` 
     auth-host: custom-artifactory.com
     auth-username: ${{ secrets.PIXI_USERNAME }}
     auth-password: ${{ secrets.PIXI_PASSWORD }}
-
 ```
 
 #### Conda-token
@@ -197,7 +190,6 @@ Specify the conda-token using the `conda-token` input argument. This form of aut
   with:
     auth-host: anaconda.org # (1)!
     auth-conda-token: ${{ secrets.CONDA_TOKEN }}
-
 ```
 
 1. or my-quetz-instance.com
@@ -213,7 +205,6 @@ Specify the S3 key pair using the `auth-access-key-id` and `auth-secret-access-k
     auth-s3-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
     auth-s3-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
     auth-s3-session-token: ${{ secrets.SESSION_TOKEN }} # (1)!
-
 ```
 
 1. only needed if your key uses a session token
@@ -228,7 +219,6 @@ You can specify whether to use keyring to look up credentials for PyPI.
 - uses: prefix-dev/setup-pixi@v0.9.2
   with:
     pypi-keyring-provider: subprocess # one of 'subprocess', 'disabled'
-
 ```
 
 ### Custom shell wrapper
@@ -240,7 +230,6 @@ You can specify whether to use keyring to look up credentials for PyPI.
     python --version
     pip install --no-deps -e .
   shell: pixi run bash -e {0}
-
 ```
 
 1. everything here will be run inside of the pixi environment
@@ -252,7 +241,6 @@ You can even run Python scripts like this:
     import my_package
     print("Hello world!")
   shell: pixi run python {0}
-
 ```
 
 1. everything here will be run inside of the pixi environment
@@ -263,7 +251,6 @@ If you want to use PowerShell, you need to specify `-Command` as well.
 - run: | # (1)!
     python --version | Select-String "3.11"
   shell: pixi run pwsh -Command {0} # pwsh works on all platforms
-
 ```
 
 1. everything here will be run inside of the pixi environment
@@ -280,7 +267,6 @@ With `pixi exec`, you can also run a one-off command inside a temporary pixi env
 - run: | # (1)!
     zstd --version
   shell: pixi exec --spec zstd -- bash -e {0}
-
 ```
 
 1. everything here will be run inside of the temporary pixi environment
@@ -290,7 +276,6 @@ With `pixi exec`, you can also run a one-off command inside a temporary pixi env
     import ruamel.yaml
     # ...
   shell: pixi exec --spec python=3.11.* --spec ruamel.yaml -- python {0}
-
 ```
 
 1. everything here will be run inside of the temporary pixi environment
@@ -305,7 +290,6 @@ Instead of using a custom shell wrapper, you can also make all pixi-installed bi
 - uses: prefix-dev/setup-pixi@v0.9.2
   with:
     activate-environment: true
-
 ```
 
 If you are installing multiple environments, you will need to specify the name of the environment that you want to be activated.
@@ -317,7 +301,6 @@ If you are installing multiple environments, you will need to specify the name o
       py311
       py312
     activate-environment: py311
-
 ```
 
 Activating an environment may be more useful than using a custom shell wrapper as it allows non-shell based steps to access binaries on the path. However, be aware that this option augments the environment of your job.
@@ -332,7 +315,6 @@ You can specify whether `setup-pixi` should run `pixi install --frozen` or `pixi
     locked: true
     # or
     frozen: true
-
 ```
 
 If you don't specify anything, the default behavior is to run `pixi install --locked` if a `pixi.lock` file is present and `pixi install` otherwise.
@@ -357,7 +339,6 @@ The second type is the debug logging of the pixi executable. This can be specifi
 - uses: prefix-dev/setup-pixi@v0.9.2
   with:
     log-level: vvv # (1)!
-
 ```
 
 1. One of `q`, `default`, `v`, `vv`, or `vvv`.
@@ -384,7 +365,6 @@ On self-hosted runners, you also might want to alter the default pixi install lo
   with:
     post-cleanup: true
     pixi-bin-path: ${{ runner.temp }}/bin/pixi # (1)!
-
 ```
 
 1. `${{ runner.temp }}\Scripts\pixi.exe` on Windows
@@ -399,7 +379,6 @@ You can also use a preinstalled local version of pixi on the runner by not setti
 - uses: prefix-dev/setup-pixi@v0.9.2
   with:
     manifest-path: pyproject.toml
-
 ```
 
 ### Only install pixi
@@ -410,7 +389,6 @@ If you only want to install pixi and not install the current workspace, you can 
 - uses: prefix-dev/setup-pixi@v0.9.2
   with:
     run-install: false
-
 ```
 
 ### Download pixi from a custom URL
@@ -422,7 +400,6 @@ You can also download pixi from a custom URL by setting the `pixi-url` input arg
   with:
     pixi-url: https://pixi-mirror.example.com/releases/download/v0.48.0/pixi-x86_64-unknown-linux-musl
     pixi-url-headers: '{"Authorization": "Bearer ${{ secrets.PIXI_MIRROR_BEARER_TOKEN }}"}'
-
 ```
 
 The `pixi-url` input argument can also be a [Handlebars](https://handlebarsjs.com/) template string. It will be rendered with the following variables:
@@ -442,7 +419,6 @@ By default, `pixi-url` is equivalent to the following template:
       {{~else~}}
       https://github.com/prefix-dev/pixi/releases/download/{{version}}/{{pixiFile}}
       {{~/if}}
-
 ```
 
 ### Setting inputs from environment variables

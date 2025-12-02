@@ -1,4 +1,4 @@
-# `[pixi](../) auth`
+# `pixi auth`
 
 ## About
 
@@ -8,7 +8,6 @@ Login to prefix.dev or anaconda.org servers to access private channels
 
 ```text
 pixi auth <COMMAND>
-
 ```
 
 ## Subcommands

@@ -1,4 +1,4 @@
-# `[pixi](../../) [global](../) expose`
+# `pixi global expose`
 
 ## About
 
@@ -8,7 +8,6 @@ Interact with the exposure of binaries in the global environment
 
 ```text
 pixi global expose <COMMAND>
-
 ```
 
 ## Subcommands

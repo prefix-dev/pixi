@@ -2,7 +2,6 @@
 
 ```bash
 pixi global install starship
-
 ```
 
 For information about how to configure and set up starship, see the [official documentation](https://starship.rs/config/#pixi).
@@ -21,7 +20,6 @@ python_binary = [
   # fall back to pixi's python if it's available
   ".pixi/envs/default/bin/python",
 ]
-
 ```
 
 By default, starship uses 🧚🏻 as pixi's symbol. You can adjust it as follows if you want a different symbol
@@ -31,12 +29,10 @@ By default, starship uses 🧚🏻 as pixi's symbol. You can adjust it as follow
 ```toml
 [pixi]
 symbol = "📦 "
-
 ```
 
 As starship already displays a custom message when a pixi environment is active, you can disable pixi's custom PS1:
 
 ```text
 pixi config set shell.change-ps1 "false"
-
 ```

@@ -1,4 +1,4 @@
-# `[pixi](../) upload`
+# `pixi upload`
 
 ## About
 
@@ -8,18 +8,21 @@ Upload a conda package
 
 ```text
 pixi upload <HOST> <PACKAGE_FILE>
-
 ```
 
 ## Arguments
 
-- [`<HOST>`](#arg-%3CHOST%3E) The host + channel to upload to
+- [`<HOST>`](#arg-%3CHOST%3E) : The host + channel to upload to
 
+  ```
   **required**: `true`
+  ```
 
-- [`<PACKAGE_FILE>`](#arg-%3CPACKAGE_FILE%3E) The file to upload
+- [`<PACKAGE_FILE>`](#arg-%3CPACKAGE_FILE%3E) : The file to upload
 
+  ```
   **required**: `true`
+  ```
 
 ## Description
 

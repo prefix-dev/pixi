@@ -40,13 +40,15 @@ Default features
 [dependencies] # short for [feature.default.dependencies]
 python = "*"
 numpy = "==2.3"
+
 [pypi-dependencies] # short for [feature.default.pypi-dependencies]
 pandas = "*"
+
 [system-requirements] # short for [feature.default.system-requirements]
 libc = "2.33"
+
 [activation] # short for [feature.default.activation]
 scripts = ["activate.sh"]
-
 ```
 
 Different dependencies per feature
@@ -58,7 +60,6 @@ python = "~=3.9.0"
 python = "~=3.10.0"
 [feature.test.dependencies]
 pytest = "*"
-
 ```
 
 Full set of environment modification in one feature
@@ -76,7 +77,6 @@ system-requirements = {cuda = "12"}
 channels = ["nvidia", {channel = "pytorch", priority = -1}] # Results in:  ["nvidia", "conda-forge", "pytorch"] when the default is `conda-forge`
 tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
-
 ```
 
 Define tasks as defaults of an environment
@@ -84,10 +84,11 @@ Define tasks as defaults of an environment
 ```toml
 [feature.test.tasks]
 test = "pytest"
+
 [environments]
 test = ["test"]
-# `pixi run test` == `pixi run --environment test test`
 
+# `pixi run test` == `pixi run --environment test test`
 ```
 
 The environment definition should contain the following fields:
@@ -104,7 +105,6 @@ default = ["py39"] # implicit: default = ["py39", "default"]
 py310 = ["py310"] # implicit: py310 = ["py310", "default"]
 test = ["test"] # implicit: test = ["test", "default"]
 test39 = ["test", "py39"] # implicit: test39 = ["test", "py39", "default"]
-
 ```
 
 Testing a production environment with additional dependencies
@@ -117,7 +117,6 @@ prod = {features = ["py39"], solve-group = "prod"}
 test_prod = {features = ["py39", "test"], solve-group = "prod"}
 # Using the `solve-group` to solve the `prod` and `test_prod` environments together
 # Which makes sure the tested environment has the same version of the dependencies as the production environment.
-
 ```
 
 Creating environments without including the default feature
@@ -126,12 +125,13 @@ Creating environments without including the default feature
 [dependencies]
 python = "*"
 numpy = "*"
+
 [feature.lint.dependencies]
 pre-commit = "*"
+
 [environments]
 # Create a custom environment which only has the `lint` feature (numpy isn't part of that env).
 lint = {features = ["lint"], no-default-feature = true}
-
 ```
 
 ### lock file Structure
@@ -159,7 +159,6 @@ Within the `pixi.lock` file, a package may now include an additional `environmen
     - py39
     - default
   ...:
-
 ```
 
 ### User Interface Environment Activation
@@ -171,7 +170,6 @@ Default behavior
 ```shell
 ➜ pixi run python
 # Runs python in the `default` environment
-
 ```
 
 Activating an specific environment
@@ -180,7 +178,6 @@ Activating an specific environment
 ➜ pixi run -e test pytest
 ➜ pixi run --environment test pytest
 # Runs `pytest` in the `test` environment
-
 ```
 
 Activating a shell in an environment
@@ -189,7 +186,6 @@ Activating a shell in an environment
 ➜ pixi shell -e cuda
 pixi shell --environment cuda
 # Starts a shell in the `cuda` environment
-
 ```
 
 Running any command in an environment
@@ -197,7 +193,6 @@ Running any command in an environment
 ```shell
 ➜ pixi run -e test any_command
 # Runs any_command in the `test` environment which doesn't require to be predefined as a task.
-
 ```
 
 ### Ambiguous Environment Selection
@@ -213,20 +208,22 @@ pixi.toml
 name = "test_ambiguous_env"
 channels = []
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
 [tasks]
 default = "echo Default"
 ambi = "echo Ambi::Default"
 [feature.test.tasks]
 test = "echo Test"
 ambi = "echo Ambi::Test"
+
 [feature.dev.tasks]
 dev = "echo Dev"
 ambi = "echo Ambi::Dev"
+
 [environments]
 default = ["test", "dev"]
 test = ["test"]
 dev = ["dev"]
-
 ```
 
 Trying to run the `ambi` task will prompt the user to select the environment. As it is available in all environments.
@@ -236,13 +233,14 @@ Interactive selection of environments if task is in multiple environments
 ```shell
 ➜ pixi run ambi
 ? The task 'ambi' can be run in multiple environments.
+
 Please select an environment to run the task in: ›
 ❯ default # selecting default
   test
   dev
+
 ✨ Pixi task (ambi in default): echo Ambi::Test
 Ambi::Test
-
 ```
 
 As you can see it runs the task defined in the `feature.task` but it is run in the `default` environment. This happens because the `ambi` task is defined in the `test` feature, and it is overwritten in the default environment. So the `tasks.default` is now non-reachable from any environment.
@@ -253,18 +251,20 @@ Some other results running in this example:
 ➜ pixi run --environment test ambi
 ✨ Pixi task (ambi in test): echo Ambi::Test
 Ambi::Test
+
 ➜ pixi run --environment dev ambi
 ✨ Pixi task (ambi in dev): echo Ambi::Dev
 Ambi::Dev
+
 # dev is run in the default environment
 ➜ pixi run dev
 ✨ Pixi task (dev in default): echo Dev
 Dev
+
 # dev is run in the dev environment
 ➜ pixi run -e dev dev
 ✨ Pixi task (dev in dev): echo Dev
 Dev
-
 ```
 
 ## Initial write-up
@@ -285,12 +285,15 @@ name = "polarify"
 # ...
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+
 [tasks]
 postinstall = "pip install --no-build-isolation --no-deps --disable-pip-version-check -e ."
+
 [dependencies]
 python = ">=3.9"
 pip = "*"
 polars = ">=0.14.24,<0.21"
+
 [feature.py39.dependencies]
 python = "3.9.*"
 [feature.py310.dependencies]
@@ -307,6 +310,7 @@ polars = "0.18.*"
 polars = "0.19.*"
 [feature.pl020.dependencies]
 polars = "0.20.*"
+
 [feature.test.dependencies]
 pytest = "*"
 pytest-md = "*"
@@ -314,10 +318,12 @@ pytest-emoji = "*"
 hypothesis = "*"
 [feature.test.tasks]
 test = "pytest"
+
 [feature.lint.dependencies]
 pre-commit = "*"
 [feature.lint.tasks]
 lint = "pre-commit run --all"
+
 [environments]
 pl017 = ["pl017", "py39", "test"]
 pl018 = ["pl018", "py39", "test"]
@@ -327,7 +333,6 @@ py39 = ["py39", "test"]
 py310 = ["py310", "test"]
 py311 = ["py311", "test"]
 py312 = ["py312", "test"]
-
 ```
 
 .github/workflows/test.yml
@@ -357,7 +362,6 @@ jobs:
     - run: |
         pixi run -e pl017 test
         pixi run -e pl018 test
-
 ```
 
 Test vs Production example
@@ -372,11 +376,13 @@ name = "my-app"
 # ...
 channels = ["conda-forge"]
 platforms = ["osx-arm64", "linux-64"]
+
 [tasks]
 postinstall-e = "pip install --no-build-isolation --no-deps --disable-pip-version-check -e ."
 postinstall = "pip install --no-build-isolation --no-deps --disable-pip-version-check ."
 dev = "uvicorn my_app.app:main --reload"
 serve = "uvicorn my_app.app:main"
+
 [dependencies]
 python = ">=3.12"
 pip = "*"
@@ -385,34 +391,35 @@ fastapi = ">=0.105.0"
 sqlalchemy = ">=2,<3"
 uvicorn = "*"
 aiofiles = "*"
+
 [feature.test.dependencies]
 pytest = "*"
 pytest-md = "*"
 pytest-asyncio = "*"
 [feature.test.tasks]
 test = "pytest --md=report.md"
+
 [environments]
 # both default and prod will have exactly the same dependency versions when they share a dependency
 default = {features = ["test"], solve-group = "prod-group"}
 prod = {features = [], solve-group = "prod-group"}
-
 ```
 
 In ci you would run the following commands:
 
 ```shell
 pixi run postinstall-e && pixi run test
-
 ```
 
 Locally you would run the following command:
 
 ```shell
 pixi run postinstall-e && pixi run dev
-
 ```
 
-Then in a Dockerfile you would run the following command: Dockerfile
+Then in a Dockerfile you would run the following command:
+
+Dockerfile
 
 ```dockerfile
 FROM ghcr.io/prefix-dev/pixi:latest # this doesn't exist yet
@@ -421,7 +428,6 @@ COPY . .
 RUN pixi run --environment prod postinstall
 EXPOSE 8080
 CMD ["/usr/local/bin/pixi", "run", "--environment", "prod", "serve"]
-
 ```
 
 Multiple machines from one workspace
@@ -438,9 +444,11 @@ authors = ["Your Name <your.name@gmail.com>"]
 channels = ["conda-forge", "pytorch"]
 # All platforms that are supported by the workspace as the features will take the intersection of the platforms defined there.
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+
 [tasks]
 train-model = "python train.py"
 evaluate-model = "python test.py"
+
 [dependencies]
 python = "3.11.*"
 pytorch = {version = ">=2.0.1", channel = "pytorch"}
@@ -448,31 +456,38 @@ torchvision = {version = ">=0.15", channel = "pytorch"}
 polars = ">=0.20,<0.21"
 matplotlib-base = ">=3.8.2,<3.9"
 ipykernel = ">=6.28.0,<6.29"
+
 [feature.cuda]
 platforms = ["win-64", "linux-64"]
 channels = ["nvidia", {channel = "pytorch", priority = -1}]
 system-requirements = {cuda = "12.1"}
+
 [feature.cuda.tasks]
 train-model = "python train.py --cuda"
 evaluate-model = "python test.py --cuda"
+
 [feature.cuda.dependencies]
 pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
+
 [feature.mlx]
 platforms = ["osx-arm64"]
 # MLX is only available on macOS >=13.5 (>14.0 is recommended)
 system-requirements = {macos = "13.5"}
+
 [feature.mlx.tasks]
 train-model = "python train.py --mlx"
 evaluate-model = "python test.py --mlx"
+
 [feature.mlx.dependencies]
 mlx = ">=0.16.0,<0.17.0"
+
 [feature.cpu]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+
 [environments]
 cuda = ["cuda"]
 mlx = ["mlx"]
 default = ["cpu"]
-
 ```
 
 Executing on a cuda machine
@@ -481,7 +496,6 @@ Executing on a cuda machine
 pixi run train-model --environment cuda
 # will execute `python train.py --cuda`
 # fails if not on linux-64 or win-64 with cuda 12.1
-
 ```
 
 Executing with mlx
@@ -490,12 +504,10 @@ Executing with mlx
 pixi run train-model --environment mlx
 # will execute `python train.py --mlx`
 # fails if not on osx-arm64
-
 ```
 
 Executing on a machine without cuda or mlx
 
 ```shell
 pixi run train-model
-
 ```

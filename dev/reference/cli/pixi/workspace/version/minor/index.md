@@ -1,4 +1,4 @@
-# `[pixi](../../../) [workspace](../../) [version](../) minor`
+# `pixi workspace version minor`
 
 ## About
 
@@ -8,5 +8,4 @@ Bump the workspace version to MINOR
 
 ```text
 pixi workspace version minor
-
 ```

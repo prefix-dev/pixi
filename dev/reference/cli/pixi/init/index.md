@@ -1,4 +1,4 @@
-# `[pixi](../) init`
+# `pixi init`
 
 ## About
 
@@ -12,34 +12,43 @@ When importing an environment, the `pixi.toml` will be created with the dependen
 
 ```text
 pixi init [OPTIONS] [PATH]
-
 ```
 
 ## Arguments
 
-- [`<PATH>`](#arg-%3CPATH%3E) Where to place the workspace (defaults to current path)
+- [`<PATH>`](#arg-%3CPATH%3E) : Where to place the workspace (defaults to current path)
 
+  ```
   **default**: `.`
+  ```
 
 ## Options
 
-- [`--channel (-c) <CHANNEL>`](#arg---channel) Channel to use in the workspace
+- [`--channel (-c) <CHANNEL>`](#arg---channel) : Channel to use in the workspace
 
+  ```
   May be provided more than once.
+  ```
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) Platforms that the workspace supports
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : Platforms that the workspace supports
 
+  ```
   May be provided more than once.
+  ```
 
-- [`--import (-i) <ENVIRONMENT_FILE>`](#arg---import) Environment.yml file to bootstrap the workspace
+- [`--import (-i) <ENVIRONMENT_FILE>`](#arg---import) : Environment.yml file to bootstrap the workspace
 
-- [`--format <FORMAT>`](#arg---format) The manifest format to create
+- [`--format <FORMAT>`](#arg---format) : The manifest format to create
 
+  ```
   **options**: `pixi`, `pyproject`, `mojoproject`
+  ```
 
-- [`--scm (-s) <SCM>`](#arg---scm) Source Control Management used for this workspace
+- [`--scm (-s) <SCM>`](#arg---scm) : Source Control Management used for this workspace
 
+  ```
   **options**: `github`, `gitlab`, `codeberg`
+  ```
 
 ## Description
 
@@ -62,7 +71,6 @@ pixi init --platform osx-64 --platform linux-64 myproject  # (5)!
 pixi init --import environment.yml  # (6)!
 pixi init --format pyproject  # (7)!
 pixi init --format pixi --scm gitlab  # (8)!
-
 ```
 
 1. Initializes a new project in the `myproject` directory, relative to the current directory.

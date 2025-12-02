@@ -4,7 +4,6 @@ First install `direnv` by running the following command:
 
 ```bash
 pixi global install direnv
-
 ```
 
 Then create a `.envrc` file in your Pixi workspace root with the following content:
@@ -14,7 +13,6 @@ Then create a `.envrc` file in your Pixi workspace root with the following conte
 ```shell
 watch_file pixi.lock # (1)!
 eval "$(pixi shell-hook)" # (2)!
-
 ```
 
 1. This ensures that every time your `pixi.lock` changes, `direnv` invokes the shell-hook again.
@@ -33,7 +31,6 @@ $ cd ..
 direnv: unloading
 $ which python
 python not found
-
 ```
 
 While `direnv` comes with [hooks for the common shells](https://direnv.net/docs/hook.html), these hooks into the shell should not be relied on when using and IDE.

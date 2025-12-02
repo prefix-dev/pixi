@@ -1,4 +1,4 @@
-# `[pixi](../../../) [workspace](../../) [requires-pixi](../) verify`
+# `pixi workspace requires-pixi verify`
 
 ## About
 
@@ -8,5 +8,4 @@ Verify the pixi minimum version requirement
 
 ```text
 pixi workspace requires-pixi verify
-
 ```

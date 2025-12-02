@@ -1,4 +1,4 @@
-# `[pixi](../../../) [workspace](../../) [version](../) get`
+# `pixi workspace version get`
 
 ## About
 
@@ -8,5 +8,4 @@ Get the workspace version
 
 ```text
 pixi workspace version get
-
 ```

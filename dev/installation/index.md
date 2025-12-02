@@ -2,14 +2,12 @@ To install `pixi` you can run the following command in your terminal:
 
 ```bash
 curl -fsSL https://pixi.sh/install.sh | sh
-
 ```
 
 If your system doesn't have `curl`, you can use `wget`:
 
 ```bash
 wget -qO- https://pixi.sh/install.sh | sh
-
 ```
 
 What does this do?
@@ -22,7 +20,6 @@ Or run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -c "irm -useb https://pixi.sh/install.ps1 | iex"
-
 ```
 
 What does this do?
@@ -45,14 +42,12 @@ Updating is as simple as installing, rerunning the installation script gets you 
 
 ```shell
 pixi self-update
-
 ```
 
 Or get a specific Pixi version using:
 
 ```shell
 pixi self-update --version x.y.z
-
 ```
 
 Note
@@ -69,7 +64,6 @@ Pixi is available via homebrew. To install Pixi via homebrew simply run:
 
 ```shell
 brew install pixi
-
 ```
 
 ### Windows Installer
@@ -80,14 +74,12 @@ We provide an `msi` installer on [our GitHub releases page](https://github.com/p
 
 ```text
 winget install prefix-dev.pixi
-
 ```
 
 ### Scoop
 
 ```text
 scoop install main/pixi
-
 ```
 
 ### Download From GitHub Releases
@@ -100,7 +92,6 @@ pixi is 100% written in Rust, and therefore it can be installed, built and teste
 
 ```shell
 cargo install --locked --git https://github.com/prefix-dev/pixi.git pixi
-
 ```
 
 We don't publish to `crates.io` anymore, so you need to install it from the repository. The reason for this is that we depend on some unpublished crates which disallows us to publish to `crates.io`.
@@ -110,7 +101,6 @@ or when you want to make changes use:
 ```shell
 cargo build
 cargo test
-
 ```
 
 If you have any issues building because of the dependency on `rattler` check out its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
@@ -134,21 +124,18 @@ For example, on Apple Silicon, you can force the installation of the x86 version
 
 ```shell
 curl -fsSL https://pixi.sh/install.sh | PIXI_ARCH=x86_64 bash
-
 ```
 
 Or set the version
 
 ```shell
 curl -fsSL https://pixi.sh/install.sh | PIXI_VERSION=v0.18.0 bash
-
 ```
 
 To make a "drop-in" installation of pixi directly in the user `$PATH`:
 
 ```shell
 curl -fsSL https://pixi.sh/install.sh | PIXI_BIN_DIR=/usr/local/bin PIXI_NO_PATH_UPDATE=1 bash
-
 ```
 
 #### Using `.netrc` for Authentication
@@ -160,13 +147,11 @@ The install script automatically uses `.netrc` for authentication with `curl` an
 ```shell
 # Use the default ~/.netrc file
 curl -fsSL https://pixi.sh/install.sh | PIXI_DOWNLOAD_URL=https://private.example.com/pixi-latest.tar.gz bash
-
 ```
 
 ```shell
 # Use a custom .netrc file
 curl -fsSL https://pixi.sh/install.sh | NETRC=/path/to/custom/.netrc PIXI_DOWNLOAD_URL=https://private.example.com/pixi-latest.tar.gz bash
-
 ```
 
 Your `.netrc` file should contain credentials in the following format:
@@ -175,7 +160,6 @@ Your `.netrc` file should contain credentials in the following format:
 machine private.example.com
 login your-username
 password your-token-or-password
-
 ```
 
 Security Recommendation
@@ -199,7 +183,6 @@ For example, set the version:
 
 ```powershell
 $env:PIXI_VERSION='v0.18.0'; powershell -ExecutionPolicy Bypass -Command "iwr -useb https://pixi.sh/install.ps1 | iex"
-
 ```
 
 #### Authentication for Private Repositories
@@ -208,7 +191,6 @@ If you need to download Pixi from a private repository that requires authenticat
 
 ```powershell
 $env:PIXI_DOWNLOAD_URL='https://username:token@private.example.com/pixi-latest.zip'; powershell -ExecutionPolicy Bypass -Command "iwr -useb https://pixi.sh/install.ps1 | iex"
-
 ```
 
 Security Note
@@ -219,11 +201,12 @@ The PowerShell install script automatically masks any credentials embedded in th
 
 To get autocompletion follow the instructions for your shell. Afterwards, restart the shell or source the shell config file.
 
-Add the following to the end of `~/.bashrc`: ~/.bashrc
+Add the following to the end of `~/.bashrc`:
+
+~/.bashrc
 
 ```bash
 eval "$(pixi completion --shell bash)"
-
 ```
 
 Add the following to the end of `~/.zshrc`:
@@ -233,14 +216,12 @@ Add the following to the end of `~/.zshrc`:
 ```zsh
 autoload -Uz compinit && compinit  # redundant with Oh My Zsh
 eval "$(pixi completion --shell zsh)"
-
 ```
 
 Add the following to the end of `Microsoft.PowerShell_profile.ps1`. You can check the location of this file by querying the `$PROFILE` variable in PowerShell. Typically the path is `~\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` or `~/.config/powershell/Microsoft.PowerShell_profile.ps1` on -Nix.
 
 ```pwsh
 (& pixi completion --shell powershell) | Out-String | Invoke-Expression
-
 ```
 
 Add the following to the end of `~/.config/fish/config.fish`:
@@ -249,7 +230,6 @@ Add the following to the end of `~/.config/fish/config.fish`:
 
 ```fish
 pixi completion --shell fish | source
-
 ```
 
 Add the following to your Nushell config file (find it by running `$nu.config-path` in Nushell):
@@ -257,7 +237,6 @@ Add the following to your Nushell config file (find it by running `$nu.config-pa
 ```text
 mkdir $"($nu.data-dir)/vendor/autoload"
 pixi completion --shell nushell | save --force $"($nu.data-dir)/vendor/autoload/pixi-completions.nu"
-
 ```
 
 Add the following to the end of `~/.elvish/rc.elv`:
@@ -266,7 +245,6 @@ Add the following to the end of `~/.elvish/rc.elv`:
 
 ```text
 eval (pixi completion --shell elvish | slurp)
-
 ```
 
 ## Uninstall
@@ -274,20 +252,24 @@ eval (pixi completion --shell elvish | slurp)
 Before un-installation you might want to delete any previous files pixi has installed.
 
 1. Remove any cached data:
+
    ```shell
    pixi clean cache
-
    ```
+
 1. Remove the environments from your pixi workspaces:
+
    ```shell
    cd path/to/workspace && pixi clean
-
    ```
+
 1. Remove the `pixi` and its global environments
+
    ```shell
    rm -r ~/.pixi
-
    ```
+
 1. Remove the pixi binary from your `PATH`:
+
    - For Linux and macOS, remove `~/.pixi/bin` from your `PATH` in your shell configuration file (e.g., `~/.bashrc`, `~/.zshrc`).
    - For Windows, remove `%UserProfile%\.pixi\bin` from your `PATH` environment variable.

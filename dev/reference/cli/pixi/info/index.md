@@ -1,4 +1,4 @@
-# `[pixi](../) info`
+# `pixi info`
 
 ## About
 
@@ -10,17 +10,16 @@ More information [here](../../../../advanced/explain_info_command/).
 
 ```text
 pixi info [OPTIONS]
-
 ```
 
 ## Options
 
-- [`--extended`](#arg---extended) Show cache and environment size
-- [`--json`](#arg---json) Whether to show the output as JSON or not
+- [`--extended`](#arg---extended) : Show cache and environment size
+- [`--json`](#arg---json) : Whether to show the output as JSON or not
 
 ## Global Options
 
-- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 ## Examples
 
@@ -28,5 +27,4 @@ pixi info [OPTIONS]
 pixi info
 pixi info --json
 pixi info --extended
-
 ```

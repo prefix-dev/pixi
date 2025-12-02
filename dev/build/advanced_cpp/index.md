@@ -25,17 +25,20 @@ We are now using the `pixi-build-rattler-build` backend instead of the `pixi-bui
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
 preview = ["pixi-build"]
+
 [dependencies]
 cpp_math = { path = "." }
 python = "3.12.*"
+
 [tasks]
 start = "python -c 'import cpp_math as b; print(b.add(1, 2))'"
+
 [package]
 name = "cpp_math"
 version = "0.1.0"
+
 [package.build]
 backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
-
 ```
 
 ## The `recipe.yaml` file
@@ -46,9 +49,11 @@ Next lets add the `recipe.yaml` file that describes how `rattler-build` builds t
 package:
   name: cpp_math
   version: 0.1.0
+
 source:
   path: .
   use_gitignore: true # (1)!
+
 build:
   number: 0
   script: | # (2)!
@@ -60,16 +65,18 @@ build:
       -DBUILD_SHARED_LIBS=ON \
       -B $SRC_DIR/../build \
       -S .
+
     cmake --build $SRC_DIR/../build --target install
+
 requirements:
   build: # (3)!
     - ${{ compiler('cxx') }}
     - cmake
     - ninja
+
   host: # (4)!
     - python 3.12.*
     - nanobind
-
 ```
 
 1. Because we are specifying the current directory as the source directory, `rattler-build` may skip files that are not tracked by git. If your files are already tracked by git, you can remove this configuration.
@@ -84,7 +91,6 @@ Now that we've defined a `pixi` task which allows us to check that our package c
 ```toml
 [tasks]
 start = "python -c 'import cpp_math as b; print(b.add(1, 2))'"
-
 ```
 
 Executing the tasks works as expected
@@ -92,7 +98,6 @@ Executing the tasks works as expected
 ```bash
 $ pixi run start
 3
-
 ```
 
 This command builds the bindings, installs them and then runs the `test` task.

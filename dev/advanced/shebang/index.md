@@ -14,8 +14,8 @@ use-bat.sh
 
 ```bash
 #!/usr/bin/env -S pixi exec --spec bat -- bash -e
-bat my-file.json
 
+bat my-file.json
 ```
 
 Explanation what's happening
@@ -30,15 +30,21 @@ install-pixi-environment-to-prefix.py
 
 ```python
 #!/usr/bin/env -S pixi exec --spec py-rattler>=0.10.0,<0.11 --spec typer>=0.15.0,<0.16 -- python
+
 import asyncio
 from pathlib import Path
 from typing import get_args
+
 from rattler import install as rattler_install
 from rattler import LockFile, Platform
 from rattler.platform.platform import PlatformLiteral
 from rattler.networking import Client, MirrorMiddleware, AuthenticationMiddleware
 import typer
+
+
 app = typer.Typer()
+
+
 async def _install(
     lock_file_path: Path,
     environment_name: str,
@@ -62,6 +68,8 @@ async def _install(
             ]
         ),
     )
+
+
 @app.command()
 def install(
     lock_file_path: Path = Path("pixi.lock").absolute(),
@@ -82,7 +90,8 @@ def install(
             target_prefix=target_prefix,
         )
     )
+
+
 if __name__ == "__main__":
     app()
-
 ```

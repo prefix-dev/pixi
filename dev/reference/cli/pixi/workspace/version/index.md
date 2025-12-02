@@ -1,4 +1,4 @@
-# `[pixi](../../) [workspace](../) version`
+# `pixi workspace version`
 
 ## About
 
@@ -8,7 +8,6 @@ Commands to manage workspace version
 
 ```text
 pixi workspace version [OPTIONS] <COMMAND>
-
 ```
 
 ## Subcommands
@@ -23,4 +22,4 @@ pixi workspace version [OPTIONS] <COMMAND>
 
 ## Global Options
 
-- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory

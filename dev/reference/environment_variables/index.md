@@ -43,7 +43,6 @@ When we run `echo $HELLO_WORLD`, it will output:
 
 ```text
 Hello world!
-
 ```
 
 pixi.toml
@@ -54,7 +53,6 @@ cmd = "echo $HELLO_WORLD"
 env = { HELLO_WORLD = "Hello world!" }
 [activation.env]
 HELLO_WORLD = "Activate!"
-
 ```
 
 ##### Example 2: `activation.env` > `activation.scripts`
@@ -63,7 +61,6 @@ In `pixi.toml`, we defined the same environment variable `DEBUG_MODE` in both `a
 
 ```bash
 Debug mode: enabled
-
 ```
 
 pixi.toml
@@ -71,16 +68,15 @@ pixi.toml
 ```toml
 [activation.env]
 DEBUG_MODE = "enabled"
+
 [activation]
 scripts = ["setup.sh"]
-
 ```
 
 setup.sh
 
 ```bash
 export DEBUG_MODE="disabled"
-
 ```
 
 ##### Example 3: `activation.scripts` > activation scripts of dependencies
@@ -89,7 +85,6 @@ In `pixi.toml`, we have our local activation script and a dependency `my-package
 
 ```text
 Library path: /my/lib
-
 ```
 
 pixi.toml
@@ -97,16 +92,15 @@ pixi.toml
 ```toml
 [activation]
 scripts = ["local_setup.sh"]
+
 [dependencies]
 my-package = "*"  # This package has its own activation scripts that set LIB_PATH="/dep/lib"
-
 ```
 
 local_setup.sh
 
 ```bash
 export LIB_PATH="/my/lib"
-
 ```
 
 ##### Example 4: activation scripts of dependencies > outside environment variable
@@ -115,13 +109,11 @@ If we have a dependency that sets `PYTHON_PATH` and the same variable is already
 
 ```bash
 Python path: /pixi/python
-
 ```
 
 ```text
 # Outside environment
 export PYTHON_PATH="/system/python"
-
 ```
 
 pixi.toml
@@ -129,42 +121,42 @@ pixi.toml
 ```toml
 [dependencies]
 python-utils = "*"  # This package sets PYTHON_PATH="/pixi/python" in its activation scripts
-
 ```
 
 ##### Example 5: Complex Example - All priorities combined
 
-In `pixi.toml`, we define the same variable `APP_CONFIG` across multiple levels: pixi.toml
+In `pixi.toml`, we define the same variable `APP_CONFIG` across multiple levels:
+
+pixi.toml
 
 ```toml
 [tasks.start]
 cmd = "echo Config: $APP_CONFIG"
 env = { APP_CONFIG = "task-specific" }
+
 [activation.env]
 APP_CONFIG = "activation-env"
+
 [activation]
 scripts = ["app_setup.sh"]
+
 [dependencies]
 config-loader = "*"  # Sets APP_CONFIG="dependency-config"
-
 ```
 
 app_setup.sh
 
 ```bash
 export APP_CONFIG="activation-script"
-
 ```
 
 ```bash
 # Outside environment
 export APP_CONFIG="system-config"
-
 ```
 
 Since `task.env` has the highest priority, when we run `pixi run start` it will output:
 
 ```text
 Config: task-specific
-
 ```

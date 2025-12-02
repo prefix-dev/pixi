@@ -2,7 +2,6 @@ The `pixi shell` command is similar to `conda activate` but works a little diffe
 
 ```shell
 pixi shell
-
 ```
 
 On Unix systems the shell command works by creating a "fake" PTY session that will start the shell, and then send a string like `source /tmp/activation-env-12345.sh` to the `stdin` in order to activate the environment. If you would peek under the hood of the the `shell` command, then you would see that this is the first thing executed in the new shell session.
@@ -18,13 +17,13 @@ For example, if your `~/.bashrc` contains code like the following, `pixi shell` 
 ```shell
 # on WSL - the `wsl.exe` somehow takes over `stdin` and prevents `pixi shell` from succeeding
 wsl.exe -d wsl-vpnkit --cd /app service wsl-vpnkit start
+
 # on macOS or Linux, some users start fish or nushell from their `bashrc`
 # If you wish to start an alternative shell from bash, it's better to do so
 # from `~/.bash_profile` or `~/.profile`
 if [[ $- = *i* ]]; then
   exec ~/.pixi/bin/fish
 fi
-
 ```
 
 In order to fix this, we would advise you to follow the steps below to use `pixi shell-hook` instead.
@@ -39,14 +38,12 @@ python not found
 $ eval "$(pixi shell-hook)"
 $ (default) which python
 /path/to/project/.pixi/envs/default/bin/python
-
 ```
 
 For example, with `bash` and `zsh` you can use the following command:
 
 ```shell
 eval "$(pixi shell-hook)"
-
 ```
 
 Custom activation function
@@ -59,7 +56,6 @@ function pixi_activate() {
     local manifest_path="${1:-.}"
     eval "$(pixi shell-hook --manifest-path $manifest_path)"
 }
-
 ```
 
 After adding this function to your `~/.bashrc`/`~/.zshrc`, you can activate the environment by running:
@@ -68,7 +64,6 @@ With fish, you can also evaluate the output of `pixi shell-hook`:
 
 ```fish
 pixi shell-hook | source
-
 ```
 
 Or, if you want to add a function to your `~/.config/fish/config.fish`:
@@ -78,18 +73,18 @@ function pixi_activate
     # default to current directory if no path is given
     set -l manifest_path $argv[1]
     test -z "$manifest_path"; and set manifest_path "."
+
     pixi shell-hook --manifest-path "$manifest_path" | source
 end
-
 ```
 
 After adding this function to your `~/.config/fish/config.fish`, you can activate the environment by running:
 
 ```shell
 pixi_activate
+
 # or with a specific manifest
 pixi_activate ~/projects/my_project
-
 ```
 
 Using direnv

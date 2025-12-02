@@ -52,7 +52,6 @@ In Pixi `0.20.1` and older the global configuration options used `snake_case` wh
 - `authentication_override_file`
 - `mirrors` and its sub-options
 - `repodata_config` and its sub-options
-
 ```
 
 The following reference describes all available configuration options.
@@ -65,7 +64,6 @@ config.toml
 
 ```toml
 default-channels = ["conda-forge"]
-
 ```
 
 Note
@@ -85,7 +83,6 @@ config.toml
 change-ps1 = false
 force-activate = true
 source-completion-scripts = false
-
 ```
 
 ### `tls-no-verify`
@@ -106,7 +103,6 @@ config.toml
 
 ```toml
 tls-no-verify = false
-
 ```
 
 ### `authentication-override-file`
@@ -117,7 +113,6 @@ config.toml
 
 ```toml
 authentication-override-file = "/path/to/your/override.json"
-
 ```
 
 ### `detached-environments`
@@ -143,7 +138,6 @@ config.toml
 
 ```toml
 detached-environments = true
-
 ```
 
 or:
@@ -152,7 +146,6 @@ config.toml
 
 ```toml
 detached-environments = "/opt/pixi/envs"
-
 ```
 
 The environments will be stored in the [cache directory](../../workspace/environment/#caching-packages) when this option is `true`. When you specify a custom path the environments will be stored in that directory.
@@ -166,7 +159,6 @@ The resulting directory structure will look like this:
 └── NAME_OF_PROJECT-HASH_OF_ORIGINAL_PATH
     ├── envs # the runnable environments
     └── solve-group-envs # If there are solve groups
-
 ```
 
 ### `pinning-strategy`
@@ -184,7 +176,6 @@ config.toml
 
 ```toml
 pinning-strategy = "no-pin"
-
 ```
 
 ### `mirrors`
@@ -197,6 +188,7 @@ config.toml
 [mirrors]
 # redirect all requests for conda-forge to the prefix.dev mirror
 "https://conda.anaconda.org/conda-forge" = ["https://prefix.dev/conda-forge"]
+
 # redirect all requests for bioconda to one of the three listed mirrors
 # Note: for repodata we try the first mirror first.
 "https://conda.anaconda.org/bioconda" = [
@@ -207,7 +199,6 @@ config.toml
   "s3://my-s3-bucket/bioconda",
   "https://prefix.dev/bioconda",
 ]
-
 ```
 
 ### `proxy-config`
@@ -224,7 +215,6 @@ config.toml
 http = "http://proxy.example.com:8080/"
 https = "http://proxy.example.com:8080/"
 non-proxy-hosts = [".cn", "localhost", "[::1]"]
-
 ```
 
 ### `repodata-config`
@@ -242,7 +232,6 @@ disable-bzip2 = true   # don't try to download repodata.json.bz2
 disable-jlap = true    # don't try to download repodata.jlap [default: true]
 disable-sharded = true # don't try to download sharded repodata
 disable-zstd = true    # don't try to download repodata.json.zst
-
 ```
 
 The above settings can be overridden on a per-channel basis by specifying a channel prefix in the configuration.
@@ -252,7 +241,6 @@ config.toml
 ```toml
 [repodata-config."https://prefix.dev"]
 disable-sharded = false
-
 ```
 
 ### `pypi-config`
@@ -276,7 +264,6 @@ extra-index-urls = ["https://pypi.org/simple2"]
 keyring-provider = "subprocess"
 # allow insecure connections to host
 allow-insecure-host = ["localhost:8080"]
-
 ```
 
 `index-url` and `extra-index-urls` are *not* globals
@@ -294,7 +281,6 @@ config.toml
 endpoint-url = "https://my-s3-compatible-host.com"
 force-path-style = true
 region = "us-east-1"
-
 ```
 
 ### `concurrency`
@@ -308,10 +294,10 @@ config.toml
 # The maximum number of concurrent downloads
 # Defaults to 50 as that was found to be a good balance between speed and stability
 downloads = 5
+
 # The maximum number of concurrent dependency resolves
 # Defaults to a heuristic based on the number of cores on the system
 solves = 2
-
 ```
 
 Set them through the CLI with:
@@ -319,7 +305,6 @@ Set them through the CLI with:
 ```shell
 pixi config set concurrency.solves 1
 pixi config set concurrency.downloads 12
-
 ```
 
 ### `run-post-link-scripts`
@@ -336,7 +321,6 @@ config.toml
 
 ```toml
 run-post-link-scripts = "false" # set to "insecure" to allow running post-link scripts
-
 ```
 
 ### `tool-platform`
@@ -347,7 +331,6 @@ config.toml
 
 ```toml
 tool-platform = "win-64" # force tools like build backends to be installed for a specific platform
-
 ```
 
 Virtual packages
@@ -367,9 +350,9 @@ Turn this feature on from configuration with the following command:
 ```shell
 # For all of your workspaces
 pixi config set experimental.use-environment-activation-cache true --global
+
 # For a specific workspace
 pixi config set experimental.use-environment-activation-cache true --local
-
 ```
 
 This will cache the environment activation in the `.pixi/activation-env-v0` folder in the workspace root. It will create a json file for each environment that is activated, and it will be used to activate the environment in the future.
@@ -379,9 +362,9 @@ This will cache the environment activation in the `.pixi/activation-env-v0` fold
 .pixi/activation-env-v0/
 ├── activation_default.json
 └── activation_lint.json
+
 > cat  .pixi/activation-env-v0/activation_lint.json
 {"hash":"8d8344e0751d377a","environment_variables":{<ENVIRONMENT_VARIABLES_USED_IN_ACTIVATION>}}
-
 ```
 
 - The `hash` is a hash of the data on that environment in the `pixi.lock`, plus some important information on the environment activation. Like `[activation.scripts]` and `[activation.env]` from the manifest file.
@@ -391,7 +374,6 @@ You can ignore the cache by running:
 
 ```text
 pixi run/shell/shell-hook --force-activate
-
 ```
 
 Set the configuration with:
@@ -402,7 +384,6 @@ config.toml
 [experimental]
 # Enable the use of the environment activation cache
 use-environment-activation-cache = true
-
 ```
 
 Why is this experimental?
@@ -429,7 +410,6 @@ config.toml
 "https://conda.anaconda.org/conda-forge/label" = [
   "https://conda.anaconda.org/conda-forge/label",
 ]
-
 ```
 
 This will forward all request to channels on anaconda.org to prefix.dev. Channels that are not currently mirrored on prefix.dev will fail in the above example. You can override the behavior for specific channels (like conda-forge's label channels) by providing a longer prefix that points to itself.
@@ -445,7 +425,6 @@ config.toml
 "https://conda.anaconda.org/conda-forge" = [
   "oci://ghcr.io/channel-mirrors/conda-forge",
 ]
-
 ```
 
 The GHCR mirror also contains `bioconda` packages. You can search the [available packages on Github](https://github.com/orgs/channel-mirrors/packages).

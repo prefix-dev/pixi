@@ -28,7 +28,6 @@ We'll simply start with a new workspace, you can skip this step if you already h
 pixi init workspace
 cd workspace
 pixi add python
-
 ```
 
 Now we have a new Pixi workspace with the following structure:
@@ -39,7 +38,6 @@ Now we have a new Pixi workspace with the following structure:
 │       └── default
 ├── pixi.lock
 └── pixi.toml
-
 ```
 
 Note the `.pixi/envs/default` directory, this is where the default environment is stored. If no environment is specified, Pixi will create or use the `default` environment.
@@ -50,7 +48,6 @@ Let's start adding a simple `test` feature to our workspace. We can do this thro
 
 ```shell
 pixi add --feature test pytest
-
 ```
 
 This will add the following to our `pixi.toml` file:
@@ -58,7 +55,6 @@ This will add the following to our `pixi.toml` file:
 ```toml
 [feature.test.dependencies]
 pytest = "*"
-
 ```
 
 This table acts exactly the same as a normal `dependencies` table, but it is only used when the `test` feature is part of an environment.
@@ -69,7 +65,6 @@ We will add the `test` environment to our workspace to add some testing tools. W
 
 ```shell
 pixi workspace environment add test --feature test
-
 ```
 
 This will add the following to our `pixi.toml` file:
@@ -77,7 +72,6 @@ This will add the following to our `pixi.toml` file:
 ```toml
 [environments]
 test = ["test"]
-
 ```
 
 ### Running a task
@@ -86,7 +80,6 @@ We can now run a task in our new environment.
 
 ```shell
 pixi run --environment test pytest --version
-
 ```
 
 This has created the test environment, and run the `pytest --version` command in it. You can see the environment will be added to the `.pixi/envs` directory.
@@ -96,14 +89,12 @@ This has created the test environment, and run the `pytest --version` command in
 │   └── envs
 │       ├── default
 │       └── test
-
 ```
 
 If you want to see the environment, you can use the `pixi list` command.
 
 ```shell
 pixi list --environment test
-
 ```
 
 If you have special test commands that always fit with the test environment you can add them to the `test` feature.
@@ -111,7 +102,6 @@ If you have special test commands that always fit with the test environment you 
 ```shell
 # Adding the 'test' task to the 'test' feature and setting it to run `pytest`
 pixi task add test --feature test pytest
-
 ```
 
 This will add the following to our `pixi.toml` file:
@@ -119,14 +109,12 @@ This will add the following to our `pixi.toml` file:
 ```toml
 [feature.test.tasks]
 test = "pytest"
-
 ```
 
 Now you don't have to specify the environment when running the test command.
 
 ```shell
 pixi run test
-
 ```
 
 In this example similar to running `pixi run --environment test pytest`
@@ -141,7 +129,6 @@ For this example we assume you have run the commands in the previous example, an
 
 ```shell
 pixi add "python=*"
-
 ```
 
 We will start by setting up two features, `py311` and `py312`.
@@ -149,7 +136,6 @@ We will start by setting up two features, `py311` and `py312`.
 ```shell
 pixi add --feature py311 python=3.11
 pixi add --feature py312 python=3.12
-
 ```
 
 We'll add the `test` and Python features to the corresponding environments.
@@ -157,7 +143,6 @@ We'll add the `test` and Python features to the corresponding environments.
 ```shell
 pixi workspace environment add test-py311 --feature py311 --feature test
 pixi workspace environment add test-py312 --feature py312 --feature test
-
 ```
 
 This should result in adding the following to the `pixi.toml`:
@@ -165,12 +150,13 @@ This should result in adding the following to the `pixi.toml`:
 ```toml
 [feature.py311.dependencies]
 python = "3.11.*"
+
 [feature.py312.dependencies]
 python = "3.12.*"
+
 [environments]
 test-py311 = ["py311", "test"]
 test-py312 = ["py312", "test"]
-
 ```
 
 Now we can run the test command in both environments.
@@ -180,10 +166,11 @@ pixi run --environment test-py311 test
 pixi run --environment test-py312 test
 # Or using the task directly, which will spawn a dialog to select the environment of choice
 pixi run test
-
 ```
 
-These could now run in CI to test separate environments: .github/workflows/test.yml
+These could now run in CI to test separate environments:
+
+.github/workflows/test.yml
 
 ```yaml
 test:
@@ -197,7 +184,6 @@ test:
     with:
       environments: ${{ matrix.environment }}
   - run: pixi run -e ${{ matrix.environment }} test
-
 ```
 
 More info on that in the GitHub actions [documentation](../../integration/ci/github_actions/).
@@ -209,7 +195,6 @@ This assumes a clean workspace, so if you have been following along, you might w
 ```shell
 pixi init production_project
 cd production_project
-
 ```
 
 Like before we'll start with creating multiple features.
@@ -218,7 +203,6 @@ Like before we'll start with creating multiple features.
 pixi add numpy python # default feature
 pixi add --feature dev jupyterlab
 pixi add --feature test pytest
-
 ```
 
 Now we'll add the environments. To accommodate the different use-cases we'll add a `production`, `test` and `default` environment.
@@ -236,7 +220,6 @@ pixi workspace environment add production --solve-group prod
 pixi workspace environment add test --feature test --solve-group prod
 # --force is used to overwrite the default environment
 pixi workspace environment add default --feature dev --feature test --solve-group prod --force
-
 ```
 
 If we run `pixi list -x` for the environments we can see that the different environments have the exact same dependency versions.
@@ -248,16 +231,17 @@ jupyterlab  4.3.4    pyhd8ed1ab_0        6.9 MiB    conda  jupyterlab
 numpy       2.2.1    py313ha4a2180_0     6.2 MiB    conda  numpy
 pytest      8.3.4    pyhd8ed1ab_1        253.1 KiB  conda  pytest
 python      3.13.1   h4f43103_105_cp313  12.3 MiB   conda  python
+
 Environment: test
 Package  Version  Build               Size       Kind   Source
 numpy    2.2.1    py313ha4a2180_0     6.2 MiB    conda  numpy
 pytest   8.3.4    pyhd8ed1ab_1        253.1 KiB  conda  pytest
 python   3.13.1   h4f43103_105_cp313  12.3 MiB   conda  python
+
 Environment: production
 Package  Version  Build               Size      Kind   Source
 numpy    2.2.1    py313ha4a2180_0     6.2 MiB   conda  numpy
 python   3.13.1   h4f43103_105_cp313  12.3 MiB  conda  python
-
 ```
 
 ### Non default environments
@@ -270,14 +254,12 @@ Let's add the `mkdocs` dependency to the `docs` feature.
 
 ```shell
 pixi add --feature docs mkdocs
-
 ```
 
 Now we can add the `docs` environment without the `default` feature.
 
 ```shell
 pixi workspace environment add docs --feature docs --no-default-feature
-
 ```
 
 If we run `pixi list -x -e docs` we can see that it only has the `mkdocs` dependency.
@@ -286,7 +268,6 @@ If we run `pixi list -x -e docs` we can see that it only has the `mkdocs` depend
 Environment: docs
 Package  Version  Build         Size     Kind   Source
 mkdocs   1.6.1    pyhd8ed1ab_1  3.4 MiB  conda  mkdocs
-
 ```
 
 ## Conclusion

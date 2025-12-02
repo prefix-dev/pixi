@@ -8,7 +8,6 @@ To build Pixi run
 
 ```shell
 cargo build --locked --profile dist
-
 ```
 
 Instead of using the predefined `dist` profile, which is optimized for binary size, you can also pass other options to let cargo optimize the binary for other metrics.
@@ -29,7 +28,6 @@ When the self-update feature is disabled and a user tries to run `pixi self-upda
 
 ```shell
 PIXI_SELF_UPDATE_DISABLED_MESSAGE="`self-update` has been disabled for this build. Run `brew upgrade pixi` instead" cargo build --locked --profile dist
-
 ```
 
 #### Custom version
@@ -38,7 +36,6 @@ You can specify a custom version string to be used in the `--version` output by 
 
 ```shell
 PIXI_VERSION="HEAD-123456" cargo build --locked --profile dist
-
 ```
 
 ## Shell completion
@@ -47,7 +44,6 @@ After building Pixi you can generate shell autocompletion scripts by running
 
 ```shell
 pixi completion --shell <SHELL>
-
 ```
 
 and saving the output to a file. Currently supported shells are `bash`, `elvish`, `fish`, `nushell`, `powershell` and `zsh`.

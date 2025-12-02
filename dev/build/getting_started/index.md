@@ -29,25 +29,31 @@ pixi.toml
 preview = ["pixi-build"]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
+
 [tasks]
 start = "rich-example-main"
+
 [dependencies]
 python_rich = { path = "." }
+
 ### Specify the package properties ###
 [package]
 name = "python_rich"
 version = "0.1.0"
+
 # We are using `pixi-build-python` in order to build a Python package
 [package.build.backend]
 name = "pixi-build-python"
 version = "==0.4.0"
+
+
 # The Python package `python_rich` uses `hatchling` as Python build backend
 [package.host-dependencies]
 hatchling = "*"
+
 # The Python package `python_rich` has a run dependency on `rich`
 [package.run-dependencies]
 rich = "13.9.*"
-
 ```
 
 Under the `[workspace]` section, you can specify properties like the name, channels, and platforms. This is currently an alias for `[project]`.
@@ -57,7 +63,6 @@ Since the build feature is still in preview, you have to add "pixi-build" to `wo
 ```toml
 [workspace]
 preview = ["pixi-build"]
-
 ```
 
 In `package` you specify properties specific to the package you want to build.
@@ -66,7 +71,6 @@ In `package` you specify properties specific to the package you want to build.
 [package]
 name = "python_rich"
 version = "0.1.0"
-
 ```
 
 Packages are built by using build backends. By specifying `package.build.backend` and `package.build.channels` you determine which backend is used and from which channel it will be downloaded.
@@ -79,7 +83,6 @@ Pixi backends describe how to build a conda package, for a certain language or b
 [package.build.backend]
 name = "pixi-build-python"
 version = "==0.4.0"
-
 ```
 
 We need to add our package `python_rich` as source dependency to the workspace.
@@ -87,7 +90,6 @@ We need to add our package `python_rich` as source dependency to the workspace.
 ```toml
 [dependencies]
 python_rich = { path = "." }
-
 ```
 
 `python_rich` uses `hatchling` as Python build backend, so this needs to be mentioned in `host-dependencies`.
@@ -99,7 +101,6 @@ Read up on host-dependencies in the [dependency types chapter](../dependency_typ
 ```toml
 [package.host-dependencies]
 hatchling = "*"
-
 ```
 
 We add `rich` as a run dependency to the package. This is necessary because the package uses `rich` during runtime. You can read up on run-dependencies in the [dependency types chapter](../dependency_types/#dependencies-run-dependencies)
@@ -107,7 +108,6 @@ We add `rich` as a run dependency to the package. This is necessary because the 
 ```toml
 [package.run-dependencies]
 rich = "13.9.*"
-
 ```
 
 ## CLI Commands

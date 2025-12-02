@@ -1,4 +1,4 @@
-# `[pixi](../../) [workspace](../) export`
+# `pixi workspace export`
 
 ## About
 
@@ -8,7 +8,6 @@ Commands to export workspaces to other formats
 
 ```text
 pixi workspace export <COMMAND>
-
 ```
 
 ## Subcommands

@@ -10,7 +10,6 @@ To get started, add `pixi-pycharm` to your Pixi workspace.
 
 ```bash
 pixi add pixi-pycharm
-
 ```
 
 This will ensure that the conda shim is installed in your workspace's environment.
@@ -19,12 +18,10 @@ Having `pixi-pycharm` installed, you can now configure PyCharm to use your Pixi 
 
 ```bash
 pixi run 'echo $CONDA_PREFIX/libexec/conda'
-
 ```
 
 ```bash
 pixi run 'echo $CONDA_PREFIX\\libexec\\conda.bat'
-
 ```
 
 This is an executable that tricks PyCharm into thinking it's the proper `conda` executable. Under the hood it redirects all calls to the corresponding `pixi` equivalent.
@@ -71,24 +68,29 @@ name = "multi-env"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = ["numpy"]
+
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64"]
+
 [tool.pixi.feature.lint.dependencies]
 ruff =  "*"
+
 [tool.pixi.feature.dev.dependencies]
 pixi-pycharm = "*"
+
 [tool.pixi.environments]
 # The production environment is the default feature set.
 # Adding a solve group to make sure the same versions are used in the `default` and `prod` environments.
 prod = { solve-group = "main" }
+
 # Setup the default environment to include the dev features.
 # By using `default` instead of `dev` you'll not have to specify the `--environment` flag when running `pixi run`.
 default = { features = ["dev"], solve-group = "main" }
+
 # The lint environment doesn't need the default feature set but only the `lint` feature
 # and thus can also be excluded from the solve group.
 lint = { features = ["lint"], no-default-feature = true }
-
 ```
 
 Now you as a user can run `pixi shell`, which will start the default environment. In production, you then just run `pixi run -e prod COMMAND`, and the minimal prod environment is installed.
@@ -105,7 +107,6 @@ To configure an interpreter for a new workspace:
    ...
    /Users/jdoe/my-workspace/.pixi/envs/default
    /Users/jdoe/my-workspace/.pixi/envs/dev
-
    ```
 
 1. In PyCharm, when adding the interpreter for your workspace, scroll down to the bottom of the Python Interpreter dropdown menu and choose *Show All ...* to bring up the Python Interpreters dialog.

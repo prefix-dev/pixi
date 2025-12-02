@@ -35,9 +35,9 @@ The easiest way to install Pixi extensions is using `pixi global install`:
 ```bash
 # Install a single extension
 pixi global install pixi-pack
+
 # Install multiple extensions at once
 pixi global install pixi-pack pixi-diff
-
 ```
 
 This approach has several advantages:
@@ -56,7 +56,6 @@ You can also install extensions manually by placing the executable in any direct
 curl -L https://github.com/user/pixi-myext/releases/download/v1.0.0/pixi-myext -o pixi-myext
 chmod +x pixi-myext
 mv pixi-myext ~/.local/bin/
-
 ```
 
 ## Contributing Extensions
@@ -72,12 +71,13 @@ mv pixi-myext ~/.local/bin/
 ```python
 #!/usr/bin/env python3
 import sys
+
 def main():
     name = sys.argv[1] if len(sys.argv) > 1 else "World"
     print(f"Hello, {name}!")
+
 if __name__ == "__main__":
     main()
-
 ```
 
 Save this as `pixi-hello`, make it executable (`chmod +x pixi-hello`), and place it in your PATH.
@@ -99,7 +99,6 @@ Pixi includes intelligent command suggestions powered by string similarity. If y
 $ pixi pck
 error: unrecognized subcommand 'pck`
 tip: a similar subcommand exists: 'pack'
-
 ```
 
 This works for both built-in commands and any extensions you have installed, making extension discovery seamless.

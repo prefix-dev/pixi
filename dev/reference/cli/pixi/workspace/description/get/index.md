@@ -1,4 +1,4 @@
-# `[pixi](../../../) [workspace](../../) [description](../) get`
+# `pixi workspace description get`
 
 ## About
 
@@ -8,7 +8,6 @@ Get the workspace description
 
 ```text
 pixi workspace description get
-
 ```
 
 ## Description

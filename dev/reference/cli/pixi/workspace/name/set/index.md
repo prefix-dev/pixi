@@ -1,4 +1,4 @@
-# `[pixi](../../../) [workspace](../../) [name](../) set`
+# `pixi workspace name set`
 
 ## About
 
@@ -8,14 +8,15 @@ Set the workspace name
 
 ```text
 pixi workspace name set <NAME>
-
 ```
 
 ## Arguments
 
-- [`<NAME>`](#arg-%3CNAME%3E) The workspace name, please only use lowercase letters (a-z), digits (0-9), hyphens (-), and underscores (\_)
+- [`<NAME>`](#arg-%3CNAME%3E) : The workspace name, please only use lowercase letters (a-z), digits (0-9), hyphens (-), and underscores (\_)
 
+  ```
   **required**: `true`
+  ```
 
 ## Description
 

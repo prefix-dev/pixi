@@ -6,19 +6,21 @@ Running the commands from the section before results in the following manifest:
 
 ```toml
 version = 1
+
 [envs.rattler-build]
 channels = ["conda-forge"]
 dependencies = { rattler-build = "*" }
 exposed = { rattler-build = "rattler-build" }
+
 [envs.ipython]
 channels = ["conda-forge"]
 dependencies = { ipython = "*", numpy = "*", matplotlib = "*" }
 exposed = { ipython = "ipython", ipython3 = "ipython3" }
+
 [envs.python]
 channels = ["conda-forge"]
 dependencies = { python = "3.12.*" } # (1)!
 exposed = { py3 = "python" } # (2)!
-
 ```
 
 1. Dependencies are the packages that will be installed in the environment. You can specify the version or use a wildcard.
@@ -57,7 +59,6 @@ The `channels` key describes the Conda channels that will be used to download th
 
 ```text
 pixi global install --channel conda-forge --channel bioconda snakemake
-
 ```
 
 Results in the following entry in the manifest:
@@ -67,7 +68,6 @@ Results in the following entry in the manifest:
 channels = ["conda-forge", "bioconda"]
 dependencies = { snakemake = "*" }
 exposed = { snakemake = "snakemake" }
-
 ```
 
 More information on channels can be found [here](../../advanced/channel_logic/).
@@ -78,7 +78,6 @@ Dependencies are the Conda packages that will be installed into your environment
 
 ```text
 pixi global install "python<3.12"
-
 ```
 
 creates the following entry in the manifest:
@@ -88,14 +87,12 @@ creates the following entry in the manifest:
 channels = ["conda-forge"]
 dependencies = { python = "<3.12" }
 # ...
-
 ```
 
 Typically, you'd specify just the tool you're installing, but you can add more packages if needed. Defining the environment to install into will allow you to add multiple dependencies at once. For example, running:
 
 ```shell
 pixi global install --environment my-env git vim python
-
 ```
 
 will create the following entry in the manifest:
@@ -105,14 +102,12 @@ will create the following entry in the manifest:
 channels = ["conda-forge"]
 dependencies = { git = "*", vim = "*", python = "*" }
 # ...
-
 ```
 
 You can [`add`](../../reference/cli/pixi/global/add/) dependencies to an existing environment by running:
 
 ```shell
 pixi global add --environment my-env package-a package-b
-
 ```
 
 They will be added as dependencies to the `my-env` environment but won't auto expose the binaries from the new packages.
@@ -121,7 +116,6 @@ You can [`remove`](../../reference/cli/pixi/global/remove/) dependencies by runn
 
 ```shell
 pixi global remove --environment my-env package-a package-b
-
 ```
 
 ## Exposed executables
@@ -130,7 +124,6 @@ One can instruct `pixi global install`, under which name it will expose executab
 
 ```shell
 pixi global install --expose bird=bat bat
-
 ```
 
 The manifest is modified like this:
@@ -140,7 +133,6 @@ The manifest is modified like this:
 channels = ["https://prefix.dev/conda-forge"]
 dependencies = { bat = "*" }
 exposed = { bird = "bat" }
-
 ```
 
 This means that executable `bat` will be exposed under the name `bird`.
@@ -151,7 +143,6 @@ There is some added automatic behavior, if you install a package with the same n
 
 ```text
 pixi global install ansible
-
 ```
 
 will create the following entry in the manifest:
@@ -161,7 +152,6 @@ will create the following entry in the manifest:
 channels = ["conda-forge"]
 dependencies = { ansible = "*" }
 exposed = { ansible = "ansible" } # (1)!
-
 ```
 
 1. The `ansible` binary is exposed even though it is installed by a dependency of `ansible`, the `ansible-core` package.
@@ -170,7 +160,6 @@ It's also possible to expose an executable which is located in a nested director
 
 ```text
 pixi global install dotnet --expose dotnet=dotnet\dotnet
-
 ```
 
 Which will create the following entry in the manifest:
@@ -180,7 +169,6 @@ Which will create the following entry in the manifest:
 channels = ["conda-forge"]
 dependencies = { dotnet = "*" }
 exposed = { dotnet = 'dotnet\dotnet' }
-
 ```
 
 ## Shortcuts
@@ -193,7 +181,6 @@ channels = ["https://prefix.dev/conda-forge"]
 dependencies = { mss = "*" }
 exposed = { ... }
 shortcuts = ["mss"]
-
 ```
 
 Note the `shortcuts` entry. If it's present, `pixi` will install the shortcut for the `mss` package. This means, the application will show up in the start menu. If you want to package an application yourself that would benefit from this, you can check out the corresponding [documentation](https://conda.github.io/menuinst/).

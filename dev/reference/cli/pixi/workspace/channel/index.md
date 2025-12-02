@@ -1,4 +1,4 @@
-# `[pixi](../../) [workspace](../) channel`
+# `pixi workspace channel`
 
 ## About
 
@@ -8,7 +8,6 @@ Commands to manage workspace channels
 
 ```text
 pixi workspace channel <COMMAND>
-
 ```
 
 ## Subcommands

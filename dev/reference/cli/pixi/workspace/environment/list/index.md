@@ -1,4 +1,4 @@
-# `[pixi](../../../) [workspace](../../) [environment](../) list`
+# `pixi workspace environment list`
 
 ## About
 
@@ -8,5 +8,4 @@ List the environments in the manifest file
 
 ```text
 pixi workspace environment list
-
 ```

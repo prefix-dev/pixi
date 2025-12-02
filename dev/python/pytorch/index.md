@@ -34,11 +34,12 @@ Bare minimum conda-forge pytorch with cuda installation
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-conda-forge"
 platforms = ["linux-64", "win-64"]
+
 [system-requirements]
 cuda = "12.0"
+
 [dependencies]
 pytorch-gpu = "*"
-
 ```
 
 Bare minimum conda-forge pytorch with cuda installation
@@ -46,14 +47,16 @@ Bare minimum conda-forge pytorch with cuda installation
 ```toml
 [project]
 name = "pytorch-conda-forge"
+
 [tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64"]
+
 [tool.pixi.system-requirements]
 cuda = "12.0"
+
 [tool.pixi.dependencies]
 pytorch-gpu = "*"
-
 ```
 
 To deliberately install a specific version of the `cuda` packages you can depend on the `cuda-version` package which will then be interpreted by the other packages during resolution. The `cuda-version` package constraints the version of the `__cuda` virtual package and `cudatoolkit` package. This ensures that the correct version of the `cudatoolkit` package is installed and the tree of dependencies is resolved correctly.
@@ -64,7 +67,6 @@ Add cuda version to the conda-forge pytorch installation
 [dependencies]
 pytorch-gpu = "*"
 cuda-version = "12.6.*"
-
 ```
 
 Add cuda version to the conda-forge pytorch installation
@@ -73,7 +75,6 @@ Add cuda version to the conda-forge pytorch installation
 [tool.pixi.dependencies]
 pytorch-gpu = "*"
 cuda-version = "12.6.*"
-
 ```
 
 With `conda-forge` you can also install the `cpu` version of PyTorch. A common use-case is having two environments, one for CUDA machines and one for non-CUDA machines.
@@ -85,17 +86,20 @@ Adding a cpu environment
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-conda-forge"
 platforms = ["linux-64"]
+
 [feature.gpu.system-requirements]
 cuda = "12.0"
+
 [feature.gpu.dependencies]
 cuda-version = "12.6.*"
 pytorch-gpu = "*"
+
 [feature.cpu.dependencies]
 pytorch-cpu = "*"
+
 [environments]
 cpu = ["cpu"]
 default = ["gpu"]
-
 ```
 
 Split into environments and add a CPU environment
@@ -103,20 +107,24 @@ Split into environments and add a CPU environment
 ```toml
 [project]
 name = "pytorch-conda-forge"
+
 [tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64"]
+
 [tool.pixi.feature.gpu.system-requirements]
 cuda = "12.0"
+
 [tool.pixi.feature.gpu.dependencies]
 cuda-version = "12.6.*"
 pytorch-gpu = "*"
+
 [tool.pixi.feature.cpu.dependencies]
 pytorch-cpu = "*"
+
 [tool.pixi.environments]
 cpu = ["cpu"]
 default = ["gpu"]
-
 ```
 
 Running these environments then can be done with the `pixi run` command.
@@ -124,7 +132,6 @@ Running these environments then can be done with the `pixi run` command.
 ```shell
 pixi run --environment cpu python -c "import torch; print(torch.cuda.is_available())"
 pixi run -e gpu python -c "import torch; print(torch.cuda.is_available())"
-
 ```
 
 Now you should be able to extend that with your dependencies and tasks.
@@ -165,17 +172,19 @@ Install PyTorch from pypi
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-pypi"
 platforms = ["osx-arm64", "linux-64", "win-64"]
+
 [dependencies]
 # We need a python version that is compatible with pytorch
 python = ">=3.11,<3.13"
+
 [pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cu124" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu124" }
+
 [target.osx.pypi-dependencies]
 # OSX has no CUDA support so use the CPU here
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cpu" }
-
 ```
 
 Install PyTorch from pypi
@@ -185,17 +194,19 @@ Install PyTorch from pypi
 name = "pytorch-pypi"
 # We need a python version that is compatible with pytorch
 requires-python = ">= 3.11,<3.13"
+
 [tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["osx-arm64", "linux-64", "win-64"]
+
 [tool.pixi.pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cu124" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu124" }
+
 [tool.pixi.target.osx.pypi-dependencies]
 # OSX has no CUDA support so use the CPU here
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cpu" }
-
 ```
 
 You can tell Pixi to use multiple environment for the multiple versions of PyTorch, either `cpu` or `gpu`.
@@ -207,22 +218,25 @@ Use multiple environments for the pypi pytorch installation
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-pypi-envs"
 platforms = ["linux-64", "win-64"]
+
 [dependencies]
 # We need a python version that is compatible with pytorch
 python = ">=3.11,<3.13"
+
 [feature.gpu]
 system-requirements = { cuda = "12.0" }
 [feature.gpu.pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cu124" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu124" }
+
 [feature.cpu.pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cpu" }
+
 [environments]
 gpu = { features = ["gpu"] }
 # Make CPU the default environment
 default = { features = ["cpu"] }
-
 ```
 
 Use multiple environments for the pypi pytorch installation
@@ -232,22 +246,26 @@ Use multiple environments for the pypi pytorch installation
 name = "pytorch-pypi-envs"
 # We need a python version that is compatible with pytorch
 requires-python = ">= 3.11,<3.13"
+
 [tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64", "win-64"]
+
 [tool.pixi.feature.gpu]
 system-requirements = { cuda = "12.0" }
+
 [tool.pixi.feature.gpu.pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cu124" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu124" }
+
 [tool.pixi.feature.cpu.pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cpu" }
+
 [tool.pixi.environments]
 gpu = { features = ["gpu"] }
 # Make CPU the default environment
 default = { features = ["cpu"] }
-
 ```
 
 Running these environments then can be done with the `pixi run` command.
@@ -255,7 +273,6 @@ Running these environments then can be done with the `pixi run` command.
 ```shell
 pixi run --environment cpu python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
 pixi run -e gpu python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
-
 ```
 
 ### Mixing MacOS and CUDA with `pypi-dependencies`
@@ -286,13 +303,15 @@ name = "pytorch-from-pytorch-channel"
 # `main` is not free! It's a paid channel for organizations over 200 people.
 channels = ["main", "nvidia", "pytorch"]
 platforms = ["osx-arm64", "linux-64", "win-64"]
+
 [feature.gpu.system-requirements]
 cuda = "12.0"
+
 [dependencies]
 pytorch = "*"
+
 [environments]
 gpu = ["gpu"]
-
 ```
 
 Install PyTorch from the PyTorch channel
@@ -302,17 +321,20 @@ Install PyTorch from the PyTorch channel
 name = "pytorch-from-pytorch-channel"
 requires-python = ">= 3.11, < 3.13"
 version = "0.1.0"
+
 [tool.pixi.workspace]
 # `main` is not free! It's a paid channel for organizations over 200 people.
 channels = ["main", "nvidia", "pytorch"]
 platforms = ["osx-arm64", "linux-64", "win-64"]
+
 [tool.pixi.feature.gpu.system-requirements]
 cuda = "12.0"
+
 [tool.pixi.dependencies]
 pytorch = "*"
+
 [tool.pixi.environments]
 gpu = ["gpu"]
-
 ```
 
 ## Troubleshooting
@@ -325,7 +347,6 @@ You can verify your PyTorch installation with this command:
 
 ```shell
 pixi run python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
-
 ```
 
 #### Checking the CUDA version of your machine
@@ -334,7 +355,6 @@ To check which CUDA version Pixi detects on your machine, run:
 
 ```text
 pixi info
-
 ```
 
 Example output:
@@ -345,21 +365,18 @@ Virtual packages: __unix=0=0
                 : __linux=6.5.9=0
                 : __cuda=12.5=0
 ...
-
 ```
 
 If `__cuda` is missing, you can verify your system’s CUDA version using NVIDIA tools:
 
 ```shell
 nvidia-smi
-
 ```
 
 To check the version of the CUDA toolkit installed in your environment:
 
 ```shell
 pixi run nvcc --version
-
 ```
 
 #### Reasons for broken installations
@@ -399,7 +416,6 @@ If you see an error like this: **ABI tag mismatch**
   and torch==2.5.1 has no wheels with a matching Python ABI tag, we can conclude that torch>=2.5.1,<2.5.1+cpu cannot be used.
   And because torch==2.5.1+cpu has no wheels with a matching platform tag and you require torch>=2.5.1, we can conclude that your requirements are
   unsatisfiable.
-
 ```
 
 This happens when the Python ABI tag (Application Binary Interface) doesn’t match the available PyPI wheels.
@@ -419,7 +435,6 @@ Solution:
     torch==2.5.1+cu124
 and torch>=2.5.1 has no wheels with a matching platform tag, we can conclude that torch>=2.5.1,<2.5.1+cu124 cannot be used.
 And because you require torch>=2.5.1, we can conclude that your requirements are unsatisfiable.
-
 ```
 
 This occurs when the platform tag doesn’t match the PyPI wheels available to be installed.

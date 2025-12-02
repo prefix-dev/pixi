@@ -1,4 +1,4 @@
-# `[pixi](../) run`
+# `pixi run`
 
 ## About
 
@@ -8,66 +8,75 @@ Runs task in the pixi environment
 
 ```text
 pixi run [OPTIONS] [TASK]...
-
 ```
 
 ## Arguments
 
-- [`<TASK>`](#arg-%3CTASK%3E) The pixi task or a task shell command you want to run in the workspace's environment, which can be an executable in the environment's PATH
+- [`<TASK>`](#arg-%3CTASK%3E) : The pixi task or a task shell command you want to run in the workspace's environment, which can be an executable in the environment's PATH
 
+  ```
   May be provided more than once.
+  ```
 
 ## Options
 
-- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) The environment to run the task in
-- [`--clean-env`](#arg---clean-env) Use a clean environment to run the task
-- [`--skip-deps`](#arg---skip-deps) Don't run the dependencies of the task ('depends-on' field in the task definition)
-- [`--dry-run (-n)`](#arg---dry-run) Run the task in dry-run mode (only print the command that would run)
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to run the task in
+- [`--clean-env`](#arg---clean-env) : Use a clean environment to run the task
+- [`--skip-deps`](#arg---skip-deps) : Don't run the dependencies of the task ('depends-on' field in the task definition)
+- [`--dry-run (-n)`](#arg---dry-run) : Run the task in dry-run mode (only print the command that would run)
 - [`--help`](#arg---help) :
 
 ## Config Options
 
-- [`--auth-file <AUTH_FILE>`](#arg---auth-file) Path to the file containing the authentication token
+- [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
 
-- [`--concurrent-downloads <CONCURRENT_DOWNLOADS>`](#arg---concurrent-downloads) Max concurrent network requests, default is `50`
+- [`--concurrent-downloads <CONCURRENT_DOWNLOADS>`](#arg---concurrent-downloads) : Max concurrent network requests, default is `50`
 
-- [`--concurrent-solves <CONCURRENT_SOLVES>`](#arg---concurrent-solves) Max concurrent solves, default is the number of CPUs
+- [`--concurrent-solves <CONCURRENT_SOLVES>`](#arg---concurrent-solves) : Max concurrent solves, default is the number of CPUs
 
-- [`--pinning-strategy <PINNING_STRATEGY>`](#arg---pinning-strategy) Set pinning strategy
+- [`--pinning-strategy <PINNING_STRATEGY>`](#arg---pinning-strategy) : Set pinning strategy
 
+  ```
   **options**: `semver`, `minor`, `major`, `latest-up`, `exact-version`, `no-pin`
+  ```
 
-- [`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`](#arg---pypi-keyring-provider) Specifies whether to use the keyring to look up credentials for PyPI
+- [`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`](#arg---pypi-keyring-provider) : Specifies whether to use the keyring to look up credentials for PyPI
 
+  ```
   **options**: `disabled`, `subprocess`
+  ```
 
-- [`--run-post-link-scripts`](#arg---run-post-link-scripts) Run post-link scripts (insecure)
+- [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
-- [`--tls-no-verify`](#arg---tls-no-verify) Do not verify the TLS certificate of the server
+- [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
-- [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) Use environment activation cache (experimental)
+- [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
-- [`--force-activate`](#arg---force-activate) Do not use the environment activation cache. (default: true except in experimental mode)
+- [`--force-activate`](#arg---force-activate) : Do not use the environment activation cache. (default: true except in experimental mode)
 
-- [`--no-completions`](#arg---no-completions) Do not source the autocompletion scripts from the environment
+- [`--no-completions`](#arg---no-completions) : Do not source the autocompletion scripts from the environment
 
 ## Update Options
 
-- [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
 
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
+  ```
   **env**: `PIXI_FROZEN`
+  ```
 
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
+  ```
   **env**: `PIXI_LOCKED`
+  ```
 
-- [`--as-is`](#arg---as-is) Shorthand for the combination of --no-install and --frozen
+- [`--as-is`](#arg---as-is) : Shorthand for the combination of --no-install and --frozen
 
 ## Global Options
 
-- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 ## Description
 
@@ -93,13 +102,14 @@ pixi run task argument1 argument2
 pixi run --skip-deps task
 # Run in dry-run mode to see the commands that would be run
 pixi run --dry-run task
+
 # If you have multiple environments you can select the right one with the --environment flag.
 pixi run --environment cuda python
+
 # THIS DOESN'T WORK ON WINDOWS
 # If you want to run a command in a clean environment you can use the --clean-env flag.
 # The PATH should only contain the pixi environment here.
 pixi run --clean-env "echo \$PATH"
-
 ```
 
 ## Notes
@@ -117,18 +127,18 @@ pixi.toml
 ```toml
 [tasks]
 start = { cmd = "python start.py", depends-on = ["build"] }
+
 [feature.build.tasks]
 build = "cargo build"
 [feature.build.dependencies]
 rust = ">=1.74"
+
 [environments]
 build = ["build"]
-
 ```
 
 Then you're able to run the `build` from the `build` environment and `start` from the default environment. By only calling:
 
 ```shell
 pixi run start
-
 ```

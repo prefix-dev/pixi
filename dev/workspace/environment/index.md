@@ -31,7 +31,6 @@ export PIXI_PROMPT="(pixi) "
 . "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-gxx_linux-64.sh"
 . "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/libglib_activate.sh"
 . "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/rust.sh"
-
 ```
 
 It sets the `PATH` and some more environment variables. But more importantly it also runs activation scripts that are presented by the installed packages. An example of this would be the [`libglib_activate.sh`](https://github.com/conda-forge/glib-feedstock/blob/52ba1944dffdb2d882d824d6548325155b58819b/recipe/scripts/activate.sh) script. Thus, just adding the `bin` directory to the `PATH` is not enough.
@@ -54,6 +53,8 @@ PYTHONNOUSERSITE = "1"
 PIXI_R_LIBS = "$CONDA_PREFIX/lib/R/library"
 R_LIBS = "$PIXI_R_LIBS"
 R_LIBS_USER = "$PIXI_R_LIBS"
+
+
 [target.unix.activation]
 # Use sh scripts on unix
 scripts = [
@@ -62,10 +63,10 @@ scripts = [
   # Want to add some personal scripts to the activation:
   "activation.sh",
 ]
+
 # Use batch scripts on windows
 [target.win.activation]
 scripts = ["install/setup.bat"]
-
 ```
 
 Find the reference for the `activation` table [here](../../reference/pixi_manifest/#the-activation-table).
@@ -80,14 +81,12 @@ python not found
 $ eval "$(pixi shell-hook)"
 $ (default) which python
 /path/to/project/.pixi/envs/default/bin/python
-
 ```
 
 For example, with `bash` and `zsh` you can use the following command:
 
 ```shell
 eval "$(pixi shell-hook)"
-
 ```
 
 Custom activation function
@@ -100,7 +99,6 @@ function pixi_activate() {
     local manifest_path="${1:-.}"
     eval "$(pixi shell-hook --manifest-path $manifest_path)"
 }
-
 ```
 
 After adding this function to your `~/.bashrc`/`~/.zshrc`, you can activate the environment by running:
@@ -109,7 +107,6 @@ With fish, you can also evaluate the output of `pixi shell-hook`:
 
 ```fish
 pixi shell-hook | source
-
 ```
 
 Or, if you want to add a function to your `~/.config/fish/config.fish`:
@@ -119,18 +116,18 @@ function pixi_activate
     # default to current directory if no path is given
     set -l manifest_path $argv[1]
     test -z "$manifest_path"; and set manifest_path "."
+
     pixi shell-hook --manifest-path "$manifest_path" | source
 end
-
 ```
 
 After adding this function to your `~/.config/fish/config.fish`, you can activate the environment by running:
 
 ```shell
 pixi_activate
+
 # or with a specific manifest
 pixi_activate ~/projects/my_project
-
 ```
 
 Using direnv
@@ -160,7 +157,6 @@ If you look at the `.pixi/envs` directory, you will see a directory for each env
         ├── include
         ├── lib
         ...
-
 ```
 
 These directories are conda environments, and you can use them as such, but you cannot manually edit them, this should always go through the `pixi.toml`. Pixi will always make sure the environment is in sync with the `pixi.lock` file. If this is not the case then all the commands that use the environment will automatically update the environment, e.g. `pixi run`, `pixi shell`.
@@ -181,7 +177,6 @@ On environment installation, Pixi will write a small file to the environment tha
   "pixi_version": "0.34.0",
   "environment_lock_file_hash": "4f36ee620f10329d"
 }
-
 ```
 
 The `environment_lock_file_hash` is used to check if the environment is in sync with the `pixi.lock` file. If the hash of the `pixi.lock` file is different from the hash in the `pixi` file, Pixi will update the environment.
@@ -196,12 +191,12 @@ If you want to clean up the environments, you can simply delete the `.pixi/envs`
 pixi clean
 # or manually:
 rm -rf .pixi/envs
+
 # or per environment:
 pixi clean --environment cuda
 # or manually:
 rm -rf .pixi/envs/default
 rm -rf .pixi/envs/cuda
-
 ```
 
 ## Solving environments

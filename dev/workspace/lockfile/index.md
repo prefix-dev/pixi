@@ -20,7 +20,6 @@ A lock file locks the environment in a specific state. Within Pixi a lock file i
               ...
               - conda: https://conda.anaconda.org/conda-forge/osx-64/python-3.12.2-h9f0c242_0_cpython.conda
               ...
-
   ```
 
   - The definition of the packages themselves. e.g.:
@@ -51,7 +50,6 @@ A lock file locks the environment in a specific state. Within Pixi a lock file i
       license: Python-2.0
       size: 14596811
       timestamp: 1708118065292
-
     ```
 
 ## Why a lock file
@@ -130,7 +128,6 @@ The lock file has a version number, this is to ensure that the lock file is comp
 
 ```yaml
 version: 6
-
 ```
 
 Pixi is backward compatible with the lock file, but not forward compatible. This means that you can use an older lock file with a newer version of `pixi`, but not the other way around.
@@ -159,7 +156,6 @@ If you want to remove the lock file, you can simply delete it.
 
 ```bash
 rm pixi.lock
-
 ```
 
 This will remove the lock file, and the next time you run a command that requires the lock file, it will be generated again.

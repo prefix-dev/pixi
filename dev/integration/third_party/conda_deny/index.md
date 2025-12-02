@@ -4,7 +4,6 @@ In your favorite `pixi` workspace, run:
 
 ```bash
 pixi exec conda-deny check --osi
-
 ```
 
 This will check your workspace for license compliance against the list of [OSI approved licenses](https://opensource.org/licenses).
@@ -17,7 +16,6 @@ You can install `conda-deny` using `pixi`:
 
 ```bash
 pixi global install conda-deny
-
 ```
 
 Or by downloading our pre-built binaries from the [releases page](https://github.com/quantco/conda-deny/releases).
@@ -37,6 +35,7 @@ environment = "default" # or ["default", "py39", "py310", "prod"]
 lockfile = "environment/pixi.lock" # or ["environment1/pixi.lock", "environment2/pixi.lock"]
 # lockfile also supports glob patterns:
 # lockfile = "environments/**/*.lock"
+
 #--------------------------------------------------------
 # License allowlist directly in configuration file:
 #--------------------------------------------------------
@@ -44,7 +43,6 @@ safe-licenses = ["MIT", "BSD-3-Clause"]
 ignore-packages = [
     { package = "make", version = "0.1.0" },
 ]
-
 ```
 
 After the installation, you can run `conda-deny check` in your workspace. This checks the dependencies defined by your `pixi.lock` against your allowlist.
@@ -63,7 +61,6 @@ package_name,version,license,platform,build,safe
 _openmp_mutex,4.5,BSD-3-Clause,linux-aarch64,2_gnu,false
 _openmp_mutex,4.5,BSD-3-Clause,linux-64,2_gnu,false
 ...
-
 ```
 
 ```bash
@@ -89,7 +86,6 @@ $ conda-deny list --output json-pretty
     "version": "4"
     },
 ...
-
 ```
 
 Tip

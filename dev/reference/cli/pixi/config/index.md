@@ -1,4 +1,4 @@
-# `[pixi](../) config`
+# `pixi config`
 
 ## About
 
@@ -8,7 +8,6 @@ Configuration management
 
 ```text
 pixi config <COMMAND>
-
 ```
 
 ## Subcommands

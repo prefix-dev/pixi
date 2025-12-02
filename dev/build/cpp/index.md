@@ -12,7 +12,6 @@ To get started, create a new workspace with pixi:
 
 ```bash
 pixi init cpp_math
-
 ```
 
 This should give you the basic `pixi.toml` to get started.
@@ -26,7 +25,6 @@ cpp_math/
 ├── .gitignore
 └── src
     └── math.cpp
-
 ```
 
 ## Creating the workspace files
@@ -46,23 +44,28 @@ Use the following `pixi.toml` file, you can hover over the annotations to see wh
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["osx-arm64", "linux-64", "osx-64", "win-64"]
 preview = ["pixi-build"]                                  # (1)!
+
 [dependencies] # (2)!
 cpp_math = { path = "." }
 python = "*"
+
 [tasks]
 start = "python -c 'import cpp_math as b; print(b.add(1, 2))'" # (3)!
+
 [package] # (4)!
 name = "cpp_math"
 version = "0.1.0"
+
 [package.build]
 backend = { name = "pixi-build-cmake", version = "0.3.*" }
+
 [package.build.config]
 extra-args = ["-DCMAKE_BUILD_TYPE=Release"] # (9)!
+
 [package.host-dependencies]
 cmake = "3.20.*"   # (8)!
 nanobind = "2.4.*" # (6)!
 python = "3.12.*"  # (7)!
-
 ```
 
 1. Add the **preview** feature `pixi-build` that enables Pixi to build the package.
@@ -82,18 +85,24 @@ Next lets add the `CMakeList.txt` file:
 ```CMake
 cmake_minimum_required(VERSION 3.20...3.27)
 project(cpp_math)
+
 find_package(Python 3.8 COMPONENTS Interpreter Development.Module REQUIRED) # (1)!
+
 execute_process(
   COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
   OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE nanobind_ROOT
 ) # (2)!
+
 execute_process(
     COMMAND ${Python_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('purelib'))"
     OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
     OUTPUT_STRIP_TRAILING_WHITESPACE
 ) # (3)!
+
 find_package(nanobind CONFIG REQUIRED) # (4)!
+
 nanobind_add_module(${PROJECT_NAME} src/math.cpp) # (5)!
+
 install( # (6)!
     TARGETS ${PROJECT_NAME}
     EXPORT ${PROJECT_NAME}Targets
@@ -101,7 +110,6 @@ install( # (6)!
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${BINDIR}
 )
-
 ```
 
 1. Find `python`, this actually finds anything above 3.8, but we are using 3.8 as a minimum version.
@@ -117,12 +125,13 @@ Next lets add the `src/math.cpp` file, this one is quite simple:
 
 ```cpp
 #include <nanobind/nanobind.h>
+
 int add(int a, int b) { return a + b; } // (1)!
+
 NB_MODULE(cpp_math, m)
 {
     m.def("add", &add); // (2)!
 }
-
 ```
 
 1. We define a function that will be used to add two numbers together.
@@ -135,7 +144,6 @@ Now that we have created the files we can test if everything works:
 ```bash
 $ pixi run start
 3
-
 ```
 
 This command builds the bindings, installs them and then runs the `test` task.

@@ -3,11 +3,12 @@ If you add a package to the [dependency table](../../reference/pixi_manifest/#de
 ```toml
 [package.build-dependencies]
 cxx-compiler = "*"
+
 [package.host-dependencies]
 catch = "*"
+
 [package.run-dependencies]
 git = "*"
-
 ```
 
 Each dependency is used at a different step of the package building process. `cxx-compiler` is used to build the package, `catch` will be linked into the package and `git` will be available during runtime.
@@ -52,7 +53,6 @@ So as an example, say we want to use `hatchling` and `uv` as to build a python p
 [host-dependencies]
 hatchling = "*"
 uv = "*"
-
 ```
 
 #### Native Code
@@ -79,7 +79,6 @@ Giving you something like this in your manifest file:
  # in our example these dependencies will use the aarch64 binaries
 [host-dependencies]
 sdl2 = "*"
-
 ```
 
 #### Run-Exports

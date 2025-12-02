@@ -24,7 +24,6 @@ First, we create a simple Python package with a `pyproject.toml` and a single Py
 │   └── python_rich
 │       └── __init__.py
 └── pyproject.toml
-
 ```
 
 1. This project uses a src-layout, but Pixi supports both [flat- and src-layouts](https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout).
@@ -37,25 +36,33 @@ src/python_rich/__init__.py
 from dataclasses import dataclass, fields
 from rich.console import Console
 from rich.table import Table
+
+
 @dataclass
 class Person:
     name: str
     age: int
     city: str
+
+
 def main() -> None:
     console = Console()
+
     people = [
         Person("John Doe", 30, "New York"),
         Person("Jane Smith", 25, "Los Angeles"),
         Person("Tim de Jager", 35, "Utrecht"),
     ]
+
     table = Table()
+
     for column in fields(Person):
         table.add_column(column.name)
+
     for person in people:
         table.add_row(person.name, str(person.age), person.city)
-    console.print(table)
 
+    console.print(table)
 ```
 
 The metadata of the Python package is defined in `pyproject.toml`.
@@ -69,10 +76,10 @@ name = "python_rich"
 requires-python = ">= 3.11"
 scripts = { rich-example-main = "python_rich:main" } # (2)!
 version = "0.1.0"
+
 [build-system] # (3)!
 build-backend = "hatchling.build"
 requires = ["hatchling"]
-
 ```
 
 1. We use the `rich` package to print the table in the terminal.
@@ -93,7 +100,6 @@ Let's initialize a Pixi project.
 
 ```text
 pixi init --format pixi
-
 ```
 
 We pass `--format pixi` in order to communicate to pixi, that we want a `pixi.toml` rather than extending `pyproject.toml`.
@@ -105,7 +111,6 @@ We pass `--format pixi` in order to communicate to pixi, that we want a `pixi.to
 ├── .gitignore
 ├── pixi.toml
 └── pyproject.toml
-
 ```
 
 This is the content of the `pixi.toml`:
@@ -117,20 +122,25 @@ pixi.toml
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 preview = ["pixi-build"]
+
 [dependencies] # (2)!
 python_rich = { path = "." }
+
 [tasks] # (3)!
 start = "rich-example-main"
+
 [package] # (4)!
 name = "python_rich"
 version = "0.1.0"
+
 [package.build] # (5)!
 backend = { name = "pixi-build-python", version = "==0.4.0" }
+
 [package.host-dependencies] # (6)!
 hatchling = "==1.26.3"
+
 [package.run-dependencies] # (7)!
 rich = "13.9.*"
-
 ```
 
 1. In `workspace` information is set that is shared across all packages in the workspace.
@@ -151,7 +161,6 @@ When we now run `pixi run start`, we get the following output:
 │ Jane Smith   │ 25  │ Los Angeles │
 │ Tim de Jager │ 35  │ Utrecht     │
 └──────────────┴─────┴─────────────┘
-
 ```
 
 ## Conclusion

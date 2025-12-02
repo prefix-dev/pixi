@@ -13,11 +13,13 @@ Running pixi info in the pixi repo
                   : __archspec=1=x86_64
          Cache dir: /home/user/.cache/rattler/cache
       Auth storage: /home/user/.rattler/credentials.json
+
 Workspace
 ------------
            Version: 0.13.0
      Manifest file: /home/user/development/pixi/pixi.toml
       Last updated: 25-01-2024 10:29:08
+
 Environments
 ------------
 default
@@ -27,7 +29,6 @@ default
       Dependencies: pre-commit, rust, openssl, pkg-config, git, mkdocs, mkdocs-material, pillow, cairosvg, compilers
   Target platforms: linux-64, osx-arm64, win-64, osx-64
              Tasks: docs, test-all, test, build, lint, install, build-docs
-
 ```
 
 ## Global info

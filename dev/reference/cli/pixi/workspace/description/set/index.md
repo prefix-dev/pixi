@@ -1,4 +1,4 @@
-# `[pixi](../../../) [workspace](../../) [description](../) set`
+# `pixi workspace description set`
 
 ## About
 
@@ -8,14 +8,15 @@ Set the workspace description
 
 ```text
 pixi workspace description set <DESCRIPTION>
-
 ```
 
 ## Arguments
 
-- [`<DESCRIPTION>`](#arg-%3CDESCRIPTION%3E) The workspace description
+- [`<DESCRIPTION>`](#arg-%3CDESCRIPTION%3E) : The workspace description
 
+  ```
   **required**: `true`
+  ```
 
 ## Description
 

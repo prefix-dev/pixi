@@ -12,7 +12,6 @@ Sometimes our direct dependency declares outdated intermediate dependency or is 
 # pyproject.toml
 [tool.pixi.pypi-options.dependency-overrides]
 numpy = ">=2.0.0"
-
 ```
 
 or in `pixi.toml`:
@@ -21,7 +20,6 @@ or in `pixi.toml`:
 # pixi.toml
 [pypi-options.dependency-overrides]
 numpy = ">=2.0.0"
-
 ```
 
 This will override the version of `numpy` used by all dependencies to be at least `2.0.0`, regardless of what the dependencies specify. This is useful if you need a specific version of a library that is not compatible with the versions specified by your dependencies.
@@ -33,7 +31,6 @@ it can also be specified in feature level,
 ```toml
 [features.dev.pypi-options.dependency-overrides]
 numpy = ">=2.0.0"
-
 ```
 
 This will override the version of `numpy` used by all dependencies in the `dev` feature to be at least `2.0.0`, regardless of what the dependencies specify when the `dev` feature is enabled.
@@ -50,18 +47,21 @@ Also, the default feature will always come, and come last in the list of all ove
 # pixi.toml
 [pypi-options]
 dependency-overrides = { numpy = ">=2.1.0" }
+
 [pypi-dependencies]
 numpy = ">=1.25.0"
+
 [feature.dev.pypi-options.dependency-overrides]
 numpy = "==2.0.0"
+
 [feature.outdated.pypi-options.dependency-overrides]
 numpy = "==1.21.0"
+
 [environments]
 dev = ["dev"]
 outdated = ["outdated"]
 conflict_a=["outdated", "dev"]
 conflict_b=["dev","outdated"]
-
 ```
 
 the following constrains are merged out: default: `numpy >= 2.1.0` dev: `numpy == 2.0.0` outdated: `numpy == 1.21.0` conflict_a: `numpy == 1.21.0` (from `outdated`) conflict_b: `numpy == 2.0.0` (from `dev`)

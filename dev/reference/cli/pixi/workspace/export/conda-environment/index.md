@@ -1,4 +1,4 @@
-# `[pixi](../../../) [workspace](../../) [export](../) conda-environment`
+# `pixi workspace export conda-environment`
 
 ## About
 
@@ -8,19 +8,18 @@ Export workspace environment to a conda environment.yaml file
 
 ```text
 pixi workspace export conda-environment [OPTIONS] [OUTPUT_PATH]
-
 ```
 
 ## Arguments
 
-- [`<OUTPUT_PATH>`](#arg-%3COUTPUT_PATH%3E) Explicit path to export the environment file to
+- [`<OUTPUT_PATH>`](#arg-%3COUTPUT_PATH%3E) : Explicit path to export the environment file to
 
 ## Options
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) The platform to render the environment file for. Defaults to the current platform
-- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) The environment to render the environment file for. Defaults to the default environment
-- [`--name (-n) <NAME>`](#arg---name) The name to use for the rendered conda environment. Defaults to the environment name
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to render the environment file for. Defaults to the current platform
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to render the environment file for. Defaults to the default environment
+- [`--name (-n) <NAME>`](#arg---name) : The name to use for the rendered conda environment. Defaults to the environment name
 
 ## Global Options
 
-- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory

@@ -1,4 +1,4 @@
-# `[pixi](../../../) [workspace](../../) [environment](../) remove`
+# `pixi workspace environment remove`
 
 ## About
 
@@ -8,11 +8,12 @@ Remove an environment from the manifest file
 
 ```text
 pixi workspace environment remove <NAME>
-
 ```
 
 ## Arguments
 
-- [`<NAME>`](#arg-%3CNAME%3E) The name of the environment to remove
+- [`<NAME>`](#arg-%3CNAME%3E) : The name of the environment to remove
 
+  ```
   **required**: `true`
+  ```

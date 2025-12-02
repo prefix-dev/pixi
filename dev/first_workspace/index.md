@@ -8,7 +8,6 @@ To create a new Pixi workspace, you can use the `pixi init` command:
 
 ```shell
 pixi init my_workspace
-
 ```
 
 This command creates a new directory called `my_workspace` with the following structure:
@@ -18,7 +17,6 @@ my_workspace
 ├── .gitattributes
 ├── .gitignore
 └── pixi.toml
-
 ```
 
 The `pixi.toml` file is the manifest of your Pixi workspace. It contains all the information about your workspace, such as its channels, platforms, dependencies, tasks, and more.
@@ -34,9 +32,10 @@ channels = ["conda-forge"]
 name = "my_workspace"
 platforms = ["osx-arm64"]
 version = "0.1.0"
-[tasks]
-[dependencies]
 
+[tasks]
+
+[dependencies]
 ```
 
 Do you want autocompletion of the manifest file?
@@ -49,7 +48,6 @@ After creating the workspace, you can start adding dependencies. Pixi uses the `
 
 ```shell
 pixi add numpy pytest
-
 ```
 
 This results in these lines being added:
@@ -60,14 +58,12 @@ pixi.toml
 [dependencies]
 numpy = ">=2.2.6,<3"
 pytest = ">=8.3.5,<9"
-
 ```
 
 You can also specify the version of the dependency you want to add.
 
 ```shell
 pixi add numpy==2.2.6 pytest==8.3.5
-
 ```
 
 ### PyPI dependencies
@@ -78,7 +74,6 @@ If you want to add them to your workspace you can do that with the `--pypi` flag
 
 ```shell
 pixi add --pypi httpx
-
 ```
 
 This will add the `httpx` package from PyPI to the workspace:
@@ -88,7 +83,6 @@ pixi.toml
 ```toml
 [pypi-dependencies]
 httpx = ">=0.28.1,<0.29"
-
 ```
 
 To learn more about the differences between `conda` and PyPI, see [our Conda & PyPI concept documentation](../concepts/conda_pypi/).
@@ -124,7 +118,6 @@ packages:
   size: 122909
   timestamp: 1720974522888
 - pypi: ...
-
 ```
 
 ## Managing tasks
@@ -137,7 +130,6 @@ You can add one to your workspace by running the `pixi task add` command.
 
 ```shell
 pixi task add hello "echo Hello, World!"
-
 ```
 
 This will add the following lines to the `pixi.toml` file:
@@ -147,14 +139,12 @@ pixi.toml
 ```toml
 [tasks]
 hello = "echo Hello, World!"
-
 ```
 
 You can then run the task using the `pixi run` command:
 
 ```shell
 pixi run hello
-
 ```
 
 This will execute the command `echo Hello, World!` in the workspace's default environment.
@@ -166,19 +156,23 @@ Tasks can be much more powerful, for example:
 ```toml
 [tasks.name-of-powerful-task]
 cmd = "echo This task can do much more! Like have {{ arguments }} and {{ "minijinja" | capitalize }} templates."
+
 # List of tasks that must be run before this one.
 depends-on = ["other-task"]
+
 # Working directory relative to the root of the workspace
 cwd = "current/working/directory"
+
 # List of arguments for the task
 args = [{ arg = "arguments", default = "default arguments" }]
+
 # Run the command if the input files have changed
 input = ["src"]
 # Run the command if the output files are missing
 output = ["output.txt"]
+
 # Set environment variables for the task
 env = { MY_ENV_VAR = "value" }
-
 ```
 
 More information about tasks can be found in the [Tasks](../workspace/advanced_tasks/) section of the documentation.
@@ -195,5 +189,4 @@ pixi run python -VV
 pixi shell
 python -VV
 exit
-
 ```

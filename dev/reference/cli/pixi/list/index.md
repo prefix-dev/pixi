@@ -1,4 +1,4 @@
-# `[pixi](../) list`
+# `pixi list`
 
 ## About
 
@@ -8,46 +8,51 @@ List the packages of the current workspace
 
 ```text
 pixi list [OPTIONS] [REGEX]
-
 ```
 
 ## Arguments
 
-- [`<REGEX>`](#arg-%3CREGEX%3E) List only packages matching a regular expression
+- [`<REGEX>`](#arg-%3CREGEX%3E) : List only packages matching a regular expression
 
 ## Options
 
-- [`--platform <PLATFORM>`](#arg---platform) The platform to list packages for. Defaults to the current platform
+- [`--platform <PLATFORM>`](#arg---platform) : The platform to list packages for. Defaults to the current platform
 
-- [`--json`](#arg---json) Whether to output in json format
+- [`--json`](#arg---json) : Whether to output in json format
 
-- [`--json-pretty`](#arg---json-pretty) Whether to output in pretty json format
+- [`--json-pretty`](#arg---json-pretty) : Whether to output in pretty json format
 
-- [`--sort-by <SORT_BY>`](#arg---sort-by) Sorting strategy
+- [`--sort-by <SORT_BY>`](#arg---sort-by) : Sorting strategy
 
+  ```
   **default**: `name`
-
+    
   **options**: `size`, `name`, `kind`
+  ```
 
-- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) The environment to list packages for. Defaults to the default environment
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to list packages for. Defaults to the default environment
 
-- [`--explicit (-x)`](#arg---explicit) Only list packages that are explicitly defined in the workspace
+- [`--explicit (-x)`](#arg---explicit) : Only list packages that are explicitly defined in the workspace
 
 ## Update Options
 
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
+  ```
   **env**: `PIXI_FROZEN`
+  ```
 
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
+  ```
   **env**: `PIXI_LOCKED`
+  ```
 
-- [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
 
 ## Global Options
 
-- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 ## Description
 
@@ -68,7 +73,6 @@ pixi list --environment cuda
 pixi list --frozen
 pixi list --locked
 pixi list --no-install
-
 ```
 
 Output will look like this, where `python` will be green as it is the package that was explicitly added to the [manifest file](../../../pixi_manifest/):
@@ -97,5 +101,4 @@ Output will look like this, where `python` will be green as it is the package th
  tk                8.6.13      noxft_h4845f30_101  3.2 MiB    conda  tk-8.6.13-noxft_h4845f30_101.conda
  tzdata            2023d       h0c530f3_0          116.8 KiB  conda  tzdata-2023d-h0c530f3_0.conda
  xz                5.2.6       h166bdaf_0          408.6 KiB  conda  xz-5.2.6-h166bdaf_0.tar.bz2
-
 ```

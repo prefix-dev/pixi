@@ -12,7 +12,6 @@ The audience for this tutorial is developers who are familiar with ROS 2 and how
 ```shell
 pixi init my_ros2_project -c robostack-humble -c conda-forge
 cd my_ros2_project
-
 ```
 
 It should have created a directory structure like this:
@@ -22,7 +21,6 @@ my_ros2_project
 ├── .gitattributes
 ├── .gitignore
 └── pixi.toml
-
 ```
 
 The `pixi.toml` file is the manifest file for your workspace. It should look like this:
@@ -38,9 +36,10 @@ authors = ["User Name <user.name@email.url>"]
 channels = ["robostack-humble", "conda-forge"]
 # Your project can support multiple platforms, the current platform will be automatically added.
 platforms = ["linux-64"]
-[tasks]
-[dependencies]
 
+[tasks]
+
+[dependencies]
 ```
 
 The `channels` you added to the `init` command are repositories of packages, you can search in these repositories through our [prefix.dev](https://prefix.dev/channels) website. The `platforms` are the systems you want to support, in Pixi you can support multiple platforms, but you have to define which platforms, so Pixi can test if those are supported for your dependencies. For the rest of the fields, you can fill them in as you see fit.
@@ -53,7 +52,6 @@ Let's start with the `turtlesim` example
 
 ```shell
 pixi add ros-humble-desktop ros-humble-turtlesim
-
 ```
 
 This will add the `ros-humble-desktop` and `ros-humble-turtlesim` packages to your manifest. Depending on your internet speed this might take a minute, as it will also install ROS in your workspace folder (`.pixi`).
@@ -62,7 +60,6 @@ Now run the `turtlesim` example.
 
 ```shell
 pixi run ros2 run turtlesim turtlesim_node
-
 ```
 
 **Or** use the `shell` command to start an activated environment in your terminal.
@@ -70,7 +67,6 @@ pixi run ros2 run turtlesim turtlesim_node
 ```shell
 pixi shell
 ros2 run turtlesim turtlesim_node
-
 ```
 
 Congratulations you have ROS 2 running on your machine with pixi!
@@ -82,7 +78,6 @@ To control the turtle you can run the following command in a new terminal
 ```shell
 cd my_ros2_project
 pixi run ros2 run turtlesim turtle_teleop_key
-
 ```
 
 Now you can control the turtle with the arrow keys on your keyboard.
@@ -93,14 +88,12 @@ As ros works with custom nodes, let's add a custom node to our project.
 
 ```shell
 pixi run ros2 pkg create --build-type ament_python --destination-directory src --node-name my_node my_package
-
 ```
 
 To build the package we need some more dependencies:
 
 ```shell
 pixi add colcon-common-extensions "setuptools<=58.2.0"
-
 ```
 
 Add the created initialization script for the ros workspace to your manifest file.
@@ -109,7 +102,6 @@ Then run the build command
 
 ```shell
 pixi run colcon build
-
 ```
 
 This will create a sourceable script in the `install` folder, you can source this script through an activation script to use your custom node. Normally this would be the script you add to your `.bashrc` but instead you tell Pixi to use it by adding the following to `pixi.toml`:
@@ -119,7 +111,6 @@ pixi.toml
 ```toml
 [activation]
 scripts = ["install/setup.sh"]
-
 ```
 
 pixi.toml
@@ -127,7 +118,6 @@ pixi.toml
 ```toml
 [activation]
 scripts = ["install/setup.bat"]
-
 ```
 
 Multi platform support
@@ -137,18 +127,17 @@ You can add multiple activation scripts for different platforms, so you can supp
 ```toml
 [workspace]
 platforms = ["linux-64", "win-64"]
+
 [activation]
 scripts = ["install/setup.sh"]
 [target.win-64.activation]
 scripts = ["install/setup.bat"]
-
 ```
 
 Now you can run your custom node with the following command
 
 ```shell
 pixi run ros2 run my_package my_node
-
 ```
 
 ## Simplify the user experience
@@ -159,7 +148,6 @@ In `pixi` we have a feature called `tasks`, this allows you to define a task in 
 pixi task add sim "ros2 run turtlesim turtlesim_node"
 pixi task add build "colcon build --symlink-install"
 pixi task add hello "ros2 run my_package my_node"
-
 ```
 
 Now you can run these task by simply running
@@ -168,7 +156,6 @@ Now you can run these task by simply running
 pixi run sim
 pixi run build
 pixi run hello
-
 ```
 
 Advanced task usage
@@ -185,7 +172,6 @@ Tasks are a powerful feature in pixi.
 sim = "ros2 run turtlesim turtlesim_node"
 build = {cmd = "colcon build --symlink-install", inputs = ["src"]}
 hello = { cmd = "ros2 run my_package my_node", depends-on = ["build"] }
-
 ```
 
 ## Build a C++ node
@@ -194,14 +180,12 @@ To build a C++ node you need to add the `ament_cmake` and some other build depen
 
 ```shell
 pixi add ros-humble-ament-cmake-auto compilers pkg-config cmake ninja
-
 ```
 
 Now you can create a C++ node with the following command
 
 ```shell
 pixi run ros2 pkg create --build-type ament_cmake --destination-directory src --node-name my_cpp_node my_cpp_package
-
 ```
 
 Now you can build it again and run it with the following commands
@@ -210,7 +194,6 @@ Now you can build it again and run it with the following commands
 # Passing arguments to the build command to build with Ninja, add them to the manifest if you want to default to ninja.
 pixi run build --cmake-args -G Ninja
 pixi run ros2 run my_cpp_package my_cpp_node
-
 ```
 
 Tip
@@ -219,7 +202,6 @@ Add the cpp task to the manifest file to simplify the user experience.
 
 ```shell
 pixi task add hello-cpp "ros2 run my_cpp_package my_cpp_node"
-
 ```
 
 ## Conclusion

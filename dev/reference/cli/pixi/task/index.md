@@ -1,4 +1,4 @@
-# `[pixi](../) task`
+# `pixi task`
 
 ## About
 
@@ -8,7 +8,6 @@ Interact with tasks in the workspace
 
 ```text
 pixi task [OPTIONS] <COMMAND>
-
 ```
 
 ## Subcommands
@@ -22,4 +21,4 @@ pixi task [OPTIONS] <COMMAND>
 
 ## Global Options
 
-- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory

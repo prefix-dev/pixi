@@ -1,4 +1,4 @@
-# `[pixi](../../../) [workspace](../../) [system-requirements](../) list`
+# `pixi workspace system-requirements list`
 
 ## About
 
@@ -8,10 +8,9 @@ List the environments in the manifest file
 
 ```text
 pixi workspace system-requirements list [OPTIONS]
-
 ```
 
 ## Options
 
-- [`--json`](#arg---json) List the system requirements in JSON format
-- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) The environment to list the system requirements for
+- [`--json`](#arg---json) : List the system requirements in JSON format
+- [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to list the system requirements for

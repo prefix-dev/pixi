@@ -1,4 +1,4 @@
-# `[pixi](../../) [config](../) append`
+# `pixi config append`
 
 ## About
 
@@ -8,28 +8,31 @@ Append a value to a list configuration key
 
 ```text
 pixi config append [OPTIONS] <KEY> <VALUE>
-
 ```
 
 ## Arguments
 
-- [`<KEY>`](#arg-%3CKEY%3E) Configuration key to set
+- [`<KEY>`](#arg-%3CKEY%3E) : Configuration key to set
 
+  ```
   **required**: `true`
+  ```
 
-- [`<VALUE>`](#arg-%3CVALUE%3E) Configuration value to (pre|ap)pend
+- [`<VALUE>`](#arg-%3CVALUE%3E) : Configuration value to (pre|ap)pend
 
+  ```
   **required**: `true`
+  ```
 
 ## Config Options
 
-- [`--local (-l)`](#arg---local) Operation on project-local configuration
-- [`--global (-g)`](#arg---global) Operation on global configuration
-- [`--system (-s)`](#arg---system) Operation on system configuration
+- [`--local (-l)`](#arg---local) : Operation on project-local configuration
+- [`--global (-g)`](#arg---global) : Operation on global configuration
+- [`--system (-s)`](#arg---system) : Operation on system configuration
 
 ## Global Options
 
-- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 ## Description
 
@@ -42,5 +45,4 @@ Example: `pixi config append default-channels bioconda`
 ```shell
 pixi config append default-channels robostack
 pixi config append default-channels bioconda --global
-
 ```

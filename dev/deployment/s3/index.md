@@ -6,7 +6,6 @@ pixi.toml
 [workspace]
 # ...
 channels = ["s3://my-bucket/custom-channel"]
-
 ```
 
 In the bucket, your objects need to adhere to the standard conda repository structure:
@@ -20,7 +19,6 @@ my-bucket/
         linux-64/
             repodata.json
             ...
-
 ```
 
 Pixi supports two ways to configure access to your S3 bucket:
@@ -46,7 +44,6 @@ sso_start_url = https://my-company.awsapps.com/start
 sso_region = eu-central-1
 region = eu-central-1
 output = json
-
 ```
 
 CLI usage
@@ -57,13 +54,15 @@ $ export AWS_PROFILE=conda
 $ aws sso login
 Attempting to automatically open the SSO authorization page in your default browser.
 If the browser does not open or you wish to use a different device to authorize this request, open the following URL:
+
 https://my-company.awsapps.com/start/#/device
+
 Then enter the code:
+
 DTBC-WFXC
 Successfully logged into Start URL: https://my-company.awsapps.com/start
 $ pixi search -c s3://my-s3-bucket/channel my-private-package
 # ...
-
 ```
 
 ci.yml
@@ -75,16 +74,17 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
       # temporary credentials via OIDC
       - name: Log in to AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::123456789012:role/github-poweruser
           aws-region: eu-central-1
+
       - name: Set up pixi
         # AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set by aws-actions/configure-aws-credentials
         uses: prefix-dev/setup-pixi@v0.8.3
-
 ```
 
 ## Using Pixi's Configuration
@@ -98,7 +98,6 @@ pixi.toml
 endpoint-url = "https://my-s3-host"
 region = "us-east-1"
 force-path-style = false
-
 ```
 
 You need to configure this per bucket you use, i.e. use `[workspace.s3-options.<bucket-name>]`.
@@ -108,7 +107,6 @@ $ pixi auth login --aws-access-key-id=... --aws-secret-access-key=... s3://my-s3
 Authenticating with s3://my-s3-bucket
 $ pixi search my-private-package
 # ...
-
 ```
 
 You can also specify the `s3-options` in your [Pixi configuration](../../reference/pixi_configuration/).
@@ -120,7 +118,6 @@ Global configuration
 endpoint-url = "https://my-s3-host"
 region = "us-east-1"
 force-path-style = false
-
 ```
 
 ci.yml
@@ -132,6 +129,7 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
       # temporary credentials via OIDC
       - name: Log in to AWS
         uses: aws-actions/configure-aws-credentials@v4
@@ -139,6 +137,7 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::123456789012:role/github-poweruser
           aws-region: eu-central-1
+
       - name: Set up pixi
         # AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set by aws-actions/configure-aws-credentials
         uses: prefix-dev/setup-pixi@v0.8.3
@@ -147,7 +146,6 @@ jobs:
           auth-s3-secret-access-key: ${{ steps.aws.outputs.aws-secret-access-key }}
           auth-s3-session-token: ${{ steps.aws.outputs.aws-session-token }}
           auth-host: s3://my-s3-bucket
-
 ```
 
 ## Public S3 Buckets
@@ -159,7 +157,6 @@ pixi.toml
 ```toml
 [workspace]
 channels = ["https://my-public-bucket.s3.eu-central-1.amazonaws.com/channel"]
-
 ```
 
 Note that for this, you need to configure your S3 bucket in such a way that it allows public access. On AWS, you need the `GetObject` and `ListBucket` permissions for this. Here is an example policy for AWS S3:
@@ -186,7 +183,6 @@ Bucket policy
         }
     ]
 }
-
 ```
 
 Cloudflare R2 also supports public buckets through a Cloudflare-managed `r2.dev` subdomain or a custom domain under your control, see [here](https://developers.cloudflare.com/r2/buckets/public-buckets/).
@@ -203,7 +199,6 @@ pixi.toml
 endpoint-url = "https://minio.example.com"
 region = "us-east-1"
 force-path-style = true
-
 ```
 
 ### Cloudflare R2
@@ -214,7 +209,6 @@ pixi.toml
 endpoint-url = "https://<account-id>.eu.r2.cloudflarestorage.com"
 region = "WEUR"
 force-path-style = false
-
 ```
 
 ### Wasabi
@@ -225,7 +219,6 @@ pixi.toml
 endpoint-url = "https://s3.de-1.wasabisys.com"
 region = "de-1"
 force-path-style = false
-
 ```
 
 ### Backblaze B2
@@ -236,7 +229,6 @@ pixi.toml
 endpoint-url = "https://s3.us-west-004.backblazeb2.com"
 region = "us-west-004"
 force-path-style = true
-
 ```
 
 ### Google Cloud Storage
@@ -249,7 +241,6 @@ pixi.toml
 endpoint-url = "https://storage.googleapis.com"
 region = "us-east-1"
 force-path-style = false
-
 ```
 
 ### Hetzner Object Storage
@@ -260,7 +251,6 @@ pixi.toml
 endpoint-url = "https://fsn1.your-objectstorage.com"
 region = "US"
 force-path-style = false
-
 ```
 
 ## Uploading to S3
@@ -280,5 +270,4 @@ pixi exec rattler-index s3 s3://my-s3-bucket/my-channel \
     --force-path-style \
     --access-key-id <access-key-id> \
     --secret-access-key <secret-access-key>
-
 ```

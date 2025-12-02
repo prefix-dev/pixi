@@ -1,4 +1,4 @@
-# `[pixi](../../) [global](../) edit`
+# `pixi global edit`
 
 ## About
 
@@ -8,14 +8,15 @@ Edit the global manifest file
 
 ```text
 pixi global edit [EDITOR]
-
 ```
 
 ## Arguments
 
-- [`<EDITOR>`](#arg-%3CEDITOR%3E) The editor to use, defaults to `EDITOR` environment variable or `nano` on Unix and `notepad` on Windows
+- [`<EDITOR>`](#arg-%3CEDITOR%3E) : The editor to use, defaults to `EDITOR` environment variable or `nano` on Unix and `notepad` on Windows
 
+  ```
   **env**: `EDITOR`
+  ```
 
 ## Description
 
@@ -29,5 +30,4 @@ Opens your editor to edit the global manifest file.
 pixi global edit
 pixi global edit code
 pixi global edit vim
-
 ```

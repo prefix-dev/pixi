@@ -1,4 +1,4 @@
-# `[pixi](../../) [workspace](../) requires-pixi`
+# `pixi workspace requires-pixi`
 
 ## About
 
@@ -8,7 +8,6 @@ Commands to manage the pixi minimum version requirement
 
 ```text
 pixi workspace requires-pixi [OPTIONS] <COMMAND>
-
 ```
 
 ## Subcommands
@@ -22,4 +21,4 @@ pixi workspace requires-pixi [OPTIONS] <COMMAND>
 
 ## Global Options
 
-- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory

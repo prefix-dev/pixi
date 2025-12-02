@@ -14,14 +14,12 @@ Starting with the name `prefix` we iterated until we had a name that was easy to
 
 ```shell
 alias not_pixi="pixi"
-
 ```
 
 PowerShell:
 
 ```powershell
 New-Alias -Name not_pixi -Value pixi
-
 ```
 
 ## Where is `pixi build`

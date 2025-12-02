@@ -9,9 +9,9 @@ When a user defines a channel per dependency, the solver needs to know the other
 ```toml
 [workspace]
 channels = ["conda-forge", "my-channel"]
+
 [dependencies]
 packgex = { version = "*", channel = "my-channel" }
-
 ```
 
 In the `packagex` example, the solver will understand that the package is only available in `my-channel` and will not look for it in `conda-forge`.
@@ -36,7 +36,6 @@ Channel priority is dictated by the order in the `workspace.channels` array, whe
 ```toml
 [workspace]
 channels = ["conda-forge", "my-channel", "your-channel"]
-
 ```
 
 If the package is found in `conda-forge` the solver will not look for it in `my-channel` and `your-channel`, because it tells the solver they are excluded. If the package is not found in `conda-forge` the solver will look for it in `my-channel` and if it **is** found there it will tell the solver to exclude `your-channel` for this package. This diagram explains the logic:
@@ -69,13 +68,13 @@ A common use case is to use `pytorch` with `nvidia` drivers, while also needing 
 [workspace]
 channels = ["nvidia/label/cuda-11.8.0", "nvidia", "conda-forge", "pytorch"]
 platforms = ["linux-64"]
+
 [dependencies]
 cuda = {version = "*", channel="nvidia/label/cuda-11.8.0"}
 pytorch = {version = "2.0.1.*", channel="pytorch"}
 torchvision = {version = "0.15.2.*", channel="pytorch"}
 pytorch-cuda = {version = "11.8.*", channel="pytorch"}
 python = "3.10.*"
-
 ```
 
 What this will do is get as much as possible from the `nvidia/label/cuda-11.8.0` channel, which is actually only the `cuda` package.
@@ -101,17 +100,20 @@ This priority definition is mostly important for [multiple environments](../../w
 name = "test_channel_priority"
 platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
 channels = ["conda-forge"]
+
 [feature.a]
 channels = ["nvidia"]
+
 [feature.b]
 channels = [ "pytorch", {channel = "nvidia", priority = 1}]
+
 [feature.c]
 channels = [ "pytorch", {channel = "nvidia", priority = -1}]
+
 [environments]
 a = ["a"]
 b = ["b"]
 c = ["c"]
-
 ```
 
 This example creates 4 environments, `a`, `b`, `c`, and the default environment. Which will have the following channel order:
@@ -136,20 +138,22 @@ Environments
           Channels: conda-forge
 Dependency count: 0
 Target platforms: linux-64
+
        Environment: a
           Features: a, default
           Channels: nvidia, conda-forge
 Dependency count: 0
 Target platforms: linux-64
+
        Environment: b
           Features: b, default
           Channels: nvidia, pytorch, conda-forge
 Dependency count: 0
 Target platforms: linux-64
+
        Environment: c
           Features: c, default
           Channels: pytorch, conda-forge, nvidia
 Dependency count: 0
 Target platforms: linux-64
-
 ```

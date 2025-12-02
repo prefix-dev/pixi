@@ -1,4 +1,4 @@
-# `[pixi](../../) [workspace](../) platform`
+# `pixi workspace platform`
 
 ## About
 
@@ -8,7 +8,6 @@ Commands to manage workspace platforms
 
 ```text
 pixi workspace platform [OPTIONS] <COMMAND>
-
 ```
 
 ## Subcommands
@@ -21,4 +20,4 @@ pixi workspace platform [OPTIONS] <COMMAND>
 
 ## Global Options
 
-- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory

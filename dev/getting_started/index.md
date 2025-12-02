@@ -45,7 +45,6 @@ For example:
 Python 3.13.5 | packaged by conda-forge | (main, Jun 16 2025, 08:24:05) [Clang 18.1.8 ]
 > pixi exec --spec "python=3.12" python -VV
 Python 3.12.11 | packaged by conda-forge | (main, Jun  4 2025, 14:38:53) [Clang 18.1.8 ]
-
 ```
 
 ## Multiple environments
@@ -68,7 +67,9 @@ Pixi can run cross-platform tasks using it's built-in task runner. This can be a
 - [`pixi run`](../reference/cli/pixi/run/) - Run a task or command
 - [`pixi task add`](../reference/cli/pixi/task/add/) - Add a new task to the manifest
 
-Tasks can have other tasks as dependencies. Here is an example of a more complex task use case pixi.toml
+Tasks can have other tasks as dependencies. Here is an example of a more complex task use case
+
+pixi.toml
 
 ```toml
 [tasks]
@@ -77,7 +78,6 @@ build = "make build"
 [tasks.test]
 cmd = "pytest"
 depends-on = ["build"]
-
 ```
 
 More information: [Tasks](../workspace/advanced_tasks/)

@@ -1,4 +1,4 @@
-# `[pixi](../) workspace`
+# `pixi workspace`
 
 ## About
 
@@ -8,7 +8,6 @@ Modify the workspace configuration file through the command line
 
 ```text
 pixi workspace [OPTIONS] <COMMAND>
-
 ```
 
 ## Subcommands
@@ -27,4 +26,4 @@ pixi workspace [OPTIONS] <COMMAND>
 
 ## Global Options
 
-- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory

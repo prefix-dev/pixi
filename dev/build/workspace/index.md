@@ -28,7 +28,6 @@ We will start with the original setup of `python_rich` and copy `cpp_math` into 
 └── src
     └── python_rich
         └── __init__.py
-
 ```
 
 Within a Pixi manifest, you can manage a workspace and/or describe a package. In the case of `python_rich` we choose to do both, so the only thing we have to add `cpp_math` as a [run dependency](../../reference/pixi_manifest/#run-dependencies) of `python_rich`.
@@ -39,7 +38,6 @@ pixi.toml
 [package.run-dependencies]
 cpp_math = { path = "packages/cpp_math" }
 rich = "13.9.*"
-
 ```
 
 We only want to use the `workspace` table of the top-level manifest. Therefore, we can remove the workspace section in the manifest of `cpp_math`.
@@ -57,7 +55,6 @@ packages/cpp_math/pixi.toml
 -
 -[tasks]
 -start = "python -c 'import cpp_math as b; print(b.add(1, 2))'"
-
 ```
 
 There is actually one problem with `python_rich`. The age of every person is off by one year!
@@ -70,7 +67,6 @@ There is actually one problem with `python_rich`. The age of every person is off
 │ Jane Smith   │ 25  │ Los Angeles │
 │ Tim de Jager │ 35  │ Utrecht     │
 └──────────────┴─────┴─────────────┘
-
 ```
 
 We need to add one year to the age of every person. Luckily `cpp_math` exposes a function `add` which allows us to do exactly that.
@@ -82,26 +78,34 @@ from dataclasses import dataclass, fields
 from rich.console import Console
 from rich.table import Table
 import cpp_math
+
+
 @dataclass
 class Person:
     name: str
     age: int
     city: str
+
+
 def main() -> None:
     console = Console()
+
     people = [
         Person("John Doe", 30, "New York"),
         Person("Jane Smith", 25, "Los Angeles"),
         Person("Tim de Jager", 35, "Utrecht"),
     ]
+
     table = Table()
+
     for column in fields(Person):
         table.add_column(column.name)
+
     for person in people:
         updated_age = cpp_math.add(person.age, 1)
         table.add_row(person.name, str(updated_age), person.city)
-    console.print(table)
 
+    console.print(table)
 ```
 
 If you run `pixi run start`, the age of each person should now be accurate:
@@ -114,7 +118,6 @@ If you run `pixi run start`, the age of each person should now be accurate:
 │ Jane Smith   │ 26  │ Los Angeles │
 │ Tim de Jager │ 36  │ Utrecht     │
 └──────────────┴─────┴─────────────┘
-
 ```
 
 ## Conclusion

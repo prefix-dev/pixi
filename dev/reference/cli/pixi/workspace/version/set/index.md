@@ -1,4 +1,4 @@
-# `[pixi](../../../) [workspace](../../) [version](../) set`
+# `pixi workspace version set`
 
 ## About
 
@@ -8,11 +8,12 @@ Set the workspace version
 
 ```text
 pixi workspace version set <VERSION>
-
 ```
 
 ## Arguments
 
-- [`<VERSION>`](#arg-%3CVERSION%3E) The new workspace version
+- [`<VERSION>`](#arg-%3CVERSION%3E) : The new workspace version
 
+  ```
   **required**: `true`
+  ```
