@@ -413,7 +413,7 @@ dependencies = [
  "bytes",
  "fastrand",
  "hex",
- "http 1.3.1",
+ "http 1.4.0",
  "p256 0.13.2",
  "rand 0.8.5",
  "ring",
@@ -487,7 +487,7 @@ dependencies = [
  "hex",
  "hmac",
  "http 0.2.12",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 0.4.6",
  "lru",
  "percent-encoding",
@@ -603,7 +603,7 @@ dependencies = [
  "hex",
  "hmac",
  "http 0.2.12",
- "http 1.3.1",
+ "http 1.4.0",
  "p256 0.11.1",
  "percent-encoding",
  "ring",
@@ -670,7 +670,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "http 0.2.12",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 0.4.6",
  "percent-encoding",
  "pin-project-lite",
@@ -688,7 +688,7 @@ dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "h2",
- "http 1.3.1",
+ "http 1.4.0",
  "hyper",
  "hyper-rustls",
  "hyper-util",
@@ -744,7 +744,7 @@ dependencies = [
  "bytes",
  "fastrand",
  "http 0.2.12",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 0.4.6",
  "http-body 1.0.1",
  "pin-project-lite",
@@ -763,7 +763,7 @@ dependencies = [
  "aws-smithy-types",
  "bytes",
  "http 0.2.12",
- "http 1.3.1",
+ "http 1.4.0",
  "pin-project-lite",
  "tokio",
  "tracing",
@@ -781,7 +781,7 @@ dependencies = [
  "bytes-utils",
  "futures-core",
  "http 0.2.12",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 0.4.6",
  "http-body 1.0.1",
  "http-body-util",
@@ -829,7 +829,7 @@ dependencies = [
  "bytes",
  "form_urlencoded",
  "futures-util",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
  "hyper",
@@ -860,7 +860,7 @@ checksum = "59446ce19cd142f8833f856eb31f3eb097812d1479ab224f54d72428ca21ea22"
 dependencies = [
  "bytes",
  "futures-core",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
  "mime",
@@ -2576,7 +2576,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "gloo-utils",
- "http 1.3.1",
+ "http 1.4.0",
  "js-sys",
  "pin-project",
  "serde",
@@ -2645,7 +2645,7 @@ dependencies = [
  "base64 0.22.1",
  "bon",
  "google-cloud-gax",
- "http 1.3.1",
+ "http 1.4.0",
  "reqwest",
  "rustc_version",
  "rustls",
@@ -2668,7 +2668,7 @@ dependencies = [
  "futures",
  "google-cloud-rpc",
  "google-cloud-wkt",
- "http 1.3.1",
+ "http 1.4.0",
  "pin-project",
  "rand 0.9.2",
  "serde",
@@ -2739,7 +2739,7 @@ dependencies = [
  "fnv",
  "futures-core",
  "futures-sink",
- "http 1.3.1",
+ "http 1.4.0",
  "indexmap 2.12.0",
  "slab",
  "tokio",
@@ -2874,12 +2874,11 @@ dependencies = [
 
 [[package]]
 name = "http"
-version = "1.3.1"
+version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4a85d31aea989eead29a3aaf9e1115a180df8282431156e533de47660892565"
+checksum = "e3ba2a386d7f85a81f119ad7498ebe444d2e22c2af0b86b069416ace48b3311a"
 dependencies = [
  "bytes",
- "fnv",
  "itoa",
 ]
 
@@ -2901,7 +2900,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1efedce1fb8e6913f23e0c92de8e62cd5b772a67e7b3946df930a62566c93184"
 dependencies = [
  "bytes",
- "http 1.3.1",
+ "http 1.4.0",
 ]
 
 [[package]]
@@ -2912,7 +2911,7 @@ checksum = "b021d93e26becf5dc7e1b75b1bed1fd93124b374ceb73f43d4d4eafec896a64a"
 dependencies = [
  "bytes",
  "futures-core",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 1.0.1",
  "pin-project-lite",
 ]
@@ -2926,7 +2925,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "cacache",
- "http 1.3.1",
+ "http 1.4.0",
  "http-cache-semantics",
  "httpdate",
  "serde",
@@ -2941,7 +2940,7 @@ checksum = "8ccca775a066b2a65da33611921e078ebdcfc27065c8bee96794703541101886"
 dependencies = [
  "anyhow",
  "async-trait",
- "http 1.3.1",
+ "http 1.4.0",
  "http-cache",
  "http-cache-semantics",
  "reqwest",
@@ -2956,7 +2955,7 @@ version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92baf25cf0b8c9246baecf3a444546360a97b569168fdf92563ee6a47829920c"
 dependencies = [
- "http 1.3.1",
+ "http 1.4.0",
  "http-serde",
  "reqwest",
  "serde",
@@ -2975,7 +2974,7 @@ version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f056c8559e3757392c8d091e796416e4649d8e49e88b8d76df6c002f05027fd"
 dependencies = [
- "http 1.3.1",
+ "http 1.4.0",
  "serde",
 ]
 
@@ -3023,7 +3022,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "h2",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 1.0.1",
  "httparse",
  "httpdate",
@@ -3041,7 +3040,7 @@ version = "0.27.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3c93eb611681b207e1fe55d5a71ecf91572ec8a6705cdb6857f7d8d5242cf58"
 dependencies = [
- "http 1.3.1",
+ "http 1.4.0",
  "hyper",
  "hyper-util",
  "log",
@@ -3094,7 +3093,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 1.0.1",
  "hyper",
  "ipnet",
@@ -3533,7 +3532,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "gloo-net",
- "http 1.3.1",
+ "http 1.4.0",
  "jsonrpsee-core",
  "pin-project",
  "rustls",
@@ -3558,7 +3557,7 @@ dependencies = [
  "bytes",
  "futures-timer",
  "futures-util",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
  "jsonrpsee-types",
@@ -3604,7 +3603,7 @@ version = "0.24.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0f05e0028e55b15dbd2107163b3c744cd3bb4474f193f95d9708acbf5677e44"
 dependencies = [
- "http 1.3.1",
+ "http 1.4.0",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -3627,7 +3626,7 @@ version = "0.24.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78fc744f17e7926d57f478cf9ca6e1ee5d8332bf0514860b1a3cdf1742e614cc"
 dependencies = [
- "http 1.3.1",
+ "http 1.4.0",
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
  "jsonrpsee-types",
@@ -4665,7 +4664,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "gag",
- "http 1.3.1",
+ "http 1.4.0",
  "indexmap 2.12.0",
  "indicatif",
  "insta",
@@ -5054,7 +5053,7 @@ dependencies = [
  "fs-err",
  "fs_extra",
  "futures",
- "http 1.3.1",
+ "http 1.4.0",
  "human_bytes",
  "humantime",
  "indexmap 2.12.0",
@@ -6452,7 +6451,7 @@ dependencies = [
  "fs-err",
  "getrandom 0.3.4",
  "google-cloud-auth",
- "http 1.3.1",
+ "http 1.4.0",
  "itertools 0.14.0",
  "keyring",
  "netrc-rs",
@@ -6545,7 +6544,7 @@ dependencies = [
  "fslock",
  "futures",
  "hex",
- "http 1.3.1",
+ "http 1.4.0",
  "http-cache-semantics",
  "humansize",
  "humantime",
@@ -6802,7 +6801,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "form_urlencoded",
- "http 1.3.1",
+ "http 1.4.0",
  "log",
  "percent-encoding",
  "quick-xml 0.38.3",
@@ -6838,7 +6837,7 @@ dependencies = [
  "form_urlencoded",
  "hex",
  "hmac",
- "http 1.3.1",
+ "http 1.4.0",
  "jiff",
  "log",
  "percent-encoding",
@@ -6868,7 +6867,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body-util",
  "reqsign-core",
  "reqwest",
@@ -6887,7 +6886,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
  "hyper",
@@ -6930,7 +6929,7 @@ source = "git+https://github.com/astral-sh/reqwest-middleware?rev=7650ed76215a96
 dependencies = [
  "anyhow",
  "async-trait",
- "http 1.3.1",
+ "http 1.4.0",
  "reqwest",
  "serde",
  "thiserror 2.0.17",
@@ -6946,7 +6945,7 @@ dependencies = [
  "async-trait",
  "futures",
  "getrandom 0.2.16",
- "http 1.3.1",
+ "http 1.4.0",
  "hyper",
  "reqwest",
  "reqwest-middleware",
@@ -8556,7 +8555,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "h2",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
  "hyper",
@@ -8628,7 +8627,7 @@ dependencies = [
  "bitflags",
  "bytes",
  "futures-util",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 1.0.1",
  "iri-string",
  "pin-project-lite",
@@ -8882,7 +8881,7 @@ dependencies = [
  "etcetera",
  "fs-err",
  "futures",
- "http 1.3.1",
+ "http 1.4.0",
  "jiff",
  "percent-encoding",
  "reqsign",
@@ -9051,7 +9050,7 @@ dependencies = [
  "futures",
  "h2",
  "html-escape",
- "http 1.3.1",
+ "http 1.4.0",
  "itertools 0.14.0",
  "jiff",
  "percent-encoding",
@@ -9245,7 +9244,7 @@ dependencies = [
  "arcstr",
  "bitflags",
  "fs-err",
- "http 1.3.1",
+ "http 1.4.0",
  "itertools 0.14.0",
  "jiff",
  "owo-colors",
