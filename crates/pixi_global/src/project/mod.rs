@@ -587,7 +587,7 @@ impl Project {
             ))
     }
 
-    /// Computes the lock file for a specific environment with the given records
+    /// Computes the lock file for a specific environment with the given records.
     pub fn update_lock_file_for_environment(
         &mut self,
         env_name: &EnvironmentName,
@@ -595,14 +595,16 @@ impl Project {
         platform: Platform,
         channels: Vec<rattler_conda_types::Channel>,
     ) -> miette::Result<()> {
-        // Convert channels
-        let lock_channels: Vec<Channel> = channels
-            .iter()
-            .map(|ch| Channel::from(ch.base_url.as_str()))
-            .collect();
+        // Convert channel
+        let target_env = env_name.as_str();
 
-        // Convert PixiRecords to LockedPackage
-        let locked_packages: Vec<LockedPackage> = records
+        // Convert channels to the format used in the lock-file (URLs as strings).
+        let lock_channels: Vec<String> =
+            channels.iter().map(|ch| ch.base_url.to_string()).collect();
+
+        // Convert PixiRecords (conda records) for this environment + platform
+        // into CondaPackageData.
+        let new_conda_packages: Vec<CondaPackageData> = records
             .into_iter()
             .map(|record| {
                 let pkg = record.package_record().clone();
@@ -615,44 +617,71 @@ impl Project {
                     pkg.build
                 );
 
-                // Build CondaBinaryData
-                let conda = CondaPackageData::Binary(CondaBinaryData {
+                CondaPackageData::Binary(CondaBinaryData {
                     package_record: pkg,
                     location: UrlOrPath::Path(file_name.clone().into()),
                     file_name,
                     channel: None,
-                });
-
-                Ok(LockedPackage::from(conda))
+                })
             })
-            .collect::<miette::Result<Vec<_>>>()?;
+            .collect();
 
-        // Build new lock file
-        let mut builder = rattler_lock::LockFileBuilder::new();
+        let mut builder = LockFile::builder();
+        let mut saw_target_env = false;
 
-        let env_name_str = env_name.to_string();
+        // Rebuild all environments, overriding only the target env’s conda packages
+        // for the specified platform.
+        for (env_key, env_data) in self.lock_file.environments() {
+            // Channels: override for target env, copy for others.
+            if env_key == target_env {
+                builder.set_channels(env_key, lock_channels.clone());
+                saw_target_env = true;
+            } else {
+                builder.set_channels(env_key, env_data.channels().to_vec());
+            }
 
-        // Preserve other environments
-        for (other_env, other_data) in self.lock_file.environments() {
-            if other_env != env_name_str {
-                builder.set_channels(other_env, other_data.channels().to_vec());
-                for (plat, pkgs) in other_data.packages_by_platform() {
-                    for pkg in pkgs {
-                        builder.add_package(other_env, plat, pkg.into());
-                    }
+            // Copy all existing conda packages, except for target env + target platform
+            // (we will replace those with `new_conda_packages`).
+            for (plat, pkgs) in env_data.conda_packages_by_platform() {
+                if env_key == target_env && plat == platform {
+                    continue;
+                }
+                for pkg in pkgs {
+                    builder.add_conda_package(env_key, plat, pkg.clone());
                 }
             }
+
+            // Copy all existing PyPI packages unchanged.
+            for (plat, pkgs) in env_data.pypi_packages_by_platform() {
+                for (pkg_data, pkg_env_data) in pkgs {
+                    builder.add_pypi_package(env_key, plat, pkg_data.clone(), pkg_env_data.clone());
+                }
+            }
+
+            // Preserve PyPI indexes if present.
+            if let Some(indexes) = env_data.pypi_indexes() {
+                builder.set_pypi_indexes(env_key, indexes.clone());
+            }
+
+            // If you also want to preserve solve options and your Environment type
+            // exposes them (e.g. `env_data.options()`), you can copy them here:
+            //
+            // if let Some(opts) = env_data.options() {
+            //     builder.set_options(env_key, opts.clone());
+            // }
         }
 
-        // Set channels for this environment
-        builder.set_channels(&env_name_str, lock_channels);
-
-        // Add updated packages
-        for lp in locked_packages {
-            builder.add_package(&env_name_str, platform, lp);
+        // If the environment did not exist yet, create it with the given channels.
+        if !saw_target_env {
+            builder.set_channels(target_env, lock_channels);
         }
 
-        // Update lock file
+        // Add the updated conda packages for the requested platform of the target env.
+        for pkg in new_conda_packages {
+            builder.add_conda_package(target_env, platform, pkg);
+        }
+
+        // Replace the in-memory lock-file and write it to disk.
         self.lock_file = builder.finish();
         self.write_lock_file()?;
 
