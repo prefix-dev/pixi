@@ -69,11 +69,6 @@ impl<'p> Environment<'p> {
         }
     }
 
-    /// Returns the inner [`manifest::Environment`]
-    pub fn manifest_environment(&self) -> manifest::Environment {
-        self.environment.clone()
-    }
-
     /// Returns true if this environment is the default environment.
     pub fn is_default(&self) -> bool {
         self.environment.name == EnvironmentName::Default
