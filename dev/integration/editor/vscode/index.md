@@ -50,7 +50,7 @@ RUN echo 'eval "$(pixi completion -s bash)"' >> /home/vscode/.bashrc
       }
     },
     "features": {
-      "ghcr.io/devcontainers/environments/docker-in-docker:2": {}
+      "ghcr.io/devcontainers/features/docker-in-docker:2": {}
     },
     "mounts": ["source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume"],
     "postCreateCommand": "sudo chown vscode .pixi && pixi install"
