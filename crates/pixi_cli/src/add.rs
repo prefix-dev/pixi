@@ -123,10 +123,15 @@ impl From<&Args> for GitOptions {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let workspace = WorkspaceLocator::for_cli()
+    let mut workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
         .with_cli_config(args.config.clone());
+
+    // Apply backend override if provided (primarily for testing)
+    if let Some(backend_override) = args.workspace_config.backend_override.clone() {
+        workspace = workspace.with_backend_override(backend_override);
+    }
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 

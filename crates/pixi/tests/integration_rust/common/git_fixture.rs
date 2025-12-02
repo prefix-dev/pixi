@@ -3,7 +3,7 @@
 //! This module provides [`GitRepoFixture`] which creates temporary git repositories
 //! from versioned fixture directories for testing purposes.
 
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use tempfile::TempDir;
 
@@ -14,6 +14,9 @@ use super::cargo_workspace_dir;
 /// Each subdirectory in the fixture (named like `001_commit-message`) becomes
 /// a commit in the repository. Directories are processed in sorted order,
 /// allowing you to build up a git history from versioned snapshots.
+///
+/// If a commit message starts with `v` (e.g., `v0.1.0`), a git tag is created
+/// for that commit.
 ///
 /// # Example fixture structure
 ///
@@ -34,6 +37,7 @@ use super::cargo_workspace_dir;
 /// // fixture.url is a git+file:// URL
 /// // fixture.commits[0] is the first commit hash
 /// // fixture.commits[1] is the second commit hash
+/// // fixture.tags["v0.1.0"] is the commit hash for that tag
 /// ```
 pub struct GitRepoFixture {
     /// Temporary directory containing the git repository.
@@ -43,8 +47,14 @@ pub struct GitRepoFixture {
     /// Git URL for the repository (git+file://...).
     pub url: String,
 
+    /// Base URL for the repository (file://... without git+ prefix).
+    pub base_url: url::Url,
+
     /// SHA hashes of all commits in order (first commit is index 0).
     pub commits: Vec<String>,
+
+    /// Map of tag names to commit hashes.
+    pub tags: HashMap<String, String>,
 }
 
 impl GitRepoFixture {
@@ -55,6 +65,7 @@ impl GitRepoFixture {
     /// are copied to the repo and committed in sorted order.
     ///
     /// The commit message is extracted from the directory name (the part after `_`).
+    /// If the commit message starts with `v`, a git tag is created with that name.
     pub fn new(fixture_name: &str) -> Self {
         let tempdir = TempDir::new().expect("failed to create temp dir");
         let repo_path = tempdir.path().join(fixture_name);
@@ -66,7 +77,7 @@ impl GitRepoFixture {
 
         // Initialize git repo
         std::process::Command::new("git")
-            .args(["init"])
+            .args(["init", "-b", "main"])
             .current_dir(&repo_path)
             .output()
             .expect("failed to init git repo");
@@ -92,6 +103,7 @@ impl GitRepoFixture {
         commit_dirs.sort_by_key(|e| e.file_name());
 
         let mut commits = Vec::new();
+        let mut tags = HashMap::new();
 
         for entry in commit_dirs {
             let dir_name = entry.file_name();
@@ -128,16 +140,28 @@ impl GitRepoFixture {
             .trim()
             .to_string();
 
+            // Create a git tag if the commit message starts with 'v'
+            if commit_msg.starts_with('v') {
+                std::process::Command::new("git")
+                    .args(["tag", commit_msg])
+                    .current_dir(&repo_path)
+                    .output()
+                    .expect("failed to create git tag");
+                tags.insert(commit_msg.to_string(), commit_hash.clone());
+            }
+
             commits.push(commit_hash);
         }
 
-        let url =
+        let base_url =
             url::Url::from_directory_path(&repo_path).expect("failed to create URL from repo path");
 
         Self {
             _tempdir: tempdir,
-            url: format!("git+{url}"),
+            url: format!("git+{base_url}"),
+            base_url,
             commits,
+            tags,
         }
     }
 
@@ -149,6 +173,13 @@ impl GitRepoFixture {
     /// Returns the latest (most recent) commit hash, or panics if there are no commits.
     pub fn latest_commit(&self) -> &str {
         self.commits.last().expect("no commits in fixture")
+    }
+
+    /// Returns the commit hash for a given tag name.
+    pub fn tag_commit(&self, tag: &str) -> &str {
+        self.tags
+            .get(tag)
+            .unwrap_or_else(|| panic!("tag '{tag}' not found in fixture"))
     }
 }
 
