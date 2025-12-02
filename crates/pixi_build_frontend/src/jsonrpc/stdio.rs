@@ -19,7 +19,6 @@ pub(crate) fn stdio_transport(
 
 pub(crate) struct Sender<T>(T);
 
-#[jsonrpsee::core::async_trait]
 impl<T: AsyncWrite + MaybeSend + Unpin + 'static> TransportSenderT for Sender<T> {
     type Error = std::io::Error;
 
@@ -39,7 +38,6 @@ impl<T: AsyncWrite + MaybeSend + Unpin + 'static> From<T> for Sender<T> {
 
 pub(crate) struct Receiver<T>(FramedRead<T, LinesCodec>);
 
-#[jsonrpsee::core::async_trait]
 impl<T: AsyncRead + MaybeSend + Unpin + 'static> TransportReceiverT for Receiver<T> {
     type Error = std::io::Error;
 
