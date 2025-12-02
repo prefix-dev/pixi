@@ -141,7 +141,7 @@ reqwest = { version = "0.12.12", default-features = false }
 # reqwest-middleware = "0.4"
 # reqwest-retry = "0.7.0"
 bzip2 = "0.6.1"
-reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
+reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "be13eba14a9a78423ad107242af7844986d8cced" }
 reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
 rlimit = "0.10.2"
 rstest = "0.25.0"
