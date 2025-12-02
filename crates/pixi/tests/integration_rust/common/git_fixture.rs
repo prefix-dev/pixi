@@ -131,12 +131,12 @@ impl GitRepoFixture {
             commits.push(commit_hash);
         }
 
-        let url = url::Url::from_directory_path(&repo_path)
-            .expect("failed to create URL from repo path");
+        let url =
+            url::Url::from_directory_path(&repo_path).expect("failed to create URL from repo path");
 
         Self {
             _tempdir: tempdir,
-            url: format!("git+{}", url),
+            url: format!("git+{url}"),
             commits,
         }
     }
