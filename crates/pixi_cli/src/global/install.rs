@@ -124,7 +124,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut env_changes = EnvChanges::default();
     let mut last_updated_project = project_original;
     let mut errors: Vec<(EnvironmentName, Report)> = Vec::new();
-    // Convert the packages into named global specs
 
     for (env_name, specs) in &env_to_specs {
         let mut project = last_updated_project.clone();
