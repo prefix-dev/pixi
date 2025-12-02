@@ -605,27 +605,10 @@ impl Project {
         let locked_packages: Vec<LockedPackage> = records
             .into_iter()
             .map(|record| {
-                let pkg = record.package_record().clone();
-
-                // Construct a filename
-                let file_name = format!(
-                    "{}-{}-{}.conda",
-                    pkg.name.as_normalized(),
-                    pkg.version,
-                    pkg.build
-                );
-
-                // Build CondaBinaryData
-                let conda = CondaPackageData::Binary(CondaBinaryData {
-                    package_record: pkg,
-                    location: UrlOrPath::Path(file_name.clone().into()),
-                    file_name,
-                    channel: None,
-                });
-
-                Ok(LockedPackage::from(conda))
+                let data = record.into_conda_package_data(self.root.as_path());
+                LockedPackage::from(data)
             })
-            .collect::<miette::Result<Vec<_>>>()?;
+            .collect();
 
         // Build new lock file
         let mut builder = rattler_lock::LockFileBuilder::new();
@@ -636,6 +619,7 @@ impl Project {
         for (other_env, other_data) in self.lock_file.environments() {
             if other_env != env_name_str {
                 builder.set_channels(other_env, other_data.channels().to_vec());
+                builder.set_options(other_env, other_data.solve_options().clone());
                 for (plat, pkgs) in other_data.packages_by_platform() {
                     for pkg in pkgs {
                         builder.add_package(other_env, plat, pkg.into());
