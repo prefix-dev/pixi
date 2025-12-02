@@ -67,6 +67,127 @@ pub(crate) fn cargo_workspace_dir() -> &'static Path {
 pub(crate) fn workspaces_dir() -> PathBuf {
     cargo_workspace_dir().join("tests/data/workspaces")
 }
+/// A git repository fixture for testing git-based PyPI dependencies.
+/// Creates a temporary git repo with two commits for testing update behavior.
+pub struct GitRepoFixture {
+    /// Temporary directory containing the git repo
+    _tempdir: TempDir,
+    /// Git URL for the repo (git+file://...)
+    pub url: String,
+    /// SHA of the first commit (v0.1.0)
+    pub first_commit: String,
+    /// SHA of the latest commit (v0.2.0)
+    pub latest_commit: String,
+}
+
+impl GitRepoFixture {
+    /// Creates a git fixture from numbered directories.
+    ///
+    /// The fixture files are stored in `tests/data/git-fixtures/minimal-pypi-package/`
+    /// with subdirectories named like `001_commit-message`, `002_commit-message`, etc.
+    /// Each directory becomes a commit in sorted order.
+    pub fn new() -> Self {
+        let tempdir = TempDir::new().expect("failed to create temp dir");
+        let repo_path = tempdir.path().join("minimal-pypi-package");
+        fs_err::create_dir_all(&repo_path).expect("failed to create repo dir");
+
+        let fixture_base = cargo_workspace_dir()
+            .join("tests/data/git-fixtures/minimal-pypi-package");
+
+        // Initialize git repo
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(&repo_path)
+            .output()
+            .expect("failed to init git repo");
+
+        // Configure git user for commits
+        std::process::Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(&repo_path)
+            .output()
+            .expect("failed to configure git email");
+        std::process::Command::new("git")
+            .args(["config", "user.name", "Test"])
+            .current_dir(&repo_path)
+            .output()
+            .expect("failed to configure git name");
+
+        // Get commit directories sorted by name (e.g., 001_v0.1.0, 002_v0.2.0)
+        let mut commit_dirs: Vec<_> = fs_err::read_dir(&fixture_base)
+            .expect("failed to read fixture dir")
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .collect();
+        commit_dirs.sort_by_key(|e| e.file_name());
+
+        let mut commits = Vec::new();
+
+        for entry in commit_dirs {
+            let dir_name = entry.file_name();
+            let dir_name_str = dir_name.to_string_lossy();
+
+            // Extract commit message from directory name (after the number prefix)
+            let commit_msg = dir_name_str
+                .split_once('_')
+                .map(|(_, msg)| msg)
+                .unwrap_or(&dir_name_str);
+
+            copy_dir_contents(&entry.path(), &repo_path);
+
+            std::process::Command::new("git")
+                .args(["add", "."])
+                .current_dir(&repo_path)
+                .output()
+                .expect("failed to git add");
+            std::process::Command::new("git")
+                .args(["commit", "-m", commit_msg])
+                .current_dir(&repo_path)
+                .output()
+                .expect("failed to git commit");
+
+            let commit_hash = String::from_utf8(
+                std::process::Command::new("git")
+                    .args(["rev-parse", "HEAD"])
+                    .current_dir(&repo_path)
+                    .output()
+                    .expect("failed to get commit hash")
+                    .stdout,
+            )
+            .expect("invalid utf8")
+            .trim()
+            .to_string();
+
+            commits.push(commit_hash);
+        }
+
+        let url = url::Url::from_directory_path(&repo_path)
+            .expect("failed to create URL from repo path");
+
+        Self {
+            _tempdir: tempdir,
+            url: format!("git+{}", url),
+            first_commit: commits.first().cloned().unwrap_or_default(),
+            latest_commit: commits.last().cloned().unwrap_or_default(),
+        }
+    }
+}
+
+/// Recursively copy directory contents from src to dst.
+fn copy_dir_contents(src: &Path, dst: &Path) {
+    for entry in fs_err::read_dir(src).expect("failed to read fixture dir") {
+        let entry = entry.expect("failed to read dir entry");
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+
+        if src_path.is_dir() {
+            fs_err::create_dir_all(&dst_path).expect("failed to create dir");
+            copy_dir_contents(&src_path, &dst_path);
+        } else {
+            fs_err::copy(&src_path, &dst_path).expect("failed to copy file");
+        }
+    }
+}
 
 /// To control the pixi process
 pub struct PixiControl {
