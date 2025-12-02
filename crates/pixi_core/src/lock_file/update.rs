@@ -19,8 +19,8 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
-    PixiEnvironmentSpec, SolvePixiEnvironmentError,
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, PixiEnvironmentSpec,
+    SolvePixiEnvironmentError,
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
@@ -329,7 +329,7 @@ impl Workspace {
         }
 
         // Construct an update context and perform the actual update.
-        let lock_file_derived_data = UpdateContext::builder(self, Some(command_dispatcher))
+        let lock_file_derived_data = UpdateContext::builder(self, Some(command_dispatcher))?
             .with_package_cache(package_cache)
             .with_no_install(options.no_install)
             .with_outdated_environments(outdated)
@@ -1503,20 +1503,22 @@ impl<'p> UpdateContext<'p> {
     pub fn builder(
         project: &'p Workspace,
         command_dispatcher: Option<CommandDispatcher>,
-    ) -> UpdateContextBuilder<'p> {
+    ) -> miette::Result<UpdateContextBuilder<'p>> {
         let multi_progress = pixi_progress::global_multi_progress();
         let anchor_pb = multi_progress.add(indicatif::ProgressBar::hidden());
 
-        let command_dispatcher = command_dispatcher.unwrap_or_else(|| {
-            CommandDispatcherBuilder::default()
+        let command_dispatcher = match command_dispatcher {
+            Some(cd) => cd,
+            None => project
+                .command_dispatcher_builder()?
                 .with_reporter(pixi_reporters::TopLevelProgress::new(
                     multi_progress,
                     anchor_pb,
                 ))
-                .finish()
-        });
+                .finish(),
+        };
 
-        UpdateContextBuilder {
+        Ok(UpdateContextBuilder {
             project,
             lock_file: LockFile::default(),
             outdated_environments: None,
@@ -1527,7 +1529,7 @@ impl<'p> UpdateContext<'p> {
             mapping_client: None,
             command_dispatcher,
             update_targets: None,
-        }
+        })
     }
 
     pub async fn update(mut self) -> miette::Result<LockFileDerivedData<'p>> {

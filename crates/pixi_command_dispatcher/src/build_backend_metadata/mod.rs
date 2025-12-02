@@ -535,7 +535,6 @@ impl BuildBackendMetadataSpec {
             metadata: MetadataKind::Outputs {
                 outputs: outputs.outputs,
             },
-            build_source_checkout,
             build_variants: self.variant_configuration.clone(),
         })
     }

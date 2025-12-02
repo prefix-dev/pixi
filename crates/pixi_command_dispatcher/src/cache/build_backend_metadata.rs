@@ -12,9 +12,7 @@ use rattler_conda_types::ChannelUrl;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{
-    BuildEnvironment, PackageIdentifier, SourceCheckout, build::source_checkout_cache_key,
-};
+use crate::{BuildEnvironment, PackageIdentifier, build::source_checkout_cache_key};
 
 use super::common::{CacheError, CacheKey, CachedMetadata, MetadataCache};
 
@@ -129,9 +127,6 @@ pub struct CachedCondaMetadata {
 
     #[serde(flatten)]
     pub metadata: MetadataKind,
-
-    /// Location of the source checkout that was used to generate this metadata.
-    pub build_source_checkout: SourceCheckout,
 
     /// The build variants that were used to generate this metadata.
     #[serde(default, skip_serializing_if = "Option::is_none")]
