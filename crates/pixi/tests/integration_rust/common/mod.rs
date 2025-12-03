@@ -516,7 +516,7 @@ impl PixiControl {
     pub fn project_environment_add(&self, name: EnvironmentName) -> ProjectEnvironmentAddBuilder {
         ProjectEnvironmentAddBuilder {
             manifest_path: Some(self.manifest_path()),
-            args: workspace::environment::add::Args {
+            args: workspace::environment::AddArgs {
                 name,
                 features: None,
                 solve_group: None,
