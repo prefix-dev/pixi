@@ -116,7 +116,7 @@ impl CacheError for SourceMetadataCacheError {
 }
 
 /// Cached result of calling `conda/getMetadata` on a build backend. This is
-/// returned by [`SourceMetadataCache::read`].
+/// returned by [`MetadataCache::read`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedSourceMetadata {
     /// A randomly generated identifier that is generated for each metadata

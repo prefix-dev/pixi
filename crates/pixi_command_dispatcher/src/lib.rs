@@ -63,7 +63,11 @@ pub use build_backend_metadata::calculate_additional_glob_hash;
 pub use build_backend_metadata::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
 };
-pub use cache::build_backend_metadata::{CachedCondaMetadata, MetadataKind};
+pub use cache::build_backend_metadata::{
+    BuildBackendMetadataCache, CachedCondaMetadata, MetadataKind,
+};
+pub use cache::common::MetadataCache;
+pub use cache::source_metadata::{CachedSourceMetadata, SourceMetadataCache};
 pub use cache_dirs::CacheDirs;
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,

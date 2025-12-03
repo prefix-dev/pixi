@@ -114,7 +114,7 @@ impl CacheError for BuildBackendMetadataCacheError {
 }
 
 /// Cached result of calling `conda/getMetadata` on a build backend. This is
-/// returned by [`BuildBackendMetadataCache::read`].
+/// returned by [`MetadataCache::read`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedCondaMetadata {
     /// A randomly generated identifier that is generated for each metadata
