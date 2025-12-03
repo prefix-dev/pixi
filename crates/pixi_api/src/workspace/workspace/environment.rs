@@ -22,11 +22,15 @@ pub async fn add<I: Interface>(
 ) -> miette::Result<()> {
     let environment_exists = workspace.workspace().environment(&name).is_some();
     if environment_exists && !force {
-        return Err(miette::miette!(
-            help = "use --force to overwrite the existing environment",
-            "the environment '{}' already exists",
-            name
-        ));
+        if interface.is_cli().await {
+            return Err(miette::miette!(
+                help = "use --force to overwrite the existing environment",
+                "the environment '{}' already exists",
+                name
+            ));
+        } else {
+            return Err(miette::miette!("the environment '{}' already exists", name));
+        }
     }
 
     // Add the platforms to the lock-file
