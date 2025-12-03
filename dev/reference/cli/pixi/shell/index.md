@@ -38,6 +38,12 @@ pixi shell [OPTIONS]
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
 - [`--change-ps1 <CHANGE_PS1>`](#arg---change-ps1) : Do not change the PS1 variable when starting a prompt

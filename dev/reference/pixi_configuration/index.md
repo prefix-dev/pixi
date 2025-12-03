@@ -105,6 +105,34 @@ config.toml
 tls-no-verify = false
 ```
 
+### `tls-root-certs`
+
+Controls which TLS root certificates are used for HTTPS connections. This affects both conda channels and PyPI registries.
+
+Available options:
+
+- `webpki` (default): Uses bundled Mozilla root certificates. This is the most portable option.
+- `native`: Uses the system certificate store. Required for corporate environments with custom CA certificates.
+- `all`: Uses both bundled Mozilla certificates and the system certificate store.
+
+You can override this from the CLI with `--tls-root-certs`.
+
+Build-dependent behavior
+
+This setting only has an effect with `rustls-tls` builds (standalone pixi binaries from GitHub releases). For `native-tls` builds (conda-forge packages), the system's TLS library is used, which always uses system certificates. In this case, the setting is accepted but has no effect.
+
+config.toml
+
+```toml
+# Which TLS root certificates to use for HTTPS connections.
+# Options: "webpki" (bundled Mozilla roots), "native" (system store), "all" (both)
+# Default is "webpki" for portability. Use "native" or "all" for corporate environments
+# with custom CA certificates.
+# Note: This setting only has an effect with rustls-tls builds (standalone pixi).
+# For native-tls builds (conda-forge), system certificates are always used.
+tls-root-certs = "native"
+```
+
 ### `authentication-override-file`
 
 Override from where the authentication information is loaded. Usually, we try to use the keyring to load authentication data from, and only use a JSON file as a fallback. This option allows you to force the use of a JSON file. Read more in the authentication section.

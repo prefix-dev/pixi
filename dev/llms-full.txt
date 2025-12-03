@@ -9428,6 +9428,34 @@ config.toml
 tls-no-verify = false
 ```
 
+### `tls-root-certs`
+
+Controls which TLS root certificates are used for HTTPS connections. This affects both conda channels and PyPI registries.
+
+Available options:
+
+- `webpki` (default): Uses bundled Mozilla root certificates. This is the most portable option.
+- `native`: Uses the system certificate store. Required for corporate environments with custom CA certificates.
+- `all`: Uses both bundled Mozilla certificates and the system certificate store.
+
+You can override this from the CLI with `--tls-root-certs`.
+
+Build-dependent behavior
+
+This setting only has an effect with `rustls-tls` builds (standalone pixi binaries from GitHub releases). For `native-tls` builds (conda-forge packages), the system's TLS library is used, which always uses system certificates. In this case, the setting is accepted but has no effect.
+
+config.toml
+
+```toml
+# Which TLS root certificates to use for HTTPS connections.
+# Options: "webpki" (bundled Mozilla roots), "native" (system store), "all" (both)
+# Default is "webpki" for portability. Use "native" or "all" for corporate environments
+# with custom CA certificates.
+# Note: This setting only has an effect with rustls-tls builds (standalone pixi).
+# For native-tls builds (conda-forge), system certificates are always used.
+tls-root-certs = "native"
+```
+
 ### `authentication-override-file`
 
 Override from where the authentication information is loaded. Usually, we try to use the keyring to load authentication data from, and only use a JSON file as a fallback. This option allows you to force the use of a JSON file. Read more in the authentication section.
@@ -11074,6 +11102,12 @@ pixi add [OPTIONS] <SPEC>...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
 ## Git Options
@@ -11298,6 +11332,12 @@ pixi build [OPTIONS]
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
 ## Update Options
@@ -11475,6 +11515,12 @@ pixi exec [OPTIONS] [COMMAND]...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
 ## Description
@@ -11603,6 +11649,12 @@ pixi import [OPTIONS] <FILE>
 - [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
@@ -11794,6 +11846,12 @@ pixi install [OPTIONS]
 - [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
@@ -12039,6 +12097,12 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
 ## Update Options
@@ -12135,6 +12199,12 @@ pixi remove [OPTIONS] <SPEC>...
 - [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
@@ -12243,6 +12313,12 @@ pixi run [OPTIONS] [TASK]...
 - [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
@@ -12480,6 +12556,12 @@ pixi shell-hook [OPTIONS]
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
 - [`--force-activate`](#arg---force-activate) : Do not use the environment activation cache. (default: true except in experimental mode)
@@ -12580,6 +12662,12 @@ pixi shell [OPTIONS]
 - [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
@@ -12862,6 +12950,12 @@ pixi update [OPTIONS] [PACKAGES]...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
 ## Global Options
@@ -12971,6 +13065,12 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 - [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
@@ -13528,6 +13628,12 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
 ## Git Options
@@ -13705,6 +13811,12 @@ pixi global install [OPTIONS] [PACKAGE]...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
 ## Git Options
@@ -13807,6 +13919,12 @@ pixi global list [OPTIONS] [REGEX]
 - [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
@@ -13927,6 +14045,12 @@ pixi global remove [OPTIONS] <PACKAGE>...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
 ## Description
@@ -13997,6 +14121,12 @@ pixi global sync [OPTIONS]
 - [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
@@ -14078,6 +14208,12 @@ pixi global uninstall [OPTIONS] <ENVIRONMENT>...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
 ## Description
@@ -14136,6 +14272,12 @@ pixi global update [OPTIONS] [ENVIRONMENTS]...
 - [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
@@ -14196,6 +14338,12 @@ pixi global upgrade-all [OPTIONS]
 - [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
@@ -14285,6 +14433,12 @@ pixi global expose add [OPTIONS] --environment <ENVIRONMENT> [MAPPING]...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
 ## Description
@@ -14346,6 +14500,12 @@ pixi global expose remove [OPTIONS] [EXPOSED_NAME]...
 - [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
@@ -14414,6 +14574,12 @@ pixi global shortcut add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
 # `pixi global shortcut remove`
@@ -14459,6 +14625,12 @@ pixi global shortcut remove [OPTIONS] [SHORTCUT]...
 - [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
@@ -14916,6 +15088,12 @@ pixi workspace channel add [OPTIONS] <CHANNEL>...
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
 ## Update Options
@@ -15009,6 +15187,12 @@ pixi workspace channel remove [OPTIONS] <CHANNEL>...
 - [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
@@ -15245,6 +15429,12 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 - [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
