@@ -254,20 +254,76 @@ async fn add_functionality_os() {
     ));
 }
 
-/// Test the `pixi add --pypi` functionality
+/// Test the `pixi add --pypi` functionality (using local mocks)
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_pypi_functionality() {
+    use crate::common::git_fixture::GitRepoFixture;
+    use crate::common::package_database::{Package, PackageDatabase};
+    use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
+
     setup_tracing();
+
+    // Create local git fixtures for pypi git packages
+    let boltons_fixture = GitRepoFixture::new("pypi-boltons");
+    let httpx_fixture = GitRepoFixture::new("pypi-httpx");
+    let isort_fixture = GitRepoFixture::new("pypi-isort");
+
+    // Create local PyPI index with test packages
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("pipx", "1.7.1"))
+        .with(
+            PyPIPackage::new("pytest", "8.3.2").with_requires_dist(["mock; extra == \"dev\""]), // dev extra requires mock
+        )
+        .with(PyPIPackage::new("mock", "5.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    // Create a separate flat index for direct wheel URL testing
+    let pytest_wheel = PyPIDatabase::new()
+        .with(PyPIPackage::new("pytest", "8.2.0"))
+        .into_flat_index()
+        .unwrap();
+    let pytest_wheel_url = pytest_wheel
+        .url()
+        .join("pytest-8.2.0-py3-none-any.whl")
+        .unwrap();
+
+    // Create local conda channel with Python for multiple platforms
+    let mut package_db = PackageDatabase::default();
+    for platform in [Platform::current(), Platform::Linux64, Platform::Osx64] {
+        package_db.add_package(
+            Package::build("python", "3.12.0")
+                .with_subdir(platform)
+                .finish(),
+        );
+    }
+    let channel = package_db.into_channel().await.unwrap();
 
     let pixi = PixiControl::new().unwrap();
 
-    pixi.init().await.unwrap();
+    pixi.init()
+        .without_channels()
+        .with_local_channel(channel.url().to_file_path().unwrap())
+        .with_platforms(vec![
+            Platform::current(),
+            Platform::Linux64,
+            Platform::Osx64,
+        ])
+        .await
+        .unwrap();
+
+    // Add pypi-options to the manifest
+    let manifest = pixi.manifest_contents().unwrap();
+    let updated_manifest = format!(
+        "{}\n[pypi-options]\nindex-url = \"{}\"\n",
+        manifest,
+        pypi_index.index_url()
+    );
+    pixi.update_manifest(&updated_manifest).unwrap();
 
     // Add python
     pixi.add("python~=3.12.0")
         .set_type(DependencyType::CondaDependency(SpecType::Run))
-        .with_install(false)
         .await
         .unwrap();
 
@@ -275,23 +331,24 @@ async fn add_pypi_functionality() {
     // without installing should succeed
     pixi.add("pipx==1.7.1")
         .set_type(DependencyType::PypiDependency)
-        .with_install(false)
         .await
         .unwrap();
 
-    // Add a pypi package to a target with short hash
-    pixi.add("boltons @ git+https://github.com/mahmoud/boltons.git@d463c60")
-        .set_type(DependencyType::PypiDependency)
-        .with_install(true)
-        .set_platforms(&[Platform::Osx64])
-        .await
-        .unwrap();
+    // Add a pypi package to a target with short hash (using local git fixture)
+    let boltons_short_commit = &boltons_fixture.first_commit()[..7];
+    pixi.add(&format!(
+        "boltons @ git+{}@{}",
+        boltons_fixture.base_url, boltons_short_commit
+    ))
+    .set_type(DependencyType::PypiDependency)
+    .set_platforms(&[Platform::Osx64])
+    .await
+    .unwrap();
 
     // Add a pypi package to a target with extras
     pixi.add("pytest[dev]==8.3.2")
         .set_type(DependencyType::PypiDependency)
         .set_platforms(&[Platform::Linux64])
-        .with_install(true)
         .await
         .unwrap();
 
@@ -335,25 +392,28 @@ async fn add_pypi_functionality() {
         pep508_rs::Requirement::from_str("mock").unwrap(),
     ));
 
-    // Add a pypi package with a git url
-    pixi.add("httpx @ git+https://github.com/encode/httpx.git")
+    // Add a pypi package with a git url (using local fixture)
+    pixi.add(&format!("httpx @ git+{}", httpx_fixture.base_url))
         .set_type(DependencyType::PypiDependency)
         .set_platforms(&[Platform::Linux64])
-        .with_install(true)
         .await
         .unwrap();
 
-    pixi.add("isort @ git+https://github.com/PyCQA/isort@c655831799765e9593989ee12faba13b6ca391a5")
-        .set_type(DependencyType::PypiDependency)
-        .set_platforms(&[Platform::Linux64])
-        .with_install(true)
-        .await
-        .unwrap();
+    // Add with specific commit (using local fixture)
+    let isort_commit = isort_fixture.first_commit();
+    pixi.add(&format!(
+        "isort @ git+{}@{}",
+        isort_fixture.base_url, isort_commit
+    ))
+    .set_type(DependencyType::PypiDependency)
+    .set_platforms(&[Platform::Linux64])
+    .await
+    .unwrap();
 
-    pixi.add("pytest @ https://github.com/pytest-dev/pytest/releases/download/8.2.0/pytest-8.2.0-py3-none-any.whl")
+    // Add pytest from direct wheel URL (using local wheel file)
+    pixi.add(&format!("pytest @ {pytest_wheel_url}"))
         .set_type(DependencyType::PypiDependency)
         .set_platforms(&[Platform::Linux64])
-        .with_install(true)
         .await
         .unwrap();
 
@@ -375,33 +435,60 @@ async fn add_pypi_functionality() {
     ));
 }
 
-/// Test the `pixi add --pypi` functionality with extras
+/// Test the `pixi add --pypi` functionality with extras (using local mocks)
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_pypi_extra_functionality() {
+    use crate::common::package_database::{Package, PackageDatabase};
+    use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
+
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
-
-    pixi.init().await.unwrap();
-
-    // Add python
-    pixi.add("python")
-        .set_type(DependencyType::CondaDependency(SpecType::Run))
-        .with_install(false)
-        .await
+    // Create local PyPI index with black package (multiple versions, with cli extra)
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("black", "24.8.0"))
+        .with(PyPIPackage::new("black", "24.7.0"))
+        .with(PyPIPackage::new("click", "8.0.0")) // cli extra dependency
+        .into_simple_index()
         .unwrap();
+
+    // Create local conda channel with Python
+    let mut package_db = PackageDatabase::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    let channel_url = channel.url();
+    let index_url = pypi_index.index_url();
+    let platform = Platform::current();
+
+    // Create manifest with local channel and pypi index
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+[workspace]
+name = "test-pypi-extras"
+channels = ["{channel_url}"]
+platforms = ["{platform}"]
+
+[dependencies]
+python = "==3.12.0"
+
+[pypi-options]
+index-url = "{index_url}"
+"#
+    ))
+    .unwrap();
 
     pixi.add("black")
         .set_type(DependencyType::PypiDependency)
-        .with_install(true)
         .await
         .unwrap();
 
     // Add dep with extra
     pixi.add("black[cli]")
         .set_type(DependencyType::PypiDependency)
-        .with_install(true)
         .await
         .unwrap();
 
@@ -423,7 +510,6 @@ async fn add_pypi_extra_functionality() {
     // Remove extras
     pixi.add("black")
         .set_type(DependencyType::PypiDependency)
-        .with_install(true)
         .await
         .unwrap();
 
@@ -442,7 +528,6 @@ async fn add_pypi_extra_functionality() {
     // Add dep with extra and version
     pixi.add("black[cli]==24.8.0")
         .set_type(DependencyType::PypiDependency)
-        .with_install(true)
         .await
         .unwrap();
 
