@@ -101,7 +101,7 @@ impl GitRepoFixture {
             let commit_msg = dir_name_str
                 .split_once('_')
                 .map(|(_, msg)| msg)
-                .unwrap_or(&dir_name_str);
+                .unwrap();
 
             copy_dir_contents(&entry.path(), &repo_path);
 
@@ -111,7 +111,7 @@ impl GitRepoFixture {
                 .output()
                 .expect("failed to git add");
             std::process::Command::new("git")
-                .args(["commit", "-m", commit_msg])
+                .args(["commit", "--message", commit_msg])
                 .current_dir(&repo_path)
                 .output()
                 .expect("failed to git commit");
