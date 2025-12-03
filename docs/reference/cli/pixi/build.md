@@ -12,8 +12,6 @@ pixi build [OPTIONS]
 ```
 
 ## Options
-- <a id="arg---build-manifest" href="#arg---build-manifest">`--build-manifest <BUILD_MANIFEST>`</a>
-:  The path to the manifest file to build (e.g., recipe.yaml, package.xml, pixi.toml). If not specified, defaults to the workspace manifest
 - <a id="arg---target-platform" href="#arg---target-platform">`--target-platform (-t) <TARGET_PLATFORM>`</a>
 :  The target platform to build for (defaults to the current platform)
 <br>**default**: `current_platform`

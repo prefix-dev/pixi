@@ -1081,7 +1081,7 @@ mod test {
         channels = []
         platforms = ["linux-64"]
 
-        [feature.extra.develop]
+        [feature.extra.dev]
         feature-pkg = { path = "../feature-pkg" }
 
         [environments]
