@@ -50,7 +50,7 @@ packages:
 - pypi: ./projects/consumer
   name: consumer
   version: 0.1.0
-  sha256: ef4547ad920a130ea8a4f77adee5c7122a8d0d61e310ef98cbe50f0c66646b37
+  sha256: dea6c44bb4201ab1483d2415556ba682df62395adc963a356c3e2c8a79e6fa71
   requires_dist:
   - attrs==23.1.0
   requires_python: '>=3.11'
