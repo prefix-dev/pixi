@@ -143,6 +143,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .map(|(name, spec)| (name, (spec, spec_type)))
                 .collect();
 
+            for i in dependency_config.specs().into_iter() {
+                for (_, spec) in i {
+                    let Some(channel) = spec.channel.as_ref().and_then(|c| c.name.as_ref()) else {
+                        break;
+                    };
+
+                    workspace.manifest().add_channels(
+                        [
+                            PrioritizedChannel::from(NamedChannelOrUrl::Name(channel.clone()))
+                                .clone(),
+                        ],
+                        &FeatureName::DEFAULT,
+                        false,
+                    )?;
+                }
+            }
             if let Some(git) = &dependency_config.git {
                 if !workspace
                     .manifest()
