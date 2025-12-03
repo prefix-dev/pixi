@@ -691,6 +691,18 @@ class PyPIOptions(StrictBaseModel):
         description="Don't use pre-built wheels for these packages",
         examples=["true", "false"],
     )
+    prerelease_mode: (
+        Literal["disallow"]
+        | Literal["allow"]
+        | Literal["if-necessary"]
+        | Literal["explicit"]
+        | Literal["if-necessary-or-explicit"]
+        | None
+    ) = Field(
+        None,
+        description="The strategy to use when considering pre-release versions",
+        examples=["disallow", "allow", "if-necessary", "explicit", "if-necessary-or-explicit"],
+    )
 
 
 #######################

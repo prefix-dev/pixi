@@ -204,7 +204,8 @@ async fn find_unsatisfiable_targets<'p>(
                         .insert(environment.clone());
                 }
 
-                EnvironmentUnsat::IndexesMismatch(_) => {
+                EnvironmentUnsat::IndexesMismatch(_)
+                | EnvironmentUnsat::PypiPrereleaseModeMismatch { .. } => {
                     // If the indexes mismatched we cannot trust any of the locked content.
                     unsatisfiable_targets
                         .disregard_locked_content
