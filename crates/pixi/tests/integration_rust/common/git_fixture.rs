@@ -110,10 +110,7 @@ impl GitRepoFixture {
             let dir_name_str = dir_name.to_string_lossy();
 
             // Extract commit message from directory name (after the number prefix)
-            let commit_msg = dir_name_str
-                .split_once('_')
-                .map(|(_, msg)| msg)
-                .unwrap();
+            let commit_msg = dir_name_str.split_once('_').map(|(_, msg)| msg).unwrap();
 
             copy_dir_contents(&entry.path(), &repo_path);
 

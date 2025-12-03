@@ -18,6 +18,7 @@ Config {
     tls_no_verify: Some(
         false,
     ),
+    tls_root_certs: None,
     mirrors: {
         Url {
             scheme: "https",

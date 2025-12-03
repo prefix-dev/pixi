@@ -8,6 +8,16 @@ default-channels = ["conda-forge"]
 tls-no-verify = false
 # --8<-- [end:tls-no-verify]
 
+# --8<-- [start:tls-root-certs]
+# Which TLS root certificates to use for HTTPS connections.
+# Options: "webpki" (bundled Mozilla roots), "native" (system store), "all" (both)
+# Default is "webpki" for portability. Use "native" or "all" for corporate environments
+# with custom CA certificates.
+# Note: This setting only has an effect with rustls-tls builds (standalone pixi).
+# For native-tls builds (conda-forge), system certificates are always used.
+tls-root-certs = "native"
+# --8<-- [end:tls-root-certs]
+
 # --8<-- [start:authentication-override-file]
 authentication-override-file = "/path/to/your/override.json"
 # --8<-- [end:authentication-override-file]
