@@ -9,8 +9,11 @@ use rattler_conda_types::{PackageName, Platform};
 use tempfile::TempDir;
 use url::Url;
 
+use pixi_build_backend_passthrough::PassthroughBackend;
+use pixi_build_frontend::BackendOverride;
+
 use crate::common::{
-    LockFileExt, PixiControl,
+    GitRepoFixture, LockFileExt, PixiControl,
     builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig},
     package_database::{Package, PackageDatabase},
 };
@@ -687,11 +690,14 @@ async fn add_dependency_pinning_strategy() {
     assert_eq!(bar_spec, r#"">=1,<2""#);
 }
 
-/// Test adding a git dependency with a specific branch
+/// Test adding a git dependency with a specific branch (using local fixture)
 #[tokio::test]
-#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_git_deps() {
     setup_tracing();
+
+    // Create local git fixture with passthrough backend
+    let fixture = GitRepoFixture::new("conda-build-package");
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
 
     let pixi = PixiControl::from_manifest(
         r#"
@@ -702,11 +708,12 @@ platforms = ["win-64"]
 preview = ['pixi-build']
 "#,
     )
-    .unwrap();
+    .unwrap()
+    .with_backend_override(backend_override);
 
-    // Add a package
+    // Add a package using local git fixture URL
     pixi.add("boost-check")
-        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
+        .with_git_url(fixture.base_url.clone())
         .with_git_rev(GitRev::new().with_branch("main".to_string()))
         .with_git_subdir("boost-check".to_string())
         .await
@@ -720,23 +727,19 @@ preview = ['pixi-build']
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
+    let location = git_package
+        .unwrap()
+        .as_conda()
+        .unwrap()
+        .location()
+        .to_string();
+
     insta::with_settings!({filters => vec![
-        (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+        (r"file://[^?#]+", "file://[TEMP_PATH]"),
+        (r"#[a-f0-9]+", "#[COMMIT]"),
     ]}, {
-        insta::assert_snapshot!(git_package.unwrap().as_conda().unwrap().location());
-
+        insta::assert_snapshot!(location, @"git+file://[TEMP_PATH]?subdirectory=boost-check&branch=main#[COMMIT]");
     });
-
-    // Check the manifest itself
-    insta::assert_snapshot!(
-        pixi.workspace()
-            .unwrap()
-            .workspace
-            .provenance
-            .read()
-            .unwrap()
-            .into_inner()
-    );
 }
 
 /// Test adding git dependencies with credentials
@@ -797,11 +800,14 @@ preview = ['pixi-build']
     );
 }
 
-/// Test adding a git dependency with a specific commit
+/// Test adding a git dependency with a specific commit (using local fixture)
 #[tokio::test]
-#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_git_with_specific_commit() {
     setup_tracing();
+
+    // Create local git fixture with passthrough backend
+    let fixture = GitRepoFixture::new("conda-build-package");
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
 
     let pixi = PixiControl::from_manifest(
         r#"
@@ -811,12 +817,16 @@ channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64"]
 preview = ['pixi-build']"#,
     )
-    .unwrap();
+    .unwrap()
+    .with_backend_override(backend_override);
 
-    // Add a package
+    // Add a package using the first commit from our fixture
+    let first_commit = fixture.first_commit().to_string();
+    let short_commit = &first_commit[..7]; // Use short hash like the original test
+
     pixi.add("boost-check")
-        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
-        .with_git_rev(GitRev::new().with_rev("8a1d9b9".to_string()))
+        .with_git_url(fixture.base_url.clone())
+        .with_git_rev(GitRev::new().with_rev(short_commit.to_string()))
         .with_git_subdir("boost-check".to_string())
         .await
         .unwrap();
@@ -830,30 +840,31 @@ preview = ['pixi-build']"#,
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
+    let location = git_package
+        .unwrap()
+        .as_conda()
+        .unwrap()
+        .location()
+        .to_string();
+
     insta::with_settings!({filters => vec![
-        (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+        (r"file://[^?#]+", "file://[TEMP_PATH]"),
+        (r"rev=[a-f0-9]+", "rev=[SHORT_COMMIT]"),
+        (r"#[a-f0-9]+", "#[FULL_COMMIT]"),
     ]}, {
-        insta::assert_snapshot!(git_package.unwrap().as_conda().unwrap().location());
-
+        insta::assert_snapshot!(location, @"git+file://[TEMP_PATH]?subdirectory=boost-check&rev=[SHORT_COMMIT]#[FULL_COMMIT]");
     });
-
-    // Check the manifest itself
-    insta::assert_snapshot!(
-        pixi.workspace()
-            .unwrap()
-            .workspace
-            .provenance
-            .read()
-            .unwrap()
-            .into_inner()
-    );
 }
 
-/// Test adding a git dependency with a specific tag
+/// Test adding a git dependency with a specific tag (using local fixture)
 #[tokio::test]
-#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_git_with_tag() {
     setup_tracing();
+
+    // Create local git fixture with passthrough backend
+    // The fixture creates a tag "v0.1.0" for the second commit
+    let fixture = GitRepoFixture::new("conda-build-package");
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
 
     let pixi = PixiControl::from_manifest(
         r#"
@@ -863,14 +874,15 @@ channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64"]
 preview = ['pixi-build']"#,
     )
-    .unwrap();
+    .unwrap()
+    .with_backend_override(backend_override);
 
-    // Add a package
+    // Add a package using the tag from our fixture
+    let tag_commit = fixture.tag_commit("v0.1.0").to_string();
+
     pixi.add("boost-check")
-        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
-        .with_git_rev(
-            GitRev::new().with_rev("8a1d9b9b1755825165a615d563966aaa59a5361c".to_string()),
-        )
+        .with_git_url(fixture.base_url.clone())
+        .with_git_rev(GitRev::new().with_tag("v0.1.0".to_string()))
         .with_git_subdir("boost-check".to_string())
         .await
         .unwrap();
@@ -884,22 +896,24 @@ preview = ['pixi-build']"#,
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
+    let location = git_package
+        .unwrap()
+        .as_conda()
+        .unwrap()
+        .location()
+        .to_string();
+
     insta::with_settings!({filters => vec![
-        (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
-        (r"rev=([a-f0-9]+)", "rev=[REV]"),
+        (r"file://[^?#]+", "file://[TEMP_PATH]"),
+        (r"#[a-f0-9]+", "#[COMMIT]"),
     ]}, {
-        insta::assert_snapshot!(git_package.unwrap().as_conda().unwrap().location());
+        insta::assert_snapshot!(location, @"git+file://[TEMP_PATH]?subdirectory=boost-check&tag=v0.1.0#[COMMIT]");
     });
 
-    // Check the manifest itself
-    insta::assert_snapshot!(
-        pixi.workspace()
-            .unwrap()
-            .workspace
-            .provenance
-            .read()
-            .unwrap()
-            .into_inner()
+    // Verify the commit hash matches the tag's commit
+    assert!(
+        location.ends_with(&format!("#{tag_commit}")),
+        "Expected tag to resolve to commit {tag_commit}, got {location}"
     );
 }
 

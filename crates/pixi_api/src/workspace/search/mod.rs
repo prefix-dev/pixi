@@ -12,10 +12,7 @@ use rattler_repodata_gateway::{GatewayError, RepoData};
 use regex::Regex;
 use strsim::jaro;
 
-use crate::Interface;
-
-pub async fn search_exact<I: Interface>(
-    _interface: &I,
+pub async fn search_exact(
     workspace: Option<&Workspace>,
     match_spec: MatchSpec,
     channels: IndexSet<Channel>,
@@ -103,8 +100,7 @@ pub async fn search_exact<I: Interface>(
     Ok(Some(packages))
 }
 
-pub async fn search_wildcard<I: Interface>(
-    _interface: &I,
+pub async fn search_wildcard(
     workspace: Option<&Workspace>,
     package_name_filter: &str,
     channels: IndexSet<Channel>,
