@@ -2365,3 +2365,59 @@ class TestCondaFile:
             env=env,
             cwd=cwd,
         )
+
+
+@pytest.mark.slow
+def test_install_source_package_with_force_reinstall(
+    pixi: Path, tmp_path: Path, test_data: Path
+) -> None:
+    """Test that --force-reinstall actually rebuilds source packages."""
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    # Copy an existing source package from test data
+    source_package = test_data / "cpp_simple"
+    target_package = tmp_path / "test-source-package"
+    shutil.copytree(source_package, target_package)
+
+    # First installation
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--path",
+            str(target_package),
+        ],
+        env=env,
+        stdout_contains="installed",
+    )
+
+    # Second installation without force-reinstall
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--path",
+            str(target_package),
+        ],
+        env=env,
+        stdout_contains="already installed",
+    )
+
+    # Third installation with --force-reinstall
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--path",
+            str(target_package),
+            "--force-reinstall",
+        ],
+        env=env,
+        # To verify that we really install again
+        stdout_contains="installed",
+        # and to verify that we really build from source
+        stderr_contains="Running build for recipe",
+    )

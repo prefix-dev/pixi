@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
+use pixi_record::VariantValue;
 use pixi_record::{DevSourceRecord, PixiRecord};
 use pixi_spec::{BinarySpec, PixiSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
@@ -83,7 +84,7 @@ pub struct PixiEnvironmentSpec {
     pub channel_config: ChannelConfig,
 
     /// Build variants to use during the solve
-    pub variants: Option<BTreeMap<String, Vec<String>>>,
+    pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
 
     /// Variant file paths to use during the solve
     pub variant_files: Option<Vec<PathBuf>>,
@@ -94,9 +95,10 @@ pub struct PixiEnvironmentSpec {
 
     /// Optional override for a specific packages: use this pinned
     /// source for checkout and as the `package_build_source` instead
-    /// of pinning anew.
+    /// of recomputing the pinned location.
     #[serde(skip)]
-    pub pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
+    pub preferred_build_source:
+        BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
 }
 
 impl Default for PixiEnvironmentSpec {
@@ -113,10 +115,10 @@ impl Default for PixiEnvironmentSpec {
             channel_priority: ChannelPriority::Strict,
             exclude_newer: None,
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
-            variants: None,
+            variant_configuration: None,
             variant_files: None,
             enabled_protocols: EnabledProtocols::default(),
-            pin_overrides: BTreeMap::new(),
+            preferred_build_source: BTreeMap::new(),
         }
     }
 }
@@ -160,10 +162,10 @@ impl PixiEnvironmentSpec {
             self.channels.clone(),
             self.channel_config.clone(),
             self.build_environment.clone(),
-            self.variants.clone(),
+            self.variant_configuration.clone(),
             self.variant_files.clone(),
             self.enabled_protocols.clone(),
-            self.pin_overrides.clone(),
+            self.preferred_build_source.clone(),
         )
         .collect(
             source_specs
@@ -268,29 +270,32 @@ impl PixiEnvironmentSpec {
             let channel_config = self.channel_config.clone();
             let channels = self.channels.clone();
             let build_environment = self.build_environment.clone();
-            let variants = self.variants.clone();
+            let variant_configuration = self.variant_configuration.clone();
             let variant_files = self.variant_files.clone();
             let enabled_protocols = self.enabled_protocols.clone();
 
             dev_source_futures.push(async move {
                 // Pin and checkout the source
                 let pinned_source = command_dispatcher
-                    .pin_and_checkout(dev_source_spec.source.location, None)
+                    .pin_and_checkout(dev_source_spec.source.location)
                     .await
                     .map_err_with(SolvePixiEnvironmentError::SourceCheckoutError)?;
 
                 // Create the spec for getting dev source metadata
                 let spec = DevSourceMetadataSpec {
-                    package_name,
+                    package_name: package_name.clone(),
                     backend_metadata: BuildBackendMetadataSpec {
                         manifest_source: pinned_source.pinned,
+                        preferred_build_source: self
+                            .preferred_build_source
+                            .get(&package_name)
+                            .cloned(),
                         channel_config,
                         channels,
                         build_environment,
-                        variants,
+                        variant_configuration,
                         variant_files,
                         enabled_protocols,
-                        pin_override: None,
                     },
                 };
 

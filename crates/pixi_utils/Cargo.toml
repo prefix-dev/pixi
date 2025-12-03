@@ -33,6 +33,7 @@ miette = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
+pixi_variant = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_networking = { workspace = true, features = [
   "gcs",

@@ -32,10 +32,11 @@ use typed_path::Utf8TypedPath;
 use url::UrlCheckoutTask;
 
 use crate::{
-    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, Executor,
-    InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
-    SourceBuildCacheEntry, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout,
-    SourceCheckoutError, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, DevSourceMetadata,
+    DevSourceMetadataError, DevSourceMetadataSpec, Executor, InvalidPathError, PixiEnvironmentSpec,
+    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
+    SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout, SourceCheckoutError,
+    SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     build::BuildCache,
     cache::{
@@ -193,6 +194,7 @@ pub(crate) enum CommandDispatcherContext {
     SourceMetadata(SourceMetadataId),
     SourceBuild(SourceBuildId),
     QuerySourceBuildCache(SourceBuildCacheStatusId),
+    DevSourceMetadata(DevSourceMetadataId),
     InstallPixiEnvironment(InstallPixiEnvironmentId),
     InstantiateToolEnv(InstantiatedToolEnvId),
 }
@@ -230,6 +232,10 @@ pub(crate) struct SourceBuildId(pub usize);
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct SourceBuildCacheStatusId(pub usize);
 
+/// An id that uniquely identifies a dev source metadata request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct DevSourceMetadataId(pub usize);
+
 /// An id that uniquely identifies a tool environment.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct InstantiatedToolEnvId(pub usize);
@@ -245,6 +251,7 @@ pub(crate) enum ForegroundMessage {
     SourceMetadata(SourceMetadataTask),
     SourceBuild(SourceBuildTask),
     QuerySourceBuildCache(SourceBuildCacheStatusTask),
+    DevSourceMetadata(DevSourceMetadataTask),
     GitCheckout(GitCheckoutTask),
     UrlCheckout(UrlCheckoutTask),
     InstallPixiEnvironment(InstallPixiEnvironmentTask),
@@ -318,6 +325,13 @@ pub(crate) type SourceBuildCacheStatusTask = Task<SourceBuildCacheStatusSpec>;
 impl TaskSpec for SourceBuildCacheStatusSpec {
     type Output = Arc<SourceBuildCacheEntry>;
     type Error = SourceBuildCacheStatusError;
+}
+
+pub(crate) type DevSourceMetadataTask = Task<DevSourceMetadataSpec>;
+
+impl TaskSpec for DevSourceMetadataSpec {
+    type Output = DevSourceMetadata;
+    type Error = DevSourceMetadataError;
 }
 
 impl Default for CommandDispatcher {
@@ -501,10 +515,9 @@ impl CommandDispatcher {
     /// - The build backend must support the `conda/outputs` procedure (API v1+)
     pub async fn dev_source_metadata(
         &self,
-        spec: crate::DevSourceMetadataSpec,
-    ) -> Result<crate::DevSourceMetadata, CommandDispatcherError<crate::DevSourceMetadataError>>
-    {
-        spec.request(self.clone()).await
+        spec: DevSourceMetadataSpec,
+    ) -> Result<DevSourceMetadata, CommandDispatcherError<DevSourceMetadataError>> {
+        self.execute_task(spec).await
     }
 
     /// Query the source build cache for a particular source package.
@@ -629,7 +642,6 @@ impl CommandDispatcher {
     pub async fn pin_and_checkout(
         &self,
         source_location_spec: SourceLocationSpec,
-        alternative_root: Option<&Path>,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match source_location_spec {
             SourceLocationSpec::Url(url) => {
@@ -643,7 +655,7 @@ impl CommandDispatcher {
             SourceLocationSpec::Path(path) => {
                 let source_path = self
                     .data
-                    .resolve_typed_path(path.path.to_path(), alternative_root)
+                    .resolve_typed_path(path.path.to_path())
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
@@ -671,10 +683,10 @@ impl CommandDispatcher {
         pinned_spec: PinnedSourceSpec,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match pinned_spec {
-            PinnedSourceSpec::Path(ref path) => {
+            PinnedSourceSpec::Path(ref path_spec) => {
                 let source_path = self
                     .data
-                    .resolve_typed_path(path.path.to_path(), None)
+                    .resolve_typed_path(path_spec.path.to_path())
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
@@ -707,11 +719,7 @@ impl CommandDispatcherData {
     ///
     /// This function does not check if the path exists and also does not follow
     /// symlinks.
-    fn resolve_typed_path(
-        &self,
-        path_spec: Utf8TypedPath,
-        alternative_root: Option<&Path>,
-    ) -> Result<PathBuf, InvalidPathError> {
+    fn resolve_typed_path(&self, path_spec: Utf8TypedPath) -> Result<PathBuf, InvalidPathError> {
         if path_spec.is_absolute() {
             Ok(Path::new(path_spec.as_str()).to_path_buf())
         } else if let Ok(user_path) = path_spec.strip_prefix("~/") {
@@ -721,20 +729,7 @@ impl CommandDispatcherData {
             debug_assert!(home_dir.is_absolute());
             normalize_absolute_path(&home_dir.join(Path::new(user_path.as_str())))
         } else {
-            let root_dir = match alternative_root {
-                Some(root_path) => {
-                    debug_assert!(
-                        root_path.is_absolute(),
-                        "alternative_root must be absolute, got: {root_path:?}"
-                    );
-                    debug_assert!(
-                        !root_path.is_file(),
-                        "alternative_root should be a directory, not a file: {root_path:?}"
-                    );
-                    root_path
-                }
-                None => self.root_dir.as_path(),
-            };
+            let root_dir = self.root_dir.as_path();
             let native_path = Path::new(path_spec.as_str());
             debug_assert!(root_dir.is_absolute());
             normalize_absolute_path(&root_dir.join(native_path))

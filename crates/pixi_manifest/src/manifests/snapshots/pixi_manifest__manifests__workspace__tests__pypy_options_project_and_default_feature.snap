@@ -8,6 +8,7 @@ extra-index-urls:
 find-links: ~
 no-build-isolation: []
 index-strategy: ~
+prerelease-mode: ~
 no-build: ~
 dependency-overrides: ~
 no-binary: ~

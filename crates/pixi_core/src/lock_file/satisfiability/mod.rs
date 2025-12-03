@@ -9,10 +9,13 @@ use pixi_command_dispatcher::{
     SourceMetadataSpec,
 };
 use pixi_git::url::RepositoryUrl;
-use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
+use pixi_manifest::{
+    FeaturesExt,
+    pypi::pypi_options::{NoBuild, PrereleaseMode},
+};
 use pixi_record::{
     DevSourceRecord, LockedGitUrl, ParseLockFileError, PinnedSourceSpec, PixiRecord,
-    SourceMismatchError,
+    SourceMismatchError, VariantValue,
 };
 use pixi_spec::{PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError};
 use pixi_utils::variants::VariantConfig;
@@ -95,6 +98,14 @@ pub enum EnvironmentUnsat {
     ChannelPriorityMismatch {
         locked_priority: rattler_solve::ChannelPriority,
         expected_priority: rattler_solve::ChannelPriority,
+    },
+
+    #[error(
+        "the lock-file was solved with a different PyPI prerelease mode ({locked_mode}) than the one selected ({expected_mode})"
+    )]
+    PypiPrereleaseModeMismatch {
+        locked_mode: PrereleaseMode,
+        expected_mode: PrereleaseMode,
     },
 
     #[error(transparent)]
@@ -543,6 +554,22 @@ pub fn verify_environment_satisfiability(
         });
     }
 
+    let locked_prerelease_mode = locked_environment
+        .solve_options()
+        .pypi_prerelease_mode
+        .unwrap_or_default()
+        .into();
+    let expected_prerelease_mode = grouped_env
+        .pypi_options()
+        .prerelease_mode
+        .unwrap_or_default();
+    if locked_prerelease_mode != expected_prerelease_mode {
+        return Err(EnvironmentUnsat::PypiPrereleaseModeMismatch {
+            locked_mode: locked_prerelease_mode,
+            expected_mode: expected_prerelease_mode,
+        });
+    }
+
     let locked_exclude_newer = locked_environment.solve_options().exclude_newer;
     let expected_exclude_newer = environment.exclude_newer();
     if locked_exclude_newer != expected_exclude_newer {
@@ -713,9 +740,7 @@ pub async fn verify_platform_satisfiability(
             LockedPackageRef::Conda(conda) => {
                 let url = conda.location().clone();
                 pixi_records.push(
-                    conda
-                        .clone()
-                        .try_into()
+                    PixiRecord::from_conda_package_data(conda.clone(), project_root)
                         .map_err(|e| PlatformUnsat::CorruptedEntry(url.to_string(), e))?,
                 );
             }
@@ -1024,7 +1049,7 @@ async fn verify_source_metadata(
     command_dispatcher: CommandDispatcher,
     channel_config: rattler_conda_types::ChannelConfig,
     channel_urls: Vec<ChannelUrl>,
-    variants: std::collections::BTreeMap<String, Vec<String>>,
+    variants: std::collections::BTreeMap<String, Vec<VariantValue>>,
     virtual_packages: Vec<GenericVirtualPackage>,
     platform: Platform,
 ) -> Result<(), Box<PlatformUnsat>> {
@@ -1044,6 +1069,7 @@ async fn verify_source_metadata(
                     package: source_record.package_record.name.clone(),
                     backend_metadata: BuildBackendMetadataSpec {
                         manifest_source: source_record.manifest_source.clone(),
+                        preferred_build_source: None,
                         channel_config,
                         channels: channel_urls,
                         build_environment: BuildEnvironment {
@@ -1052,10 +1078,9 @@ async fn verify_source_metadata(
                             host_virtual_packages: virtual_packages.clone(),
                             build_virtual_packages: virtual_packages,
                         },
-                        variants: Some(variants),
+                        variant_configuration: Some(variants),
                         variant_files: None,
                         enabled_protocols: EnabledProtocols::default(),
-                        pin_override: source_record.build_source.clone(),
                     },
                 };
 
@@ -1133,7 +1158,7 @@ async fn resolve_dev_dependencies(
     channel_config: &rattler_conda_types::ChannelConfig,
     channels: &[ChannelUrl],
     build_environment: &BuildEnvironment,
-    variants: &std::collections::BTreeMap<String, Vec<String>>,
+    variants: &std::collections::BTreeMap<String, Vec<VariantValue>>,
     variant_files: &[PathBuf],
 ) -> Result<Vec<Dependency>, PlatformUnsat> {
     let futures = dev_dependencies
@@ -1178,11 +1203,11 @@ async fn resolve_single_dev_dependency(
     channel_config: rattler_conda_types::ChannelConfig,
     channels: Vec<ChannelUrl>,
     build_environment: BuildEnvironment,
-    variants: std::collections::BTreeMap<String, Vec<String>>,
+    variants: std::collections::BTreeMap<String, Vec<VariantValue>>,
     variant_files: Vec<PathBuf>,
 ) -> Result<Vec<Dependency>, PlatformUnsat> {
     let pinned_source = command_dispatcher
-        .pin_and_checkout(source_spec.location, None)
+        .pin_and_checkout(source_spec.location)
         .await?;
 
     // Create the spec for getting dev source metadata
@@ -1190,13 +1215,13 @@ async fn resolve_single_dev_dependency(
         package_name: package_name.clone(),
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source.pinned,
+            preferred_build_source: None,
             channel_config: channel_config.clone(),
             channels,
             build_environment,
-            variants: Some(variants),
+            variant_configuration: Some(variants),
             variant_files: Some(variant_files),
             enabled_protocols: Default::default(),
-            pin_override: None,
         },
     };
 
@@ -1211,7 +1236,7 @@ async fn resolve_single_dev_dependency(
 
     // Process source dependencies
     for (dev_name, dep) in dev_source.into_specs() {
-        let anchored_source = SourceAnchor::Workspace.resolve(dep.clone());
+        let anchored_source = SourceAnchor::Workspace.resolve(dep.clone().location);
 
         let spec = MatchSpec::from_str(dev_name.as_source(), Lenient).map_err(|e| {
             PlatformUnsat::FailedToParseMatchSpec(dev_name.as_source().to_string(), e)
@@ -1220,7 +1245,9 @@ async fn resolve_single_dev_dependency(
         dependencies.push(Dependency::CondaSource(
             dev_name.clone(),
             spec,
-            anchored_source,
+            SourceSpec {
+                location: anchored_source,
+            },
             Cow::Owned(format!("{} @ {}", dev_name.as_source(), dep)),
         ));
     }
@@ -1248,7 +1275,7 @@ async fn resolve_single_dev_dependency(
                 )
             })?;
 
-        let spec = MatchSpec::from_nameless(nameless_spec, Some(dev_name.clone()));
+        let spec = MatchSpec::from_nameless(nameless_spec, Some(dev_name.clone().into()));
 
         dependencies.push(Dependency::Conda(
             spec,
@@ -1346,7 +1373,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
     // Determine the build variants
     let VariantConfig {
-        variants,
+        variant_configuration,
         variant_files,
     } = environment
         .workspace()
@@ -1370,7 +1397,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
         &channel_config,
         &channels,
         &build_environment,
-        &variants,
+        &variant_configuration,
         &variant_files,
     );
 
@@ -1379,7 +1406,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
         command_dispatcher.clone(),
         channel_config.clone(),
         channels.clone(),
-        variants.clone(),
+        variant_configuration.clone(),
         virtual_packages.values().cloned().collect(),
         platform,
     );
@@ -1500,7 +1527,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         match find_matching_package(
                             locked_pixi_records,
                             &virtual_packages,
-                            MatchSpec::from_nameless(spec, Some(name)),
+                            MatchSpec::from_nameless(spec, Some(name.into())),
                             source,
                         )? {
                             Some(pkg) => pkg,
@@ -1563,7 +1590,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         });
                     }
 
-                    if !identifier.satisfies(&requirement)? {
+                    // Use the overridden requirement if specified (e.g. for pytorch/torch)
+                    let requirement_to_check = dependency_overrides
+                        .get(&requirement.name)
+                        .cloned()
+                        .unwrap_or(requirement.clone());
+
+                    if !identifier.satisfies(&requirement_to_check)? {
                         // The record does not match the spec, the lock-file is inconsistent.
                         delayed_pypi_error.get_or_insert_with(|| {
                             Box::new(PlatformUnsat::CondaUnsatisfiableRequirement(
@@ -1668,14 +1701,20 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     if let Some((source, package_name)) = record
                         .as_source()
                         .and_then(|record| Some((record, spec.name.as_ref()?)))
-                        .and_then(|(record, package_name)| {
+                        .and_then(|(record, package_name_matcher)| {
+                            let package_name = package_name_matcher
+                                .as_exact()
+                                .expect("depends can only contain exact package names");
                             Some((
                                 record.sources.get(package_name.as_normalized())?,
                                 package_name,
                             ))
                         })
                     {
-                        let anchored_source = anchor.resolve(source.clone());
+                        let anchored_location = anchor.resolve(source.location.clone());
+                        let anchored_source = SourceSpec {
+                            location: anchored_location,
+                        };
                         conda_queue.push(Dependency::CondaSource(
                             package_name.clone(),
                             spec,
@@ -1927,7 +1966,10 @@ fn find_matching_package(
                 Some(idx) => idx,
             }
         }
-        Some(name) => {
+        Some(name_matcher) => {
+            let name = name_matcher
+                .as_exact()
+                .expect("depends can only contain exact package names");
             match locked_pixi_records
                 .index_by_name(name)
                 .map(|idx| (idx, &locked_pixi_records.records[idx]))
@@ -2023,7 +2065,7 @@ trait MatchesMatchspec {
 impl MatchesMatchspec for GenericVirtualPackage {
     fn matches(&self, spec: &MatchSpec) -> bool {
         if let Some(name) = &spec.name {
-            if name != &self.name {
+            if !name.matches(&self.name) {
                 return false;
             }
         }

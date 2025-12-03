@@ -16,7 +16,7 @@ use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, CommandDispatcherError, Executor,
     InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PackageIdentifier,
-    PixiEnvironmentSpec, SourceBuildCacheStatusSpec,
+    PixiEnvironmentSpec, SourceBuildCacheStatusSpec, build::SourceCodeLocation,
 };
 use pixi_config::default_channel_config;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
@@ -153,7 +153,7 @@ pub async fn simple_test() {
                     .into(),
             ],
             channel_config: default_channel_config(),
-            variants: None,
+            variant_configuration: None,
             variant_files: None,
             enabled_protocols: Default::default(),
         })
@@ -589,10 +589,13 @@ async fn source_build_cache_status_clear_works() {
 
     let spec = SourceBuildCacheStatusSpec {
         package: pkg,
-        source: PinnedPathSpec {
-            path: tmp_dir.path().to_string_lossy().into_owned().into(),
-        }
-        .into(),
+        source: SourceCodeLocation::new(
+            PinnedPathSpec {
+                path: tmp_dir.path().to_string_lossy().into_owned().into(),
+            }
+            .into(),
+            None,
+        ),
         channels: Vec::<ChannelUrl>::new(),
         build_environment: build_env,
         channel_config: default_channel_config(),
@@ -673,10 +676,10 @@ pub async fn test_dev_source_metadata() {
             channel_config: default_channel_config(),
             channels: vec![],
             build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
-            variants: None,
+            variant_configuration: None,
             variant_files: None,
             enabled_protocols: Default::default(),
-            pin_override: None,
+            preferred_build_source: None,
         },
     };
 
@@ -758,11 +761,11 @@ pub async fn test_dev_source_metadata_with_variants() {
     let mut variant_config = BTreeMap::new();
     variant_config.insert(
         "python".to_string(),
-        vec!["3.10".to_string(), "3.11".to_string()],
+        vec!["3.10".to_string().into(), "3.11".to_string().into()],
     );
     variant_config.insert(
         "numpy".to_string(),
-        vec!["1.0".to_string(), "2.0".to_string()],
+        vec!["1.0".to_string().into(), "2.0".to_string().into()],
     );
 
     // Create the spec for dev source metadata with variants
@@ -773,10 +776,10 @@ pub async fn test_dev_source_metadata_with_variants() {
             channel_config: default_channel_config(),
             channels: vec![],
             build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
-            variants: Some(variant_config),
+            variant_configuration: Some(variant_config),
             variant_files: None,
             enabled_protocols: Default::default(),
-            pin_override: None,
+            preferred_build_source: None,
         },
     };
 
@@ -802,13 +805,13 @@ pub async fn test_dev_source_metadata_with_variants() {
             let python = record
                 .variants
                 .get("python")
-                .map(|s| s.as_str())
-                .unwrap_or("none");
+                .map(|s| s.to_string())
+                .unwrap_or("none".to_string());
             let numpy = record
                 .variants
                 .get("numpy")
-                .map(|s| s.as_str())
-                .unwrap_or("none");
+                .map(|s| s.to_string())
+                .unwrap_or("none".to_string());
             (python, numpy)
         })
         .sorted()
@@ -818,10 +821,10 @@ pub async fn test_dev_source_metadata_with_variants() {
     assert_eq!(
         variants,
         vec![
-            ("3.10", "1.0"),
-            ("3.10", "2.0"),
-            ("3.11", "1.0"),
-            ("3.11", "2.0"),
+            ("3.10".to_string(), "1.0".to_string()),
+            ("3.10".to_string(), "2.0".to_string()),
+            ("3.11".to_string(), "1.0".to_string()),
+            ("3.11".to_string(), "2.0".to_string()),
         ],
         "All variant combinations should be generated"
     );

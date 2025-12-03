@@ -6,7 +6,7 @@ use std::{
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
-use pixi_record::{InputHash, PinnedSourceSpec, SourceRecord};
+use pixi_record::{InputHash, PinnedSourceSpec, SourceRecord, VariantValue};
 use rattler_conda_types::{ChannelUrl, PackageName};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -137,7 +137,7 @@ pub struct CachedSourceMetadata {
 
     /// The build variants that were used to generate this metadata.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub build_variants: Option<BTreeMap<String, Vec<String>>>,
+    pub build_variants: Option<BTreeMap<String, Vec<VariantValue>>>,
 
     #[serde(flatten)]
     pub metadata: Metadata,

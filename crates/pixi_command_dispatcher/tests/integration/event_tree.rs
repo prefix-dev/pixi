@@ -162,11 +162,7 @@ impl EventTree {
                 Event::SourceBuildQueued { id, context, spec } => {
                     source_build_label.insert(
                         *id,
-                        format!(
-                            "{} @ {}",
-                            spec.package.name.as_source(),
-                            spec.manifest_source
-                        ),
+                        format!("{} @ {}", spec.package.name.as_source(), spec.source),
                     );
                     builder.set_event_parent((*id).into(), *context);
                 }

@@ -7,6 +7,7 @@ use miette::{Context, IntoDiagnostic};
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
+    build::SourceCodeLocation,
 };
 use pixi_config::ConfigCli;
 use pixi_consts::consts::{
@@ -20,7 +21,6 @@ use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
 use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
-use tempfile::tempdir;
 
 use crate::cli_config::LockAndInstallConfig;
 
@@ -37,11 +37,6 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_and_install_config: LockAndInstallConfig,
-
-    /// The path to the manifest file to build (e.g., recipe.yaml, package.xml, pixi.toml).
-    /// If not specified, defaults to the workspace manifest.
-    #[clap(long)]
-    pub build_manifest: Option<PathBuf>,
 
     /// The target platform to build for (defaults to the current platform)
     #[clap(long, short, default_value_t = Platform::current())]
@@ -205,7 +200,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Determine the variant configuration for the build.
     let VariantConfig {
-        variants,
+        variant_configuration,
         variant_files,
     } = workspace.variants(args.target_platform)?;
 
@@ -234,16 +229,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Query any and all information we can acquire about the package we're
     // attempting to build.
-    // Use the explicit build manifest if provided, otherwise use the workspace manifest.
-    let manifest_path = if let Some(build_manifest) = &args.build_manifest {
-        build_manifest.clone()
-    } else {
-        let Ok(path) = workspace_locator.path() else {
-            miette::bail!(
-                "could not determine the current working directory to locate the workspace"
-            );
-        };
-        path
+    let Ok(manifest_path) = workspace_locator.path() else {
+        miette::bail!("could not determine the current working directory to locate the workspace");
     };
 
     let package_manifest_path = match args.path {
@@ -283,13 +270,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Create the build backend metadata specification.
     let backend_metadata_spec = BuildBackendMetadataSpec {
         manifest_source: manifest_source.clone(),
+        preferred_build_source: None,
         channels: channels.clone(),
         channel_config: channel_config.clone(),
         build_environment: build_environment.clone(),
-        variants: Some(variants.clone()),
+        variant_configuration: Some(variant_configuration.clone()),
         variant_files: Some(variant_files.clone()),
         enabled_protocols: Default::default(),
-        pin_override: None,
     };
     let backend_metadata = command_dispatcher
         .build_backend_metadata(backend_metadata_spec.clone())
@@ -308,25 +295,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )
         })?;
 
-    // Create a temporary directory to hold build outputs
-    let temp_output_dir = tempdir()
-        .into_diagnostic()
-        .context("failed to create temporary output directory for build artifacts")?;
-
     // Build the individual packages
     for package in packages {
         let built_package = command_dispatcher
             .source_build(SourceBuildSpec {
                 package,
-                // Build into a temporary directory first
-                output_directory: Some(temp_output_dir.path().to_path_buf()),
-                manifest_source: manifest_source.clone(),
-                build_source: None,
+                output_directory: None,
+                source: SourceCodeLocation::new(manifest_source.clone(), None),
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),
-                variants: Some(variants.clone()),
+                variant_configuration: Some(variant_configuration.clone()),
                 variant_files: Some(variant_files.clone()),
+                // Fresh builds don't have pre-existing variants to match against
+                variants: None,
                 enabled_protocols: Default::default(),
                 work_directory: None,
                 clean: args.clean,
@@ -347,12 +329,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .expect("built package should have a file name");
         let dest_path = args.output_dir.join(file_name);
 
-        // Move the .conda artifact into the requested directory.
-        // If a simple rename fails (e.g., across filesystems), fall back to copy+remove.
-        if let Err(_e) = fs_err::rename(&package_path, &dest_path) {
-            fs_err::copy(&package_path, &dest_path).into_diagnostic()?;
-            fs_err::remove_file(&package_path).into_diagnostic()?;
-        }
+        // Copy the .conda artifact into the requested directory.
+        // We use copy instead of move to preserve the cache for subsequent builds.
+        fs_err::copy(&package_path, &dest_path).into_diagnostic()?;
 
         // Print success relative to the user-requested output directory
         let output_dir = dunce::canonicalize(&args.output_dir)

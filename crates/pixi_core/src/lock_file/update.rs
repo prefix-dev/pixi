@@ -19,8 +19,8 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
-    PixiEnvironmentSpec, SolvePixiEnvironmentError,
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, PixiEnvironmentSpec,
+    SolvePixiEnvironmentError,
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
@@ -328,7 +328,7 @@ impl Workspace {
         }
 
         // Construct an update context and perform the actual update.
-        let lock_file_derived_data = UpdateContext::builder(self, Some(command_dispatcher))
+        let lock_file_derived_data = UpdateContext::builder(self, Some(command_dispatcher))?
             .with_package_cache(package_cache)
             .with_no_install(options.no_install)
             .with_outdated_environments(outdated)
@@ -407,9 +407,11 @@ pub enum SolveCondaEnvironmentError {
         source: Box<CommandDispatcherError<SolvePixiEnvironmentError>>,
     },
 
-    #[error(transparent)]
+    #[error(
+        "failed to map conda packages to their PyPI equivalents. This mapping is required when using PyPI dependencies alongside conda packages."
+    )]
     #[diagnostic(transparent)]
-    PypiMappingFailed(Box<dyn Diagnostic + Send + Sync + 'static>),
+    PypiMappingFailed(#[source] Box<dyn Diagnostic + Send + Sync + 'static>),
 
     #[error(transparent)]
     ParseChannels(#[from] Box<ParseChannelError>),
@@ -679,7 +681,8 @@ impl<'p> LockFileDerivedData<'p> {
                         LockedPackageRef::Pypi(data, _) => Either::Right(data.name.clone()),
                     });
 
-                let pixi_records = locked_packages_to_pixi_records(conda_packages)?;
+                let pixi_records =
+                    locked_packages_to_pixi_records(conda_packages, self.workspace.root())?;
 
                 let pypi_records = pypi_packages
                     .into_iter()
@@ -856,7 +859,7 @@ impl<'p> LockFileDerivedData<'p> {
                 } else {
                     Vec::new()
                 };
-                let records = locked_packages_to_pixi_records(packages)?;
+                let records = locked_packages_to_pixi_records(packages, self.workspace.root())?;
 
                 // Update the conda prefix
                 let CondaPrefixUpdated {
@@ -944,12 +947,13 @@ impl PackageFilterNames {
 
 fn locked_packages_to_pixi_records(
     conda_packages: Vec<LockedPackageRef<'_>>,
+    workspace_root: &std::path::Path,
 ) -> Result<Vec<PixiRecord>, Report> {
     let pixi_records = conda_packages
         .into_iter()
         .filter_map(LockedPackageRef::as_conda)
         .cloned()
-        .map(PixiRecord::try_from)
+        .map(|data| PixiRecord::from_conda_package_data(data, workspace_root))
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
     Ok(pixi_records)
@@ -1303,6 +1307,7 @@ impl<'p> UpdateContextBuilder<'p> {
 
         // Extract the current conda records from the lock-file
         // TODO: Should we parallelize this? Measure please.
+        let workspace_root = project.root();
         let locked_repodata_records = project
             .environments()
             .into_iter()
@@ -1316,7 +1321,9 @@ impl<'p> UpdateContextBuilder<'p> {
                             .map(|(platform, records)| {
                                 records
                                     .cloned()
-                                    .map(PixiRecord::try_from)
+                                    .map(|data| {
+                                        PixiRecord::from_conda_package_data(data, workspace_root)
+                                    })
                                     .collect::<Result<Vec<_>, _>>()
                                     .map(|records| {
                                         (platform, Arc::new(PixiRecordsByName::from_iter(records)))
@@ -1494,20 +1501,22 @@ impl<'p> UpdateContext<'p> {
     pub fn builder(
         project: &'p Workspace,
         command_dispatcher: Option<CommandDispatcher>,
-    ) -> UpdateContextBuilder<'p> {
+    ) -> miette::Result<UpdateContextBuilder<'p>> {
         let multi_progress = pixi_progress::global_multi_progress();
         let anchor_pb = multi_progress.add(indicatif::ProgressBar::hidden());
 
-        let command_dispatcher = command_dispatcher.unwrap_or_else(|| {
-            CommandDispatcherBuilder::default()
+        let command_dispatcher = match command_dispatcher {
+            Some(cd) => cd,
+            None => project
+                .command_dispatcher_builder()?
                 .with_reporter(pixi_reporters::TopLevelProgress::new(
                     multi_progress,
                     anchor_pb,
                 ))
-                .finish()
-        });
+                .finish(),
+        };
 
-        UpdateContextBuilder {
+        Ok(UpdateContextBuilder {
             project,
             lock_file: LockFile::default(),
             outdated_environments: None,
@@ -1518,7 +1527,7 @@ impl<'p> UpdateContext<'p> {
             mapping_client: None,
             command_dispatcher,
             update_targets: None,
-        }
+        })
     }
 
     pub async fn update(mut self) -> miette::Result<LockFileDerivedData<'p>> {
@@ -1967,6 +1976,8 @@ impl<'p> UpdateContext<'p> {
         for environment in project.environments() {
             let environment_name = environment.name().to_string();
             let grouped_env = GroupedEnvironment::from(environment.clone());
+            let grouped_pypi_options = grouped_env.pypi_options();
+            let pypi_prerelease_mode = grouped_pypi_options.prerelease_mode.unwrap_or_default();
 
             let channel_config = project.channel_config();
             let channels: Vec<String> = grouped_env
@@ -1992,6 +2003,7 @@ impl<'p> UpdateContext<'p> {
                         .unwrap_or_default()
                         .into(),
                     exclude_newer: grouped_env.exclude_newer(),
+                    pypi_prerelease_mode: Some(pypi_prerelease_mode.into()),
                 },
             );
 
@@ -1999,7 +2011,11 @@ impl<'p> UpdateContext<'p> {
             for platform in environment.platforms() {
                 if let Some(records) = self.take_latest_repodata_records(&environment, platform) {
                     for record in records.into_inner() {
-                        builder.add_conda_package(&environment_name, platform, record.into());
+                        builder.add_conda_package(
+                            &environment_name,
+                            platform,
+                            record.into_conda_package_data(project.root()),
+                        );
                     }
                 }
                 if let Some(records) = self.take_latest_pypi_records(&environment, platform) {
@@ -2018,7 +2034,7 @@ impl<'p> UpdateContext<'p> {
             // Store the indexes that were used to solve the environment. But only if there
             // are pypi packages.
             if has_pypi_records {
-                builder.set_pypi_indexes(&environment_name, grouped_env.pypi_options().into());
+                builder.set_pypi_indexes(&environment_name, grouped_pypi_options.into());
             }
         }
 
@@ -2181,7 +2197,7 @@ async fn spawn_solve_conda_environment_task(
 
     // Determine the build variants
     let VariantConfig {
-        variants,
+        variant_configuration,
         variant_files,
     } = group.workspace().variants(platform)?;
 
@@ -2217,10 +2233,10 @@ async fn spawn_solve_conda_environment_task(
             channel_priority: channel_priority.into(),
             exclude_newer,
             channel_config,
-            variants: Some(variants),
+            variant_configuration: Some(variant_configuration),
             variant_files: Some(variant_files),
             enabled_protocols: Default::default(),
-            pin_overrides,
+            preferred_build_source: pin_overrides,
         })
         .await
         .map_err(|source| SolveCondaEnvironmentError::SolveFailed {

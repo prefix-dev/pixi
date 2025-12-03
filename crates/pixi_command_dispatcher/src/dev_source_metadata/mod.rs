@@ -1,6 +1,6 @@
 use miette::Diagnostic;
 use pixi_record::{DevSourceRecord, PinnedSourceSpec};
-use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor};
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::PackageName;
 use thiserror::Error;
@@ -47,6 +47,9 @@ pub enum DevSourceMetadataError {
         "the build backend does not support the `conda/outputs` procedure, which is required for dev sources"
     )]
     UnsupportedProtocol,
+
+    #[error("detected a cycle while trying to retrieve dev source metadata")]
+    Cycle,
 }
 
 impl DevSourceMetadataSpec {
@@ -87,7 +90,7 @@ impl DevSourceMetadataSpec {
 
         // Create a SourceAnchor for resolving relative paths in dependencies
         let source_anchor = SourceAnchor::from(pixi_spec::SourceSpec::from(
-            build_backend_metadata.manifest_source.clone(),
+            build_backend_metadata.source.manifest_source().clone(),
         ));
 
         // Create a DevSourceRecord for each output
@@ -98,14 +101,14 @@ impl DevSourceMetadataSpec {
             }
             let record = Self::create_dev_source_record(
                 output,
-                &build_backend_metadata.manifest_source,
+                build_backend_metadata.source.manifest_source(),
                 &source_anchor,
             )?;
             records.push(record);
         }
 
         Ok(DevSourceMetadata {
-            source: build_backend_metadata.manifest_source.clone(),
+            source: build_backend_metadata.source.manifest_source().clone(),
             records,
         })
     }
@@ -139,9 +142,9 @@ impl DevSourceMetadataSpec {
 
                         // Resolve relative paths for source dependencies
                         let resolved_spec = match spec.into_source_or_binary() {
-                            itertools::Either::Left(source_spec) => {
-                                PixiSpec::from(source_anchor.resolve(source_spec))
-                            }
+                            itertools::Either::Left(source_spec) => PixiSpec::from(SourceSpec {
+                                location: source_anchor.resolve(source_spec.location),
+                            }),
                             itertools::Either::Right(binary_spec) => PixiSpec::from(binary_spec),
                         };
                         dependencies.insert(name, resolved_spec);
@@ -181,7 +184,11 @@ impl DevSourceMetadataSpec {
         Ok(DevSourceRecord {
             name: output.metadata.name.clone(),
             source: source.clone(),
-            variants: variant_values,
+            variants: variant_values
+                .clone()
+                .into_iter()
+                .map(|(k, v)| (k, pixi_variant::VariantValue::from(v)))
+                .collect(),
             dependencies: all_dependencies,
             constraints: all_constraints,
         })

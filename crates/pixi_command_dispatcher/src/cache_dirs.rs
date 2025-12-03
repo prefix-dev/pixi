@@ -4,6 +4,7 @@ use pixi_consts::consts;
 
 use crate::build::BuildCache;
 use crate::cache::build_backend_metadata::BuildBackendMetadataCache;
+use crate::cache::source_metadata::SourceMetadataCache;
 
 pub struct CacheDirs {
     /// The root cache directory, all other cache directories are derived from
@@ -148,7 +149,7 @@ impl CacheDirs {
             self.build().join(format!(
                 "{}-{}",
                 consts::CACHED_SOURCE_METADATA,
-                BuildBackendMetadataCache::CACHE_SUFFIX
+                SourceMetadataCache::CACHE_SUFFIX
             ))
         })
     }

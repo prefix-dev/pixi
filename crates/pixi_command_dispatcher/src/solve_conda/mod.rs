@@ -129,7 +129,7 @@ impl SolveCondaEnvironmentSpec {
                 .source_specs
                 .into_specs()
                 .map(|(name, spec)| {
-                    MatchSpec::from_nameless(spec.to_nameless_match_spec(), Some(name))
+                    MatchSpec::from_nameless(spec.to_nameless_match_spec(), Some(name.into()))
                 })
                 .collect::<Vec<_>>();
 
@@ -159,9 +159,9 @@ impl SolveCondaEnvironmentSpec {
                 .map(|name| {
                     let prefixed_name = format!("__pixi_dev_source_{}", name.as_normalized());
                     MatchSpec {
-                        name: Some(rattler_conda_types::PackageName::new_unchecked(
-                            prefixed_name,
-                        )),
+                        name: Some(
+                            rattler_conda_types::PackageName::new_unchecked(prefixed_name).into(),
+                        ),
                         ..MatchSpec::default()
                     }
                 })
@@ -188,7 +188,7 @@ impl SolveCondaEnvironmentSpec {
                         channel: None,
                     };
                     let mut record = record.clone();
-                    record.build_source = source_metadata.build_source.clone();
+                    record.build_source = source_metadata.source.build_source().cloned();
                     url_to_source_package.insert(url, (record, repodata_record));
                 }
             }
@@ -218,7 +218,8 @@ impl SolveCondaEnvironmentSpec {
                                     .clone()
                                     .try_into_nameless_match_spec_ref(&self.channel_config)
                                     .unwrap_or_default();
-                                MatchSpec::from_nameless(nameless, Some(name.clone())).to_string()
+                                MatchSpec::from_nameless(nameless, Some(name.clone().into()))
+                                    .to_string()
                             })
                             .collect(),
                         constrains: dev_source
@@ -231,7 +232,7 @@ impl SolveCondaEnvironmentSpec {
                                     .try_into_nameless_match_spec(&self.channel_config)
                                     .ok()?;
                                 Some(
-                                    MatchSpec::from_nameless(nameless, Some(name.clone()))
+                                    MatchSpec::from_nameless(nameless, Some(name.clone().into()))
                                         .to_string(),
                                 )
                             })
@@ -340,7 +341,7 @@ fn unique_dev_source_url(dev_source: &pixi_record::DevSourceRecord) -> Url {
     pairs.append_pair("name", dev_source.name.as_source());
 
     for (key, value) in &dev_source.variants {
-        pairs.append_pair(&format!("_{key}"), value);
+        pairs.append_pair(&format!("_{key}"), value.to_string().as_str());
     }
 
     drop(pairs);
