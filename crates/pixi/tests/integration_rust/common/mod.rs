@@ -13,7 +13,7 @@ use std::{
     str::FromStr,
 };
 
-use builders::{BuildBuilder, LockBuilder, SearchBuilder};
+use builders::{LockBuilder, SearchBuilder};
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi_cli::LockFileUsageConfig;
@@ -46,8 +46,9 @@ use thiserror::Error;
 
 use self::builders::{HasDependencyConfig, RemoveBuilder};
 use crate::common::builders::{
-    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, ProjectChannelRemoveBuilder,
-    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
+    AddBuilder, BuildBuilder, GlobalInstallBuilder, InitBuilder, InstallBuilder,
+    ProjectChannelAddBuilder, ProjectChannelRemoveBuilder, ProjectEnvironmentAddBuilder,
+    TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
 };
 
 const DEFAULT_PROJECT_CONFIG: &str = r#"
@@ -56,6 +57,16 @@ default-channels = ["https://prefix.dev/conda-forge"]
 [repodata-config."https://prefix.dev"]
 disable-sharded = false
 "#;
+
+/// Returns the path to the root of the workspace.
+pub(crate) fn cargo_workspace_dir() -> &'static Path {
+    Path::new(env!("CARGO_WORKSPACE_DIR"))
+}
+
+/// Returns the path to the `tests/data/workspaces` directory in the repository.
+pub(crate) fn workspaces_dir() -> PathBuf {
+    cargo_workspace_dir().join("tests/data/workspaces")
+}
 
 /// To control the pixi process
 pub struct PixiControl {
@@ -624,6 +635,15 @@ impl PixiControl {
         }
     }
 
+    /// Returns a [`GlobalInstallBuilder`].
+    /// To execute the command and await the result, call `.await` on the return value.
+    pub fn global_install(&self) -> GlobalInstallBuilder {
+        GlobalInstallBuilder::new(
+            self.tmpdir.path().to_path_buf(),
+            self.backend_override.clone(),
+        )
+    }
+
     /// Returns a [`UpdateBuilder]. To execute the command and await the result
     /// call `.await` on the return value.
     pub fn update(&self) -> UpdateBuilder {
@@ -683,10 +703,7 @@ impl PixiControl {
     pub fn build(&self) -> BuildBuilder {
         BuildBuilder {
             args: build::Args {
-                project_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
-                },
+                backend_override: Default::default(),
                 config_cli: Default::default(),
                 lock_and_install_config: Default::default(),
                 target_platform: rattler_conda_types::Platform::current(),
@@ -694,6 +711,7 @@ impl PixiControl {
                 output_dir: PathBuf::from("."),
                 build_dir: None,
                 clean: false,
+                path: Some(self.manifest_path()),
             },
         }
     }

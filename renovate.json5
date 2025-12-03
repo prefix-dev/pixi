@@ -5,6 +5,7 @@
   "enabledManagers": ["github-actions", "pixi", "cargo"],
   "commitMessagePrefix": "chore(ci):",
   "ignorePaths": ["**/examples/**", "**/docs/**", "**/tests/**"],
+  "labels": ["dependencies"],
   "packageRules": [
     {
       "groupName": "GitHub Actions",
@@ -27,24 +28,33 @@
     },
     {
       "description": "We want to update Rust manually and keep it in sync with rust-toolchain",
-      "matchPackageNames": "rust",
+      "matchPackageNames": ["rust"],
       "matchManagers": ["pixi"],
       "enabled": false
     },
     {
-      "groupName": "Cargo",
-      "matchManagers": ["cargo"]
-    },
-    {
-      "groupName": "Cargo-Lock",
+      "groupName": "cargo lockfile maintenance",
       "matchManagers": ["cargo"],
-      "matchUpdateTypes": ["lockFileMaintenance"]
-    },
-    {
-      "description": "We want a separate PR for rattler crates",
-      "matchPackageNames": ["rattler*", "file_url"],
-      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["lockFileMaintenance"],
       "enabled": false
+    },
+    {
+      "groupName": "cargo patches",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["patch"]
+    },
+    {
+      "description": "We want a separate PR for all rattler crates",
+      "matchPackageNames": ["rattler*", "file_url", "coalesced_map", "path_resolver", "simple_spawn_blocking"],
+      "matchManagers": ["cargo"],
+      "groupName": "rattler",
+      "addLabels": ["rattler"]
+    },
+    {
+      "description": "Update uv crates together",
+      "matchSourceUrls": ["https://github.com/astral-sh/uv{/,}**"],
+      "groupName": "uv",
+      "addLabels": ["uv"]
     }
   ]
 }

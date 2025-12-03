@@ -21,6 +21,7 @@ use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
 use pixi_build_discovery::EnabledProtocols;
+use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec,
     Limits, PixiEnvironmentSpec,
@@ -73,7 +74,6 @@ mod global_spec;
 mod manifest;
 mod parsed_manifest;
 pub use global_spec::{FromMatchSpecError, GlobalSpec};
-use pixi_build_frontend::BackendOverride;
 use pixi_utils::reqwest::{LazyReqwestClient, build_lazy_reqwest_clients};
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
@@ -139,6 +139,8 @@ pub struct Project {
     /// The command dispatcher for solving environments
     /// This is wrapped in a `OnceCell` to allow for lazy initialization.
     command_dispatcher: OnceCell<CommandDispatcher>,
+    /// Optional backend override for testing purposes
+    backend_override: Option<BackendOverride>,
 }
 
 impl Debug for Project {
@@ -321,6 +323,7 @@ impl Project {
             repodata_gateway,
             concurrent_downloads_semaphore: OnceCell::new(),
             command_dispatcher: OnceCell::new(),
+            backend_override: None,
         }
     }
 
@@ -487,6 +490,14 @@ impl Project {
         self
     }
 
+    /// Set the backend override for this project (primarily for testing)
+    pub fn with_backend_override(mut self, backend_override: BackendOverride) -> Self {
+        self.backend_override = Some(backend_override);
+        // Clear the command dispatcher so it will be re-initialized with the new backend override
+        self.command_dispatcher = OnceCell::new();
+        self
+    }
+
     /// Returns the environments in this project.
     pub fn environments(&self) -> &IndexMap<EnvironmentName, ParsedEnvironment> {
         &self.manifest.parsed.envs
@@ -553,6 +564,14 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<EnvironmentUpdate> {
+        self.install_environment_with_options(env_name, false).await
+    }
+
+    pub async fn install_environment_with_options(
+        &self,
+        env_name: &EnvironmentName,
+        force_reinstall: bool,
+    ) -> miette::Result<EnvironmentUpdate> {
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
@@ -609,6 +628,12 @@ impl Project {
 
         let prefix = self.environment_prefix(env_name).await?;
 
+        let force_reinstall_packages = if force_reinstall {
+            dependencies_names.iter().cloned().collect()
+        } else {
+            Default::default()
+        };
+
         let result = command_dispatcher
             .install_pixi_environment(InstallPixiEnvironmentSpec {
                 name: env_name.to_string(),
@@ -621,8 +646,8 @@ impl Project {
                 enabled_protocols: EnabledProtocols::default(),
                 installed: None,
                 ignore_packages: None,
-                force_reinstall: Default::default(),
-                variants: None,
+                force_reinstall: force_reinstall_packages,
+                variant_configuration: None,
                 variant_files: None,
             })
             .await?;
@@ -893,7 +918,7 @@ impl Project {
                         .ok_or_else(|| {
                             miette::miette!("Couldn't convert {spec:?} to nameless match spec.")
                         })?,
-                    Some(name.clone()),
+                    Some(name.clone().into()),
                 );
                 Ok(match_spec)
             })
@@ -1351,11 +1376,12 @@ impl Project {
                     max_concurrent_solves: self.config().max_concurrent_solves().into(),
                     ..Limits::default()
                 })
-                .with_backend_overrides(
+                .with_backend_overrides(self.backend_override.clone().unwrap_or_else(|| {
                     BackendOverride::from_env()
-                        .map_err(|e| CommandDispatcherError::BackendOverride(e.into()))?
-                        .unwrap_or_default(),
-                )
+                        .ok()
+                        .flatten()
+                        .unwrap_or_default()
+                }))
                 .execute_link_scripts(match self.config.run_post_link_scripts() {
                     RunPostLinkScripts::Insecure => true,
                     RunPostLinkScripts::False => false,
@@ -1372,7 +1398,7 @@ impl Project {
     ) -> Result<PackageName, InferPackageNameError> {
         let command_dispatcher = self.command_dispatcher()?;
         let checkout = command_dispatcher
-            .pin_and_checkout(source_spec.location, None)
+            .pin_and_checkout(source_spec.location)
             .await
             .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
 
@@ -1381,6 +1407,7 @@ impl Project {
         // Create the metadata spec
         let metadata_spec = BuildBackendMetadataSpec {
             manifest_source: pinned_source_spec,
+            preferred_build_source: None,
             channel_config: self.global_channel_config().clone(),
             channels: self
                 .config()
@@ -1389,10 +1416,9 @@ impl Project {
                 .filter_map(|c| c.clone().into_base_url(self.global_channel_config()).ok())
                 .collect(),
             build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
-            variants: None,
+            variant_configuration: None,
             variant_files: None,
             enabled_protocols: Default::default(),
-            pin_override: None,
         };
 
         // Get the metadata using the command dispatcher

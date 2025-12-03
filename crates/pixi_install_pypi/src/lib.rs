@@ -22,8 +22,8 @@ use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_utils::prefix::Prefix;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
-    BuildIsolation, locked_indexes_to_index_locations, pypi_options_to_build_options,
-    to_exclude_newer, to_index_strategy,
+    BuildIsolation, configure_insecure_hosts_for_tls_bypass, locked_indexes_to_index_locations,
+    pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
@@ -341,8 +341,14 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         let index_strategy = to_index_strategy(self.build_config.index_strategy);
 
+        let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
+            self.context_config.uv_context.allow_insecure_host.clone(),
+            self.context_config.uv_context.tls_no_verify,
+            &index_locations,
+        );
+
         let base_client_builder = BaseClientBuilder::default()
-            .allow_insecure_host(self.context_config.uv_context.allow_insecure_host.clone())
+            .allow_insecure_host(allow_insecure_hosts)
             .keyring(self.context_config.uv_context.keyring_provider)
             .connectivity(Connectivity::Online)
             .extra_middleware(self.context_config.uv_context.extra_middleware.clone());

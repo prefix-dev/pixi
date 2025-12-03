@@ -31,6 +31,15 @@ use serde::Deserialize;
 
 const BACKEND_NAME: &str = "passthrough";
 
+/// Events that can be emitted by the observable backend during method calls.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BackendEvent {
+    /// Emitted when `conda_build_v1` is called
+    CondaBuildV1Called,
+    /// Emitted when `conda_outputs` is called
+    CondaOutputsCalled,
+}
+
 /// An in-memory build backend that simply passes along the information from the
 /// project model to the `conda/outputs` API without any modifications. This
 /// backend is useful for testing and debugging purposes, as it does not perform
@@ -289,4 +298,121 @@ pub struct PassthroughBackendConfig {
 
     /// Build globs
     pub build_globs: Option<BTreeSet<String>>,
+}
+
+/// Observer that allows collecting backend events from an ObservableBackend.
+/// Use the `get_events` method to retrieve all available events.
+pub struct BackendObserver {
+    receiver: tokio::sync::mpsc::UnboundedReceiver<BackendEvent>,
+}
+
+impl BackendObserver {
+    /// Collects all available events from the channel using try_recv.
+    /// This is non-blocking and returns immediately with all events that
+    /// are currently in the channel.
+    pub fn events(&mut self) -> Vec<BackendEvent> {
+        let mut events = Vec::new();
+        while let Ok(event) = self.receiver.try_recv() {
+            events.push(event);
+        }
+        events
+    }
+}
+
+/// An observable wrapper around any InMemoryBackend that emits events through a
+/// channel when methods are called. This is useful for testing to verify that
+/// specific backend methods were invoked.
+pub struct ObservableBackend<T: InMemoryBackend> {
+    inner: T,
+    event_sender: tokio::sync::mpsc::UnboundedSender<BackendEvent>,
+}
+
+impl<T: InMemoryBackend> ObservableBackend<T> {
+    /// Creates a new instantiator for an ObservableBackend wrapping the given backend.
+    /// Returns both the instantiator and a BackendObserver for collecting events.
+    pub fn instantiator<I>(
+        inner_instantiator: I,
+    ) -> (
+        impl InMemoryBackendInstantiator<Backend = Self>,
+        BackendObserver,
+    )
+    where
+        I: InMemoryBackendInstantiator<Backend = T>,
+    {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<BackendEvent>();
+        let observer = BackendObserver { receiver: rx };
+        let instantiator = ObservableBackendInstantiator {
+            inner_instantiator,
+            event_sender: tx,
+        };
+        (instantiator, observer)
+    }
+}
+
+impl<T: InMemoryBackend> InMemoryBackend for ObservableBackend<T> {
+    fn capabilities(&self) -> BackendCapabilities {
+        self.inner.capabilities()
+    }
+
+    fn identifier(&self) -> &str {
+        self.inner.identifier()
+    }
+
+    fn conda_outputs(
+        &self,
+        params: CondaOutputsParams,
+        output_stream: &(dyn BackendOutputStream + Send + 'static),
+    ) -> Result<CondaOutputsResult, Box<CommunicationError>> {
+        // Emit event
+        let _ = self.event_sender.send(BackendEvent::CondaOutputsCalled);
+
+        // Delegate to the inner backend
+        self.inner.conda_outputs(params, output_stream)
+    }
+
+    fn conda_build_v1(
+        &self,
+        params: CondaBuildV1Params,
+        output_stream: &(dyn BackendOutputStream + Send + 'static),
+    ) -> Result<CondaBuildV1Result, Box<CommunicationError>> {
+        // Emit event
+        let _ = self.event_sender.send(BackendEvent::CondaBuildV1Called);
+
+        // Delegate to the inner backend
+        self.inner.conda_build_v1(params, output_stream)
+    }
+}
+
+/// An implementation of the [`InMemoryBackendInstantiator`] that creates an
+/// [`ObservableBackend`] wrapping any other backend.
+pub struct ObservableBackendInstantiator<I, T>
+where
+    I: InMemoryBackendInstantiator<Backend = T>,
+    T: InMemoryBackend,
+{
+    inner_instantiator: I,
+    event_sender: tokio::sync::mpsc::UnboundedSender<BackendEvent>,
+}
+
+impl<I, T> InMemoryBackendInstantiator for ObservableBackendInstantiator<I, T>
+where
+    I: InMemoryBackendInstantiator<Backend = T>,
+    T: InMemoryBackend,
+{
+    type Backend = ObservableBackend<T>;
+
+    fn initialize(
+        &self,
+        params: InitializeParams,
+    ) -> Result<Self::Backend, Box<CommunicationError>> {
+        let inner = self.inner_instantiator.initialize(params)?;
+        Ok(ObservableBackend {
+            inner,
+            event_sender: self.event_sender.clone(),
+        })
+    }
+
+    fn identifier(&self) -> &str {
+        self.inner_instantiator.identifier()
+    }
 }

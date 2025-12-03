@@ -16,7 +16,7 @@ use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, CommandDispatcherError, Executor,
     InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PackageIdentifier,
-    PixiEnvironmentSpec, SourceBuildCacheStatusSpec,
+    PixiEnvironmentSpec, SourceBuildCacheStatusSpec, build::SourceCodeLocation,
 };
 use pixi_config::default_channel_config;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
@@ -153,7 +153,7 @@ pub async fn simple_test() {
                     .into(),
             ],
             channel_config: default_channel_config(),
-            variants: None,
+            variant_configuration: None,
             variant_files: None,
             enabled_protocols: Default::default(),
         })
@@ -589,10 +589,13 @@ async fn source_build_cache_status_clear_works() {
 
     let spec = SourceBuildCacheStatusSpec {
         package: pkg,
-        source: PinnedPathSpec {
-            path: tmp_dir.path().to_string_lossy().into_owned().into(),
-        }
-        .into(),
+        source: SourceCodeLocation::new(
+            PinnedPathSpec {
+                path: tmp_dir.path().to_string_lossy().into_owned().into(),
+            }
+            .into(),
+            None,
+        ),
         channels: Vec::<ChannelUrl>::new(),
         build_environment: build_env,
         channel_config: default_channel_config(),
