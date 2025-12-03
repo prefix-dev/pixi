@@ -28,7 +28,7 @@ Then, create the following two files in the `.devcontainer` directory:
 ```dockerfile title=".devcontainer/Dockerfile"
 FROM mcr.microsoft.com/devcontainers/base:jammy
 
-ARG PIXI_VERSION=v0.59.0
+ARG PIXI_VERSION=v0.60.0
 
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \
@@ -55,7 +55,7 @@ RUN echo 'eval "$(pixi completion -s bash)"' >> /home/vscode/.bashrc
       }
     },
     "features": {
-      "ghcr.io/devcontainers/environments/docker-in-docker:2": {}
+      "ghcr.io/devcontainers/features/docker-in-docker:2": {}
     },
     "mounts": ["source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume"],
     "postCreateCommand": "sudo chown vscode .pixi && pixi install"
