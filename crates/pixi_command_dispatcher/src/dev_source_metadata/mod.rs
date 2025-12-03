@@ -47,6 +47,9 @@ pub enum DevSourceMetadataError {
         "the build backend does not support the `conda/outputs` procedure, which is required for dev sources"
     )]
     UnsupportedProtocol,
+
+    #[error("detected a cycle while trying to retrieve dev source metadata")]
+    Cycle,
 }
 
 impl DevSourceMetadataSpec {

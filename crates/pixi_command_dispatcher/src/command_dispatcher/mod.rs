@@ -32,10 +32,11 @@ use typed_path::Utf8TypedPath;
 use url::UrlCheckoutTask;
 
 use crate::{
-    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, Executor,
-    InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
-    SourceBuildCacheEntry, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout,
-    SourceCheckoutError, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, DevSourceMetadata,
+    DevSourceMetadataError, DevSourceMetadataSpec, Executor, InvalidPathError, PixiEnvironmentSpec,
+    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
+    SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout, SourceCheckoutError,
+    SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     build::BuildCache,
     cache::{
@@ -193,6 +194,7 @@ pub(crate) enum CommandDispatcherContext {
     SourceMetadata(SourceMetadataId),
     SourceBuild(SourceBuildId),
     QuerySourceBuildCache(SourceBuildCacheStatusId),
+    DevSourceMetadata(DevSourceMetadataId),
     InstallPixiEnvironment(InstallPixiEnvironmentId),
     InstantiateToolEnv(InstantiatedToolEnvId),
 }
@@ -230,6 +232,10 @@ pub(crate) struct SourceBuildId(pub usize);
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct SourceBuildCacheStatusId(pub usize);
 
+/// An id that uniquely identifies a dev source metadata request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct DevSourceMetadataId(pub usize);
+
 /// An id that uniquely identifies a tool environment.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct InstantiatedToolEnvId(pub usize);
@@ -245,6 +251,7 @@ pub(crate) enum ForegroundMessage {
     SourceMetadata(SourceMetadataTask),
     SourceBuild(SourceBuildTask),
     QuerySourceBuildCache(SourceBuildCacheStatusTask),
+    DevSourceMetadata(DevSourceMetadataTask),
     GitCheckout(GitCheckoutTask),
     UrlCheckout(UrlCheckoutTask),
     InstallPixiEnvironment(InstallPixiEnvironmentTask),
@@ -318,6 +325,13 @@ pub(crate) type SourceBuildCacheStatusTask = Task<SourceBuildCacheStatusSpec>;
 impl TaskSpec for SourceBuildCacheStatusSpec {
     type Output = Arc<SourceBuildCacheEntry>;
     type Error = SourceBuildCacheStatusError;
+}
+
+pub(crate) type DevSourceMetadataTask = Task<DevSourceMetadataSpec>;
+
+impl TaskSpec for DevSourceMetadataSpec {
+    type Output = DevSourceMetadata;
+    type Error = DevSourceMetadataError;
 }
 
 impl Default for CommandDispatcher {
@@ -501,10 +515,9 @@ impl CommandDispatcher {
     /// - The build backend must support the `conda/outputs` procedure (API v1+)
     pub async fn dev_source_metadata(
         &self,
-        spec: crate::DevSourceMetadataSpec,
-    ) -> Result<crate::DevSourceMetadata, CommandDispatcherError<crate::DevSourceMetadataError>>
-    {
-        spec.request(self.clone()).await
+        spec: DevSourceMetadataSpec,
+    ) -> Result<DevSourceMetadata, CommandDispatcherError<DevSourceMetadataError>> {
+        self.execute_task(spec).await
     }
 
     /// Query the source build cache for a particular source package.
