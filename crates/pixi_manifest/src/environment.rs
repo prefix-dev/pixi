@@ -132,7 +132,7 @@ impl<'de> Deserialize<'de> for EnvironmentName {
 ///
 /// Individual features cannot be used directly, instead they are grouped
 /// together into environments. Environments are then locked and installed.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Environment {
     /// The name of the environment
     pub name: EnvironmentName,
