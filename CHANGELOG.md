@@ -8,7 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### [0.60.0] - 2025-12-03
 #### ✨ Highlights
 
-This release, our first in a month, brings a massive amount of changes and improvements. The Pixi build process continues to get more powerful and stable with every iteration. We especially focused on making development with ROS and the broader robotics ecosystem as smooth as possible. Finally, a major focus for this release was bug fixes and documentation improvements, often driven by the support of our amazing community 🫶
+This release, our first in a month, brings a massive amount of changes and improvements.
+Pixi Build continues to get more powerful and stable with every iteration.
+We especially focused on making development with ROS and the broader robotics ecosystem as smooth as possible.
+Finally, this release contains a lot of bug fixes and documentation improvements, 
+often driven by our amazing community 🫶
 
 
 #### Changed
