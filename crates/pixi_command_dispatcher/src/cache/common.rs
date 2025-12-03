@@ -1,9 +1,6 @@
-use std::{
-    io::SeekFrom,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
-use async_fd_lock::LockWrite;
+use async_fd_lock::{LockRead, LockWrite};
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
@@ -61,7 +58,7 @@ pub trait MetadataCache: Clone + Sized {
             }
         };
 
-        let mut locked_cache_file = cache_file.lock_write().await.map_err(|e| {
+        let mut locked_cache_file = cache_file.lock_read().await.map_err(|e| {
             Self::Error::from_io_error(
                 "locking cache file".to_string(),
                 cache_file_path.clone(),
@@ -176,16 +173,13 @@ pub trait MetadataCache: Clone + Sized {
             serde_json::to_vec(&new_metadata).expect("serialization to JSON should not fail");
 
         // Write to file
-        locked_cache_file
-            .seek(SeekFrom::Start(0))
-            .await
-            .map_err(|e| {
-                Self::Error::from_io_error(
-                    "seeking to start of cache file".to_string(),
-                    cache_file_path.clone(),
-                    e,
-                )
-            })?;
+        locked_cache_file.rewind().await.map_err(|e| {
+            Self::Error::from_io_error(
+                "seeking to start of cache file".to_string(),
+                cache_file_path.clone(),
+                e,
+            )
+        })?;
 
         locked_cache_file.write_all(&bytes).await.map_err(|e| {
             Self::Error::from_io_error(

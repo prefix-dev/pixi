@@ -156,8 +156,8 @@ impl SourceMetadataSpec {
                     source_metadata::WriteResult::Written => {
                         tracing::trace!("Cache updated successfully");
                     }
-                    source_metadata::WriteResult::Conflict(_other_metadata) => {
-                        tracing::debug!(
+                    source_metadata::WriteResult::Conflict(_) => {
+                        tracing::warn!(
                             "Cache was updated by another process during computation (version conflict), using our computed result"
                         );
                     }
@@ -205,8 +205,8 @@ impl SourceMetadataSpec {
                     source_metadata::WriteResult::Written => {
                         tracing::trace!("Cache updated successfully");
                     }
-                    source_metadata::WriteResult::Conflict(_other_metadata) => {
-                        tracing::debug!(
+                    source_metadata::WriteResult::Conflict(_) => {
+                        tracing::warn!(
                             "Cache was updated by another process during computation (version conflict), using our computed result"
                         );
                     }
