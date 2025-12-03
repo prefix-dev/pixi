@@ -2,9 +2,12 @@
 
 pub mod builders;
 pub mod client;
+pub mod git_fixture;
 pub mod logging;
 pub mod package_database;
 pub mod pypi_index;
+
+pub use git_fixture::GitRepoFixture;
 
 use std::{
     ffi::OsString,
@@ -418,7 +421,7 @@ impl PixiControl {
             args: add::Args {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
+                    backend_override: self.backend_override.clone(),
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
                 no_install_config: NoInstallConfig { no_install: true },
@@ -517,7 +520,7 @@ impl PixiControl {
     pub fn project_environment_add(&self, name: EnvironmentName) -> ProjectEnvironmentAddBuilder {
         ProjectEnvironmentAddBuilder {
             manifest_path: Some(self.manifest_path()),
-            args: workspace::environment::add::Args {
+            args: workspace::environment::AddArgs {
                 name,
                 features: None,
                 solve_group: None,

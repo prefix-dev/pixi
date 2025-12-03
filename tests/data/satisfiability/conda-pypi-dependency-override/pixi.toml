@@ -15,8 +15,8 @@ platforms = ["osx-arm64"]
 version = "0.1.0"
 
 [dependencies]
-python = "3.12.*"
 attrs = "23.2.0"
+python = "3.12.*"
 
 [pypi-dependencies]
 consumer = { path = "./projects/consumer", editable = true }

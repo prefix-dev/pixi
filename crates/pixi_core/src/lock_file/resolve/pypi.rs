@@ -29,7 +29,7 @@ use pixi_uv_conversions::{
     ConversionError, as_uv_req, configure_insecure_hosts_for_tls_bypass,
     convert_uv_requirements_to_pep508, into_pinned_git_spec, pypi_options_to_build_options,
     pypi_options_to_index_locations, to_exclude_newer, to_index_strategy, to_normalize,
-    to_requirements, to_uv_normalize, to_uv_version, to_version_specifiers,
+    to_prerelease_mode, to_requirements, to_uv_normalize, to_uv_version, to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -333,14 +333,14 @@ pub async fn resolve_pypi(
     if !conda_python_packages.is_empty() {
         tracing::info!(
             "the following python packages are assumed to be installed by conda: {conda_python_packages}",
-            conda_python_packages =
-                conda_python_packages
-                    .values()
-                    .format_with(", ", |(_, p), f| f(&format_args!(
-                        "{name} {version}",
-                        name = &p.name.as_source(),
-                        version = &p.version
-                    )))
+            conda_python_packages = conda_python_packages
+                .values()
+                .format_with(", ", |(_, p), f| f(&format_args!(
+                    "{name} {version}",
+                    name = &p.name.as_source(),
+                    version = &p.version
+                )))
+                .to_string()
         );
     } else {
         tracing::info!("there are no python packages installed by conda");
@@ -420,6 +420,7 @@ pub async fn resolve_pypi(
         .markers(&marker_environment)
         .keyring(context.keyring_provider)
         .connectivity(Connectivity::Online)
+        .native_tls(context.use_native_tls)
         .extra_middleware(context.extra_middleware.clone());
 
     let mut uv_client_builder =
@@ -484,12 +485,15 @@ pub async fn resolve_pypi(
         SolveStrategy::LowestDirect => ResolutionMode::LowestDirect,
     };
 
+    let prerelease_mode = to_prerelease_mode(pypi_options.prerelease_mode.as_ref());
+
     // Hi maintainers! For anyone coming here, if you expose any additional `uv`
     // options, similar to `index_strategy`, make sure to include them in this
     // struct as well instead of relying on the default. Otherwise there be
     // panics.
     let options = Options {
         resolution_mode,
+        prerelease_mode,
         index_strategy,
         build_options: build_options.clone(),
         exclude_newer: exclude_newer.map(to_exclude_newer).unwrap_or_default(),

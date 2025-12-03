@@ -16,7 +16,10 @@ miette = { workspace = true }
 pathdiff = { workspace = true }
 pixi_git = { workspace = true }
 pixi_spec = { workspace = true, features = ["rattler_lock"] }
-pixi_variant = { workspace = true, features = ["rattler_lock", "pixi_build_types"] }
+pixi_variant = { workspace = true, features = [
+  "rattler_lock",
+  "pixi_build_types",
+] }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true, features = ["serde"] }
 rattler_lock = { workspace = true }

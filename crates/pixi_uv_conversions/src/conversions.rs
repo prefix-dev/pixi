@@ -8,7 +8,8 @@ use miette::IntoDiagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_git::{git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha};
 use pixi_manifest::pypi::pypi_options::{
-    FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PypiOptions,
+    FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PrereleaseMode,
+    PypiOptions,
 };
 use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
 use pixi_spec::GitReference as PixiReference;
@@ -242,6 +243,19 @@ pub fn to_index_strategy(
         }
     } else {
         uv_configuration::IndexStrategy::default()
+    }
+}
+
+/// Convert pixi `PrereleaseMode` to `uv_resolver::PrereleaseMode`
+pub fn to_prerelease_mode(prerelease_mode: Option<&PrereleaseMode>) -> uv_resolver::PrereleaseMode {
+    match prerelease_mode {
+        Some(PrereleaseMode::Disallow) => uv_resolver::PrereleaseMode::Disallow,
+        Some(PrereleaseMode::Allow) => uv_resolver::PrereleaseMode::Allow,
+        Some(PrereleaseMode::IfNecessary) => uv_resolver::PrereleaseMode::IfNecessary,
+        Some(PrereleaseMode::Explicit) => uv_resolver::PrereleaseMode::Explicit,
+        Some(PrereleaseMode::IfNecessaryOrExplicit) | None => {
+            uv_resolver::PrereleaseMode::IfNecessaryOrExplicit
+        }
     }
 }
 
