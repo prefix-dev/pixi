@@ -497,7 +497,7 @@ impl IntoFuture for InstallBuilder {
 }
 
 pub struct ProjectEnvironmentAddBuilder {
-    pub args: workspace::environment::add::Args,
+    pub args: workspace::environment::AddArgs,
     pub manifest_path: Option<PathBuf>,
 }
 

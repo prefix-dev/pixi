@@ -42,13 +42,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           submodules: recursive
 
       - uses: prefix-dev/setup-pixi@main
         with:
           environments: docs
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build docs for test
         run: |
@@ -62,7 +63,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           # fetch everything so we can checkout the tag
           fetch-depth: 0
@@ -77,6 +78,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           environments: docs
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Configure Git user
         run: |
@@ -103,7 +105,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           # fetch everything so we can checkout the tag
           fetch-depth: 0
@@ -112,6 +114,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           environments: docs
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Configure Git user
         run: |

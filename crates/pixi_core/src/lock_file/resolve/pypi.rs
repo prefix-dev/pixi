@@ -420,6 +420,7 @@ pub async fn resolve_pypi(
         .markers(&marker_environment)
         .keyring(context.keyring_provider)
         .connectivity(Connectivity::Online)
+        .native_tls(context.use_native_tls)
         .extra_middleware(context.extra_middleware.clone());
 
     let mut uv_client_builder =
