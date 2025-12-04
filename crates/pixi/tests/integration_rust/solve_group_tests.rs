@@ -786,6 +786,7 @@ async fn test_disabled_mapping() {
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_custom_mapping_ignores_backwards_compatibility() {
     setup_tracing();
 

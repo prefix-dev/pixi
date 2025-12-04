@@ -160,6 +160,7 @@ async fn test_update_single_package() {
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_update_conda_package_doesnt_update_git_pypi() {
     setup_tracing();
 
@@ -245,6 +246,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
     setup_tracing();
 
@@ -293,6 +295,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_update_git_pypi_when_requested() {
     setup_tracing();
 
