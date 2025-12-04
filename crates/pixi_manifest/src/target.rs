@@ -310,7 +310,7 @@ impl WorkspaceTarget {
         // the original PixiPypiSpec if provided
         let name = PypiPackageName::from_normalized(requirement.name.clone());
         let mut requirement = match pixi_requirement {
-            Some(existing) => existing.update_requirement(requirement).map_err(Box::new)?,
+            Some(existing) => existing.update_requirement(requirement)?,
             None => PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?,
         };
         if let Some(editable) = editable {

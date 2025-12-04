@@ -397,7 +397,7 @@ impl ManifestDocument {
             || editable.is_some_and(|e| e)
         {
             let mut pypi_requirement = match pixi_requirement {
-                Some(existing) => existing.update_requirement(requirement).map_err(Box::new)?,
+                Some(existing) => existing.update_requirement(requirement)?,
                 None => PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?,
             };
             if let Some(editable) = editable {

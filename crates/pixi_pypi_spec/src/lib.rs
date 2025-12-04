@@ -172,8 +172,8 @@ impl PixiPypiSpec {
     pub fn update_requirement(
         &self,
         requirement: &pep508_rs::Requirement,
-    ) -> Result<Self, Pep508ToPyPiRequirementError> {
-        let mut updated: PixiPypiSpec = requirement.clone().try_into()?;
+    ) -> Result<Self, Box<Pep508ToPyPiRequirementError>> {
+        let mut updated: PixiPypiSpec = requirement.clone().try_into().map_err(Box::new)?;
 
         match (&mut updated, self) {
             // Both are Version variants - copy the index
