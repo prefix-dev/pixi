@@ -15,9 +15,9 @@ use pixi_build_frontend::BackendOverride;
 use crate::common::{
     GitRepoFixture, LockFileExt, PixiControl,
     builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig},
-    package_database::{Package, PackageDatabase},
 };
 use crate::setup_tracing;
+use pixi_test_utils::{MockRepoData, Package};
 
 /// Test add functionality for different types of packages.
 /// Run, dev, build
@@ -25,7 +25,7 @@ use crate::setup_tracing;
 async fn add_functionality() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package `foo` that depends on `bar` both set to version 1.
     package_database.add_package(Package::build("rattler", "1").finish());
@@ -136,7 +136,7 @@ async fn add_with_channel() {
 async fn add_functionality_union() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package `foo` that depends on `bar` both set to version 1.
     package_database.add_package(Package::build("rattler", "1").finish());
@@ -216,7 +216,7 @@ async fn add_functionality_union() {
 async fn add_functionality_os() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package `foo` that depends on `bar` both set to version 1.
     package_database.add_package(
@@ -258,7 +258,6 @@ async fn add_functionality_os() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn add_pypi_functionality() {
     use crate::common::git_fixture::GitRepoFixture;
-    use crate::common::package_database::{Package, PackageDatabase};
     use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 
     setup_tracing();
@@ -289,7 +288,7 @@ async fn add_pypi_functionality() {
         .unwrap();
 
     // Create local conda channel with Python for multiple platforms
-    let mut package_db = PackageDatabase::default();
+    let mut package_db = MockRepoData::default();
     for platform in [Platform::current(), Platform::Linux64, Platform::Osx64] {
         package_db.add_package(
             Package::build("python", "3.12.0")
@@ -438,7 +437,6 @@ async fn add_pypi_functionality() {
 /// Test the `pixi add --pypi` functionality with extras (using local mocks)
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn add_pypi_extra_functionality() {
-    use crate::common::package_database::{Package, PackageDatabase};
     use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 
     setup_tracing();
@@ -452,7 +450,7 @@ async fn add_pypi_extra_functionality() {
         .unwrap();
 
     // Create local conda channel with Python
-    let mut package_db = PackageDatabase::default();
+    let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.12.0")
             .with_subdir(Platform::current())
@@ -580,7 +578,7 @@ async fn add_unconstrained_dependency() {
     setup_tracing();
 
     // Create a channel with a single package
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("foobar", "1").finish());
     package_database.add_package(Package::build("bar", "1").finish());
     let local_channel = package_database.into_channel().await.unwrap();
@@ -635,7 +633,7 @@ async fn pinning_dependency() {
     setup_tracing();
 
     // Create a channel with a single package
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("foobar", "1").finish());
     package_database.add_package(Package::build("python", "3.13").finish());
 
@@ -706,7 +704,7 @@ async fn add_dependency_pinning_strategy() {
     setup_tracing();
 
     // Create a channel with two packages
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("foo", "1").finish());
     package_database.add_package(Package::build("bar", "1").finish());
     package_database.add_package(Package::build("python", "3.13").finish());
@@ -1169,7 +1167,7 @@ async fn add_dependency_dont_create_project() {
     setup_tracing();
 
     // Create a channel with two packages
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("foo", "1").finish());
     package_database.add_package(Package::build("bar", "1").finish());
     package_database.add_package(Package::build("python", "3.13").finish());

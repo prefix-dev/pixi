@@ -3,10 +3,10 @@ use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme, NamedSource, Re
 use std::path::Path;
 
 pub mod git_fixture;
-pub mod package_database;
+pub mod mock_repo_data;
 
 pub use git_fixture::GitRepoFixture;
-pub use package_database::{LocalChannel, Package, PackageBuilder, PackageDatabase};
+pub use mock_repo_data::{LocalChannel, MockRepoData, Package, PackageBuilder};
 
 /// Format a TOML parse error into a string that can be used to generate
 /// snapshots.

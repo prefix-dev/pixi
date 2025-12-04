@@ -6,11 +6,9 @@ use tempfile::tempdir;
 use typed_path::Utf8TypedPath;
 
 use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
-use crate::common::{
-    LockFileExt, PixiControl,
-    package_database::{Package, PackageDatabase},
-};
+use crate::common::{LockFileExt, PixiControl};
 use crate::setup_tracing;
+use pixi_test_utils::{MockRepoData, Package};
 
 /// This tests if we can resolve pyproject optional dependencies recursively
 /// before when running `pixi list -e all`, this would have not included numpy
@@ -29,7 +27,7 @@ async fn pyproject_optional_dependencies_resolve_recursively() {
     let platform = Platform::current();
     let platform_str = platform.to_string();
 
-    let mut package_db = PackageDatabase::default();
+    let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.11.0")
             .with_subdir(platform)
@@ -746,10 +744,9 @@ async fn test_pinned_help_message() {
     setup_tracing();
 
     // Construct a minimal local conda channel with python and pandas==1.0.0
-    use crate::common::package_database::{Package, PackageDatabase};
     use rattler_conda_types::Platform;
 
-    let mut conda_db = PackageDatabase::default();
+    let mut conda_db = MockRepoData::default();
     // Python runtime
     conda_db.add_package(
         Package::build("python", "3.12.0")
@@ -813,7 +810,7 @@ async fn test_uv_index_correctly_parsed() {
     let platform = Platform::current();
 
     // Create local conda channel with Python
-    let mut package_db = PackageDatabase::default();
+    let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.12.0")
             .with_subdir(platform)
@@ -899,7 +896,7 @@ async fn test_prerelease_mode_allow() {
 
     let platform = Platform::current();
 
-    let mut package_db = PackageDatabase::default();
+    let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.12.0")
             .with_subdir(platform)
@@ -960,7 +957,7 @@ async fn test_prerelease_mode_disallow() {
 
     let platform = Platform::current();
 
-    let mut package_db = PackageDatabase::default();
+    let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.12.0")
             .with_subdir(platform)

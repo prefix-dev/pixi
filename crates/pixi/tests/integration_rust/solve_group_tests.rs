@@ -16,16 +16,16 @@ use crate::common::{
     LockFileExt, PixiControl,
     builders::HasDependencyConfig,
     client::OfflineMiddleware,
-    package_database::{Package, PackageDatabase},
     pypi_index::{Database as PyPIDatabase, PyPIPackage},
 };
 use crate::setup_tracing;
+use pixi_test_utils::{MockRepoData, Package};
 
 #[tokio::test]
 async fn conda_solve_group_functionality() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package `foo` with 3 different versions
     package_database.add_package(Package::build("foo", "1").finish());
@@ -789,7 +789,7 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
     setup_tracing();
 
     // Create local conda channel with boltons and python packages
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("python", "3.12.0")
             .with_subdir(Platform::Linux64)

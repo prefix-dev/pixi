@@ -1,15 +1,12 @@
 //! This modules defines [`PackageDatabase`], a struct that holds a bunch of easily constructable
 //! package definitions. Using this struct it becomes easier to generate controllable fake repodata.
 
-// There are a bunch of functions that remain unused in tests but might be useful in the future.
-#![allow(dead_code)]
-
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{
-    package::ArchiveType, ChannelInfo, PackageName, PackageRecord, PackageUrl, Platform, RepoData,
-    VersionWithSource,
+    ChannelInfo, PackageName, PackageRecord, PackageUrl, Platform, RepoData, VersionWithSource,
+    package::ArchiveType,
 };
 use std::{collections::HashSet, path::Path};
 use tempfile::TempDir;
@@ -17,7 +14,7 @@ use url::Url;
 
 pub struct LocalChannel {
     dir: TempDir,
-    db: PackageDatabase,
+    _db: MockRepoData,
 }
 
 impl LocalChannel {
@@ -28,11 +25,11 @@ impl LocalChannel {
 
 /// A database of packages
 #[derive(Default, Clone, Debug)]
-pub struct PackageDatabase {
+pub struct MockRepoData {
     packages: Vec<Package>,
 }
 
-impl PackageDatabase {
+impl MockRepoData {
     /// Adds a package to the database
     pub fn with_package(mut self, package: Package) -> Self {
         self.packages.push(package);
@@ -99,7 +96,7 @@ impl PackageDatabase {
     pub async fn into_channel(self) -> miette::Result<LocalChannel> {
         let dir = TempDir::new().into_diagnostic()?;
         self.write_repodata(dir.path()).await?;
-        Ok(LocalChannel { dir, db: self })
+        Ok(LocalChannel { dir, _db: self })
     }
 
     /// Returns all packages for the specified platform.

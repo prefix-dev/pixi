@@ -37,9 +37,9 @@ use crate::common::{
     builders::{
         HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig, string_from_iter,
     },
-    package_database::{Package, PackageDatabase},
 };
 use crate::setup_tracing;
+use pixi_test_utils::{MockRepoData, Package};
 
 /// Should add a python version to the environment and lock file that matches
 /// the specified version and run it
@@ -97,7 +97,7 @@ async fn install_run_python() {
 async fn test_incremental_lock_file() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package `foo` that depends on `bar` both set to version 1.
     package_database.add_package(Package::build("bar", "1").finish());
@@ -520,13 +520,13 @@ async fn test_channels_changed() {
     setup_tracing();
 
     // Write a channel with a package `bar` with only one version
-    let mut package_database_a = PackageDatabase::default();
+    let mut package_database_a = MockRepoData::default();
     package_database_a.add_package(Package::build("bar", "2").finish());
     let channel_a = package_database_a.into_channel().await.unwrap();
 
     // Write another channel with a package `bar` with only one version but another
     // one.
-    let mut package_database_b = PackageDatabase::default();
+    let mut package_database_b = MockRepoData::default();
     package_database_b.add_package(Package::build("bar", "1").finish());
     let channel_b = package_database_b.into_channel().await.unwrap();
 
@@ -1386,7 +1386,7 @@ async fn install_s3() {
 async fn test_exclude_newer() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Create a channel with two packages with different timestamps
     package_database.add_package(

@@ -105,9 +105,7 @@ pub async fn simple_test() {
 
     // Use a local channel (backend_channel_1 has pixi-build-api-version which is needed for builds)
     let channel_dir = cargo_workspace_dir().join("tests/data/channels/channels/backend_channel_1");
-    let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir)
-        .unwrap()
-        .into();
+    let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
 
     let (reporter, events) = EventReporter::new();
     let (tool_platform, tool_virtual_packages) = tool_platform();
@@ -544,8 +542,7 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
 #[tokio::test]
 pub async fn instantiate_backend_with_from_source() {
     // Use existing backend_channel_1 which has pixi-build-api-version package with actual .conda files
-    let channel_dir = cargo_workspace_dir()
-        .join("tests/data/channels/channels/backend_channel_1");
+    let channel_dir = cargo_workspace_dir().join("tests/data/channels/channels/backend_channel_1");
     let channel_url = url::Url::from_directory_path(&channel_dir).unwrap();
 
     // Copy source-backends workspace to temp directory so we can modify the channel

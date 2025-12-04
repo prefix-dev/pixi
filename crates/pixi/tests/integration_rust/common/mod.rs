@@ -4,7 +4,6 @@ pub mod builders;
 pub mod client;
 pub mod git_fixture;
 pub mod logging;
-pub mod package_database;
 pub mod pypi_index;
 
 pub use git_fixture::GitRepoFixture;

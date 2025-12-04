@@ -7,9 +7,9 @@ use tempfile::TempDir;
 use url::Url;
 
 use crate::common::PixiControl;
-use crate::common::package_database::{Package, PackageDatabase};
 use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 use crate::setup_tracing;
+use pixi_test_utils::{MockRepoData, Package};
 
 #[tokio::test]
 async fn pypi_dependency_index_preserved_on_upgrade() {
@@ -18,7 +18,7 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
     let platform = Platform::current();
 
     // Create local conda channel with python
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("python", "3.12.0")
             .with_subdir(platform)
@@ -104,7 +104,7 @@ async fn upgrade_command_updates_platform_specific_version() {
     setup_tracing();
 
     let platform = Platform::current();
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("python", "3.12.0").finish());
     let channel_dir = TempDir::new().unwrap();
     package_database
@@ -150,7 +150,7 @@ async fn upgrade_command_updates_platform_specific_version() {
 async fn upgrade_command_updates_all_platform_specific_targets() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("python", "3.12.0").finish());
     let channel_dir = TempDir::new().unwrap();
     package_database
