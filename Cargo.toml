@@ -81,6 +81,7 @@ pin-project-lite = "0.2.16"
 pixi = { path = "crates/pixi" }
 pixi_allocator = { path = "crates/pixi_allocator" }
 pixi_api = { path = "crates/pixi_api" }
+pixi_auth = { path = "crates/pixi_auth", default-features = false }
 pixi_build_backend_passthrough = { path = "crates/pixi_build_backend_passthrough" }
 pixi_build_discovery = { path = "crates/pixi_build_discovery" }
 pixi_build_frontend = { path = "crates/pixi_build_frontend" }

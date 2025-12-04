@@ -41,6 +41,7 @@ miette = { workspace = true, features = ["fancy-no-backtrace"] }
 pathdiff = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_api = { workspace = true }
+pixi_auth = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
 pixi_config = { workspace = true }
@@ -117,6 +118,7 @@ signal-hook = { workspace = true }
 default = []
 native-tls = [
   "pixi_api/native-tls",
+  "pixi_auth/native-tls",
   "pixi_utils/native-tls",
   "rattler/native-tls",
   "reqwest/native-tls",
@@ -126,6 +128,7 @@ native-tls = [
 online_tests = []
 rustls-tls = [
   "pixi_api/rustls-tls",
+  "pixi_auth/rustls-tls",
   "pixi_utils/rustls-tls",
   "rattler/rustls-tls",
   "reqwest/rustls-tls",

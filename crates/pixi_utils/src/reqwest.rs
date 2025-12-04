@@ -1,21 +1,17 @@
 use std::{
-    any::Any,
     borrow::Cow,
     collections::HashMap,
-    path::PathBuf,
     sync::{Arc, LazyLock},
     time::{Duration, Instant},
 };
 
 use miette::IntoDiagnostic;
+use pixi_auth::{get_auth_middleware, get_auth_store};
 use pixi_config::Config;
 use pixi_consts::consts;
 use rattler_networking::{
-    AuthenticationMiddleware, AuthenticationStorage, GCSMiddleware, LazyClient, MirrorMiddleware,
-    OciMiddleware, S3Middleware,
-    authentication_storage::{self, AuthenticationStorageError},
-    mirror_middleware::Mirror,
-    retry_policies::ExponentialBackoff,
+    GCSMiddleware, LazyClient, MirrorMiddleware, OciMiddleware, S3Middleware,
+    mirror_middleware::Mirror, retry_policies::ExponentialBackoff,
 };
 use reqwest::Client;
 use reqwest_middleware::{ClientWithMiddleware, Middleware};
@@ -25,45 +21,6 @@ use reqwest_retry::RetryTransientMiddleware;
 /// TODO: At some point we might want to make this configurable.
 pub fn default_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff::builder().build_with_max_retries(3)
-}
-
-fn auth_store(config: &Config) -> Result<AuthenticationStorage, AuthenticationStorageError> {
-    let mut store = AuthenticationStorage::from_env_and_defaults()?;
-    if let Some(auth_file) = config.authentication_override_file() {
-        tracing::info!("Loading authentication from file: {:?}", auth_file);
-
-        if !auth_file.exists() {
-            tracing::warn!("Authentication file does not exist: {:?}", auth_file);
-        }
-
-        // this should be the first place before the keyring authentication
-        // i.e. either index 0 if RATTLER_AUTH_FILE is not set or index 1 if it is
-        let first_storage = store.backends.first().unwrap();
-        let index = if first_storage.type_id()
-            == std::any::TypeId::of::<authentication_storage::backends::file::FileStorage>()
-        {
-            1
-        } else {
-            0
-        };
-        store.backends.insert(
-            index,
-            Arc::from(
-                authentication_storage::backends::file::FileStorage::from_path(PathBuf::from(
-                    &auth_file,
-                ))?,
-            ),
-        );
-    }
-    Ok(store)
-}
-
-fn auth_middleware(
-    config: &Config,
-) -> Result<AuthenticationMiddleware, AuthenticationStorageError> {
-    Ok(AuthenticationMiddleware::from_auth_storage(auth_store(
-        config,
-    )?))
 }
 
 pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
@@ -147,11 +104,11 @@ pub fn build_reqwest_middleware_stack(
     s3_config.extend(s3_config_global);
     s3_config.extend(s3_config_project);
 
-    let store = auth_store(config).into_diagnostic()?;
+    let store = get_auth_store(config).into_diagnostic()?;
     result.push(Arc::new(S3Middleware::new(s3_config, store)));
 
     result.push(Arc::new(
-        auth_middleware(config).expect("could not create auth middleware"),
+        get_auth_middleware(config).expect("could not create auth middleware"),
     ));
 
     result.push(Arc::new(RetryTransientMiddleware::new_with_policy(
@@ -253,7 +210,7 @@ pub fn uv_middlewares(config: &Config) -> Vec<Arc<dyn Middleware>> {
     // Add authentication middleware after mirror rewriting so it can authenticate
     // against the rewritten URLs (important for mirrors that require different
     // credentials)
-    if let Ok(auth_middleware) = auth_middleware(config) {
+    if let Ok(auth_middleware) = get_auth_middleware(config) {
         middlewares.push(Arc::new(auth_middleware));
     }
     middlewares

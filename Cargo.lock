@@ -4385,7 +4385,7 @@ dependencies = [
  "crc32c",
  "futures",
  "getrandom 0.2.16",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 1.0.1",
  "log",
  "md-5",
@@ -4873,6 +4873,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_auth"
+version = "0.1.0"
+dependencies = [
+ "pixi_config",
+ "rattler_networking",
+ "tracing",
+]
+
+[[package]]
 name = "pixi_build_backend_passthrough"
 version = "0.1.0"
 dependencies = [
@@ -4990,6 +4999,7 @@ dependencies = [
  "pathdiff",
  "pep508_rs",
  "pixi_api",
+ "pixi_auth",
  "pixi_build_frontend",
  "pixi_command_dispatcher",
  "pixi_config",
@@ -5740,6 +5750,7 @@ dependencies = [
  "itertools 0.14.0",
  "miette 7.6.0",
  "pep508_rs",
+ "pixi_auth",
  "pixi_config",
  "pixi_consts",
  "pixi_variant",
@@ -6475,7 +6486,7 @@ checksum = "bb7df0b22cfc135ea3ebf4672557f413d784df96a63ea0c1f132929be451ca9a"
 dependencies = [
  "console 0.16.1",
  "fs-err",
- "indexmap 2.12.0",
+ "indexmap 2.12.1",
  "rattler_conda_types",
  "serde",
  "serde_json",
@@ -6983,7 +6994,7 @@ dependencies = [
  "hex",
  "hmac",
  "home",
- "http 1.3.1",
+ "http 1.4.0",
  "log",
  "percent-encoding",
  "quick-xml 0.37.5",
