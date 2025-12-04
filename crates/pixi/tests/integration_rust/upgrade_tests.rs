@@ -178,7 +178,6 @@ async fn upgrade_command_updates_all_platform_specific_targets() {
 /// - Manifest specifies `foo = { version = "==1.0.0", index = "<custom>" }`
 ///
 /// Expected: After upgrade, `foo` should be upgraded to 2.0.0 (from custom index)
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 #[tokio::test]
 async fn pypi_dependency_upgrade_uses_custom_index() {
     setup_tracing();
