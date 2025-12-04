@@ -162,6 +162,45 @@ impl PixiPypiSpec {
             PixiPypiSpec::RawVersion(_) => &[],
         }
     }
+
+    /// Updates this spec with a new PEP 508 requirement, preserving pixi-specific
+    /// fields (`index`, `extras`) from self.
+    ///
+    /// This is useful when updating a dependency (e.g., during `pixi upgrade`)
+    /// where the version changes but pixi-specific fields like `index` should
+    /// be preserved from the original manifest entry.
+    pub fn update_requirement(
+        &self,
+        requirement: &pep508_rs::Requirement,
+    ) -> Result<Self, Pep508ToPyPiRequirementError> {
+        let mut updated: PixiPypiSpec = requirement.clone().try_into()?;
+
+        match (&mut updated, self) {
+            // Both are Version variants - copy the index
+            (
+                PixiPypiSpec::Version {
+                    index: new_index, ..
+                },
+                PixiPypiSpec::Version { index, .. },
+            ) => {
+                *new_index = index.clone();
+            }
+            // Updated is RawVersion but self was Version with index or extras
+            // Convert to Version to preserve these fields
+            (PixiPypiSpec::RawVersion(version), PixiPypiSpec::Version { index, extras, .. })
+                if index.is_some() || !extras.is_empty() =>
+            {
+                updated = PixiPypiSpec::Version {
+                    version: version.clone(),
+                    extras: extras.clone(),
+                    index: index.clone(),
+                };
+            }
+            _ => {}
+        }
+
+        Ok(updated)
+    }
 }
 
 #[cfg(test)]

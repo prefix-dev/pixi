@@ -48,8 +48,8 @@ use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
     BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy,
-    IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
-    SourceDist, ToUrlError,
+    Index, IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution,
+    ResolvedDist, SourceDist, ToUrlError,
 };
 use uv_git_types::GitUrl;
 use uv_pep508::VerbatimUrl;
@@ -346,6 +346,38 @@ pub async fn resolve_pypi(
         tracing::info!("there are no python packages installed by conda");
     }
 
+    // Extract per-package indexes from dependencies before consuming them.
+    // These will be added to IndexLocations as explicit indexes so that the resolver
+    // can query them when packages reference them via IndexMetadata.
+    let per_package_indexes: Vec<Index> = dependencies
+        .values()
+        .flat_map(|specs| specs.iter())
+        .filter_map(|spec| match spec {
+            PixiPypiSpec::Version {
+                index: Some(url), ..
+            } => Some(url.clone()),
+            _ => None,
+        })
+        .collect::<HashSet<_>>() // Deduplicate URLs
+        .into_iter()
+        .map(|url| {
+            let verbatim_url = VerbatimUrl::from_url(DisplaySafeUrl::from(url));
+            let index_url = IndexUrl::from(verbatim_url);
+            // Create an explicit index - this means it will ONLY be used for packages
+            // that explicitly reference it via IndexMetadata
+            let mut index = Index::from_extra_index_url(index_url);
+            index.explicit = true;
+            index
+        })
+        .collect();
+
+    if !per_package_indexes.is_empty() {
+        tracing::debug!(
+            "found {} per-package explicit indexes in dependencies",
+            per_package_indexes.len()
+        );
+    }
+
     let mut requirements = dependencies
         .into_iter()
         .flat_map(|(name, req)| {
@@ -404,6 +436,9 @@ pub async fn resolve_pypi(
 
     let index_locations =
         pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?;
+
+    // Combine with per-package explicit indexes extracted earlier
+    let index_locations = index_locations.combine(per_package_indexes, vec![], false);
 
     // TODO: create a cached registry client per index_url set?
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());

@@ -287,6 +287,7 @@ impl WorkspaceTarget {
     pub(crate) fn try_add_pep508_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
+        pixi_requirement: Option<&PixiPypiSpec>,
         editable: Option<bool>,
         dependency_overwrite_behavior: DependencyOverwriteBehavior,
     ) -> Result<bool, DependencyError> {
@@ -305,9 +306,13 @@ impl WorkspaceTarget {
             }
         }
 
-        // Convert to an internal representation
+        // Convert to an internal representation, preserving fields like `index` from
+        // the original PixiPypiSpec if provided
         let name = PypiPackageName::from_normalized(requirement.name.clone());
-        let mut requirement = PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?;
+        let mut requirement = match pixi_requirement {
+            Some(existing) => existing.update_requirement(requirement).map_err(Box::new)?,
+            None => PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?,
+        };
         if let Some(editable) = editable {
             requirement.set_editable(editable);
         }
