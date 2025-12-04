@@ -1,9 +1,9 @@
 [build-system]
-requires = ["hatchling"]
 build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 [project]
-name = "isort"
-version = "5.13.0"
 description = "Test fixture for isort"
+name = "isort"
 requires-python = ">=3.8"
+version = "5.13.0"
