@@ -214,7 +214,7 @@ async fn pypi_dependency_upgrade_uses_custom_index() {
     let platform = Platform::current();
 
     // Create local conda channel with Python
-    let mut package_db = MockDatabase::default();
+    let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.12.0")
             .with_subdir(platform)

@@ -1,4 +1,4 @@
-//! This modules defines [`PackageDatabase`], a struct that holds a bunch of easily constructable
+//! This modules defines [`MockRepoData`], a struct that holds a bunch of easily constructable
 //! package definitions. Using this struct it becomes easier to generate controllable fake repodata.
 
 use chrono::{DateTime, Utc};
