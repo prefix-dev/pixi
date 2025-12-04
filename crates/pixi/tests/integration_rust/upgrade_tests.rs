@@ -30,6 +30,7 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
     // Create local PyPI index with click
     let pypi_index = PyPIDatabase::new()
         .with(PyPIPackage::new("click", "8.2.0"))
+        .with(PyPIPackage::new("click", "8.3.1"))
         .into_simple_index()
         .expect("failed to create local simple index");
     let pypi_index_url = pypi_index.index_url();
