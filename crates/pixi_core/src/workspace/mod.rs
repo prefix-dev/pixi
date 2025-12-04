@@ -205,12 +205,12 @@ impl Workspace {
     /// Constructs a new instance from an internal manifest representation
     pub(crate) fn from_manifests(manifest: Manifests) -> Self {
         let env_vars = Workspace::init_env_vars(&manifest.workspace.value.environments);
-        // Canonicalize the root path
-        let root = &manifest.workspace.provenance.path;
-        let root = dunce::canonicalize(root).unwrap_or(root.to_path_buf());
+        // Get the absolute path of the manifest, preserving symlinks by only
+        // canonicalizing the parent directory
+        let manifest_path = manifest.workspace.provenance.absolute_path();
         // Take the parent after canonicalizing to ensure this works even when the
         // manifest
-        let root = root
+        let root = manifest_path
             .parent()
             .expect("manifest path should always have a parent")
             .to_owned();
@@ -1297,5 +1297,52 @@ mod tests {
         console::set_colors_enabled(false);
 
         insta::assert_snapshot!(workspace.pypi_name_mapping_source().unwrap_err());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_workspace_root_preserves_symlink_location() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let dotfiles_dir = temp_dir.path().join("dotfiles");
+        let home_dir = temp_dir.path().join("home");
+        fs_err::create_dir_all(&dotfiles_dir).unwrap();
+        fs_err::create_dir_all(&home_dir).unwrap();
+
+        // Real manifest lives inside the dotfiles directory
+        let real_manifest = dotfiles_dir.join("pixi.toml");
+        fs_err::write(
+            &real_manifest,
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = []
+            "#,
+        )
+        .unwrap();
+
+        // Home directory contains a symlink that points at the real manifest
+        let symlink_manifest = home_dir.join("pixi.toml");
+        std::os::unix::fs::symlink(&real_manifest, &symlink_manifest).unwrap();
+
+        // Load workspace from the symlinked manifest path
+        let workspace = Workspace::from_path(&symlink_manifest).unwrap();
+
+        // The workspace root should be the home_dir (where the symlink lives),
+        // NOT the dotfiles_dir (where the real file lives)
+        let canonical_home = dunce::canonicalize(&home_dir).unwrap();
+        assert_eq!(
+            workspace.root(),
+            canonical_home,
+            "workspace root should be relative to symlink location, not the real file location"
+        );
+
+        // The .pixi directory should be created in the home directory
+        let expected_pixi_dir = canonical_home.join(consts::PIXI_DIR);
+        assert_eq!(
+            workspace.pixi_dir(),
+            expected_pixi_dir,
+            ".pixi directory should be in the symlink's parent directory"
+        );
     }
 }
