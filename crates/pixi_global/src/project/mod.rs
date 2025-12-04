@@ -416,9 +416,7 @@ impl Project {
         }
 
         let mut project = Self::from_path(&manifest_path, env_root, bin_dir)?;
-        project
-            .populate_missing_lock_environments_from_existing_prefixes()
-            .await?;
+        project.create_lockfile_from_existing_environments().await?;
         Ok(project)
     }
 
@@ -481,9 +479,7 @@ impl Project {
             .await
             .into_diagnostic()?;
         let mut project = Self::from_str(manifest_path, &toml, env_root, bin_dir)?;
-        project
-            .populate_missing_lock_environments_from_existing_prefixes()
-            .await?;
+        project.create_lockfile_from_existing_environments().await?;
         Ok(project)
     }
 
@@ -1616,64 +1612,17 @@ impl Project {
             },
         }
     }
-    /// Ensure that every environment defined in the manifest has a corresponding
-    /// entry in the global lock file.
+    /// Creates a fresh lockfile from existing environment prefixes on disk.
     ///
-    /// This is mainly used when upgrading from a Pixi version that did not
-    /// create a `pixi-global.lock` yet. In that case the manifest already
-    /// describes multiple environments, but the lock file may be completely
-    /// empty or only contain a subset of them.
-    ///
-    /// The method inspects the existing environment prefixes on disk and
-    /// synthesizes lockfile entries for any environment that is present in the
-    /// manifest but missing from the lockfile. Existing lockfile entries are
-    /// preserved unchanged.
-    pub async fn populate_missing_lock_environments_from_existing_prefixes(
-        &mut self,
-    ) -> miette::Result<()> {
-        // Collect the set of environments already present in the lockfile.
-        let existing_locked_envs: HashSet<String> = self
-            .lock_file
-            .environments()
-            .map(|(name, _)| name.to_string())
-            .collect();
-
-        // Determine which manifest environments are missing from the lockfile.
-        let missing_envs: Vec<(&EnvironmentName, &ParsedEnvironment)> = self
-            .manifest
-            .parsed
-            .envs
-            .iter()
-            .filter(|(env_name, _)| {
-                let name = env_name.to_string();
-                !existing_locked_envs.contains(&name)
-            })
-            .collect();
-
-        // Nothing to do: the lockfile already has all environments.
-        if missing_envs.is_empty() {
-            return Ok(());
-        }
-
+    /// For each environment in the manifest that has an installed prefix,
+    /// this extracts the installed packages and creates lockfile entries.
+    pub async fn create_lockfile_from_existing_environments(&mut self) -> miette::Result<()> {
         let mut builder = rattler_lock::LockFileBuilder::new();
 
-        // First copy all existing environments from the current lockfile.
-        for (env_name, env_data) in self.lock_file.environments() {
-            builder.set_channels(env_name, env_data.channels().to_vec());
-            for (platform, packages) in env_data.packages_by_platform() {
-                for pkg in packages {
-                    builder.add_package(env_name, platform, pkg.into());
-                }
-            }
-        }
+        for (env_name, parsed_env) in &self.manifest.parsed.envs {
+            let env_dir_path = self.env_root.path().join(env_name.as_str());
 
-        // Now synthesize lock entries for environments that are missing but have
-        // an installed prefix on disk.
-        for (env_name, parsed_env) in missing_envs {
-            let env_name_str = env_name.to_string();
-            let env_dir_path = self.env_root.path().join(env_name_str.as_str());
-
-            // Only consider environments that actually exist as a conda prefix.
+            // Skip environments without an installed prefix
             let conda_meta = env_dir_path.join(consts::CONDA_META_DIR);
             if !conda_meta.try_exists().into_diagnostic()? {
                 continue;
@@ -1685,24 +1634,20 @@ impl Project {
                 _ => continue,
             };
 
-            // Derive channels from the manifest definition
-            let channels = parsed_env
+            // Derive channels from the manifest
+            let channels: Vec<Channel> = parsed_env
                 .channels()
                 .into_iter()
                 .map(|channel| {
                     channel
                         .clone()
                         .into_channel(self.config.global_channel_config())
+                        .map(|ch| Channel::from(ch.base_url.as_str()))
                 })
                 .collect::<Result<Vec<_>, _>>()
                 .into_diagnostic()?;
 
-            let lock_channels: Vec<Channel> = channels
-                .iter()
-                .map(|ch| Channel::from(ch.base_url.as_str()))
-                .collect();
-
-            builder.set_channels(&env_name_str, lock_channels);
+            builder.set_channels(env_name.as_str(), channels);
 
             let platform = parsed_env.platform.unwrap_or_else(Platform::current);
 
@@ -1712,25 +1657,17 @@ impl Project {
 
                 let conda = CondaPackageData::Binary(CondaBinaryData {
                     package_record: pkg,
-                    // We only need a stable, reproducible filename here. This
-                    // mirrors what `compute_lock_file_for_environment` does.
                     location: UrlOrPath::Path(file_name.clone().into()),
                     file_name,
                     channel: None,
                 });
 
-                let locked = LockedPackage::from(conda);
-                builder.add_package(&env_name_str, platform, locked);
+                builder.add_package(env_name.as_str(), platform, LockedPackage::from(conda));
             }
         }
 
-        // Replace the in-memory lockfile and persist it. Even if we didn't
-        // discover any prefixes for the missing envs, this is equivalent to
-        // the old lockfile because we copied all existing environments above.
         self.lock_file = builder.finish();
-        self.write_lock_file()?;
-
-        Ok(())
+        self.write_lock_file()
     }
 }
 
