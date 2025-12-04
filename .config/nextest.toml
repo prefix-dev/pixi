@@ -1,3 +1,0 @@
-[profile.default]
-# Report tests that take longer than 10 seconds as slow
-slow-timeout = { period = "10s" }
