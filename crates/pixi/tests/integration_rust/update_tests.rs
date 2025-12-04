@@ -163,6 +163,20 @@ async fn test_update_single_package() {
 async fn test_update_conda_package_doesnt_update_git_pypi() {
     setup_tracing();
 
+    // Create local package database with Python
+    let mut package_database = PackageDatabase::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("python", "3.12.1")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
     let pixi = PixiControl::new().unwrap();
 
     // Create local git fixture with two commits
@@ -170,6 +184,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
 
     // Create a new project using our package database.
     pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
         .with_platforms(vec![Platform::current()])
         .await
         .unwrap();
@@ -248,6 +263,20 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
 async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
     setup_tracing();
 
+    // Create local package database with Python
+    let mut package_database = PackageDatabase::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("python", "3.12.1")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
     let pixi = PixiControl::new().unwrap();
 
     // Create local git fixture with two commits
@@ -255,6 +284,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
 
     // Create a new project using our package database.
     pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
         .with_platforms(vec![Platform::current()])
         .await
         .unwrap();
@@ -296,6 +326,15 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
 async fn test_update_git_pypi_when_requested() {
     setup_tracing();
 
+    // Create local package database with Python
+    let mut package_database = PackageDatabase::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
     let pixi = PixiControl::new().unwrap();
 
     // Create local git fixture with two commits
@@ -303,6 +342,7 @@ async fn test_update_git_pypi_when_requested() {
 
     // Create a new project using our package database.
     pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
         .with_platforms(vec![Platform::current()])
         .await
         .unwrap();
