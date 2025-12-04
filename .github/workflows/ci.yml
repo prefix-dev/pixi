@@ -92,6 +92,7 @@ jobs:
         uses: prefix-dev/setup-pixi@main
         with:
           environments: lint
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
       - name: lint (if this step fails, please 'pixi run lint' locally and push the changes)
         run: pixi run lint
 
@@ -129,7 +130,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - uses: prefix-dev/setup-pixi@main
         with:
-          cache: ${{ github.ref == 'refs/heads/main' }}
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           workspaces: ". -> target/pixi"
@@ -180,7 +181,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - uses: prefix-dev/setup-pixi@main
         with:
-          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           workspaces: ". -> target/pixi"
@@ -202,7 +203,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - uses: prefix-dev/setup-pixi@main
         with:
-          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           workspaces: ". -> target/pixi"
@@ -224,7 +225,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - uses: prefix-dev/setup-pixi@main
         with:
-          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           workspaces: ". -> target/pixi"
@@ -249,7 +250,7 @@ jobs:
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - uses: prefix-dev/setup-pixi@main
         with:
-          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           cache-directories: ${{ env.DEV_DRIVE }}/target
@@ -279,6 +280,8 @@ jobs:
           sudo apt-get install musl-tools
           rustup target add x86_64-unknown-linux-musl
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "Build"
         run: >
           cargo build
@@ -300,8 +303,9 @@ jobs:
     name: "build binary | macos aarch64"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-      - uses: rui314/setup-mold@725a8794d15fc7563f59595bd9556495c0564878 # v1
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "Build"
         run: >
           cargo build
@@ -322,8 +326,9 @@ jobs:
     name: "build binary | macos x86_64"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-      - uses: rui314/setup-mold@725a8794d15fc7563f59595bd9556495c0564878 # v1
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "Build"
         run: >
           cargo build
@@ -352,6 +357,7 @@ jobs:
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           workspaces: ${{ env.PIXI_WORKSPACE }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "Build"
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: >
@@ -384,6 +390,7 @@ jobs:
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           workspaces: ${{ env.PIXI_WORKSPACE }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "Build"
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: >
@@ -922,7 +929,7 @@ jobs:
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@main
         with:
-          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Download pixi artifacts
         run: pixi run download-artifacts --repo pixi --run-id ${{ github.run_id }}
@@ -961,7 +968,7 @@ jobs:
         uses: prefix-dev/setup-pixi@main
         with:
           manifest-path: ${{ env.PIXI_WORKSPACE }}/pixi.toml
-          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Download pixi artifacts
         working-directory: ${{ env.PIXI_WORKSPACE }}
@@ -993,7 +1000,7 @@ jobs:
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@main
         with:
-          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Download pixi artifacts
         run: pixi run download-artifacts --repo pixi --run-id ${{ github.run_id }}
