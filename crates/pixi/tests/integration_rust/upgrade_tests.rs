@@ -6,8 +6,10 @@ use rattler_conda_types::Platform;
 use tempfile::TempDir;
 use url::Url;
 
+use crate::common::LockFileExt;
 use crate::common::PixiControl;
 use crate::common::package_database::{Package, PackageDatabase};
+use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 use crate::setup_tracing;
 
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
@@ -165,4 +167,94 @@ async fn upgrade_command_updates_all_platform_specific_targets() {
     );
     assert!(content.contains("[target.linux-64.dependencies]"));
     assert!(content.contains("[target.win-64.dependencies]"));
+}
+
+/// Test that `pixi upgrade` uses the per-package `index` URL when fetching
+/// available versions, not the default index-url.
+///
+/// Setup:
+/// - Default index has `foo-1.0.0`
+/// - Custom index has `foo-2.0.0`
+/// - Manifest specifies `foo = { version = "==1.0.0", index = "<custom>" }`
+///
+/// Expected: After upgrade, `foo` should be upgraded to 2.0.0 (from custom index)
+#[tokio::test]
+async fn pypi_dependency_upgrade_uses_custom_index() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = PackageDatabase::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    // Create "default" index with foo 1.0.0 - this should NOT be used for upgrade
+    let default_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    // Create "custom" index with foo 1.0.0 AND 2.0.0 - this SHOULD be used for upgrade
+    let custom_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .with(PyPIPackage::new("foo", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    // Create manifest with foo pinned to 1.0.0, using custom index
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [project]
+        name = "pypi-upgrade-custom-index"
+        platforms = ["{platform}"]
+        channels = ["{channel}"]
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        foo = {{ version = "==1.0.0", index = "{custom_index}" }}
+
+        [pypi-options]
+        index-url = "{default_index}"
+        "#,
+        platform = platform,
+        channel = channel.url(),
+        default_index = default_index.index_url(),
+        custom_index = custom_index.index_url(),
+    ))
+    .unwrap();
+
+    // First, create the initial lock file
+    let _lock_file = pixi.update_lock_file().await.unwrap();
+
+    // Now run upgrade
+    let mut args = Args::default();
+    args.workspace_config.manifest_path = Some(pixi.manifest_path());
+    args.no_install_config.no_install = true;
+    args.specs.packages = Some(vec!["foo".to_string()]);
+
+    pixi_cli::upgrade::execute(args).await.unwrap();
+
+    // Load the lock file and verify foo was upgraded to 2.0.0 from the custom index
+    let lock_file = pixi.lock_file().await.unwrap();
+    let version = lock_file.get_pypi_package_version("default", platform, "foo");
+
+    assert_eq!(
+        version,
+        Some("2.0.0".into()),
+        "foo should be upgraded to 2.0.0 from custom index, not remain at or downgrade to 1.0.0 from default index"
+    );
+
+    // Also verify the index is still preserved in the manifest
+    let content = pixi.manifest_contents().unwrap_or_default();
+    assert!(
+        content.contains(&custom_index.index_url().to_string()),
+        "custom index URL should be preserved in manifest"
+    );
 }
