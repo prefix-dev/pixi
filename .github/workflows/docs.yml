@@ -49,6 +49,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           environments: docs
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build docs for test
         run: |
@@ -77,6 +78,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           environments: docs
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Configure Git user
         run: |
@@ -112,6 +114,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           environments: docs
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Configure Git user
         run: |
