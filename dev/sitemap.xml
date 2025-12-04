@@ -445,6 +445,30 @@
          <lastmod>2025-12-04</lastmod>
     </url>
     <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/upload/anaconda/</loc>
+         <lastmod>2025-12-04</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/upload/artifactory/</loc>
+         <lastmod>2025-12-04</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/upload/conda-forge/</loc>
+         <lastmod>2025-12-04</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/upload/prefix/</loc>
+         <lastmod>2025-12-04</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/upload/quetz/</loc>
+         <lastmod>2025-12-04</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/upload/s3/</loc>
+         <lastmod>2025-12-04</lastmod>
+    </url>
+    <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/channel/</loc>
          <lastmod>2025-12-04</lastmod>
     </url>

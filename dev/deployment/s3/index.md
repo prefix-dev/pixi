@@ -255,7 +255,20 @@ force-path-style = false
 
 ## Uploading to S3
 
-You can upload to S3 using `rattler-build upload s3`. For more information, see [rattler-build's documentation](https://rattler.build/latest/authentication_and_upload/#s3).
+You can upload packages to S3 using `pixi upload s3`:
+
+```bash
+pixi upload s3 \
+    --bucket my-s3-bucket \
+    --channel my-channel \
+    --region us-east-1 \
+    --endpoint-url https://my-s3-host \
+    my_package.conda
+```
+
+Use `pixi upload s3 --help` for all available options.
+
+When using `rattler-build` to build a `.conda` package you can also use `rattler-build upload s3`: for more information, see [rattler-build's documentation](https://rattler-build.prefix.dev/latest/authentication_and_upload/#s3).
 
 ### Re-indexing S3 buckets After Uploading new Packages
 

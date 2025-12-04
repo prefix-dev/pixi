@@ -7358,7 +7358,20 @@ force-path-style = false
 
 ## Uploading to S3
 
-You can upload to S3 using `rattler-build upload s3`. For more information, see [rattler-build's documentation](https://rattler.build/latest/authentication_and_upload/#s3).
+You can upload packages to S3 using `pixi upload s3`:
+
+```bash
+pixi upload s3 \
+    --bucket my-s3-bucket \
+    --channel my-channel \
+    --region us-east-1 \
+    --endpoint-url https://my-s3-host \
+    my_package.conda
+```
+
+Use `pixi upload s3 --help` for all available options.
+
+When using `rattler-build` to build a `.conda` package you can also use `rattler-build upload s3`: for more information, see [rattler-build's documentation](https://rattler-build.prefix.dev/latest/authentication_and_upload/#s3).
 
 ### Re-indexing S3 buckets After Uploading new Packages
 
@@ -11007,7 +11020,7 @@ pixi [OPTIONS] [COMMAND]
 | [`tree`](tree/)               | Show a tree of workspace dependencies                                                                                                     |
 | [`update`](update/)           | The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly |
 | [`upgrade`](upgrade/)         | Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file                                |
-| [`upload`](upload/)           | Upload a conda package                                                                                                                    |
+| [`upload`](upload/)           | Upload conda packages to various channels                                                                                                 |
 | [`workspace`](workspace/)     | Modify the workspace configuration file through the command line                                                                          |
 
 ## Global Options
@@ -13124,35 +13137,186 @@ pixi upgrade --dry-run # (7)!
 
 ## About
 
-Upload a conda package
+Upload conda packages to various channels
+
+The `pixi upload` command supports uploading conda packages to various server types:
+
+| Server Type   | Description                                                         |
+| ------------- | ------------------------------------------------------------------- |
+| `prefix`      | Upload to [prefix.dev](https://prefix.dev) or self-hosted instances |
+| `anaconda`    | Upload to [Anaconda.org](https://anaconda.org)                      |
+| `quetz`       | Upload to a [Quetz](https://github.com/mamba-org/quetz) server      |
+| `artifactory` | Upload to [JFrog Artifactory](https://jfrog.com/artifactory/)       |
+| `s3`          | Upload to S3-compatible object storage                              |
 
 ## Usage
 
 ```text
-pixi upload <HOST> <PACKAGE_FILE>
+pixi upload [OPTIONS] [PACKAGE_FILES]... <COMMAND>
 ```
+
+## Subcommands
+
+| Command                       | Description                                                                                          |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------- |
+| [`quetz`](quetz/)             | Upload to a Quetz server. Authentication is used from the keychain / auth-file                       |
+| [`artifactory`](artifactory/) | Options for uploading to a Artifactory channel. Authentication is used from the keychain / auth-file |
+| [`prefix`](prefix/)           | Options for uploading to a prefix.dev server. Authentication is used from the keychain / auth-file   |
+| [`anaconda`](anaconda/)       | Options for uploading to a Anaconda.org server                                                       |
+| [`s3`](s3/)                   | Options for uploading to S3                                                                          |
 
 ## Arguments
 
-- [`<HOST>`](#arg-%3CHOST%3E) : The host + channel to upload to
+- [`<PACKAGE_FILES>`](#arg-%3CPACKAGE_FILES%3E) : The package file to upload
 
   ```
-  **required**: `true`
+  May be provided more than once.
   ```
 
-- [`<PACKAGE_FILE>`](#arg-%3CPACKAGE_FILE%3E) : The file to upload
+## Options
+
+- [`--allow-insecure-host <ALLOW_INSECURE_HOST>`](#arg---allow-insecure-host) : List of hosts for which SSL certificate verification should be skipped
 
   ```
-  **required**: `true`
+  May be provided more than once.
   ```
 
 ## Description
 
-Upload a conda package
+Upload conda packages to various channels
 
-With this command, you can upload a conda package to a channel. Example: `pixi upload https://prefix.dev/api/v1/upload/my_channel my_package.conda`
+Supported server types: prefix, anaconda, quetz, artifactory, s3, conda-forge
 
 Use `pixi auth login` to authenticate with the server.
+
+## Examples
+
+### Uploading to prefix.dev
+
+```shell
+# Upload a package to a channel on prefix.dev
+pixi upload prefix --channel my-channel my_package-1.0.0-h123abc_0.conda
+
+# Upload with an explicit API key
+pixi upload prefix --channel my-channel --api-key $PREFIX_API_KEY my_package.conda
+
+# Skip upload if package already exists
+pixi upload prefix --channel my-channel --skip-existing my_package.conda
+```
+
+### Uploading to Anaconda.org
+
+```shell
+# Upload to your personal channel
+pixi upload anaconda --owner my-username my_package.conda
+
+# Upload to a specific label/channel
+pixi upload anaconda --owner my-username --channel dev my_package.conda
+
+# Force replace existing package
+pixi upload anaconda --owner my-username --force my_package.conda
+```
+
+### Uploading to S3
+
+```shell
+# Upload to an S3 bucket (using AWS credentials from environment)
+pixi upload s3 --channel s3://my-bucket/my-channel my_package.conda
+
+# Upload with explicit credentials
+pixi upload s3 \
+    --channel s3://my-bucket/my-channel \
+    --region us-east-1 \
+    --access-key-id $AWS_ACCESS_KEY_ID \
+    --secret-access-key $AWS_SECRET_ACCESS_KEY \
+    my_package.conda
+
+# Upload to S3-compatible storage (MinIO, Cloudflare R2, etc.)
+pixi upload s3 \
+    --channel s3://my-bucket/my-channel \
+    --endpoint-url https://minio.example.com \
+    --region us-east-1 \
+    --addressing-style path \
+    my_package.conda
+
+# Force replace existing package
+pixi upload s3 --channel s3://my-bucket/my-channel --force my_package.conda
+```
+
+### Uploading to Quetz
+
+```shell
+# Upload to a Quetz server
+pixi upload quetz \
+    --url https://my-quetz-server.com \
+    --channel my-channel \
+    my_package.conda
+
+# Upload with explicit API key
+pixi upload quetz \
+    --url https://my-quetz-server.com \
+    --channel my-channel \
+    --api-key $QUETZ_API_KEY \
+    my_package.conda
+```
+
+### Uploading to Artifactory
+
+```shell
+# Upload to Artifactory
+pixi upload artifactory \
+    --url https://my-artifactory.com \
+    --channel conda-local \
+    my_package.conda
+
+# Upload with explicit token
+pixi upload artifactory \
+    --url https://my-artifactory.com \
+    --channel conda-local \
+    --token $ARTIFACTORY_TOKEN \
+    my_package.conda
+```
+
+### Uploading Multiple Packages
+
+All server types support uploading multiple packages at once:
+
+```shell
+pixi upload prefix --channel my-channel package1.conda package2.conda package3.conda
+```
+
+## Authentication
+
+For most server types, authentication can be provided in multiple ways:
+
+1. **Keychain / auth-file**: Use `pixi auth login` to store credentials
+
+   ```shell
+   pixi auth login https://prefix.dev --token $MY_TOKEN
+   pixi upload prefix --channel my-channel my_package.conda
+   ```
+
+1. **Environment variables**: Each server type supports specific environment variables
+
+   - `PREFIX_API_KEY` for prefix.dev
+   - `ANACONDA_API_KEY` for Anaconda.org
+   - `QUETZ_API_KEY` for Quetz
+   - `ARTIFACTORY_TOKEN` for Artifactory
+   - `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` for S3
+
+1. **Command-line arguments**: Pass credentials directly via `--api-key`, `--token`, etc.
+
+## S3 Re-indexing
+
+When uploading packages to S3, the `repodata.json` file needs to be updated manually since S3 is just storage, not a package server. Use `rattler-index` to re-index your S3 bucket after uploading:
+
+```shell
+pixi exec rattler-index s3 s3://my-bucket/my-channel \
+    --endpoint-url https://my-s3-host \
+    --region us-east-1
+```
+
+See the [S3 deployment documentation](../../../../deployment/s3/) for more details.
 
 # `pixi workspace`
 
@@ -14828,6 +14992,306 @@ pixi task remove cow
 pixi task remove --platform linux-64 test
 pixi task remove --feature cuda task
 ```
+
+# `pixi upload anaconda`
+
+## About
+
+Options for uploading to a Anaconda.org server
+
+## Usage
+
+```text
+pixi upload anaconda [OPTIONS] --owner <OWNER>
+```
+
+## Options
+
+- [`--owner (-o) <OWNER>`](#arg---owner) : The owner of the distribution (e.g. conda-forge or your username)
+
+  ```
+  **required**: `true`
+    
+  **env**: `ANACONDA_OWNER`
+  ```
+
+- [`--channel (-c) <CHANNELS>`](#arg---channel) : The channel / label to upload the package to (e.g. main / rc)
+
+  ```
+  May be provided more than once.
+    
+  **env**: `ANACONDA_CHANNEL`
+  ```
+
+- [`--api-key (-a) <API_KEY>`](#arg---api-key) : The Anaconda API key, if none is provided, the token is read from the keychain / auth-file
+
+  ```
+  **env**: `ANACONDA_API_KEY`
+  ```
+
+- [`--url (-u) <URL>`](#arg---url) : The URL to the Anaconda server
+
+  ```
+  **env**: `ANACONDA_SERVER_URL`
+  ```
+
+- [`--force (-f)`](#arg---force) : Replace files on conflict
+
+  ```
+  **env**: `ANACONDA_FORCE`
+  ```
+
+# `pixi upload artifactory`
+
+## About
+
+Options for uploading to a Artifactory channel. Authentication is used from the keychain / auth-file
+
+## Usage
+
+```text
+pixi upload artifactory [OPTIONS] --url <URL> --channel <CHANNELS>
+```
+
+## Options
+
+- [`--url (-u) <URL>`](#arg---url) : The URL to your Artifactory server
+
+  ```
+  **required**: `true`
+    
+  **env**: `ARTIFACTORY_SERVER_URL`
+  ```
+
+- [`--channel (-c) <CHANNELS>`](#arg---channel) : The URL to your channel
+
+  ```
+  **required**: `true`
+    
+  **env**: `ARTIFACTORY_CHANNEL`
+  ```
+
+- [`--token (-t) <TOKEN>`](#arg---token) : Your Artifactory token
+
+  ```
+  **env**: `ARTIFACTORY_TOKEN`
+  ```
+
+# `pixi upload conda-forge`
+
+## About
+
+Options for uploading to conda-forge
+
+## Usage
+
+```text
+pixi upload conda-forge [OPTIONS] --staging-token <STAGING_TOKEN> --feedstock <FEEDSTOCK> --feedstock-token <FEEDSTOCK_TOKEN>
+```
+
+## Options
+
+- [`--staging-token <STAGING_TOKEN>`](#arg---staging-token) : The Anaconda API key
+
+  ```
+  **required**: `true`
+    
+  **env**: `STAGING_BINSTAR_TOKEN`
+  ```
+
+- [`--feedstock <FEEDSTOCK>`](#arg---feedstock) : The feedstock name
+
+  ```
+  **required**: `true`
+    
+  **env**: `FEEDSTOCK_NAME`
+  ```
+
+- [`--feedstock-token <FEEDSTOCK_TOKEN>`](#arg---feedstock-token) : The feedstock token
+
+  ```
+  **required**: `true`
+    
+  **env**: `FEEDSTOCK_TOKEN`
+  ```
+
+- [`--staging-channel <STAGING_CHANNEL>`](#arg---staging-channel) : The staging channel name
+
+  ```
+  **env**: `STAGING_CHANNEL`
+  ```
+
+- [`--anaconda-url <ANACONDA_URL>`](#arg---anaconda-url) : The Anaconda Server URL
+
+  ```
+  **env**: `ANACONDA_SERVER_URL`
+  ```
+
+- [`--validation-endpoint <VALIDATION_ENDPOINT>`](#arg---validation-endpoint) : The validation endpoint url
+
+  ```
+  **env**: `VALIDATION_ENDPOINT`
+  ```
+
+- [`--provider <PROVIDER>`](#arg---provider) : The CI provider
+
+  ```
+  **env**: `CI`
+  ```
+
+- [`--dry-run`](#arg---dry-run) : Dry run, don't actually upload anything
+
+  ```
+  **env**: `DRY_RUN`
+  ```
+
+# `pixi upload prefix`
+
+## About
+
+Options for uploading to a prefix.dev server. Authentication is used from the keychain / auth-file
+
+## Usage
+
+```text
+pixi upload prefix [OPTIONS] --channel <CHANNEL>
+```
+
+## Options
+
+- [`--url (-u) <URL>`](#arg---url) : The URL to the prefix.dev server (only necessary for self-hosted instances)
+
+  ```
+  **env**: `PREFIX_SERVER_URL`
+    
+  **default**: `https://prefix.dev`
+  ```
+
+- [`--channel (-c) <CHANNEL>`](#arg---channel) : The channel to upload the package to
+
+  ```
+  **required**: `true`
+    
+  **env**: `PREFIX_CHANNEL`
+  ```
+
+- [`--api-key (-a) <API_KEY>`](#arg---api-key) : The prefix.dev API key, if none is provided, the token is read from the keychain / auth-file
+
+  ```
+  **env**: `PREFIX_API_KEY`
+  ```
+
+- [`--attestation <ATTESTATION>`](#arg---attestation) : Upload one or more attestation files alongside the package Note: if you add an attestation, you can *only* upload a single package
+
+- [`--generate-attestation`](#arg---generate-attestation) : Automatically generate attestations when using trusted publishing
+
+  ```
+  **default**: `false`
+  ```
+
+- [`--skip-existing (-s)`](#arg---skip-existing) : Skip upload if package is existed
+
+# `pixi upload quetz`
+
+## About
+
+Upload to a Quetz server. Authentication is used from the keychain / auth-file
+
+## Usage
+
+```text
+pixi upload quetz [OPTIONS] --url <URL> --channel <CHANNELS>
+```
+
+## Options
+
+- [`--url (-u) <URL>`](#arg---url) : The URL to your Quetz server
+
+  ```
+  **required**: `true`
+    
+  **env**: `QUETZ_SERVER_URL`
+  ```
+
+- [`--channel (-c) <CHANNELS>`](#arg---channel) : The URL to your channel
+
+  ```
+  **required**: `true`
+    
+  **env**: `QUETZ_CHANNEL`
+  ```
+
+- [`--api-key (-a) <API_KEY>`](#arg---api-key) : The Quetz API key, if none is provided, the token is read from the keychain / auth-file
+
+  ```
+  **env**: `QUETZ_API_KEY`
+  ```
+
+# `pixi upload s3`
+
+## About
+
+Options for uploading to S3
+
+## Usage
+
+```text
+pixi upload s3 [OPTIONS] --channel <CHANNEL>
+```
+
+## Options
+
+- [`--channel (-c) <CHANNEL>`](#arg---channel) : The channel URL in the S3 bucket to upload the package to, e.g., `s3://my-bucket/my-channel`
+
+  ```
+  **required**: `true`
+    
+  **env**: `S3_CHANNEL`
+  ```
+
+- [`--force`](#arg---force) : Replace files if it already exists
+
+## S3 Credentials
+
+- [`--endpoint-url <ENDPOINT_URL>`](#arg---endpoint-url) : The endpoint URL of the S3 backend
+
+  ```
+  **env**: `S3_ENDPOINT_URL`
+  ```
+
+- [`--region <REGION>`](#arg---region) : The region of the S3 backend
+
+  ```
+  **env**: `S3_REGION`
+  ```
+
+- [`--access-key-id <ACCESS_KEY_ID>`](#arg---access-key-id) : The access key ID for the S3 bucket
+
+  ```
+  **env**: `S3_ACCESS_KEY_ID`
+  ```
+
+- [`--secret-access-key <SECRET_ACCESS_KEY>`](#arg---secret-access-key) : The secret access key for the S3 bucket
+
+  ```
+  **env**: `S3_SECRET_ACCESS_KEY`
+  ```
+
+- [`--session-token <SESSION_TOKEN>`](#arg---session-token) : The session token for the S3 bucket
+
+  ```
+  **env**: `S3_SESSION_TOKEN`
+  ```
+
+- [`--addressing-style <ADDRESSING_STYLE>`](#arg---addressing-style) : How to address the bucket
+
+  ```
+  **env**: `S3_ADDRESSING_STYLE`
+    
+  **default**: `virtual-host`
+    
+  **options**: `virtual-host`, `path`
+  ```
 
 # `pixi workspace channel`
 
