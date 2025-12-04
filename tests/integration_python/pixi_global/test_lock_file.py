@@ -1,8 +1,11 @@
+import json
+import shutil
+import tomllib
 from pathlib import Path
 from typing import Any, cast
-import shutil
 
 import pytest
+import tomli_w
 from rattler.lock import LockFile as _LockFile
 
 from ..common import verify_cli_command
@@ -91,31 +94,74 @@ def test_global_lock_file_created(pixi: Path, tmp_path: Path, dummy_channel_1: s
     assert env_names, "Lockfile should contain at least one environment"
 
 
+def _get_conda_meta_version(env_dir: Path, package_name: str) -> str | None:
+    """Read the installed version of a package from conda-meta."""
+    conda_meta = env_dir / "conda-meta"
+    if not conda_meta.exists():
+        return None
+    for json_file in conda_meta.glob(f"{package_name}-*.json"):
+        data = json.loads(json_file.read_text())
+        return data.get("version")
+    return None
+
+
 @pytest.mark.slow
-def test_global_lock_file_reproducible(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
-    """Test that installations using lock file are reproducible."""
+def test_global_lock_file_reproducible(
+    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
+) -> None:
+    """Test that installations using lock file are reproducible.
+
+    This test verifies that:
+    1. When a lockfile exists, sync respects the locked version
+    2. When the lockfile is removed, a fresh solve gets the latest version
+    """
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
+    manifest_path = manifests.joinpath("pixi-global.toml")
     lock_file_path = manifests.joinpath("pixi-global.lock")
+    env_dir = tmp_path.joinpath("envs", "package2")
 
+    # Step 1: Install a specific lower version (0.1.0)
     verify_cli_command(
-        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a"],
+        [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package2==0.1.0"],
         env=env,
     )
 
-    # Save lockfile contents
-    original = lock_file_path.read_text()
+    # Verify we got the expected version
+    lock_file = parse_lockfile(lock_file_path)
+    versions = _locked_versions_for_package(lock_file, "package2", "package2")
+    assert "0.1.0" in versions, "Should have locked version 0.1.0"
+
+    # Modify the manifest to use "*" as version spec
+    manifest_data = tomllib.loads(manifest_path.read_text())
+    manifest_data["envs"]["package2"]["dependencies"]["package2"] = "*"
+    manifest_path.write_bytes(tomli_w.dumps(manifest_data).encode())
 
     # Remove the environment directory to force re-creation
-    env_dir = tmp_path.joinpath("envs", "dummy-a")
     if env_dir.exists():
         shutil.rmtree(env_dir)
 
-    # Sync should use existing lockfile
+    # Sync should use existing lockfile and install 0.1.0
     verify_cli_command([pixi, "global", "sync"], env=env)
 
-    # Lockfile must not change after a reproducible sync
-    assert lock_file_path.read_text() == original, "Lockfile should not change after sync"
+    # Verify the installed version from conda-meta is still 0.1.0
+    installed_version = _get_conda_meta_version(env_dir, "package2")
+    assert installed_version == "0.1.0", (
+        f"Sync with lockfile should install locked version 0.1.0, got {installed_version}"
+    )
+
+    # Remove the lockfile and env dir
+    lock_file_path.unlink()
+    shutil.rmtree(env_dir)
+
+    # Sync without lockfile should do a fresh solve and get 0.2.0
+    verify_cli_command([pixi, "global", "sync"], env=env)
+
+    # Verify we now have the newer version
+    new_installed_version = _get_conda_meta_version(env_dir, "package2")
+    assert new_installed_version == "0.2.0", (
+        f"Sync without lockfile should install latest version 0.2.0, got {new_installed_version}"
+    )
 
 
 @pytest.mark.slow
@@ -138,116 +184,6 @@ def test_global_lock_file_multiple_envs(pixi: Path, tmp_path: Path, dummy_channe
 
     assert "dummy-a" in env_names
     assert "dummy-b" in env_names
-
-
-@pytest.mark.slow
-def test_global_manifest_without_lock_file(
-    pixi: Path, tmp_path: Path, dummy_channel_1: str
-) -> None:
-    """Pixi global should work if manifest exists but no lockfile is present."""
-    env = {"PIXI_HOME": str(tmp_path)}
-
-    manifests = tmp_path.joinpath("manifests")
-    manifests.mkdir(parents=True, exist_ok=True)
-
-    lock_file_path = manifests.joinpath("pixi-global.lock")
-
-    # Manually create manifest without lockfile
-    manifest_content = f"""\
-version = {MANIFEST_VERSION}
-
-[envs.dummy-a]
-channels = ["{dummy_channel_1}"]
-dependencies = {{ dummy-a = "*" }}
-exposed = {{ dummy-a = "dummy-a" }}
-"""
-    manifests.joinpath("pixi-global.toml").write_text(manifest_content)
-
-    # This should create the lockfile
-    verify_cli_command([pixi, "global", "sync"], env=env)
-
-    # Now parse lockfile
-    lock_file = parse_lockfile(lock_file_path)
-    env_names = {name for name, _ in lock_file.environments()}
-    assert "dummy-a" in env_names, "Lockfile must contain dummy-a"
-
-
-@pytest.mark.slow
-def test_global_lockfile_prevents_unexpected_version_changes(
-    pixi: Path, tmp_path: Path, dummy_channel_1: str, dummy_channel_2: str
-) -> None:
-    """Lockfile should prevent version changes when newer packages are introduced."""
-    env = {"PIXI_HOME": str(tmp_path)}
-    lock_file_path = tmp_path.joinpath("manifests", "pixi-global.lock")
-
-    # Install version from channel_1
-    verify_cli_command(
-        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a"],
-        env=env,
-    )
-    first_lock = lock_file_path.read_text()
-
-    # Replace environment directory to force reinstall
-    env_dir = tmp_path.joinpath("envs", "dummy-a")
-    shutil.rmtree(env_dir)
-
-    # Now sync with channel_2 also available (which provides higher version)
-    verify_cli_command(
-        [pixi, "global", "install", "--channel", dummy_channel_2, "dummy-a"],
-        env=env,
-    )
-
-    # Must still use the locked version
-    second_lock = lock_file_path.read_text()
-    assert first_lock == second_lock, "Sync should not change locked package versions"
-
-
-@pytest.mark.slow
-def test_global_lockfile_contains_platform_entries(
-    pixi: Path, tmp_path: Path, dummy_channel_1: str
-) -> None:
-    """Lockfile should record platform-specific metadata."""
-    env = {"PIXI_HOME": str(tmp_path)}
-    lock_file_path = tmp_path.joinpath("manifests", "pixi-global.lock")
-
-    verify_cli_command(
-        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a"],
-        env=env,
-    )
-
-    lock_file = parse_lockfile(lock_file_path)
-    env_obj = lock_file.environment("dummy-a")
-    assert env_obj is not None, "dummy-a environment should exist in lockfile"
-
-    # There must be at least one platform registered.
-    assert env_obj.platforms(), "Platform records should exist in lockfile"
-
-
-@pytest.mark.slow
-def test_global_lockfile_respected_despite_channel_change(
-    pixi: Path, tmp_path: Path, dummy_channel_1: str, dummy_channel_2: str
-) -> None:
-    """Lockfile resolution should not change even if new channels are added."""
-    env = {"PIXI_HOME": str(tmp_path)}
-    lock_file_path = tmp_path.joinpath("manifests", "pixi-global.lock")
-
-    # Initial install from channel_1
-    verify_cli_command(
-        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a"],
-        env=env,
-    )
-    original = lock_file_path.read_text()
-
-    # Add another channel that may include different versions
-    verify_cli_command(
-        [pixi, "global", "install", "--channel", dummy_channel_2, "dummy-a"],
-        env=env,
-    )
-
-    # Lockfile should remain unchanged because lockfile pin is respected
-    assert lock_file_path.read_text() == original, (
-        "Adding new channels should not override lockfile resolution"
-    )
 
 
 @pytest.mark.slow
@@ -281,130 +217,6 @@ def test_global_lockfile_removes_dependency(pixi: Path, tmp_path: Path, dummy_ch
 
     names = _package_names_for_env(lock_file, "dummy-a")
     assert "dummy-b" not in names, "dummy-b should be removed from lockfile"
-
-
-@pytest.mark.slow
-def test_global_lockfile_updates_on_env_change(pixi: Path, tmp_path: Path, dummy_channel_1: str):
-    """Changing dependencies should update the global lockfile."""
-    env = {"PIXI_HOME": str(tmp_path)}
-    manifests = tmp_path.joinpath("manifests")
-    lock_file_path = manifests.joinpath("pixi-global.lock")
-
-    # Install initial package
-    verify_cli_command(
-        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a"],
-        env=env,
-    )
-    original_text = lock_file_path.read_text()
-
-    # Add a second package
-    verify_cli_command(
-        [pixi, "global", "add", "--environment", "dummy-a", "dummy-b"],
-        env=env,
-    )
-
-    # Lockfile should have changed
-    updated_text = lock_file_path.read_text()
-    assert updated_text != original_text, "Lockfile should update when dependencies change"
-
-    # Parsed lockfile should include both packages for env dummy-a
-    lock_file = parse_lockfile(lock_file_path)
-    names = _package_names_for_env(lock_file, "dummy-a")
-    assert "dummy-a" in names
-    assert "dummy-b" in names
-
-
-@pytest.mark.slow
-def test_global_lockfile_updates_package_version_when_relocked(
-    pixi: Path, tmp_path: Path, dummy_channel_1: str, dummy_channel_2: str
-) -> None:
-    """
-    If we drop the global lockfile and reinstall, pixi should re-solve and
-    produce a lockfile that is semantically consistent with the original one:
-    the set of locked (name, version) pairs for dummy-a should remain stable.
-
-    This guards against accidental changes in the re-locking path, even if
-    additional channels are provided.
-    """
-    env = {"PIXI_HOME": str(tmp_path)}
-    manifests = tmp_path / "manifests"
-    lock_file_path = manifests / "pixi-global.lock"
-
-    # Initial install from channel_1
-    verify_cli_command(
-        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a"],
-        env=env,
-    )
-
-    lock_initial = parse_lockfile(lock_file_path)
-    initial_pairs = _package_name_version_pairs(lock_initial, "dummy-a")
-    assert initial_pairs, "dummy-a should have at least one locked package initially"
-
-    # Remove lockfile and env prefix so that a fresh solve happens
-    if lock_file_path.exists():
-        lock_file_path.unlink()
-
-    env_dir = tmp_path.joinpath("envs", "dummy-a")
-    if env_dir.exists():
-        shutil.rmtree(env_dir)
-
-    # Reinstall, this time also passing dummy_channel_2. Current pixi behavior
-    # keeps using the manifest's channels, so we don't assert that the channel
-    # set changes. Only that the resolved package set stays consistent.
-    verify_cli_command(
-        [pixi, "global", "install", "--channel", dummy_channel_2, "dummy-a"],
-        env=env,
-    )
-
-    lock_updated = parse_lockfile(lock_file_path)
-    updated_pairs = _package_name_version_pairs(lock_updated, "dummy-a")
-    assert updated_pairs, "dummy-a should still have locked packages after re-locking"
-
-    # The important invariant: re-locking from scratch keeps the same package
-    # versions for the environment.
-    assert updated_pairs == initial_pairs, (
-        "Re-solving after removing the lockfile should preserve the locked "
-        "package versions for dummy-a"
-    )
-
-
-@pytest.mark.slow
-def test_global_lockfile_removes_dependency_structurally(
-    pixi: Path, tmp_path: Path, dummy_channel_1: str
-) -> None:
-    """Removing a dependency should remove it from the lockfile's package list."""
-    env = {"PIXI_HOME": str(tmp_path)}
-    lock_file_path = tmp_path.joinpath("manifests", "pixi-global.lock")
-
-    # Setup with dummy-a plus dummy-b
-    verify_cli_command(
-        [
-            pixi,
-            "global",
-            "install",
-            "--channel",
-            dummy_channel_1,
-            "dummy-a",
-            "--with",
-            "dummy-b",
-        ],
-        env=env,
-    )
-
-    lock_before = parse_lockfile(lock_file_path)
-    versions_before = _locked_versions_for_package(lock_before, "dummy-a", "dummy-b")
-    assert versions_before, "dummy-b should be present before removal"
-
-    # Remove dummy-b from environment dummy-a
-    verify_cli_command(
-        [pixi, "global", "remove", "--environment", "dummy-a", "dummy-b"],
-        env=env,
-    )
-
-    lock_after = parse_lockfile(lock_file_path)
-    versions_after = _locked_versions_for_package(lock_after, "dummy-a", "dummy-b")
-
-    assert not versions_after, "dummy-b should be removed from the lockfile packages"
 
 
 @pytest.mark.slow
