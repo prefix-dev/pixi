@@ -18,6 +18,7 @@ dirs = { workspace = true }
 dunce = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
+indexmap = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 once_cell = { workspace = true }
@@ -29,7 +30,6 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
 slotmap = { workspace = true }
-strsim = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
 tokio-util = { workspace = true }
@@ -61,6 +61,7 @@ pixi_spec_containers = { workspace = true }
 pixi_stable_hash = { workspace = true, features = ["serde_json"] }
 pixi_url = { workspace = true }
 pixi_utils = { workspace = true }
+pixi_variant = { workspace = true }
 
 [dev-dependencies]
 indexmap = { workspace = true }

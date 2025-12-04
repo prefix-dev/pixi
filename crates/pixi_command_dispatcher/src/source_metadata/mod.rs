@@ -10,9 +10,11 @@ use futures::TryStreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
+use pixi_record::VariantValue;
 use pixi_record::{InputHash, PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
+use rand::random;
 use rattler_conda_types::{
     ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, PackageRecord,
     package::RunExportsJson,
@@ -25,9 +27,11 @@ use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
     SolvePixiEnvironmentError,
-    build::{
-        Dependencies, DependenciesError, PixiRunExports, SourceCodeLocation, conversion,
-        source_metadata_cache::MetadataKind,
+    build::{Dependencies, DependenciesError, PixiRunExports, SourceCodeLocation, conversion},
+    cache::{
+        build_backend_metadata::MetadataKind,
+        common::MetadataCache,
+        source_metadata::{self, CachedSourceMetadata, Metadata, SourceMetadataKey},
     },
     executor::ExecutorFutures,
 };
@@ -42,16 +46,20 @@ pub struct SourceMetadataSpec {
 }
 
 /// The result of building a particular source record.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SourceMetadata {
     /// Manifest and optional build source location for this metadata.
     pub source: SourceCodeLocation,
 
-    /// All the source records for this particular package.
-    pub records: Vec<SourceRecord>,
+    /// The cache entry that contains the metadata acquired from the build
+    /// backend.
+    ///
+    /// As long as the cache entry is not dropped, the metadata cannot be
+    /// accessed by another process.
+    pub cache_entry: source_metadata::CacheEntry,
 
-    /// All package names that where skipped but the backend could provide.
-    pub skipped_packages: Vec<PackageName>,
+    /// The metadata that was acquired from the build backend.
+    pub cached_metadata: CachedSourceMetadata,
 }
 
 impl SourceMetadataSpec {
@@ -78,6 +86,43 @@ impl SourceMetadataSpec {
 
         let build_backend_metadata = build_backend_metadata?;
 
+        tracing::info!(
+            "Retrieving source metadata for package {}",
+            self.package.as_source()
+        );
+
+        let cache_key = self.cache_key();
+
+        // Get the skip_cache flag from the build backend metadata
+        let skip_cache = build_backend_metadata.skip_cache;
+
+        let (metadata, mut cache_entry) = command_dispatcher
+            .source_metadata_cache()
+            .entry(&cache_key)
+            .await
+            .map_err(SourceMetadataError::Cache)
+            .map_err(CommandDispatcherError::Failed)?;
+
+        if !skip_cache {
+            if let Some(cached_metadata) = Self::verify_cache_freshness(
+                &build_backend_metadata.metadata.input_hash,
+                metadata,
+                &self.backend_metadata.variant_configuration,
+            )
+            .await?
+            {
+                tracing::debug!(
+                    "Using cached source metadata for package {}",
+                    self.package.as_source()
+                );
+                return Ok(SourceMetadata {
+                    source: build_backend_metadata.source.clone(),
+                    cached_metadata,
+                    cache_entry,
+                });
+            }
+        }
+
         match &build_backend_metadata.metadata.metadata {
             MetadataKind::GetMetadata { packages } => {
                 let source_location = build_backend_metadata.source.clone();
@@ -90,20 +135,33 @@ impl SourceMetadataSpec {
                     &build_backend_metadata.metadata.input_hash,
                 );
 
+                let cached_source_metadata = CachedSourceMetadata {
+                    id: random(),
+                    input_hash: build_backend_metadata.metadata.input_hash.clone(),
+                    build_variants: self.backend_metadata.variant_configuration.clone(),
+                    metadata: Metadata {
+                        records: records.clone(),
+                    },
+                };
+
+                // Store the metadata in the cache for later retrieval
+                cache_entry
+                    .write(cached_source_metadata.clone())
+                    .await
+                    .map_err(SourceMetadataError::Cache)
+                    .map_err(CommandDispatcherError::Failed)?;
+
                 Ok(SourceMetadata {
+                    cache_entry,
+                    cached_metadata: cached_source_metadata,
                     source: source_location,
-                    records,
-                    // As the GetMetadata kind returns all records at once and we don't solve them we can skip this.
-                    skipped_packages: Default::default(),
                 })
             }
             MetadataKind::Outputs { outputs } => {
-                let mut skipped_packages = vec![];
                 let mut futures = ExecutorFutures::new(command_dispatcher.executor());
                 let source_location = build_backend_metadata.source.clone();
                 for output in outputs {
                     if output.metadata.name != self.package {
-                        skipped_packages.push(output.metadata.name.clone());
                         continue;
                     }
                     futures.push(self.resolve_output(
@@ -115,12 +173,73 @@ impl SourceMetadataSpec {
                     ));
                 }
 
+                let cached_source_metadata = CachedSourceMetadata {
+                    id: random(),
+                    input_hash: build_backend_metadata.metadata.input_hash.clone(),
+                    build_variants: self.backend_metadata.variant_configuration.clone(),
+                    metadata: Metadata {
+                        records: futures.try_collect().await?,
+                    },
+                };
+
+                // Store the metadata in the cache for later retrieval
+                cache_entry
+                    .write(cached_source_metadata.clone())
+                    .await
+                    .map_err(SourceMetadataError::Cache)
+                    .map_err(CommandDispatcherError::Failed)?;
+
                 Ok(SourceMetadata {
+                    cache_entry,
+                    cached_metadata: cached_source_metadata,
                     source: source_location,
-                    records: futures.try_collect().await?,
-                    skipped_packages,
                 })
             }
+        }
+    }
+
+    /// Computes the cache key for this instance
+    pub(crate) fn cache_key(&self) -> SourceMetadataKey {
+        SourceMetadataKey {
+            package: self.package.clone(),
+            channel_urls: self.backend_metadata.channels.clone(),
+            build_environment: self.backend_metadata.build_environment.clone(),
+            enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
+            pinned_source: self.backend_metadata.manifest_source.clone(),
+        }
+    }
+
+    async fn verify_cache_freshness(
+        current_input_hash: &Option<InputHash>,
+        cached_metadata: Option<CachedSourceMetadata>,
+        requested_variants: &Option<BTreeMap<String, Vec<VariantValue>>>,
+    ) -> Result<Option<CachedSourceMetadata>, CommandDispatcherError<SourceMetadataError>> {
+        let Some(cached_metadata) = cached_metadata else {
+            tracing::debug!("no cached metadata passed.");
+            return Ok(None);
+        };
+
+        // Check if the build variants match
+        if cached_metadata.build_variants != *requested_variants {
+            tracing::trace!("found cached response with different variants, invalidating cache.");
+            return Ok(None);
+        }
+
+        // If neither has an input hash, consider it fresh
+        let (Some(current_hash), Some(cached_hash)) =
+            (current_input_hash, &cached_metadata.input_hash)
+        else {
+            tracing::trace!("no input hash to compare, assuming cache is fresh");
+            return Ok(Some(cached_metadata));
+        };
+
+        // Compare the hashes directly
+        if current_hash.hash == cached_hash.hash {
+            tracing::trace!("found up-to-date cached response");
+            Ok(Some(cached_metadata))
+        } else {
+            tracing::trace!("found stale cached response");
+            Ok(None)
         }
     }
 
@@ -397,6 +516,7 @@ impl SourceMetadataSpec {
                     .into_specs()
                     .map(|(name, spec)| (name, spec.value))
                     .collect(),
+                dev_sources: Default::default(),
                 installed: vec![], // TODO: To lock build environments, fill this.
                 build_environment,
                 channels: self.backend_metadata.channels.clone(),
@@ -526,6 +646,9 @@ pub enum SourceMetadataError {
 
     #[error("the dependencies of some packages in the environment form a cycle")]
     Cycle(Cycle),
+
+    #[error(transparent)]
+    Cache(#[from] source_metadata::SourceMetadataCacheError),
 }
 
 impl From<DependenciesError> for SourceMetadataError {

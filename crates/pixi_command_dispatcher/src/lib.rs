@@ -35,9 +35,11 @@
 mod backend_source_build;
 pub mod build;
 mod build_backend_metadata;
+mod cache;
 mod cache_dirs;
 mod command_dispatcher;
 mod command_dispatcher_processor;
+mod dev_source_metadata;
 mod discover_backend_cache;
 mod executor;
 mod install_pixi;
@@ -66,6 +68,7 @@ pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
     CommandDispatcherErrorResultExt, InstantiateBackendError, InstantiateBackendSpec,
 };
+pub use dev_source_metadata::{DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataSpec};
 pub use executor::Executor;
 pub use install_pixi::{
     InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,

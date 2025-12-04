@@ -24,9 +24,12 @@ use xxhash_rust::xxh3::Xxh3;
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
-    build::{
-        SourceCodeLocation, SourceRecordOrCheckout, WorkDirKey,
-        source_metadata_cache::{self, CachedCondaMetadata, MetadataKind, SourceMetadataKey},
+    build::{SourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
+    cache::{
+        build_backend_metadata::{
+            self, BuildBackendMetadataKey, CachedCondaMetadata, MetadataKind,
+        },
+        common::MetadataCache,
     },
 };
 use pixi_build_discovery::BackendSpec;
@@ -94,10 +97,16 @@ pub struct BuildBackendMetadata {
     ///
     /// As long as the cache entry is not dropped, the metadata cannot be
     /// accessed by another process.
-    pub cache_entry: source_metadata_cache::CacheEntry,
+    pub cache_entry: build_backend_metadata::CacheEntry,
 
     /// The metadata that was acquired from the build backend.
     pub metadata: CachedCondaMetadata,
+
+    /// Whether caching should be skipped for this backend.
+    ///
+    /// This is true for System backends and path-based (mutable) backends
+    /// which can change between runs.
+    pub skip_cache: bool,
 }
 
 impl BuildBackendMetadataSpec {
@@ -192,7 +201,7 @@ impl BuildBackendMetadataSpec {
         // is still fresh.
         let cache_key = self.cache_key();
         let (metadata, mut cache_entry) = command_dispatcher
-            .source_metadata_cache()
+            .build_backend_metadata_cache()
             .entry(&cache_key)
             .await
             .map_err(BuildBackendMetadataError::Cache)
@@ -204,6 +213,7 @@ impl BuildBackendMetadataSpec {
                 &command_dispatcher,
                 metadata,
                 &additional_glob_hash,
+                &self.variant_configuration,
             )
             .await?
             {
@@ -211,6 +221,7 @@ impl BuildBackendMetadataSpec {
                     source: source_location.clone(),
                     metadata,
                     cache_entry,
+                    skip_cache,
                 });
             }
         } else {
@@ -274,6 +285,7 @@ impl BuildBackendMetadataSpec {
             source: source_location,
             metadata,
             cache_entry,
+            skip_cache,
         })
     }
 
@@ -335,6 +347,7 @@ impl BuildBackendMetadataSpec {
         command_dispatcher: &CommandDispatcher,
         metadata: Option<CachedCondaMetadata>,
         additional_glob_hash: &[u8],
+        requested_variants: &Option<BTreeMap<String, Vec<VariantValue>>>,
     ) -> Result<Option<CachedCondaMetadata>, CommandDispatcherError<BuildBackendMetadataError>>
     {
         let Some(metadata) = metadata else {
@@ -347,6 +360,14 @@ impl BuildBackendMetadataSpec {
                 pixi_build_types::procedures::conda_outputs::METHOD_NAME
             }
         };
+
+        // Check if the build variants match
+        if metadata.build_variants != *requested_variants {
+            tracing::trace!(
+                "found cached `{metadata_kind}` response with different variants, invalidating cache."
+            );
+            return Ok(None);
+        }
 
         let Some(input_globs) = &metadata.input_hash else {
             // No input hash so just assume it is still valid.
@@ -427,7 +448,7 @@ impl BuildBackendMetadataSpec {
     async fn call_conda_outputs(
         self,
         command_dispatcher: CommandDispatcher,
-        source_checkout: SourceCheckout,
+        build_source_checkout: SourceCheckout,
         backend: Backend,
         additional_glob_hash: Vec<u8>,
         mut log_sink: UnboundedSender<String>,
@@ -437,7 +458,7 @@ impl BuildBackendMetadataSpec {
             channels: self.channels,
             host_platform: self.build_environment.host_platform,
             build_platform: self.build_environment.build_platform,
-            variant_configuration: self.variant_configuration.map(|variants| {
+            variant_configuration: self.variant_configuration.clone().map(|variants| {
                 variants
                     .iter()
                     .map(|(k, v)| {
@@ -455,7 +476,7 @@ impl BuildBackendMetadataSpec {
             work_directory: command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {
                     source: SourceRecordOrCheckout::Checkout {
-                        checkout: source_checkout.clone(),
+                        checkout: build_source_checkout.clone(),
                     },
                     host_platform: self.build_environment.host_platform,
                     build_backend: backend_identifier.clone(),
@@ -492,17 +513,17 @@ impl BuildBackendMetadataSpec {
         let input_globs = extend_input_globs_with_variant_files(
             outputs.input_globs.clone(),
             &self.variant_files,
-            &source_checkout,
+            &build_source_checkout,
         );
         tracing::debug!(
             backend = %backend_identifier,
-            source = %source_checkout.pinned,
+            source = %build_source_checkout.pinned,
             glob_count = input_globs.len(),
             "computing metadata input hash",
         );
         let input_hash = Self::compute_input_hash(
             command_dispatcher,
-            &source_checkout,
+            &build_source_checkout,
             input_globs,
             additional_glob_hash,
         )
@@ -514,6 +535,7 @@ impl BuildBackendMetadataSpec {
             metadata: MetadataKind::Outputs {
                 outputs: outputs.outputs,
             },
+            build_variants: self.variant_configuration.clone(),
         })
     }
 
@@ -549,11 +571,10 @@ impl BuildBackendMetadataSpec {
     }
 
     /// Computes the cache key for this instance
-    pub(crate) fn cache_key(&self) -> SourceMetadataKey {
-        SourceMetadataKey {
+    pub(crate) fn cache_key(&self) -> BuildBackendMetadataKey {
+        BuildBackendMetadataKey {
             channel_urls: self.channels.clone(),
             build_environment: self.build_environment.clone(),
-            build_variants: self.variant_configuration.clone().unwrap_or_default(),
             enabled_protocols: self.enabled_protocols.clone(),
             pinned_source: self.manifest_source.clone(),
         }
@@ -615,7 +636,7 @@ pub enum BuildBackendMetadataError {
     GlobHash(#[from] pixi_glob::GlobHashError),
 
     #[error(transparent)]
-    Cache(#[from] source_metadata_cache::SourceMetadataCacheError),
+    Cache(#[from] build_backend_metadata::BuildBackendMetadataCacheError),
 }
 
 /// Computes an additional hash to be used in glob hash

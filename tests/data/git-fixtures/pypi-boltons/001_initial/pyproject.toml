@@ -1,9 +1,9 @@
 [build-system]
-requires = ["hatchling"]
 build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 [project]
-name = "boltons"
-version = "24.0.0"
 description = "Test fixture for boltons"
+name = "boltons"
 requires-python = ">=3.8"
+version = "24.0.0"
