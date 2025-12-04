@@ -570,6 +570,7 @@ async fn add_sdist_functionality() {
     // Add the sdist pypi package
     pixi.add("sdist")
         .set_type(DependencyType::PypiDependency)
+        .with_install(true)
         .await
         .unwrap();
 }
