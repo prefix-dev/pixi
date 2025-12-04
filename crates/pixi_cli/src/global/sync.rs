@@ -46,6 +46,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         match project.sync_environment(&env_name, None).await {
             Ok(state_changes) => {
                 if state_changes.has_changed() {
+                    has_changed = true;
                     state_changes.report();
                 }
             }
