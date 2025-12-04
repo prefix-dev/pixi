@@ -158,6 +158,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     spec_type,
                     (&args).try_into()?,
                     git_options,
+                    args.channel.clone(),
                 )
                 .await?
         }

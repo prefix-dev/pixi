@@ -4,10 +4,10 @@ use pixi_core::{
     environment::sanity_check_workspace,
     workspace::{PypiDeps, UpdateDeps, WorkspaceMut},
 };
+use pixi_manifest::PrioritizedChannel;
 use pixi_manifest::{FeatureName, KnownPreviewFeature, SpecType};
 use pixi_spec::{GitSpec, SourceLocationSpec, SourceSpec};
-use rattler_conda_types::{MatchSpec, PackageName};
-
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName};
 mod options;
 
 pub use options::{DependencyOptions, GitOptions};
@@ -18,6 +18,7 @@ pub async fn add_conda_dep(
     spec_type: SpecType,
     dep_options: DependencyOptions,
     git_options: GitOptions,
+    channel: Option<String>,
 ) -> miette::Result<Option<UpdateDeps>> {
     sanity_check_workspace(workspace.workspace()).await?;
 
@@ -29,6 +30,30 @@ pub async fn add_conda_dep(
     let mut match_specs = IndexMap::default();
     let mut source_specs = IndexMap::default();
 
+    // Add a channel if specified
+
+    if channel.is_some() {
+        workspace.manifest().add_channels(
+            [
+                PrioritizedChannel::from(NamedChannelOrUrl::Name(channel.unwrap_or_default()))
+                    .clone(),
+            ],
+            &FeatureName::DEFAULT,
+            false,
+        )?;
+    }
+
+    for (_, spec) in &specs {
+        let Some(channel) = spec.channel.as_ref().and_then(|c| c.name.as_ref()) else {
+            break;
+        };
+
+        workspace.manifest().add_channels(
+            [PrioritizedChannel::from(NamedChannelOrUrl::Name(channel.clone())).clone()],
+            &FeatureName::DEFAULT,
+            false,
+        )?;
+    }
     // if user passed some git configuration
     // we will use it to create pixi source specs
     let passed_specs: IndexMap<PackageName, (MatchSpec, SpecType)> = specs
