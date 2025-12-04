@@ -96,9 +96,19 @@ test = {{features = ["test"]}}
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_flat_links_based_index_returns_path() {
     setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
 
     // Build a local flat (find-links) index with a single wheel: foo==1.0.0
     let index = PyPIDatabase::new()
@@ -113,10 +123,10 @@ async fn test_flat_links_based_index_returns_path() {
         [project]
         name = "pypi-flat-find-links"
         platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [pypi-dependencies]
         foo = "*"
@@ -124,7 +134,8 @@ async fn test_flat_links_based_index_returns_path() {
         [pypi-options]
         find-links = [{{ path = "{find_links_path}"}}]
         "#,
-        platform = Platform::current(),
+        platform = platform,
+        channel_url = channel.url(),
         find_links_path = find_links_path,
     ));
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
@@ -133,7 +144,7 @@ async fn test_flat_links_based_index_returns_path() {
     // Our wheel builder uses the tag py3-none-any by default.
     assert_eq!(
         lock_file
-            .get_pypi_package_url("default", Platform::current(), "foo")
+            .get_pypi_package_url("default", platform, "foo")
             .unwrap()
             .as_path()
             .unwrap(),
@@ -143,9 +154,19 @@ async fn test_flat_links_based_index_returns_path() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_file_based_index_returns_path() {
     setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
 
     let simple = PyPIDatabase::new()
         .with(PyPIPackage::new("foo", "1.0.0"))
@@ -157,10 +178,10 @@ async fn test_file_based_index_returns_path() {
         [project]
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [pypi-dependencies]
         foo = "*"
@@ -169,14 +190,15 @@ async fn test_file_based_index_returns_path() {
         extra-index-urls = [
             "{index_url}"
         ]"#,
-        platform = Platform::current(),
+        platform = platform,
+        channel_url = channel.url(),
         index_url = simple.index_url(),
     ));
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
 
     assert_eq!(
         lock_file
-            .get_pypi_package_url("default", Platform::current(), "foo")
+            .get_pypi_package_url("default", platform, "foo")
             .unwrap()
             .as_path()
             .unwrap(),
@@ -187,9 +209,19 @@ async fn test_file_based_index_returns_path() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_index_strategy() {
     setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
 
     let idx_a = PyPIDatabase::new()
         .with(PyPIPackage::new("foo", "1.0.0"))
@@ -209,10 +241,10 @@ async fn test_index_strategy() {
         [project]
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [pypi-dependencies]
         foo = "*"
@@ -245,7 +277,8 @@ async fn test_index_strategy() {
         unsafe-first-match-constrained = ["unsafe-first-match-constrained"]
         unsafe-best-match = ["unsafe-best-match"]
         "#,
-        platform = Platform::current(),
+        platform = platform,
+        channel_url = channel.url(),
         idx_a = idx_a.index_url(),
         idx_b = idx_b.index_url(),
         idx_c = idx_c.index_url(),
@@ -254,37 +287,39 @@ async fn test_index_strategy() {
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
 
     assert_eq!(
-        lock_file.get_pypi_package_version("default", Platform::current(), "foo"),
+        lock_file.get_pypi_package_version("default", platform, "foo"),
         Some("1.0.0".into())
     );
     assert_eq!(
-        lock_file.get_pypi_package_version(
-            "unsafe-first-match-unconstrained",
-            Platform::current(),
-            "foo"
-        ),
+        lock_file.get_pypi_package_version("unsafe-first-match-unconstrained", platform, "foo"),
         Some("1.0.0".into())
     );
 
     assert_eq!(
-        lock_file.get_pypi_package_version(
-            "unsafe-first-match-constrained",
-            Platform::current(),
-            "foo"
-        ),
+        lock_file.get_pypi_package_version("unsafe-first-match-constrained", platform, "foo"),
         Some("3.0.0".into())
     );
     assert_eq!(
-        lock_file.get_pypi_package_version("unsafe-best-match", Platform::current(), "foo"),
+        lock_file.get_pypi_package_version("unsafe-best-match", platform, "foo"),
         Some("3.0.0".into())
     );
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 /// This test checks if we can pin a package from a PyPI index, by explicitly specifying the index.
 async fn test_pinning_index() {
     setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
 
     let idx = PyPIDatabase::new()
         .with(PyPIPackage::new("foo", "1.0.0"))
@@ -296,16 +331,17 @@ async fn test_pinning_index() {
         [project]
         name = "pypi-pinning-index"
         platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [pypi-dependencies]
         foo = {{ version = "*", index = "{idx_url}" }}
 
         "#,
-        platform = Platform::current(),
+        platform = platform,
+        channel_url = channel.url(),
         idx_url = idx.index_url(),
     ));
 
@@ -313,7 +349,7 @@ async fn test_pinning_index() {
 
     assert_eq!(
         lock_file
-            .get_pypi_package_url("default", Platform::current(), "foo")
+            .get_pypi_package_url("default", platform, "foo")
             .unwrap()
             .as_path()
             .unwrap(),
@@ -324,7 +360,7 @@ async fn test_pinning_index() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 /// This test checks if we can receive torch correctly from the whl/cu124 index.
 async fn pin_torch() {
     setup_tracing();
@@ -336,19 +372,36 @@ async fn pin_torch() {
         _ => format!("\"{platform}\", \"linux-64\""),
     };
 
+    // Create local conda channel with Python for all relevant platforms
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::Linux64)
+            .finish(),
+    );
+    if platform != Platform::Linux64 {
+        package_db.add_package(
+            Package::build("python", "3.12.0")
+                .with_subdir(platform)
+                .finish(),
+        );
+    }
+    let channel = package_db.into_channel().await.unwrap();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [project]
         name = "pypi-pinning-index"
         platforms = [{platforms}]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [target.linux-64.pypi-dependencies]
         torch = {{ version = "*", index = "https://download.pytorch.org/whl/cu124" }}
         "#,
+        channel_url = channel.url(),
     ));
 
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
@@ -367,26 +420,46 @@ async fn pin_torch() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_allow_insecure_host() {
     setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    // Create local PyPI index with sh package
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("sh", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [project]
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [pypi-dependencies]
         sh = "*"
 
         [pypi-options]
+        index-url = "{pypi_index_url}"
         extra-index-urls = ["https://expired.badssl.com/"]"#,
-        platform = Platform::current(),
+        platform = platform,
+        channel_url = channel.url(),
+        pypi_index_url = pypi_index.index_url(),
     ))
     .unwrap();
     // will occur ssl error
@@ -411,24 +484,46 @@ async fn test_allow_insecure_host() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_tls_no_verify_with_pypi_dependencies() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    // Create local PyPI index with sh package
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("sh", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [project]
         name = "pypi-tls-test"
         platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [pypi-dependencies]
         sh = "*"
 
         [pypi-options]
+        index-url = "{pypi_index_url}"
         extra-index-urls = ["https://expired.badssl.com/"]"#,
-        platform = Platform::current(),
+        platform = platform,
+        channel_url = channel.url(),
+        pypi_index_url = pypi_index.index_url(),
     ))
     .unwrap();
 
@@ -472,24 +567,46 @@ async fn test_tls_no_verify_with_pypi_dependencies() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_tls_verify_still_fails_without_config() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    // Create local PyPI index with sh package
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("sh", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [project]
         name = "pypi-tls-verify-test"
         platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [pypi-dependencies]
         sh = "*"
 
         [pypi-options]
+        index-url = "{pypi_index_url}"
         extra-index-urls = ["https://expired.badssl.com/"]"#,
-        platform = Platform::current(),
+        platform = platform,
+        channel_url = channel.url(),
+        pypi_index_url = pypi_index.index_url(),
     ))
     .unwrap();
 
@@ -686,7 +803,6 @@ async fn test_index_strategy_respected_for_build_dependencies() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_cross_platform_resolve_with_no_build() {
     setup_tracing();
 
@@ -696,6 +812,15 @@ async fn test_cross_platform_resolve_with_no_build() {
     } else {
         Platform::OsxArm64
     };
+
+    // Create local conda channel with Python for the resolve platform
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(resolve_platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
 
     // Use a local flat index for foo==1.0.0
     let flat = PyPIDatabase::new()
@@ -707,10 +832,10 @@ async fn test_cross_platform_resolve_with_no_build() {
         [project]
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [pypi-dependencies]
         foo = "*"
@@ -719,6 +844,7 @@ async fn test_cross_platform_resolve_with_no_build() {
         no-build = true
         find-links = [{{ path = "{find_links}"}}]"#,
         platform = resolve_platform,
+        channel_url = channel.url(),
         find_links = flat.path().display().to_string().replace("\\", "/"),
     ));
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
@@ -739,7 +865,6 @@ async fn test_cross_platform_resolve_with_no_build() {
 ///
 /// We expect there to be a help message that informs the user about the pinned package
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_pinned_help_message() {
     setup_tracing();
 
