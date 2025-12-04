@@ -515,7 +515,7 @@ impl WorkspaceManifestMut<'_> {
             match self
                 .workspace
                 .get_or_insert_target_mut(platform, Some(feature_name))
-                .try_add_pep508_dependency(requirement, editable, overwrite_behavior)
+                .try_add_pep508_dependency(requirement, pixi_req, editable, overwrite_behavior)
             {
                 Ok(true) => {
                     self.document.add_pypi_dependency(
