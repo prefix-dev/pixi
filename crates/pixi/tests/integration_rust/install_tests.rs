@@ -1001,7 +1001,6 @@ async fn test_many_linux_wheel_tag() {
     // We know that this package has many linux wheel tags for this version
     pixi.add("gmsh==4.13.1")
         .set_type(pixi_core::DependencyType::PypiDependency)
-        .with_install(true)
         .await
         .unwrap();
 }

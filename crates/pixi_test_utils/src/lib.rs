@@ -2,6 +2,12 @@ use itertools::Itertools;
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme, NamedSource, Report};
 use std::path::Path;
 
+pub mod git_fixture;
+pub mod package_database;
+
+pub use git_fixture::GitRepoFixture;
+pub use package_database::{LocalChannel, Package, PackageBuilder, PackageDatabase};
+
 /// Format a TOML parse error into a string that can be used to generate
 /// snapshots.
 pub fn format_parse_error(source: &str, error: impl Into<Report>) -> String {

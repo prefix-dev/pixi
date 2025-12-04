@@ -807,9 +807,19 @@ async fn test_pinned_help_message() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_uv_index_correctly_parsed() {
     setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = PackageDatabase::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
 
     // Provide a local simple index containing `foo` used in build-system requires.
     let simple = PyPIDatabase::new()
@@ -845,13 +855,14 @@ async fn test_uv_index_correctly_parsed() {
         module-root = ""
 
         [tool.pixi.workspace]
-        channels = ["conda-forge"]
+        channels = ["{channel_url}"]
         platforms = ["{platform}"]
 
         [tool.pixi.pypi-dependencies]
         simple = {{ path = "." }}
         "#,
-        platform = Platform::current(),
+        platform = platform,
+        channel_url = channel.url(),
         index_url = simple.index_url(),
     ))
     .unwrap();

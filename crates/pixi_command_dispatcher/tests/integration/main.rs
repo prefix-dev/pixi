@@ -98,6 +98,17 @@ fn file_url_for_test(tempdir: &TempDir, name: &str) -> Url {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 pub async fn simple_test() {
+    use pixi_test_utils::GitRepoFixture;
+
+    // Create a local git repo from our fixture
+    let git_repo = GitRepoFixture::new("multi-output-recipe");
+
+    // Use a local channel (backend_channel_1 has pixi-build-api-version which is needed for builds)
+    let channel_dir = cargo_workspace_dir().join("tests/data/channels/channels/backend_channel_1");
+    let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir)
+        .unwrap()
+        .into();
+
     let (reporter, events) = EventReporter::new();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let tempdir = tempfile::tempdir().unwrap();
@@ -116,21 +127,13 @@ pub async fn simple_test() {
             dependencies: DependencyMap::from_iter([(
                 "foobar-desktop".parse().unwrap(),
                 GitSpec {
-                    git: "https://github.com/wolfv/pixi-build-examples.git"
-                        .parse()
-                        .unwrap(),
-                    rev: Some(GitReference::Rev(
-                        "8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a".to_owned(),
-                    )),
-                    subdirectory: Some(String::from("multi-output/recipe")),
+                    git: git_repo.url.parse().unwrap(),
+                    rev: Some(GitReference::Rev(git_repo.commits[0].clone())),
+                    subdirectory: Some(String::from("recipe")),
                 }
                 .into(),
             )]),
-            channels: vec![
-                Url::from_str("https://prefix.dev/conda-forge")
-                    .unwrap()
-                    .into(),
-            ],
+            channels: vec![channel_url.clone()],
             build_environment: build_env.clone(),
             channel_config: default_channel_config(),
             ..PixiEnvironmentSpec::default()
@@ -147,11 +150,7 @@ pub async fn simple_test() {
             build_environment: build_env,
             ignore_packages: None,
             force_reinstall: Default::default(),
-            channels: vec![
-                Url::from_str("https://prefix.dev/conda-forge")
-                    .unwrap()
-                    .into(),
-            ],
+            channels: vec![channel_url],
             channel_config: default_channel_config(),
             variant_configuration: None,
             variant_files: None,
@@ -166,7 +165,16 @@ pub async fn simple_test() {
     );
 
     let event_tree = EventTree::from(events);
-    insta::assert_snapshot!(event_tree.to_string());
+
+    // Redact temp paths and git hashes for stable snapshots
+    let output = event_tree.to_string();
+    let output = regex::Regex::new(r"file:///[^@]+/multi-output-recipe/")
+        .unwrap()
+        .replace_all(&output, "file://[LOCAL_GIT_REPO]/");
+    let output = regex::Regex::new(r"@[a-f0-9]{40}")
+        .unwrap()
+        .replace_all(&output, "@[GIT_HASH]");
+    insta::assert_snapshot!(output);
 }
 
 #[tokio::test]
@@ -534,13 +542,43 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 pub async fn instantiate_backend_with_from_source() {
-    let root_dir = workspaces_dir().join("source-backends");
+    // Use existing backend_channel_1 which has pixi-build-api-version package with actual .conda files
+    let channel_dir = cargo_workspace_dir()
+        .join("tests/data/channels/channels/backend_channel_1");
+    let channel_url = url::Url::from_directory_path(&channel_dir).unwrap();
+
+    // Copy source-backends workspace to temp directory so we can modify the channel
+    let source_dir = workspaces_dir().join("source-backends");
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let root_dir = tmp_dir.path().to_path_buf();
+
+    // Copy all files from source to temp
+    fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+        fs_err::create_dir_all(dst)?;
+        for entry in fs_err::read_dir(src)? {
+            let entry = entry?;
+            let src_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+            if src_path.is_dir() {
+                copy_dir_recursive(&src_path, &dst_path)?;
+            } else {
+                fs_err::copy(&src_path, &dst_path)?;
+            }
+        }
+        Ok(())
+    }
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
+
+    // Update workspace pixi.toml to use local channel instead of conda-forge
+    let workspace_toml = root_dir.join("pixi.toml");
+    let content = fs_err::read_to_string(&workspace_toml).unwrap();
+    let content = content.replace("conda-forge", channel_url.as_str());
+    fs_err::write(&workspace_toml, content).unwrap();
 
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(root_dir.clone())
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(CacheDirs::new(root_dir.join(".pixi")))
         .with_executor(Executor::Serial)
         .with_backend_overrides(BackendOverride::InMemory(
             InMemoryOverriddenBackends::Specified(HashMap::from_iter([(
