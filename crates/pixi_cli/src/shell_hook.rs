@@ -124,7 +124,6 @@ async fn generate_activation_script(
 async fn generate_deactivation_script(
     shell: Option<ShellEnum>,
     environment: &Environment<'_>,
-    _project: &Workspace,
 ) -> miette::Result<String> {
     // Get shell from the arguments or from the current process or use default if
     // all fails
@@ -222,7 +221,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         (_, true) => {
             // Deactivation script
-            generate_deactivation_script(args.shell, &environment, &workspace).await?
+            generate_deactivation_script(args.shell, &environment).await?
         }
         _ => {
             // Default: activation script
