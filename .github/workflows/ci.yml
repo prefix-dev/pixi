@@ -277,7 +277,8 @@ jobs:
       - uses: rui314/setup-mold@725a8794d15fc7563f59595bd9556495c0564878 # v1
       - name: "Setup musl"
         run: |
-          sudo apt-get install musl-tools
+          sudo apt update
+          sudo apt install musl-tools
           rustup target add x86_64-unknown-linux-musl
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
