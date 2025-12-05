@@ -24,6 +24,25 @@ use crate::{
     task_environment::{FindTaskError, FindTaskSource, SearchEnvironments},
 };
 
+/// Joins command-line arguments into a single shell command string.
+///
+/// Uses single quotes to preserve backslashes literally. This avoids issues
+/// with deno_task_shell which doesn't unescape `\\` to `\` inside double
+/// quotes the way POSIX shells do (see issue #5054).
+///
+/// Single quotes within arguments are handled by ending the single-quoted
+/// section, adding a double-quoted single quote, and continuing:
+/// `it's` becomes `'it'"'"'s'`
+fn join_args_with_single_quotes<'a>(args: impl IntoIterator<Item = &'a str>) -> String {
+    args.into_iter()
+        .map(|arg| {
+            // Use single quotes, replacing any ' with '"'"'
+            // (end single quote, double-quoted single quote, start single quote)
+            format!("'{}'", arg.replace('\'', r#"'"'"'"#))
+        })
+        .join(" ")
+}
+
 /// A task ID is a unique identifier for a [`TaskNode`] in a [`TaskGraph`].
 ///
 /// To get a task from a [`TaskGraph`], you can use the [`TaskId`] as an index.
@@ -271,8 +290,10 @@ impl<'p> TaskGraph<'p> {
         // and clap, so we reconstruct them into a single shell command to avoid double-quoting.
         let (cmd, additional_args) = if verbatim {
             // Multiple CLI arguments: reconstruct as a single shell command
-            let command_string = shlex::try_join(args.iter().map(|s| s.as_str()))
-                .map_err(|_| TaskGraphError::InvalidTask)?;
+            // We use single quotes to preserve backslashes literally, avoiding the
+            // escaping mismatch between shlex's POSIX double-quote escaping and
+            // deno_task_shell's non-POSIX parsing (see issue #5054).
+            let command_string = join_args_with_single_quotes(args.iter().map(|s| s.as_str()));
             (CmdArgs::Single(command_string.into()), vec![])
         } else {
             // Single argument that was shell-parsed: use as multiple args
@@ -590,7 +611,10 @@ mod test {
     use pixi_manifest::EnvironmentName;
     use rattler_conda_types::Platform;
 
-    use crate::{task_environment::SearchEnvironments, task_graph::TaskGraph};
+    use crate::{
+        task_environment::SearchEnvironments,
+        task_graph::{TaskGraph, join_args_with_single_quotes},
+    };
 
     fn commands_in_order(
         project_str: &str,
@@ -885,5 +909,26 @@ mod test {
             commands_in_order(project, &["bar"], None, None, false),
             vec!["echo foo", "echo bar"]
         );
+    }
+
+    /// Regression test for https://github.com/prefix-dev/pixi/issues/5054
+    ///
+    /// Verifies that backslashes in CLI arguments are preserved correctly.
+    #[test]
+    fn test_backslash_escaping_issue_5054() {
+        // Backslashes should be preserved using single quotes
+        let args = ["echo", r"test\ntest"];
+        let result = join_args_with_single_quotes(args.iter().copied());
+        assert_eq!(result, r#"'echo' 'test\ntest'"#);
+
+        // JSON with escaped quotes should use single quotes
+        let json_args = ["python", "-c", "print(1)", r#"{"a": "b\"c"}"#];
+        let json_result = join_args_with_single_quotes(json_args.iter().copied());
+        assert_eq!(json_result, r#"'python' '-c' 'print(1)' '{"a": "b\"c"}'"#);
+
+        // Single quotes in arguments: 'it'"'"'s' (end quote, quoted quote, start quote)
+        let quote_args = ["echo", "it's"];
+        let quote_result = join_args_with_single_quotes(quote_args.iter().copied());
+        assert_eq!(quote_result, r#"'echo' 'it'"'"'s'"#);
     }
 }
