@@ -83,8 +83,15 @@ impl BuildInput {
         build.hash(&mut hasher);
         channel_urls.hash(&mut hasher);
         host_platform.hash(&mut hasher);
-        host_virtual_packages.hash(&mut hasher);
-        build_virtual_packages.hash(&mut hasher);
+
+        let mut sorted_host_virtual_packages = host_virtual_packages.clone();
+        sorted_host_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));
+        sorted_host_virtual_packages.hash(&mut hasher);
+
+        let mut sorted_build_virtual_packages = build_virtual_packages.clone();
+        sorted_build_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));
+        sorted_build_virtual_packages.hash(&mut hasher);
+
         let hash = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
 
         format!("{name}-{version}-{subdir}-{hash}",)
