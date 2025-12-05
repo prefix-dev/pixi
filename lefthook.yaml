@@ -35,6 +35,10 @@ pre-commit:
             run: pixi {run} ruff-lint {staged_files}
           - name: ruff format
             run: pixi {run} ruff-format {staged_files}
+    - name: cargo-shear
+      glob: "*.rs,Cargo.toml"
+      stage_fixed: true
+      run: pixi {run} cargo-shear
     - name: shell-format
       glob: "*.{sh, bash}"
       run: pixi {run} shell-format {staged_files}
