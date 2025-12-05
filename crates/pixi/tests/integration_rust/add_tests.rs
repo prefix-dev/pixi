@@ -13,11 +13,11 @@ use pixi_build_backend_passthrough::PassthroughBackend;
 use pixi_build_frontend::BackendOverride;
 
 use crate::common::{
-    GitRepoFixture, LockFileExt, PixiControl,
+    LockFileExt, PixiControl,
     builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig},
 };
 use crate::setup_tracing;
-use pixi_test_utils::{MockRepoData, Package};
+use pixi_test_utils::{GitRepoFixture, MockRepoData, Package};
 
 /// Test add functionality for different types of packages.
 /// Run, dev, build
@@ -257,7 +257,6 @@ async fn add_functionality_os() {
 /// Test the `pixi add --pypi` functionality (using local mocks)
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn add_pypi_functionality() {
-    use crate::common::git_fixture::GitRepoFixture;
     use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 
     setup_tracing();

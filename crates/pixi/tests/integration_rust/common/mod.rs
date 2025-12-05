@@ -2,11 +2,10 @@
 
 pub mod builders;
 pub mod client;
-pub mod git_fixture;
 pub mod logging;
 pub mod pypi_index;
 
-pub use git_fixture::GitRepoFixture;
+pub use pixi_test_utils::GitRepoFixture;
 
 use std::{
     ffi::OsString,
