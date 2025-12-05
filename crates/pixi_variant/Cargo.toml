@@ -15,5 +15,3 @@ rattler_lock = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
-serde_json = { workspace = true }
-serde_yaml = { workspace = true }

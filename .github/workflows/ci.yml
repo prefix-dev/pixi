@@ -85,6 +85,7 @@ jobs:
               - "install/install.ps1"
 
   lint:
+    name: "lint"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
@@ -98,7 +99,7 @@ jobs:
 
   # Check that all the code references are correct.
   check-rustdoc-links:
-    name: "cargo rustdoc | ubuntu"
+    name: "cargo rustdoc"
     needs: determine_changes
     runs-on: ubuntu-latest
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
@@ -114,17 +115,21 @@ jobs:
 
   # Checks for dependencies that are not used in the codebase
   cargo-machete:
-    name: Cargo Machete
+    timeout-minutes: 10
+    name: cargo shear
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-      - name: Machete
-        uses: bnjbvr/cargo-machete@7959c845782fed02ee69303126d4a12d64f1db18 # v0.9.1
+      - name: "Install cargo shear"
+        uses: taiki-e/install-action@a416ddeedbd372e614cc1386e8b642692f66865e # v2.57.1
+        with:
+          tool: cargo-shear
+      - run: cargo shear
 
   # Checks for duplicate version of package
   cargo-vendor:
-    name: Cargo Vendor
+    name: cargo vendor
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
@@ -140,6 +145,7 @@ jobs:
         run: cargo vendor --locked
 
   check-cli-docs:
+    name: check cli docs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6

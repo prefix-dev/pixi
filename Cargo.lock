@@ -2281,17 +2281,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "filedescriptor"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e40758ed24c9b2eeb76c35fb0aebc66c626084edd827e07e1552279814c6682d"
-dependencies = [
- "libc",
- "thiserror 1.0.69",
- "winapi",
-]
-
-[[package]]
 name = "filetime"
 version = "0.2.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2541,16 +2530,6 @@ dependencies = [
  "pin-project-lite",
  "pin-utils",
  "slab",
-]
-
-[[package]]
-name = "gag"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a713bee13966e9fbffdf7193af71d54a6b35a0bb34997cd6c9519ebeb5005972"
-dependencies = [
- "filedescriptor",
- "tempfile",
 ]
 
 [[package]]
@@ -4774,13 +4753,10 @@ version = "0.60.0"
 dependencies = [
  "async-trait",
  "chrono",
- "clap",
  "dunce",
- "fake",
  "fs-err",
  "fs_extra",
  "futures",
- "gag",
  "http 1.4.0",
  "indexmap 2.12.1",
  "indicatif",
@@ -4801,7 +4777,6 @@ dependencies = [
  "pixi_record",
  "pixi_spec",
  "pixi_task",
- "pixi_test_utils",
  "pixi_utils",
  "pypi_mapping",
  "rattler_conda_types",
@@ -4810,7 +4785,6 @@ dependencies = [
  "rattler_virtual_packages",
  "reqwest",
  "reqwest-middleware",
- "rstest",
  "serde_json",
  "temp-env",
  "tempfile",
@@ -4825,7 +4799,6 @@ dependencies = [
  "uv-configuration",
  "uv-installer",
  "uv-normalize",
- "uv-pep508",
  "uv-python",
  "zip 2.4.2",
 ]
@@ -4995,7 +4968,6 @@ dependencies = [
  "itertools 0.14.0",
  "libc",
  "miette 7.6.0",
- "nix 0.29.0",
  "pathdiff",
  "pep508_rs",
  "pixi_api",
@@ -5035,8 +5007,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "sha2",
- "signal-hook",
  "strsim",
  "tabwriter",
  "tar",
@@ -5168,26 +5138,22 @@ name = "pixi_core"
 version = "0.1.0"
 dependencies = [
  "async-once-cell",
- "async-trait",
  "barrier_cell",
  "chrono",
  "console 0.16.1",
  "dashmap",
  "dialoguer",
  "dunce",
- "fake",
  "fancy_display",
  "fs-err",
  "fs_extra",
  "futures",
- "http 1.4.0",
  "human_bytes",
  "humantime",
  "indexmap 2.12.1",
  "indicatif",
  "insta",
  "itertools 0.14.0",
- "libc",
  "miette 7.6.0",
  "once_cell",
  "pathdiff",
@@ -5225,8 +5191,6 @@ dependencies = [
  "rattler_shell",
  "rattler_solve",
  "rattler_virtual_packages",
- "reqwest",
- "rlimit",
  "rstest",
  "serde",
  "serde_json",
@@ -5356,7 +5320,6 @@ dependencies = [
  "insta",
  "is_executable",
  "itertools 0.14.0",
- "libc",
  "miette 7.6.0",
  "once_cell",
  "pixi_build_discovery",
@@ -5406,7 +5369,6 @@ dependencies = [
  "csv",
  "fancy_display",
  "fs-err",
- "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
  "pep440_rs",
@@ -5427,7 +5389,6 @@ dependencies = [
  "rattler_conda_types",
  "rattler_lock",
  "rayon",
- "rstest",
  "serde",
  "serde_json",
  "tempfile",
@@ -5468,7 +5429,6 @@ dependencies = [
  "dunce",
  "fancy_display",
  "fs-err",
- "glob",
  "indexmap 2.12.1",
  "insta",
  "itertools 0.14.0",
@@ -5569,7 +5529,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "serde_yaml",
  "thiserror 2.0.17",
  "typed-path",
  "url",
@@ -5838,8 +5797,6 @@ dependencies = [
  "pixi_build_types",
  "rattler_lock",
  "serde",
- "serde_json",
- "serde_yaml",
 ]
 
 [[package]]
