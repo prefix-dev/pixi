@@ -79,9 +79,6 @@ async fn generate_activation_script(
             .unwrap_or_else(|| ShellEnum::from_env().unwrap_or_default())
     });
 
-    // Read current environment variables
-    let current_env = std::env::vars().collect::<HashMap<String, String>>();
-
     let activator = get_activator(environment, shell.clone()).into_diagnostic()?;
 
     let path = std::env::var("PATH")
@@ -225,7 +222,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         (_, true) => {
             // Deactivation script
-            generate_deactivation_script(args.shell, &environment).await?
+            generate_deactivation_script(args.shell, &environment, &workspace).await?
         }
         _ => {
             // Default: activation script
