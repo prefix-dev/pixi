@@ -1,0 +1,8 @@
+---
+source: crates/pixi_core/src/lock_file/satisfiability/mod.rs
+assertion_line: 2430
+expression: s
+---
+environment 'default' does not satisfy the requirements of the project for platform 'win-64'
+    Diagnostic severity: error
+    Caused by: failed to discover a valid project manifest, the source path 'F:\projects\pixi\tests\data\non-satisfiability\source-recursive-dependency-mismatch\foobar' could not be found

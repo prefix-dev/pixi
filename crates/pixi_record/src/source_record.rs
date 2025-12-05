@@ -205,6 +205,27 @@ impl SourceRecord {
             }),
         })
     }
+
+    /// Returns true if this source record refers to the same output as the other source record.
+    /// This is determined by comparing the package name, and either the variants (if both records have them)
+    /// or the build, version and subdir (if variants are not present).
+    pub fn refers_to_same_output(&self, other: &SourceRecord) -> bool {
+        if self.package_record.name != other.package_record.name {
+            return false;
+        }
+
+        match (&self.variants, &other.variants) {
+            (Some(variants), Some(other_variants)) => {
+                // If both records have variants, we use that to identify them.
+                return variants == other_variants;
+            }
+            _ => {
+                return self.package_record.build == other.package_record.build
+                    && self.package_record.version == other.package_record.version
+                    && self.package_record.subdir == other.package_record.subdir;
+            }
+        }
+    }
 }
 
 impl Matches<SourceRecord> for NamelessMatchSpec {
