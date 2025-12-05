@@ -3,6 +3,8 @@ environments:
   default:
     channels:
     - url: https://prefix.dev/conda-forge/
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://prefix.dev/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
@@ -736,6 +738,8 @@ environments:
   dist:
     channels:
     - url: https://prefix.dev/conda-forge/
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://prefix.dev/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
@@ -796,6 +800,8 @@ environments:
   docs:
     channels:
     - url: https://prefix.dev/conda-forge/
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://prefix.dev/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
@@ -1419,6 +1425,8 @@ environments:
   lint:
     channels:
     - url: https://prefix.dev/conda-forge/
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://prefix.dev/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
@@ -1437,6 +1445,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/c-compiler-1.11.0-h4d9bdce_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.11.12-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/cargo-deny-0.18.6-hb17b654_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/cargo-shear-1.7.1-hb17b654_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/clang-21-21.1.6-default_h99862b1_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/clang-21.1.6-default_h36abe19_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -1579,6 +1588,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/c-compiler-1.11.0-hdceaead_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.11.12-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/cargo-deny-0.18.6-h069e38c_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-aarch64/cargo-shear-1.7.1-h069e38c_1.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/clang-21-21.1.6-default_he95a3c9_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/clang-21.1.6-default_h395f21b_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -1719,6 +1729,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-64/c-compiler-1.11.0-h7a00415_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.11.12-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/cargo-deny-0.18.6-h3c2ae71_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-64/cargo-shear-1.7.1-h3c2ae71_1.conda
       - conda: https://prefix.dev/conda-forge/osx-64/cctools-1030.6.3-llvm19_1_h67a6458_1.conda
       - conda: https://prefix.dev/conda-forge/osx-64/cctools_impl_osx-64-1030.6.3-llvm19_1_h3b512aa_1.conda
       - conda: https://prefix.dev/conda-forge/osx-64/cctools_osx-64-1030.6.3-llvm19_1_h8f0d4bb_1.conda
@@ -1857,6 +1868,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/c-compiler-1.11.0-h61f9b84_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.11.12-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/cargo-deny-0.18.6-h8d80559_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-arm64/cargo-shear-1.7.1-h8d80559_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/cctools-1030.6.3-llvm19_1_hd01ab73_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/cctools_impl_osx-arm64-1030.6.3-llvm19_1_h8c76c84_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/cctools_osx-arm64-1030.6.3-llvm19_1_h6d92914_1.conda
@@ -1994,6 +2006,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/c-compiler-1.11.0-h528c1b4_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.11.12-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/cargo-deny-0.18.6-h18a1a76_0.conda
+      - conda: https://prefix.dev/conda-forge/win-64/cargo-shear-1.7.1-h18a1a76_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/clang-19-19.1.7-default_hac490eb_5.conda
       - conda: https://prefix.dev/conda-forge/win-64/clang-19.1.7-default_hac490eb_5.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -2095,6 +2108,8 @@ environments:
   pypi-gen:
     channels:
     - url: https://prefix.dev/conda-forge/
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://prefix.dev/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
@@ -2322,6 +2337,8 @@ environments:
   recipes:
     channels:
     - url: https://prefix.dev/conda-forge/
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://prefix.dev/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
@@ -2355,6 +2372,8 @@ environments:
   schema:
     channels:
     - url: https://prefix.dev/conda-forge/
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://prefix.dev/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
@@ -2669,6 +2688,8 @@ environments:
   test-export:
     channels:
     - url: https://prefix.dev/conda-forge/
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://prefix.dev/conda-forge/linux-64/micromamba-2.4.0-0.tar.bz2
@@ -2689,6 +2710,8 @@ environments:
   test-native-certs:
     channels:
     - url: https://prefix.dev/conda-forge/
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://prefix.dev/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
@@ -3225,6 +3248,8 @@ environments:
   trampoline:
     channels:
     - url: https://prefix.dev/conda-forge/
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://prefix.dev/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
@@ -4318,6 +4343,57 @@ packages:
   license_family: MIT
   size: 5418173
   timestamp: 1760383126762
+- conda: https://prefix.dev/conda-forge/linux-64/cargo-shear-1.7.1-hb17b654_1.conda
+  sha256: aad6174f8e53574a41405226a6b43429fc4894bfea6df78473f643e5f4f8504c
+  md5: cea1c2b433247d7f9c0de1beb9b543e9
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - libgcc >=14
+  constrains:
+  - __glibc >=2.17
+  license: MIT
+  size: 814279
+  timestamp: 1764939311447
+- conda: https://prefix.dev/conda-forge/linux-aarch64/cargo-shear-1.7.1-h069e38c_1.conda
+  sha256: 16a0e9ac53f8a06d024df660d359e352e2deac49d885d77af52581b240ccfc99
+  md5: dfb72b41a7d7b04ad261627346c0cee1
+  depends:
+  - libgcc >=14
+  constrains:
+  - __glibc >=2.17
+  license: MIT
+  size: 778481
+  timestamp: 1764939362140
+- conda: https://prefix.dev/conda-forge/osx-64/cargo-shear-1.7.1-h3c2ae71_1.conda
+  sha256: 465b07d95025cc90c759340411ab64c9e509d3ff972d97c6c0d10036e0c312fd
+  md5: 6f1b33fc28fd6c933d9feae27ab55ada
+  depends:
+  - __osx >=10.13
+  constrains:
+  - __osx >=10.13
+  license: MIT
+  size: 782860
+  timestamp: 1764939393435
+- conda: https://prefix.dev/conda-forge/osx-arm64/cargo-shear-1.7.1-h8d80559_1.conda
+  sha256: aa572f1223833e4e9bf5fa2b7febf4da97c4f0a4540fe4d3607652ee649214c3
+  md5: 069f52e4b7a4d82ac3fba4d127e9d560
+  depends:
+  - __osx >=11.0
+  constrains:
+  - __osx >=11.0
+  license: MIT
+  size: 715296
+  timestamp: 1764939338981
+- conda: https://prefix.dev/conda-forge/win-64/cargo-shear-1.7.1-h18a1a76_1.conda
+  sha256: cc998ca5d9baa3799de216136dc3cecf315795ef2565d5c417b296f2e8679df2
+  md5: 1e667945bc95ff9ff9e44797dd74c108
+  depends:
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  license: MIT
+  size: 731469
+  timestamp: 1764939352598
 - conda: https://prefix.dev/conda-forge/osx-64/cctools-1030.6.3-llvm19_1_h67a6458_1.conda
   sha256: 022d1510394e6f87f9c0f5e4093f7def220b4f73b9c4082a5032600983f43e90
   md5: c49fac70cb3983cdc72b73e065818547

@@ -113,20 +113,6 @@ jobs:
             cargo rustdoc -p "$package" --all-features -- -D warnings -W unreachable-pub
           done
 
-  # Checks for dependencies that are not used in the codebase
-  cargo-machete:
-    timeout-minutes: 10
-    name: cargo shear
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-      - name: "Install cargo shear"
-        uses: taiki-e/install-action@a416ddeedbd372e614cc1386e8b642692f66865e # v2.57.1
-        with:
-          tool: cargo-shear
-      - run: cargo shear
-
   # Checks for duplicate version of package
   cargo-vendor:
     name: cargo vendor
