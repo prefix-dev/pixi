@@ -108,9 +108,7 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: |
-          for package in $(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | .name'); do
-            cargo rustdoc -p "$package" --all-features -- -D warnings -W unreachable-pub
-          done
+          RUSTDOCFLAGS="-Dwarnings -Wrustdoc::unreachable_pub" cargo doc --workspace --all-features --no-deps
 
   # Checks for dependencies that are not used in the codebase
   cargo-machete:
@@ -134,7 +132,6 @@ jobs:
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           workspaces: ". -> target/pixi"
-          key: ${{ hashFiles('pixi.lock') }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test cargo vendor
         run: cargo vendor --locked
