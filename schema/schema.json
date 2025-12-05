@@ -347,6 +347,10 @@
               "git": "https://github.com/user/repo.git",
               "rev": "bd62770509b8afd792e98d20f8b458e2a7f19ec2",
               "subdirectory": "subproject/src"
+            },
+            {
+              "subdirectory": "subproject/src",
+              "url": "https://github.com/user/repo/archive/refs/tags/v0.1.0.tar.gz"
             }
           ]
         },
@@ -1783,15 +1787,27 @@
           "type": "string",
           "minLength": 1
         },
+        "sha256": {
+          "title": "Sha256",
+          "description": "The sha256 hash of the source",
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
         "subdirectory": {
           "title": "Subdirectory",
-          "description": "A subdirectory to use in the repo",
+          "description": "A subdirectory to use",
           "type": "string",
           "minLength": 1
         },
         "tag": {
           "title": "Tag",
           "description": "A git tag to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "title": "Url",
+          "description": "The URL to the source",
           "type": "string",
           "minLength": 1
         }

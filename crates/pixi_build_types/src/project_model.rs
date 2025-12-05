@@ -269,6 +269,10 @@ pub struct UrlSpecV1 {
     /// The URL of the package
     pub url: Url,
 
+    /// The subdirectory of the archive to use, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subdirectory: Option<String>,
+
     /// The md5 hash of the package
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Md5>>")]
     pub md5: Option<Md5Hash>,
@@ -288,6 +292,9 @@ impl std::fmt::Debug for UrlSpecV1 {
         }
         if let Some(sha256) = &self.sha256 {
             debug_struct.field("sha256", &format!("{sha256:x}"));
+        }
+        if let Some(subdir) = &self.subdirectory {
+            debug_struct.field("subdirectory", subdir);
         }
         debug_struct.finish()
     }
@@ -546,11 +553,17 @@ impl Hash for UrlSpecV1 {
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let UrlSpecV1 { url, md5, sha256 } = self;
+        let UrlSpecV1 {
+            url,
+            md5,
+            sha256,
+            subdirectory,
+        } = self;
 
         StableHashBuilder::<H>::new()
             .field("md5", md5)
             .field("sha256", sha256)
+            .field("subdirectory", subdirectory)
             .field("url", url)
             .finish(state);
     }

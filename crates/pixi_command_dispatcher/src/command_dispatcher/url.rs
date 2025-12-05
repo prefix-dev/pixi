@@ -33,14 +33,26 @@ impl CommandDispatcher {
         &self,
         url_spec: UrlSpec,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
+        let subdirectory = url_spec.subdirectory.clone();
         // Fetch the url in the background
-        let UrlCheckout { pinned_url, dir } = self
+        let UrlCheckout {
+            mut pinned_url,
+            dir,
+        } = self
             .checkout_url(url_spec)
             .await
             .map_err(|err| err.map(SourceCheckoutError::from))?;
 
+        let path = if let Some(subdir) = subdirectory {
+            pinned_url.subdirectory = Some(subdir.clone());
+            dir.join(subdir)
+        } else {
+            pinned_url.subdirectory = None;
+            dir
+        };
+
         Ok(SourceCheckout {
-            path: dir,
+            path,
             pinned: PinnedSourceSpec::Url(pinned_url),
         })
     }
@@ -62,6 +74,7 @@ impl CommandDispatcher {
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         let url_spec = UrlSpec {
             url: pinned_url_spec.url.clone(),
+            subdirectory: pinned_url_spec.subdirectory.clone(),
             md5: pinned_url_spec.md5,
             sha256: Some(pinned_url_spec.sha256),
         };
@@ -71,13 +84,12 @@ impl CommandDispatcher {
             .await
             .map_err(|err| err.map(SourceCheckoutError::from))?;
 
-        // TODO: Similar to TODO above.
-        // let path = if let Some(subdir) = url_spec.source.subdirectory.as_ref() {
-        //     fetch.path().join(subdir)
-        // } else {
-        //     fetch.into_path()
-        // };
-        let path = fetch.into_path();
+        let base_path = fetch.into_path();
+        let path = if let Some(subdir) = pinned_url_spec.subdirectory.as_deref() {
+            base_path.join(subdir)
+        } else {
+            base_path
+        };
 
         Ok(SourceCheckout {
             path,
