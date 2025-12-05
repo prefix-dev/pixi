@@ -9,24 +9,28 @@ use std::{
 };
 
 use event_reporter::EventReporter;
+use fs_err as fs;
 use itertools::Itertools;
 use pixi_build_backend_passthrough::PassthroughBackend;
 use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
-    InstantiateToolEnvironmentSpec, PackageIdentifier, PixiEnvironmentSpec,
-    SourceBuildCacheStatusSpec,
+    BuildEnvironment, CacheDirs, CommandDispatcher, CommandDispatcherError, Executor,
+    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PackageIdentifier,
+    PixiEnvironmentSpec, SourceBuildCacheStatusSpec, build::SourceCodeLocation,
 };
 use pixi_config::default_channel_config;
-use pixi_record::PinnedPathSpec;
-use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec};
+use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
+use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
+use pixi_url::UrlError;
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, PackageName, Platform, VersionSpec, VersionWithSource,
     prefix::Prefix,
 };
+use rattler_digest::{Sha256, Sha256Hash, digest::Digest};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
+use tempfile::TempDir;
 use url::Url;
 
 use crate::{event_reporter::Event, event_tree::EventTree};
@@ -69,9 +73,40 @@ fn default_build_environment() -> BuildEnvironment {
     BuildEnvironment::simple(tool_platform, tool_virtual_packages)
 }
 
+fn dummy_sha() -> Sha256Hash {
+    Sha256::digest(b"pixi-url-cache-test")
+}
+
+fn prepare_cached_checkout(cache_root: &Path, sha: Sha256Hash) -> PathBuf {
+    let checkout_dir = cache_root.join("checkouts").join(format!("{sha:x}"));
+    fs::create_dir_all(&checkout_dir).unwrap();
+    fs::write(checkout_dir.join("payload.txt"), "cached contents").unwrap();
+    fs::write(checkout_dir.join(".pixi-url-ready"), "ready").unwrap();
+    checkout_dir
+}
+
+fn hello_world_archive() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/url/hello_world.zip")
+}
+
+fn file_url_for_test(tempdir: &TempDir, name: &str) -> Url {
+    let path = tempdir.path().join(name);
+    fs::copy(hello_world_archive(), &path).unwrap();
+    Url::from_file_path(&path).unwrap()
+}
+
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 pub async fn simple_test() {
+    use pixi_test_utils::GitRepoFixture;
+
+    // Create a local git repo from our fixture
+    let git_repo = GitRepoFixture::new("multi-output-recipe");
+
+    // Use a local channel (backend_channel_1 has pixi-build-api-version which is needed for builds)
+    let channel_dir = cargo_workspace_dir().join("tests/data/channels/channels/backend_channel_1");
+    let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
+
     let (reporter, events) = EventReporter::new();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let tempdir = tempfile::tempdir().unwrap();
@@ -90,21 +125,13 @@ pub async fn simple_test() {
             dependencies: DependencyMap::from_iter([(
                 "foobar-desktop".parse().unwrap(),
                 GitSpec {
-                    git: "https://github.com/wolfv/pixi-build-examples.git"
-                        .parse()
-                        .unwrap(),
-                    rev: Some(GitReference::Rev(
-                        "8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a".to_owned(),
-                    )),
-                    subdirectory: Some(String::from("multi-output/recipe")),
+                    git: git_repo.url.parse().unwrap(),
+                    rev: Some(GitReference::Rev(git_repo.commits[0].clone())),
+                    subdirectory: Some(String::from("recipe")),
                 }
                 .into(),
             )]),
-            channels: vec![
-                Url::from_str("https://prefix.dev/conda-forge")
-                    .unwrap()
-                    .into(),
-            ],
+            channels: vec![channel_url.clone()],
             build_environment: build_env.clone(),
             channel_config: default_channel_config(),
             ..PixiEnvironmentSpec::default()
@@ -121,13 +148,9 @@ pub async fn simple_test() {
             build_environment: build_env,
             ignore_packages: None,
             force_reinstall: Default::default(),
-            channels: vec![
-                Url::from_str("https://prefix.dev/conda-forge")
-                    .unwrap()
-                    .into(),
-            ],
+            channels: vec![channel_url],
             channel_config: default_channel_config(),
-            variants: None,
+            variant_configuration: None,
             variant_files: None,
             enabled_protocols: Default::default(),
         })
@@ -140,7 +163,16 @@ pub async fn simple_test() {
     );
 
     let event_tree = EventTree::from(events);
-    insta::assert_snapshot!(event_tree.to_string());
+
+    // Redact temp paths and git hashes for stable snapshots
+    let output = event_tree.to_string();
+    let output = regex::Regex::new(r"file:///[^@]+/multi-output-recipe/")
+        .unwrap()
+        .replace_all(&output, "file://[LOCAL_GIT_REPO]/");
+    let output = regex::Regex::new(r"@[a-f0-9]{40}")
+        .unwrap()
+        .replace_all(&output, "@[GIT_HASH]");
+    insta::assert_snapshot!(output);
 }
 
 #[tokio::test]
@@ -508,13 +540,42 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 pub async fn instantiate_backend_with_from_source() {
-    let root_dir = workspaces_dir().join("source-backends");
+    // Use existing backend_channel_1 which has pixi-build-api-version package with actual .conda files
+    let channel_dir = cargo_workspace_dir().join("tests/data/channels/channels/backend_channel_1");
+    let channel_url = url::Url::from_directory_path(&channel_dir).unwrap();
+
+    // Copy source-backends workspace to temp directory so we can modify the channel
+    let source_dir = workspaces_dir().join("source-backends");
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let root_dir = tmp_dir.path().to_path_buf();
+
+    // Copy all files from source to temp
+    fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+        fs_err::create_dir_all(dst)?;
+        for entry in fs_err::read_dir(src)? {
+            let entry = entry?;
+            let src_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+            if src_path.is_dir() {
+                copy_dir_recursive(&src_path, &dst_path)?;
+            } else {
+                fs_err::copy(&src_path, &dst_path)?;
+            }
+        }
+        Ok(())
+    }
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
+
+    // Update workspace pixi.toml to use local channel instead of conda-forge
+    let workspace_toml = root_dir.join("pixi.toml");
+    let content = fs_err::read_to_string(&workspace_toml).unwrap();
+    let content = content.replace("conda-forge", channel_url.as_str());
+    fs_err::write(&workspace_toml, content).unwrap();
 
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(root_dir.clone())
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(CacheDirs::new(root_dir.join(".pixi")))
         .with_executor(Executor::Serial)
         .with_backend_overrides(BackendOverride::InMemory(
             InMemoryOverriddenBackends::Specified(HashMap::from_iter([(
@@ -563,10 +624,13 @@ async fn source_build_cache_status_clear_works() {
 
     let spec = SourceBuildCacheStatusSpec {
         package: pkg,
-        source: PinnedPathSpec {
-            path: tmp_dir.path().to_string_lossy().into_owned().into(),
-        }
-        .into(),
+        source: SourceCodeLocation::new(
+            PinnedPathSpec {
+                path: tmp_dir.path().to_string_lossy().into_owned().into(),
+            }
+            .into(),
+            None,
+        ),
         channels: Vec::<ChannelUrl>::new(),
         build_environment: build_env,
         channel_config: default_channel_config(),
@@ -762,4 +826,113 @@ pub async fn test_force_rebuild() {
         rebuild_packages.is_empty(),
         "Expected no packages to be queued for rebuild"
     );
+}
+
+#[tokio::test]
+pub async fn pin_and_checkout_url_reuses_cached_checkout() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let url_cache_root = cache_dirs.url();
+
+    let sha = dummy_sha();
+    let checkout_dir = prepare_cached_checkout(&url_cache_root, sha);
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(cache_dirs)
+        .with_executor(Executor::Serial)
+        .finish();
+
+    // Since we have the same expected hash we expect to return existing archive.
+    let spec = UrlSpec {
+        url: "https://example.com/archive.tar.gz".parse().unwrap(),
+        md5: None,
+        sha256: Some(sha),
+    };
+
+    let checkout = dispatcher
+        .pin_and_checkout_url(spec.clone())
+        .await
+        .expect("url checkout should succeed");
+
+    assert_eq!(checkout.path, checkout_dir);
+    match checkout.pinned {
+        PinnedSourceSpec::Url(pinned) => {
+            assert_eq!(pinned.url, spec.url);
+            assert_eq!(pinned.sha256, sha);
+        }
+        other => panic!("expected url pinned spec, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let archive = tempfile::tempdir().unwrap();
+    let url = file_url_for_test(&archive, "archive.zip");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(cache_dirs)
+        .with_executor(Executor::Concurrent)
+        .finish();
+
+    let good_spec = UrlSpec {
+        url: url.clone(),
+        md5: None,
+        sha256: None,
+    };
+    let bad_spec = UrlSpec {
+        url,
+        md5: None,
+        sha256: Some(Sha256::digest(b"pixi-url-bad-sha")),
+    };
+
+    let (good, bad) = tokio::join!(
+        dispatcher.checkout_url(good_spec),
+        dispatcher.checkout_url(bad_spec),
+    );
+
+    assert!(good.is_ok());
+    assert!(matches!(
+        bad,
+        Err(CommandDispatcherError::Failed(
+            UrlError::Sha256Mismatch { .. }
+        ))
+    ));
+}
+
+#[tokio::test]
+pub async fn pin_and_checkout_url_validates_cached_results() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let archive = tempfile::tempdir().unwrap();
+    let url = file_url_for_test(&archive, "archive.zip");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(cache_dirs)
+        .with_executor(Executor::Serial)
+        .finish();
+
+    let spec = UrlSpec {
+        url: url.clone(),
+        md5: None,
+        sha256: None,
+    };
+
+    dispatcher
+        .checkout_url(spec.clone())
+        .await
+        .expect("initial download succeeds");
+
+    let bad_spec = UrlSpec {
+        url: url.clone(),
+        md5: None,
+        sha256: Some(Sha256::digest(b"pixi-url-bad-cache")),
+    };
+
+    let err = dispatcher.checkout_url(bad_spec).await.unwrap_err();
+    assert!(matches!(
+        err,
+        CommandDispatcherError::Failed(UrlError::Sha256Mismatch { .. })
+    ));
 }

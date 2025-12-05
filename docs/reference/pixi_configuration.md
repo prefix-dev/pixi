@@ -93,16 +93,48 @@ workspace manifest.
 
 ### `tls-no-verify`
 
-When set to true, the TLS certificates are not verified.
+When set to true, TLS certificate verification is disabled for all network connections, including both conda channels and PyPI registries.
+You can override this from the CLI with `--tls-no-verify`.
 
 !!! warning
 
     This is a security risk and should only be used for testing purposes or internal networks.
 
-You can override this from the CLI with `--tls-no-verify`.
+This is a global setting that affects all connections. 
+If you only need to bypass TLS verification for specific PyPI hosts, consider using [`pypi-config.allow-insecure-host`](#pypi-config) instead for more granular control.
+
+!!! note "Implementation detail and limitations"
+
+    For PyPI operations, since uv does not support a global TLS verification disable flag, pixi automatically adds all configured PyPI index hosts to the trusted hosts list when `tls-no-verify` is enabled. 
+    For the main PyPI index, `files.pythonhosted.org` (the download host) is also automatically added.
+    **Important limitation:** If your custom PyPI index redirects package downloads to a different host (e.g., a separate CDN or artifact server), that download host will not be automatically trusted, even with `tls-no-verify` set. 
+    In these cases, you *must* manually add the download host to [`pypi-config.allow-insecure-host`](#pypi-config).
+
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:tls-no-verify"
+```
+
+### `tls-root-certs`
+
+Controls which TLS root certificates are used for HTTPS connections. This affects both conda channels and PyPI registries.
+
+Available options:
+
+- `webpki` (default): Uses bundled Mozilla root certificates. This is the most portable option.
+- `native`: Uses the system certificate store. Required for corporate environments with custom CA certificates.
+- `all`: Uses both bundled Mozilla certificates and the system certificate store.
+
+You can override this from the CLI with `--tls-root-certs`.
+
+!!! note "Build-dependent behavior"
+
+    This setting only has an effect with `rustls-tls` builds (standalone pixi binaries from GitHub releases).
+    For `native-tls` builds (conda-forge packages), the system's TLS library is used, which always uses system certificates.
+    In this case, the setting is accepted but has no effect.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:tls-root-certs"
 ```
 
 ### `authentication-override-file`
@@ -233,7 +265,7 @@ To setup a certain number of defaults for the usage of PyPI registries. You can 
   `pixi init`.
 - `keyring-provider`: Allows the use of the [keyring](https://pypi.org/project/keyring/) python package to store and
   retrieve credentials.
-- `allow-insecure-host`: Allow insecure connections to host.
+- `allow-insecure-host`: A list of host names (without protocol or port) for which TLS certificate verification should be disabled when accessing PyPI registries. This is useful when working with internal PyPI mirrors that use self-signed certificates. For disabling TLS verification globally for all connections, use [`tls-no-verify`](#tls-no-verify) instead.
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:pypi-config"

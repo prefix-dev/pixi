@@ -9,7 +9,7 @@ use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::{CondaPackageMetadata, procedures::conda_outputs::CondaOutput};
-use pixi_record::{InputHash, PinnedSourceSpec};
+use pixi_record::{InputHash, PinnedSourceSpec, VariantValue};
 use rattler_conda_types::ChannelUrl;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -48,7 +48,7 @@ pub struct SourceMetadataKey {
     pub build_environment: BuildEnvironment,
 
     /// The variants that were used
-    pub build_variants: BTreeMap<String, Vec<String>>,
+    pub build_variants: BTreeMap<String, Vec<VariantValue>>,
 
     /// The protocols that are enabled for source packages
     pub enabled_protocols: EnabledProtocols,

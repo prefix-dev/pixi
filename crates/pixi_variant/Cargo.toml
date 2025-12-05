@@ -1,0 +1,19 @@
+[package]
+authors.workspace = true
+description = "Defines variant values for conda-build variant configurations"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_variant"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+pixi_build_types = { workspace = true, optional = true }
+rattler_lock = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }

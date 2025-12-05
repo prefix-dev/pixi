@@ -2,10 +2,8 @@ use pixi_core::{InstallFilter, UpdateLockFileOptions, lock_file::PackageFilterNa
 use pixi_utils::prefix::Prefix as CondaPrefix;
 use rattler_conda_types::{PackageName, Platform};
 
-use crate::common::{
-    PixiControl,
-    package_database::{Package, PackageDatabase},
-};
+use crate::common::PixiControl;
+use pixi_test_utils::{LocalChannel, MockRepoData, Package};
 
 /// Helper to check if a conda package is installed in a prefix
 async fn is_conda_package_installed(prefix_path: &std::path::Path, package_name: &str) -> bool {
@@ -18,9 +16,8 @@ async fn is_conda_package_installed(prefix_path: &std::path::Path, package_name:
 
 // Build a simple package graph for tests:
 // a -> {b, c}; c -> {d}; e (independent)
-async fn setup_simple_graph_project() -> (PixiControl, crate::common::package_database::LocalChannel)
-{
-    let mut db = PackageDatabase::default();
+async fn setup_simple_graph_project() -> (PixiControl, LocalChannel) {
+    let mut db = MockRepoData::default();
 
     // Leaf nodes
     db.add_package(Package::build("b", "1").finish());

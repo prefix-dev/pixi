@@ -4,17 +4,15 @@ use rattler_conda_types::Platform;
 use tempfile::TempDir;
 use url::Url;
 
-use crate::common::{
-    PixiControl,
-    package_database::{Package, PackageDatabase},
-};
+use crate::common::PixiControl;
 use crate::setup_tracing;
+use pixi_test_utils::{MockRepoData, Package};
 
 #[tokio::test]
 async fn search_return_latest_across_everything() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package `foo` with 4 different versions, on different platforms
     // and different channels
@@ -27,7 +25,7 @@ async fn search_return_latest_across_everything() {
             .finish(),
     );
 
-    let mut latest_package_database = PackageDatabase::default();
+    let mut latest_package_database = MockRepoData::default();
     latest_package_database.add_package(
         Package::build("foo", "4")
             .with_subdir(Platform::current())
@@ -75,7 +73,7 @@ async fn search_return_latest_across_everything() {
 async fn search_using_match_spec() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package `foo` with different versions and different builds
     package_database.add_package(
@@ -147,7 +145,7 @@ async fn search_using_match_spec() {
 async fn test_search_multiple_versions() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add package with multiple versions and build strings
     package_database.add_package(
@@ -203,9 +201,9 @@ async fn test_search_multiple_versions() {
         .replace("\x1b[1m", "")
         .replace("\x1b[2m", "");
 
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0].package_record.version.as_str(), "0.2.0");
-    assert_eq!(result[0].package_record.build, "h60d57d3_1");
+    let latest_package = result.last().expect("should have at least one result");
+    assert_eq!(latest_package.package_record.version.as_str(), "0.2.0");
+    assert_eq!(latest_package.package_record.build, "h60d57d3_1");
     let output = output
         .lines()
         // Filter out URL line since temporary directory name is random.

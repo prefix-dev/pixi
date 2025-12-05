@@ -515,7 +515,7 @@ impl WorkspaceManifestMut<'_> {
             match self
                 .workspace
                 .get_or_insert_target_mut(platform, Some(feature_name))
-                .try_add_pep508_dependency(requirement, editable, overwrite_behavior)
+                .try_add_pep508_dependency(requirement, pixi_req, editable, overwrite_behavior)
             {
                 Ok(true) => {
                     self.document.add_pypi_dependency(
@@ -811,6 +811,7 @@ mod tests {
         PrioritizedChannel, SpecType, TargetSelector, Task, TomlError, WorkspaceManifest,
         manifests::document::ManifestDocument,
         pyproject::PyProjectManifest,
+        task::TaskRenderContext,
         to_options,
         toml::{FromTomlStr, TomlDocument},
         utils::{WithSourceCode, test_utils::expect_parse_failure},
@@ -1262,7 +1263,7 @@ start = "python -m flask run --port=5050"
                             "{}/{} = {:?}",
                             &selector_name,
                             name.as_str(),
-                            task.as_single_command(None)
+                            task.as_single_command(&TaskRenderContext::default())
                                 .ok()
                                 .flatten()
                                 .map(|c| c.to_string())
@@ -2540,7 +2541,7 @@ platforms = ["linux-64", "win-64"]
                 .tasks
                 .get(&"warmup".into())
                 .unwrap()
-                .as_single_command(None)
+                .as_single_command(&TaskRenderContext::default())
                 .unwrap()
                 .unwrap(),
             "python warmup.py"
@@ -2641,7 +2642,7 @@ bar = "*"
         let spec = &MatchSpec::from_str("baz >=1.2.3", Strict).unwrap();
 
         let (name, spec) = spec.clone().into_nameless();
-        let name = name.unwrap();
+        let name = name.unwrap().as_exact().unwrap().clone();
 
         let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
 
@@ -2678,7 +2679,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                &name.unwrap(),
+                name.unwrap().as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Run,
                 &[],
@@ -2713,7 +2714,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                &package_name.unwrap(),
+                package_name.unwrap().as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Run,
                 &[Platform::Linux64],
@@ -2749,7 +2750,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                &package_name.unwrap(),
+                package_name.unwrap().as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Build,
                 &[Platform::Linux64],

@@ -22,7 +22,7 @@
 .LINK
     https://github.com/prefix-dev/pixi
 .NOTES
-    Version: v0.59.0
+    Version: v0.60.0
 #>
 param (
     [string] $PixiVersion = 'latest',
@@ -32,6 +32,14 @@ param (
 )
 
 Set-StrictMode -Version Latest
+
+function Mask-Credentials {
+    param(
+        [string] $Url
+    )
+    # Replace username:password@ pattern with ***:***@
+    return $Url -replace '://[^:@/]+:[^@/]+@', '://***:***@'
+}
 
 function Publish-Env {
     if (-not ("Win32.NativeMethods" -as [Type])) {
@@ -163,7 +171,9 @@ if (-not @("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc") -contains $ARCH)
 
 $BINARY = "pixi-$ARCH"
 
-if ($PixiVersion -eq 'latest') {
+if ($Env:PIXI_DOWNLOAD_URL) {
+    $DOWNLOAD_URL = $Env:PIXI_DOWNLOAD_URL
+} elseif ($PixiVersion -eq 'latest') {
     $DOWNLOAD_URL = "$PixiRepourl/releases/latest/download/$BINARY.zip"
 } else {
     # Check if version is incorrectly specified without prefix 'v', and prepend 'v' in this case
@@ -174,7 +184,7 @@ if ($PixiVersion -eq 'latest') {
 $BinDir = Join-Path $PixiHome 'bin'
 
 Write-Host "This script will automatically download and install Pixi ($PixiVersion) for you."
-Write-Host "Getting it from this url: $DOWNLOAD_URL"
+Write-Host "Getting it from this url: $(Mask-Credentials $DOWNLOAD_URL)"
 Write-Host "The binary will be installed into '$BinDir'"
 
 $TEMP_FILE = [System.IO.Path]::GetTempFileName()
@@ -193,7 +203,7 @@ try {
     # Extract pixi from the downloaded zip file
     Expand-Archive -Path $ZIP_FILE -DestinationPath $BinDir -Force
 } catch {
-    Write-Host "Error: '$DOWNLOAD_URL' is not available or failed to download"
+    Write-Host "Error: '$(Mask-Credentials $DOWNLOAD_URL)' is not available or failed to download"
     exit 1
 } finally {
     Remove-Item -Path $ZIP_FILE

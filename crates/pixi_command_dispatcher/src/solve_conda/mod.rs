@@ -124,7 +124,7 @@ impl SolveCondaEnvironmentSpec {
                 .source_specs
                 .into_specs()
                 .map(|(name, spec)| {
-                    MatchSpec::from_nameless(spec.to_nameless_match_spec(), Some(name))
+                    MatchSpec::from_nameless(spec.to_nameless_match_spec(), Some(name.into()))
                 })
                 .collect::<Vec<_>>();
 
@@ -156,7 +156,7 @@ impl SolveCondaEnvironmentSpec {
                         channel: None,
                     };
                     let mut record = record.clone();
-                    record.build_source = source_metadata.build_source.clone();
+                    record.build_source = source_metadata.source.build_source().cloned();
                     url_to_source_package.insert(url, (record, repodata_record));
                 }
             }

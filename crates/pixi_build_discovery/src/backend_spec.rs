@@ -1,4 +1,4 @@
-use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor};
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::ChannelUrl;
 /// Describes how a backend should be instantiated.
@@ -45,8 +45,10 @@ impl JsonRpcBackendSpec {
                         let maybe_source_spec = env_spec.requirement.1.try_into_source_spec();
                         let pixi_spec = match maybe_source_spec {
                             Ok(source_spec) => {
-                                let resolved_spec = source_anchor.resolve(source_spec);
-                                PixiSpec::from(resolved_spec)
+                                let resolved_spec = source_anchor.resolve(source_spec.location);
+                                PixiSpec::from(SourceSpec {
+                                    location: resolved_spec,
+                                })
                             }
                             Err(pixi_spec) => pixi_spec,
                         };
@@ -133,8 +135,10 @@ impl EnvironmentSpec {
         let maybe_source_spec = self.requirement.1.try_into_source_spec();
         let pixi_spec = match maybe_source_spec {
             Ok(source_spec) => {
-                let resolved_spec = source_anchor.resolve(source_spec);
-                PixiSpec::from(resolved_spec)
+                let resolved_spec = source_anchor.resolve(source_spec.location);
+                PixiSpec::from(SourceSpec {
+                    location: resolved_spec,
+                })
             }
             Err(pixi_spec) => pixi_spec,
         };

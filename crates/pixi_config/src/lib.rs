@@ -27,6 +27,44 @@ use url::Url;
 
 const EXPERIMENTAL: &str = "experimental";
 
+/// Controls which root certificates to use for TLS connections.
+///
+/// - `Webpki`: Use bundled Mozilla root certificates (portable, works everywhere)
+/// - `Native`: Use the system's certificate store (includes corporate CAs)
+/// - `All`: Use both webpki and native certificates (union of both sources)
+///
+/// Note: This setting only has an effect when pixi is built with the `rustls-tls` feature.
+/// When built with `native-tls`, system certificates are always used regardless of this setting.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TlsRootCerts {
+    /// Use bundled Mozilla root certificates
+    #[default]
+    Webpki,
+    /// Use the system's native certificate store
+    Native,
+    /// Use both webpki and native certificates
+    All,
+}
+
+impl FromStr for TlsRootCerts {
+    type Err = serde::de::value::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::deserialize(s.into_deserializer())
+    }
+}
+
+impl std::fmt::Display for TlsRootCerts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TlsRootCerts::Webpki => write!(f, "webpki"),
+            TlsRootCerts::Native => write!(f, "native"),
+            TlsRootCerts::All => write!(f, "all"),
+        }
+    }
+}
+
 pub fn default_channel_config() -> ChannelConfig {
     ChannelConfig::default_with_root_dir(
         std::env::current_dir().expect("Could not retrieve the current directory"),
@@ -147,6 +185,10 @@ pub struct ConfigCli {
     /// Do not verify the TLS certificate of the server.
     #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     tls_no_verify: bool,
+
+    /// Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both).
+    #[arg(long, env = "PIXI_TLS_ROOT_CERTS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    tls_root_certs: Option<TlsRootCerts>,
 
     /// Use environment activation cache (experimental)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
@@ -338,6 +380,7 @@ pub enum DetachedEnvironments {
     Boolean(bool),
     Path(PathBuf),
 }
+
 impl DetachedEnvironments {
     pub fn is_false(&self) -> bool {
         matches!(self, DetachedEnvironments::Boolean(false))
@@ -346,16 +389,60 @@ impl DetachedEnvironments {
     // Get the path to the detached-environments directory. None means the default
     // directory.
     pub fn path(&self) -> miette::Result<Option<PathBuf>> {
-        match self {
+        let resolved_self = self.resolve_path()?;
+        match resolved_self {
             DetachedEnvironments::Path(p) => Ok(Some(p.clone())),
-            DetachedEnvironments::Boolean(b) if *b => {
+            DetachedEnvironments::Boolean(b) if b => {
                 let path = get_cache_dir()?.join(consts::ENVIRONMENTS_DIR);
                 Ok(Some(path))
             }
             _ => Ok(None),
         }
     }
+
+    /// If `self` is the `DetachedEnvironments::Path` variant, expands `~`
+    /// to the absolute path to the home directory, otherwise clone the boolean
+    /// variant.
+    pub fn resolve_path(&self) -> miette::Result<Self> {
+        match self {
+            DetachedEnvironments::Boolean(_) => Ok(self.clone()),
+            DetachedEnvironments::Path(p) => {
+                let mut path = p.clone();
+                // If the path starts with ~, expand it to the home directory
+                if path.to_string_lossy().starts_with("~") {
+                    let home_dir = dirs::home_dir().ok_or_else(|| {
+                        miette!(
+                            "Could not resolve home directory for '~' in path {}",
+                            path.display()
+                        )
+                    })?;
+                    // Safe unwrap as we checked if it starts with ~
+                    path = home_dir.join(path.strip_prefix("~").unwrap());
+                }
+                Ok(DetachedEnvironments::Path(path))
+            }
+        }
+    }
+
+    pub fn validate(&self) -> miette::Result<()> {
+        // Resolve the path variant (if present) prior to validating it.
+        let resolved_self = self.resolve_path()?;
+
+        match resolved_self {
+            DetachedEnvironments::Boolean(_) => {}
+            DetachedEnvironments::Path(path) => {
+                if !path.is_absolute() {
+                    return Err(miette!(
+                        "The `detached-environments` path must be an absolute path: {}",
+                        path.display()
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
 }
+
 impl Default for DetachedEnvironments {
     fn default() -> Self {
         DetachedEnvironments::Boolean(false)
@@ -640,6 +727,11 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tls_no_verify: Option<bool>,
 
+    /// Which TLS root certificates to use for HTTPS connections.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tls_root_certs: Option<TlsRootCerts>,
+
     #[serde(default)]
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub mirrors: HashMap<Url, Vec<Url>>,
@@ -738,6 +830,7 @@ impl Default for Config {
             default_channels: Vec::new(),
             authentication_override_file: None,
             tls_no_verify: None,
+            tls_root_certs: None,
             mirrors: HashMap::new(),
             loaded_from: Vec::new(),
             channel_config: default_channel_config(),
@@ -765,6 +858,7 @@ impl From<ConfigCli> for Config {
     fn from(cli: ConfigCli) -> Self {
         Self {
             tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
+            tls_root_certs: cli.tls_root_certs,
             authentication_override_file: cli.auth_file,
             pypi_config: cli
                 .pypi_keyring_provider
@@ -1210,18 +1304,8 @@ impl Config {
     /// Validate the config file.
     pub fn validate(&self) -> miette::Result<()> {
         // Validate the detached environments directory is set correctly
-        if let Some(detached_environments) = self.detached_environments.clone() {
-            match detached_environments {
-                DetachedEnvironments::Boolean(_) => {}
-                DetachedEnvironments::Path(path) => {
-                    if !path.is_absolute() {
-                        return Err(miette!(
-                            "The `detached-environments` path must be an absolute path: {}",
-                            path.display()
-                        ));
-                    }
-                }
-            }
+        if let Some(detached_environments) = self.detached_environments.as_ref() {
+            detached_environments.validate()?
         }
 
         Ok(())
@@ -1322,6 +1406,7 @@ impl Config {
             "shell.force-activate",
             "shell.source-completion-scripts",
             "tls-no-verify",
+            "tls-root-certs",
             "tool-platform",
         ]
     }
@@ -1340,6 +1425,7 @@ impl Config {
                 other.default_channels
             },
             tls_no_verify: other.tls_no_verify.or(self.tls_no_verify),
+            tls_root_certs: other.tls_root_certs.or(self.tls_root_certs),
             authentication_override_file: other
                 .authentication_override_file
                 .or(self.authentication_override_file),
@@ -1390,6 +1476,11 @@ impl Config {
     /// Retrieve the value for the tls_no_verify field (defaults to false).
     pub fn tls_no_verify(&self) -> bool {
         self.tls_no_verify.unwrap_or(false)
+    }
+
+    /// Retrieve the value for the tls_root_certs field (defaults to Webpki).
+    pub fn tls_root_certs(&self) -> TlsRootCerts {
+        self.tls_root_certs.unwrap_or_default()
     }
 
     /// Retrieve the value for the change_ps1 field (defaults to true).
@@ -1516,6 +1607,12 @@ impl Config {
             "tls-no-verify" => {
                 self.tls_no_verify = value.map(|v| v.parse()).transpose().into_diagnostic()?;
             }
+            "tls-root-certs" => {
+                self.tls_root_certs = value
+                    .map(|v| TlsRootCerts::from_str(v.as_str()))
+                    .transpose()
+                    .into_diagnostic()?;
+            }
             "mirrors" => {
                 self.mirrors = value
                     .map(|v| serde_json::de::from_str(&v))
@@ -1524,11 +1621,15 @@ impl Config {
                     .unwrap_or_default();
             }
             "detached-environments" => {
-                self.detached_environments = value.map(|v| match v.as_str() {
-                    "true" => DetachedEnvironments::Boolean(true),
-                    "false" => DetachedEnvironments::Boolean(false),
-                    _ => DetachedEnvironments::Path(PathBuf::from(v)),
-                });
+                self.detached_environments = value
+                    .map(|v| {
+                        Ok::<_, miette::Report>(match v.as_str() {
+                            "true" => DetachedEnvironments::Boolean(true),
+                            "false" => DetachedEnvironments::Boolean(false),
+                            _ => DetachedEnvironments::Path(PathBuf::from(v)).resolve_path()?,
+                        })
+                    })
+                    .transpose()?;
             }
             "pinning-strategy" => {
                 self.pinning_strategy = value
@@ -1921,6 +2022,7 @@ mod tests {
         let toml = format!(
             r#"default-channels = ["conda-forge"]
 tls-no-verify = true
+tls-root-certs = "native"
 detached-environments = "{}"
 pinning-strategy = "no-pin"
 concurrency.solves = 5
@@ -1934,6 +2036,7 @@ UNUSED = "unused"
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
         );
         assert_eq!(config.tls_no_verify, Some(true));
+        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Native));
         assert_eq!(
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
@@ -1965,11 +2068,66 @@ UNUSED = "unused"
         assert_eq!(config.pinning_strategy, Some(expected));
     }
 
+    /// Assert that usage of `~` in `detached_environments` is correctly expanded
+    /// to the absolute path to the home directory.
+    #[test]
+    fn test_detached_environments_resolve_home_dir() {
+        let home_dir = dirs::home_dir().expect("Failed to resolve home directory");
+        let toml = r#"detached-environments = "~/my/envs""#;
+
+        let expected_detached_envs_path = home_dir.join("my/envs");
+
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        let actual_detached_envs_path = config.detached_environments().path().unwrap().unwrap();
+
+        assert_eq!(actual_detached_envs_path, expected_detached_envs_path);
+    }
+
+    /// Assert that an absolute path in `detached_environments` is preserved.
+    #[test]
+    fn test_detached_environments_abs_path() {
+        let toml = r#"detached-environments = "/home/me/envs""#;
+
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        let actual_detached_envs_path = config.detached_environments().path().unwrap().unwrap();
+        let expected_detached_envs_path = PathBuf::from("/home/me/envs");
+        assert_eq!(actual_detached_envs_path, expected_detached_envs_path);
+    }
+
+    /// Assert that en error is thrown if a relative path is used in `detached_environments`.
+    #[test]
+    fn test_detached_environments_relative_path() {
+        let toml = r#"detached-environments = "./relative_path/""#;
+
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        let result = config.validate();
+        assert!(result.is_err());
+        let error_message = result.unwrap_err().to_string();
+        assert_eq!(
+            error_message,
+            "The `detached-environments` path must be an absolute path: ./relative_path/"
+        );
+    }
+
+    /// Assert that a boolean in `detached_environments` is preserved.
+    #[test]
+    fn test_detached_environments_bool() {
+        let toml = r#"detached-environments = true"#;
+
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+
+        assert_eq!(
+            config.detached_environments(),
+            DetachedEnvironments::Boolean(true)
+        );
+    }
+
     #[test]
     fn test_config_from_cli() {
         // Test with all CLI options enabled
         let cli = ConfigCli {
             tls_no_verify: true,
+            tls_root_certs: Some(TlsRootCerts::Native),
             auth_file: None,
             pypi_keyring_provider: Some(KeyringProvider::Subprocess),
             concurrent_solves: Some(8),
@@ -1980,6 +2138,7 @@ UNUSED = "unused"
         };
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
+        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Native));
         assert_eq!(
             config.pypi_config().keyring_provider,
             Some(KeyringProvider::Subprocess)
@@ -1998,6 +2157,7 @@ UNUSED = "unused"
 
         let cli = ConfigCli {
             tls_no_verify: false,
+            tls_root_certs: None,
             auth_file: Some(PathBuf::from("path.json")),
             pypi_keyring_provider: None,
             concurrent_solves: None,
@@ -2009,6 +2169,7 @@ UNUSED = "unused"
 
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, None);
+        assert_eq!(config.tls_root_certs, None);
         assert_eq!(
             config.authentication_override_file,
             Some(PathBuf::from("path.json"))
@@ -2107,6 +2268,7 @@ UNUSED = "unused"
             default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
+            tls_root_certs: Some(TlsRootCerts::Native),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
             concurrency: ConcurrencyConfig {
                 solves: 5,
@@ -2596,6 +2758,12 @@ UNUSED = "unused"
             .unwrap();
         assert_eq!(config.tls_no_verify, Some(true));
 
+        // Test tls-root-certs
+        config
+            .set("tls-root-certs", Some("native".to_string()))
+            .unwrap();
+        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Native));
+
         // Test mirrors
         config
             .set(
@@ -2621,6 +2789,14 @@ UNUSED = "unused"
         assert_eq!(config.pinning_strategy, Some(PinningStrategy::Semver));
 
         config.set("unknown-key", None).unwrap_err();
+    }
+
+    #[test]
+    fn test_tls_root_certs_default() {
+        let config = Config::default();
+        // Default should be Webpki (bundled Mozilla roots)
+        assert_eq!(config.tls_root_certs(), TlsRootCerts::Webpki);
+        assert_eq!(config.tls_root_certs, None);
     }
 
     #[rstest]
