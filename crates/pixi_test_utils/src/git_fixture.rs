@@ -7,7 +7,10 @@ use std::{collections::HashMap, path::Path};
 
 use tempfile::TempDir;
 
-use super::cargo_workspace_dir;
+/// Returns the path to the Cargo workspace root.
+fn cargo_workspace_dir() -> &'static Path {
+    Path::new(env!("CARGO_WORKSPACE_DIR"))
+}
 
 /// A temporary git repository created from fixture directories.
 ///
@@ -67,13 +70,20 @@ impl GitRepoFixture {
     /// The commit message is extracted from the directory name (the part after `_`).
     /// If the commit message starts with `v`, a git tag is created with that name.
     pub fn new(fixture_name: &str) -> Self {
-        let tempdir = TempDir::new().expect("failed to create temp dir");
-        let repo_path = tempdir.path().join(fixture_name);
-        fs_err::create_dir_all(&repo_path).expect("failed to create repo dir");
-
         let fixture_base = cargo_workspace_dir()
             .join("tests/data/git-fixtures")
             .join(fixture_name);
+        Self::from_path(&fixture_base, fixture_name)
+    }
+
+    /// Creates a git repository from a specific fixture path.
+    ///
+    /// This allows using fixture directories from any location, not just the
+    /// default `tests/data/git-fixtures` directory.
+    pub fn from_path(fixture_base: &Path, repo_name: &str) -> Self {
+        let tempdir = TempDir::new().expect("failed to create temp dir");
+        let repo_path = tempdir.path().join(repo_name);
+        fs_err::create_dir_all(&repo_path).expect("failed to create repo dir");
 
         // Initialize git repo
         std::process::Command::new("git")
@@ -95,7 +105,7 @@ impl GitRepoFixture {
             .expect("failed to configure git name");
 
         // Get commit directories sorted by name
-        let mut commit_dirs: Vec<_> = fs_err::read_dir(&fixture_base)
+        let mut commit_dirs: Vec<_> = fs_err::read_dir(fixture_base)
             .expect("failed to read fixture dir")
             .filter_map(|e| e.ok())
             .filter(|e| e.path().is_dir())

@@ -109,9 +109,7 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: |
-          for package in $(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | .name'); do
-            cargo rustdoc -p "$package" --all-features -- -D warnings -W unreachable-pub
-          done
+          RUSTDOCFLAGS="-Dwarnings -Wunreachable-pub" cargo doc --workspace --all-features --no-deps
 
   # Checks for duplicate version of package
   cargo-vendor:
@@ -125,7 +123,6 @@ jobs:
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           workspaces: ". -> target/pixi"
-          key: ${{ hashFiles('pixi.lock') }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test cargo vendor
         run: cargo vendor --locked
@@ -168,7 +165,7 @@ jobs:
     timeout-minutes: 15
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: 8core_ubuntu_latest_runner
+    runs-on: namespace-profile-ubuntu-24-04-x86-64-4
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - uses: prefix-dev/setup-pixi@main
@@ -190,7 +187,7 @@ jobs:
     timeout-minutes: 15
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: macos-15
+    runs-on: namespace-profile-macos-15-arm64-6
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - uses: prefix-dev/setup-pixi@main
@@ -212,7 +209,7 @@ jobs:
     timeout-minutes: 30
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow')}} # Only run on the main branch
-    runs-on: macos-15-intel
+    runs-on: namespace-profile-macos-15-arm64-6
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - uses: prefix-dev/setup-pixi@main
@@ -234,7 +231,7 @@ jobs:
     timeout-minutes: 15
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: windows_x64_2025_large
+    runs-on: namespace-profile-windows-2022-x86-64-8
     steps:
       # We don't use the dev drive here since we run out of space otherwise
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
@@ -262,14 +259,15 @@ jobs:
   build-binary-linux-x86_64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: 8core_ubuntu_latest_runner
+    runs-on: namespace-profile-ubuntu-24-04-x86-64-4
     name: "build binary | linux x86_64"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - uses: rui314/setup-mold@725a8794d15fc7563f59595bd9556495c0564878 # v1
       - name: "Setup musl"
         run: |
-          sudo apt-get install musl-tools
+          sudo apt update
+          sudo apt install musl-tools
           rustup target add x86_64-unknown-linux-musl
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
@@ -291,7 +289,7 @@ jobs:
   build-binary-macos-aarch64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: macos-15
+    runs-on: namespace-profile-macos-15-arm64-6
     name: "build binary | macos aarch64"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
@@ -337,7 +335,7 @@ jobs:
   build-binary-windows-x86_64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: windows_x64_2025_large
+    runs-on: namespace-profile-windows-2022-x86-64-8
     name: "build binary | windows x86_64"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
@@ -433,7 +431,7 @@ jobs:
   test-pytest-macos-aarch64:
     timeout-minutes: 10
     name: Pytest | macos aarch64
-    runs-on: macos-15
+    runs-on: namespace-profile-macos-15-arm64-6
     needs: build-binary-macos-aarch64
     env:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
@@ -457,7 +455,7 @@ jobs:
   test-pytest-linux-x86_64:
     timeout-minutes: 10
     name: Pytest | linux x86_64
-    runs-on: 8core_ubuntu_latest_runner
+    runs-on: namespace-profile-ubuntu-24-04-x86-64-4
     needs: build-binary-linux-x86_64
     env:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
@@ -516,7 +514,7 @@ jobs:
   test-integration-macos-aarch64:
     timeout-minutes: 30
     name: Integration tests | macos aarch64
-    runs-on: macos-15
+    runs-on: namespace-profile-macos-15-arm64-6
     needs: build-binary-macos-aarch64
     if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
     env:
@@ -550,7 +548,7 @@ jobs:
   test-integration-linux-x86_64:
     timeout-minutes: 30
     name: Integration tests | linux x86_64
-    runs-on: 8core_ubuntu_latest_runner
+    runs-on: namespace-profile-ubuntu-24-04-x86-64-4
     needs: build-binary-linux-x86_64
     if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
     env:
@@ -690,7 +688,7 @@ jobs:
   test-downstream-linux-x86_64:
     timeout-minutes: 15
     name: Downstream tests | linux x86_64
-    runs-on: 8core_ubuntu_latest_runner
+    runs-on: namespace-profile-ubuntu-24-04-x86-64-4
     needs: build-binary-linux-x86_64
     if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
     env:
@@ -756,7 +754,7 @@ jobs:
     with:
       sha: ${{ github.sha }}
       arch: linux-x86_64
-      runs-on: 8core_ubuntu_latest_runner
+      runs-on: ubuntu-latest
 
   test-common-wheels-windows-x86_64:
     name: Wheel Tests | windows x86_64
