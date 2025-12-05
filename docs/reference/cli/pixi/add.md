@@ -75,7 +75,7 @@ pixi add [OPTIONS] <SPEC>...
 <br>**env**: `PIXI_LOCKED`
 
 ## Global Options
-- <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
+- <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 ## Description
