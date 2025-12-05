@@ -5,17 +5,15 @@ use rattler_conda_types::Platform;
 use rattler_lock::LockFile;
 use tempfile::TempDir;
 
-use crate::common::{
-    GitRepoFixture, LockFileExt, PixiControl,
-    package_database::{Package, PackageDatabase},
-};
+use crate::common::{GitRepoFixture, LockFileExt, PixiControl};
 use crate::setup_tracing;
+use pixi_test_utils::{MockRepoData, Package};
 
 #[tokio::test]
 async fn test_update() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package
     package_database.add_package(Package::build("bar", "1").finish());
@@ -91,7 +89,7 @@ async fn test_update() {
 async fn test_update_single_package() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add packages
     package_database.add_package(Package::build("bar", "1").finish());
@@ -163,6 +161,20 @@ async fn test_update_single_package() {
 async fn test_update_conda_package_doesnt_update_git_pypi() {
     setup_tracing();
 
+    // Create local package database with Python
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("python", "3.12.1")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
     let pixi = PixiControl::new().unwrap();
 
     // Create local git fixture with two commits
@@ -170,6 +182,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
 
     // Create a new project using our package database.
     pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
         .with_platforms(vec![Platform::current()])
         .await
         .unwrap();
@@ -248,6 +261,20 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
 async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
     setup_tracing();
 
+    // Create local package database with Python
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("python", "3.12.1")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
     let pixi = PixiControl::new().unwrap();
 
     // Create local git fixture with two commits
@@ -255,6 +282,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
 
     // Create a new project using our package database.
     pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
         .with_platforms(vec![Platform::current()])
         .await
         .unwrap();
@@ -296,6 +324,15 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
 async fn test_update_git_pypi_when_requested() {
     setup_tracing();
 
+    // Create local package database with Python
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
     let pixi = PixiControl::new().unwrap();
 
     // Create local git fixture with two commits
@@ -303,6 +340,7 @@ async fn test_update_git_pypi_when_requested() {
 
     // Create a new project using our package database.
     pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
         .with_platforms(vec![Platform::current()])
         .await
         .unwrap();

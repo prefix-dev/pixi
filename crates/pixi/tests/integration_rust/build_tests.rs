@@ -6,12 +6,10 @@ use rattler_conda_types::Platform;
 use tempfile::TempDir;
 
 use crate::{
-    common::{
-        LockFileExt, PixiControl,
-        package_database::{Package, PackageDatabase},
-    },
+    common::{LockFileExt, PixiControl},
     setup_tracing,
 };
+use pixi_test_utils::{MockRepoData, Package};
 
 /// Test that verifies build backend receives the correct resolved source path
 /// when a relative path is specified in the source field
@@ -20,7 +18,7 @@ async fn test_build_with_relative_source_path() {
     setup_tracing();
 
     // Create a simple package database for our test
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("empty-backend", "0.1.0").finish());
 
     // Write the repodata to disk
@@ -137,7 +135,7 @@ preview = ["pixi-build"]
 async fn test_build_with_absolute_source_path() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("empty-backend", "0.1.0").finish());
 
     let channel_dir = TempDir::new().unwrap();
@@ -216,7 +214,7 @@ preview = ["pixi-build"]
 async fn test_build_with_subdirectory_source_path() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("empty-backend", "0.1.0").finish());
 
     let channel_dir = TempDir::new().unwrap();
