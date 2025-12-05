@@ -530,6 +530,16 @@ impl SourceBuildSpec {
                 .collect()
         });
 
+        let backend_span = tracing::info_span!(
+            target: "pixi::backend",
+            "backend-build",
+            backend = backend.identifier(),
+            package = %self.package.name.as_normalized(),
+            version = %self.package.version,
+            build = %self.package.build,
+        );
+        let _backend_guard = backend_span.enter();
+
         // Request the metadata from the backend.
         // TODO: Can we somehow cache this metadata?
         let outputs = backend

@@ -1,0 +1,1 @@
+{"level":"INFO","fields":{"message":"sample message","path":"./debug"},"target":"pixi_build_backend::intermediate_backend","spans":[{"name":"solve","package":"sdl_example","platform":"linux-64"}]}
