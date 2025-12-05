@@ -26,6 +26,56 @@ exposed = { py3 = "python" } # (2)!
 1. Dependencies are the packages that will be installed in the environment. You can specify the version or use a wildcard.
 2. The exposed binaries are the ones that will be available in the system path. In this case, `python` is exposed under the name `py3`.
 
+## Lock Files
+
+Pixi global creates and maintains a `pixi-global.lock` file alongside your manifest for reproducible installations.
+
+When you install or update global tools, pixi automatically creates a `pixi-global.lock` file in the same directory as your manifest. This lock file contains the exact resolved package versions for all your global environments, ensuring reproducible installations across different machines.
+
+### Benefits
+
+- **Reproducibility**: Share your `pixi-global.toml` and `pixi-global.lock` files with your team to ensure everyone has identical tool versions
+- **Version Control**: Commit both files to version control for consistent team environments
+- **Automatic Updates**: The lock file is automatically updated when you add, remove, or update packages
+- **Cross-Platform**: Lock files work across different operating systems, maintaining separate resolutions per platform where needed
+
+### Example Workflow
+
+```shell
+# Install a tool - creates/updates the lock file
+pixi global install bat
+
+# Share your manifest and lock file with others
+git add ~/.pixi/manifests/pixi-global.{toml,lock}
+git commit -m "Add bat tool"
+
+# On another machine, sync to get identical versions
+pixi global sync
+```
+
+### Lock File Location
+
+The lock file is stored in the same directory as your manifest:
+
+=== "Linux"
+    - `$PIXI_HOME/manifests/pixi-global.lock`
+    - `$HOME/.pixi/manifests/pixi-global.lock`
+    - `$XDG_CONFIG_HOME/pixi/manifests/pixi-global.lock`
+    - `$HOME/.config/pixi/manifests/pixi-global.lock`
+
+=== "macOS"
+    - `$PIXI_HOME/manifests/pixi-global.lock`
+    - `$HOME/.pixi/manifests/pixi-global.lock`
+    - `$HOME/Library/Application Support/pixi/manifests/pixi-global.lock`
+
+=== "Windows"
+    - `$PIXI_HOME\manifests\pixi-global.lock`
+    - `%USERPROFILE%\.pixi\manifests\pixi-global.lock`
+    - `%APPDATA%\pixi\manifests\pixi-global.lock`
+
+!!! tip
+    You typically don't need to edit the lock file manually. Just use `pixi global install`, `add`, `remove`, or `sync` commands, and pixi will update it automatically.
+
 ## Manifest locations
 
 The manifest can be found at the following locations depending on your operating system.
