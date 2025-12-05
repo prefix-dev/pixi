@@ -8,28 +8,47 @@ use url::Url;
 
 use crate::common::LockFileExt;
 use crate::common::PixiControl;
-use crate::common::package_database::{Package, PackageDatabase};
 use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 use crate::setup_tracing;
+use pixi_test_utils::{MockRepoData, Package};
 
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 #[tokio::test]
 async fn pypi_dependency_index_preserved_on_upgrade() {
     setup_tracing();
 
+    let platform = Platform::current();
+
+    // Create local conda channel with python
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
+    // Create local PyPI index with click
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("click", "8.2.0"))
+        .with(PyPIPackage::new("click", "8.3.1"))
+        .into_simple_index()
+        .expect("failed to create local simple index");
+    let pypi_index_url = pypi_index.index_url();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [workspace]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
         platforms = ["{platform}"]
-        exclude-newer = "2025-05-19"
 
         [pypi-dependencies]
-        click = {{ version = "==8.2.0", index = "https://pypi.tuna.tsinghua.edu.cn/simple" }}
+        click = {{ version = "==8.2.0", index = "{pypi_index_url}" }}
 
         [dependencies]
-        python = "==3.13.3""#,
-        platform = Platform::current()
+        python = "==3.12.0""#,
+        channel_url = channel.url(),
+        platform = platform,
+        pypi_index_url = pypi_index_url,
     ))
     .unwrap();
 
@@ -63,19 +82,31 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
 
     workspace.save().await.unwrap();
 
-    // Redact platform-specific information for consistent snapshots across environments
+    // Redact platform-specific and path-specific information for consistent snapshots
     let content = pixi.manifest_contents().unwrap_or_default();
-    let redacted_content = content.replace(&Platform::current().to_string(), "[PLATFORM]");
-    assert_snapshot!(redacted_content);
+    let redacted_content = content
+        .replace(&Platform::current().to_string(), "[PLATFORM]")
+        .replace(&channel.url().to_string(), "[CHANNEL_URL]")
+        .replace(&pypi_index_url.to_string(), "[PYPI_INDEX_URL]");
+    assert_snapshot!(redacted_content, @r###"
+        [workspace]
+        channels = ["[CHANNEL_URL]"]
+        platforms = ["[PLATFORM]"]
+
+        [pypi-dependencies]
+        click = { version = ">=8.3.1, <9", index = "[PYPI_INDEX_URL]" }
+
+        [dependencies]
+        python = ">=3.12.0,<3.13"
+    "###);
 }
 
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 #[tokio::test]
 async fn upgrade_command_updates_platform_specific_version() {
     setup_tracing();
 
     let platform = Platform::current();
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("python", "3.12.0").finish());
     let channel_dir = TempDir::new().unwrap();
     package_database
@@ -117,12 +148,11 @@ async fn upgrade_command_updates_platform_specific_version() {
     );
 }
 
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 #[tokio::test]
 async fn upgrade_command_updates_all_platform_specific_targets() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("python", "3.12.0").finish());
     let channel_dir = TempDir::new().unwrap();
     package_database
@@ -185,7 +215,7 @@ async fn pypi_dependency_upgrade_uses_custom_index() {
     let platform = Platform::current();
 
     // Create local conda channel with Python
-    let mut package_db = PackageDatabase::default();
+    let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.12.0")
             .with_subdir(platform)

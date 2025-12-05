@@ -5109,6 +5109,7 @@ dependencies = [
  "rattler_shell",
  "rattler_solve",
  "rattler_virtual_packages",
+ "regex",
  "serde",
  "serde_json",
  "serde_with",
@@ -5689,8 +5690,16 @@ dependencies = [
 name = "pixi_test_utils"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "fs-err",
  "itertools 0.14.0",
  "miette 7.6.0",
+ "rattler_conda_types",
+ "rattler_digest",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "url",
 ]
 
 [[package]]
