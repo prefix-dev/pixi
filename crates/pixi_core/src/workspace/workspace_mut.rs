@@ -314,7 +314,11 @@ impl WorkspaceMut {
             return Ok(None);
         }
 
-        let original_lock_file = self.workspace().load_lock_file().await?;
+        let original_lock_file = self
+            .workspace()
+            .load_lock_file()
+            .await?
+            .into_lock_file_or_empty_with_warning();
         let affected_environments = self
             .workspace()
             .environments()
@@ -334,7 +338,11 @@ impl WorkspaceMut {
             affected_environments.contains(&self.workspace().default_environment());
         tracing::debug!(
             "environments affected by the add command: {}",
-            affected_environments.iter().map(|e| e.name()).format(", ")
+            affected_environments
+                .iter()
+                .map(|e| e.name())
+                .format(", ")
+                .to_string()
         );
         let affect_environment_and_platforms = affected_environments
             .into_iter()
@@ -469,7 +477,13 @@ impl WorkspaceMut {
     ) -> Result<(), miette::Error> {
         for spec in conda_deps {
             // Determine the name of the package to add
-            let (Some(name), spec) = spec.clone().into_nameless() else {
+            let (Some(name_matcher), spec) = spec.clone().into_nameless() else {
+                miette::bail!(
+                    "{} does not support wildcard dependencies",
+                    pixi_utils::executable_name()
+                );
+            };
+            let Some(name) = name_matcher.as_exact() else {
                 miette::bail!(
                     "{} does not support wildcard dependencies",
                     pixi_utils::executable_name()
@@ -477,7 +491,7 @@ impl WorkspaceMut {
             };
             let spec = PixiSpec::from_nameless_matchspec(spec, &self.workspace().channel_config());
             self.manifest().add_dependency(
-                &name,
+                name,
                 &spec,
                 SpecType::Run,
                 // No platforms required as you can't define them in the yaml

@@ -173,7 +173,17 @@ Example:
 If `conda-forge` is not present in `conda-pypi-map` `pixi` will use `prefix.dev` mapping for it.
 
 ```toml
-conda-pypi-map = { "conda-forge" = "https://example.com/mapping", "https://repo.prefix.dev/robostack" = "local/robostack_mapping.json"}
+conda-pypi-map = { conda-forge = "https://example.com/mapping", "https://repo.prefix.dev/robostack" = "local/robostack_mapping.json"}
+```
+
+It is also possible to disable fetching external mpping by adding an empty map to the list
+
+```toml
+conda-pypi-map = { conda-forge = "map.json" }
+```
+
+```json title="map.json"
+{}
 ```
 
 ### `channel-priority` (optional)
@@ -235,7 +245,7 @@ solve-strategy = "lowest"
     [feature.one]
     solve-strategy = "lowest"
     [feature.two]
-    solve-strategy = "lowest-direct"    
+    solve-strategy = "lowest-direct"
     [environments]
     combined = ["two", "one"] # <- The solve strategy from feature `two` is used
     ```
@@ -434,6 +444,7 @@ The options that can be defined are:
 - `no-build`: don't build source distributions.
 - `no-binary`: don't use pre-build wheels.
 - `index-strategy`: allows for specifying the index strategy to use.
+- `prerelease-mode`: controls whether pre-release versions are allowed during dependency resolution.
 
 These options are explained in the sections below. Most of these options are taken directly or with slight modifications from the [uv settings](https://docs.astral.sh/uv/reference/settings/). If any are missing that you need feel free to create an issue [requesting](https://github.com/prefix-dev/pixi/issues) them.
 
@@ -560,6 +571,30 @@ By default, `uv` and thus `pixi`, will stop at the first index on which a given 
 
 !!! info "PyPI only"
     The `index-strategy` only changes PyPI package resolution and not conda package resolution.
+
+
+### Prerelease Mode
+
+The strategy to use when considering pre-release versions during dependency resolution. Description taken from the [uv documentation](https://docs.astral.sh/uv/reference/settings/#prerelease).
+
+By default, `pixi` will allow pre-release versions when a package only has pre-release versions available, or when a pre-release version is explicitly requested in the version specifier (e.g., `>=1.0.0a1`).
+
+!!! warning "One prerelease mode per environment"
+    Only one `prerelease-mode` can be defined per environment or solve-group, otherwise, an error will be shown.
+
+#### Possible values:
+
+- **"disallow"**: Disallow all pre-release versions.
+- **"allow"**: Allow all pre-release versions.
+- **"if-necessary"**: Allow pre-release versions if all versions of a package are pre-release.
+- **"explicit"**: Allow pre-release versions for first-party packages with explicit pre-release markers in their version requirements.
+- **"if-necessary-or-explicit"** (default): Allow pre-release versions if all versions of a package are pre-release, or if the package has an explicit pre-release marker in its version requirements.
+
+Example:
+```toml
+[pypi-options]
+prerelease-mode = "allow"  # Allow all pre-release versions
+```
 
 ## The `dependencies` table(s)
 ??? info "Details regarding the dependencies"
@@ -1074,13 +1109,37 @@ The build system is a table that can contain the following fields:
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
   - `version`: the version of the build backend to use.
-- `configuration`: a table that contains the configuration options for the build backend.
+- `config`: a table that contains the configuration options for the build backend.
 - `target`: a table that can contain target specific build configuration.
+  - Each target can have its own `config` table to override or extend the base configuration for specific platforms.
 
 More documentation on the backends can be found in the [build backend documentation](../build/backends.md).
 
+#### Basic build configuration example
+
 ```toml
 --8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:build-system"
+```
+
+#### Target-specific build configuration example
+
+For platform-specific build configuration, use the `[package.build.target.<platform>]` table:
+
+```toml
+[package.build]
+backend = { name = "pixi-build-cmake", version = "0.3.*" }
+
+[package.build.config]
+# Base configuration applied to all platforms
+extra-args = ["-DCMAKE_BUILD_TYPE=Release"]
+
+[package.build.target.linux-64.config]
+# Linux-specific configuration
+extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DLINUX_FLAG=ON"]
+
+[package.build.target.win-64.config]
+# Windows-specific configuration
+extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DWIN_FLAG=ON"]
 ```
 
 

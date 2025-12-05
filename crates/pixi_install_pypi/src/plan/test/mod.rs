@@ -435,7 +435,7 @@ fn test_installed_local_required_local() {
 /// except if the pyproject.toml file, or some other source files we won't check here is newer than the cache
 /// NOTE: We are skipping that test since it is flaky on linux
 /// uv checks ctime on unix systems
-/// During debug, we noticed that some times ctime isn't updated, and we couldn't find a relieable way to ensure that
+/// During debug, we noticed that some times ctime isn't updated, and we couldn't find a reliable way to ensure that
 /// At this time, we believe this to be a problem with our test, not with pixi or uv.
 /// If user encounter this problem we should investigate this again
 #[cfg(not(target_os = "linux"))]

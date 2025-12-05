@@ -79,6 +79,7 @@ impl DetailedSpec {
             license: self.license,
             url: None,
             extras: Default::default(),
+            condition: None,
         })
     }
 }

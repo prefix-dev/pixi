@@ -197,7 +197,7 @@ pub async fn update_prefix_conda(
     // Run the installation through the command dispatcher.
     let build_environment = BuildEnvironment::simple(host_platform, host_virtual_packages);
     let VariantConfig {
-        variants,
+        variant_configuration,
         variant_files,
     } = variant_config;
     let result = command_dispatcher
@@ -211,7 +211,7 @@ pub async fn update_prefix_conda(
             build_environment,
             channels,
             channel_config,
-            variants: Some(variants),
+            variant_configuration: Some(variant_configuration),
             variant_files: Some(variant_files),
             enabled_protocols: Default::default(),
         })

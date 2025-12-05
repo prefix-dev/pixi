@@ -45,16 +45,16 @@ test-slow = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
 
 [feature.pytest.dependencies]
-dirty-equals = ">=0.10.0,<0.11"
+dirty-equals = ">=0.11,<0.12"
 filelock = ">=3.19.1,<4"
-inline-snapshot = ">=0.29.3,<0.30"
-py-rattler = ">=0.16.0,<0.17"
+inline-snapshot = ">=0.31.1,<0.32"
+py-rattler = ">=0.18,<0.19"
 pytest = ">=8.4.2,<9"
 pytest-rerunfailures = ">=16.0.1,<17"
 pytest-timeout = ">=2.4.0,<3"
 pytest-xdist = ">=3.8.0,<4"
 pyyaml = ">=6.0.3,<7"
-rattler-build = ">=0.47.1,<0.48"
+rattler-build = ">=0.53,<0.54"
 rich = ">=14.1.0,<15"
 tomli-w = ">=1.2.0,<2"
 types-pyyaml = ">=6.0.12.20250915,<7"
@@ -104,7 +104,6 @@ tbump = ">=6.9.0,<7"
 [feature.dev.tasks]
 insta-review = "cargo insta review --workspace"
 update-rattler = "cargo upgrade --incompatible allow -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages"
-
 # UV dependency management
 switch-to-remote-uv = { cmd = "python scripts/local_patch.py uv remote", description = "Switch back to remote uv dependencies" }
 
@@ -130,7 +129,7 @@ cmd = "pytest --inline-snapshot=fix -k '{{ expression }}'"
 [feature.lint.dependencies]
 actionlint = ">=1.7.7,<2"
 basedpyright = ">=1.31.6,<2"
-cargo-deny = ">=0.18,<0.18.5" # 0.18.5 breaks license checking for uv crates
+cargo-deny = ">=0.18,<0.18.8" # 0.18.5 breaks license checking for uv crates
 dprint = ">=0.49.1,<0.51"
 go-shfmt = ">=3.12.0,<4"
 lefthook = ">=1.13.6,<2"
@@ -175,7 +174,7 @@ openssl = ">=3.5.4,<4"
 pkg-config = ">=0.29.2,<0.30"
 rust-src = ">=1.88.0,<2"
 
-[feature.build.target.linux-64.dependencies]
+[feature.build.target.linux.dependencies]
 clang = ">=21.1.2,<22"
 compilers = ">=1.6.0"
 make = ">=4.4.1,<5"
@@ -184,11 +183,11 @@ mold = ">=2.40.2,<3"
 [feature.build.target.win-64.dependencies]
 vs2017_win-64 = ">=19.16.27033,<20"
 
-[feature.build.activation]
-env.CARGO_TARGET_DIR = "target/pixi"
-
 [feature.build.target.unix.activation]
 scripts = ["scripts/activate.sh"]
+
+[feature.build.activation]
+env.CARGO_TARGET_DIR = "target/pixi"
 
 [feature.docs.dependencies]
 cairosvg = ">=2.8.2,<3"
@@ -240,7 +239,7 @@ description = "Build the trampolines"
 # Feature to build recipes
 #
 [feature.recipes.dependencies]
-rattler-build = ">=0.47.1,<0.48"
+rattler-build = ">=0.53,<0.54"
 
 [feature.recipes.tasks.build-backends]
 cmd = "rattler-build build --recipe-dir empty --output-dir ."
@@ -250,6 +249,17 @@ description = "Build build-backends used for testing purposes"
 [feature.dist.dependencies]
 zig = ">=0.15.1,<0.16"
 
+# Feature for native-certs testing
+[feature.native-certs-test.dependencies]
+mkcert = ">=1.4.4,<2"
+pip = ">=24,<25"
+rich = ">=14,<15"
+testcontainers = ">=4,<5"
+
+[feature.native-certs-test.tasks]
+test-native-certs = { cmd = "python scripts/test_native_certs.py --pixi-bin $CARGO_TARGET_DIR/release/pixi", description = "Test native-certs feature with local HTTPS PyPI server", depends-on = [
+  "build-release",
+] }
 
 #
 # Environment descriptions
@@ -282,4 +292,5 @@ schema = { features = [
   "pytest",
 ], no-default-feature = true, solve-group = "default" }
 test-export = { features = ["micromamba"], no-default-feature = true }
+test-native-certs = { features = ["native-certs-test", "build"] }
 trampoline = { features = ["trampoline"], no-default-feature = true }

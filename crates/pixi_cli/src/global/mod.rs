@@ -8,7 +8,7 @@ mod add;
 mod edit;
 mod expose;
 mod global_specs;
-mod install;
+pub mod install;
 mod list;
 mod remove;
 mod shortcut;
@@ -55,7 +55,7 @@ pub enum Command {
 #[derive(Debug, Parser)]
 pub struct Args {
     #[command(subcommand)]
-    command: Command,
+    pub command: Command,
 }
 
 /// Maps global command enum variants to their function handlers.

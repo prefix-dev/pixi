@@ -7,10 +7,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
         [
             MatchSpec {
                 name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "python",
-                    },
+                    Exact(
+                        PackageName {
+                            normalized: None,
+                            source: "python",
+                        },
+                    ),
                 ),
                 version: Some(
                     StrictRange(
@@ -34,13 +36,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "numpy",
-                    },
+                    Exact(
+                        PackageName {
+                            normalized: None,
+                            source: "numpy",
+                        },
+                    ),
                 ),
                 version: Some(
                     Range(
@@ -62,13 +67,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "jupyter",
-                    },
+                    Exact(
+                        PackageName {
+                            normalized: None,
+                            source: "jupyter",
+                        },
+                    ),
                 ),
                 version: Some(
                     StrictRange(
@@ -92,13 +100,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "pandas",
-                    },
+                    Exact(
+                        PackageName {
+                            normalized: None,
+                            source: "pandas",
+                        },
+                    ),
                 ),
                 version: Some(
                     Range(
@@ -120,13 +131,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "geopandas",
-                    },
+                    Exact(
+                        PackageName {
+                            normalized: None,
+                            source: "geopandas",
+                        },
+                    ),
                 ),
                 version: Some(
                     Range(
@@ -148,13 +162,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "shapely",
-                    },
+                    Exact(
+                        PackageName {
+                            normalized: None,
+                            source: "shapely",
+                        },
+                    ),
                 ),
                 version: Some(
                     Range(
@@ -176,13 +193,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "pytest",
-                    },
+                    Exact(
+                        PackageName {
+                            normalized: None,
+                            source: "pytest",
+                        },
+                    ),
                 ),
                 version: Some(
                     Range(
@@ -204,13 +224,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "pip",
-                    },
+                    Exact(
+                        PackageName {
+                            normalized: None,
+                            source: "pip",
+                        },
+                    ),
                 ),
                 version: None,
                 build: None,
@@ -224,6 +247,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
         ],
         [

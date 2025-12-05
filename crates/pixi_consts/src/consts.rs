@@ -16,7 +16,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.59.0",
+    None => "0.60.0",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -39,6 +39,7 @@ pub const CACHED_ENVS_DIR: &str = "cached-envs-v0";
 pub const _CACHED_BUILD_ENVS_DIR: &str = "cached-build-envs-v0";
 pub const CACHED_BUILD_TOOL_ENVS_DIR: &str = "cached-build-tool-envs-v0";
 pub const CACHED_GIT_DIR: &str = "git-v0";
+pub const CACHED_URL_DIR: &str = "url-v0";
 pub const CACHED_BUILD_WORK_DIR: &str = "work";
 pub const CACHED_BUILD_BACKENDS: &str = "backends-v0";
 pub const CACHED_PACKAGES: &str = "pkgs";
@@ -104,6 +105,11 @@ pub const CLAP_CONFIG_OPTIONS: &str = "Config Options";
 pub const CLAP_GIT_OPTIONS: &str = "Git Options";
 pub const CLAP_GLOBAL_OPTIONS: &str = "Global Options";
 pub const CLAP_UPDATE_OPTIONS: &str = "Update Options";
+
+// Build backends constants
+pub const RATTLER_BUILD_FILE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
+pub const RATTLER_BUILD_DIRS: [&str; 2] = ["", "recipe"];
+pub const ROS_BACKEND_FILE_NAMES: [&str; 1] = ["package.xml"];
 
 pub static TASK_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().blue());
 pub static TASK_ERROR_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().red());

@@ -20,7 +20,8 @@ use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
-use pixi_spec::SourceLocationSpec;
+use pixi_spec::{SourceLocationSpec, UrlSpec};
+use pixi_url::UrlResolver;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 use rattler_networking::LazyClient;
@@ -28,6 +29,7 @@ use rattler_repodata_gateway::Gateway;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use typed_path::Utf8TypedPath;
+use url::UrlCheckoutTask;
 
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, Executor,
@@ -54,6 +56,7 @@ mod builder;
 mod error;
 mod git;
 mod instantiate_backend;
+pub mod url;
 
 /// The command dispatcher is responsible for synchronizing requests between
 /// different conda environments.
@@ -110,6 +113,9 @@ pub(crate) struct CommandDispatcherData {
 
     /// The resolver of git repositories.
     pub git_resolver: GitResolver,
+
+    /// The resolver of url archives.
+    pub url_resolver: UrlResolver,
 
     /// The base directory to use if relative paths are discovered.
     pub root_dir: PathBuf,
@@ -234,6 +240,7 @@ pub(crate) enum ForegroundMessage {
     SourceBuild(SourceBuildTask),
     QuerySourceBuildCache(SourceBuildCacheStatusTask),
     GitCheckout(GitCheckoutTask),
+    UrlCheckout(UrlCheckoutTask),
     InstallPixiEnvironment(InstallPixiEnvironmentTask),
     InstantiateToolEnvironment(Task<InstantiateToolEnvironmentSpec>),
     ClearReporter(oneshot::Sender<()>),
@@ -565,11 +572,23 @@ impl CommandDispatcher {
     ///
     /// This function resolves the source specification to a concrete checkout
     /// by:
-    /// 1. For path sources: Resolving relative paths against the root directory
+    /// 1. For path sources: Resolving relative paths against the root directory or against an alternative root path
+    ///
+    /// i.e. in the case of an out-of-tree build.
+    /// Some examples for different inputs:
+    /// - `/foo/bar` => `/foo/bar` (absolute paths are unchanged)
+    /// - `./bar` => `<root_dir>/bar`
+    /// - `bar` => `<root_dir>/bar` (or `<alternative_root>/bar` if provided)
+    /// - `../bar` => `<alternative_root>/../bar` (normalized, validated for security)
+    /// - `~/bar` => `<home_dir>/bar`
+    ///
+    /// Usually:
+    /// * `root_dir` => workspace root directory (parent of workspace manifest)
+    /// * `alternative_root` => package root directory (parent of package manifest)
+    ///
     /// 2. For git sources: Cloning or fetching the repository and checking out
     ///    the specified reference
-    /// 3. For URL sources: Downloading and extracting the archive (currently
-    ///    unimplemented)
+    /// 3. For URL sources: Downloading and extracting the archive
     ///
     /// The function handles path normalization and ensures security by
     /// preventing directory traversal attacks. It also manages caching of
@@ -581,7 +600,12 @@ impl CommandDispatcher {
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match source_location_spec {
             SourceLocationSpec::Url(url) => {
-                unimplemented!("fetching URL sources ({}) is not yet implemented", url.url)
+                self.pin_and_checkout_url(UrlSpec {
+                    url: url.url,
+                    md5: url.md5,
+                    sha256: url.sha256,
+                })
+                .await
             }
             SourceLocationSpec::Path(path) => {
                 let source_path = self
@@ -609,16 +633,15 @@ impl CommandDispatcher {
     /// - For path sources: Resolves and validates the path
     /// - For git sources: Checks out the specific revision
     /// - For URL sources: Extracts the archive with the exact checksum
-    ///   (unimplemented)
     pub async fn checkout_pinned_source(
         &self,
         pinned_spec: PinnedSourceSpec,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match pinned_spec {
-            PinnedSourceSpec::Path(ref path) => {
+            PinnedSourceSpec::Path(ref path_spec) => {
                 let source_path = self
                     .data
-                    .resolve_typed_path(path.path.to_path())
+                    .resolve_typed_path(path_spec.path.to_path())
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
@@ -627,9 +650,7 @@ impl CommandDispatcher {
                 })
             }
             PinnedSourceSpec::Git(git_spec) => self.checkout_pinned_git(git_spec).await,
-            PinnedSourceSpec::Url(_) => {
-                unimplemented!("fetching URL sources is not yet implemented")
-            }
+            PinnedSourceSpec::Url(url_spec) => self.checkout_pinned_url(url_spec).await,
         }
     }
 

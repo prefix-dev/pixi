@@ -257,7 +257,7 @@ cli = ["rich==12"]
 [dependency-groups]
 test = ["pytest==6"]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["{CURRENT_PLATFORM}"]
 

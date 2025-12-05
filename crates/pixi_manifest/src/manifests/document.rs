@@ -77,7 +77,7 @@ impl ManifestDocument {
         let empty_content = r#"
         [project]
         name = "test"
-        [tool.pixi.project]
+        [tool.pixi.workspace]
         channels = []
         platforms = []
         "#
@@ -396,9 +396,10 @@ impl ManifestDocument {
             || platform.is_some()
             || editable.is_some_and(|e| e)
         {
-            let mut pypi_requirement =
-                PixiPypiSpec::try_from((requirement.clone(), pixi_requirement.cloned()))
-                    .map_err(Box::new)?;
+            let mut pypi_requirement = match pixi_requirement {
+                Some(existing) => existing.update_requirement(requirement)?,
+                None => PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?,
+            };
             if let Some(editable) = editable {
                 pypi_requirement.set_editable(editable);
             }
@@ -821,7 +822,7 @@ mod test {
         let manifest_content = r#"[project]
 name = "test"
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = []
 platforms = []
 
@@ -873,7 +874,7 @@ dev = [
     "PyYaML>=6.0", # dev inline comment
 ]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = []
 platforms = []
 

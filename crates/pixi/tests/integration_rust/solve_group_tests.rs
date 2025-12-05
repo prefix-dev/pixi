@@ -14,17 +14,18 @@ use url::Url;
 
 use crate::common::{
     LockFileExt, PixiControl,
-    builders::{HasDependencyConfig, HasNoInstallConfig},
+    builders::HasDependencyConfig,
     client::OfflineMiddleware,
-    package_database::{Package, PackageDatabase},
+    pypi_index::{Database as PyPIDatabase, PyPIPackage},
 };
 use crate::setup_tracing;
+use pixi_test_utils::{MockRepoData, Package};
 
 #[tokio::test]
 async fn conda_solve_group_functionality() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package `foo` with 3 different versions
     package_database.add_package(Package::build("foo", "1").finish());
@@ -124,7 +125,6 @@ async fn test_purl_are_added_for_pypi() {
 
     // Add boltons from pypi
     pixi.add("boltons")
-        .with_install(true)
         .set_type(pixi_core::DependencyType::PypiDependency)
         .await
         .unwrap();
@@ -207,7 +207,6 @@ async fn test_purl_are_missing_for_non_conda_forge() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_purl_are_generated_using_custom_mapping() {
     setup_tracing();
 
@@ -465,18 +464,14 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     let package = packages.pop().unwrap();
 
-    let first_purl = package
-        .package_record
-        .purls
-        .as_ref()
-        .and_then(BTreeSet::first)
-        .unwrap();
-
-    // we verify that even if this name is not present in our mapping
-    // we record a purl anyways. Because we make the assumption
-    // that it's a pypi package
-    assert_eq!(first_purl.name(), "pixi-something-new");
-    assert!(first_purl.qualifiers().is_empty());
+    // With custom mapping, packages not in the mapping should NOT get purls
+    // This verifies that custom mapping is exclusive - only packages explicitly
+    // mapped should be considered as pypi packages
+    assert!(
+        package.package_record.purls.is_none()
+            || package.package_record.purls.as_ref().unwrap().is_empty(),
+        "pixi-something-new should not have purls when not in custom mapping"
+    );
 }
 
 #[tokio::test]
@@ -787,4 +782,100 @@ async fn test_disabled_mapping() {
     // that it's a pypi package
     assert_eq!(boltons_first_purl.name(), "boltons");
     assert!(boltons_first_purl.qualifiers().is_empty());
+}
+
+#[tokio::test]
+async fn test_custom_mapping_ignores_backwards_compatibility() {
+    setup_tracing();
+
+    // Create local conda channel with boltons and python packages
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::Linux64)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("boltons", "24.0.0")
+            .with_subdir(Platform::Linux64)
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+    let channel_url = channel.url();
+
+    // Create local PyPI index with boltons package
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("boltons", "24.0.0"))
+        .into_simple_index()
+        .expect("failed to create local simple index");
+
+    // Create a custom mapping file that only includes specific packages
+    let temp_dir = TempDir::new().unwrap();
+    let mapping_file = temp_dir.path().join("map.json");
+    fs_err::write(&mapping_file, r#"{}"#).unwrap();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-custom-mapping"
+    channels = ["{channel_url}"]
+    platforms = ["linux-64"]
+    conda-pypi-map = {{ "{channel_url}" = "{mapping_file}" }}
+
+    [dependencies]
+    python = "3.12.0"
+    boltons = "*"
+
+    [pypi-dependencies]
+    boltons = "*"
+
+    [pypi-options]
+    index-url = "{pypi_url}"
+    "#,
+        channel_url = channel_url,
+        mapping_file = mapping_file
+            .to_str()
+            .unwrap()
+            .to_string()
+            .replace("\\", "/"),
+        pypi_url = pypi_index.index_url(),
+    ))
+    .unwrap();
+
+    // Lock the project (this triggers the amend_purls logic)
+    pixi.lock().await.unwrap();
+
+    // Get the lock file
+    let lock = pixi.lock_file().await.unwrap();
+    let environment = lock.environment(DEFAULT_ENVIRONMENT_NAME).unwrap();
+    let conda_packages = environment.conda_packages(Platform::Linux64).unwrap();
+
+    // Collect conda packages to a vector so we can iterate over them
+    let conda_packages: Vec<_> = conda_packages.collect();
+
+    // Find boltons in conda packages
+    let boltons_package = conda_packages
+        .iter()
+        .find(|pkg| match pkg {
+            rattler_lock::CondaPackageData::Binary(binary) => {
+                binary.package_record.name.as_source() == "boltons"
+            }
+            _ => panic!("All packagees should be binary"),
+        })
+        .expect("boltons should be present in conda packages");
+
+    // The issue: boltons should NOT have purls when using custom mapping
+    // because it's not specified in our custom mapping
+    // But due to backwards compatibility logic, it gets purls anyway
+    let purls = match boltons_package {
+        rattler_lock::CondaPackageData::Binary(binary) => &binary.package_record.purls,
+        _ => panic!("All packages should be binary"),
+    };
+
+    if let Some(purls) = purls {
+        assert!(
+            purls.is_empty(),
+            "boltons should not have purls when not specified in custom conda-pypi-map"
+        );
+    }
 }
