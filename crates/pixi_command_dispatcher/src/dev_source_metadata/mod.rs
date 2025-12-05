@@ -102,7 +102,6 @@ impl DevSourceMetadataSpec {
             let record = Self::create_dev_source_record(
                 output,
                 build_backend_metadata.source.manifest_source(),
-                &build_backend_metadata.metadata.input_hash,
                 &source_anchor,
             )?;
             records.push(record);
@@ -121,7 +120,6 @@ impl DevSourceMetadataSpec {
     fn create_dev_source_record(
         output: &pixi_build_types::procedures::conda_outputs::CondaOutput,
         source: &PinnedSourceSpec,
-        input_hash: &Option<pixi_record::InputHash>,
         source_anchor: &SourceAnchor,
     ) -> Result<DevSourceRecord, CommandDispatcherError<DevSourceMetadataError>> {
         // Combine all dependencies into a single map
@@ -186,7 +184,6 @@ impl DevSourceMetadataSpec {
         Ok(DevSourceRecord {
             name: output.metadata.name.clone(),
             source: source.clone(),
-            input_hash: input_hash.clone(),
             variants: variant_values
                 .clone()
                 .into_iter()

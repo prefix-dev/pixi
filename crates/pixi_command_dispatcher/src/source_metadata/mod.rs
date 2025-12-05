@@ -51,13 +51,6 @@ pub struct SourceMetadata {
     /// Manifest and optional build source location for this metadata.
     pub source: SourceCodeLocation,
 
-    /// The cache entry that contains the metadata acquired from the build
-    /// backend.
-    ///
-    /// As long as the cache entry is not dropped, the metadata cannot be
-    /// accessed by another process.
-    pub cache_entry: source_metadata::CacheEntry,
-
     /// The metadata that was acquired from the build backend.
     pub cached_metadata: CachedSourceMetadata,
 }
@@ -96,17 +89,23 @@ impl SourceMetadataSpec {
         // Get the skip_cache flag from the build backend metadata
         let skip_cache = build_backend_metadata.skip_cache;
 
-        let (metadata, mut cache_entry) = command_dispatcher
+        let cache_read_result = command_dispatcher
             .source_metadata_cache()
-            .entry(&cache_key)
+            .read(&cache_key)
             .await
             .map_err(SourceMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
 
+        let (cached_metadata, cache_version) = match cache_read_result {
+            Some((metadata, version)) => (Some(metadata), version),
+            // Start at cache version 0 if no cache exists
+            None => (None, 0),
+        };
+
         if !skip_cache {
             if let Some(cached_metadata) = Self::verify_cache_freshness(
                 &build_backend_metadata.metadata.input_hash,
-                metadata,
+                cached_metadata,
                 &self.backend_metadata.variant_configuration,
             )
             .await?
@@ -118,7 +117,6 @@ impl SourceMetadataSpec {
                 return Ok(SourceMetadata {
                     source: build_backend_metadata.source.clone(),
                     cached_metadata,
-                    cache_entry,
                 });
             }
         }
@@ -132,11 +130,11 @@ impl SourceMetadataSpec {
                     source_location.build_source(),
                     packages,
                     &self.package,
-                    &build_backend_metadata.metadata.input_hash,
                 );
 
                 let cached_source_metadata = CachedSourceMetadata {
                     id: random(),
+                    cache_version,
                     input_hash: build_backend_metadata.metadata.input_hash.clone(),
                     build_variants: self.backend_metadata.variant_configuration.clone(),
                     metadata: Metadata {
@@ -144,15 +142,25 @@ impl SourceMetadataSpec {
                     },
                 };
 
-                // Store the metadata in the cache for later retrieval
-                cache_entry
-                    .write(cached_source_metadata.clone())
+                // Try to store the metadata in the cache with version checking
+                match command_dispatcher
+                    .source_metadata_cache()
+                    .try_write(&cache_key, cached_source_metadata.clone(), cache_version)
                     .await
                     .map_err(SourceMetadataError::Cache)
-                    .map_err(CommandDispatcherError::Failed)?;
+                    .map_err(CommandDispatcherError::Failed)?
+                {
+                    source_metadata::WriteResult::Written => {
+                        tracing::trace!("Cache updated successfully");
+                    }
+                    source_metadata::WriteResult::Conflict(_) => {
+                        tracing::warn!(
+                            "Cache was updated by another process during computation (version conflict), using our computed result"
+                        );
+                    }
+                }
 
                 Ok(SourceMetadata {
-                    cache_entry,
                     cached_metadata: cached_source_metadata,
                     source: source_location,
                 })
@@ -167,7 +175,6 @@ impl SourceMetadataSpec {
                     futures.push(self.resolve_output(
                         &command_dispatcher,
                         output,
-                        build_backend_metadata.metadata.input_hash.clone(),
                         source_location.clone(),
                         reporter.clone(),
                     ));
@@ -175,6 +182,7 @@ impl SourceMetadataSpec {
 
                 let cached_source_metadata = CachedSourceMetadata {
                     id: random(),
+                    cache_version,
                     input_hash: build_backend_metadata.metadata.input_hash.clone(),
                     build_variants: self.backend_metadata.variant_configuration.clone(),
                     metadata: Metadata {
@@ -182,15 +190,25 @@ impl SourceMetadataSpec {
                     },
                 };
 
-                // Store the metadata in the cache for later retrieval
-                cache_entry
-                    .write(cached_source_metadata.clone())
+                // Try to store the metadata in the cache with version checking
+                match command_dispatcher
+                    .source_metadata_cache()
+                    .try_write(&cache_key, cached_source_metadata.clone(), cache_version)
                     .await
                     .map_err(SourceMetadataError::Cache)
-                    .map_err(CommandDispatcherError::Failed)?;
+                    .map_err(CommandDispatcherError::Failed)?
+                {
+                    source_metadata::WriteResult::Written => {
+                        tracing::trace!("Cache updated successfully");
+                    }
+                    source_metadata::WriteResult::Conflict(_) => {
+                        tracing::warn!(
+                            "Cache was updated by another process during computation (version conflict), using our computed result"
+                        );
+                    }
+                }
 
                 Ok(SourceMetadata {
-                    cache_entry,
                     cached_metadata: cached_source_metadata,
                     source: source_location,
                 })
@@ -247,7 +265,6 @@ impl SourceMetadataSpec {
         &self,
         command_dispatcher: &CommandDispatcher,
         output: &CondaOutput,
-        input_hash: Option<InputHash>,
         source: SourceCodeLocation,
         reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
@@ -469,7 +486,6 @@ impl SourceMetadataSpec {
                 experimental_extra_depends: Default::default(),
             },
             manifest_source,
-            input_hash,
             build_source,
             sources: sources
                 .into_iter()

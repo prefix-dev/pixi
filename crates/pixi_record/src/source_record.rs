@@ -33,13 +33,6 @@ pub struct SourceRecord {
     /// The variants that uniquely identify the way this package was built.
     pub variants: Option<BTreeMap<String, VariantValue>>,
 
-    /// The hash of the input that was used to build the metadata of the
-    /// package. This can be used to verify that the metadata is still valid.
-    ///
-    /// If this is `None`, the input hash was not computed or is not relevant
-    /// for this record. The record can always be considered up to date.
-    pub input_hash: Option<InputHash>,
-
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
     pub sources: HashMap<String, SourceSpec>,
@@ -107,10 +100,8 @@ impl SourceRecord {
             package_record: self.package_record,
             location: self.manifest_source.clone().into(),
             package_build_source,
-            input: self.input_hash.map(|i| rattler_lock::InputHash {
-                hash: i.hash,
-                globs: Vec::from_iter(i.globs),
-            }),
+            // Don't write input_hash to lock file
+            input: None,
             sources: self
                 .sources
                 .into_iter()
@@ -200,10 +191,6 @@ impl SourceRecord {
         Ok(Self {
             package_record: data.package_record,
             manifest_source,
-            input_hash: data.input.map(|hash| InputHash {
-                hash: hash.hash,
-                globs: BTreeSet::from_iter(hash.globs),
-            }),
             build_source,
             sources: data
                 .sources
@@ -323,7 +310,6 @@ mod tests {
             package_record,
             manifest_source: manifest_source.clone(),
             build_source: Some(build_source),
-            input_hash: None,
             sources: Default::default(),
             variants: None,
         };
@@ -403,7 +389,6 @@ mod tests {
             package_record,
             manifest_source: manifest_source.clone(),
             build_source: Some(build_source),
-            input_hash: None,
             sources: Default::default(),
             variants: None,
         };
@@ -489,7 +474,6 @@ mod tests {
             package_record,
             manifest_source: manifest_source.clone(),
             build_source: Some(build_source),
-            input_hash: None,
             sources: Default::default(),
             variants: None,
         };

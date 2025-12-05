@@ -92,13 +92,6 @@ pub struct BuildBackendMetadata {
     /// The manifest and optional build source location for this metadata.
     pub source: SourceCodeLocation,
 
-    /// The cache entry that contains the metadata acquired from the build
-    /// backend.
-    ///
-    /// As long as the cache entry is not dropped, the metadata cannot be
-    /// accessed by another process.
-    pub cache_entry: build_backend_metadata::CacheEntry,
-
     /// The metadata that was acquired from the build backend.
     pub metadata: CachedCondaMetadata,
 
@@ -200,18 +193,24 @@ impl BuildBackendMetadataSpec {
         // Check the source metadata cache, short circuit if there is a cache hit that
         // is still fresh.
         let cache_key = self.cache_key();
-        let (metadata, mut cache_entry) = command_dispatcher
+        let cache_read_result = command_dispatcher
             .build_backend_metadata_cache()
-            .entry(&cache_key)
+            .read(&cache_key)
             .await
             .map_err(BuildBackendMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
+
+        let (cached_metadata, cache_version) = match cache_read_result {
+            Some((metadata, version)) => (Some(metadata), version),
+            // Start at cache version 0 if no cache exists
+            None => (None, 0),
+        };
 
         if !skip_cache {
             if let Some(metadata) = Self::verify_cache_freshness(
                 &build_source_checkout,
                 &command_dispatcher,
-                metadata,
+                cached_metadata,
                 &additional_glob_hash,
                 &self.variant_configuration,
             )
@@ -220,7 +219,6 @@ impl BuildBackendMetadataSpec {
                 return Ok(BuildBackendMetadata {
                     source: source_location.clone(),
                     metadata,
-                    cache_entry,
                     skip_cache,
                 });
             }
@@ -264,9 +262,9 @@ impl BuildBackendMetadataSpec {
             "Using `{}` procedure to get metadata information",
             pixi_build_types::procedures::conda_outputs::METHOD_NAME
         );
-        let metadata = self
+        let mut metadata = self
             .call_conda_outputs(
-                command_dispatcher,
+                command_dispatcher.clone(),
                 build_source_checkout,
                 backend,
                 additional_glob_hash,
@@ -274,17 +272,32 @@ impl BuildBackendMetadataSpec {
             )
             .await?;
 
-        // Store the metadata in the cache for later retrieval
-        cache_entry
-            .write(metadata.clone())
+        metadata.cache_version = cache_version;
+
+        // Try to store the metadata in the cache with version checking.
+        // If another process updated the cache while we were computing, we get a conflict.
+        match command_dispatcher
+            .build_backend_metadata_cache()
+            .try_write(&cache_key, metadata.clone(), cache_version)
             .await
             .map_err(BuildBackendMetadataError::Cache)
-            .map_err(CommandDispatcherError::Failed)?;
+            .map_err(CommandDispatcherError::Failed)?
+        {
+            build_backend_metadata::WriteResult::Written => {
+                tracing::trace!("Cache updated successfully");
+            }
+            build_backend_metadata::WriteResult::Conflict(_other_metadata) => {
+                // Another process computed and cached metadata while we were computing.
+                // We use our computed result.
+                tracing::debug!(
+                    "Cache was updated by another process during computation (version conflict), using our computed result"
+                );
+            }
+        }
 
         Ok(BuildBackendMetadata {
             source: source_location,
             metadata,
-            cache_entry,
             skip_cache,
         })
     }
@@ -532,6 +545,7 @@ impl BuildBackendMetadataSpec {
         Ok(CachedCondaMetadata {
             id: random(),
             input_hash: input_hash.clone(),
+            cache_version: 0,
             metadata: MetadataKind::Outputs {
                 outputs: outputs.outputs,
             },
