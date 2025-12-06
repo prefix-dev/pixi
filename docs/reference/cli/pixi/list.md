@@ -25,11 +25,13 @@ pixi list [OPTIONS] [REGEX]
 - <a id="arg---sort-by" href="#arg---sort-by">`--sort-by <SORT_BY>`</a>
 :  Sorting strategy
 <br>**default**: `name`
-<br>**options**: `size`, `name`, `kind`
+<br>**options**: `size`, `name`, `kind`, `license`
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to list packages for. Defaults to the default environment
 - <a id="arg---explicit" href="#arg---explicit">`--explicit (-x)`</a>
 :  Only list packages that are explicitly defined in the workspace
+- <a id="arg---show-license" href="#arg---show-license">`--show-license`</a>
+:  Show the license column in the output
 
 ## Update Options
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>

@@ -448,6 +448,28 @@ def test_list_exits_unsuccessful_on_unknown_pkg(
     )
 
 
+def test_list_with_license_column(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    # Create a new project and add a package
+    verify_cli_command([pixi, "init", "--channel", dummy_channel_1, tmp_pixi_workspace])
+    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "dummy-a"])
+
+    # Test that --show-license flag shows the License column header
+    verify_cli_command(
+        [pixi, "list", "--manifest-path", manifest_path, "--show-license"],
+        stdout_contains="License",
+    )
+
+    # Test that without the flag, License column is not shown
+    verify_cli_command(
+        [pixi, "list", "--manifest-path", manifest_path],
+        stdout_excludes="License",
+    )
+
+
 def test_pixi_manifest_path(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
 
