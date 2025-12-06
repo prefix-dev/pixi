@@ -92,6 +92,10 @@ pub struct Args {
     /// Whether the pypi requirement should be editable
     #[arg(long, requires = "pypi")]
     pub editable: bool,
+
+    // Specify channel
+    #[arg(long)]
+    pub channel: Option<String>,
 }
 
 impl TryFrom<&Args> for DependencyOptions {
@@ -154,6 +158,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     spec_type,
                     (&args).try_into()?,
                     git_options,
+                    args.channel.clone(),
                 )
                 .await?
         }
