@@ -22,7 +22,8 @@ pub use git::{GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
 pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
 use rattler_conda_types::{
-    ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError, VersionSpec,
+    BuildNumberSpec, ChannelConfig, MatchSpecCondition, NamedChannelOrUrl, NamelessMatchSpec,
+    ParseChannelError, StringMatcher, VersionSpec,
 };
 pub use source_anchor::SourceAnchor;
 use thiserror::Error;
@@ -287,18 +288,12 @@ impl PixiSpec {
             }
             PixiSpec::Url(url) => url
                 .into_source_or_binary()
-                .map_left(|url| SourceSpec {
-                    location: SourceLocationSpec::Url(url),
-                })
+                .map_left(|url| SourceLocationSpec::Url(url).into())
                 .map_right(BinarySpec::Url),
-            PixiSpec::Git(git) => Either::Left(SourceSpec {
-                location: SourceLocationSpec::Git(git),
-            }),
+            PixiSpec::Git(git) => Either::Left(SourceLocationSpec::Git(git).into()),
             PixiSpec::Path(path) => path
                 .into_source_or_binary()
-                .map_left(|path| SourceSpec {
-                    location: SourceLocationSpec::Path(path),
-                })
+                .map_left(|path| SourceLocationSpec::Path(path).into())
                 .map_right(BinarySpec::Path),
         }
     }
@@ -312,9 +307,7 @@ impl PixiSpec {
                 .try_into_source_url()
                 .map(SourceSpec::from)
                 .map_err(PixiSpec::from),
-            PixiSpec::Git(git) => Ok(SourceSpec {
-                location: SourceLocationSpec::Git(git),
-            }),
+            PixiSpec::Git(git) => Ok(SourceLocationSpec::Git(git).into()),
             PixiSpec::Path(path) => path
                 .try_into_source_path()
                 .map(SourceSpec::from)
@@ -362,14 +355,55 @@ impl PixiSpec {
 ///
 /// This type only represents source packages. Use [`PixiSpec`] to represent
 /// both binary and source packages.
-#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
 pub struct SourceSpec {
     /// The location of the source.
+    #[serde(flatten)]
     pub location: SourceLocationSpec,
+
+    /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
+    pub version: Option<VersionSpec>,
+
+    /// The build string of the package (e.g. `py37_0`, `py37h6de7cb9_0`, `py*`)
+    pub build: Option<StringMatcher>,
+
+    /// The build number of the package
+    pub build_number: Option<BuildNumberSpec>,
+
+    /// Optional extra dependencies to select for the package
+    pub extras: Option<Vec<String>>,
+
+    /// The subdir of the channel
+    pub subdir: Option<String>,
+
+    /// The namespace of the package (currently not used)
+    pub namespace: Option<String>,
+
+    /// The license of the package
+    pub license: Option<String>,
+
+    /// The condition under which this match spec applies.
+    pub condition: Option<MatchSpecCondition>,
+}
+
+impl From<SourceLocationSpec> for SourceSpec {
+    fn from(value: SourceLocationSpec) -> Self {
+        Self {
+            location: value,
+            version: None,
+            build: None,
+            build_number: None,
+            extras: None,
+            subdir: None,
+            namespace: None,
+            license: None,
+            condition: None,
+        }
+    }
 }
 
 /// A specification for a source location.
-#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
 #[serde(untagged)]
 pub enum SourceLocationSpec {
     /// The spec is represented as an archive that can be downloaded from the
@@ -383,9 +417,9 @@ pub enum SourceLocationSpec {
     Path(PathSourceSpec),
 }
 
-impl Display for SourceSpec {
+impl Display for SourceLocationSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.location {
+        match &self {
             SourceLocationSpec::Url(url) => write!(f, "{url}"),
             SourceLocationSpec::Git(git) => write!(f, "{git}"),
             SourceLocationSpec::Path(path) => write!(f, "{path}"),
@@ -393,16 +427,81 @@ impl Display for SourceSpec {
     }
 }
 
+impl Display for SourceSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.location.fmt(f)
+    }
+}
+
 impl SourceSpec {
+    /// Constructs a new instance from a location and a nameless match spec.
+    pub fn new(location: SourceLocationSpec, spec: NamelessMatchSpec) -> Self {
+        let NamelessMatchSpec {
+            version,
+            build,
+            build_number,
+            file_name: _,
+            extras,
+            channel: _,
+            subdir,
+            namespace,
+            md5: _,
+            sha256: _,
+            url: _,
+            license,
+            condition,
+        } = spec;
+        Self {
+            location,
+            version,
+            build,
+            build_number,
+            extras,
+            subdir,
+            namespace,
+            license,
+            condition,
+        }
+    }
+
     /// Convert this instance into a nameless match spec.
     pub fn to_nameless_match_spec(&self) -> NamelessMatchSpec {
-        NamelessMatchSpec::default()
+        let Self {
+            location: _,
+            version,
+            build,
+            build_number,
+            extras,
+            subdir,
+            namespace,
+            license,
+            condition,
+        } = self;
+        NamelessMatchSpec {
+            version: version.clone(),
+            build: build.clone(),
+            build_number: build_number.clone(),
+            extras: extras.clone(),
+            subdir: subdir.clone(),
+            namespace: namespace.clone(),
+            license: license.clone(),
+            condition: condition.clone(),
+            ..NamelessMatchSpec::default()
+        }
     }
 
     /// Converts this instance into a [`toml_edit::Value`].
     pub fn to_toml_value(&self) -> toml_edit::Value {
         ::serde::Serialize::serialize(&self.location, toml_edit::ser::ValueSerializer::new())
             .expect("conversion to toml cannot fail")
+    }
+
+    /// Resolves the source location using the provided source anchor.
+    pub fn resolve(self, source_anchor: SourceAnchor) -> Self {
+        Self {
+            location: source_anchor.resolve(self.location),
+            ..self
+        }
     }
 }
 
@@ -437,9 +536,7 @@ impl From<UrlSpec> for PixiSpec {
 
 impl From<UrlSourceSpec> for SourceSpec {
     fn from(value: UrlSourceSpec) -> Self {
-        Self {
-            location: SourceLocationSpec::Url(value),
-        }
+        SourceLocationSpec::Url(value).into()
     }
 }
 
@@ -457,9 +554,7 @@ impl From<PathSpec> for PixiSpec {
 
 impl From<PathSourceSpec> for SourceSpec {
     fn from(value: PathSourceSpec) -> Self {
-        Self {
-            location: SourceLocationSpec::Path(value),
-        }
+        SourceLocationSpec::Path(value).into()
     }
 }
 
@@ -541,26 +636,20 @@ impl From<VersionSpec> for BinarySpec {
 }
 
 #[cfg(feature = "rattler_lock")]
-impl From<rattler_lock::source::SourceLocation> for SourceSpec {
+impl From<rattler_lock::source::SourceLocation> for SourceLocationSpec {
     fn from(value: rattler_lock::source::SourceLocation) -> Self {
         match value {
-            rattler_lock::source::SourceLocation::Url(url) => Self {
-                location: SourceLocationSpec::Url(url.into()),
-            },
-            rattler_lock::source::SourceLocation::Git(git) => Self {
-                location: SourceLocationSpec::Git(git.into()),
-            },
-            rattler_lock::source::SourceLocation::Path(path) => Self {
-                location: SourceLocationSpec::Path(path.into()),
-            },
+            rattler_lock::source::SourceLocation::Url(url) => Self::Url(url.into()),
+            rattler_lock::source::SourceLocation::Git(git) => Self::Git(git.into()),
+            rattler_lock::source::SourceLocation::Path(path) => Self::Path(path.into()),
         }
     }
 }
 
 #[cfg(feature = "rattler_lock")]
-impl From<SourceSpec> for rattler_lock::source::SourceLocation {
-    fn from(value: SourceSpec) -> Self {
-        match value.location {
+impl From<SourceLocationSpec> for rattler_lock::source::SourceLocation {
+    fn from(value: SourceLocationSpec) -> Self {
+        match value {
             SourceLocationSpec::Url(url) => Self::Url(url.into()),
             SourceLocationSpec::Git(git) => Self::Git(git.into()),
             SourceLocationSpec::Path(path) => Self::Path(path.into()),

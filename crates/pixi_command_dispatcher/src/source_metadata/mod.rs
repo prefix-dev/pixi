@@ -11,7 +11,7 @@ use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_record::{InputHash, PixiRecord, SourceRecord};
-use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, PackageRecord,
@@ -134,7 +134,7 @@ impl SourceMetadataSpec {
     ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
         let manifest_source = source.manifest_source().clone();
         let build_source = source.build_source().cloned();
-        let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
+        let source_anchor = SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
 
         // Solve the build environment for the output.
         let build_dependencies = output
@@ -226,23 +226,25 @@ impl SourceMetadataSpec {
 
         let pixi_spec_to_match_spec = |name: &PackageName,
                                        spec: &PixiSpec,
-                                       sources: &mut HashMap<PackageName, SourceSpec>|
+                                       sources: &mut HashMap<PackageName, SourceLocationSpec>|
          -> Result<MatchSpec, SourceMetadataError> {
             match spec.clone().into_source_or_binary() {
                 Either::Left(source) => {
-                    let source = match sources.entry(name.clone()) {
+                    match sources.entry(name.clone()) {
                         std::collections::hash_map::Entry::Occupied(entry) => {
                             // If the entry already exists, check if it points to the same source.
-                            if entry.get() == &source {
+                            if entry.get() == &source.location {
                                 return Err(SourceMetadataError::DuplicateSourceDependency {
                                     package: name.clone(),
                                     source1: Box::new(entry.get().clone()),
-                                    source2: Box::new(source.clone()),
+                                    source2: Box::new(source.location.clone()),
                                 });
                             }
                             entry.into_mut()
                         }
-                        std::collections::hash_map::Entry::Vacant(entry) => entry.insert(source),
+                        std::collections::hash_map::Entry::Vacant(entry) => {
+                            entry.insert(source.location.clone())
+                        }
                     };
                     Ok(MatchSpec::from_nameless(
                         source.to_nameless_match_spec(),
@@ -259,7 +261,7 @@ impl SourceMetadataSpec {
         };
 
         let pixi_specs_to_match_spec = |specs: DependencyMap<PackageName, PixiSpec>,
-                                        sources: &mut HashMap<PackageName, SourceSpec>|
+                                        sources: &mut HashMap<PackageName, SourceLocationSpec>|
          -> Result<
             Vec<String>,
             CommandDispatcherError<SourceMetadataError>,
@@ -439,7 +441,7 @@ impl SourceMetadataSpec {
 struct PackageRecordDependencies {
     pub depends: Vec<String>,
     pub constrains: Vec<String>,
-    pub sources: HashMap<rattler_conda_types::PackageName, SourceSpec>,
+    pub sources: HashMap<rattler_conda_types::PackageName, SourceLocationSpec>,
 }
 
 impl PackageRecordDependencies {
@@ -463,14 +465,12 @@ impl PackageRecordDependencies {
         for (name, spec) in dependencies.dependencies.into_specs() {
             match spec.value.into_source_or_binary() {
                 Either::Left(source) => {
-                    depends.push(
-                        MatchSpec {
-                            name: Some(name.clone().into()),
-                            ..MatchSpec::default()
-                        }
-                        .to_string(),
+                    let spec = MatchSpec::from_nameless(
+                        source.to_nameless_match_spec(),
+                        Some(name.clone().into()),
                     );
-                    sources.insert(name, source);
+                    depends.push(spec.to_string());
+                    sources.insert(name, source.location);
                 }
                 Either::Right(binary) => {
                     if let Ok(spec) = binary.try_into_nameless_match_spec(channel_config) {
@@ -520,8 +520,8 @@ pub enum SourceMetadataError {
     )]
     DuplicateSourceDependency {
         package: PackageName,
-        source1: Box<SourceSpec>,
-        source2: Box<SourceSpec>,
+        source1: Box<SourceLocationSpec>,
+        source2: Box<SourceLocationSpec>,
     },
 
     #[error("the dependencies of some packages in the environment form a cycle")]

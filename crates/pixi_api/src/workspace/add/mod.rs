@@ -62,12 +62,7 @@ pub async fn add_conda_dep(
                 };
                 (
                     name.clone(),
-                    (
-                        SourceSpec {
-                            location: SourceLocationSpec::Git(git_spec),
-                        },
-                        *spec_type,
-                    ),
+                    (SourceLocationSpec::Git(git_spec).into(), *spec_type),
                 )
             })
             .collect();

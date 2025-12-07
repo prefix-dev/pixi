@@ -177,8 +177,8 @@ impl PinnedSourceSpec {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn matches_source_spec(&self, source_spec: &SourceSpec) -> bool {
-        match (self, &source_spec.location) {
+    pub fn matches_source_spec(&self, source_spec: &SourceLocationSpec) -> bool {
+        match (self, &source_spec) {
             // Path sources: paths must be exactly equal
             (PinnedSourceSpec::Path(pinned_path), SourceLocationSpec::Path(source_path)) => {
                 pinned_path.path == source_path.path
@@ -992,18 +992,13 @@ impl Display for PinnedGitSpec {
     }
 }
 
-impl From<PinnedSourceSpec> for SourceSpec {
+impl From<PinnedSourceSpec> for SourceLocationSpec {
     fn from(value: PinnedSourceSpec) -> Self {
         match value {
-            PinnedSourceSpec::Url(url) => SourceSpec {
-                location: SourceLocationSpec::Url(url.into()),
-            },
-            PinnedSourceSpec::Git(git) => SourceSpec {
-                location: SourceLocationSpec::Git(git.into()),
-            },
-            PinnedSourceSpec::Path(path) => SourceSpec {
-                location: SourceLocationSpec::Path(path.into()),
-            },
+            PinnedSourceSpec::Url(url) => SourceLocationSpec::Url(url.into()),
+            PinnedSourceSpec::Git(git) => SourceLocationSpec::Git(git.into()),
+
+            PinnedSourceSpec::Path(path) => SourceLocationSpec::Path(path.into()),
         }
     }
 }
@@ -1262,7 +1257,7 @@ mod tests {
         ));
     }
 
-    use pixi_spec::{PathSourceSpec, SourceLocationSpec, SourceSpec, UrlSourceSpec};
+    use pixi_spec::{PathSourceSpec, SourceLocationSpec, UrlSourceSpec};
     use typed_path::Utf8TypedPathBuf;
 
     #[test]
@@ -1271,11 +1266,9 @@ mod tests {
             path: Utf8TypedPathBuf::from("/path/to/source"),
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Path(PathSourceSpec {
-                path: Utf8TypedPathBuf::from("/path/to/source"),
-            }),
-        };
+        let spec = SourceLocationSpec::Path(PathSourceSpec {
+            path: Utf8TypedPathBuf::from("/path/to/source"),
+        });
 
         assert!(pinned.matches_source_spec(&spec));
     }
@@ -1286,11 +1279,9 @@ mod tests {
             path: Utf8TypedPathBuf::from("/path/to/source"),
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Path(PathSourceSpec {
-                path: Utf8TypedPathBuf::from("/different/path"),
-            }),
-        };
+        let spec = SourceLocationSpec::Path(PathSourceSpec {
+            path: Utf8TypedPathBuf::from("/different/path"),
+        });
 
         assert!(!pinned.matches_source_spec(&spec));
     }
@@ -1306,13 +1297,11 @@ mod tests {
             },
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Git(GitSpec {
-                git: Url::parse("https://github.com/user/repo.git").unwrap(),
-                rev: None,
-                subdirectory: None,
-            }),
-        };
+        let spec = SourceLocationSpec::Git(GitSpec {
+            git: Url::parse("https://github.com/user/repo.git").unwrap(),
+            rev: None,
+            subdirectory: None,
+        });
 
         // Should match despite .git suffix difference
         assert!(pinned.matches_source_spec(&spec));
@@ -1329,13 +1318,11 @@ mod tests {
             },
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Git(GitSpec {
-                git: Url::parse("https://github.com/user/repo").unwrap(),
-                rev: None,
-                subdirectory: None,
-            }),
-        };
+        let spec = SourceLocationSpec::Git(GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: None,
+            subdirectory: None,
+        });
 
         // Should match despite .git suffix difference
         assert!(pinned.matches_source_spec(&spec));
@@ -1352,13 +1339,11 @@ mod tests {
             },
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Git(GitSpec {
-                git: Url::parse("https://github.com/user/repo2").unwrap(),
-                rev: None,
-                subdirectory: None,
-            }),
-        };
+        let spec = SourceLocationSpec::Git(GitSpec {
+            git: Url::parse("https://github.com/user/repo2").unwrap(),
+            rev: None,
+            subdirectory: None,
+        });
 
         assert!(!pinned.matches_source_spec(&spec));
     }
@@ -1374,13 +1359,11 @@ mod tests {
             },
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Git(GitSpec {
-                git: Url::parse("https://github.com/user/repo").unwrap(),
-                rev: None,
-                subdirectory: None,
-            }),
-        };
+        let spec = SourceLocationSpec::Git(GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: None,
+            subdirectory: None,
+        });
 
         // Should match - spec doesn't care about subdirectory
         assert!(pinned.matches_source_spec(&spec));
@@ -1397,13 +1380,11 @@ mod tests {
             },
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Git(GitSpec {
-                git: Url::parse("https://github.com/user/repo").unwrap(),
-                rev: None,
-                subdirectory: Some("subdir".to_string()),
-            }),
-        };
+        let spec = SourceLocationSpec::Git(GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: None,
+            subdirectory: Some("subdir".to_string()),
+        });
 
         assert!(pinned.matches_source_spec(&spec));
     }
@@ -1419,13 +1400,11 @@ mod tests {
             },
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Git(GitSpec {
-                git: Url::parse("https://github.com/user/repo").unwrap(),
-                rev: None,
-                subdirectory: Some("subdir2".to_string()),
-            }),
-        };
+        let spec = SourceLocationSpec::Git(GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: None,
+            subdirectory: Some("subdir2".to_string()),
+        });
 
         assert!(!pinned.matches_source_spec(&spec));
     }
@@ -1441,13 +1420,11 @@ mod tests {
             },
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Git(GitSpec {
-                git: Url::parse("https://github.com/user/repo").unwrap(),
-                rev: None,
-                subdirectory: Some("subdir".to_string()),
-            }),
-        };
+        let spec = SourceLocationSpec::Git(GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: None,
+            subdirectory: Some("subdir".to_string()),
+        });
 
         // Should not match - spec requires a subdirectory that pinned doesn't have
         assert!(!pinned.matches_source_spec(&spec));
@@ -1464,13 +1441,11 @@ mod tests {
             md5: None,
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Url(UrlSourceSpec {
-                url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
-                sha256: None,
-                md5: None,
-            }),
-        };
+        let spec = SourceLocationSpec::Url(UrlSourceSpec {
+            url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
+            sha256: None,
+            md5: None,
+        });
 
         assert!(pinned.matches_source_spec(&spec));
     }
@@ -1486,13 +1461,11 @@ mod tests {
             md5: None,
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Url(UrlSourceSpec {
-                url: Url::parse("https://example.com/different.tar.gz").unwrap(),
-                sha256: None,
-                md5: None,
-            }),
-        };
+        let spec = SourceLocationSpec::Url(UrlSourceSpec {
+            url: Url::parse("https://example.com/different.tar.gz").unwrap(),
+            sha256: None,
+            md5: None,
+        });
 
         assert!(!pinned.matches_source_spec(&spec));
     }
@@ -1503,13 +1476,11 @@ mod tests {
             path: Utf8TypedPathBuf::from("/path/to/source"),
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Git(GitSpec {
-                git: Url::parse("https://github.com/user/repo").unwrap(),
-                rev: None,
-                subdirectory: None,
-            }),
-        };
+        let spec = SourceLocationSpec::Git(GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: None,
+            subdirectory: None,
+        });
 
         assert!(!pinned.matches_source_spec(&spec));
     }
@@ -1525,13 +1496,11 @@ mod tests {
             },
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Url(UrlSourceSpec {
-                url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
-                sha256: None,
-                md5: None,
-            }),
-        };
+        let spec = SourceLocationSpec::Url(UrlSourceSpec {
+            url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
+            sha256: None,
+            md5: None,
+        });
 
         assert!(!pinned.matches_source_spec(&spec));
     }
@@ -1547,11 +1516,9 @@ mod tests {
             md5: None,
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Path(PathSourceSpec {
-                path: Utf8TypedPathBuf::from("/path/to/source"),
-            }),
-        };
+        let spec = SourceLocationSpec::Path(PathSourceSpec {
+            path: Utf8TypedPathBuf::from("/path/to/source"),
+        });
 
         assert!(!pinned.matches_source_spec(&spec));
     }
@@ -1567,13 +1534,11 @@ mod tests {
             },
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Git(GitSpec {
-                git: Url::parse("https://github.com/user/repo").unwrap(),
-                rev: Some(GitReference::Rev("v2.0.0".to_string())),
-                subdirectory: None,
-            }),
-        };
+        let spec = SourceLocationSpec::Git(GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: Some(GitReference::Rev("v2.0.0".to_string())),
+            subdirectory: None,
+        });
 
         // Should match - we only compare repository and subdirectory, not the commit/rev
         assert!(pinned.matches_source_spec(&spec));
@@ -1590,13 +1555,11 @@ mod tests {
             },
         });
 
-        let spec = SourceSpec {
-            location: SourceLocationSpec::Git(GitSpec {
-                git: Url::parse("https://github.com/user/repo").unwrap(),
-                rev: None,
-                subdirectory: None,
-            }),
-        };
+        let spec = SourceLocationSpec::Git(GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: None,
+            subdirectory: None,
+        });
 
         // Should match - GitHub URLs are case-insensitive
         assert!(pinned.matches_source_spec(&spec));

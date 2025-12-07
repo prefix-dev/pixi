@@ -10,7 +10,7 @@ use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_record::{PinnedSourceSpec, PixiRecord, VariantValue};
-use pixi_spec::{SourceAnchor, SourceLocationSpec, SourceSpec};
+use pixi_spec::{SourceAnchor, SourceLocationSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageRecord,
     Platform, RepoDataRecord, prefix::Prefix,
@@ -273,7 +273,7 @@ impl SourceBuildSpec {
             discovered_backend.init_params.build_source.clone()
         {
             let manifest_source_anchor =
-                SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
+                SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
             let resolved_build_source = manifest_source_anchor.resolve(manifest_build_source);
             &command_dispatcher
                 .pin_and_checkout(resolved_build_source)
@@ -289,7 +289,7 @@ impl SourceBuildSpec {
                 backend_spec: discovered_backend
                     .backend_spec
                     .clone()
-                    .resolve(SourceAnchor::from(SourceSpec::from(
+                    .resolve(SourceAnchor::from(SourceLocationSpec::from(
                         manifest_source.clone(),
                     ))),
                 build_source_dir: build_source_checkout.path.clone(),
@@ -510,7 +510,7 @@ impl SourceBuildSpec {
     ) -> Result<BuiltPackage, CommandDispatcherError<SourceBuildError>> {
         let manifest_source = self.source.manifest_source().clone();
 
-        let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
+        let source_anchor = SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
         let host_platform = self.build_environment.host_platform;
         let build_platform = self.build_environment.build_platform;
         let editable = self.editable();
