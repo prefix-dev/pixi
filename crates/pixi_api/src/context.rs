@@ -10,7 +10,9 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{
+    Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform, RepoDataRecord,
+};
 
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
@@ -175,7 +177,7 @@ impl<I: Interface> WorkspaceContext<I> {
         spec_type: SpecType,
         dep_options: DependencyOptions,
         git_options: GitOptions,
-        channel: Option<String>,
+        channel: Option<Vec<NamedChannelOrUrl>>,
     ) -> miette::Result<Option<UpdateDeps>> {
         Box::pin(crate::workspace::add::add_conda_dep(
             self.workspace_mut()?,
