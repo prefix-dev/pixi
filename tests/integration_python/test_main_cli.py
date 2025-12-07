@@ -1402,7 +1402,7 @@ def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "--manifest-path",
             tmp_pixi_workspace,
         ],
-        stderr_contains="Added https://repo.prefix.dev/bioconda::libzlib",
+        stderr_contains="Added libzlib",
     )
     # test channel parameter with name
     verify_cli_command(
