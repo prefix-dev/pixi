@@ -609,7 +609,12 @@
                 "maxProperties": 1,
                 "minProperties": 1,
                 "propertyNames": {
-                  "description": "A valid task argument name"
+                  "description": "A valid task argument name; may not be any of: pixi",
+                  "not": {
+                    "enum": [
+                      "pixi"
+                    ]
+                  }
                 }
               }
             ]
@@ -2032,6 +2037,11 @@
           "title": "Arg",
           "description": "The name of the argument",
           "type": "string",
+          "not": {
+            "enum": [
+              "pixi"
+            ]
+          },
           "pattern": "^[a-zA-Z_][a-zA-Z\\d_]*$"
         },
         "default": {
@@ -2057,8 +2067,13 @@
                 "$ref": "#/$defs/TaskArgs"
               },
               {
-                "description": "A valid task argument name",
+                "description": "A valid task argument name; may not be any of: pixi",
                 "type": "string",
+                "not": {
+                  "enum": [
+                    "pixi"
+                  ]
+                },
                 "pattern": "^[a-zA-Z_][a-zA-Z\\d_]*$"
               }
             ]
