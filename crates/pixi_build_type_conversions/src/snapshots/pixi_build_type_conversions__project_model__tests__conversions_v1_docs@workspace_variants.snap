@@ -53,7 +53,12 @@ expression: project_model
             "source": {
               "Path": {
                 "path": "packages/cpp_math"
-              }
+              },
+              "version": null,
+              "build": null,
+              "build_number": null,
+              "subdir": null,
+              "license": null
             }
           },
           "rich": {

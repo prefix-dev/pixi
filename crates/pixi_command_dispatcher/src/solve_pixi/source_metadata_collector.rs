@@ -109,7 +109,7 @@ impl SourceMetadataCollector {
         loop {
             // Create futures for all encountered specs.
             for (name, spec, chain) in specs.drain(..) {
-                if already_encountered_specs.insert(spec.clone()) {
+                if already_encountered_specs.insert((name.clone(), spec.location.clone())) {
                     source_futures.push(
                         self.collect_source_metadata(name, spec, chain)
                             .boxed_local(),

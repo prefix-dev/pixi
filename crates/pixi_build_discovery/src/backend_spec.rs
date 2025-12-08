@@ -123,7 +123,7 @@ impl EnvironmentSpec {
     pub fn resolve(mut self, source_anchor: SourceAnchor) -> Self {
         let maybe_source_spec = self.requirement.1.try_into_source_spec();
         let pixi_spec = match maybe_source_spec {
-            Ok(source_spec) => PixiSpec::from(source_spec.resolve(source_anchor)),
+            Ok(source_spec) => PixiSpec::from(source_spec.resolve(&source_anchor)),
             Err(pixi_spec) => pixi_spec,
         };
         self.requirement.1 = pixi_spec;

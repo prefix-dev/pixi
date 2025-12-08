@@ -497,7 +497,7 @@ impl SourceSpec {
     }
 
     /// Resolves the source location using the provided source anchor.
-    pub fn resolve(self, source_anchor: SourceAnchor) -> Self {
+    pub fn resolve(self, source_anchor: &SourceAnchor) -> Self {
         Self {
             location: source_anchor.resolve(self.location),
             ..self

@@ -12,9 +12,7 @@ use pixi_git::{
     sha::GitSha,
     url::{RepositoryUrl, redact_credentials},
 };
-use pixi_spec::{
-    GitReference, GitSpec, PathSourceSpec, SourceLocationSpec, SourceSpec, UrlSourceSpec,
-};
+use pixi_spec::{GitReference, GitSpec, PathSourceSpec, SourceLocationSpec, UrlSourceSpec};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use rattler_lock::UrlOrPath;
 use serde::{Deserialize, Serialize};
@@ -948,8 +946,8 @@ impl PinnedGitSpec {
 impl PinnedSourceSpec {
     #[allow(clippy::result_large_err)]
     /// Verifies if the locked source satisfies the requested source.
-    pub fn satisfies(&self, spec: &SourceSpec) -> Result<(), SourceMismatchError> {
-        match (self, &spec.location) {
+    pub fn satisfies(&self, spec: &SourceLocationSpec) -> Result<(), SourceMismatchError> {
+        match (self, &spec) {
             (PinnedSourceSpec::Path(locked), SourceLocationSpec::Path(spec)) => {
                 locked.satisfies(spec)
             }

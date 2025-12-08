@@ -230,9 +230,9 @@ impl IsDefault for TargetV1 {
 #[serde(rename_all = "camelCase")]
 pub enum PackageSpecV1 {
     /// This is a binary dependency
-    Binary(Box<BinaryPackageSpecV1>),
+    Binary(BinaryPackageSpecV1),
     /// This is a dependency on a source package
-    Source(SourcePackageSpecV1),
+    Source(SourcePackageSpec),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
@@ -244,8 +244,67 @@ pub struct NamedSpecV1<T> {
     pub spec: T,
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-pub enum SourcePackageSpecV1 {
+pub struct SourcePackageSpec {
+    #[serde(flatten)]
+    pub location: SourcePackageLocationSpec,
+    /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    pub version: Option<VersionSpec>,
+    /// The build string of the package (e.g. `py37_0`, `py37h6de7cb9_0`, `py*`)
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    pub build: Option<StringMatcher>,
+    /// The build number of the package
+    pub build_number: Option<BuildNumberSpec>,
+    /// The subdir of the channel
+    pub subdir: Option<String>,
+    /// The md5 hash of the package
+    /// The license of the package
+    pub license: Option<String>,
+}
+
+impl From<PathSpecV1> for SourcePackageSpec {
+    fn from(value: PathSpecV1) -> Self {
+        Self {
+            location: SourcePackageLocationSpec::Path(value),
+            version: None,
+            build: None,
+            build_number: None,
+            subdir: None,
+            license: None,
+        }
+    }
+}
+
+impl From<UrlSpecV1> for SourcePackageSpec {
+    fn from(value: UrlSpecV1) -> Self {
+        Self {
+            location: SourcePackageLocationSpec::Url(value),
+            version: None,
+            build: None,
+            build_number: None,
+            subdir: None,
+            license: None,
+        }
+    }
+}
+
+impl From<GitSpecV1> for SourcePackageSpec {
+    fn from(value: GitSpecV1) -> Self {
+        Self {
+            location: SourcePackageLocationSpec::Git(value),
+            version: None,
+            build: None,
+            build_number: None,
+            subdir: None,
+            license: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub enum SourcePackageLocationSpec {
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL. The package should be retrieved from the URL and can
     /// either represent a source or binary package depending on the archive
@@ -520,20 +579,45 @@ impl Hash for PackageSpecV1 {
     }
 }
 
-impl Hash for SourcePackageSpecV1 {
+impl Hash for SourcePackageSpec {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let Self {
+            location,
+            version,
+            build,
+            build_number,
+            subdir,
+            license,
+        } = self;
+
+        // Hash the location first, to ensure compatibility with older versions.
+        location.hash(state);
+
+        // Add the new fields using StableHashBuilder for forward/backward compatibility.
+        StableHashBuilder::<H>::new()
+            .field("build", build)
+            .field("build_number", build_number)
+            .field("license", license)
+            .field("subdir", subdir)
+            .field("version", version)
+            .finish(state);
+    }
+}
+
+impl Hash for SourcePackageLocationSpec {
     /// Custom hash implementation that uses discriminant values to keep the
     /// hash as stable as possible when adding new enum variants.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            SourcePackageSpecV1::Url(spec) => {
+            Self::Url(spec) => {
                 0u8.hash(state);
                 spec.hash(state);
             }
-            SourcePackageSpecV1::Git(spec) => {
+            Self::Git(spec) => {
                 1u8.hash(state);
                 spec.hash(state);
             }
-            SourcePackageSpecV1::Path(spec) => {
+            Self::Path(spec) => {
                 2u8.hash(state);
                 spec.hash(state);
             }
@@ -723,7 +807,10 @@ mod tests {
 
         // Add a real dependency (should change hash)
         let mut deps = OrderMap::new();
-        deps.insert("python".to_string(), PackageSpecV1::Binary(Box::default()));
+        deps.insert(
+            "python".to_string(),
+            PackageSpecV1::Binary(BinaryPackageSpecV1::default()),
+        );
 
         let target_with_deps = TargetV1 {
             host_dependencies: Some(deps),
@@ -790,8 +877,8 @@ mod tests {
     #[test]
     fn test_enum_variant_hash_stability() {
         // Test PackageSpecV1 enum variants
-        let binary_spec = PackageSpecV1::Binary(Box::default());
-        let source_spec = PackageSpecV1::Source(SourcePackageSpecV1::Path(PathSpecV1 {
+        let binary_spec = PackageSpecV1::Binary(BinaryPackageSpecV1::default());
+        let source_spec = PackageSpecV1::Source(SourcePackageSpec::from(PathSpecV1 {
             path: "test".to_string(),
         }));
 
@@ -805,7 +892,7 @@ mod tests {
         );
 
         // Same variant with same content should have same hash
-        let binary_spec2 = PackageSpecV1::Binary(Box::default());
+        let binary_spec2 = PackageSpecV1::Binary(BinaryPackageSpecV1::default());
         let hash3 = calculate_hash(&binary_spec2);
 
         assert_eq!(
@@ -818,15 +905,15 @@ mod tests {
         TargetV1 {
             host_dependencies: Some(OrderMap::from([(
                 "host_dep1".to_string(),
-                PackageSpecV1::Binary(Box::default()),
+                PackageSpecV1::Binary(BinaryPackageSpecV1::default()),
             )])),
             build_dependencies: Some(OrderMap::from([(
                 "build_dep1".to_string(),
-                PackageSpecV1::Binary(Box::default()),
+                PackageSpecV1::Binary(BinaryPackageSpecV1::default()),
             )])),
             run_dependencies: Some(OrderMap::from([(
                 "run_dep1".to_string(),
-                PackageSpecV1::Binary(Box::default()),
+                PackageSpecV1::Binary(BinaryPackageSpecV1::default()),
             )])),
         }
     }
@@ -933,7 +1020,10 @@ mod tests {
         // different hashes
 
         let mut deps = OrderMap::new();
-        deps.insert("python".to_string(), PackageSpecV1::Binary(Box::default()));
+        deps.insert(
+            "python".to_string(),
+            PackageSpecV1::Binary(BinaryPackageSpecV1::default()),
+        );
 
         // Same dependency in host_dependencies
         let target1 = TargetV1 {
