@@ -11,11 +11,12 @@ use pixi_config::Config;
 use pixi_consts::consts;
 use rattler_networking::{
     GCSMiddleware, LazyClient, MirrorMiddleware, OciMiddleware, S3Middleware,
-    mirror_middleware::Mirror, retry_policies::ExponentialBackoff,
+    mirror_middleware::Mirror,
 };
 use reqwest::Client;
 use reqwest_middleware::{ClientWithMiddleware, Middleware};
 use reqwest_retry::RetryTransientMiddleware;
+use retry_policies::policies::ExponentialBackoff;
 
 /// The default retry policy employed by pixi.
 /// TODO: At some point we might want to make this configurable.
