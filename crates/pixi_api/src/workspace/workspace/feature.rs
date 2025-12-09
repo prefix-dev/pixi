@@ -1,13 +1,16 @@
 use std::collections::HashMap;
 
 use indexmap::{IndexMap, IndexSet};
-use pixi_core::Workspace;
+use miette::IntoDiagnostic;
+use pixi_core::{Workspace, workspace::WorkspaceMut};
 use pixi_manifest::{
     EnvironmentName, Feature, FeatureName, PrioritizedChannel, TargetSelector, Task, TaskName,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::PackageName;
+
+use crate::Interface;
 
 pub async fn list_features(workspace: &Workspace) -> IndexMap<FeatureName, Feature> {
     workspace.workspace.value.features.clone()
@@ -85,4 +88,28 @@ pub async fn feature_by_task(
     }
 
     None
+}
+
+pub async fn remove_feature<I: Interface>(
+    interface: &I,
+    mut workspace: WorkspaceMut,
+    name: &str,
+) -> miette::Result<()> {
+    // Remove the feature (also removes it from all environments)
+    let modified_environments = workspace.manifest().remove_feature(name)?;
+
+    workspace.save().await.into_diagnostic()?;
+
+    if modified_environments.is_empty() {
+        interface.success(&format!("Removed feature {name}")).await;
+    } else {
+        interface
+            .success(&format!(
+                "Removed feature {name} (also removed from environment(s): {})",
+                modified_environments.join(", ")
+            ))
+            .await;
+    }
+
+    Ok(())
 }

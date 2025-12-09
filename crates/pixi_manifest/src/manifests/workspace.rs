@@ -351,6 +351,88 @@ impl WorkspaceManifestMut<'_> {
         Ok(true)
     }
 
+    /// Removes a feature from the project.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    ///
+    /// The feature is automatically removed from all environments that use it.
+    ///
+    /// Returns the list of environments that were modified.
+    pub fn remove_feature(&mut self, name: &str) -> miette::Result<Vec<String>> {
+        let feature_name = crate::FeatureName::from(name);
+
+        // Check that the feature is not the default feature
+        if feature_name.is_default() {
+            return Err(miette::miette!("Cannot remove the default feature"));
+        }
+
+        // Check that the feature exists
+        if self.workspace.features.get(&feature_name).is_none() {
+            return Err(miette::miette!("Feature '{}' does not exist", name));
+        }
+
+        // Find all environments that use this feature and update them
+        let environments_using_feature: Vec<_> = self
+            .workspace
+            .environments
+            .iter()
+            .filter(|env| env.features.contains(&name.to_string()))
+            .cloned()
+            .collect();
+
+        let modified_environments: Vec<String> = environments_using_feature
+            .iter()
+            .map(|env| env.name.to_string())
+            .collect();
+
+        // Remove the feature from the internal manifest first (before updating
+        // environments) so that the feature validation in add_environment
+        // doesn't fail
+        self.workspace.features.shift_remove(&feature_name);
+
+        // Update each environment to remove the feature
+        for env in environments_using_feature {
+            let updated_features: Vec<String> = env
+                .features
+                .iter()
+                .filter(|f| f.as_str() != name)
+                .cloned()
+                .collect();
+
+            let solve_group = env
+                .solve_group
+                .map(|idx| self.workspace.solve_groups[idx].name.clone());
+
+            // Update the environment in the TOML document
+            self.document.add_environment(
+                env.name.to_string(),
+                Some(updated_features.clone()),
+                solve_group.clone(),
+                env.no_default_feature,
+            )?;
+
+            // Update the environment in the internal manifest
+            let environment_idx = self.workspace.environments.add(Environment {
+                name: env.name.clone(),
+                features: updated_features,
+                solve_group: None,
+                no_default_feature: env.no_default_feature,
+            });
+
+            if let Some(solve_group) = solve_group {
+                self.workspace
+                    .solve_groups
+                    .add(solve_group, environment_idx);
+            }
+        }
+
+        // Remove the feature from the TOML document
+        self.document.remove_feature(name)?;
+
+        Ok(modified_environments)
+    }
+
     /// Add a platform to the project
     ///
     /// This function modifies both the workspace and the TOML document. Use
@@ -2874,6 +2956,73 @@ bar = "*"
 
         assert!(manifest.remove_environment("foo").unwrap());
         assert!(!manifest.remove_environment("default").unwrap());
+    }
+
+    #[test]
+    fn test_remove_feature() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [feature.test]
+        channels = ["test-channel"]
+
+        [feature.test.dependencies]
+        some-package = "*"
+
+        [feature.used]
+        channels = ["used-channel"]
+
+        [feature.also-used]
+        channels = ["also-used-channel"]
+
+        [environments]
+        test-env = ["used", "also-used"]
+        "#;
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        // Remove unused feature should succeed and return empty list
+        let modified = manifest.remove_feature("test").unwrap();
+        assert!(modified.is_empty());
+
+        // Check the feature was removed from the manifest
+        assert!(manifest.workspace.feature("test").is_none());
+
+        // Remove non-existent feature should return error
+        let result = manifest.remove_feature("nonexistent");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("does not exist"));
+
+        // Remove feature used by environment should succeed and update environments
+        let modified = manifest.remove_feature("used").unwrap();
+        assert_eq!(modified, vec!["test-env"]);
+
+        // Check the feature was removed from the manifest
+        assert!(manifest.workspace.feature("used").is_none());
+
+        // Check the environment was updated (feature removed)
+        let env = manifest.workspace.environment("test-env").unwrap();
+        assert!(!env.features.contains(&"used".to_string()));
+        assert!(env.features.contains(&"also-used".to_string()));
+
+        // Cannot remove default feature
+        let result = manifest.remove_feature("default");
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Cannot remove the default feature")
+        );
+
+        // Verify TOML was updated
+        let toml = manifest.document.to_string();
+        assert!(!toml.contains("[feature.test]"));
+        assert!(!toml.contains("[feature.used]"));
+        assert!(toml.contains("[feature.also-used]"));
     }
 
     #[test]

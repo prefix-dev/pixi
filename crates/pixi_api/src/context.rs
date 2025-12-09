@@ -169,6 +169,15 @@ impl<I: Interface> WorkspaceContext<I> {
             .await
     }
 
+    pub async fn remove_feature(&self, name: &str) -> miette::Result<()> {
+        crate::workspace::workspace::feature::remove_feature(
+            &self.interface,
+            self.workspace_mut()?,
+            name,
+        )
+        .await
+    }
+
     pub async fn add_conda_deps(
         &self,
         specs: IndexMap<PackageName, MatchSpec>,
