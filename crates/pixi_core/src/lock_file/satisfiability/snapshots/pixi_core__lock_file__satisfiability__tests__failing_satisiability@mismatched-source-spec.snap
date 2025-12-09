@@ -4,4 +4,4 @@ expression: s
 ---
 environment 'default' does not satisfy the requirements of the project for platform 'win-64'
     Diagnostic severity: error
-    Caused by: failed to discover a valid project manifest, the source path '/Users/graf/oss/pixi/tests/data/non-satisfiability/mismatched-source-spec/child-package' could not be found
+    Caused by: the locked source package 'child-package' does not match the requested source package, the locked source type does not match the requested type

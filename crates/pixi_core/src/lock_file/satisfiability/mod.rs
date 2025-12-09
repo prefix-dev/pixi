@@ -15,7 +15,7 @@ use pixi_manifest::{
 };
 use pixi_record::{
     DevSourceRecord, LockedGitUrl, ParseLockFileError, PinnedSourceSpec, PixiRecord,
-    SourceMismatchError, VariantValue,
+    SourceMismatchError, SourceRecord, VariantValue,
 };
 use pixi_spec::{PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError};
 use pixi_utils::variants::VariantConfig;
@@ -436,12 +436,24 @@ pub enum PlatformUnsat {
     #[error("the locked metadata of '{0}' package changed")]
     SourcePackageMetadataChanged(String),
 
+    #[error("the source location '{0}' changed from '{1}' to '{2}'")]
+    SourceBuildLocationChanged(String, String, String),
+
     #[error(
         "locked source package '{package_name}' not found in current metadata for '{manifest_path}'. Was the package renamed?"
     )]
     SourcePackageNotFoundInMetadata {
         package_name: String,
         manifest_path: String,
+    },
+
+    #[error(
+        "locked source package '{package}' does not match any of the outputs in the metadata of the package at '{manifest_path}', only the following outputs are available: {available}"
+    )]
+    NoMatchingSourcePackageInMetadata {
+        package: String,
+        manifest_path: String,
+        available: String,
     },
 }
 
@@ -1092,6 +1104,22 @@ async fn verify_source_metadata(
                     .await
                     .map_err(|e| Box::new(PlatformUnsat::SourceMetadata(e)))?;
 
+                if current_source_metadata
+                    .cached_metadata
+                    .metadata
+                    .records
+                    .is_empty()
+                {
+                    return Err(Box::new(PlatformUnsat::SourcePackageNotFoundInMetadata {
+                        package_name: source_record.package_record.name.as_source().to_string(),
+                        manifest_path: source_record
+                            .manifest_source
+                            .as_path()
+                            .map(|p| p.path.to_string())
+                            .unwrap_or_else(|| source_record.manifest_source.to_string()),
+                    }));
+                }
+
                 // Find the record that matches our locked package name and build string.
                 // When there are variants, there can be multiple source metadata entries
                 // with the same package name, so we also match on the build string which
@@ -1107,15 +1135,36 @@ async fn verify_source_metadata(
                         .as_path()
                         .map(|p| p.path.to_string())
                         .unwrap_or_else(|| source_record.manifest_source.to_string());
-                    return Err(Box::new(PlatformUnsat::SourcePackageNotFoundInMetadata {
-                        package_name: source_record.package_record.name.as_source().to_string(),
+                    return Err(Box::new(PlatformUnsat::NoMatchingSourcePackageInMetadata {
+                        package: format_source_record(source_record),
                         manifest_path,
+                        available: current_records
+                            .iter()
+                            .map(format_source_record)
+                            .format(", ")
+                            .to_string(),
                     }));
                 };
 
                 // Check if the current record matches what's in the lock file
-                let matches = current_record.package_record != source_record.package_record;
-                if !matches {
+                if current_record.build_source != source_record.build_source {
+                    return Err(Box::new(PlatformUnsat::SourceBuildLocationChanged(
+                        source_record.package_record.name.as_source().to_string(),
+                        source_record
+                            .build_source
+                            .as_ref()
+                            .map(|s| s.to_string())
+                            .unwrap_or_default(),
+                        current_record
+                            .build_source
+                            .as_ref()
+                            .map(|s| s.to_string())
+                            .unwrap_or_default(),
+                    )));
+                }
+
+                // Check if the current record matches what's in the lock file
+                if current_record.package_record == source_record.package_record {
                     return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
                         source_record.package_record.name.as_source().to_string(),
                     )));
@@ -1132,6 +1181,24 @@ async fn verify_source_metadata(
     }
 
     Ok(())
+}
+
+fn format_source_record(r: &SourceRecord) -> String {
+    let variants = r.variants.as_ref().map(|v| {
+        format!(
+            "[{}]",
+            v.iter()
+                .format_with(", ", |(k, v), f| f(&format_args!("{k}={v}")))
+        )
+    });
+    format!(
+        "{}/{}={}={} {}",
+        &r.package_record.subdir,
+        r.package_record.name.as_source(),
+        &r.package_record.version,
+        &r.package_record.build,
+        variants.unwrap_or_default()
+    )
 }
 
 /// Resolve dev dependencies and get all their dependencies
@@ -2234,6 +2301,7 @@ mod tests {
     use pep440_rs::{Operator, Version};
     use pixi_build_backend_passthrough::PassthroughBackend;
     use pixi_build_frontend::BackendOverride;
+    use pixi_command_dispatcher::CacheDirs;
     use rattler_lock::LockFile;
     use rstest::rstest;
 
@@ -2266,8 +2334,12 @@ mod tests {
     ) -> Result<(), LockfileUnsat> {
         let mut individual_verified_envs = HashMap::new();
 
+        let temp_pixi_dir = tempfile::tempdir().unwrap();
         let command_dispatcher = {
-            let command_dispatcher = project.command_dispatcher_builder().unwrap();
+            let command_dispatcher = project
+                .command_dispatcher_builder()
+                .unwrap()
+                .with_cache_dirs(CacheDirs::new(temp_pixi_dir.path().to_path_buf()));
             let command_dispatcher = if let Some(backend_override) = backend_override {
                 command_dispatcher.with_backend_overrides(backend_override)
             } else {
