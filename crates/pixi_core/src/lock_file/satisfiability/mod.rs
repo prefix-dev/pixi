@@ -1056,6 +1056,7 @@ pub struct VerifiedIndividualEnvironment {
 ///
 /// This function fetches the current metadata for each source package and compares
 /// it with the locked metadata to detect if any source packages have changed.
+#[allow(clippy::too_many_arguments)]
 async fn verify_source_metadata(
     source_records: Vec<&pixi_record::SourceRecord>,
     command_dispatcher: CommandDispatcher,
@@ -1127,7 +1128,7 @@ async fn verify_source_metadata(
                 let current_records = &current_source_metadata.cached_metadata.metadata.records;
                 let current_record = current_records
                     .iter()
-                    .find(|r| source_record.refers_to_same_output(*r));
+                    .find(|r| source_record.refers_to_same_output(r));
 
                 let Some(current_record) = current_record else {
                     let manifest_path = source_record
@@ -1256,8 +1257,6 @@ async fn resolve_single_dev_dependency(
     variants: std::collections::BTreeMap<String, Vec<VariantValue>>,
     variant_files: Vec<PathBuf>,
 ) -> Result<Vec<Dependency>, PlatformUnsat> {
-    dbg!(&package_name);
-
     let pinned_source = command_dispatcher
         .pin_and_checkout(source_spec.location)
         .await?;
@@ -1328,7 +1327,6 @@ async fn resolve_single_dev_dependency(
             })?;
 
         let spec = MatchSpec::from_nameless(nameless_spec, Some(dev_name.clone().into()));
-        dbg!(&spec);
 
         dependencies.push(Dependency::Conda(
             spec,
