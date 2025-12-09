@@ -217,12 +217,12 @@ impl SourceRecord {
         match (&self.variants, &other.variants) {
             (Some(variants), Some(other_variants)) => {
                 // If both records have variants, we use that to identify them.
-                return variants == other_variants;
+                variants == other_variants
             }
             _ => {
-                return self.package_record.build == other.package_record.build
+                self.package_record.build == other.package_record.build
                     && self.package_record.version == other.package_record.version
-                    && self.package_record.subdir == other.package_record.subdir;
+                    && self.package_record.subdir == other.package_record.subdir
             }
         }
     }
