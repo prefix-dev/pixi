@@ -921,6 +921,7 @@ async fn test_missing_mapping_file_error_includes_path() {
     insta::with_settings!({filters => vec![
         (r#"path: "([^"]+)""#, "[MAPPING_PATH]"),
         (r#"message: "[^"]+""#, "[MAPPING_MESSAGE]"),
+        (r#"\bcode:\s*\d+\b"#, "[MAPPING_CODE]"),
     ]}, {
         insta::assert_debug_snapshot!(err);
     });

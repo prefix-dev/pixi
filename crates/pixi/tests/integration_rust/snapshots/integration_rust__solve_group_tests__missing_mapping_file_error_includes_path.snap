@@ -10,7 +10,7 @@ Error {
             error: Error {
                 kind: OpenFile,
                 source: Os {
-                    code: 2,
+                    [MAPPING_CODE],
                     kind: NotFound,
                     [MAPPING_MESSAGE],
                 },
