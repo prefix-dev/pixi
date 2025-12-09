@@ -303,7 +303,7 @@ impl SourceMetadataSpec {
                 reporter.clone(),
             )
             .await
-            .map_err(SourceMetadataError::from)
+            .map_err(|err| SourceMetadataError::RunExportsExtraction(String::from("build"), err))
             .map_err(CommandDispatcherError::Failed)?;
 
         // Solve the host environment for the output.
@@ -334,7 +334,7 @@ impl SourceMetadataSpec {
                 reporter,
             )
             .await
-            .map_err(SourceMetadataError::from)
+            .map_err(|err| SourceMetadataError::RunExportsExtraction(String::from("host"), err))
             .map_err(CommandDispatcherError::Failed)?;
 
         // Gather the dependencies for the output.
@@ -629,8 +629,8 @@ pub enum SourceMetadataError {
     #[diagnostic(transparent)]
     BuildBackendMetadata(#[from] BuildBackendMetadataError),
 
-    #[error("failed to amend run exports: {0}")]
-    RunExportsExtraction(#[from] RunExportExtractorError),
+    #[error("failed to amend run exports for {0} environment")]
+    RunExportsExtraction(String, #[source] RunExportExtractorError),
 
     #[error("while trying to solve the build environment for the package")]
     SolveBuildEnvironment(

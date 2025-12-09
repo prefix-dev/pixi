@@ -614,7 +614,7 @@ impl SourceBuildSpec {
                 reporter.clone(),
             )
             .await
-            .map_err(SourceBuildError::from)
+            .map_err(|err| SourceBuildError::RunExportsExtraction(String::from("build"), err))
             .map_err(CommandDispatcherError::Failed)?;
 
         // Solve the host environment for the output.
@@ -646,7 +646,7 @@ impl SourceBuildSpec {
                 reporter,
             )
             .await
-            .map_err(SourceBuildError::from)
+            .map_err(|err| SourceBuildError::RunExportsExtraction(String::from("host"), err))
             .map_err(CommandDispatcherError::Failed)?;
 
         // Install the build environment
@@ -886,8 +886,8 @@ pub enum SourceBuildError {
     #[error(transparent)]
     BuildCache(#[from] BuildCacheError),
 
-    #[error("failed to amend run exports: {0}")]
-    RunExportsExtraction(#[from] RunExportExtractorError),
+    #[error("failed to amend run exports for {0} environment")]
+    RunExportsExtraction(String, #[source] RunExportExtractorError),
 
     #[error(transparent)]
     CreateWorkDirectory(std::io::Error),
