@@ -138,7 +138,7 @@ rattler_virtual_packages = { version = "2.3.0", default-features = false }
 rayon = "1.10.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", default-features = false }
-retry-policies = "0.4"
+retry-policies = "0.5"
 # reqwest-middleware = "0.4"
 # reqwest-retry = "0.7.0"
 bzip2 = "0.6.1"
