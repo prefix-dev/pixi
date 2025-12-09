@@ -343,12 +343,29 @@ RunDependenciesField = Field(
 )
 Dependencies = dict[CondaPackageName, MatchSpec] | None
 
+
 ################
 # Task section #
 ################
+class ReservedTaskArgName(str, Enum):
+    """A reserved task arg name."""
+
+    #: a namespace for runtime `pixi` data
+    pixi = "pixi"
+
+
 TaskName = Annotated[str, Field(pattern=r"^[^\s\$]+$", description="A valid task name.")]
+NotReservedSchema: Any = {"not": {"enum": sorted(r.value for r in ReservedTaskArgName)}}
 TaskArgName = Annotated[
-    str, Field(pattern=r"^[a-zA-Z_][a-zA-Z\d_]*$", description="A valid task argument name")
+    str,
+    Field(
+        pattern=r"^[a-zA-Z_][a-zA-Z\d_]*$",
+        description=(
+            "A valid task argument name; may not be any of: "
+            f"""{", ".join(sorted(r.value for r in ReservedTaskArgName))}"""
+        ),
+        json_schema_extra=NotReservedSchema,
+    ),
 ]
 TaskArgInlineTable = Annotated[
     dict[TaskArgName, str],
