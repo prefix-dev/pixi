@@ -46,7 +46,6 @@ impl From<HashMappingClientError> for MappingError {
         match value {
             HashMappingClientError::Io(err) => MappingError::IoError {
                 source: err,
-                // Path will be filled in by MappingClient::with_cache_path_context
                 path: std::path::PathBuf::new(),
             },
             HashMappingClientError::Reqwest(err) => MappingError::Reqwest(err),
