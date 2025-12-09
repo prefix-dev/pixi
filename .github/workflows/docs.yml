@@ -138,5 +138,5 @@ jobs:
           git push origin gh-pages
 
       - name: Checkout main branch
-        # Important to run the post setup-pixi steps
+        # Important to run the post setup-pixi steps, we want to cache based on the `main` branch and we checked out another in the step above.
         run: git checkout main
