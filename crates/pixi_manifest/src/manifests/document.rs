@@ -665,16 +665,15 @@ impl ManifestDocument {
     /// Removes a feature from the manifest. Returns `true` if the feature was
     /// removed.
     pub fn remove_feature(&mut self, feature_name: &FeatureName) -> Result<bool, TomlError> {
-        // Build the path to the feature table: either "feature" or "tool.pixi.feature"
-        let mut keys: Vec<&str> = Vec::new();
-        if let Some(prefix) = self.table_prefix() {
-            keys.extend(prefix.split('.'));
-        }
-        keys.push("feature");
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_table(Some("feature"));
 
-        // Get the feature table and remove the feature entry
-        let feature_table = self.manifest_mut().get_or_insert_nested_table(&keys)?;
-        Ok(feature_table.remove(&feature_name.to_string()).is_some())
+        let feature_table = self
+            .manifest_mut()
+            .get_or_insert_nested_table(&table_name.as_keys())?;
+
+        Ok(feature_table.remove(feature_name.as_str()).is_some())
     }
 
     pub fn add_system_requirements(

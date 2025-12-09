@@ -351,24 +351,23 @@ impl WorkspaceManifestMut<'_> {
         Ok(true)
     }
 
-    /// Removes a feature from the project.
+    /// Removes a feature from the project. The feature is automatically
+    /// removed from all environments that use it.
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
     ///
-    /// The feature is automatically removed from all environments that use it.
-    ///
     /// Returns the list of environments that were modified.
     pub fn remove_feature(&mut self, feature_name: &FeatureName) -> miette::Result<Vec<String>> {
-        // Check that the feature is not the default feature
         if feature_name.is_default() {
             return Err(miette::miette!("Cannot remove the default feature"));
         }
 
-        // Check that the feature exists
         if self.workspace.features.get(feature_name).is_none() {
             return Err(miette::miette!("Feature '{}' does not exist", feature_name));
         }
+
+        self.workspace.features.shift_remove(feature_name);
 
         // Find all environments that use this feature and update them
         let environments_using_feature: Vec<_> = self
@@ -379,18 +378,7 @@ impl WorkspaceManifestMut<'_> {
             .cloned()
             .collect();
 
-        let modified_environments: Vec<String> = environments_using_feature
-            .iter()
-            .map(|env| env.name.to_string())
-            .collect();
-
-        // Remove the feature from the internal manifest first (before updating
-        // environments) so that the feature validation in add_environment
-        // doesn't fail
-        self.workspace.features.shift_remove(feature_name);
-
-        // Update each environment to remove the feature
-        for env in environments_using_feature {
+        for env in &environments_using_feature {
             let updated_features: Vec<String> = env
                 .features
                 .iter()
@@ -402,7 +390,7 @@ impl WorkspaceManifestMut<'_> {
                 .solve_group
                 .map(|idx| self.workspace.solve_groups[idx].name.clone());
 
-            // Update the environment in the TOML document
+            // Update the environment, minus the removed feature
             self.document.add_environment(
                 env.name.to_string(),
                 Some(updated_features.clone()),
@@ -410,7 +398,6 @@ impl WorkspaceManifestMut<'_> {
                 env.no_default_feature,
             )?;
 
-            // Update the environment in the internal manifest
             let environment_idx = self.workspace.environments.add(Environment {
                 name: env.name.clone(),
                 features: updated_features,
@@ -427,6 +414,11 @@ impl WorkspaceManifestMut<'_> {
 
         // Remove the feature from the TOML document
         self.document.remove_feature(feature_name)?;
+
+        let modified_environments = environments_using_feature
+            .iter()
+            .map(|env| env.name.to_string())
+            .collect();
 
         Ok(modified_environments)
     }
@@ -2959,7 +2951,7 @@ bar = "*"
     #[test]
     fn test_remove_feature() {
         let contents = r#"
-        [project]
+        [workspace]
         name = "foo"
         channels = []
         platforms = []
@@ -2979,6 +2971,7 @@ bar = "*"
         [environments]
         test-env = ["used", "also-used"]
         "#;
+
         let mut manifest = parse_pixi_toml(contents);
         let mut manifest = manifest.editable();
 
