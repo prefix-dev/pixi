@@ -8056,9 +8056,9 @@ dependencies = [
 
 [[package]]
 name = "sevenz-rust2"
-version = "0.19.4"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "414256b6bb303a2a38ad800096664c3b332295c17b7ef0674bf0acf44284036c"
+checksum = "611081ec4fc67633b979fc0c24385de90fa60acd18126d796c8758a24294a950"
 dependencies = [
  "aes",
  "bzip2 0.6.1",
