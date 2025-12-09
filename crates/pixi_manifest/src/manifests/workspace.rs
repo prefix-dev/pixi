@@ -359,17 +359,15 @@ impl WorkspaceManifestMut<'_> {
     /// The feature is automatically removed from all environments that use it.
     ///
     /// Returns the list of environments that were modified.
-    pub fn remove_feature(&mut self, name: &str) -> miette::Result<Vec<String>> {
-        let feature_name = crate::FeatureName::from(name);
-
+    pub fn remove_feature(&mut self, feature_name: &FeatureName) -> miette::Result<Vec<String>> {
         // Check that the feature is not the default feature
         if feature_name.is_default() {
             return Err(miette::miette!("Cannot remove the default feature"));
         }
 
         // Check that the feature exists
-        if self.workspace.features.get(&feature_name).is_none() {
-            return Err(miette::miette!("Feature '{}' does not exist", name));
+        if self.workspace.features.get(feature_name).is_none() {
+            return Err(miette::miette!("Feature '{}' does not exist", feature_name));
         }
 
         // Find all environments that use this feature and update them
@@ -377,7 +375,7 @@ impl WorkspaceManifestMut<'_> {
             .workspace
             .environments
             .iter()
-            .filter(|env| env.features.contains(&name.to_string()))
+            .filter(|env| env.features.contains(&feature_name.to_string()))
             .cloned()
             .collect();
 
@@ -389,14 +387,14 @@ impl WorkspaceManifestMut<'_> {
         // Remove the feature from the internal manifest first (before updating
         // environments) so that the feature validation in add_environment
         // doesn't fail
-        self.workspace.features.shift_remove(&feature_name);
+        self.workspace.features.shift_remove(feature_name);
 
         // Update each environment to remove the feature
         for env in environments_using_feature {
             let updated_features: Vec<String> = env
                 .features
                 .iter()
-                .filter(|f| f.as_str() != name)
+                .filter(|f| f.as_str() != feature_name.to_string())
                 .cloned()
                 .collect();
 
@@ -428,7 +426,7 @@ impl WorkspaceManifestMut<'_> {
         }
 
         // Remove the feature from the TOML document
-        self.document.remove_feature(name)?;
+        self.document.remove_feature(feature_name)?;
 
         Ok(modified_environments)
     }
@@ -2985,19 +2983,23 @@ bar = "*"
         let mut manifest = manifest.editable();
 
         // Remove unused feature should succeed and return empty list
-        let modified = manifest.remove_feature("test").unwrap();
+        let modified = manifest
+            .remove_feature(&FeatureName::from_str("test").unwrap())
+            .unwrap();
         assert!(modified.is_empty());
 
         // Check the feature was removed from the manifest
         assert!(manifest.workspace.feature("test").is_none());
 
         // Remove non-existent feature should return error
-        let result = manifest.remove_feature("nonexistent");
+        let result = manifest.remove_feature(&FeatureName::from_str("nonexistent").unwrap());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("does not exist"));
 
         // Remove feature used by environment should succeed and update environments
-        let modified = manifest.remove_feature("used").unwrap();
+        let modified = manifest
+            .remove_feature(&FeatureName::from_str("used").unwrap())
+            .unwrap();
         assert_eq!(modified, vec!["test-env"]);
 
         // Check the feature was removed from the manifest
@@ -3009,7 +3011,7 @@ bar = "*"
         assert!(env.features.contains(&"also-used".to_string()));
 
         // Cannot remove default feature
-        let result = manifest.remove_feature("default");
+        let result = manifest.remove_feature(&FeatureName::from_str("default").unwrap());
         assert!(result.is_err());
         assert!(
             result

@@ -169,11 +169,11 @@ impl<I: Interface> WorkspaceContext<I> {
             .await
     }
 
-    pub async fn remove_feature(&self, name: &str) -> miette::Result<()> {
+    pub async fn remove_feature(&self, feature: &FeatureName) -> miette::Result<()> {
         crate::workspace::workspace::feature::remove_feature(
             &self.interface,
             self.workspace_mut()?,
-            name,
+            feature,
         )
         .await
     }

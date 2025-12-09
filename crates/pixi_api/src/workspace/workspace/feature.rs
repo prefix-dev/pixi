@@ -93,19 +93,21 @@ pub async fn feature_by_task(
 pub async fn remove_feature<I: Interface>(
     interface: &I,
     mut workspace: WorkspaceMut,
-    name: &str,
+    feature: &FeatureName,
 ) -> miette::Result<()> {
     // Remove the feature (also removes it from all environments)
-    let modified_environments = workspace.manifest().remove_feature(name)?;
+    let modified_environments = workspace.manifest().remove_feature(feature)?;
 
     workspace.save().await.into_diagnostic()?;
 
     if modified_environments.is_empty() {
-        interface.success(&format!("Removed feature {name}")).await;
+        interface
+            .success(&format!("Removed feature {feature}"))
+            .await;
     } else {
         interface
             .success(&format!(
-                "Removed feature {name} (also removed from environment(s): {})",
+                "Removed feature {feature} (also removed from environment(s): {})",
                 modified_environments.join(", ")
             ))
             .await;

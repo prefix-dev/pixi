@@ -664,7 +664,7 @@ impl ManifestDocument {
 
     /// Removes a feature from the manifest. Returns `true` if the feature was
     /// removed.
-    pub fn remove_feature(&mut self, name: &str) -> Result<bool, TomlError> {
+    pub fn remove_feature(&mut self, feature_name: &FeatureName) -> Result<bool, TomlError> {
         // Build the path to the feature table: either "feature" or "tool.pixi.feature"
         let mut keys: Vec<&str> = Vec::new();
         if let Some(prefix) = self.table_prefix() {
@@ -674,7 +674,7 @@ impl ManifestDocument {
 
         // Get the feature table and remove the feature entry
         let feature_table = self.manifest_mut().get_or_insert_nested_table(&keys)?;
-        Ok(feature_table.remove(name).is_some())
+        Ok(feature_table.remove(&feature_name.to_string()).is_some())
     }
 
     pub fn add_system_requirements(
@@ -1033,7 +1033,9 @@ channels = ["other-channel"]
         ));
 
         // Remove the feature
-        let removed = document.remove_feature("test").unwrap();
+        let removed = document
+            .remove_feature(&FeatureName::from_str("test").unwrap())
+            .unwrap();
         assert!(removed);
 
         // Verify the feature and all its subtables are removed
@@ -1046,7 +1048,9 @@ channels = ["other-channel"]
         assert!(result.contains("[feature.other]"));
 
         // Remove non-existent feature should return false
-        let removed = document.remove_feature("nonexistent").unwrap();
+        let removed = document
+            .remove_feature(&FeatureName::from_str("nonexistent").unwrap())
+            .unwrap();
         assert!(!removed);
     }
 
@@ -1076,7 +1080,9 @@ channels = ["other-channel"]
         ));
 
         // Remove the feature
-        let removed = document.remove_feature("test").unwrap();
+        let removed = document
+            .remove_feature(&FeatureName::from_str("test").unwrap())
+            .unwrap();
         assert!(removed);
 
         // Verify the feature and all its subtables are removed
