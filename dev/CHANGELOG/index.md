@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.61.0] - 2025-12-09
+
+#### ✨ Highlights
+
+This Pixi release features a new and improved `pixi upload` functionality, that is shared with `rattler-build` through `rattler`.
+
+#### Changed
+
+- Add list_environments, add_environment, remove_environment to Pixi API by @haecker-felix in [#4918](https://github.com/prefix-dev/pixi/pull/4918)
+- Optimize git checkouts in pypi tests by @baszalmstra in [#5035](https://github.com/prefix-dev/pixi/pull/5035)
+- Use local git fixtures for tests by @baszalmstra in [#5047](https://github.com/prefix-dev/pixi/pull/5047)
+- Optimize pypi add tests by @baszalmstra in [#5048](https://github.com/prefix-dev/pixi/pull/5048)
+- Allow loading of native certificate store by @tdejager in [#5013](https://github.com/prefix-dev/pixi/pull/5013)
+- New rattler-upload functionality by @tdejager in [#5017](https://github.com/prefix-dev/pixi/pull/5017)
+- Optimize integration tests to use local fixtures by @baszalmstra in [#5064](https://github.com/prefix-dev/pixi/pull/5064)
+
+#### Fixed
+
+- Mark more tests as `online_tests` by @mgorny in [#5060](https://github.com/prefix-dev/pixi/pull/5060)
+- Use absolute_path() when computing workspace root to preserve symlinks by @claydugo in [#5059](https://github.com/prefix-dev/pixi/pull/5059)
+- Index was being ignored during upgrades by @tdejager in [#5062](https://github.com/prefix-dev/pixi/pull/5062)
+- Use single quotes for CLI arg joining to fix backslash escaping by @baszalmstra in [#5063](https://github.com/prefix-dev/pixi/pull/5063)
+- Don't assume that shell config file ends on newline by @MikkelSchubert in [#4873](https://github.com/prefix-dev/pixi/pull/4873)
+- Fix docs-dev post setup-pixi run by @ruben-arts in [#5088](https://github.com/prefix-dev/pixi/pull/5088)
+- Mark `test_add_url_no_channel` as slow by @Hofer-Julian in [#5093](https://github.com/prefix-dev/pixi/pull/5093)
+
+#### New Contributors
+
+- @MikkelSchubert made their first contribution in [#4873](https://github.com/prefix-dev/pixi/pull/4873)
+
 ### [0.60.0] - 2025-12-03
 
 #### ✨ Highlights
