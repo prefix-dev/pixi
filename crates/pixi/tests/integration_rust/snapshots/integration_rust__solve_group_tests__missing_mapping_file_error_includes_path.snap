@@ -12,7 +12,7 @@ Error {
                 source: Os {
                     code: 2,
                     kind: NotFound,
-                    message: "No such file or directory",
+                    [MAPPING_MESSAGE],
                 },
                 [MAPPING_PATH],
             },

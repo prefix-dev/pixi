@@ -920,6 +920,7 @@ async fn test_missing_mapping_file_error_includes_path() {
     let err = result.expect_err("Expected an error when mapping file doesn't exist");
     insta::with_settings!({filters => vec![
         (r#"path: "([^"]+)""#, "[MAPPING_PATH]"),
+        (r#"message: "[^"]+""#, "[MAPPING_MESSAGE]"),
     ]}, {
         insta::assert_debug_snapshot!(err);
     });
