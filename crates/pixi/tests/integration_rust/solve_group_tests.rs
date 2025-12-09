@@ -879,3 +879,48 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
         );
     }
 }
+
+#[tokio::test]
+async fn test_missing_mapping_file_error_includes_path() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let client = project.authenticated_client().unwrap();
+
+    // Use a non-existent file path for the custom mapping
+    let non_existent_path = Path::new("/this/path/does/not/exist/mapping.json");
+
+    let source = HashMap::from([(
+        "https://conda.anaconda.org/conda-forge".to_owned(),
+        MappingLocation::Path(non_existent_path.to_path_buf()),
+    )]);
+
+    let foo_bar_package = Package::build("foo-bar-car", "2").finish();
+
+    let mut repo_data_record = RepoDataRecord {
+        package_record: foo_bar_package.package_record,
+        file_name: "foo-bar-car".to_owned(),
+        url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
+        channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
+    };
+
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let result = mapping_client
+        .amend_purls(
+            &MappingSource::Custom(Arc::new(CustomMapping::new(source))),
+            vec![&mut repo_data_record],
+            None,
+        )
+        .await;
+
+    // The operation should fail because the mapping file doesn't exist
+    let err = result.expect_err("Expected an error when mapping file doesn't exist");
+    insta::with_settings!({filters => vec![
+        (r#"path: "([^"]+)""#, "[MAPPING_PATH]"),
+    ]}, {
+        insta::assert_debug_snapshot!(err);
+    });
+}

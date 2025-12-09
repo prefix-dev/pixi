@@ -1,0 +1,21 @@
+---
+source: crates/pixi/tests/integration_rust/solve_group_tests.rs
+expression: err
+---
+Error {
+    msg: "failed to open file /this/path/does/not/exist/mapping.json",
+    source: DiagnosticError(
+        Custom {
+            kind: NotFound,
+            error: Error {
+                kind: OpenFile,
+                source: Os {
+                    code: 2,
+                    kind: NotFound,
+                    message: "No such file or directory",
+                },
+                [MAPPING_PATH],
+            },
+        },
+    ),
+}
