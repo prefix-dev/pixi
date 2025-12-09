@@ -1,0 +1,43 @@
+# `pixi global sync`
+
+## About
+
+Sync global manifest with installed environments
+
+## Usage
+
+```text
+pixi global sync [OPTIONS]
+```
+
+## Config Options
+
+- [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
+
+- [`--concurrent-downloads <CONCURRENT_DOWNLOADS>`](#arg---concurrent-downloads) : Max concurrent network requests, default is `50`
+
+- [`--concurrent-solves <CONCURRENT_SOLVES>`](#arg---concurrent-solves) : Max concurrent solves, default is the number of CPUs
+
+- [`--pinning-strategy <PINNING_STRATEGY>`](#arg---pinning-strategy) : Set pinning strategy
+
+  ```
+  **options**: `semver`, `minor`, `major`, `latest-up`, `exact-version`, `no-pin`
+  ```
+
+- [`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`](#arg---pypi-keyring-provider) : Specifies whether to use the keyring to look up credentials for PyPI
+
+  ```
+  **options**: `disabled`, `subprocess`
+  ```
+
+- [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
+
+- [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
+- [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
