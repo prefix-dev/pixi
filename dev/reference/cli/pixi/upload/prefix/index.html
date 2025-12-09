@@ -3257,20 +3257,25 @@
 <li>
 <dl>
 <dt><a id="arg---attestation" href="#arg---attestation"><code>--attestation &lt;ATTESTATION&gt;</code></a></dt>
-<dd>Upload one or more attestation files alongside the package Note: if you add an attestation, you can <em>only</em> upload a single package</dd>
+<dd>Upload an attestation file alongside the package. Note: if you add an attestation, you can <em>only</em> upload a single package. Mutually exclusive with --generate-attestation</dd>
 </dl>
 </li>
 <li>
 <dl>
 <dt><a id="arg---generate-attestation" href="#arg---generate-attestation"><code>--generate-attestation</code></a></dt>
-<dd>Automatically generate attestations when using trusted publishing
-<br><strong>default</strong>: <code>false</code></dd>
+<dd>Automatically generate attestation using cosign in CI. Mutually exclusive with --attestation</dd>
 </dl>
 </li>
 <li>
 <dl>
 <dt><a id="arg---skip-existing" href="#arg---skip-existing"><code>--skip-existing (-s)</code></a></dt>
-<dd>Skip upload if package is existed</dd>
+<dd>Skip upload if package already exists</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---force" href="#arg---force"><code>--force</code></a></dt>
+<dd>Force overwrite existing packages</dd>
 </dl>
 </li>
 </ul>
