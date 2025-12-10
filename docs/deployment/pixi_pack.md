@@ -26,7 +26,7 @@ pixi exec pixi-unpack environment.tar
 You can pack an environment with
 
 ```bash
-pixi-pack --environment prod --platform linux-64 pixi.toml
+pixi-pack --environment default --platform linux-64 pixi.toml
 ```
 
 This will create an `environment.tar` file that contains all conda packages required to create the environment.
