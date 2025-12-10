@@ -14,17 +14,18 @@ use url::Url;
 
 use crate::common::{
     LockFileExt, PixiControl,
-    builders::{HasDependencyConfig, HasNoInstallConfig},
+    builders::HasDependencyConfig,
     client::OfflineMiddleware,
-    package_database::{Package, PackageDatabase},
+    pypi_index::{Database as PyPIDatabase, PyPIPackage},
 };
 use crate::setup_tracing;
+use pixi_test_utils::{MockRepoData, Package};
 
 #[tokio::test]
 async fn conda_solve_group_functionality() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package `foo` with 3 different versions
     package_database.add_package(Package::build("foo", "1").finish());
@@ -124,7 +125,6 @@ async fn test_purl_are_added_for_pypi() {
 
     // Add boltons from pypi
     pixi.add("boltons")
-        .with_install(true)
         .set_type(pixi_core::DependencyType::PypiDependency)
         .await
         .unwrap();
@@ -207,7 +207,6 @@ async fn test_purl_are_missing_for_non_conda_forge() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_purl_are_generated_using_custom_mapping() {
     setup_tracing();
 
@@ -789,6 +788,27 @@ async fn test_disabled_mapping() {
 async fn test_custom_mapping_ignores_backwards_compatibility() {
     setup_tracing();
 
+    // Create local conda channel with boltons and python packages
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::Linux64)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("boltons", "24.0.0")
+            .with_subdir(Platform::Linux64)
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+    let channel_url = channel.url();
+
+    // Create local PyPI index with boltons package
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("boltons", "24.0.0"))
+        .into_simple_index()
+        .expect("failed to create local simple index");
+
     // Create a custom mapping file that only includes specific packages
     let temp_dir = TempDir::new().unwrap();
     let mapping_file = temp_dir.path().join("map.json");
@@ -798,21 +818,27 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
         r#"
     [workspace]
     name = "test-custom-mapping"
-    channels = ["https://prefix.dev/conda-forge"]
+    channels = ["{channel_url}"]
     platforms = ["linux-64"]
-    conda-pypi-map = {{ "https://prefix.dev/conda-forge" = "{}" }}
+    conda-pypi-map = {{ "{channel_url}" = "{mapping_file}" }}
 
     [dependencies]
+    python = "3.12.0"
     boltons = "*"
 
     [pypi-dependencies]
     boltons = "*"
+
+    [pypi-options]
+    index-url = "{pypi_url}"
     "#,
-        mapping_file
+        channel_url = channel_url,
+        mapping_file = mapping_file
             .to_str()
             .unwrap()
             .to_string()
-            .replace("\\", "/")
+            .replace("\\", "/"),
+        pypi_url = pypi_index.index_url(),
     ))
     .unwrap();
 
@@ -870,7 +896,7 @@ async fn test_solve_group_per_environment_editability() {
     setup_tracing();
 
     // Create a fake channel with Python
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("python", "3.10.0").finish());
 
     let channel_dir = TempDir::new().unwrap();
@@ -968,4 +994,51 @@ version = "0.1.0"
     // The key benefit of this architecture is that changing editability in the manifest
     // does NOT require re-locking - only re-installing. Both environments share the same
     // lock file entry but can have different editability at install time.
+}
+
+#[tokio::test]
+async fn test_missing_mapping_file_error_includes_path() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let client = project.authenticated_client().unwrap();
+
+    // Use a non-existent file path for the custom mapping
+    let non_existent_path = Path::new("/this/path/does/not/exist/mapping.json");
+
+    let source = HashMap::from([(
+        "https://conda.anaconda.org/conda-forge".to_owned(),
+        MappingLocation::Path(non_existent_path.to_path_buf()),
+    )]);
+
+    let foo_bar_package = Package::build("foo-bar-car", "2").finish();
+
+    let mut repo_data_record = RepoDataRecord {
+        package_record: foo_bar_package.package_record,
+        file_name: "foo-bar-car".to_owned(),
+        url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
+        channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
+    };
+
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let result = mapping_client
+        .amend_purls(
+            &MappingSource::Custom(Arc::new(CustomMapping::new(source))),
+            vec![&mut repo_data_record],
+            None,
+        )
+        .await;
+
+    // The operation should fail because the mapping file doesn't exist
+    let err = result.expect_err("Expected an error when mapping file doesn't exist");
+    insta::with_settings!({filters => vec![
+        (r#"path: "([^"]+)""#, "[MAPPING_PATH]"),
+        (r#"message: "[^"]+""#, "[MAPPING_MESSAGE]"),
+        (r#"\bcode:\s*\d+\b"#, "[MAPPING_CODE]"),
+    ]}, {
+        insta::assert_debug_snapshot!(err);
+    });
 }

@@ -1,12 +1,13 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use crate::common::{PixiControl, package_database::PackageDatabase};
+use crate::common::PixiControl;
 use crate::setup_tracing;
 use insta::assert_debug_snapshot;
 use pixi_config::Config;
 use pixi_core::Workspace;
 use pixi_manifest::FeaturesExt;
+use pixi_test_utils::MockRepoData;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use tempfile::TempDir;
 use url::Url;
@@ -17,7 +18,7 @@ async fn add_remove_channel() {
 
     // Create a local package database with no entries and write it to disk. This
     // ensures that we have a valid channel.
-    let package_database = PackageDatabase::default();
+    let package_database = MockRepoData::default();
     let initial_channel_dir = TempDir::new().unwrap();
     package_database
         .write_repodata(initial_channel_dir.path())
