@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    fmt::Display,
     io,
     io::{Write, stdout},
 };
@@ -36,6 +37,106 @@ pub enum SortBy {
     Kind,
 }
 
+/// Available fields for the list command output
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Field {
+    Name,
+    Version,
+    Build,
+    #[clap(name = "build-number")]
+    BuildNumber,
+    Size,
+    Kind,
+    Source,
+    License,
+    #[clap(name = "license-family")]
+    LicenseFamily,
+    #[clap(name = "is-explicit")]
+    IsExplicit,
+    #[clap(name = "is-editable")]
+    IsEditable,
+    Description,
+    Md5,
+    Sha256,
+    Arch,
+    Platform,
+    Subdir,
+    Timestamp,
+    Noarch,
+    #[clap(name = "file-name")]
+    FileName,
+    Url,
+}
+
+impl Display for Field {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Use lowercase for ValueEnum compatibility
+        match self {
+            Field::Name => write!(f, "name"),
+            Field::Version => write!(f, "version"),
+            Field::Build => write!(f, "build"),
+            Field::BuildNumber => write!(f, "build-number"),
+            Field::Size => write!(f, "size"),
+            Field::Kind => write!(f, "kind"),
+            Field::Source => write!(f, "source"),
+            Field::License => write!(f, "license"),
+            Field::LicenseFamily => write!(f, "license-family"),
+            Field::IsExplicit => write!(f, "is-explicit"),
+            Field::IsEditable => write!(f, "is-editable"),
+            Field::Description => write!(f, "description"),
+            Field::Md5 => write!(f, "md5"),
+            Field::Sha256 => write!(f, "sha256"),
+            Field::Arch => write!(f, "arch"),
+            Field::Platform => write!(f, "platform"),
+            Field::Subdir => write!(f, "subdir"),
+            Field::Timestamp => write!(f, "timestamp"),
+            Field::Noarch => write!(f, "noarch"),
+            Field::FileName => write!(f, "file-name"),
+            Field::Url => write!(f, "url"),
+        }
+    }
+}
+
+impl Field {
+    /// Get the header display name for this field (used in table output)
+    fn header_name(&self) -> &'static str {
+        match self {
+            Field::Name => "Name",
+            Field::Version => "Version",
+            Field::Build => "Build",
+            Field::BuildNumber => "Build#",
+            Field::Size => "Size",
+            Field::Kind => "Kind",
+            Field::Source => "Source",
+            Field::License => "License",
+            Field::LicenseFamily => "License Family",
+            Field::IsExplicit => "Explicit",
+            Field::IsEditable => "Editable",
+            Field::Description => "Description",
+            Field::Md5 => "MD5",
+            Field::Sha256 => "SHA256",
+            Field::Arch => "Arch",
+            Field::Platform => "Platform",
+            Field::Subdir => "Subdir",
+            Field::Timestamp => "Timestamp",
+            Field::Noarch => "Noarch",
+            Field::FileName => "File Name",
+            Field::Url => "URL",
+        }
+    }
+}
+
+/// Default fields to display when --fields is not specified
+pub const DEFAULT_FIELDS: [Field; 6] = [
+    Field::Name,
+    Field::Version,
+    Field::Build,
+    Field::Size,
+    Field::Kind,
+    Field::Source,
+];
+
 /// List the packages of the current workspace
 ///
 /// Highlighted packages are explicit dependencies.
@@ -61,6 +162,14 @@ pub struct Args {
     /// Sorting strategy
     #[arg(long, default_value = "name", value_enum)]
     pub sort_by: SortBy,
+
+    /// Select which fields to display and in what order (comma-separated).
+    ///
+    /// Available fields: name, version, build, build-number, size, kind, source,
+    /// license, license-family, is-explicit, is-editable, description, md5, sha256,
+    /// arch, platform, subdir, timestamp, noarch, file-name, url
+    #[arg(long, value_delimiter = ',', default_values_t = DEFAULT_FIELDS)]
+    pub fields: Vec<Field>,
 
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
@@ -115,12 +224,63 @@ struct PackageToOutput {
     name: String,
     version: String,
     build: Option<String>,
+    build_number: Option<u64>,
     size_bytes: Option<u64>,
     kind: KindPackage,
     source: Option<String>,
+    license: Option<String>,
+    license_family: Option<String>,
     is_explicit: bool,
     #[serde(skip_serializing_if = "serde_skip_is_editable")]
     is_editable: bool,
+    description: Option<String>,
+    md5: Option<String>,
+    sha256: Option<String>,
+    arch: Option<String>,
+    platform: Option<String>,
+    subdir: Option<String>,
+    timestamp: Option<i64>,
+    noarch: Option<String>,
+    file_name: Option<String>,
+    url: Option<String>,
+}
+
+impl PackageToOutput {
+    /// Get the value of a field as a string for table display
+    fn get_field_value(&self, field: &Field) -> String {
+        match field {
+            Field::Name => self.name.clone(),
+            Field::Version => self.version.clone(),
+            Field::Build => self.build.clone().unwrap_or_default(),
+            Field::BuildNumber => self
+                .build_number
+                .map(|n| n.to_string())
+                .unwrap_or_default(),
+            Field::Size => self
+                .size_bytes
+                .map(|size| human_bytes(size as f64))
+                .unwrap_or_default(),
+            Field::Kind => match self.kind {
+                KindPackage::Conda => "conda".to_string(),
+                KindPackage::Pypi => "pypi".to_string(),
+            },
+            Field::Source => self.source.clone().unwrap_or_default(),
+            Field::License => self.license.clone().unwrap_or_default(),
+            Field::LicenseFamily => self.license_family.clone().unwrap_or_default(),
+            Field::IsExplicit => if self.is_explicit { "true" } else { "false" }.to_string(),
+            Field::IsEditable => if self.is_editable { "true" } else { "false" }.to_string(),
+            Field::Description => self.description.clone().unwrap_or_default(),
+            Field::Md5 => self.md5.clone().unwrap_or_default(),
+            Field::Sha256 => self.sha256.clone().unwrap_or_default(),
+            Field::Arch => self.arch.clone().unwrap_or_default(),
+            Field::Platform => self.platform.clone().unwrap_or_default(),
+            Field::Subdir => self.subdir.clone().unwrap_or_default(),
+            Field::Timestamp => self.timestamp.map(|t| t.to_string()).unwrap_or_default(),
+            Field::Noarch => self.noarch.clone().unwrap_or_default(),
+            Field::FileName => self.file_name.clone().unwrap_or_default(),
+            Field::Url => self.url.clone().unwrap_or_default(),
+        }
+    }
 }
 
 /// Get directory size
@@ -323,7 +483,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // print packages as table
-        print_packages_as_table(&packages_to_output)
+        print_packages_as_table(&packages_to_output, &args.fields)
             .map_err(|e| {
                 if e.kind() == std::io::ErrorKind::BrokenPipe {
                     std::process::exit(0);
@@ -337,56 +497,62 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
+fn print_packages_as_table(packages: &Vec<PackageToOutput>, fields: &[Field]) -> io::Result<()> {
     let mut writer = tabwriter::TabWriter::new(stdout());
 
+    // Print header row
     let header_style = console::Style::new().bold().cyan();
-    writeln!(
-        writer,
-        "{}\t{}\t{}\t{}\t{}\t{}",
-        header_style.apply_to("Package"),
-        header_style.apply_to("Version"),
-        header_style.apply_to("Build"),
-        header_style.apply_to("Size"),
-        header_style.apply_to("Kind"),
-        header_style.apply_to("Source")
-    )?;
+    let headers: Vec<String> = fields
+        .iter()
+        .map(|f| format!("{}", header_style.apply_to(f.header_name())))
+        .collect();
+    writeln!(writer, "{}", headers.join("\t"))?;
 
+    // Print each package row
     for package in packages {
-        if package.is_explicit {
-            write!(
-                writer,
-                "{}",
-                match package.kind {
-                    KindPackage::Conda =>
-                        consts::CONDA_PACKAGE_STYLE.apply_to(&package.name).bold(),
-                    KindPackage::Pypi => consts::PYPI_PACKAGE_STYLE.apply_to(&package.name).bold(),
+        let values: Vec<String> = fields
+            .iter()
+            .enumerate()
+            .map(|(i, field)| {
+                // Special formatting for specific fields
+                match field {
+                    Field::Name => {
+                        // Apply styling for explicit dependencies
+                        if package.is_explicit {
+                            format!(
+                                "{}",
+                                match package.kind {
+                                    KindPackage::Conda =>
+                                        consts::CONDA_PACKAGE_STYLE.apply_to(&package.name).bold(),
+                                    KindPackage::Pypi =>
+                                        consts::PYPI_PACKAGE_STYLE.apply_to(&package.name).bold(),
+                                }
+                            )
+                        } else {
+                            package.name.clone()
+                        }
+                    }
+                    Field::Kind => {
+                        // Apply fancy display for kind
+                        format!("{}", package.kind.fancy_display())
+                    }
+                    _ => {
+                        let value = package.get_field_value(field);
+                        // Add editable marker for the last field if package is editable
+                        if i == fields.len() - 1 && package.is_editable {
+                            format!(
+                                "{}{}",
+                                value,
+                                format!(" {}", console::style("(editable)").fg(Color::Yellow))
+                            )
+                        } else {
+                            value
+                        }
+                    }
                 }
-            )?
-        } else {
-            write!(writer, "{}", &package.name)?;
-        };
-
-        // Convert size to human readable format
-        let size_human = package
-            .size_bytes
-            .map(|size| human_bytes(size as f64))
-            .unwrap_or_default();
-
-        writeln!(
-            writer,
-            "\t{}\t{}\t{}\t{}\t{}{}",
-            &package.version,
-            package.build.as_deref().unwrap_or(""),
-            size_human,
-            &package.kind.fancy_display(),
-            package.source.as_deref().unwrap_or(""),
-            if package.is_editable {
-                format!(" {}", console::style("(editable)").fg(Color::Yellow))
-            } else {
-                "".to_string()
-            }
-        )?;
+            })
+            .collect();
+        writeln!(writer, "{}", values.join("\t"))?;
     }
 
     writer.flush()
@@ -428,6 +594,11 @@ fn create_package_to_output<'a, 'b>(
         PackageExt::PyPI(_, _) => None,
     };
 
+    let build_number = match package {
+        PackageExt::Conda(pkg) => Some(pkg.record().build_number),
+        PackageExt::PyPI(_, _) => None,
+    };
+
     let (size_bytes, source) = match package {
         PackageExt::Conda(pkg) => (
             pkg.record().size,
@@ -458,6 +629,78 @@ fn create_package_to_output<'a, 'b>(
         }
     };
 
+    let license = match package {
+        PackageExt::Conda(pkg) => pkg.record().license.clone(),
+        PackageExt::PyPI(_, _) => None,
+    };
+
+    let license_family = match package {
+        PackageExt::Conda(pkg) => pkg.record().license_family.clone(),
+        PackageExt::PyPI(_, _) => None,
+    };
+
+    let description = None; // Description is not readily available in PackageRecord
+
+    let md5 = match package {
+        PackageExt::Conda(pkg) => pkg.record().md5.map(|h| format!("{:x}", h)),
+        PackageExt::PyPI(p, _) => p.hash.as_ref().and_then(|h| h.md5().map(|m| format!("{:x}", m))),
+    };
+
+    let sha256 = match package {
+        PackageExt::Conda(pkg) => pkg.record().sha256.map(|h| format!("{:x}", h)),
+        PackageExt::PyPI(p, _) => p
+            .hash
+            .as_ref()
+            .and_then(|h| h.sha256().map(|s| format!("{:x}", s))),
+    };
+
+    let arch = match package {
+        PackageExt::Conda(pkg) => pkg.record().arch.clone(),
+        PackageExt::PyPI(_, _) => None,
+    };
+
+    let platform = match package {
+        PackageExt::Conda(pkg) => pkg.record().platform.clone(),
+        PackageExt::PyPI(_, _) => None,
+    };
+
+    let subdir = match package {
+        PackageExt::Conda(pkg) => Some(pkg.record().subdir.clone()),
+        PackageExt::PyPI(_, _) => None,
+    };
+
+    let timestamp = match package {
+        PackageExt::Conda(pkg) => pkg.record().timestamp.map(|ts| ts.timestamp_millis()),
+        PackageExt::PyPI(_, _) => None,
+    };
+
+    let noarch = match package {
+        PackageExt::Conda(pkg) => {
+            let noarch_type = &pkg.record().noarch;
+            if noarch_type.is_python() {
+                Some("python".to_string())
+            } else if noarch_type.is_generic() {
+                Some("generic".to_string())
+            } else {
+                None
+            }
+        }
+        PackageExt::PyPI(_, _) => None,
+    };
+
+    let (file_name, url) = match package {
+        PackageExt::Conda(pkg) => match pkg {
+            CondaPackageData::Binary(binary) => {
+                (Some(binary.file_name.clone()), Some(binary.location.to_string()))
+            }
+            CondaPackageData::Source(source) => (None, Some(source.location.to_string())),
+        },
+        PackageExt::PyPI(p, _) => match &p.location {
+            UrlOrPath::Url(url) => (None, Some(url.to_string())),
+            UrlOrPath::Path(path) => (None, Some(path.to_string())),
+        },
+    };
+
     let is_explicit = project_dependency_names.contains(&name);
     let is_editable = match package {
         PackageExt::Conda(_) => false,
@@ -468,10 +711,23 @@ fn create_package_to_output<'a, 'b>(
         name,
         version,
         build,
+        build_number,
         size_bytes,
         kind,
         source,
+        license,
+        license_family,
         is_explicit,
         is_editable,
+        description,
+        md5,
+        sha256,
+        arch,
+        platform,
+        subdir,
+        timestamp,
+        noarch,
+        file_name,
+        url,
     })
 }
