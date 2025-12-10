@@ -20,8 +20,6 @@ pixi list [OPTIONS] [REGEX]
 :  The platform to list packages for. Defaults to the current platform
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  Whether to output in json format
-- <a id="arg---json-pretty" href="#arg---json-pretty">`--json-pretty`</a>
-:  Whether to output in pretty json format
 - <a id="arg---sort-by" href="#arg---sort-by">`--sort-by <SORT_BY>`</a>
 :  Sorting strategy
 <br>**default**: `name`
@@ -30,7 +28,7 @@ pixi list [OPTIONS] [REGEX]
 :  Select which fields to display and in what order (comma-separated)
 <br>May be provided more than once.
 <br>**default**: `name, version, build, size, kind, source`
-<br>**options**: `arch`, `build`, `build-number`, `description`, `file-name`, `is-editable`, `is-explicit`, `kind`, `license`, `license-family`, `md5`, `name`, `noarch`, `platform`, `sha256`, `size`, `source`, `subdir`, `timestamp`, `url`, `version`
+<br>**options**: `arch`, `build`, `build-number`, `constrains`, `depends`, `file-name`, `is-editable`, `kind`, `license`, `license-family`, `md5`, `name`, `noarch`, `platform`, `requested-spec`, `sha256`, `size`, `source`, `subdir`, `timestamp`, `track-features`, `url`, `version`
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to list packages for. Defaults to the default environment
 - <a id="arg---explicit" href="#arg---explicit">`--explicit (-x)`</a>
