@@ -9,44 +9,23 @@ template: home.html
 
 Pixi is a **fast, modern, and reproducible** package management tool for developers of all backgrounds.
 
-<div class="feature-grid">
-    <a href="workspace/lockfile">
-      <div class="feature-card">
-              <strong>🔄 Reproducibility</strong>
-              <p>Isolated, easily recreated environments with lockfiles built-in</p>
-      </div>
-    </a>
-    <a href="workspace/advanced_tasks/">
-      <div class="feature-card">
-          <strong>🛠️ Tasks</strong>
-          <p>Manage complex pipelines effortlessly.</p>
-      </div>
-    </a>
-    <a href="workspace/multi_platform_configuration/">
-      <div class="feature-card">
-          <strong>🌐 Multi Platform</strong>
-          <p>Works on Linux, macOS, Windows, and more.</p>
-      </div>
-    </a>
-    <a href="workspace/multi_environment/">
-      <div class="feature-card">
-          <strong>🧩 Multi Environment</strong>
-          <p>Compose multiple environments in one manifest.</p>
-      </div>
-    </a>
-    <a href="python/tutorial/">
-      <div class="feature-card">
-          <strong>🐍 Python</strong>
-          <p>Support for <code>pyproject.toml</code> and PyPI through uv.</p>
-      </div>
-    </a>
-    <a href="global_tools/introduction/">
-      <div class="feature-card">
-          <strong>🌍 Global Tools</strong>
-          <p>Install global tools, safely isolated. Replacing <code>apt</code>, <code>homebrew</code>, <code>winget</code></p>
-      </div>
-    </a>
-</div>
+- [🔄 **Reproducibility**](workspace/lockfile.md)  
+  Isolated, easily recreated environments with lockfiles built-in
+
+- [🛠️ **Tasks**](workspace/advanced_tasks.md)  
+  Manage complex pipelines effortlessly.
+
+- [🌐 **Multi Platform**](workspace/multi_platform_configuration.md)  
+  Works on Linux, macOS, Windows, and more.
+
+- [🧩 **Multi Environment**](workspace/multi_environment.md)  
+  Compose multiple environments in one manifest.
+
+- [🐍 **Python**](python/tutorial.md)  
+  Support for `pyproject.toml` and PyPI through uv.
+
+- [🌍 **Global Tools**](global_tools/introduction.md)  
+  Install global tools, safely isolated. Replacing `apt`, `homebrew`, `winget`.
 
 ---
 
