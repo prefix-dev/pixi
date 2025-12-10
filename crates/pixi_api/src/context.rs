@@ -10,7 +10,9 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{
+    Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform, RepoDataRecord,
+};
 
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
@@ -81,7 +83,31 @@ impl<I: Interface> WorkspaceContext<I> {
         crate::workspace::workspace::name::set(&self.interface, self.workspace_mut()?, name).await
     }
 
-    pub async fn list_environments(&self) -> Vec<Environment<'_>> {
+    pub async fn list_channel(&self) -> HashMap<EnvironmentName, Vec<NamedChannelOrUrl>> {
+        crate::workspace::workspace::channel::list(&self.workspace).await
+    }
+
+    pub async fn add_channel(
+        &self,
+        options: crate::workspace::workspace::channel::ChannelOptions,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::channel::add(&self.interface, self.workspace_mut()?, options)
+            .await
+    }
+
+    pub async fn remove_channel(
+        &self,
+        options: crate::workspace::workspace::channel::ChannelOptions,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::channel::remove(
+            &self.interface,
+            self.workspace_mut()?,
+            options,
+        )
+        .await
+    }
+
+    pub async fn list_environments(&self) -> Vec<Environment> {
         crate::workspace::workspace::environment::list(&self.workspace).await
     }
 
