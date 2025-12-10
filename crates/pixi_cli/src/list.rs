@@ -247,7 +247,7 @@ struct PackageToOutput {
 
 impl PackageToOutput {
     /// Get the value of a field as a string for table display
-    fn get_field_value(&self, field: &Field) -> String {
+    fn get_field_value(&self, field: Field) -> String {
         match field {
             Field::Name => self.name.clone(),
             Field::Version => self.version.clone(),
@@ -512,6 +512,7 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>, fields: &[Field]) ->
     for package in packages {
         let values: Vec<String> = fields
             .iter()
+            .copied()
             .enumerate()
             .map(|(i, field)| {
                 // Special formatting for specific fields
