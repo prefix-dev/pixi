@@ -1,9 +1,6 @@
-use std::{
-    borrow::Cow,
-    fmt::Display,
-    io,
-    io::{Write, stdout},
-};
+use std::{borrow::Cow, fmt::Display};
+
+use comfy_table::{Cell, CellAlignment, ContentArrangement, Table, presets::NOTHING};
 
 use clap::Parser;
 use console::Color;
@@ -475,40 +472,40 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // print packages as table
-        print_packages_as_table(&packages_to_output, &args.fields)
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::BrokenPipe {
-                    std::process::exit(0);
-                } else {
-                    e
-                }
-            })
-            .into_diagnostic()?;
+        print_packages_as_table(&packages_to_output, &args.fields);
     }
 
     Ok(())
 }
 
-fn print_packages_as_table(packages: &Vec<PackageToOutput>, fields: &[Field]) -> io::Result<()> {
-    let mut writer = tabwriter::TabWriter::new(stdout());
+fn print_packages_as_table(packages: &[PackageToOutput], fields: &[Field]) {
+    let mut table = Table::new();
+    table
+        .load_preset(NOTHING)
+        .set_content_arrangement(ContentArrangement::Dynamic);
 
-    // Print header row
+    // Set up header row
     let header_style = console::Style::new().bold().cyan();
-    let headers: Vec<String> = fields
+    let headers: Vec<Cell> = fields
         .iter()
-        .map(|f| format!("{}", header_style.apply_to(f.header_name())))
+        .map(|f| {
+            let mut cell = Cell::new(format!("{}", header_style.apply_to(f.header_name())));
+            if *f == Field::Size {
+                cell = cell.set_alignment(CellAlignment::Right);
+            }
+            cell
+        })
         .collect();
-    writeln!(writer, "{}", headers.join("\t"))?;
+    table.set_header(headers);
 
-    // Print each package row
+    // Add each package row
     for package in packages {
-        let values: Vec<String> = fields
+        let cells: Vec<Cell> = fields
             .iter()
             .copied()
             .enumerate()
             .map(|(i, field)| {
-                // Special formatting for specific fields
-                match field {
+                let content = match field {
                     Field::Name => {
                         // Apply styling for explicit dependencies
                         if package.is_explicit {
@@ -538,13 +535,18 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>, fields: &[Field]) ->
                             value
                         }
                     }
+                };
+                let mut cell = Cell::new(content);
+                if *field == Field::Size {
+                    cell = cell.set_alignment(CellAlignment::Right);
                 }
+                cell
             })
             .collect();
-        writeln!(writer, "{}", values.join("\t"))?;
+        table.add_row(cells);
     }
 
-    writer.flush()
+    println!("{table}");
 }
 
 fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {
