@@ -38,35 +38,34 @@ pub enum SortBy {
 }
 
 /// Available fields for the list command output
-#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Field {
-    Name,
-    Version,
+    Arch,
     Build,
     #[clap(name = "build-number")]
     BuildNumber,
-    Size,
+    Description,
+    #[clap(name = "file-name")]
+    FileName,
+    #[clap(name = "is-editable")]
+    IsEditable,
+    #[clap(name = "is-explicit")]
+    IsExplicit,
     Kind,
-    Source,
     License,
     #[clap(name = "license-family")]
     LicenseFamily,
-    #[clap(name = "is-explicit")]
-    IsExplicit,
-    #[clap(name = "is-editable")]
-    IsEditable,
-    Description,
     Md5,
-    Sha256,
-    Arch,
+    Name,
+    Noarch,
     Platform,
+    Sha256,
+    Size,
+    Source,
     Subdir,
     Timestamp,
-    Noarch,
-    #[clap(name = "file-name")]
-    FileName,
     Url,
+    Version,
 }
 
 impl Display for Field {
@@ -164,10 +163,6 @@ pub struct Args {
     pub sort_by: SortBy,
 
     /// Select which fields to display and in what order (comma-separated).
-    ///
-    /// Available fields: arch, build, build-number, description, file-name,
-    /// is-editable, is-explicit, kind, license, license-family, md5, name, noarch,
-    /// platform, sha256, size, source, subdir, timestamp, url, version
     #[arg(long, value_delimiter = ',', default_values_t = DEFAULT_FIELDS)]
     pub fields: Vec<Field>,
 
@@ -538,10 +533,7 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>, fields: &[Field]) ->
                         let value = package.get_field_value(field);
                         // Add editable marker for the last field if package is editable
                         if i == fields.len() - 1 && package.is_editable {
-                            format!(
-                                "{value} {}",
-                                console::style("(editable)").fg(Color::Yellow)
-                            )
+                            format!("{value} {}", console::style("(editable)").fg(Color::Yellow))
                         } else {
                             value
                         }

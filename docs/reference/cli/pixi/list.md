@@ -30,7 +30,7 @@ pixi list [OPTIONS] [REGEX]
 :  Select which fields to display and in what order (comma-separated)
 <br>May be provided more than once.
 <br>**default**: `name, version, build, size, kind, source`
-<br>**options**: `name`, `version`, `build`, `build-number`, `size`, `kind`, `source`, `license`, `license-family`, `is-explicit`, `is-editable`, `description`, `md5`, `sha256`, `arch`, `platform`, `subdir`, `timestamp`, `noarch`, `file-name`, `url`
+<br>**options**: `arch`, `build`, `build-number`, `description`, `file-name`, `is-editable`, `is-explicit`, `kind`, `license`, `license-family`, `md5`, `name`, `noarch`, `platform`, `sha256`, `size`, `source`, `subdir`, `timestamp`, `url`, `version`
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to list packages for. Defaults to the default environment
 - <a id="arg---explicit" href="#arg---explicit">`--explicit (-x)`</a>
