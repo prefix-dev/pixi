@@ -364,7 +364,7 @@ impl WorkspaceManifestMut<'_> {
         }
 
         if self.workspace.features.get(feature_name).is_none() {
-            return Err(miette::miette!("Feature '{}' does not exist", feature_name));
+            miette::bail!("Feature '{}' does not exist", feature_name);
         }
 
         self.workspace.features.shift_remove(feature_name);
