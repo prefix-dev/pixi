@@ -165,9 +165,9 @@ pub struct Args {
 
     /// Select which fields to display and in what order (comma-separated).
     ///
-    /// Available fields: name, version, build, build-number, size, kind, source,
-    /// license, license-family, is-explicit, is-editable, description, md5, sha256,
-    /// arch, platform, subdir, timestamp, noarch, file-name, url
+    /// Available fields: arch, build, build-number, description, file-name,
+    /// is-editable, is-explicit, kind, license, license-family, md5, name, noarch,
+    /// platform, sha256, size, source, subdir, timestamp, url, version
     #[arg(long, value_delimiter = ',', default_values_t = DEFAULT_FIELDS)]
     pub fields: Vec<Field>,
 
