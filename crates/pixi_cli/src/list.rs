@@ -1,11 +1,9 @@
-use std::{borrow::Cow, fmt::Display};
-
-use comfy_table::{Cell, CellAlignment, ContentArrangement, Table, presets::NOTHING};
+use std::{borrow::Cow, collections::HashMap, fmt::Display};
 
 use clap::Parser;
-use console::Color;
+use comfy_table::{Cell, CellAlignment, ContentArrangement, Table, presets::NOTHING};
+use console::Style;
 use fancy_display::FancyDisplay;
-use human_bytes::human_bytes;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
@@ -41,13 +39,12 @@ pub enum Field {
     Build,
     #[clap(name = "build-number")]
     BuildNumber,
-    Description,
+    Constrains,
+    Depends,
     #[clap(name = "file-name")]
     FileName,
     #[clap(name = "is-editable")]
     IsEditable,
-    #[clap(name = "is-explicit")]
-    IsExplicit,
     Kind,
     License,
     #[clap(name = "license-family")]
@@ -56,11 +53,15 @@ pub enum Field {
     Name,
     Noarch,
     Platform,
+    #[clap(name = "requested-spec")]
+    RequestedSpec,
     Sha256,
     Size,
     Source,
     Subdir,
     Timestamp,
+    #[clap(name = "track-features")]
+    TrackFeatures,
     Url,
     Version,
 }
@@ -69,27 +70,29 @@ impl Display for Field {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Use lowercase for ValueEnum compatibility
         match self {
-            Field::Name => write!(f, "name"),
-            Field::Version => write!(f, "version"),
+            Field::Arch => write!(f, "arch"),
             Field::Build => write!(f, "build"),
             Field::BuildNumber => write!(f, "build-number"),
-            Field::Size => write!(f, "size"),
+            Field::Constrains => write!(f, "constrains"),
+            Field::Depends => write!(f, "depends"),
+            Field::FileName => write!(f, "file-name"),
+            Field::IsEditable => write!(f, "is-editable"),
             Field::Kind => write!(f, "kind"),
-            Field::Source => write!(f, "source"),
             Field::License => write!(f, "license"),
             Field::LicenseFamily => write!(f, "license-family"),
-            Field::IsExplicit => write!(f, "is-explicit"),
-            Field::IsEditable => write!(f, "is-editable"),
-            Field::Description => write!(f, "description"),
             Field::Md5 => write!(f, "md5"),
-            Field::Sha256 => write!(f, "sha256"),
-            Field::Arch => write!(f, "arch"),
+            Field::Name => write!(f, "name"),
+            Field::Noarch => write!(f, "noarch"),
             Field::Platform => write!(f, "platform"),
+            Field::RequestedSpec => write!(f, "requested-spec"),
+            Field::Sha256 => write!(f, "sha256"),
+            Field::Size => write!(f, "size"),
+            Field::Source => write!(f, "source"),
             Field::Subdir => write!(f, "subdir"),
             Field::Timestamp => write!(f, "timestamp"),
-            Field::Noarch => write!(f, "noarch"),
-            Field::FileName => write!(f, "file-name"),
+            Field::TrackFeatures => write!(f, "track-features"),
             Field::Url => write!(f, "url"),
+            Field::Version => write!(f, "version"),
         }
     }
 }
@@ -98,28 +101,47 @@ impl Field {
     /// Get the header display name for this field (used in table output)
     fn header_name(&self) -> &'static str {
         match self {
-            Field::Name => "Name",
-            Field::Version => "Version",
+            Field::Arch => "Arch",
             Field::Build => "Build",
             Field::BuildNumber => "Build#",
-            Field::Size => "Size",
+            Field::Constrains => "Constrains",
+            Field::Depends => "Depends",
+            Field::FileName => "File Name",
+            Field::IsEditable => "Editable",
             Field::Kind => "Kind",
-            Field::Source => "Source",
             Field::License => "License",
             Field::LicenseFamily => "License Family",
-            Field::IsExplicit => "Explicit",
-            Field::IsEditable => "Editable",
-            Field::Description => "Description",
             Field::Md5 => "MD5",
-            Field::Sha256 => "SHA256",
-            Field::Arch => "Arch",
+            Field::Name => "Name",
+            Field::Noarch => "Noarch",
             Field::Platform => "Platform",
+            Field::RequestedSpec => "Requested",
+            Field::Sha256 => "SHA256",
+            Field::Size => "Size",
+            Field::Source => "Source",
             Field::Subdir => "Subdir",
             Field::Timestamp => "Timestamp",
-            Field::Noarch => "Noarch",
-            Field::FileName => "File Name",
+            Field::TrackFeatures => "Track Features",
             Field::Url => "URL",
+            Field::Version => "Version",
         }
+    }
+
+    /// Get the cell alignment for this field
+    fn alignment(&self) -> Option<CellAlignment> {
+        match self {
+            Field::Size | Field::BuildNumber | Field::Timestamp => Some(CellAlignment::Right),
+            _ => None,
+        }
+    }
+
+    /// Create a styled header cell for this field
+    fn header_cell(&self, style: &Style) -> Cell {
+        let mut cell = Cell::new(format!("{}", style.apply_to(self.header_name())));
+        if let Some(align) = self.alignment() {
+            cell = cell.set_alignment(align);
+        }
+        cell
     }
 }
 
@@ -148,19 +170,15 @@ pub struct Args {
     pub platform: Option<Platform>,
 
     /// Whether to output in json format
-    #[arg(long)]
+    #[arg(long, alias = "json-pretty")]
     pub json: bool,
 
-    /// Whether to output in pretty json format
-    #[arg(long)]
-    pub json_pretty: bool,
-
     /// Sorting strategy
-    #[arg(long, default_value = "name", value_enum)]
+    #[arg(long, default_value = "name", value_enum, conflicts_with = "json")]
     pub sort_by: SortBy,
 
     /// Select which fields to display and in what order (comma-separated).
-    #[arg(long, value_delimiter = ',', default_values_t = DEFAULT_FIELDS)]
+    #[arg(long, value_delimiter = ',', default_values_t = DEFAULT_FIELDS, conflicts_with = "json")]
     pub fields: Vec<Field>,
 
     #[clap(flatten)]
@@ -222,10 +240,8 @@ struct PackageToOutput {
     source: Option<String>,
     license: Option<String>,
     license_family: Option<String>,
-    is_explicit: bool,
     #[serde(skip_serializing_if = "serde_skip_is_editable")]
     is_editable: bool,
-    description: Option<String>,
     md5: Option<String>,
     sha256: Option<String>,
     arch: Option<String>,
@@ -235,40 +251,77 @@ struct PackageToOutput {
     noarch: Option<String>,
     file_name: Option<String>,
     url: Option<String>,
+    requested_spec: Option<String>,
+    constrains: Vec<String>,
+    depends: Vec<String>,
+    track_features: Vec<String>,
 }
 
 impl PackageToOutput {
-    /// Get the value of a field as a string for table display
-    fn get_field_value(&self, field: Field) -> String {
-        match field {
-            Field::Name => self.name.clone(),
-            Field::Version => self.version.clone(),
-            Field::Build => self.build.clone().unwrap_or_default(),
-            Field::BuildNumber => self.build_number.map(|n| n.to_string()).unwrap_or_default(),
-            Field::Size => self
-                .size_bytes
-                .map(|size| human_bytes(size as f64))
-                .unwrap_or_default(),
-            Field::Kind => match self.kind {
-                KindPackage::Conda => "conda".to_string(),
-                KindPackage::Pypi => "pypi".to_string(),
-            },
-            Field::Source => self.source.clone().unwrap_or_default(),
-            Field::License => self.license.clone().unwrap_or_default(),
-            Field::LicenseFamily => self.license_family.clone().unwrap_or_default(),
-            Field::IsExplicit => if self.is_explicit { "true" } else { "false" }.to_string(),
-            Field::IsEditable => if self.is_editable { "true" } else { "false" }.to_string(),
-            Field::Description => self.description.clone().unwrap_or_default(),
-            Field::Md5 => self.md5.clone().unwrap_or_default(),
-            Field::Sha256 => self.sha256.clone().unwrap_or_default(),
-            Field::Arch => self.arch.clone().unwrap_or_default(),
-            Field::Platform => self.platform.clone().unwrap_or_default(),
-            Field::Subdir => self.subdir.clone().unwrap_or_default(),
-            Field::Timestamp => self.timestamp.map(|t| t.to_string()).unwrap_or_default(),
-            Field::Noarch => self.noarch.clone().unwrap_or_default(),
-            Field::FileName => self.file_name.clone().unwrap_or_default(),
-            Field::Url => self.url.clone().unwrap_or_default(),
+    /// Returns true if this package was explicitly requested
+    fn is_explicit(&self) -> bool {
+        self.requested_spec.is_some()
+    }
+
+    /// Get a Cell for a field, with proper styling and alignment
+    fn get_field_cell(&self, field: Field) -> Cell {
+        let mut cell = match field {
+            Field::Name => {
+                let content = if self.is_explicit() {
+                    let style = match self.kind {
+                        KindPackage::Conda => consts::CONDA_PACKAGE_STYLE.clone().bold(),
+                        KindPackage::Pypi => consts::PYPI_PACKAGE_STYLE.clone().bold(),
+                    };
+                    format!("{}", style.apply_to(&self.name))
+                } else {
+                    self.name.clone()
+                };
+                Cell::new(content)
+            }
+            Field::Version => Cell::new(&self.version),
+            Field::Build => Cell::new(self.build.as_deref().unwrap_or_default()),
+            Field::BuildNumber => {
+                Cell::new(self.build_number.map(|n| n.to_string()).unwrap_or_default())
+            }
+            Field::Size => Cell::new(
+                self.size_bytes
+                    .map(|size| indicatif::HumanBytes(size).to_string())
+                    .unwrap_or_default(),
+            ),
+            Field::Kind => Cell::new(format!("{}", self.kind.fancy_display())),
+            Field::Source => {
+                let base = self.source.as_deref().unwrap_or_default();
+                let content = if self.is_editable {
+                    format!("{base} {}", Style::new().yellow().apply_to("(editable)"))
+                } else {
+                    base.to_string()
+                };
+                Cell::new(content)
+            }
+            Field::License => Cell::new(self.license.as_deref().unwrap_or_default()),
+            Field::LicenseFamily => Cell::new(self.license_family.as_deref().unwrap_or_default()),
+            Field::IsEditable => Cell::new(if self.is_editable { "true" } else { "false" }),
+            Field::Md5 => Cell::new(self.md5.as_deref().unwrap_or_default()),
+            Field::Sha256 => Cell::new(self.sha256.as_deref().unwrap_or_default()),
+            Field::Arch => Cell::new(self.arch.as_deref().unwrap_or_default()),
+            Field::Platform => Cell::new(self.platform.as_deref().unwrap_or_default()),
+            Field::Subdir => Cell::new(self.subdir.as_deref().unwrap_or_default()),
+            Field::Timestamp => {
+                Cell::new(self.timestamp.map(|t| t.to_string()).unwrap_or_default())
+            }
+            Field::Noarch => Cell::new(self.noarch.as_deref().unwrap_or_default()),
+            Field::FileName => Cell::new(self.file_name.as_deref().unwrap_or_default()),
+            Field::Url => Cell::new(self.url.as_deref().unwrap_or_default()),
+            Field::RequestedSpec => Cell::new(self.requested_spec.as_deref().unwrap_or_default()),
+            Field::Constrains => Cell::new(self.constrains.join(", ")),
+            Field::Depends => Cell::new(self.depends.join(", ")),
+            Field::TrackFeatures => Cell::new(self.track_features.join(", ")),
+        };
+
+        if let Some(align) = field.alignment() {
+            cell = cell.set_alignment(align);
         }
+        cell
     }
 }
 
@@ -405,22 +458,31 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         None
     };
 
-    // Get the explicit project dependencies
-    let mut project_dependency_names = environment
+    // Get the explicit project dependencies with their requested specs
+    let mut requested_specs: HashMap<String, String> = environment
         .combined_dependencies(Some(platform))
-        .names()
-        .map(|p| p.as_source().to_string())
-        .collect_vec();
-    project_dependency_names.extend(
+        .iter()
+        .map(|(name, specs)| {
+            let spec_str = specs.iter().map(|s| s.to_string()).join(", ");
+            (name.as_source().to_string(), spec_str)
+        })
+        .collect();
+    requested_specs.extend(
         environment
             .pypi_dependencies(Some(platform))
             .into_iter()
-            .map(|(name, _)| name.as_normalized().as_dist_info_name().into_owned()),
+            .map(|(name, reqs)| {
+                let spec = reqs
+                    .first()
+                    .map(|r| r.to_string())
+                    .unwrap_or_else(|| "*".to_string());
+                (name.as_normalized().as_dist_info_name().into_owned(), spec)
+            }),
     );
 
     let mut packages_to_output = locked_deps_ext
         .iter()
-        .map(|p| create_package_to_output(p, &project_dependency_names, registry_index.as_mut()))
+        .map(|p| create_package_to_output(p, &requested_specs, registry_index.as_mut()))
         .collect::<Result<Vec<PackageToOutput>, _>>()?;
 
     // Filter packages by regex if needed
@@ -436,7 +498,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if args.explicit {
         packages_to_output = packages_to_output
             .into_iter()
-            .filter(|p| p.is_explicit)
+            .filter(|p| p.is_explicit())
             .collect::<Vec<_>>();
     }
 
@@ -463,9 +525,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Print as table string or JSON
-    if args.json || args.json_pretty {
+    if args.json {
         // print packages as json
-        json_packages(&packages_to_output, args.json_pretty);
+        json_packages(&packages_to_output);
     } else {
         if !environment.is_default() {
             eprintln!("Environment: {}", environment.name().fancy_display());
@@ -482,81 +544,29 @@ fn print_packages_as_table(packages: &[PackageToOutput], fields: &[Field]) {
     let mut table = Table::new();
     table
         .load_preset(NOTHING)
-        .set_content_arrangement(ContentArrangement::Dynamic);
+        .set_content_arrangement(ContentArrangement::Disabled);
 
     // Set up header row
-    let header_style = console::Style::new().bold().cyan();
-    let headers: Vec<Cell> = fields
-        .iter()
-        .map(|f| {
-            let mut cell = Cell::new(format!("{}", header_style.apply_to(f.header_name())));
-            if *f == Field::Size {
-                cell = cell.set_alignment(CellAlignment::Right);
-            }
-            cell
-        })
-        .collect();
-    table.set_header(headers);
+    let header_style = Style::new().bold().cyan();
+    table.set_header(fields.iter().map(|f| f.header_cell(&header_style)));
 
     // Add each package row
     for package in packages {
-        let cells: Vec<Cell> = fields
-            .iter()
-            .copied()
-            .enumerate()
-            .map(|(i, field)| {
-                let content = match field {
-                    Field::Name => {
-                        // Apply styling for explicit dependencies
-                        if package.is_explicit {
-                            format!(
-                                "{}",
-                                match package.kind {
-                                    KindPackage::Conda =>
-                                        consts::CONDA_PACKAGE_STYLE.apply_to(&package.name).bold(),
-                                    KindPackage::Pypi =>
-                                        consts::PYPI_PACKAGE_STYLE.apply_to(&package.name).bold(),
-                                }
-                            )
-                        } else {
-                            package.name.clone()
-                        }
-                    }
-                    Field::Kind => {
-                        // Apply fancy display for kind
-                        format!("{}", package.kind.fancy_display())
-                    }
-                    _ => {
-                        let value = package.get_field_value(field);
-                        // Add editable marker for the last field if package is editable
-                        if i == fields.len() - 1 && package.is_editable {
-                            format!("{value} {}", console::style("(editable)").fg(Color::Yellow))
-                        } else {
-                            value
-                        }
-                    }
-                };
-                let mut cell = Cell::new(content);
-                if *field == Field::Size {
-                    cell = cell.set_alignment(CellAlignment::Right);
-                }
-                cell
-            })
-            .collect();
-        table.add_row(cells);
+        table.add_row(fields.iter().map(|f| package.get_field_cell(*f)));
     }
 
-    println!("{table}");
+    println!(
+        "{}",
+        table
+            .lines()
+            .map(|line| line.trim().to_string())
+            .format("\n")
+    );
 }
 
-fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {
-    let json_string = if json_pretty {
-        serde_json::to_string_pretty(&packages)
-    } else {
-        serde_json::to_string(&packages)
-    }
-    .expect("Cannot serialize packages to JSON");
-
+fn json_packages(packages: &Vec<PackageToOutput>) {
+    let json_string =
+        serde_json::to_string_pretty(&packages).expect("Cannot serialize packages to JSON");
     println!("{json_string}");
 }
 
@@ -573,7 +583,7 @@ fn get_pypi_location_information(location: &UrlOrPath) -> (Option<u64>, Option<S
 
 fn create_package_to_output<'a, 'b>(
     package: &'b PackageExt,
-    project_dependency_names: &'a [String],
+    requested_specs: &'a HashMap<String, String>,
     registry_index: Option<&'a mut RegistryWheelIndex<'b>>,
 ) -> miette::Result<PackageToOutput> {
     let name = package.name().to_string();
@@ -595,7 +605,10 @@ fn create_package_to_output<'a, 'b>(
             pkg.record().size,
             match pkg {
                 CondaPackageData::Source(source) => Some(source.location.to_string()),
-                CondaPackageData::Binary(binary) => binary.channel.as_ref().map(|c| c.to_string()),
+                CondaPackageData::Binary(binary) => binary
+                    .channel
+                    .as_ref()
+                    .map(|c| c.to_string().trim_end_matches('/').to_string()),
             },
         ),
         PackageExt::PyPI(p, name) => {
@@ -629,8 +642,6 @@ fn create_package_to_output<'a, 'b>(
         PackageExt::Conda(pkg) => pkg.record().license_family.clone(),
         PackageExt::PyPI(_, _) => None,
     };
-
-    let description = None; // Description is not readily available in PackageRecord
 
     let md5 = match package {
         PackageExt::Conda(pkg) => pkg.record().md5.map(|h| format!("{h:x}")),
@@ -696,10 +707,26 @@ fn create_package_to_output<'a, 'b>(
         },
     };
 
-    let is_explicit = project_dependency_names.contains(&name);
+    let requested_spec = requested_specs.get(&name).cloned();
+
     let is_editable = match package {
         PackageExt::Conda(_) => false,
         PackageExt::PyPI(p, _) => p.editable,
+    };
+
+    let constrains = match package {
+        PackageExt::Conda(pkg) => pkg.record().constrains.clone(),
+        PackageExt::PyPI(_, _) => Vec::new(),
+    };
+
+    let depends = match package {
+        PackageExt::Conda(pkg) => pkg.record().depends.clone(),
+        PackageExt::PyPI(p, _) => p.requires_dist.iter().map(|r| r.to_string()).collect(),
+    };
+
+    let track_features = match package {
+        PackageExt::Conda(pkg) => pkg.record().track_features.clone(),
+        PackageExt::PyPI(_, _) => Vec::new(),
     };
 
     Ok(PackageToOutput {
@@ -712,9 +739,7 @@ fn create_package_to_output<'a, 'b>(
         source,
         license,
         license_family,
-        is_explicit,
         is_editable,
-        description,
         md5,
         sha256,
         arch,
@@ -724,5 +749,9 @@ fn create_package_to_output<'a, 'b>(
         noarch,
         file_name,
         url,
+        requested_spec,
+        constrains,
+        depends,
+        track_features,
     })
 }
