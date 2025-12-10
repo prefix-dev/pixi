@@ -2365,3 +2365,34 @@ class TestCondaFile:
             env=env,
             cwd=cwd,
         )
+
+
+def test_install_nonexistent_package_no_empty_dir(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    """Test that installing a non-existent package doesn't leave an empty directory."""
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    envs_dir = tmp_path / "envs"
+
+    # Try to install a package that doesn't exist
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "this-package-does-not-exist",
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="No candidates were found",
+    )
+
+    # Verify no empty directory was left behind
+    # The envs directory should either not exist or not contain the failed environment
+    if envs_dir.exists():
+        assert not (envs_dir / "this-package-does-not-exist").exists(), (
+            "Empty directory was left behind for failed package installation"
+        )
