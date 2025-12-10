@@ -108,7 +108,7 @@ pub async fn remove_feature<I: Interface>(
     if !environments_using_feature.is_empty() {
         let confirmed = interface
             .confirm(&format!(
-                "Feature '{}' gets used by the following environment(s): {}. Do you want to remove it anyway?",
+                "Feature '{}' is used by the following environment(s): {}. Do you want to remove it anyway?",
                 feature,
                 environments_using_feature.join(", ")
             ))
