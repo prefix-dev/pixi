@@ -13339,6 +13339,7 @@ pixi workspace [OPTIONS] <COMMAND>
 | [`platform`](platform/)                       | Commands to manage workspace platforms                  |
 | [`version`](version/)                         | Commands to manage workspace version                    |
 | [`environment`](environment/)                 | Commands to manage workspace environments               |
+| [`feature`](feature/)                         | Commands to manage workspace features                   |
 | [`export`](export/)                           | Commands to export workspaces to other formats          |
 | [`name`](name/)                               | Commands to manage workspace name                       |
 | [`system-requirements`](system-requirements/) | Commands to manage workspace system requirements        |
@@ -15377,6 +15378,29 @@ pixi workspace export <COMMAND>
 | [`conda-explicit-spec`](conda-explicit-spec/) | Export workspace environment to a conda explicit specification file |
 | [`conda-environment`](conda-environment/)     | Export workspace environment to a conda environment.yaml file       |
 
+# `pixi workspace feature`
+
+## About
+
+Commands to manage workspace features
+
+## Usage
+
+```text
+pixi workspace feature [OPTIONS] <COMMAND>
+```
+
+## Subcommands
+
+| Command             | Description                             |
+| ------------------- | --------------------------------------- |
+| [`list`](list/)     | List the features in the manifest file  |
+| [`remove`](remove/) | Remove a feature from the manifest file |
+
+## Global Options
+
+- [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+
 # `pixi workspace name`
 
 ## About
@@ -15919,6 +15943,38 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 ## Global Options
 
 - [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+
+# `pixi workspace feature list`
+
+## About
+
+List the features in the manifest file
+
+## Usage
+
+```text
+pixi workspace feature list
+```
+
+# `pixi workspace feature remove`
+
+## About
+
+Remove a feature from the manifest file
+
+## Usage
+
+```text
+pixi workspace feature remove <FEATURE>
+```
+
+## Arguments
+
+- [`<FEATURE>`](#arg-%3CFEATURE%3E) : The name of the feature to remove
+
+  ```
+  **required**: `true`
+  ```
 
 # `pixi workspace name get`
 
