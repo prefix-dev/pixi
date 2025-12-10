@@ -55,9 +55,9 @@ pub struct BuildBackendMetadataSpec {
     /// The optional pinned location of the source code. If not provide the
     /// location in the manifest is resolved.
     ///
-    /// This is passed as a hint. If the [`SourceSpec`] in the discovered
-    /// manifest does not match with the pinned source provided here, the one
-    /// in the manifest takes precedence and it is reresolved.
+    /// This is passed as a hint. If the [`pixi_spec::SourceSpec`] in the
+    /// discovered manifest does not match with the pinned source provided
+    /// here, the one in the manifest takes precedence and it is reresolved.
     ///
     /// See [`PinnedSourceSpec::matches_source_spec`] how the matching is done.
     pub preferred_build_source: Option<PinnedSourceSpec>,
