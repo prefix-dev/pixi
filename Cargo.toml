@@ -26,14 +26,12 @@ async-trait = "0.1.86"
 axum = "0.8"
 barrier_cell = { path = "crates/barrier_cell" }
 base64 = "0.22.1"
-bytes = "1.10.0"
 chrono = "0.4.40"
 clap = { version = "4.5.31", default-features = false }
 clap_complete = "4.5.46"
 clap_complete_nushell = "4.5.5"
 # Rattler crates
 coalesced_map = "0.1.2"
-concat-idents = "1.1.5"
 console = "0.16.1"
 console-subscriber = "0.5.0"
 crossbeam-channel = "0.5.14"
@@ -47,7 +45,6 @@ digest = "0.10"
 dirs = "6.0.0"
 dunce = "1.0.5"
 fancy_display = { path = "crates/fancy_display" }
-fd-lock = "4.0.2"
 file_url = "0.2.6"
 flate2 = "1.1.0"
 fs-err = { version = "3.1.0" }
@@ -78,7 +75,6 @@ pep440_rs = "0.7.3"
 pep508_rs = "0.9.2"
 percent-encoding = "2.3.1"
 pin-project-lite = "0.2.16"
-pixi = { path = "crates/pixi" }
 pixi_allocator = { path = "crates/pixi_allocator" }
 pixi_api = { path = "crates/pixi_api" }
 pixi_auth = { path = "crates/pixi_auth", default-features = false }
@@ -142,6 +138,7 @@ rattler_virtual_packages = { version = "2.3.0", default-features = false }
 rayon = "1.10.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", default-features = false }
+retry-policies = "0.4"
 # reqwest-middleware = "0.4"
 # reqwest-retry = "0.7.0"
 bzip2 = "0.6.1"
@@ -159,9 +156,7 @@ serde_ignored = "0.1.10"
 serde_json = "1.0.139"
 serde_with = "=3.16.1"
 serde_yaml = "0.9.34"
-sevenz-rust2 = "0.19.3"
-sha1 = "0.10.6"
-sha2 = "0.10.8"
+sevenz-rust2 = "0.20.0"
 shlex = "1.3.0"
 signal-hook = "0.3.17"
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
@@ -176,7 +171,6 @@ tempfile = "3.17.1"
 text_trees = "0.1.2"
 thiserror = "2.0.12"
 tokio = "1.43.0"
-tokio-stream = "0.1.17"
 tokio-util = "0.7.13"
 toml-span = "0.6.0"
 toml_edit = "0.23.0"
@@ -184,7 +178,7 @@ tracing = "0.1.41"
 xz2 = "0.1.7"
 # Forcing the version due to this PR https://github.com/tokio-rs/tracing/pull/3368
 tracing-subscriber = "=0.3.19"
-typed-path = "0.11.0"
+typed-path = "0.12.0"
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.4"
 uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
@@ -215,7 +209,6 @@ uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 which = "8.0.0"
-winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.15"
 zip = { version = "2.4.2", default-features = false }
 zstd = { version = "0.13.3", default-features = false }
