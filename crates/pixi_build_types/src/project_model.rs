@@ -246,6 +246,7 @@ pub struct NamedSpecV1<T> {
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct SourcePackageSpec {
     #[serde(flatten)]
     pub location: SourcePackageLocationSpec,

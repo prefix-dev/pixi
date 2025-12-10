@@ -56,7 +56,7 @@ expression: project_model
               },
               "version": null,
               "build": null,
-              "build_number": null,
+              "buildNumber": null,
               "subdir": null,
               "license": null
             }
