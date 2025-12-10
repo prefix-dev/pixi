@@ -958,13 +958,11 @@ version = "0.1.0"
     // The actual editability is applied at install time based on the manifest
     assert!(
         !prod_editable,
-        "prod environment should have my-local-pkg with editable=false in lock file, but got editable={}",
-        prod_editable
+        "prod environment should have my-local-pkg with editable=false in lock file, but got editable={prod_editable}",
     );
     assert!(
         !dev_editable,
-        "dev environment should have my-local-pkg with editable=false in lock file, but got editable={}",
-        dev_editable
+        "dev environment should have my-local-pkg with editable=false in lock file, but got editable={dev_editable}",
     );
 
     // The key benefit of this architecture is that changing editability in the manifest
