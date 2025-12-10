@@ -392,6 +392,7 @@ impl TaskAliasBuilder {
 }
 
 pub struct ProjectChannelAddBuilder {
+    pub workspace_config: WorkspaceConfig,
     pub args: workspace::channel::AddRemoveArgs,
 }
 
@@ -421,6 +422,7 @@ impl IntoFuture for ProjectChannelAddBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         workspace::channel::execute(workspace::channel::Args {
+            workspace_config: self.workspace_config,
             command: workspace::channel::Command::Add(self.args),
         })
         .boxed_local()
@@ -428,7 +430,7 @@ impl IntoFuture for ProjectChannelAddBuilder {
 }
 
 pub struct ProjectChannelRemoveBuilder {
-    pub manifest_path: Option<PathBuf>,
+    pub workspace_config: WorkspaceConfig,
     pub args: workspace::channel::AddRemoveArgs,
 }
 
@@ -453,6 +455,7 @@ impl IntoFuture for ProjectChannelRemoveBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         workspace::channel::execute(workspace::channel::Args {
+            workspace_config: self.workspace_config,
             command: workspace::channel::Command::Remove(self.args),
         })
         .boxed_local()
