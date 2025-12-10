@@ -360,7 +360,7 @@ impl WorkspaceManifestMut<'_> {
     /// Returns the list of environments that were modified.
     pub fn remove_feature(&mut self, feature_name: &FeatureName) -> miette::Result<Vec<String>> {
         if feature_name.is_default() {
-            return Err(miette::miette!("Cannot remove the default feature"));
+            miette::bail!("Cannot remove the default feature");
         }
 
         if self.workspace.features.get(feature_name).is_none() {
