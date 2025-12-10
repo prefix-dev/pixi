@@ -26,6 +26,11 @@ pixi list [OPTIONS] [REGEX]
 :  Sorting strategy
 <br>**default**: `name`
 <br>**options**: `size`, `name`, `kind`
+- <a id="arg---fields" href="#arg---fields">`--fields <FIELDS>`</a>
+:  Select which fields to display and in what order (comma-separated)
+<br>May be provided more than once.
+<br>**default**: `name, version, build, size, kind, source`
+<br>**options**: `name`, `version`, `build`, `build-number`, `size`, `kind`, `source`, `license`, `license-family`, `is-explicit`, `is-editable`, `description`, `md5`, `sha256`, `arch`, `platform`, `subdir`, `timestamp`, `noarch`, `file-name`, `url`
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to list packages for. Defaults to the default environment
 - <a id="arg---explicit" href="#arg---explicit">`--explicit (-x)`</a>
