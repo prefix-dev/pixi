@@ -81,6 +81,103 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let command = command_iter.next().ok_or_else(|| miette::miette!(help ="i.e when specifying specs explicitly use a command at the end: `pixi exec -s python==3.12 python`", "missing required command to execute",))?;
     let (_, client) = build_reqwest_clients(Some(&config), None)?;
 
+    // Parse script metadata and determine specs
+    let (
+        name_specs,
+        install_specs,
+        channels_from_metadata,
+        entrypoint_from_metadata,
+        should_guess_package,
+    ) = parse_script_metadata_and_specs(command, &args, &config)?;
+
+    // Create the environment to run the command in.
+    let prefix = create_exec_prefix(
+        &args,
+        &install_specs,
+        &cache_dir,
+        &config,
+        &client,
+        should_guess_package,
+        channels_from_metadata.as_deref(),
+    )
+    .await?;
+
+    // Get environment variables from the activation
+    let mut activation_env = run_activation(&prefix).await?;
+
+    // Collect unique package names for environment naming
+    let package_names: BTreeSet<String> = name_specs
+        .iter()
+        .filter_map(|spec| spec.name.as_ref().map(|n| n.as_normalized().to_string()))
+        .collect();
+
+    if !package_names.is_empty() {
+        let env_name = format!("temp:{}", package_names.into_iter().format(","));
+
+        activation_env.insert("PIXI_ENVIRONMENT_NAME".into(), env_name.clone());
+
+        if !args.no_modify_ps1 && std::env::current_dir().is_ok() {
+            let (prompt_var, prompt_value) = if cfg!(windows) {
+                ("_PIXI_PROMPT", format!("(pixi:{env_name}) $P$G"))
+            } else {
+                ("PS1", format!(r"(pixi:{env_name}) [\w] \$"))
+            };
+
+            activation_env.insert(prompt_var.into(), prompt_value);
+
+            if cfg!(windows) {
+                activation_env.insert("PROMPT".into(), String::from("$P$G"));
+            }
+        }
+    }
+
+    // Ignore CTRL+C so that the child is responsible for its own signal handling.
+    let _ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
+
+    // Determine the command to run - use entrypoint from metadata if available
+    let (actual_command, actual_args) = determine_command_from_entrypoint(
+        command,
+        entrypoint_from_metadata.as_deref(),
+        command_iter,
+    )?;
+
+    // Spawn the command
+    let mut cmd = std::process::Command::new(&actual_command);
+    cmd.args(&actual_args);
+
+    // On Windows, when using cmd.exe or cmd, we need to pass the full environment
+    // because cmd.exe requires access to all environment variables (including prompt variables)
+    // to properly display the modified prompt
+    if cfg!(windows) && (command.to_lowercase().ends_with("cmd.exe") || command == "cmd") {
+        let mut env = std::env::vars().collect::<HashMap<String, String>>();
+        env.extend(activation_env);
+        cmd.envs(env);
+    } else {
+        cmd.envs(activation_env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+    }
+
+    let status = cmd
+        .status()
+        .into_diagnostic()
+        .with_context(|| format!("failed to execute '{}'", &actual_command))?;
+
+    // Return the exit code of the command
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+/// Parse script metadata and determine specs for installation
+/// Returns (name_specs, install_specs, channels, entrypoint, should_guess_package)
+fn parse_script_metadata_and_specs(
+    command: &str,
+    args: &Args,
+    config: &Config,
+) -> miette::Result<(
+    Vec<MatchSpec>,
+    Vec<MatchSpec>,
+    Option<Vec<Channel>>,
+    Option<String>,
+    bool,
+)> {
     // Check if the first argument is a script file with embedded metadata
     let script_path = PathBuf::from(command);
     let script_metadata = if script_path.exists() && script_path.is_file() {
@@ -171,52 +268,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         install_specs.push(guess_package_spec(command));
     }
 
-    // Create the environment to run the command in.
-    let prefix = create_exec_prefix(
-        &args,
-        &install_specs,
-        &cache_dir,
-        &config,
-        &client,
+    Ok((
+        name_specs,
+        install_specs,
+        channels_from_metadata,
+        entrypoint_from_metadata,
         should_guess_package,
-        channels_from_metadata.as_deref(),
-    )
-    .await?;
+    ))
+}
 
-    // Get environment variables from the activation
-    let mut activation_env = run_activation(&prefix).await?;
-
-    // Collect unique package names for environment naming
-    let package_names: BTreeSet<String> = name_specs
-        .iter()
-        .filter_map(|spec| spec.name.as_ref().map(|n| n.as_normalized().to_string()))
-        .collect();
-
-    if !package_names.is_empty() {
-        let env_name = format!("temp:{}", package_names.into_iter().format(","));
-
-        activation_env.insert("PIXI_ENVIRONMENT_NAME".into(), env_name.clone());
-
-        if !args.no_modify_ps1 && std::env::current_dir().is_ok() {
-            let (prompt_var, prompt_value) = if cfg!(windows) {
-                ("_PIXI_PROMPT", format!("(pixi:{env_name}) $P$G"))
-            } else {
-                ("PS1", format!(r"(pixi:{env_name}) [\w] \$"))
-            };
-
-            activation_env.insert(prompt_var.into(), prompt_value);
-
-            if cfg!(windows) {
-                activation_env.insert("PROMPT".into(), String::from("$P$G"));
-            }
-        }
-    }
-
-    // Ignore CTRL+C so that the child is responsible for its own signal handling.
-    let _ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
-
-    // Determine the command to run - use entrypoint from metadata if available
-    let (actual_command, actual_args) = if let Some(ref entrypoint) = entrypoint_from_metadata {
+/// Determine the actual command and arguments to run based on entrypoint metadata
+/// Returns (command, args)
+fn determine_command_from_entrypoint<'a>(
+    command: &str,
+    entrypoint: Option<&str>,
+    command_iter: impl Iterator<Item = &'a String>,
+) -> miette::Result<(String, Vec<String>)> {
+    if let Some(entrypoint) = entrypoint {
         // Replace ${SCRIPT} with the script path in the entrypoint
         let expanded_entrypoint = entrypoint.replace("${SCRIPT}", command);
 
@@ -240,35 +308,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Add any additional arguments provided via CLI
         args.extend(command_iter.map(|s| s.clone()));
 
-        (cmd, args)
+        Ok((cmd, args))
     } else {
         // No entrypoint from metadata, use the command as-is
         let command_args_vec: Vec<String> = command_iter.map(|s| s.clone()).collect();
-        (command.to_string(), command_args_vec)
-    };
-
-    // Spawn the command
-    let mut cmd = std::process::Command::new(&actual_command);
-    cmd.args(&actual_args);
-
-    // On Windows, when using cmd.exe or cmd, we need to pass the full environment
-    // because cmd.exe requires access to all environment variables (including prompt variables)
-    // to properly display the modified prompt
-    if cfg!(windows) && (command.to_lowercase().ends_with("cmd.exe") || command == "cmd") {
-        let mut env = std::env::vars().collect::<HashMap<String, String>>();
-        env.extend(activation_env);
-        cmd.envs(env);
-    } else {
-        cmd.envs(activation_env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        Ok((command.to_string(), command_args_vec))
     }
-
-    let status = cmd
-        .status()
-        .into_diagnostic()
-        .with_context(|| format!("failed to execute '{}'", &actual_command))?;
-
-    // Return the exit code of the command
-    std::process::exit(status.code().unwrap_or(1));
 }
 
 /// Creates a prefix for the `pixi exec` command.

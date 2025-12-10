@@ -180,3 +180,66 @@ def test_exec_with(pixi: Path, dummy_channel_1: str) -> None:
         expected_exit_code=ExitCode.INCORRECT_USAGE,
         stderr_contains="cannot be used with",
     )
+
+
+@pytest.mark.slow
+def test_conda_script_python(pixi: Path, tmp_path: Path) -> None:
+    """Test conda-script metadata with Python script (basic e2e test)."""
+    script = tmp_path / "test_script.py"
+    script.write_text(
+        """#!/usr/bin/env python
+# /// conda-script
+# [dependencies]
+# python = "3.12.*"
+# [script]
+# channels = ["conda-forge"]
+# entrypoint = "python"
+# /// end-conda-script
+
+print("Hello from conda-script!")
+"""
+    )
+
+    verify_cli_command(
+        [pixi, "exec", str(script)],
+        stdout_contains="Hello from conda-script!",
+    )
+
+
+def test_conda_script_with_cli_specs(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    """Test that CLI specs override conda-script metadata."""
+    script = tmp_path / "test_script.py"
+    script.write_text(
+        """#!/usr/bin/env python
+# /// conda-script
+# [dependencies]
+# python = "3.12.*"
+# [script]
+# channels = ["conda-forge"]
+# /// end-conda-script
+
+print("Script executed")
+"""
+    )
+
+    # CLI specs should override script metadata
+    verify_cli_command(
+        [pixi, "exec", "--channel", dummy_channel_1, "-s", "dummy-a", str(script)],
+        stdout_contains="Script executed",
+    )
+
+
+def test_conda_script_no_metadata(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    """Test that scripts without metadata still work."""
+    script = tmp_path / "test_script.py"
+    script.write_text(
+        """#!/usr/bin/env python
+print("Hello without metadata!")
+"""
+    )
+
+    # Should work with regular exec behavior
+    verify_cli_command(
+        [pixi, "exec", "--channel", dummy_channel_1, "-s", "python", str(script)],
+        stdout_contains="Hello without metadata!",
+    )

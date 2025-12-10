@@ -263,21 +263,20 @@ fn extract_metadata_block<R: BufRead>(reader: R) -> Result<String, ScriptMetadat
 }
 
 /// Detect the comment prefix used in the script
+/// Returns the prefix including any trailing space found in the line
 fn detect_comment_prefix(line: &str) -> Option<String> {
-    // Common comment prefixes
-    let prefixes = ["# ", "// ", "-- ", "/* "];
+    let trimmed = line.trim_start();
+    let prefixes = ["#", "//", "--", "/*"];
 
     for prefix in &prefixes {
-        if line.trim_start().starts_with(prefix) {
-            return Some(prefix.to_string());
-        }
-    }
-
-    // Also support without trailing space
-    let prefixes_no_space = ["#", "//", "--"];
-    for prefix in &prefixes_no_space {
-        if line.trim_start().starts_with(prefix) {
-            return Some(prefix.to_string());
+        if trimmed.starts_with(prefix) {
+            // Check if there's a space after the prefix and include it
+            let prefix_end = prefix.len();
+            if trimmed.len() > prefix_end && trimmed.chars().nth(prefix_end) == Some(' ') {
+                return Some(format!("{} ", prefix));
+            } else {
+                return Some(prefix.to_string());
+            }
         }
     }
 
@@ -410,6 +409,149 @@ print("No metadata here!")
 "#;
 
         let cursor = Cursor::new(script);
+        let result = ScriptMetadata::from_reader(cursor);
+        assert!(matches!(
+            result,
+            Err(ScriptMetadataError::MalformedBlock(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_bash_script() {
+        let script = r#"#!/bin/bash
+# This is a bash script
+# /// conda-script
+# [dependencies]
+# bash = "5.*"
+# curl = "*"
+# [script]
+# channels = ["conda-forge"]
+# entrypoint = "bash"
+# /// end-conda-script
+
+echo "Hello from bash!"
+"#;
+
+        let cursor = Cursor::new(script);
+        let metadata = ScriptMetadata::from_reader(cursor).unwrap();
+
+        assert_eq!(metadata.dependencies.default.len(), 2);
+        assert_eq!(metadata.dependencies.default.get("bash").unwrap(), "5.*");
+        assert_eq!(metadata.dependencies.default.get("curl").unwrap(), "*");
+        assert_eq!(metadata.script.entrypoint, Some("bash".to_string()));
+    }
+
+    #[test]
+    fn test_parse_sql_script() {
+        let script = r#"-- SQL script with conda-script metadata
+-- /// conda-script
+-- [dependencies]
+-- sqlite = "*"
+-- [script]
+-- channels = ["conda-forge"]
+-- entrypoint = "sqlite3"
+-- /// end-conda-script
+
+SELECT * FROM users;
+"#;
+
+        let cursor = Cursor::new(script);
+        let metadata = ScriptMetadata::from_reader(cursor).unwrap();
+
+        assert_eq!(metadata.dependencies.default.len(), 1);
+        assert_eq!(metadata.dependencies.default.get("sqlite").unwrap(), "*");
+        assert_eq!(metadata.script.entrypoint, Some("sqlite3".to_string()));
+    }
+
+    #[test]
+    fn test_parse_r_script() {
+        let script = r#"#!/usr/bin/env Rscript
+# R script with conda metadata
+# /// conda-script
+# [dependencies]
+# r-base = "4.3.*"
+# r-ggplot2 = "*"
+# [script]
+# channels = ["conda-forge"]
+# entrypoint = "Rscript"
+# /// end-conda-script
+
+library(ggplot2)
+print("Hello from R!")
+"#;
+
+        let cursor = Cursor::new(script);
+        let metadata = ScriptMetadata::from_reader(cursor).unwrap();
+
+        assert_eq!(metadata.dependencies.default.len(), 2);
+        assert_eq!(
+            metadata.dependencies.default.get("r-base").unwrap(),
+            "4.3.*"
+        );
+        assert_eq!(metadata.dependencies.default.get("r-ggplot2").unwrap(), "*");
+    }
+
+    #[test]
+    fn test_parse_julia_script() {
+        let script = r#"#!/usr/bin/env julia
+# Julia script
+# /// conda-script
+# [dependencies]
+# julia = "1.9.*"
+# [script]
+# channels = ["conda-forge"]
+# entrypoint = "julia"
+# /// end-conda-script
+
+println("Hello from Julia!")
+"#;
+
+        let cursor = Cursor::new(script);
+        let metadata = ScriptMetadata::from_reader(cursor).unwrap();
+
+        assert_eq!(metadata.dependencies.default.len(), 1);
+        assert_eq!(metadata.dependencies.default.get("julia").unwrap(), "1.9.*");
+    }
+
+    #[test]
+    fn test_parse_comment_without_space() {
+        let script = r#"#!/usr/bin/env python
+#/// conda-script
+#[dependencies]
+#python = "3.12.*"
+#[script]
+#channels = ["conda-forge"]
+#/// end-conda-script
+
+print("Hello!")
+"#;
+
+        let cursor = Cursor::new(script);
+        let metadata = ScriptMetadata::from_reader(cursor).unwrap();
+
+        assert_eq!(metadata.dependencies.default.len(), 1);
+        assert_eq!(
+            metadata.dependencies.default.get("python").unwrap(),
+            "3.12.*"
+        );
+    }
+
+    #[test]
+    fn test_parse_mixed_comment_spaces() {
+        let script = r#"#!/usr/bin/env python
+# /// conda-script
+# [dependencies]
+#python = "3.12.*"
+# requests = "*"
+# [script]
+# channels = ["conda-forge"]
+# /// end-conda-script
+
+print("Hello!")
+"#;
+
+        let cursor = Cursor::new(script);
+        // This should fail because we detect "# " as the prefix but then encounter "#python"
         let result = ScriptMetadata::from_reader(cursor);
         assert!(matches!(
             result,

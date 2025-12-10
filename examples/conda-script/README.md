@@ -40,6 +40,40 @@ Shows how to specify different dependencies for different platforms:
 pixi exec platform_specific.py
 ```
 
+### 4. Multi-Language Examples
+
+The following examples demonstrate conda-script support across different programming languages:
+
+#### Bash (`hello_bash.sh`)
+Shell scripting with conda-managed tools:
+```bash
+pixi exec examples/conda-script/hello_bash.sh
+```
+
+#### R (`hello_r.R`)
+R script with conda-managed R environment:
+```bash
+pixi exec examples/conda-script/hello_r.R
+```
+
+#### Julia (`hello_julia.jl`)
+Julia script with conda-managed Julia:
+```bash
+pixi exec examples/conda-script/hello_julia.jl
+```
+
+#### Node.js (`hello_node.js`)
+JavaScript with conda-managed Node.js:
+```bash
+pixi exec examples/conda-script/hello_node.js
+```
+
+#### Perl (`hello_perl.pl`)
+Perl script with conda-managed Perl:
+```bash
+pixi exec examples/conda-script/hello_perl.pl
+```
+
 ## How to Use
 
 1. Make sure you have Pixi installed
