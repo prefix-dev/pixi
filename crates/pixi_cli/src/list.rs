@@ -252,10 +252,7 @@ impl PackageToOutput {
             Field::Name => self.name.clone(),
             Field::Version => self.version.clone(),
             Field::Build => self.build.clone().unwrap_or_default(),
-            Field::BuildNumber => self
-                .build_number
-                .map(|n| n.to_string())
-                .unwrap_or_default(),
+            Field::BuildNumber => self.build_number.map(|n| n.to_string()).unwrap_or_default(),
             Field::Size => self
                 .size_bytes
                 .map(|size| human_bytes(size as f64))
@@ -542,9 +539,8 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>, fields: &[Field]) ->
                         // Add editable marker for the last field if package is editable
                         if i == fields.len() - 1 && package.is_editable {
                             format!(
-                                "{}{}",
-                                value,
-                                format!(" {}", console::style("(editable)").fg(Color::Yellow))
+                                "{value} {}",
+                                console::style("(editable)").fg(Color::Yellow)
                             )
                         } else {
                             value
@@ -643,16 +639,19 @@ fn create_package_to_output<'a, 'b>(
     let description = None; // Description is not readily available in PackageRecord
 
     let md5 = match package {
-        PackageExt::Conda(pkg) => pkg.record().md5.map(|h| format!("{:x}", h)),
-        PackageExt::PyPI(p, _) => p.hash.as_ref().and_then(|h| h.md5().map(|m| format!("{:x}", m))),
-    };
-
-    let sha256 = match package {
-        PackageExt::Conda(pkg) => pkg.record().sha256.map(|h| format!("{:x}", h)),
+        PackageExt::Conda(pkg) => pkg.record().md5.map(|h| format!("{h:x}")),
         PackageExt::PyPI(p, _) => p
             .hash
             .as_ref()
-            .and_then(|h| h.sha256().map(|s| format!("{:x}", s))),
+            .and_then(|h| h.md5().map(|m| format!("{m:x}"))),
+    };
+
+    let sha256 = match package {
+        PackageExt::Conda(pkg) => pkg.record().sha256.map(|h| format!("{h:x}")),
+        PackageExt::PyPI(p, _) => p
+            .hash
+            .as_ref()
+            .and_then(|h| h.sha256().map(|s| format!("{s:x}"))),
     };
 
     let arch = match package {
@@ -691,9 +690,10 @@ fn create_package_to_output<'a, 'b>(
 
     let (file_name, url) = match package {
         PackageExt::Conda(pkg) => match pkg {
-            CondaPackageData::Binary(binary) => {
-                (Some(binary.file_name.clone()), Some(binary.location.to_string()))
-            }
+            CondaPackageData::Binary(binary) => (
+                Some(binary.file_name.clone()),
+                Some(binary.location.to_string()),
+            ),
             CondaPackageData::Source(source) => (None, Some(source.location.to_string())),
         },
         PackageExt::PyPI(p, _) => match &p.location {
