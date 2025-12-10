@@ -72,10 +72,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     let mut details = Vec::new();
 
                     if !deps.is_empty() {
-                        details.push(format!("    dependencies: {}", deps.join(", ")));
+                        let deps = deps.iter().map(|d| console::style(d).green()).join(", ");
+                        details.push(format!("    dependencies: {deps}"));
                     }
                     if !pypi_deps.is_empty() {
-                        details.push(format!("    pypi-dependencies: {}", pypi_deps.join(", ")));
+                        let deps = pypi_deps
+                            .iter()
+                            .map(|d| console::style(d).blue())
+                            .join(", ");
+                        details.push(format!("    pypi-dependencies: {deps}"));
                     }
                     if !tasks.is_empty() {
                         details.push(format!("    tasks: {}", tasks.join(", ")));
