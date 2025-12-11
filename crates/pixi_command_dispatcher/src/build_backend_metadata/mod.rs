@@ -399,7 +399,7 @@ impl BuildBackendMetadataSpec {
                 // use the parent directory if the check is a file.
                 globs_root.parent().expect("a dir must have a parent")
             } else {
-                &globs_root
+                globs_root
             };
             let glob_set = GlobSet::create(globs.iter().map(|p| p.as_str()));
             match glob_set.collect_matching(globs_root) {
