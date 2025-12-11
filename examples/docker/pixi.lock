@@ -359,7 +359,7 @@ packages:
 - pypi: ./
   name: docker-project
   version: 0.1.0
-  sha256: 470cc555bb006f57808ce4bcda0a22bbfbd1a4d7b1279d814f839d385f5d0e0f
+  sha256: 884d54c8fe7d141dc6f9db1bdaa0707f72641c79193973441cd3805477565366
   requires_python: '>=3.12'
 - conda: https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.1-pyhd8ed1ab_0.conda
   sha256: ee6cf346d017d954255bbcbdb424cddea4d14e4ed7e9813e429db1d795d01144
