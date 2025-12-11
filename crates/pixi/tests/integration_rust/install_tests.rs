@@ -32,6 +32,7 @@ use uv_configuration::RAYON_INITIALIZE;
 use uv_normalize::PackageName;
 use uv_python::PythonEnvironment;
 
+use crate::common::pypi_index::PyPIPackage;
 use crate::common::{
     LockFileExt, PixiControl,
     builders::{
@@ -1140,20 +1141,29 @@ async fn pypi_prefix_is_not_created_when_whl() {
 /// This should result in the PyPI package being overridden on linux and not on
 /// osxarm64.
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn conda_pypi_override_correct_per_platform() {
     setup_tracing();
 
     // Create local conda channel with Python for multiple platforms
     let mut package_db = MockRepoData::default();
-    for platform in [Platform::current(), Platform::Linux64, Platform::Osx64] {
-        package_db.add_package(
-            Package::build("python", "3.12.0")
-                .with_subdir(platform)
-                .finish(),
-        );
-    }
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_db.add_package(
+        Package::build("boltons", "1.0.0")
+            .with_subdir(Platform::NoArch)
+            .with_pypi_purl("boltons")
+            .finish(),
+    );
     let channel = package_db.into_channel().await.unwrap();
+
+    // Create local PyPI index with test packages
+    let pypi_index = crate::common::pypi_index::Database::new()
+        .with(PyPIPackage::new("boltons", "1.0.0"))
+        .into_simple_index()
+        .unwrap();
 
     let pixi = PixiControl::new().unwrap();
     pixi.init_with_platforms(vec![
@@ -1166,6 +1176,15 @@ async fn conda_pypi_override_correct_per_platform() {
     .await
     .unwrap();
     pixi.add("python==3.12").with_install(false).await.unwrap();
+
+    // Add pypi-options to the manifest
+    let manifest = pixi.manifest_contents().unwrap();
+    let updated_manifest = format!(
+        "{}\n[pypi-options]\nindex-url = \"{}\"\n",
+        manifest,
+        pypi_index.index_url()
+    );
+    pixi.update_manifest(&updated_manifest).unwrap();
 
     // Add a conda package that is only available on linux
     pixi.add("boltons")
