@@ -32,6 +32,7 @@ clap_complete = "4.5.46"
 clap_complete_nushell = "4.5.5"
 # Rattler crates
 coalesced_map = "0.1.2"
+comfy-table = "7.2.1"
 console = "0.16.1"
 console-subscriber = "0.5.0"
 crossbeam-channel = "0.5.14"
