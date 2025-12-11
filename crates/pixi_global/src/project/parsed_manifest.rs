@@ -417,6 +417,7 @@ impl AsRef<str> for ExposedName {
 /// name.
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
 #[error("pixi is not allowed as exposed name in the map")]
+#[allow(dead_code)]
 pub struct ParseExposedKeyError {}
 
 #[cfg(test)]

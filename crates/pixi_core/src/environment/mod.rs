@@ -526,7 +526,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     filter: &InstallFilter,
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
     let (lock_file, prefixes) = get_update_lock_file_and_prefixes(
-        &[environment.clone()],
+        std::slice::from_ref(environment),
         update_mode,
         update_lock_file_options,
         reinstall_packages,
