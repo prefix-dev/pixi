@@ -416,7 +416,6 @@ impl AsRef<str> for ExposedName {
 /// This error is returned when a string fails to be parsed as an environment
 /// name.
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
-#[warn(dead_code)]
 #[error("pixi is not allowed as exposed name in the map")]
 pub struct ParseExposedKeyError {}
 

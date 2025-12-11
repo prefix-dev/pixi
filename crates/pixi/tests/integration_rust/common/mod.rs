@@ -143,7 +143,7 @@ pub trait LockFileExt {
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<LockedPackageRef>;
+    ) -> Option<LockedPackageRef<'_>>;
 }
 
 impl LockFileExt for LockFile {
@@ -226,7 +226,7 @@ impl LockFileExt for LockFile {
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<LockedPackageRef> {
+    ) -> Option<LockedPackageRef<'_>> {
         self.environment(environment).and_then(|env| {
             env.packages(platform)
                 .and_then(|mut packages| packages.find(|p| p.name() == package))
@@ -716,7 +716,7 @@ impl PixiControl {
         }
     }
 
-    pub fn tasks(&self) -> TasksControl {
+    pub fn tasks(&self) -> TasksControl<'_> {
         TasksControl { pixi: self }
     }
 }
