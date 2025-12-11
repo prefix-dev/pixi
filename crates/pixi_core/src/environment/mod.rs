@@ -144,11 +144,11 @@ impl EnvironmentHash {
 
         // Hash the packages
         let mut urls = Vec::new();
-        if let Some(env) = lock_file.environment(run_environment.name().as_str()) {
-            if let Some(packages) = env.packages(run_environment.best_platform()) {
-                for package in packages {
-                    urls.push(package.location().to_string())
-                }
+        if let Some(env) = lock_file.environment(run_environment.name().as_str())
+            && let Some(packages) = env.packages(run_environment.best_platform())
+        {
+            for package in packages {
+                urls.push(package.location().to_string())
             }
         }
         urls.sort();

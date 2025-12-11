@@ -192,16 +192,16 @@ impl WorkspaceLocator {
         };
 
         // Take into consideration any environment variables that may be set.
-        if self.consider_environment && !explicit_start {
-            if let Some(WithWarnings {
+        if self.consider_environment
+            && !explicit_start
+            && let Some(WithWarnings {
                 value: manifests,
                 warnings: mut env_warnings,
             }) =
                 Self::apply_environment_overrides(workspace_manifests.take(), self.emit_warnings)?
-            {
-                warnings.append(&mut env_warnings);
-                workspace_manifests = Some(manifests);
-            }
+        {
+            warnings.append(&mut env_warnings);
+            workspace_manifests = Some(manifests);
         }
 
         // Early out if discovery failed.
@@ -210,12 +210,12 @@ impl WorkspaceLocator {
             let pyproject_path = discovery_source.join(consts::PYPROJECT_MANIFEST);
             if pyproject_path.is_file() {
                 // Check if it's a valid Python project by looking for project metadata
-                if let Ok(content) = fs_err::read_to_string(&pyproject_path) {
-                    if content.contains("[project]") {
-                        return Err(WorkspaceLocatorError::PyprojectWithoutPixi(
-                            discovery_source,
-                        ));
-                    }
+                if let Ok(content) = fs_err::read_to_string(&pyproject_path)
+                    && content.contains("[project]")
+                {
+                    return Err(WorkspaceLocatorError::PyprojectWithoutPixi(
+                        discovery_source,
+                    ));
                 }
             }
             return Err(WorkspaceLocatorError::WorkspaceNotFound(discovery_source));
@@ -256,14 +256,16 @@ impl WorkspaceLocator {
         if let Some(workspace_manifests) = &discovered_workspace {
             let discovered_manifest_path = &workspace_manifests.workspace.provenance.path;
             let in_shell = std::env::var("PIXI_IN_SHELL").is_ok();
-            if let Some(env_manifest_path) = env_manifest_path {
-                if &env_manifest_path != discovered_manifest_path && in_shell && emit_warnings {
-                    tracing::warn!(
-                        "Using local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
-                        discovered_manifest_path.display(),
-                        env_manifest_path.display(),
-                    );
-                }
+            if let Some(env_manifest_path) = env_manifest_path
+                && &env_manifest_path != discovered_manifest_path
+                && in_shell
+                && emit_warnings
+            {
+                tracing::warn!(
+                    "Using local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
+                    discovered_manifest_path.display(),
+                    env_manifest_path.display(),
+                );
             }
         // Else, if we didn't find a workspace manifest, but we there is an
         // active one set in the environment, we try to use that instead.

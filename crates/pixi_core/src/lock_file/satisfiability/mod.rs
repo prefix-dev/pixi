@@ -1789,13 +1789,13 @@ fn find_matching_source_package(
         .satisfies(&source_spec)
         .map_err(|e| PlatformUnsat::SourcePackageMismatch(name.as_source().to_string(), e))?;
 
-    if let Some(match_spec) = match_spec {
-        if !match_spec.matches(package) {
-            return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-                Box::new(match_spec),
-                source.into_owned(),
-            )));
-        }
+    if let Some(match_spec) = match_spec
+        && !match_spec.matches(package)
+    {
+        return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
+            Box::new(match_spec),
+            source.into_owned(),
+        )));
     }
 
     Ok(CondaPackageIdx(idx))
@@ -1807,22 +1807,22 @@ trait MatchesMatchspec {
 
 impl MatchesMatchspec for GenericVirtualPackage {
     fn matches(&self, spec: &MatchSpec) -> bool {
-        if let Some(name) = &spec.name {
-            if !name.matches(&self.name) {
-                return false;
-            }
+        if let Some(name) = &spec.name
+            && !name.matches(&self.name)
+        {
+            return false;
         }
 
-        if let Some(version) = &spec.version {
-            if !version.matches(&self.version) {
-                return false;
-            }
+        if let Some(version) = &spec.version
+            && !version.matches(&self.version)
+        {
+            return false;
         }
 
-        if let Some(build) = &spec.build {
-            if !build.matches(&self.build_string) {
-                return false;
-            }
+        if let Some(build) = &spec.build
+            && !build.matches(&self.build_string)
+        {
+            return false;
         }
 
         true

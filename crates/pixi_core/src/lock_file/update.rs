@@ -550,10 +550,10 @@ impl<'p> LockFileDerivedData<'p> {
         // Check if the prefix is already up-to-date by validating the hash with the
         // environment file
         let hash = self.locked_environment_hash(environment)?;
-        if update_mode == UpdateMode::QuickValidate {
-            if let Some(prefix) = self.cached_prefix(environment, &hash) {
-                return prefix;
-            }
+        if update_mode == UpdateMode::QuickValidate
+            && let Some(prefix) = self.cached_prefix(environment, &hash)
+        {
+            return prefix;
         }
 
         // Get the up-to-date prefix
