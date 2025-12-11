@@ -391,9 +391,16 @@ impl BuildBackendMetadataSpec {
             return Ok(Some(cache_entry));
         }
 
+        // Determine the root
         let globs_root = &source_checkout.path;
         let globs = &cache_entry.input_globs;
         let walk_globs = || {
+            let globs_root = if globs_root.is_dir() {
+                // use the parent directory if the check is a file.
+                globs_root.parent().expect("a dir must have a parent")
+            } else {
+                &globs_root
+            };
             let glob_set = GlobSet::create(globs.iter().map(|p| p.as_str()));
             match glob_set.collect_matching(globs_root) {
                 Ok(matches) => Either::Left(matches.into_iter().map(|entry| {
