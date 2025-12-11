@@ -163,6 +163,16 @@ impl PixiPypiSpec {
         }
     }
 
+    /// Returns the editability setting from the manifest.
+    /// Only `Path` specs can be editable. Returns `None` for non-path specs
+    /// or if editability is not explicitly specified.
+    pub fn editable(&self) -> Option<bool> {
+        match self {
+            PixiPypiSpec::Path { editable, .. } => *editable,
+            _ => None,
+        }
+    }
+
     /// Updates this spec with a new PEP 508 requirement, preserving pixi-specific
     /// fields (`index`, `extras`) from self.
     ///
