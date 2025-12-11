@@ -2,10 +2,19 @@
 title: Home
 template: home.html
 ---
-
-![pixi logo](assets/banner.svg)
+# Pixi
 
 Pixi is a **fast, modern, and reproducible** package management tool for developers of all backgrounds.
+
+=== "Linux & macOS"
+    ```shell
+    curl -fsSL https://pixi.sh/install.sh | sh
+    ```
+=== "Windows"
+    ```powershell
+    powershell -ExecutionPolicy Bypass -c "irm -useb https://pixi.sh/install.ps1 | iex"
+    ```
+More installation options can be found [here](installation.md).
 
 ## Highlights
 

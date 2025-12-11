@@ -245,10 +245,13 @@
 }
 
 .md-content .md-typeset {
-  padding: 1.5rem;
+  padding: 0 1.5rem 1.5rem;
   border-radius: 1.5rem;
   background: var(--content-bg-light);
   border: 1px solid var(--gsd-100);
+
+  -webkit-background-clip: padding-box;
+  background-clip: padding-box;
 }
 
 [data-md-color-scheme="slate"] .md-content .md-typeset {
@@ -259,6 +262,8 @@
 .md-typeset h1, .md-typeset h2, .md-typeset h3, .md-typeset h4, .md-typeset h5, .md-typeset h6 {
   font-family: var(--font-display), serif;
   font-weight: 400;
+  padding-top: 0.5rem;
+  margin: 0;
 }
 
 /* Heading colors - subtle, not aggressive */
@@ -379,6 +384,7 @@
   margin: 0;
 }
 
+/* Prefix logo scaling and color switching */
 .prefix-logo {
   transform: scale(0.8);
 }
@@ -516,18 +522,11 @@ table code {
   background-color: #232136;
 }
 
-[data-md-color-scheme="slate"] .md-typeset .highlight {
-  background-color: #010409;
-}
-
-[data-md-color-scheme="slate"] .md-typeset pre {
-  background-color: #010409;
-}
-
 .md-typeset code {
   background-color: var(--gsd-50);
   color: var(--text-light);
-  border-radius: 0.25rem;
+  border-radius: 0.5rem;
+
 }
 
 [data-md-color-scheme="slate"] .md-typeset code {
@@ -541,6 +540,23 @@ table code {
 
 [data-md-color-scheme="default"] .md-typeset a > code {
   color: var(--brand-blue);
+}
+
+[data-md-color-scheme="default"] .highlight span.filename {
+  background-color: var(--gsd-100) !important;
+}
+[data-md-color-scheme="slate"] .highlight span.filename {
+  background-color: var(--gsd-600) !important;
+}
+
+.highlight span.filename {
+    padding: 0.25rem 0.5rem;
+    border-top-left-radius: 0.25rem !important;
+    border-top-right-radius: 0.25rem !important;
+}
+
+.md-typeset .tabbed-labels {
+  box-shadow: none;
 }
 
 .quote-scroll-wrapper {
@@ -570,4 +586,25 @@ table code {
 
 .quote-card p {
   margin-bottom: 0.5rem;
+}
+
+/* TOC banner image */
+.md-sidebar--secondary::before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 150px;
+  background-image: url('../assets/paxton-as-pixi.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: left;
+  margin-bottom: 1rem;
+  margin-left: 0.5rem;
+}
+
+/* Adjust for small screens where TOC is hidden */
+@media screen and (max-width: 76.1875em) {
+  .md-sidebar--secondary::before {
+    display: none;
+  }
 }

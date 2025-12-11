@@ -10,7 +10,7 @@ theme:
   favicon: assets/pixi.png
   logo: assets/pixi-logo.svg
   font:
-    text: Red Hat Text
+    text: Inter
     code: JetBrains Mono
 
   palette:
@@ -48,7 +48,7 @@ theme:
     - content.action.edit
     - content.code.annotate
     - content.tooltips
-    - content.code.select
+    #    - content.code.select
     - navigation.instant
     - navigation.instant.progress
     - navigation.tracking
