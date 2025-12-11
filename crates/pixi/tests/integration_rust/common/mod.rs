@@ -2,12 +2,10 @@
 
 pub mod builders;
 pub mod client;
-pub mod git_fixture;
 pub mod logging;
-pub mod package_database;
 pub mod pypi_index;
 
-pub use git_fixture::GitRepoFixture;
+pub use pixi_test_utils::GitRepoFixture;
 
 use std::{
     ffi::OsString,
@@ -146,6 +144,14 @@ pub trait LockFileExt {
         platform: Platform,
         package: &str,
     ) -> Option<LockedPackageRef>;
+
+    /// Check if a PyPI package is marked as editable in the lock file
+    fn is_pypi_package_editable(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<bool>;
 }
 
 impl LockFileExt for LockFile {
@@ -247,6 +253,21 @@ impl LockFileExt for LockFile {
                     .and_then(|mut packages| packages.find(|p| p.name() == package))
             })
             .map(|p| p.location().clone())
+    }
+
+    fn is_pypi_package_editable(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<bool> {
+        self.environment(environment)
+            .and_then(|env| {
+                env.pypi_packages(platform).and_then(|mut packages| {
+                    packages.find(|(data, _)| data.name.as_ref() == package)
+                })
+            })
+            .map(|(data, _)| data.editable)
     }
 }
 

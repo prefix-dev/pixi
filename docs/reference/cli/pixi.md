@@ -36,7 +36,7 @@ pixi [OPTIONS] [COMMAND]
 | [`tree`](pixi/tree.md) | Show a tree of workspace dependencies |
 | [`update`](pixi/update.md) | The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly |
 | [`upgrade`](pixi/upgrade.md) | Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file |
-| [`upload`](pixi/upload.md) | Upload a conda package |
+| [`upload`](pixi/upload.md) | Upload conda packages to various channels |
 | [`workspace`](pixi/workspace.md) | Modify the workspace configuration file through the command line |
 
 

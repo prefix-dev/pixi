@@ -2385,57 +2385,32 @@ class TestCondaFile:
         )
 
 
-@pytest.mark.slow
-def test_install_source_package_with_force_reinstall(
-    pixi: Path, tmp_path: Path, test_data: Path
+def test_install_nonexistent_package_no_empty_dir(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
 ) -> None:
-    """Test that --force-reinstall actually rebuilds source packages."""
+    """Test that installing a non-existent package doesn't leave an empty directory."""
     env = {"PIXI_HOME": str(tmp_path)}
 
-    # Copy an existing source package from test data
-    source_package = test_data / "cpp_simple"
-    target_package = tmp_path / "test-source-package"
-    shutil.copytree(source_package, target_package)
+    envs_dir = tmp_path / "envs"
 
-    # First installation
+    # Try to install a package that doesn't exist
     verify_cli_command(
         [
             pixi,
             "global",
             "install",
-            "--path",
-            str(target_package),
+            "--channel",
+            dummy_channel_1,
+            "this-package-does-not-exist",
         ],
+        ExitCode.FAILURE,
         env=env,
-        stdout_contains="installed",
+        stderr_contains="No candidates were found",
     )
 
-    # Second installation without force-reinstall
-    verify_cli_command(
-        [
-            pixi,
-            "global",
-            "install",
-            "--path",
-            str(target_package),
-        ],
-        env=env,
-        stdout_contains="already installed",
-    )
-
-    # Third installation with --force-reinstall
-    verify_cli_command(
-        [
-            pixi,
-            "global",
-            "install",
-            "--path",
-            str(target_package),
-            "--force-reinstall",
-        ],
-        env=env,
-        # To verify that we really install again
-        stdout_contains="installed",
-        # and to verify that we really build from source
-        stderr_contains="Running build for recipe",
-    )
+    # Verify no empty directory was left behind
+    # The envs directory should either not exist or not contain the failed environment
+    if envs_dir.exists():
+        assert not (envs_dir / "this-package-does-not-exist").exists(), (
+            "Empty directory was left behind for failed package installation"
+        )
