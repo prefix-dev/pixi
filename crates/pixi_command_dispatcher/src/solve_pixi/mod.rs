@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_record::PixiRecord;
+use pixi_record::{PixiRecord, VariantValue};
 use pixi_spec::{BinarySpec, PixiSpec, SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, ParseChannelError, Platform};
@@ -78,7 +78,7 @@ pub struct PixiEnvironmentSpec {
     pub channel_config: ChannelConfig,
 
     /// Build variants to use during the solve
-    pub variants: Option<BTreeMap<String, Vec<String>>>,
+    pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
 
     /// Variant file paths to use during the solve
     pub variant_files: Option<Vec<PathBuf>>,
@@ -89,9 +89,10 @@ pub struct PixiEnvironmentSpec {
 
     /// Optional override for a specific packages: use this pinned
     /// source for checkout and as the `package_build_source` instead
-    /// of pinning anew.
+    /// of recomputing the pinned location.
     #[serde(skip)]
-    pub pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
+    pub preferred_build_source:
+        BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
 }
 
 impl Default for PixiEnvironmentSpec {
@@ -107,10 +108,10 @@ impl Default for PixiEnvironmentSpec {
             channel_priority: ChannelPriority::Strict,
             exclude_newer: None,
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
-            variants: None,
+            variant_configuration: None,
             variant_files: None,
             enabled_protocols: EnabledProtocols::default(),
-            pin_overrides: BTreeMap::new(),
+            preferred_build_source: BTreeMap::new(),
         }
     }
 }
@@ -145,10 +146,10 @@ impl PixiEnvironmentSpec {
             self.channels.clone(),
             self.channel_config.clone(),
             self.build_environment.clone(),
-            self.variants.clone(),
+            self.variant_configuration.clone(),
             self.variant_files.clone(),
             self.enabled_protocols.clone(),
-            self.pin_overrides.clone(),
+            self.preferred_build_source.clone(),
         )
         .collect(
             source_specs

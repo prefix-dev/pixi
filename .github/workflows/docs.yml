@@ -10,6 +10,7 @@ on:
       - ".github/workflows/docs.yml"
       - "mkdocs.yml"
       - "pixi.*"
+      - "install/*"
     tags:
       - v**
   pull_request:
@@ -20,6 +21,7 @@ on:
       - ".github/workflows/docs.yml"
       - "mkdocs.yml"
       - "pixi.*"
+      - "install/*"
   workflow_dispatch:
     inputs:
       tag:
@@ -40,13 +42,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           submodules: recursive
 
       - uses: prefix-dev/setup-pixi@main
         with:
           environments: docs
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build docs for test
         run: |
@@ -60,7 +63,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           # fetch everything so we can checkout the tag
           fetch-depth: 0
@@ -75,6 +78,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           environments: docs
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Configure Git user
         run: |
@@ -101,7 +105,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           # fetch everything so we can checkout the tag
           fetch-depth: 0
@@ -110,6 +114,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           environments: docs
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Configure Git user
         run: |
@@ -131,3 +136,7 @@ jobs:
           # Check diff before committing
           git diff-index --quiet HEAD || git commit -m "Update install scripts from main"
           git push origin gh-pages
+
+      - name: Checkout main branch
+        # Important to run the post setup-pixi steps, we want to cache based on the `main` branch and we checked out another in the step above.
+        run: git checkout main

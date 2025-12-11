@@ -56,6 +56,22 @@ impl rattler::install::Reporter for WrappingInstallReporter {
         self.0.on_link_complete(index)
     }
 
+    fn on_post_link_start(&self, package_name: &str, script_path: &str) -> usize {
+        self.0.on_post_link_start(package_name, script_path)
+    }
+
+    fn on_post_link_complete(&self, index: usize, success: bool) {
+        self.0.on_post_link_complete(index, success)
+    }
+
+    fn on_pre_unlink_start(&self, package_name: &str, script_path: &str) -> usize {
+        self.0.on_pre_unlink_start(package_name, script_path)
+    }
+
+    fn on_pre_unlink_complete(&self, index: usize, success: bool) {
+        self.0.on_pre_unlink_complete(index, success)
+    }
+
     fn on_transaction_operation_complete(&self, operation: usize) {
         self.0.on_transaction_operation_complete(operation)
     }

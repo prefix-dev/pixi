@@ -25,7 +25,7 @@ use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
 use uv_configuration::RAYON_INITIALIZE;
 
-use crate::cli_config::ChannelsConfig;
+use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath};
 
 /// Run a command and install it in a temporary environment.
 ///
@@ -40,12 +40,12 @@ pub struct Args {
     /// Matchspecs of package to install.
     /// If this is not provided, the package is guessed from the command.
     #[clap(long = "spec", short = 's', value_name = "SPEC")]
-    pub specs: Vec<MatchSpec>,
+    pub specs: Vec<MatchSpecOrPath>,
 
     /// Matchspecs of package to install, while also guessing a package
     /// from the command.
     #[clap(long, short = 'w', conflicts_with = "specs")]
-    pub with: Vec<MatchSpec>,
+    pub with: Vec<MatchSpecOrPath>,
 
     #[clap(flatten)]
     channels: ChannelsConfig,
@@ -90,6 +90,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         should_guess_package,
     ) = parse_script_metadata_and_specs(command, &args, &config)?;
 
+    // Extract display names from specs for environment naming
+    let mut display_names: Vec<String> = name_specs
+        .iter()
+        .filter_map(|spec| {
+            spec.name
+                .as_ref()
+                .and_then(|n| n.as_exact().map(|e| e.as_source().to_string()))
+        })
+        .collect();
+
     // Create the environment to run the command in.
     let prefix = create_exec_prefix(
         &args,
@@ -106,10 +116,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut activation_env = run_activation(&prefix).await?;
 
     // Collect unique package names for environment naming
-    let package_names: BTreeSet<String> = name_specs
-        .iter()
-        .filter_map(|spec| spec.name.as_ref().map(|n| n.as_normalized().to_string()))
-        .collect();
+    let package_names: BTreeSet<String> = display_names.into_iter().collect();
 
     if !package_names.is_empty() {
         let env_name = format!("temp:{}", package_names.into_iter().format(","));
@@ -206,8 +213,11 @@ fn parse_script_metadata_and_specs(
     };
 
     // Determine the specs for installation and for the environment name.
-    let mut name_specs = args.specs.clone();
-    name_specs.extend(args.with.clone());
+    let exec_specs = to_exec_match_specs(&args.specs)?;
+    let exec_with = to_exec_match_specs(&args.with)?;
+
+    let mut name_specs = exec_specs.clone();
+    name_specs.extend(exec_with.clone());
 
     let mut install_specs = name_specs.clone();
     let mut channels_from_metadata: Option<Vec<Channel>> = None;
@@ -441,7 +451,7 @@ pub async fn create_exec_prefix(
             let guessed_package_name = specs[specs.len() - 1]
                 .name
                 .as_ref()
-                .map(|name| name.as_source())
+                .and_then(|name| name.as_exact().map(|n| n.as_source()))
                 .unwrap_or("<unknown>");
             tracing::debug!(
                 "Solver failed with guessed package '{}', retrying without it: {}",
@@ -512,7 +522,7 @@ fn list_exec_environment(
                 specs
                     .clone()
                     .into_iter()
-                    .filter_map(|spec| spec.name) // Extract the name if it exists
+                    .filter_map(|spec| spec.name.and_then(|n| n.as_exact().cloned())) // Extract exact name if it exists
                     .collect_vec()
                     .contains(&record.package_record.name),
             )
@@ -551,7 +561,11 @@ fn guess_package_spec(command: &str) -> MatchSpec {
     );
 
     MatchSpec {
-        name: Some(PackageName::from_str(&command).expect("all illegal characters were removed")),
+        name: Some(
+            PackageName::from_str(&command)
+                .expect("all illegal characters were removed")
+                .into(),
+        ),
         ..Default::default()
     }
 }
@@ -561,4 +575,15 @@ async fn run_activation(
     prefix: &Prefix,
 ) -> miette::Result<std::collections::HashMap<String, String>> {
     wrap_in_progress("running activation", move || prefix.run_activation()).await
+}
+
+fn to_exec_match_specs(specs: &[MatchSpecOrPath]) -> miette::Result<Vec<MatchSpec>> {
+    specs
+        .iter()
+        .cloned()
+        .map(|spec| {
+            spec.into_exec_match_spec()
+                .map_err(|err| miette::miette!(err))
+        })
+        .collect()
 }

@@ -37,9 +37,9 @@ use crate::common::{
     builders::{
         HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig, string_from_iter,
     },
-    package_database::{Package, PackageDatabase},
 };
 use crate::setup_tracing;
+use pixi_test_utils::{MockRepoData, Package};
 
 /// Should add a python version to the environment and lock file that matches
 /// the specified version and run it
@@ -97,7 +97,7 @@ async fn install_run_python() {
 async fn test_incremental_lock_file() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package `foo` that depends on `bar` both set to version 1.
     package_database.add_package(Package::build("bar", "1").finish());
@@ -362,21 +362,18 @@ async fn install_frozen_skip() {
     setup_tracing();
 
     // Create a project with a local python dependency 'no-build-editable'
-    // and a local conda dependency 'python_rich'
+    // and a local conda dependency 'simple-package'
     let current_platform = Platform::current();
     let manifest = format!(
         r#"
         [workspace]
-        channels = ["conda-forge"]
-        description = "Add a short description here"
-        name = "pyproject"
+        channels = ["https://prefix.dev/conda-forge"]
         platforms = ["{current_platform}"]
         preview = ["pixi-build"]
-        version = "0.1.0"
 
         [dependencies]
         python = "*"
-        python_rich = {{ path = "./python" }}
+        simple-package = {{ path = "./simple-package" }}
 
         [pypi-dependencies]
         no-build-editable = {{ path = "./no-build-editable" }}
@@ -388,7 +385,7 @@ async fn install_frozen_skip() {
     let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
 
     fs_extra::dir::copy(
-        workspace_root.join("docs/source_files/pixi_workspaces/pixi_build/python"),
+        workspace_root.join("tests/data/pixi-build/simple-package"),
         pixi.workspace_path(),
         &fs_extra::dir::CopyOptions::new(),
     )
@@ -403,10 +400,10 @@ async fn install_frozen_skip() {
 
     pixi.update_lock_file().await.unwrap();
 
-    // Check that neither 'python_rich' nor 'no-build-editable' are installed when skipped
+    // Check that neither 'simple-package' nor 'no-build-editable' are installed when skipped
     pixi.install()
         .with_frozen()
-        .with_skipped(vec!["no-build-editable".into(), "python_rich".into()])
+        .with_skipped(vec!["no-build-editable".into(), "simple-package".into()])
         .await
         .unwrap();
 
@@ -415,13 +412,13 @@ async fn install_frozen_skip() {
     let env = create_uv_environment(&prefix_path, &cache);
 
     assert!(!is_pypi_package_installed(&env, "no-build-editable"));
-    assert!(!is_conda_package_installed(&prefix_path, "python_rich").await);
+    assert!(!is_conda_package_installed(&prefix_path, "simple-package").await);
 
-    // Check that 'no-build-editable' and 'python_rich' are installed after a followup normal install
+    // Check that 'no-build-editable' and 'simple-package' are installed after a followup normal install
     pixi.install().with_frozen().await.unwrap();
 
     assert!(is_pypi_package_installed(&env, "no-build-editable"));
-    assert!(is_conda_package_installed(&prefix_path, "python_rich").await);
+    assert!(is_conda_package_installed(&prefix_path, "simple-package").await);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -523,13 +520,13 @@ async fn test_channels_changed() {
     setup_tracing();
 
     // Write a channel with a package `bar` with only one version
-    let mut package_database_a = PackageDatabase::default();
+    let mut package_database_a = MockRepoData::default();
     package_database_a.add_package(Package::build("bar", "2").finish());
     let channel_a = package_database_a.into_channel().await.unwrap();
 
     // Write another channel with a package `bar` with only one version but another
     // one.
-    let mut package_database_b = PackageDatabase::default();
+    let mut package_database_b = MockRepoData::default();
     package_database_b.add_package(Package::build("bar", "1").finish());
     let channel_b = package_database_b.into_channel().await.unwrap();
 
@@ -1004,7 +1001,6 @@ async fn test_many_linux_wheel_tag() {
     // We know that this package has many linux wheel tags for this version
     pixi.add("gmsh==4.13.1")
         .set_type(pixi_core::DependencyType::PypiDependency)
-        .with_install(true)
         .await
         .unwrap();
 }
@@ -1390,7 +1386,7 @@ async fn install_s3() {
 async fn test_exclude_newer() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Create a channel with two packages with different timestamps
     package_database.add_package(

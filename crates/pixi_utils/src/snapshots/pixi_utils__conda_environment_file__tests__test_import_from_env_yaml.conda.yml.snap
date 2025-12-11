@@ -7,10 +7,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
         [
             MatchSpec {
                 name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "pip",
-                    },
+                    Exact(
+                        PackageName {
+                            normalized: None,
+                            source: "pip",
+                        },
+                    ),
                 ),
                 version: Some(
                     StrictRange(
@@ -34,13 +36,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
             MatchSpec {
                 name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "python",
-                    },
+                    Exact(
+                        PackageName {
+                            normalized: None,
+                            source: "python",
+                        },
+                    ),
                 ),
                 version: Some(
                     StrictRange(
@@ -64,6 +69,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             },
         ],
         [],

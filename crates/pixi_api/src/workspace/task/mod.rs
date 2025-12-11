@@ -13,8 +13,7 @@ use rattler_conda_types::Platform;
 
 use crate::interface::Interface;
 
-pub async fn list_tasks<I: Interface>(
-    _interface: &I,
+pub async fn list_tasks(
     workspace: &Workspace,
     environment: Option<EnvironmentName>,
 ) -> miette::Result<HashMap<EnvironmentName, HashMap<TaskName, Task>>> {
@@ -26,7 +25,11 @@ pub async fn list_tasks<I: Interface>(
         })
         .transpose()?;
 
-    let lockfile = workspace.load_lock_file().await.ok();
+    let lockfile = workspace
+        .load_lock_file()
+        .await
+        .ok()
+        .map(|r| r.into_lock_file_or_empty_with_warning());
 
     let env_task_map: HashMap<Environment, HashSet<TaskName>> =
         if let Some(explicit_environment) = explicit_environment {

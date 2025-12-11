@@ -6,12 +6,10 @@ use rattler_conda_types::Platform;
 use tempfile::TempDir;
 
 use crate::{
-    common::{
-        LockFileExt, PixiControl,
-        package_database::{Package, PackageDatabase},
-    },
+    common::{LockFileExt, PixiControl},
     setup_tracing,
 };
+use pixi_test_utils::{MockRepoData, Package};
 
 /// Test that verifies build backend receives the correct resolved source path
 /// when a relative path is specified in the source field
@@ -20,7 +18,7 @@ async fn test_build_with_relative_source_path() {
     setup_tracing();
 
     // Create a simple package database for our test
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("empty-backend", "0.1.0").finish());
 
     // Write the repodata to disk
@@ -137,7 +135,7 @@ preview = ["pixi-build"]
 async fn test_build_with_absolute_source_path() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("empty-backend", "0.1.0").finish());
 
     let channel_dir = TempDir::new().unwrap();
@@ -216,7 +214,7 @@ preview = ["pixi-build"]
 async fn test_build_with_subdirectory_source_path() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("empty-backend", "0.1.0").finish());
 
     let channel_dir = TempDir::new().unwrap();
@@ -429,5 +427,61 @@ test-build-source = {{ path = "." }}
             "test-build-source",
         ),
         "Built package should be in the lock file"
+    );
+}
+
+/// Test that verifies `.pixi/.gitignore` is created during `pixi build`
+/// This fixes issue #4761 where pixi build didn't create the .gitignore file,
+/// causing recursion errors in rattler-build when source files reference the project root
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_build_creates_gitignore() {
+    setup_tracing();
+
+    // Create a PixiControl instance
+    let pixi = PixiControl::new().unwrap();
+
+    // Create a minimal manifest with build configuration
+    // We're not setting up a real backend, so the build will fail,
+    // but the .gitignore should still be created
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = []
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[package]
+name = "test-gitignore-build"
+version = "0.1.0"
+description = "Test package for .gitignore creation during build"
+
+[package.build]
+backend.name = "nonexistent-backend"
+backend.version = "0.1.0"
+"#,
+        Platform::current(),
+    );
+
+    // Write the manifest
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    let gitignore_path = pixi.workspace().unwrap().pixi_dir().join(".gitignore");
+
+    // Verify .pixi/.gitignore doesn't exist initially
+    assert!(
+        !gitignore_path.exists(),
+        ".pixi/.gitignore file should not exist before build"
+    );
+
+    // Run pixi build - this will fail because the backend doesn't exist,
+    // but it should still create the .pixi/.gitignore file as part of
+    // the sanity_check_workspace call
+    let _ = pixi.build().await;
+
+    // Verify .pixi/.gitignore was created even though the build failed
+    assert!(
+        gitignore_path.exists(),
+        ".pixi/.gitignore file was not created after build"
     );
 }

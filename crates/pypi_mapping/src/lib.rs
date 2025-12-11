@@ -113,12 +113,14 @@ pub struct MappingClient {
     client: LazyClient,
     compressed_mapping: prefix::CompressedMappingClient,
     hash_mapping: prefix::HashMappingClient,
+    cache_path: PathBuf,
 }
 
 pub struct MappingClientBuilder {
     client: LazyClient,
     compressed_mapping: prefix::CompressedMappingClientBuilder,
     hash_mapping: prefix::HashMappingClientBuilder,
+    cache_path: PathBuf,
 }
 
 impl MappingClientBuilder {
@@ -148,16 +150,27 @@ impl MappingClientBuilder {
             client: self.client,
             compressed_mapping: self.compressed_mapping.finish(),
             hash_mapping: self.hash_mapping.finish(),
+            cache_path: self.cache_path,
         }
     }
 }
 
 #[derive(Debug, Error)]
 pub enum MappingError {
-    #[error(transparent)]
-    IoError(#[from] std::io::Error),
-    #[error(transparent)]
-    Reqwest(#[from] reqwest_middleware::Error),
+    #[error("failed to access conda-pypi mapping cache at '{path}'")]
+    IoError {
+        #[source]
+        source: std::io::Error,
+        path: PathBuf,
+    },
+    #[error("failed to fetch conda-pypi mapping from remote source")]
+    Reqwest(#[source] reqwest_middleware::Error),
+}
+
+impl From<reqwest_middleware::Error> for MappingError {
+    fn from(err: reqwest_middleware::Error) -> Self {
+        MappingError::Reqwest(err)
+    }
 }
 
 impl MappingClient {
@@ -166,12 +179,13 @@ impl MappingClient {
         // Construct a client with a retry policy and local caching
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
         let retry_strategy = RetryTransientMiddleware::new_with_policy(retry_policy);
+        let cache_path = get_cache_dir()
+            .expect("failed to determine cache directory for conda-pypi mappings. Please ensure PIXI_CACHE_DIR or XDG_CACHE_HOME is set, or that ~/.cache exists.")
+            .join(pixi_consts::consts::CONDA_PYPI_MAPPING_CACHE_DIR);
         let cache_strategy = Cache(HttpCache {
             mode: CacheMode::Default,
             manager: CACacheManager {
-                path: get_cache_dir()
-                    .expect("missing cache directory")
-                    .join(pixi_consts::consts::CONDA_PYPI_MAPPING_CACHE_DIR),
+                path: cache_path.clone(),
                 remove_opts: Default::default(),
             },
             options: HttpCacheOptions::default(),
@@ -189,6 +203,7 @@ impl MappingClient {
             client: wrapped_client.clone(),
             compressed_mapping: prefix::CompressedMappingClient::builder(wrapped_client.clone()),
             hash_mapping: prefix::HashMappingClient::builder(wrapped_client),
+            cache_path,
         }
     }
 
@@ -276,7 +291,9 @@ impl MappingClient {
             let (record, mut derived_purls) = next.into_diagnostic()?;
 
             // As a last resort use the verbatim conda-forge purls.
-            if derived_purls.is_none() {
+            // But only if we're not using a custom mapping, since custom mapping
+            // should be exclusive - only packages explicitly in the mapping get purls.
+            if derived_purls.is_none() && !matches!(mapping_source, MappingSource::Custom(_)) {
                 derived_purls = CondaForgeVerbatim
                     .derive_purls(record, &metrics)
                     .await
@@ -327,17 +344,30 @@ impl MappingClient {
         let mut purls = self
             .hash_mapping
             .derive_purls(record, cache_metrics)
-            .await?;
+            .await
+            .map_err(|e| self.with_cache_path_context(e))?;
 
         // Otherwise try from the compressed mapping
         if purls.is_none() {
             purls = self
                 .compressed_mapping
                 .derive_purls(record, cache_metrics)
-                .await?;
+                .await
+                .map_err(|e| self.with_cache_path_context(e))?;
         }
 
         Ok(purls)
+    }
+
+    /// Adds cache path context to a MappingError if it's an IO error.
+    fn with_cache_path_context(&self, err: MappingError) -> MappingError {
+        match err {
+            MappingError::IoError { source, path: _ } => MappingError::IoError {
+                source,
+                path: self.cache_path.clone(),
+            },
+            other => other,
+        }
     }
 }
 

@@ -25,12 +25,12 @@ use pixi_global::{
 /// - `pixi global install jupyter --with polars`
 /// - `pixi global install --expose python3.8=python python=3.8`
 /// - `pixi global install --environment science --expose jupyter --expose ipython jupyter ipython polars`
-#[derive(Parser, Debug, Clone)]
+#[derive(Parser, Debug, Clone, Default)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     /// Specifies the package that should be installed.
     #[clap(flatten)]
-    packages: GlobalSpecs,
+    pub packages: GlobalSpecs,
 
     /// The channels to consider as a name or a url.
     /// Multiple channels can be specified by using this field multiple times.
@@ -69,11 +69,15 @@ pub struct Args {
 
     /// Specifies that the environment should be reinstalled.
     #[arg(action, long)]
-    force_reinstall: bool,
+    pub force_reinstall: bool,
 
     /// Specifies that no shortcuts should be created for the installed packages.
     #[arg(action, long, alias = "no-shortcut")]
     no_shortcuts: bool,
+
+    /// Optional backend override (primarily for testing, not exposed in CLI)
+    #[clap(skip)]
+    pub backend_override: Option<pixi_build_frontend::BackendOverride>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -81,9 +85,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Load the global config and ensure
     // that the root_dir is relative to the manifest directory
-    let project_original = pixi_global::Project::discover_or_create()
+    let mut project_original = pixi_global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
+
+    // Apply backend override if provided (primarily for testing)
+    if let Some(backend_override) = args.backend_override.clone() {
+        project_original = project_original.with_backend_override(backend_override);
+    }
     let channel_config = project_original.global_channel_config().clone();
 
     let specs = args
@@ -228,7 +237,9 @@ async fn setup_environment(
     }
 
     // Installing the environment to be able to find the bin paths later
-    let environment_update = project.install_environment(env_name).await?;
+    let environment_update = project
+        .install_environment_with_options(env_name, args.force_reinstall)
+        .await?;
 
     // Sync exposed name
     sync_exposed_names(env_name, project, args).await?;
@@ -279,9 +290,13 @@ async fn sync_exposed_names(
         .with
         .iter()
         .map(|spec| {
-            spec.name
-                .clone()
-                .ok_or_else(|| miette::miette!("could not find package name in MatchSpec {}", spec))
+            let name_matcher = spec.name.clone().ok_or_else(|| {
+                miette::miette!("could not find package name in MatchSpec {}", spec)
+            })?;
+            name_matcher
+                .as_exact()
+                .cloned()
+                .ok_or_else(|| miette::miette!("wildcard package names are not supported"))
         })
         .collect::<miette::Result<Vec<_>>>()?;
     let expose_type = if args.expose.is_empty().not() {

@@ -1,4 +1,8 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
@@ -109,6 +113,16 @@ impl SolveCondaEnvironmentSpec {
         // Solving is a CPU-intensive task, we spawn this on a background task to allow
         // for more concurrency.
         let solve_result = tokio::task::spawn_blocking(move || {
+            // Determine for which records we have source records because those records should only
+            //  be installed as source records.
+            let package_names_from_source = self
+                .source_repodata
+                .iter()
+                .flat_map(|metadata| &metadata.records)
+                .map(|metadata| &metadata.package_record.name)
+                .dedup()
+                .collect::<HashSet<_>>();
+
             // Filter all installed packages
             let installed = self
                 .installed
@@ -116,7 +130,7 @@ impl SolveCondaEnvironmentSpec {
                 // Only lock binary records
                 .filter_map(|record| record.into_binary())
                 // Filter any record we want as a source record
-                .filter(|record| !self.source_specs.contains_key(&record.package_record.name))
+                .filter(|record| !package_names_from_source.contains(&record.package_record.name))
                 .collect();
 
             // Create direct dependencies on the source packages to feed to the solver.
@@ -124,7 +138,7 @@ impl SolveCondaEnvironmentSpec {
                 .source_specs
                 .into_specs()
                 .map(|(name, spec)| {
-                    MatchSpec::from_nameless(spec.to_nameless_match_spec(), Some(name))
+                    MatchSpec::from_nameless(spec.to_nameless_match_spec(), Some(name.into()))
                 })
                 .collect::<Vec<_>>();
 
@@ -156,7 +170,7 @@ impl SolveCondaEnvironmentSpec {
                         channel: None,
                     };
                     let mut record = record.clone();
-                    record.build_source = source_metadata.build_source.clone();
+                    record.build_source = source_metadata.source.build_source().cloned();
                     url_to_source_package.insert(url, (record, repodata_record));
                 }
             }

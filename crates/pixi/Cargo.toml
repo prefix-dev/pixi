@@ -7,7 +7,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.59.0"
+version = "0.61.0"
 
 [features]
 default = ["rustls-tls"]
@@ -34,7 +34,6 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 dunce = { workspace = true }
-fake = "4.0.0"
 fs-err = { workspace = true }
 fs_extra = { workspace = true }
 futures = { workspace = true }
@@ -42,7 +41,6 @@ http = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
 insta = { workspace = true, features = ["yaml", "glob", "filters"] }
-itertools = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_build_backend_passthrough = { workspace = true }
 pixi_build_frontend = { workspace = true }
@@ -59,13 +57,10 @@ pixi_test_utils = { workspace = true }
 pixi_utils = { workspace = true }
 pypi_mapping = { workspace = true }
 rattler_conda_types = { workspace = true }
-rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
-rstest = { workspace = true }
-serde_json = { workspace = true }
 temp-env = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
@@ -79,6 +74,5 @@ uv-cache = { workspace = true }
 uv-configuration = { workspace = true }
 uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
-uv-pep508 = { workspace = true }
 uv-python = { workspace = true }
 zip = { workspace = true }

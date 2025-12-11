@@ -3,10 +3,10 @@ import platform
 import shutil
 import sys
 import tomllib
-import tomli_w
 from pathlib import Path
 
 import pytest
+import tomli_w
 from dirty_equals import AnyThing, IsList, IsStr
 from inline_snapshot import snapshot
 
@@ -1321,6 +1321,11 @@ dependencies:
                 [pixi, "shell", "--manifest-path", manifest_path, "--locked", "--no-install"],
                 expected_exit_code=ExitCode.FAILURE,
             )
+        elif command_name == "pixi build":
+            # Special case: build uses --path instead of --manifest-path
+            verify_cli_command(
+                [pixi, "build", "--path", manifest_path, "--locked", "--no-install"],
+            )
         else:
             verify_cli_command([pixi, *command_parts, *frozen_no_install_flags, *additional_args])
         check_invariants(command_name)
@@ -1367,6 +1372,7 @@ def test_quiet_flag_with_rust_log_env(
     )
 
 
+@pytest.mark.slow
 def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """
     Check that a helpful error message is raised when attempting to

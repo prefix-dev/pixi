@@ -10,10 +10,16 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
+dunce = { workspace = true }
 file_url = { workspace = true }
 miette = { workspace = true }
+pathdiff = { workspace = true }
 pixi_git = { workspace = true }
 pixi_spec = { workspace = true, features = ["rattler_lock"] }
+pixi_variant = { workspace = true, features = [
+  "rattler_lock",
+  "pixi_build_types",
+] }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true, features = ["serde"] }
 rattler_lock = { workspace = true }
@@ -24,4 +30,5 @@ typed-path = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
+insta = { workspace = true, features = ["yaml"] }
 serde_json = { workspace = true }

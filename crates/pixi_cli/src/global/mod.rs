@@ -1,4 +1,6 @@
 use clap::Parser;
+use miette::IntoDiagnostic;
+use tokio::fs as tokio_fs;
 
 use pixi_global::EnvironmentName;
 
@@ -6,7 +8,7 @@ mod add;
 mod edit;
 mod expose;
 mod global_specs;
-mod install;
+pub mod install;
 mod list;
 mod remove;
 mod shortcut;
@@ -53,7 +55,7 @@ pub enum Command {
 #[derive(Debug, Parser)]
 pub struct Args {
     #[command(subcommand)]
-    command: Command,
+    pub command: Command,
 }
 
 /// Maps global command enum variants to their function handlers.
@@ -86,6 +88,18 @@ async fn revert_environment_after_error(
         let _ = project_to_revert_to
             .sync_environment(env_name, None)
             .await?;
+    } else {
+        // clean up if directory exists for the failed new environment
+        let env_dir_path = project_to_revert_to.env_root_path().join(env_name.as_str());
+        if env_dir_path.exists() {
+            tokio_fs::remove_dir_all(&env_dir_path)
+                .await
+                .into_diagnostic()?;
+            tracing::debug!(
+                "Cleaned up failed environment directory: {}",
+                env_dir_path.display()
+            );
+        }
     }
     Ok(())
 }
