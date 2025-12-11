@@ -5,9 +5,9 @@ template: home.html
 
 ![pixi logo](assets/banner.svg)
 
-## Why Pixi?
-
 Pixi is a **fast, modern, and reproducible** package management tool for developers of all backgrounds.
+
+## Highlights
 
 - [🔄 **Reproducibility**](workspace/lockfile.md)  
   Isolated, easily recreated environments with lockfiles built-in

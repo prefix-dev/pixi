@@ -1,6 +1,8 @@
 site_name: "Pixi"
 site_url: https://prefix-dev.github.io/pixi
 site_description: Pixi Documentation — Next-gen package manager for reproducible development setups
+repo_url: https://github.com/prefix-dev/pixi/
+edit_uri: edit/main/docs/
 
 theme:
   name: material
@@ -58,9 +60,6 @@ extra_css:
   - stylesheets/extra.css
 extra_javascript:
   - javascripts/extra.js
-
-repo_url: https://github.com/prefix-dev/pixi/
-edit_uri: edit/main/docs/
 
 markdown_extensions:
   - admonition
