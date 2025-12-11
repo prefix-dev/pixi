@@ -25,6 +25,11 @@ impl SourceCheckout {
             pinned,
         }
     }
+
+    /// Returns true if the contents of the source checkout are immutable.
+    pub fn is_immutable(&self) -> bool {
+        self.pinned.is_immutable()
+    }
 }
 
 #[derive(Debug, Error, Diagnostic)]

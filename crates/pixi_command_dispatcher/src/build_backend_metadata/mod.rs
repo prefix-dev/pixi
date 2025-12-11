@@ -1,34 +1,33 @@
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    hash::{Hash, Hasher},
-    path::PathBuf,
-    sync::Mutex,
-};
-
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
+use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use once_cell::sync::Lazy;
 use pathdiff::diff_paths;
 use pixi_build_discovery::{CommandSpec, EnabledProtocols};
 use pixi_build_frontend::Backend;
-use pixi_build_types::{ProjectModelV1, procedures::conda_outputs::CondaOutputsParams};
-use pixi_glob::GlobHashKey;
-use pixi_record::{InputHash, PinnedSourceSpec, VariantValue};
+use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
+use pixi_glob::{GlobSet, GlobSetError};
+use pixi_record::{PinnedSourceSpec, VariantValue};
 use pixi_spec::{SourceAnchor, SourceSpec};
-use rand::random;
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
+use std::time::SystemTime;
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    hash::Hash,
+    path::PathBuf,
+    sync::Mutex,
+};
 use thiserror::Error;
 use tracing::instrument;
-use xxhash_rust::xxh3::Xxh3;
 
+use crate::cache::build_backend_metadata::CachedCondaMetadataId;
+use crate::input_hash::ProjectModelHash;
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
     build::{SourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
     cache::{
-        build_backend_metadata::{
-            self, BuildBackendMetadataKey, CachedCondaMetadata, MetadataKind,
-        },
+        build_backend_metadata::{self, BuildBackendMetadataCacheShard, CachedCondaMetadata},
         common::MetadataCache,
     },
 };
@@ -55,7 +54,7 @@ pub struct BuildBackendMetadataSpec {
     /// The location that refers to where the manifest is stored.
     pub manifest_source: PinnedSourceSpec,
 
-    /// The optional pinned location of the source code. If not provide the
+    /// The optional pinned location of the source code. If not provided, the
     /// location in the manifest is resolved.
     ///
     /// This is passed as a hint. If the [`SourceSpec`] in the discovered
@@ -105,7 +104,7 @@ pub struct BuildBackendMetadata {
 impl BuildBackendMetadataSpec {
     #[instrument(
         skip_all,
-        name="backend-metadata",
+        name = "backend-metadata",
         fields(
             manifest_source = %self.manifest_source,
             build_source = self.preferred_build_source.as_ref().map(tracing::field::display),
@@ -133,6 +132,12 @@ impl BuildBackendMetadataSpec {
             )
             .await
             .map_err_with(BuildBackendMetadataError::Discovery)?;
+
+        let project_model_hash = discovered_backend
+            .init_params
+            .project_model
+            .as_ref()
+            .map(ProjectModelHash::from);
 
         // Determine the location of the source to build from.
         let manifest_source_anchor =
@@ -178,12 +183,6 @@ impl BuildBackendMetadataSpec {
             build_source.clone(),
         );
 
-        // Calculate the hash of the project model
-        let additional_glob_hash = calculate_additional_glob_hash(
-            &discovered_backend.init_params.project_model,
-            &self.variant_configuration,
-        );
-
         // Check if we should skip the metadata cache for this backend
         let skip_cache = Self::should_skip_metadata_cache(
             &discovered_backend.backend_spec,
@@ -192,7 +191,7 @@ impl BuildBackendMetadataSpec {
 
         // Check the source metadata cache, short circuit if there is a cache hit that
         // is still fresh.
-        let cache_key = self.cache_key();
+        let cache_key = self.cache_shard();
         let cache_read_result = command_dispatcher
             .build_backend_metadata_cache()
             .read(&cache_key)
@@ -207,18 +206,17 @@ impl BuildBackendMetadataSpec {
         };
 
         if !skip_cache {
-            if let Some(metadata) = Self::verify_cache_freshness(
-                &build_source_checkout,
-                &command_dispatcher,
+            if let Some(cache_entry) = Self::verify_cache_freshness(
                 cached_metadata,
-                &additional_glob_hash,
+                &build_source_checkout,
+                project_model_hash,
                 &self.variant_configuration,
             )
             .await?
             {
                 return Ok(BuildBackendMetadata {
                     source: source_location.clone(),
-                    metadata,
+                    metadata: cache_entry,
                     skip_cache,
                 });
             }
@@ -266,8 +264,8 @@ impl BuildBackendMetadataSpec {
             .call_conda_outputs(
                 command_dispatcher.clone(),
                 build_source_checkout,
+                project_model_hash,
                 backend,
-                additional_glob_hash,
                 log_sink,
             )
             .await?;
@@ -356,57 +354,111 @@ impl BuildBackendMetadataSpec {
     }
 
     async fn verify_cache_freshness(
+        cache_entry: Option<CachedCondaMetadata>,
         source_checkout: &SourceCheckout,
-        command_dispatcher: &CommandDispatcher,
-        metadata: Option<CachedCondaMetadata>,
-        additional_glob_hash: &[u8],
+        project_model_hash: Option<ProjectModelHash>,
         requested_variants: &Option<BTreeMap<String, Vec<VariantValue>>>,
     ) -> Result<Option<CachedCondaMetadata>, CommandDispatcherError<BuildBackendMetadataError>>
     {
-        let Some(metadata) = metadata else {
+        let Some(cache_entry) = cache_entry else {
             return Ok(None);
         };
 
-        let metadata_kind = match metadata.metadata {
-            MetadataKind::GetMetadata { .. } => "conda/getMetadata",
-            MetadataKind::Outputs { .. } => {
-                pixi_build_types::procedures::conda_outputs::METHOD_NAME
-            }
-        };
-
-        // Check if the build variants match
-        if metadata.build_variants != *requested_variants {
+        // Check the project model
+        if cache_entry.project_model_hash != project_model_hash {
             tracing::trace!(
-                "found cached `{metadata_kind}` response with different variants, invalidating cache."
+                "found cached outputs with different project model, invalidating cache."
             );
             return Ok(None);
         }
 
-        let Some(input_globs) = &metadata.input_hash else {
-            // No input hash so just assume it is still valid.
-            tracing::trace!("found cached `{metadata_kind}` response.");
-            return Ok(Some(metadata));
+        // Check if the source location changed.
+        if cache_entry.build_source != source_checkout.pinned {
+            tracing::trace!(
+                "found cached outputs with different source code location, invalidating cache."
+            );
+            return Ok(None);
+        }
+
+        // Check if the build variants match
+        if Some(&cache_entry.build_variants) != requested_variants.as_ref() {
+            tracing::trace!("found cached outputs with different variants, invalidating cache.");
+            return Ok(None);
+        }
+
+        // If the build source is immutable, we don't check the contents of the files.
+        if source_checkout.is_immutable() {
+            return Ok(Some(cache_entry));
+        }
+
+        let globs_root = &source_checkout.path;
+        let globs = &cache_entry.input_globs;
+        let walk_globs = || {
+            let glob_set = GlobSet::create(globs.iter().map(|p| p.as_str()));
+            match glob_set.collect_matching(globs_root) {
+                Ok(matches) => Either::Left(matches.into_iter().map(|entry| {
+                    entry
+                        .metadata()
+                        .map_err(|err| GlobSetError::Walk(entry.path().to_path_buf(), err))
+                        .map(|m| (m, entry.path().to_path_buf()))
+                })),
+                Err(err) => Either::Right(std::iter::once(Err(err))),
+            }
         };
 
-        // Check if the input hash is still valid.
-        let new_hash = command_dispatcher
-            .glob_hash_cache()
-            .compute_hash(GlobHashKey::new(
-                source_checkout.path.clone(),
-                input_globs.globs.clone(),
-                additional_glob_hash.to_vec(),
-            ))
-            .await
-            .map_err(BuildBackendMetadataError::GlobHash)
-            .map_err(CommandDispatcherError::Failed)?;
+        let walk_files = || {
+            cache_entry.input_files.iter().map(|path| {
+                let source_file_path = source_checkout.path.join(path);
+                fs_err::metadata(&source_file_path)
+                    .map_err(|err| GlobSetError::Walk(path.clone(), err.into()))
+                    .map(|m| (m, path.clone()))
+            })
+        };
 
-        if new_hash.hash == input_globs.hash {
-            tracing::trace!("found up-to-date cached `{metadata_kind}` response..");
-            Ok(Some(metadata))
-        } else {
-            tracing::trace!("found stale `{metadata_kind}` response..");
-            Ok(None)
+        // Check the files that were explicitly mentioned.
+        for metadata in walk_files().chain(std::iter::once_with(walk_globs).flatten()) {
+            let (metadata, path) = match metadata {
+                Ok(metadata) => metadata,
+                Err(GlobSetError::Walk(path, err))
+                    if err.io_error().map(std::io::Error::kind)
+                        == Some(std::io::ErrorKind::NotFound) =>
+                {
+                    tracing::trace!(
+                        "found cached outputs but '{}' has been deleted, invalidating cache.",
+                        path.display()
+                    );
+                    return Ok(None);
+                }
+                Err(err) => {
+                    return Err(CommandDispatcherError::Failed(
+                        BuildBackendMetadataError::from(err),
+                    ));
+                }
+            };
+
+            match metadata.modified() {
+                Ok(modified_date) => {
+                    if modified_date > cache_entry.timestamp {
+                        tracing::trace!(
+                            "found cached outputs but '{}' has been modified, invalidating cache.",
+                            path.display()
+                        );
+                        return Ok(None);
+                    }
+                }
+                Err(err) => {
+                    tracing::trace!(
+                        "found cached outputs but requested metadata for '{}' failed with: {}",
+                        path.display(),
+                        err
+                    );
+                    return Ok(None);
+                }
+            }
         }
+
+        tracing::trace!("found up-to-date cached outputs.");
+        Ok(Some(cache_entry))
     }
 
     /// Validates that outputs with the same name have unique variants.
@@ -462,8 +514,8 @@ impl BuildBackendMetadataSpec {
         self,
         command_dispatcher: CommandDispatcher,
         build_source_checkout: SourceCheckout,
+        project_model_hash: Option<ProjectModelHash>,
         backend: Backend,
-        additional_glob_hash: Vec<u8>,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
         let backend_identifier = backend.identifier().to_string();
@@ -504,6 +556,7 @@ impl BuildBackendMetadataSpec {
             .await
             .map_err(BuildBackendMetadataError::Communication)
             .map_err(CommandDispatcherError::Failed)?;
+        let timestamp = SystemTime::now();
 
         // If the backend supports unique variants, validate that outputs with the same name
         // have unique variants
@@ -534,59 +587,24 @@ impl BuildBackendMetadataSpec {
             glob_count = input_globs.len(),
             "computing metadata input hash",
         );
-        let input_hash = Self::compute_input_hash(
-            command_dispatcher,
-            &build_source_checkout,
-            input_globs,
-            additional_glob_hash,
-        )
-        .await?;
+        let (input_globs, input_files) = split_globs(input_globs);
 
         Ok(CachedCondaMetadata {
-            id: random(),
-            input_hash: input_hash.clone(),
+            id: CachedCondaMetadataId::random(),
             cache_version: 0,
-            metadata: MetadataKind::Outputs {
-                outputs: outputs.outputs,
-            },
-            build_variants: self.variant_configuration.clone(),
+            outputs: outputs.outputs,
+            build_variants: self.variant_configuration.unwrap_or_default(),
+            input_globs,
+            input_files,
+            build_source: build_source_checkout.pinned,
+            project_model_hash,
+            timestamp,
         })
     }
 
-    /// Computes the input hash for metadata returned by the backend.
-    async fn compute_input_hash(
-        command_queue: CommandDispatcher,
-        source: &SourceCheckout,
-        input_globs: BTreeSet<String>,
-        additional_glob_hash: Vec<u8>,
-    ) -> Result<Option<InputHash>, CommandDispatcherError<BuildBackendMetadataError>> {
-        if source.pinned.is_immutable() {
-            // If the source is immutable (e.g., a git commit), we do not need to compute an
-            // input hash because the contents of the source are fixed.
-            return Ok(None);
-        }
-
-        // Compute the input hash based on the manifest path and the input globs.
-        let input_hash = command_queue
-            .glob_hash_cache()
-            .compute_hash(GlobHashKey::new(
-                &source.path,
-                input_globs.clone(),
-                additional_glob_hash,
-            ))
-            .await
-            .map_err(BuildBackendMetadataError::GlobHash)
-            .map_err(CommandDispatcherError::Failed)?;
-
-        Ok(Some(InputHash {
-            hash: input_hash.hash,
-            globs: input_globs,
-        }))
-    }
-
     /// Computes the cache key for this instance
-    pub(crate) fn cache_key(&self) -> BuildBackendMetadataKey {
-        BuildBackendMetadataKey {
+    pub(crate) fn cache_shard(&self) -> BuildBackendMetadataCacheShard {
+        BuildBackendMetadataCacheShard {
             channel_urls: self.channels.clone(),
             build_environment: self.build_environment.clone(),
             enabled_protocols: self.enabled_protocols.clone(),
@@ -615,6 +633,19 @@ fn extend_input_globs_with_variant_files(
         }
     }
     input_globs
+}
+
+/// Splits globs into globs and explicit paths.
+fn split_globs<G: Extend<String> + Default, F: Extend<PathBuf> + Default>(
+    input_globs: BTreeSet<String>,
+) -> (G, F) {
+    input_globs.into_iter().partition_map(|glob| {
+        if glob.contains("*") {
+            Either::Left(glob)
+        } else {
+            Either::Right(PathBuf::from(glob))
+        }
+    })
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -649,25 +680,11 @@ pub enum BuildBackendMetadataError {
     #[error("could not compute hash of input files")]
     GlobHash(#[from] pixi_glob::GlobHashError),
 
+    #[error("failed to determine input file modification times")]
+    GlobSet(#[from] pixi_glob::GlobSetError),
+
     #[error(transparent)]
     Cache(#[from] build_backend_metadata::BuildBackendMetadataCacheError),
-}
-
-/// Computes an additional hash to be used in glob hash
-pub fn calculate_additional_glob_hash(
-    project_model: &Option<ProjectModelV1>,
-    variants: &Option<BTreeMap<String, Vec<VariantValue>>>,
-) -> Vec<u8> {
-    let mut hasher = Xxh3::new();
-    if let Some(project_model) = project_model {
-        project_model.hash(&mut hasher);
-    }
-    if let Some(variants) = variants {
-        if !variants.is_empty() {
-            variants.hash(&mut hasher);
-        }
-    }
-    hasher.finish().to_ne_bytes().to_vec()
 }
 
 #[cfg(test)]

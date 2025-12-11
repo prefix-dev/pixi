@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, HashMap},
     path::Path,
     str::FromStr,
 };
@@ -7,9 +7,7 @@ use std::{
 use pixi_git::{sha::GitSha, url::RepositoryUrl};
 use pixi_spec::{GitReference, SourceSpec};
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
-use rattler_digest::{Sha256, Sha256Hash};
 use rattler_lock::{CondaSourceData, GitShallowSpec, PackageBuildSource};
-use serde::{Deserialize, Serialize};
 use typed_path::{Utf8TypedPathBuf, Utf8UnixPathBuf};
 use url::Url;
 
@@ -36,22 +34,6 @@ pub struct SourceRecord {
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
     pub sources: HashMap<String, SourceSpec>,
-}
-
-/// Defines the hash of the input files that were used to build the metadata of
-/// the record. If reevaluating and hashing the globs results in a different
-/// hash, the metadata is considered invalid.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InputHash {
-    /// The hash of the input files that matched the globs.
-    #[serde(
-        serialize_with = "rattler_digest::serde::serialize::<_, Sha256>",
-        deserialize_with = "rattler_digest::serde::deserialize::<_, Sha256>"
-    )]
-    pub hash: Sha256Hash,
-
-    /// The globs that were used to compute the hash.
-    pub globs: BTreeSet<String>,
 }
 
 impl SourceRecord {

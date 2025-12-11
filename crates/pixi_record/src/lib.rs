@@ -17,7 +17,7 @@ use rattler_conda_types::{
 };
 use rattler_lock::{CondaPackageData, ConversionError, UrlOrPath};
 use serde::Serialize;
-pub use source_record::{InputHash, SourceRecord};
+pub use source_record::SourceRecord;
 use thiserror::Error;
 
 /// A record of a conda package that is either something installable from a

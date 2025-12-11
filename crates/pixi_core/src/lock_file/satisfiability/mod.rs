@@ -1094,12 +1094,7 @@ async fn verify_source_metadata(
                     .await
                     .map_err(|e| Box::new(PlatformUnsat::SourceMetadata(e)))?;
 
-                if current_source_metadata
-                    .cached_metadata
-                    .metadata
-                    .records
-                    .is_empty()
-                {
+                if current_source_metadata.cached_metadata.records.is_empty() {
                     return Err(Box::new(PlatformUnsat::SourcePackageNotFoundInMetadata {
                         package_name: source_record.package_record.name.as_source().to_string(),
                         manifest_path: source_record
@@ -1114,7 +1109,7 @@ async fn verify_source_metadata(
                 // When there are variants, there can be multiple source metadata entries
                 // with the same package name, so we also match on the build string which
                 // encodes the variant information.
-                let current_records = &current_source_metadata.cached_metadata.metadata.records;
+                let current_records = &current_source_metadata.cached_metadata.records;
                 let current_record = current_records
                     .iter()
                     .find(|r| source_record.refers_to_same_output(r));
