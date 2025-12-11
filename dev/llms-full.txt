@@ -11939,14 +11939,22 @@ pixi list [OPTIONS] [REGEX]
 
 - [`--json`](#arg---json) : Whether to output in json format
 
-- [`--json-pretty`](#arg---json-pretty) : Whether to output in pretty json format
-
 - [`--sort-by <SORT_BY>`](#arg---sort-by) : Sorting strategy
 
   ```
   **default**: `name`
     
   **options**: `size`, `name`, `kind`
+  ```
+
+- [`--fields <FIELDS>`](#arg---fields) : Select which fields to display and in what order (comma-separated)
+
+  ```
+  May be provided more than once.
+    
+  **default**: `name, version, build, size, kind, source`
+    
+  **options**: `arch`, `build`, `build-number`, `constrains`, `depends`, `file-name`, `is-editable`, `kind`, `license`, `license-family`, `md5`, `name`, `noarch`, `platform`, `requested-spec`, `sha256`, `size`, `source`, `subdir`, `timestamp`, `track-features`, `url`, `version`
   ```
 
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to list packages for. Defaults to the default environment
