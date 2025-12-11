@@ -711,6 +711,17 @@ impl Project {
         let platform = environment.platform.unwrap_or_else(Platform::current);
         let dependencies_names: Vec<_> = environment.dependencies.specs.keys().cloned().collect();
 
+        let channels = environment
+            .channels()
+            .into_iter()
+            .map(|channel| {
+                channel
+                    .clone()
+                    .into_channel(self.config.global_channel_config())
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .into_diagnostic()?;
+
         // Try to use lockfile if requested and conditions are met
         let pixi_records = use_lockfile
             .then(|| {
@@ -782,30 +793,9 @@ impl Project {
             .flatten();
 
         // If we couldn't use lockfile, do a fresh solve
-        let (pixi_records, channels) = if let Some(records) = pixi_records {
-            let channels = environment
-                .channels()
-                .into_iter()
-                .map(|channel| {
-                    channel
-                        .clone()
-                        .into_channel(self.config.global_channel_config())
-                })
-                .collect::<Result<Vec<_>, _>>()
-                .into_diagnostic()?;
-            (records, channels)
+        let pixi_records = if let Some(records) = pixi_records {
+            records
         } else {
-            let channels = environment
-                .channels()
-                .into_iter()
-                .map(|channel| {
-                    channel
-                        .clone()
-                        .into_channel(self.config.global_channel_config())
-                })
-                .collect::<Result<Vec<_>, _>>()
-                .into_diagnostic()?;
-
             // Convert dependency specs to binary specs for CommandDispatcher
             let mut pixi_specs = DependencyMap::default();
             let mut dependencies_names = Vec::new();
@@ -849,18 +839,14 @@ impl Project {
                 channels.clone(),
             )?;
 
-            (pixi_records, channels)
+            pixi_records
         };
 
         // Move this to a separate function to avoid code duplication
         try_increase_rlimit_to_sensible();
 
         let prefix = self.environment_prefix(env_name).await?;
-        let channels_urls = channels
-            .iter()
-            .map(|c| c.base_url.clone())
-            .collect::<Vec<_>>();
-
+        let channels_urls: Vec<_> = channels.iter().map(|c| c.base_url.clone()).collect();
         let build_environment = BuildEnvironment::simple(
             platform,
             Self::virtual_packages_for(&platform).into_diagnostic()?,
