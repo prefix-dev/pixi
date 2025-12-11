@@ -236,8 +236,9 @@ async fn setup_environment(
     }
 
     // Installing the environment to be able to find the bin paths later
+    // Don't use lockfile for install operations since we may be changing versions
     let environment_update = project
-        .install_environment_with_options(env_name, args.force_reinstall)
+        .install_environment_with_options(env_name, args.force_reinstall, false)
         .await?;
 
     // Sync exposed name

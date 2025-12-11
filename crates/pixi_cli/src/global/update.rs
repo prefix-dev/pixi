@@ -29,7 +29,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     ) -> miette::Result<StateChanges> {
         // If the environment isn't up-to-date our executable detection afterwards will not work
         if !project.environment_in_sync(env_name).await? {
-            let _ = project.install_environment(env_name).await?;
+            let _ = project.update_environment(env_name).await?;
         }
 
         // See what executables were installed prior to update
@@ -49,7 +49,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         };
 
         // Reinstall the environment
-        let environment_update = project.install_environment(env_name).await?;
+        let environment_update = project.update_environment(env_name).await?;
 
         let mut state_changes = StateChanges::default();
 

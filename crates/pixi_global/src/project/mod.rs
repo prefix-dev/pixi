@@ -685,41 +685,177 @@ impl Project {
         &mut self,
         env_name: &EnvironmentName,
     ) -> miette::Result<EnvironmentUpdate> {
-        self.install_environment_with_options(env_name, false).await
+        self.install_environment_with_options(env_name, false, true)
+            .await
+    }
+
+    /// Install environment for update operations (skips lockfile to get latest versions)
+    pub async fn update_environment(
+        &mut self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<EnvironmentUpdate> {
+        self.install_environment_with_options(env_name, false, false)
+            .await
     }
 
     pub async fn install_environment_with_options(
         &mut self,
         env_name: &EnvironmentName,
         force_reinstall: bool,
+        use_lockfile: bool,
     ) -> miette::Result<EnvironmentUpdate> {
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
-        let channels = environment
-            .channels()
-            .into_iter()
-            .map(|channel| {
-                channel
-                    .clone()
-                    .into_channel(self.config.global_channel_config())
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .into_diagnostic()?;
 
         let platform = environment.platform.unwrap_or_else(Platform::current);
+        let dependencies_names: Vec<_> = environment.dependencies.specs.keys().cloned().collect();
 
-        // Convert dependency specs to binary specs for CommandDispatcher
-        let mut pixi_specs = DependencyMap::default();
-        let mut dependencies_names = Vec::new();
+        // Try to use lockfile if requested and conditions are met
+        let pixi_records = use_lockfile
+            .then(|| {
+                let (source_specs, _) = environment.split_into_source_and_binary_requirements();
 
-        for (name, spec) in &environment.dependencies.specs {
-            pixi_specs.insert(name.clone(), spec.clone());
-            dependencies_names.push(name.clone());
-        }
+                // Check if we can use the lockfile
+                if !source_specs.specs.is_empty() {
+                    return None;
+                }
 
-        let command_dispatcher = self.command_dispatcher()?;
+                let env_name_str = env_name.to_string();
+                let locked_env = self.lock_file.environment(&env_name_str)?;
+                let packages = locked_env.packages(platform)?;
 
+                let locked_packages: Vec<_> = packages.map(Into::into).collect();
+
+                let locked_names: HashSet<_> = locked_packages
+                    .iter()
+                    .filter_map(|p| match p {
+                        LockedPackage::Conda(d) => Some(match d {
+                            CondaPackageData::Binary(b) => b.package_record.name.clone(),
+                            CondaPackageData::Source(s) => s.package_record.name.clone(),
+                        }),
+                        LockedPackage::Pypi(_, _) => None,
+                    })
+                    .collect();
+
+                // Validate lockfile has exactly the right dependencies
+                let dependencies_names_set: HashSet<_> = dependencies_names.iter().collect();
+                let lockfile_valid = dependencies_names.iter().all(|d| locked_names.contains(d))
+                    && locked_names
+                        .iter()
+                        .all(|l| dependencies_names_set.contains(l));
+
+                if !lockfile_valid {
+                    if !dependencies_names.iter().all(|d| locked_names.contains(d)) {
+                        tracing::debug!(
+                            "Lockfile is missing some dependencies from manifest, doing fresh solve"
+                        );
+                    } else {
+                        tracing::debug!(
+                            "Lockfile has dependencies not in manifest, doing fresh solve"
+                        );
+                    }
+                    return None;
+                }
+
+                tracing::debug!(
+                    "Using packages from lockfile for environment {}",
+                    env_name.fancy_display()
+                );
+
+                let pixi_records: Vec<_> = locked_packages
+                    .into_iter()
+                    .map(|p| match p {
+                        LockedPackage::Conda(data) => {
+                            PixiRecord::from_conda_package_data(data, self.root.as_path())
+                                .into_diagnostic()
+                        }
+                        LockedPackage::Pypi(_, _) => Err(miette::miette!(
+                            "PyPI packages are not supported in global environments"
+                        )),
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                    .ok()?;
+
+                Some(pixi_records)
+            })
+            .flatten();
+
+        // If we couldn't use lockfile, do a fresh solve
+        let (pixi_records, channels) = if let Some(records) = pixi_records {
+            let channels = environment
+                .channels()
+                .into_iter()
+                .map(|channel| {
+                    channel
+                        .clone()
+                        .into_channel(self.config.global_channel_config())
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .into_diagnostic()?;
+            (records, channels)
+        } else {
+            let channels = environment
+                .channels()
+                .into_iter()
+                .map(|channel| {
+                    channel
+                        .clone()
+                        .into_channel(self.config.global_channel_config())
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .into_diagnostic()?;
+
+            // Convert dependency specs to binary specs for CommandDispatcher
+            let mut pixi_specs = DependencyMap::default();
+            let mut dependencies_names = Vec::new();
+
+            for (name, spec) in &environment.dependencies.specs {
+                pixi_specs.insert(name.clone(), spec.clone());
+                dependencies_names.push(name.clone());
+            }
+
+            let command_dispatcher = self.command_dispatcher()?;
+
+            let channels_urls = channels
+                .iter()
+                .map(|c| c.base_url.clone())
+                .collect::<Vec<_>>();
+
+            let build_environment = BuildEnvironment::simple(
+                platform,
+                Self::virtual_packages_for(&platform).into_diagnostic()?,
+            );
+            // Create solve spec
+            let solve_spec = PixiEnvironmentSpec {
+                name: Some(env_name.to_string()),
+                dependencies: pixi_specs,
+                build_environment: build_environment.clone(),
+                channels: channels_urls.clone(),
+                channel_config: self.config.global_channel_config().clone(),
+                ..Default::default()
+            };
+
+            // Solve using CommandDispatcher
+            let pixi_records = command_dispatcher
+                .solve_pixi_environment(solve_spec)
+                .await?;
+
+            // Update lock file with the solved packages
+            self.update_lock_file_for_environment(
+                env_name,
+                pixi_records.clone(),
+                platform,
+                channels.clone(),
+            )?;
+
+            (pixi_records, channels)
+        };
+
+        // Move this to a separate function to avoid code duplication
+        try_increase_rlimit_to_sensible();
+
+        let prefix = self.environment_prefix(env_name).await?;
         let channels_urls = channels
             .iter()
             .map(|c| c.base_url.clone())
@@ -729,25 +865,6 @@ impl Project {
             platform,
             Self::virtual_packages_for(&platform).into_diagnostic()?,
         );
-        // Create solve spec
-        let solve_spec = PixiEnvironmentSpec {
-            name: Some(env_name.to_string()),
-            dependencies: pixi_specs,
-            build_environment: build_environment.clone(),
-            channels: channels_urls.clone(),
-            channel_config: self.config.global_channel_config().clone(),
-            ..Default::default()
-        };
-
-        // Solve using CommandDispatcher
-        let pixi_records = command_dispatcher
-            .solve_pixi_environment(solve_spec)
-            .await?;
-
-        // Move this to a separate function to avoid code duplication
-        try_increase_rlimit_to_sensible();
-
-        let prefix = self.environment_prefix(env_name).await?;
 
         let force_reinstall_packages = if force_reinstall {
             dependencies_names.iter().cloned().collect()
@@ -755,6 +872,7 @@ impl Project {
             Default::default()
         };
 
+        let command_dispatcher = self.command_dispatcher()?;
         let result = command_dispatcher
             .install_pixi_environment(InstallPixiEnvironmentSpec {
                 name: env_name.to_string(),
@@ -774,9 +892,6 @@ impl Project {
             .await?;
 
         command_dispatcher.clear_reporter().await;
-
-        // Update lock file with the installed packages
-        self.update_lock_file_for_environment(env_name, pixi_records, platform, channels)?;
 
         let install_changes = get_install_changes(result.transaction);
         Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
@@ -1235,7 +1350,12 @@ impl Project {
                 "Environment {} specs not up to date with global manifest",
                 env_name.fancy_display()
             );
-            let mut environment_update = self.install_environment(env_name).await?;
+
+            // Skip lockfile installation if packages were removed, as the lockfile is stale
+            let use_lockfile = removed_packages.is_none();
+            let mut environment_update = self
+                .install_environment_with_options(env_name, false, use_lockfile)
+                .await?;
 
             if let Some(removed_packages) = removed_packages {
                 environment_update.add_removed_packages(removed_packages.to_vec());
@@ -1617,10 +1737,41 @@ impl Project {
     /// For each environment in the manifest that has an installed prefix,
     /// this extracts the installed packages and creates lockfile entries.
     pub async fn create_lockfile_from_existing_environments(&mut self) -> miette::Result<()> {
+        let existing_locked_envs: HashSet<String> = self
+            .lock_file
+            .environments()
+            .map(|(name, _)| name.to_string())
+            .collect();
+
+        let missing_envs: Vec<(&EnvironmentName, &ParsedEnvironment)> = self
+            .manifest
+            .parsed
+            .envs
+            .iter()
+            .filter(|(env_name, _)| {
+                let name = env_name.to_string();
+                !existing_locked_envs.contains(&name)
+            })
+            .collect();
+
+        if missing_envs.is_empty() {
+            return Ok(());
+        }
+
         let mut builder = rattler_lock::LockFileBuilder::new();
 
-        for (env_name, parsed_env) in &self.manifest.parsed.envs {
-            let env_dir_path = self.env_root.path().join(env_name.as_str());
+        for (env_name, env_data) in self.lock_file.environments() {
+            builder.set_channels(env_name, env_data.channels().to_vec());
+            for (platform, packages) in env_data.packages_by_platform() {
+                for pkg in packages {
+                    builder.add_package(env_name, platform, pkg.into());
+                }
+            }
+        }
+
+        for (env_name, parsed_env) in missing_envs {
+            let env_name_str = env_name.to_string();
+            let env_dir_path = self.env_root.path().join(env_name_str.as_str());
 
             // Skip environments without an installed prefix
             let conda_meta = env_dir_path.join(consts::CONDA_META_DIR);
