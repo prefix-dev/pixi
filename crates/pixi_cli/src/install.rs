@@ -1,14 +1,14 @@
-use std::fmt::Write;
-
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
+use miette::IntoDiagnostic;
 use pixi_config::ConfigCli;
 use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator,
     environment::{InstallFilter, get_update_lock_file_and_prefixes},
     lock_file::{LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateMode},
 };
+use std::fmt::Write;
 
 use crate::cli_config::WorkspaceConfig;
 
@@ -132,7 +132,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             "The {} environment has been installed",
             environment.name().fancy_display(),
         )
-        .unwrap();
+        .into_diagnostic()?;
 
         if skip_opts {
             let platform = environment.best_platform();
@@ -147,7 +147,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
             // When only is set, also print the number of packages that will be installed
             if args.only.as_ref().is_some_and(|v| !v.is_empty()) {
-                write!(&mut message, ", including {num_retained} packages").unwrap();
+                write!(&mut message, ", including {num_retained} packages").into_diagnostic()?;
             }
 
             // Create set of unmatched packages, that matches the skip filter
@@ -175,7 +175,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         " excluding '{}'",
                         skipped_packages_vec.join("', '")
                     )
-                    .unwrap();
+                    .into_diagnostic()?;
                 } else if num_skipped > 0 {
                     let num_matched = matched.len();
                     if num_matched > 0 {
@@ -185,16 +185,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             matched.into_iter().join("', '"),
                             num_skipped
                         )
-                        .unwrap()
+                        .into_diagnostic()?
                     } else {
-                        write!(&mut message, " excluding {num_skipped} other packages").unwrap()
+                        write!(&mut message, " excluding {num_skipped} other packages")
+                            .into_diagnostic()?
                     }
                 } else {
                     write!(
                         &mut message,
                         " no packages were skipped (check if cli args were correct)"
                     )
-                    .unwrap();
+                    .into_diagnostic()?;
                 }
             }
         }
@@ -206,7 +207,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .iter()
                 .format_with(", ", |e, f| f(&e.name().fancy_display())),
         )
-        .unwrap();
+        .into_diagnostic()?;
     }
 
     if let Ok(Some(path)) = workspace.config().detached_environments().path() {
@@ -215,7 +216,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             " in '{}'",
             console::style(path.display()).bold()
         )
-        .unwrap()
+        .into_diagnostic()?;
     }
 
     eprintln!("{message}.");
