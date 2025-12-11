@@ -51,6 +51,7 @@ pub struct Args {
     #[arg(short = 's', long = "scm", ignore_case = true)]
     pub scm: Option<GitAttributes>,
 
+    /// Set a mapping between conda channels and pypi channels.
     #[arg(long = "conda-pypi-map", value_parser = parse_conda_pypi_mapping, value_delimiter = ',')]
     pub conda_pypi_map: Option<Vec<(NamedChannelOrUrl, String)>>,
 }
