@@ -73,15 +73,14 @@ impl TomlWorkspace {
             value: license,
             span,
         }) = &self.license
+            && let Err(e) = spdx::Expression::parse(license)
         {
-            if let Err(e) = spdx::Expression::parse(license) {
-                return Err(
-                    GenericError::new("'license' is not a valid SPDX expression")
-                        .with_span((*span).into())
-                        .with_span_label(e.to_string())
-                        .into(),
-                );
-            }
+            return Err(
+                GenericError::new("'license' is not a valid SPDX expression")
+                    .with_span((*span).into())
+                    .with_span_label(e.to_string())
+                    .into(),
+            );
         }
 
         let check_file_existence = |path: &Option<Spanned<PathBuf>>| {

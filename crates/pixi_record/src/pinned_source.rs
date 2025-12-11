@@ -879,28 +879,28 @@ impl PinnedUrlSpec {
                 requested: spec.url.clone(),
             });
         }
-        if let Some(sha256) = &spec.sha256 {
-            if *sha256 != self.sha256 {
-                let locked_sha256 = self.sha256;
-                return Err(SourceMismatchError::UrlHashMismatch {
-                    hash: "sha256",
-                    url: self.url.clone(),
-                    locked: format!("{locked_sha256:x}"),
-                    requested: format!("{sha256:x}"),
-                });
-            }
+        if let Some(sha256) = &spec.sha256
+            && *sha256 != self.sha256
+        {
+            let locked_sha256 = self.sha256;
+            return Err(SourceMismatchError::UrlHashMismatch {
+                hash: "sha256",
+                url: self.url.clone(),
+                locked: format!("{locked_sha256:x}"),
+                requested: format!("{sha256:x}"),
+            });
         }
-        if let Some(md5) = &spec.md5 {
-            if Some(md5) != self.md5.as_ref() {
-                return Err(SourceMismatchError::UrlHashMismatch {
-                    hash: "md5",
-                    url: self.url.clone(),
-                    locked: self
-                        .md5
-                        .map_or("None".to_string(), |md5| format!("{md5:x}")),
-                    requested: format!("{md5:x}"),
-                });
-            }
+        if let Some(md5) = &spec.md5
+            && Some(md5) != self.md5.as_ref()
+        {
+            return Err(SourceMismatchError::UrlHashMismatch {
+                hash: "md5",
+                url: self.url.clone(),
+                locked: self
+                    .md5
+                    .map_or("None".to_string(), |md5| format!("{md5:x}")),
+                requested: format!("{md5:x}"),
+            });
         }
         Ok(())
     }
@@ -932,14 +932,14 @@ impl PinnedGitSpec {
         // Check if requested rev matches.
         let locked_git_ref = self.source.reference.clone();
 
-        if let Some(requested_ref) = &spec.rev {
-            if requested_ref != &locked_git_ref {
-                return Err(SourceMismatchError::GitRevMismatch {
-                    git: self.git.clone(),
-                    locked: locked_git_ref.to_string(),
-                    requested: requested_ref.to_string(),
-                });
-            }
+        if let Some(requested_ref) = &spec.rev
+            && requested_ref != &locked_git_ref
+        {
+            return Err(SourceMismatchError::GitRevMismatch {
+                git: self.git.clone(),
+                locked: locked_git_ref.to_string(),
+                requested: requested_ref.to_string(),
+            });
         }
         Ok(())
     }

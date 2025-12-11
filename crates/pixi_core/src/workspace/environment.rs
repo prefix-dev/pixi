@@ -241,7 +241,7 @@ impl<'p> Environment<'p> {
         &self,
         name: &TaskName,
         platform: Option<Platform>,
-    ) -> Result<&'p Task, UnknownTask> {
+    ) -> Result<&'p Task, UnknownTask<'_>> {
         match self.tasks(platform).map(|tasks| tasks.get(name).copied()) {
             Err(_) | Ok(None) => Err(UnknownTask {
                 project: self.workspace,

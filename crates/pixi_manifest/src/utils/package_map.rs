@@ -29,9 +29,10 @@ impl UniquePackageMap {
         self,
         is_pixi_build_enabled: bool,
     ) -> Result<IndexMap<rattler_conda_types::PackageName, PixiSpec>, TomlError> {
-        if !is_pixi_build_enabled {
-            if let Some((package_name, _)) = self.specs.iter().find(|(_, spec)| spec.is_source()) {
-                return Err(TomlError::Generic(
+        if !is_pixi_build_enabled
+            && let Some((package_name, _)) = self.specs.iter().find(|(_, spec)| spec.is_source())
+        {
+            return Err(TomlError::Generic(
                     GenericError::new(
                         "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
                     )
@@ -41,7 +42,6 @@ impl UniquePackageMap {
                         "Add `preview = [\"pixi-build\"]` to the `workspace` or `project` table of your manifest",
                     ),
                 ));
-            }
         }
         Ok(self.specs)
     }

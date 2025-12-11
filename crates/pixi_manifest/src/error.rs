@@ -380,6 +380,7 @@ impl Diagnostic for InvalidNonPackageDependencies {
 }
 
 #[derive(Debug, Error, Diagnostic)]
+#[allow(dead_code)]
 #[error("an error occurred while parsing the manifest")]
 pub struct MultiTomlError {
     #[related]

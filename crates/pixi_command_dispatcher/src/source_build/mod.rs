@@ -254,10 +254,9 @@ impl SourceBuildSpec {
         if let (Some(PinnedSourceSpec::Git(pinned_git)), Some(SourceLocationSpec::Git(git_spec))) = (
             build_source.as_mut(),
             discovered_backend.init_params.build_source.clone(),
-        ) {
-            if pinned_git.source.subdirectory.is_none() {
-                pinned_git.source.subdirectory = git_spec.subdirectory.clone();
-            }
+        ) && pinned_git.source.subdirectory.is_none()
+        {
+            pinned_git.source.subdirectory = git_spec.subdirectory.clone();
         }
 
         // Here we have to get path in which we will run build. We have those options in order of decreasing priority:
@@ -327,12 +326,12 @@ impl SourceBuildSpec {
         );
 
         // Clean the working directory if requested.
-        if self.clean {
-            if let Err(err) = fs_err::remove_dir_all(&work_directory) {
-                return Err(CommandDispatcherError::Failed(
-                    SourceBuildError::CleanWorkingDirectory(work_directory, err),
-                ));
-            }
+        if self.clean
+            && let Err(err) = fs_err::remove_dir_all(&work_directory)
+        {
+            return Err(CommandDispatcherError::Failed(
+                SourceBuildError::CleanWorkingDirectory(work_directory, err),
+            ));
         }
 
         // Build the package using the v1 build method.
