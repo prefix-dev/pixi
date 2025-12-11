@@ -519,7 +519,7 @@ table code {
 /* Dark mode - darker code blocks */
 [data-md-color-scheme="slate"] .md-typeset code,
 [data-md-color-scheme="slate"] .md-typeset pre > code {
-  background-color: #232136;
+  background-color: var(--bg-dark);
 }
 
 .md-typeset code {
@@ -586,6 +586,17 @@ table code {
 
 .quote-card p {
   margin-bottom: 0.5rem;
+}
+
+/* Text selection color */
+::selection {
+  background-color: var(--brand-yellow);
+  color: var(--brand-navy);
+}
+
+::-moz-selection {
+  background-color: var(--brand-yellow);
+  color: var(--brand-navy);
 }
 
 /* TOC banner image */

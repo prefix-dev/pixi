@@ -63,7 +63,7 @@ pixi global install gh nvim ipython btop ripgrep
 
 ---
 
-## What is the difference with Pixi?
+## How Tools Compare to Pixi
 
 | Builtin Core Features       | Pixi | Conda | Pip | Poetry | uv |
 |-----------------------------|------|-------|-----|--------|----|
