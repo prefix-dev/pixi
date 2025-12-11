@@ -28,6 +28,17 @@ Pixi can also be configured via environment variables.
         </ul>
       </td>
     </tr>
+    <tr>
+      <td><code>RATTLER_AUTH_FILE</code></td>
+      <td>Overrides the default location of the credentials file. When set, this is the only source of authentication data used by pixi. See <a href="../deployment/authentication.md#override-the-authentication-storage">authentication docs</a> for the file format.</td>
+      <td>
+        <ul>
+          <li>If <code>RATTLER_AUTH_FILE</code> is not set, the system keyring is used.</li>
+          <li>If no keyring is available, file storage from <code>~/.rattler/credentials.json</code> is used.</li>
+          <li>Additionally, <code>.netrc</code> file authentication is checked.</li>
+        </ul>
+      </td>
+    </tr>
   </tbody>
 </table>
 
