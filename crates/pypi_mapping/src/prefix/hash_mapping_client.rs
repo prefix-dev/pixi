@@ -44,7 +44,10 @@ impl From<reqwest::Error> for HashMappingClientError {
 impl From<HashMappingClientError> for MappingError {
     fn from(value: HashMappingClientError) -> Self {
         match value {
-            HashMappingClientError::Io(err) => MappingError::IoError(err),
+            HashMappingClientError::Io(err) => MappingError::IoError {
+                source: err,
+                path: std::path::PathBuf::new(),
+            },
             HashMappingClientError::Reqwest(err) => MappingError::Reqwest(err),
         }
     }

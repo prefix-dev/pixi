@@ -60,7 +60,7 @@ impl SourceMetadataSpec {
         name = "source-metadata",
         fields(
             manifest_source= %self.backend_metadata.manifest_source,
-            preferred_build_source=?self.backend_metadata.preferred_build_source,
+            preferred_build_source=self.backend_metadata.preferred_build_source.as_ref().map(tracing::field::display),
             name = %self.package.as_source(),
             platform = %self.backend_metadata.build_environment.host_platform,
         )

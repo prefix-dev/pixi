@@ -24,11 +24,12 @@ pixi upload prefix [OPTIONS] --channel <CHANNEL>
 :  The prefix.dev API key, if none is provided, the token is read from the keychain / auth-file
 <br>**env**: `PREFIX_API_KEY`
 - <a id="arg---attestation" href="#arg---attestation">`--attestation <ATTESTATION>`</a>
-:  Upload one or more attestation files alongside the package Note: if you add an attestation, you can _only_ upload a single package
+:  Upload an attestation file alongside the package. Note: if you add an attestation, you can _only_ upload a single package. Mutually exclusive with --generate-attestation
 - <a id="arg---generate-attestation" href="#arg---generate-attestation">`--generate-attestation`</a>
-:  Automatically generate attestations when using trusted publishing
-<br>**default**: `false`
+:  Automatically generate attestation using cosign in CI. Mutually exclusive with --attestation
 - <a id="arg---skip-existing" href="#arg---skip-existing">`--skip-existing (-s)`</a>
-:  Skip upload if package is existed
+:  Skip upload if package already exists
+- <a id="arg---force" href="#arg---force">`--force`</a>
+:  Force overwrite existing packages
 
 --8<-- "docs/reference/cli/pixi/upload/prefix_extender:example"
