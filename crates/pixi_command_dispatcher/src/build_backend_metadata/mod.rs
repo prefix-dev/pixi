@@ -114,8 +114,8 @@ impl BuildBackendMetadataSpec {
         skip_all,
         name="backend-metadata",
         fields(
-            manifest_source = ?self.manifest_source,
-            build_source = ?self.preferred_build_source,
+            manifest_source = %self.manifest_source,
+            build_source = self.preferred_build_source.as_ref().map(tracing::field::display),
             platform = %self.build_environment.host_platform,
         )
     )]

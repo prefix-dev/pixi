@@ -127,7 +127,7 @@ impl SourceBuildSpec {
         name = "source-build",
         fields(
             manifest_source = %self.source.manifest_source(),
-            build_source = ?self.source.build_source(),
+            build_source = self.source.build_source().as_ref().map(tracing::field::display),
             package = %self.package,
         )
     )]

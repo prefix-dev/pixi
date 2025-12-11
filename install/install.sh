@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-# Version: v0.60.0
+# Version: v0.61.0
 
 __wrap__() {
     # Function to mask username and password in URLs for safe printing
@@ -207,6 +207,7 @@ __wrap__() {
             # Append the line if not already present
             if ! grep -Fxq "$LINE" "$FILE"; then
                 echo "Updating '${FILE}'"
+                echo >>"$FILE"
                 echo "$LINE" >>"$FILE"
                 echo "Please restart or source your shell."
             fi

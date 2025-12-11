@@ -7,14 +7,14 @@ use rattler_conda_types::Platform;
 use crate::{
     common::{
         LockFileExt, PixiControl,
-        package_database::{Package, PackageDatabase},
     },
     setup_tracing,
 };
+use pixi_test_utils::{MockRepoData, Package};
 
 /// Helper function to create a package database with common test dependencies
-fn create_test_package_database() -> PackageDatabase {
-    let mut db = PackageDatabase::default();
+fn create_test_package_database() -> MockRepoData {
+    let mut db = MockRepoData::default();
 
     // Add common dependencies that our test packages will need
     db.add_package(Package::build("cmake", "3.20.0").finish());

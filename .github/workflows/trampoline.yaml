@@ -68,6 +68,7 @@ jobs:
         uses: prefix-dev/setup-pixi@main
         with:
           environments: trampoline
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build trampoline binary
         run: pixi run build-trampoline --target ${{ matrix.target }}

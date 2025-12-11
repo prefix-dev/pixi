@@ -6,6 +6,7 @@ pub mod channel;
 pub mod description;
 pub mod environment;
 pub mod export;
+pub mod feature;
 pub mod name;
 pub mod platform;
 pub mod requires_pixi;
@@ -19,6 +20,7 @@ pub enum Command {
     Platform(platform::Args),
     Version(version::Args),
     Environment(environment::Args),
+    Feature(feature::Args),
     Export(export::Args),
     Name(name::Args),
     SystemRequirements(system_requirements::Args),
@@ -42,6 +44,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::Platform(args) => platform::execute(args).await?,
         Command::Version(args) => version::execute(args).await?,
         Command::Environment(args) => environment::execute(args).await?,
+        Command::Feature(args) => feature::execute(args).await?,
         Command::Export(cmd) => export::execute(cmd).await?,
         Command::Name(args) => name::execute(args).await?,
         Command::SystemRequirements(args) => system_requirements::execute(args).await?,

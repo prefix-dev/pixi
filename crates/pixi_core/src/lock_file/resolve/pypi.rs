@@ -1130,7 +1130,9 @@ async fn lock_pypi_packages(
                             // instead of from the source path to copy the path that was passed in
                             // from the requirement.
                             let url_or_path = UrlOrPath::Path(install_path);
-                            (url_or_path, hash, dir.editable.unwrap_or(false))
+                            // Always set editable to false in lock file.
+                            // Editability is looked up from manifest at install time.
+                            (url_or_path, hash, false)
                         }
                     };
 

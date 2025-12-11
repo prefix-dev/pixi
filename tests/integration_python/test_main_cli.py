@@ -3,10 +3,10 @@ import platform
 import shutil
 import sys
 import tomllib
-import tomli_w
 from pathlib import Path
 
 import pytest
+import tomli_w
 from dirty_equals import AnyThing, IsList, IsStr
 from inline_snapshot import snapshot
 
@@ -1372,6 +1372,7 @@ def test_quiet_flag_with_rust_log_env(
     )
 
 
+@pytest.mark.slow
 def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """
     Check that a helpful error message is raised when attempting to

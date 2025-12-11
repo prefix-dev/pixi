@@ -396,9 +396,10 @@ impl ManifestDocument {
             || platform.is_some()
             || editable.is_some_and(|e| e)
         {
-            let mut pypi_requirement =
-                PixiPypiSpec::try_from((requirement.clone(), pixi_requirement.cloned()))
-                    .map_err(Box::new)?;
+            let mut pypi_requirement = match pixi_requirement {
+                Some(existing) => existing.update_requirement(requirement)?,
+                None => PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?,
+            };
             if let Some(editable) = editable {
                 pypi_requirement.set_editable(editable);
             }
@@ -659,6 +660,20 @@ impl ManifestDocument {
             .get_or_insert_nested_table(&env_table.as_keys())?
             .remove(name)
             .is_some())
+    }
+
+    /// Removes a feature from the manifest. Returns `true` if the feature was
+    /// removed.
+    pub fn remove_feature(&mut self, feature_name: &FeatureName) -> Result<bool, TomlError> {
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_table(Some("feature"));
+
+        let feature_table = self
+            .manifest_mut()
+            .get_or_insert_nested_table(&table_name.as_keys())?;
+
+        Ok(feature_table.remove(feature_name.as_str()).is_some())
     }
 
     pub fn add_system_requirements(
@@ -988,5 +1003,93 @@ pixi_demo = { path = ".", editable = true }
             .unwrap();
 
         insta::assert_snapshot!(document.to_string());
+    }
+
+    /// This test checks that removing a feature removes all its subtables.
+    #[test]
+    pub fn remove_feature_pixi_toml() {
+        let manifest_content = r#"
+[workspace]
+name = "test"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[feature.test]
+channels = ["test-channel"]
+
+[feature.test.dependencies]
+some-package = "*"
+
+[feature.test.target.linux-64.dependencies]
+linux-package = "*"
+
+[feature.other]
+channels = ["other-channel"]
+"#;
+
+        let mut document = ManifestDocument::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        // Remove the feature
+        let removed = document
+            .remove_feature(&FeatureName::from_str("test").unwrap())
+            .unwrap();
+        assert!(removed);
+
+        // Verify the feature and all its subtables are removed
+        let result = document.to_string();
+        assert!(!result.contains("[feature.test]"));
+        assert!(!result.contains("some-package"));
+        assert!(!result.contains("linux-package"));
+
+        // Verify other feature is still there
+        assert!(result.contains("[feature.other]"));
+
+        // Remove non-existent feature should return false
+        let removed = document
+            .remove_feature(&FeatureName::from_str("nonexistent").unwrap())
+            .unwrap();
+        assert!(!removed);
+    }
+
+    /// This test checks that removing a feature works in pyproject.toml.
+    #[test]
+    pub fn remove_feature_pyproject_toml() {
+        let manifest_content = r#"
+[project]
+name = "test"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.feature.test]
+channels = ["test-channel"]
+
+[tool.pixi.feature.test.dependencies]
+some-package = "*"
+
+[tool.pixi.feature.other]
+channels = ["other-channel"]
+"#;
+
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        // Remove the feature
+        let removed = document
+            .remove_feature(&FeatureName::from_str("test").unwrap())
+            .unwrap();
+        assert!(removed);
+
+        // Verify the feature and all its subtables are removed
+        let result = document.to_string();
+        assert!(!result.contains("[tool.pixi.feature.test]"));
+        assert!(!result.contains("some-package"));
+
+        // Verify other feature is still there
+        assert!(result.contains("[tool.pixi.feature.other]"));
     }
 }
