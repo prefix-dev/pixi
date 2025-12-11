@@ -7,7 +7,7 @@ mod dependencies;
 mod move_file;
 mod work_dir_key;
 
-use std::hash::{Hash, Hasher};
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 pub use build_cache::{
@@ -96,18 +96,18 @@ impl std::fmt::Display for SourceCodeLocation {
 
 /// Try to deduce a name from a url.
 fn pretty_url_name(url: &Url) -> String {
-    if let Some(last_segment) = url
-        .path_segments()
-        .and_then(|mut segments| segments.next_back())
-    {
-        // Strip known suffixes
-        for suffix in KNOWN_SUFFIXES {
-            if let Some(segment) = last_segment.strip_suffix(suffix) {
-                return segment.to_string();
+    if let Some(segments) = url.path_segments() {
+        // Collect path segments, filtering out empty ones (e.g., from trailing slashes)
+        let non_empty_segments: Vec<_> = segments.filter(|s| !s.is_empty()).collect();
+
+        if let Some(last_segment) = non_empty_segments.last() {
+            // Strip known suffixes
+            for suffix in KNOWN_SUFFIXES {
+                if let Some(segment) = last_segment.strip_suffix(suffix) {
+                    return segment.to_string();
+                }
             }
-        }
-        if !last_segment.is_empty() {
-            return last_segment.to_string();
+            return (*last_segment).to_string();
         }
     }
 
@@ -115,7 +115,10 @@ fn pretty_url_name(url: &Url) -> String {
         // If the URL has no path segments, we can use the host as a fallback
         host.to_string()
     } else {
-        url.to_string()
+        // Final fallback: use a hash of the URL to avoid invalid path characters
+        let mut hasher = DefaultHasher::new();
+        url.as_str().hash(&mut hasher);
+        URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())
     }
 }
 

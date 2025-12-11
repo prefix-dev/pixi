@@ -37,7 +37,6 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::{Display, Formatter},
     hash::Hash,
-    ops::Sub,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -185,12 +184,6 @@ impl Display for IndexesMismatch {
 }
 
 #[derive(Debug, Error)]
-pub struct EditablePackagesMismatch {
-    pub expected_editable: Vec<uv_normalize::PackageName>,
-    pub unexpected_editable: Vec<uv_normalize::PackageName>,
-}
-
-#[derive(Debug, Error)]
 pub struct SourceTreeHashMismatch {
     pub computed: PackageHashes,
     pub locked: Option<PackageHashes>,
@@ -311,9 +304,6 @@ pub enum PlatformUnsat {
 
     #[error("directory dependency on a conda installed package '{0}' is not supported")]
     DirectoryDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
-
-    #[error(transparent)]
-    EditablePackageMismatch(EditablePackagesMismatch),
 
     #[error(
         "the editable package '{0}' was expected to be a directory but is a url, which cannot be editable: '{1}'"
@@ -474,7 +464,6 @@ impl PlatformUnsat {
                 | PlatformUnsat::AsPep508Error(_, _)
                 | PlatformUnsat::FailedToDetermineSourceTreeHash(_, _)
                 | PlatformUnsat::PythonVersionMismatch(_, _, _)
-                | PlatformUnsat::EditablePackageMismatch(_)
                 | PlatformUnsat::SourceTreeHashMismatch(..),
         )
     }
@@ -1530,7 +1519,6 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .chain(resolved_dev_dependencies.into_iter())
         .collect_vec();
     let mut pypi_queue = pypi_requirements;
-    let mut expected_editable_pypi_packages = HashSet::new();
     let mut expected_conda_source_dependencies = HashSet::new();
     let mut expected_conda_packages = HashSet::new();
     let mut conda_packages_used_by_pypi = HashSet::new();
@@ -1680,11 +1668,6 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                 {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
-
-                                // Record that we want this package to be editable. This is used to
-                                // check at the end if packages that should be editable are actually
-                                // editable and vice versa.
-                                expected_editable_pypi_packages.insert(requirement.name.clone());
 
                                 FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras.to_vec())
                             } else {
@@ -1937,27 +1920,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
         )));
     }
 
-    // Check if all packages that should be editable are actually editable and vice
-    // versa.
-    let locked_editable_packages = locked_pypi_environment
-        .records
-        .iter()
-        .filter(|record| record.0.editable)
-        .map(|record| {
-            uv_normalize::PackageName::from_str(record.0.name.as_ref())
-                .expect("cannot convert name")
-        })
-        .collect::<HashSet<_>>();
-    let expected_editable = expected_editable_pypi_packages.sub(&locked_editable_packages);
-    let unexpected_editable = locked_editable_packages.sub(&expected_editable_pypi_packages);
-    if !expected_editable.is_empty() || !unexpected_editable.is_empty() {
-        return Err(Box::new(PlatformUnsat::EditablePackageMismatch(
-            EditablePackagesMismatch {
-                expected_editable: expected_editable.into_iter().sorted().collect(),
-                unexpected_editable: unexpected_editable.into_iter().sorted().collect(),
-            },
-        )));
-    }
+    // Note: Editability is NOT checked here. The lock file always stores editable=false
+    // (which is omitted from serialization). Editability is looked up from the manifest
+    // at install time. This allows different environments in a solve-group to have
+    // different editability settings for the same path-based package.
 
     // Verify the pixi build package's package_build_source matches the manifest.
     verify_build_source_matches_manifest(environment, locked_pixi_records)?;
@@ -2150,72 +2116,6 @@ pub fn verify_solve_group_satisfiability(
     }
 
     Ok(())
-}
-
-impl Display for EditablePackagesMismatch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if !self.expected_editable.is_empty() && self.unexpected_editable.is_empty() {
-            write!(f, "expected ")?;
-            format_package_list(f, &self.expected_editable)?;
-            write!(
-                f,
-                " to be editable but in the lock-file {they} {are} not",
-                they = it_they(self.expected_editable.len()),
-                are = is_are(self.expected_editable.len())
-            )?
-        } else if self.expected_editable.is_empty() && !self.unexpected_editable.is_empty() {
-            write!(f, "expected ")?;
-            format_package_list(f, &self.unexpected_editable)?;
-            write!(
-                f,
-                " NOT to be editable but in the lock-file {they} {are}",
-                they = it_they(self.unexpected_editable.len()),
-                are = is_are(self.unexpected_editable.len())
-            )?
-        } else {
-            write!(f, "expected ")?;
-            format_package_list(f, &self.expected_editable)?;
-            write!(
-                f,
-                " to be editable but in the lock-file but {they} {are} not, whereas ",
-                they = it_they(self.expected_editable.len()),
-                are = is_are(self.expected_editable.len())
-            )?;
-            format_package_list(f, &self.unexpected_editable)?;
-            write!(
-                f,
-                " {are} NOT expected to be editable which in the lock-file {they} {are}",
-                they = it_they(self.unexpected_editable.len()),
-                are = is_are(self.unexpected_editable.len())
-            )?
-        }
-
-        return Ok(());
-
-        fn format_package_list(
-            f: &mut std::fmt::Formatter<'_>,
-            packages: &[uv_normalize::PackageName],
-        ) -> std::fmt::Result {
-            for (idx, package) in packages.iter().enumerate() {
-                if idx == packages.len() - 1 && idx > 0 {
-                    write!(f, " and ")?;
-                } else if idx > 0 {
-                    write!(f, ", ")?;
-                }
-                write!(f, "{package}")?;
-            }
-
-            Ok(())
-        }
-
-        fn is_are(count: usize) -> &'static str {
-            if count == 1 { "is" } else { "are" }
-        }
-
-        fn it_they(count: usize) -> &'static str {
-            if count == 1 { "it" } else { "they" }
-        }
-    }
 }
 
 /// Verify that the current package's build.source in the manifest

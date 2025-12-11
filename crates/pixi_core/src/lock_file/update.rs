@@ -684,10 +684,23 @@ impl<'p> LockFileDerivedData<'p> {
                 let pixi_records =
                     locked_packages_to_pixi_records(conda_packages, self.workspace.root())?;
 
+                // Get the manifest's pypi dependencies for this environment to look up editability.
+                // The lock file always stores editable=false, so we apply the actual
+                // editability from the manifest at install time.
+                let manifest_pypi_deps = environment.pypi_dependencies(Some(platform));
+
                 let pypi_records = pypi_packages
                     .into_iter()
                     .filter_map(LockedPackageRef::as_pypi)
-                    .map(|(data, env_data)| (data.clone(), env_data.clone()))
+                    .map(|(data, env_data)| {
+                        let mut data = data.clone();
+                        data.editable = manifest_pypi_deps
+                            .get(&data.name)
+                            .and_then(|specs| specs.last())
+                            .and_then(|spec| spec.editable())
+                            .unwrap_or(data.editable);
+                        (data, env_data.clone())
+                    })
                     .collect::<Vec<_>>();
 
                 let conda_reinstall_packages = match reinstall_packages {

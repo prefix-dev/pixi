@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - uses: prefix-dev/setup-pixi@main
         with:
-          cache: true
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: schema
       - name: Ensure schema is up-to-date
         run: |

@@ -3,8 +3,9 @@
 pub mod builders;
 pub mod client;
 pub mod logging;
-pub mod package_database;
 pub mod pypi_index;
+
+pub use pixi_test_utils::GitRepoFixture;
 
 use std::{
     ffi::OsString,
@@ -143,6 +144,14 @@ pub trait LockFileExt {
         platform: Platform,
         package: &str,
     ) -> Option<LockedPackageRef>;
+
+    /// Check if a PyPI package is marked as editable in the lock file
+    fn is_pypi_package_editable(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<bool>;
 }
 
 impl LockFileExt for LockFile {
@@ -244,6 +253,21 @@ impl LockFileExt for LockFile {
                     .and_then(|mut packages| packages.find(|p| p.name() == package))
             })
             .map(|p| p.location().clone())
+    }
+
+    fn is_pypi_package_editable(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<bool> {
+        self.environment(environment)
+            .and_then(|env| {
+                env.pypi_packages(platform).and_then(|mut packages| {
+                    packages.find(|(data, _)| data.name.as_ref() == package)
+                })
+            })
+            .map(|(data, _)| data.editable)
     }
 }
 
@@ -418,7 +442,7 @@ impl PixiControl {
             args: add::Args {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
+                    backend_override: self.backend_override.clone(),
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
                 no_install_config: NoInstallConfig { no_install: true },
@@ -516,7 +540,7 @@ impl PixiControl {
     pub fn project_environment_add(&self, name: EnvironmentName) -> ProjectEnvironmentAddBuilder {
         ProjectEnvironmentAddBuilder {
             manifest_path: Some(self.manifest_path()),
-            args: workspace::environment::add::Args {
+            args: workspace::environment::AddArgs {
                 name,
                 features: None,
                 solve_group: None,

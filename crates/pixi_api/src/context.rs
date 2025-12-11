@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use indexmap::{IndexMap, IndexSet};
 use miette::IntoDiagnostic;
-use pixi_core::workspace::{PypiDeps, UpdateDeps, WorkspaceMut};
+use pixi_core::workspace::{Environment, PypiDeps, UpdateDeps, WorkspaceMut};
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
     EnvironmentName, Feature, FeatureName, PrioritizedChannel, SpecType, TargetSelector, Task,
@@ -81,6 +81,39 @@ impl<I: Interface> WorkspaceContext<I> {
         crate::workspace::workspace::name::set(&self.interface, self.workspace_mut()?, name).await
     }
 
+    pub async fn list_environments(&self) -> Vec<Environment> {
+        crate::workspace::workspace::environment::list(&self.workspace).await
+    }
+
+    pub async fn add_environment(
+        &self,
+        name: EnvironmentName,
+        features: Option<Vec<String>>,
+        solve_group: Option<String>,
+        no_default_feature: bool,
+        force: bool,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::environment::add(
+            &self.interface,
+            self.workspace_mut()?,
+            name,
+            features,
+            solve_group,
+            no_default_feature,
+            force,
+        )
+        .await
+    }
+
+    pub async fn remove_environment(&self, name: &str) -> miette::Result<()> {
+        crate::workspace::workspace::environment::remove(
+            &self.interface,
+            self.workspace_mut()?,
+            name,
+        )
+        .await
+    }
+
     pub async fn list_features(&self) -> IndexMap<FeatureName, Feature> {
         crate::workspace::workspace::feature::list_features(&self.workspace).await
     }
@@ -134,6 +167,15 @@ impl<I: Interface> WorkspaceContext<I> {
     ) -> Option<FeatureName> {
         crate::workspace::workspace::feature::feature_by_task(&self.workspace, task, environment)
             .await
+    }
+
+    pub async fn remove_feature(&self, feature: &FeatureName) -> miette::Result<()> {
+        crate::workspace::workspace::feature::remove_feature(
+            &self.interface,
+            self.workspace_mut()?,
+            feature,
+        )
+        .await
     }
 
     pub async fn add_conda_deps(

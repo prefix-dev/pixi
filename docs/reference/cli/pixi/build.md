@@ -12,8 +12,6 @@ pixi build [OPTIONS]
 ```
 
 ## Options
-- <a id="arg---build-manifest" href="#arg---build-manifest">`--build-manifest <BUILD_MANIFEST>`</a>
-:  The path to the manifest file to build (e.g., recipe.yaml, package.xml, pixi.toml). If not specified, defaults to the workspace manifest
 - <a id="arg---target-platform" href="#arg---target-platform">`--target-platform (-t) <TARGET_PLATFORM>`</a>
 :  The target platform to build for (defaults to the current platform)
 <br>**default**: `current_platform`
@@ -47,6 +45,9 @@ pixi build [OPTIONS]
 :  Run post-link scripts (insecure)
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
+- <a id="arg---tls-root-certs" href="#arg---tls-root-certs">`--tls-root-certs <TLS_ROOT_CERTS>`</a>
+:  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+<br>**env**: `PIXI_TLS_ROOT_CERTS`
 - <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
 :  Use environment activation cache (experimental)
 

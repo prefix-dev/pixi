@@ -50,7 +50,6 @@ url = { workspace = true }
 [dev-dependencies]
 assert_matches = { workspace = true }
 fancy_display = { workspace = true }
-glob = "0.3.2"
 insta = { workspace = true, features = ["yaml"] }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
 pixi_test_utils = { workspace = true }
