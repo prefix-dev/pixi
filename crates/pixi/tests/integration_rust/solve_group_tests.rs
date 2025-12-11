@@ -914,6 +914,7 @@ async fn test_solve_group_per_environment_editability() {
     name = "test-editability"
     channels = ["{channel}"]
     platforms = ["{platform}"]
+conda-pypi-map = {{}} # disable mapping
 
     [dependencies]
     python = "*"
