@@ -14,7 +14,7 @@ use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRec
 
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
-use crate::workspace::{DependencyOptions, InitOptions, ReinstallOptions};
+use crate::workspace::{DependencyOptions, InitOptions, Package, ReinstallOptions};
 
 pub struct DefaultContext<I: Interface> {
     _interface: I,
@@ -110,6 +110,27 @@ impl<I: Interface> WorkspaceContext<I> {
             &self.interface,
             self.workspace_mut()?,
             name,
+        )
+        .await
+    }
+
+    pub async fn list_packages(
+        &self,
+        regex: Option<String>,
+        platform: Option<Platform>,
+        environment: Option<String>,
+        explicit: bool,
+        no_install: bool,
+        lock_file_usage: LockFileUsage,
+    ) -> miette::Result<Vec<Package>> {
+        crate::workspace::list::list(
+            &self.workspace,
+            regex,
+            platform,
+            environment,
+            explicit,
+            no_install,
+            lock_file_usage,
         )
         .await
     }

@@ -58,9 +58,7 @@ pixi_reporters = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_task = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
-pixi_uv_context = { workspace = true }
 pixi_uv_conversions = { workspace = true }
-pypi_modifiers = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
 rattler_lock = { workspace = true }
@@ -94,13 +92,9 @@ typed-path = { workspace = true }
 url = { workspace = true }
 uv-client = { workspace = true }
 uv-configuration = { workspace = true }
-uv-distribution = { workspace = true }
-uv-distribution-types = { workspace = true }
-uv-normalize = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
 uv-requirements-txt = { workspace = true }
-uv-types = { workspace = true }
 which = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 

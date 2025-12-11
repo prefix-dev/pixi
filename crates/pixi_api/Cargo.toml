@@ -30,6 +30,8 @@ pixi_manifest = { workspace = true }
 pixi_pypi_spec = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_utils = { workspace = true }
+pixi_uv_conversions = { workspace = true }
+pypi_modifiers = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_repodata_gateway = { workspace = true, features = [
@@ -44,4 +46,7 @@ tempfile = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }
 url = { workspace = true }
+uv-distribution = { workspace = true }
+uv-distribution-types = { workspace = true }
 uv-normalize = { workspace = true }
+uv-types = { workspace = true }
