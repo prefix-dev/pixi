@@ -110,7 +110,7 @@ impl UvReporter {
         Arc::new(Self::new(options))
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<Vec<Option<'_, ScopedTask>>> {
+    fn lock(&self) -> std::sync::MutexGuard<Vec<Option<ScopedTask>>> {
         self.scoped_tasks.lock().expect("progress lock poison")
     }
 
