@@ -169,6 +169,7 @@ impl UrlSource {
                     url: url.clone(),
                     sha256: sha,
                     md5,
+                    subdirectory: None,
                 };
                 return Ok(Fetch { pinned, path });
             }
@@ -196,6 +197,7 @@ impl UrlSource {
                     url,
                     sha256: sha,
                     md5,
+                    subdirectory: None,
                 };
                 return Ok(Fetch { pinned, path });
             }
@@ -249,6 +251,7 @@ impl UrlSource {
             url,
             sha256,
             md5: Some(md5),
+            subdirectory: None,
         };
 
         Ok(Fetch {

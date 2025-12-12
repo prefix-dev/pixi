@@ -27,8 +27,18 @@ fn to_pixi_spec_v1(
         itertools::Either::Left(source) => {
             let source = match source.location {
                 pixi_spec::SourceLocationSpec::Url(url_source_spec) => {
-                    let pixi_spec::UrlSourceSpec { url, md5, sha256 } = url_source_spec;
-                    pbt::SourcePackageSpecV1::Url(pbt::UrlSpecV1 { url, md5, sha256 })
+                    let pixi_spec::UrlSourceSpec {
+                        url,
+                        subdirectory,
+                        md5,
+                        sha256,
+                    } = url_source_spec;
+                    pbt::SourcePackageSpecV1::Url(pbt::UrlSpecV1 {
+                        url,
+                        subdirectory,
+                        md5,
+                        sha256,
+                    })
                 }
                 pixi_spec::SourceLocationSpec::Git(git_spec) => {
                     let pixi_spec::GitSpec {

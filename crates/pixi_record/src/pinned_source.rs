@@ -15,7 +15,7 @@ use pixi_git::{
 use pixi_spec::{
     GitReference, GitSpec, PathSourceSpec, SourceLocationSpec, SourceSpec, UrlSourceSpec,
 };
-use rattler_digest::{Md5Hash, Sha256Hash};
+use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, parse_digest_from_hex};
 use rattler_lock::UrlOrPath;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -206,7 +206,14 @@ impl PinnedSourceSpec {
 
             // URL sources: URLs must be exactly equal
             (PinnedSourceSpec::Url(pinned_url), SourceLocationSpec::Url(source_url)) => {
-                pinned_url.url == source_url.url
+                if pinned_url.url != source_url.url {
+                    return false;
+                }
+                match (&source_url.subdirectory, &pinned_url.subdirectory) {
+                    (Some(source_subdir), Some(pinned_subdir)) => source_subdir == pinned_subdir,
+                    (Some(_), None) => false,
+                    (None, _) => true,
+                }
             }
 
             // Mismatched types never match
@@ -305,7 +312,31 @@ impl PinnedSourceSpec {
                 }))
             }
 
-            PinnedSourceSpec::Url(_) => unreachable!("url specs have not been implemented"),
+            PinnedSourceSpec::Url(base_url) => {
+                // Base subdirectory
+                let base_subdir = base_url.subdirectory.as_deref().unwrap_or("");
+                let base_path = Path::new(base_subdir);
+
+                let relative_std_path = Path::new(build_source_path.as_str());
+
+                // Join and normalize to account for any navigation segments.
+                let target_subdir = base_path.join(relative_std_path);
+                let normalized = crate::path_utils::normalize_path(&target_subdir);
+
+                let subdir_str = normalized.to_string_lossy();
+                let subdirectory = if subdir_str.is_empty() {
+                    None
+                } else {
+                    Some(subdir_str.into_owned())
+                };
+
+                Some(PinnedSourceSpec::Url(PinnedUrlSpec {
+                    url: base_url.url.clone(),
+                    sha256: base_url.sha256,
+                    md5: base_url.md5,
+                    subdirectory,
+                }))
+            }
         }
     }
 
@@ -367,8 +398,26 @@ impl PinnedSourceSpec {
 
                 Some(Utf8UnixPathBuf::from(relative_str))
             }
-            (PinnedSourceSpec::Url(_), _) => unreachable!("url specs have not been implemented"),
-            (_, PinnedSourceSpec::Url(_)) => unreachable!("url specs have not been implemented"),
+            (PinnedSourceSpec::Url(this_url), PinnedSourceSpec::Url(base_url)) => {
+                // Only make relative when the archives are identical (same URL and hashes)
+                if this_url.url != base_url.url
+                    || this_url.sha256 != base_url.sha256
+                    || this_url.md5 != base_url.md5
+                {
+                    return None;
+                }
+
+                let base_subdir = base_url.subdirectory.as_deref().unwrap_or("");
+                let this_subdir = this_url.subdirectory.as_deref().unwrap_or("");
+
+                let base_path = std::path::Path::new(base_subdir);
+                let this_path = std::path::Path::new(this_subdir);
+
+                let relative = pathdiff::diff_paths(this_path, base_path)?;
+                let relative_str = unixify_relative_path(relative.as_path());
+
+                Some(Utf8UnixPathBuf::from(relative_str))
+            }
             // Different types or incompatible sources
             _ => None,
         }
@@ -411,15 +460,30 @@ pub struct PinnedUrlSpec {
     /// The md5 hash of the archive.
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Md5>>")]
     pub md5: Option<Md5Hash>,
+
+    /// The subdirectory inside the extracted archive.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subdirectory: Option<String>,
 }
 
 impl PinnedUrlSpec {
     /// Returns a URL that uniquely identifies this path spec. This URL is not
     /// portable, e.g. it might result in a different URL on different systems.
     pub fn identifiable_url(&self) -> Url {
+        // NOTE: we piggyback on user-visible query parameters to store pixi metadata.
+        // If the upstream URL already uses `sha256`, `md5`, or `subdirectory` keys we
+        // currently overwrite/interpret them as our own metadata.
         let mut url = self.url.clone();
-        url.query_pairs_mut()
-            .append_pair("sha256", &format!("{:x}", self.sha256));
+        {
+            let mut pairs = url.query_pairs_mut();
+            pairs.append_pair("sha256", &format!("{:x}", self.sha256));
+            if let Some(md5) = &self.md5 {
+                pairs.append_pair("md5", &format!("{md5:x}"));
+            }
+            if let Some(subdir) = &self.subdirectory {
+                pairs.append_pair("subdirectory", subdir);
+            }
+        }
         url
     }
 }
@@ -667,8 +731,8 @@ impl From<PinnedGitSpec> for UrlOrPath {
 }
 
 impl From<PinnedUrlSpec> for UrlOrPath {
-    fn from(_value: PinnedUrlSpec) -> Self {
-        unimplemented!()
+    fn from(value: PinnedUrlSpec) -> Self {
+        UrlOrPath::Url(value.identifiable_url())
     }
 }
 
@@ -763,6 +827,24 @@ pub enum ParseError {
     /// An error that occurs when parsing a locked git URL.
     #[error("failed to parse locked git url {0}. Reason: {1}")]
     LockedGitUrl(String, String),
+
+    /// A pinned URL is missing the sha256 query parameter.
+    #[error("failed to parse pinned url {url}: missing sha256 query parameter")]
+    MissingUrlSha256 {
+        /// The url missing mandatory metadata.
+        url: Url,
+    },
+
+    /// Failed to parse a hash stored in the pinned URL.
+    #[error("failed to parse pinned url {url}: invalid {hash} digest '{value}'")]
+    InvalidUrlDigest {
+        /// The url that failed to parse.
+        url: Url,
+        /// The digest kind.
+        hash: &'static str,
+        /// The invalid digest string.
+        value: String,
+    },
 }
 
 impl TryFrom<UrlOrPath> for PinnedSourceSpec {
@@ -780,7 +862,60 @@ impl TryFrom<UrlOrPath> for PinnedSourceSpec {
                         })?;
                         Ok(pinned.into())
                     }
-                    false => unimplemented!("url not supported"),
+                    false => {
+                        let mut sha256 = None;
+                        let mut md5 = None;
+                        let mut subdirectory = None;
+                        let mut preserved = Vec::new();
+                        for (key, value) in url.query_pairs() {
+                            match key.as_ref() {
+                                "sha256" => {
+                                    sha256 = Some(
+                                        parse_digest_from_hex::<Sha256>(value.as_ref())
+                                            .ok_or_else(|| ParseError::InvalidUrlDigest {
+                                                url: url.clone(),
+                                                hash: "sha256",
+                                                value: value.to_string(),
+                                            })?,
+                                    );
+                                }
+                                "md5" => {
+                                    md5 = Some(
+                                        parse_digest_from_hex::<Md5>(value.as_ref()).ok_or_else(
+                                            || ParseError::InvalidUrlDigest {
+                                                url: url.clone(),
+                                                hash: "md5",
+                                                value: value.to_string(),
+                                            },
+                                        )?,
+                                    );
+                                }
+                                "subdirectory" => subdirectory = Some(value.into_owned()),
+                                _ => preserved.push((key.into_owned(), value.into_owned())),
+                            }
+                        }
+
+                        let Some(sha256) = sha256 else {
+                            return Err(ParseError::MissingUrlSha256 { url });
+                        };
+
+                        let mut base_url = url.clone();
+                        base_url.set_query(None);
+                        if !preserved.is_empty() {
+                            let mut pairs = base_url.query_pairs_mut();
+                            for (key, value) in preserved {
+                                pairs.append_pair(&key, &value);
+                            }
+                        }
+
+                        Ok(PinnedUrlSpec {
+                            url: base_url,
+                            sha256,
+                            md5,
+                            subdirectory,
+                        }
+                        .into())
+                    }
                 }
             }
             UrlOrPath::Path(path) => Ok(PinnedPathSpec { path }.into()),
@@ -822,6 +957,19 @@ pub enum SourceMismatchError {
         locked: String,
         /// The requested url
         requested: String,
+    },
+
+    #[error(
+        "the locked url subdirectory '{locked:?}' for '{url}' does not match the requested url subdirectory '{requested:?}'"
+    )]
+    /// The locked url subdirectory does not match the requested url subdirectory.
+    UrlSubdirectoryMismatch {
+        /// The url.
+        url: Url,
+        /// The locked subdirectory.
+        locked: Option<String>,
+        /// The requested subdirectory.
+        requested: Option<String>,
     },
 
     #[error(
@@ -901,6 +1049,13 @@ impl PinnedUrlSpec {
                     requested: format!("{md5:x}"),
                 });
             }
+        }
+        if spec.subdirectory != self.subdirectory {
+            return Err(SourceMismatchError::UrlSubdirectoryMismatch {
+                url: self.url.clone(),
+                locked: self.subdirectory.clone(),
+                requested: spec.subdirectory.clone(),
+            });
         }
         Ok(())
     }
@@ -1018,6 +1173,7 @@ impl From<PinnedUrlSpec> for UrlSourceSpec {
     fn from(value: PinnedUrlSpec) -> Self {
         Self {
             url: value.url,
+            subdirectory: value.subdirectory,
             sha256: Some(value.sha256),
             md5: value.md5,
         }
@@ -1263,7 +1419,9 @@ mod tests {
     }
 
     use pixi_spec::{PathSourceSpec, SourceLocationSpec, SourceSpec, UrlSourceSpec};
+    use rattler_digest::parse_digest_from_hex;
     use typed_path::Utf8TypedPathBuf;
+    use typed_path::Utf8UnixPathBuf;
 
     #[test]
     fn test_path_exact_match() {
@@ -1462,6 +1620,7 @@ mod tests {
             )
             .unwrap(),
             md5: None,
+            subdirectory: Some("subdir".into()),
         });
 
         let spec = SourceSpec {
@@ -1469,6 +1628,7 @@ mod tests {
                 url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
                 sha256: None,
                 md5: None,
+                subdirectory: Some("subdir".into()),
             }),
         };
 
@@ -1484,17 +1644,33 @@ mod tests {
             )
             .unwrap(),
             md5: None,
+            subdirectory: Some("subdir".into()),
         });
 
-        let spec = SourceSpec {
+        let mismatching_url = SourceSpec {
             location: SourceLocationSpec::Url(UrlSourceSpec {
                 url: Url::parse("https://example.com/different.tar.gz").unwrap(),
                 sha256: None,
                 md5: None,
+                subdirectory: Some("subdir".into()),
             }),
         };
 
-        assert!(!pinned.matches_source_spec(&spec));
+        assert!(!pinned.matches_source_spec(&mismatching_url));
+
+        let mismatching_subdir = SourceSpec {
+            location: SourceLocationSpec::Url(UrlSourceSpec {
+                url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
+                sha256: None,
+                md5: None,
+                subdirectory: Some("other-subdir".into()),
+            }),
+        };
+
+        assert!(
+            !pinned.matches_source_spec(&mismatching_subdir),
+            "subdirectory must match when specified"
+        );
     }
 
     #[test]
@@ -1530,6 +1706,7 @@ mod tests {
                 url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
                 sha256: None,
                 md5: None,
+                subdirectory: None,
             }),
         };
 
@@ -1545,6 +1722,7 @@ mod tests {
             )
             .unwrap(),
             md5: None,
+            subdirectory: None,
         });
 
         let spec = SourceSpec {
@@ -1676,5 +1854,124 @@ mod tests {
         let path = result.expect("Should return Some");
         // From /foo/baz/quux to /foo/bar/qux requires ../../bar/qux
         assert_eq!(path.as_str(), "../../bar/qux");
+    }
+
+    #[test]
+    fn test_url_make_relative_to_mismatch_returns_none() {
+        let workspace_root = Path::new("/workspace");
+
+        let base = PinnedSourceSpec::Url(PinnedUrlSpec {
+            url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
+            sha256: parse_digest_from_hex::<rattler_digest::Sha256>(
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            )
+            .unwrap(),
+            md5: None,
+            subdirectory: Some("pkg/manifest".into()),
+        });
+
+        // different sha prevents relativity
+        let target = PinnedSourceSpec::Url(PinnedUrlSpec {
+            url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
+            sha256: parse_digest_from_hex::<rattler_digest::Sha256>(
+                "558b2587b199594ac439b9464e14ea72429bf6998c4fbfa941c1cf89244c0b3e",
+            )
+            .unwrap(),
+            md5: None,
+            subdirectory: Some("pkg/src".into()),
+        });
+
+        let relative = target.make_relative_to(&base, workspace_root);
+        assert!(relative.is_none());
+
+        // different md5 prevents relativity
+        let target = PinnedSourceSpec::Url(PinnedUrlSpec {
+            url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
+            sha256: base.as_url().unwrap().sha256,
+            md5: Some(
+                parse_digest_from_hex::<rattler_digest::Md5>("d41d8cd98f00b204e9800998ecf8427e")
+                    .unwrap(),
+            ),
+            subdirectory: Some("pkg/src".into()),
+        });
+
+        let relative = target.make_relative_to(&base, workspace_root);
+        assert!(relative.is_none());
+
+        // different url prevents relativity
+        let target = PinnedSourceSpec::Url(PinnedUrlSpec {
+            url: Url::parse("https://example.com/other.tar.gz").unwrap(),
+            sha256: base.as_url().unwrap().sha256,
+            md5: None,
+            subdirectory: Some("pkg/src".into()),
+        });
+
+        let relative = target.make_relative_to(&base, workspace_root);
+        assert!(relative.is_none());
+    }
+
+    #[test]
+    fn test_url_relative_roundtrip() {
+        let workspace_root = Path::new("/workspace");
+
+        let sha256 = parse_digest_from_hex::<rattler_digest::Sha256>(
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        )
+        .unwrap();
+        let md5 = parse_digest_from_hex::<rattler_digest::Md5>("d41d8cd98f00b204e9800998ecf8427e")
+            .unwrap();
+
+        let base = PinnedSourceSpec::Url(PinnedUrlSpec {
+            url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
+            sha256,
+            md5: Some(md5),
+            subdirectory: Some("pkg/manifest".into()),
+        });
+
+        let target = PinnedSourceSpec::Url(PinnedUrlSpec {
+            url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
+            sha256,
+            md5: Some(md5),
+            subdirectory: Some("pkg/src/code".into()),
+        });
+
+        let relative = target
+            .make_relative_to(&base, workspace_root)
+            .expect("should produce relative path");
+        assert_eq!(relative.as_str(), "../src/code");
+
+        let resolved = PinnedSourceSpec::from_relative_to(relative, &base, workspace_root)
+            .expect("should roundtrip from relative path");
+
+        assert_eq!(resolved, target);
+    }
+
+    #[test]
+    fn test_url_from_relative_to_base_without_subdir() {
+        let workspace_root = Path::new("/workspace");
+
+        let base = PinnedSourceSpec::Url(PinnedUrlSpec {
+            url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
+            sha256: parse_digest_from_hex::<rattler_digest::Sha256>(
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            )
+            .unwrap(),
+            md5: None,
+            subdirectory: None,
+        });
+
+        let resolved = PinnedSourceSpec::from_relative_to(
+            Utf8UnixPathBuf::from("pkg/src"),
+            &base,
+            workspace_root,
+        )
+        .expect("should resolve relative url path");
+
+        let PinnedSourceSpec::Url(url_spec) = resolved else {
+            panic!("expected url spec");
+        };
+
+        assert_eq!(url_spec.subdirectory.as_deref(), Some("pkg/src"));
+        assert_eq!(url_spec.url.as_str(), "https://example.com/archive.tar.gz");
     }
 }
