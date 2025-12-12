@@ -131,10 +131,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             "The {} environment has been installed",
             environment.name().fancy_display(),
         )
-        .expect(&format!(
-            "Cannot install the {} environment",
-            environment.name().fancy_display()
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "Cannot install the {} environment",
+                environment.name().fancy_display()
+            )
+        });
 
         if skip_opts {
             let platform = environment.best_platform();
@@ -209,10 +211,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             "The following environments have been installed: {}",
             env,
         )
-        .expect(&format!(
-            "Cannot install the following environments: {}",
-            env
-        ));
+        .unwrap_or_else(|_| panic!("Cannot install the following environments: {}", env));
     }
 
     if let Ok(Some(path)) = workspace.config().detached_environments().path() {
