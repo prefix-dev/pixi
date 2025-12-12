@@ -1,4 +1,5 @@
 use pixi_git::{GitError, GitUrl, git::GitReference, source::Fetch};
+use pixi_path::AbsPathBuf;
 use pixi_record::{PinnedGitCheckout, PinnedGitSpec, PinnedSourceSpec};
 use pixi_spec::GitSpec;
 
@@ -46,17 +47,7 @@ impl CommandDispatcher {
             },
         };
 
-        // Include any subdirectory
-        let path = if let Some(subdir) = git_spec.subdirectory {
-            fetch.path().join(subdir)
-        } else {
-            fetch.into_path()
-        };
-
-        Ok(SourceCheckout {
-            path,
-            pinned: PinnedSourceSpec::Git(pinned),
-        })
+        Self::fetch_to_checkout(fetch, pinned)
     }
 
     /// Check out a particular git repository.
@@ -85,16 +76,26 @@ impl CommandDispatcher {
             .await
             .map_err(|err| err.map(SourceCheckoutError::from))?;
 
-        // Include any subdirectory
-        let path = if let Some(subdir) = git_spec.source.subdirectory.as_ref() {
-            fetch.path().join(subdir)
+        Self::fetch_to_checkout(fetch, git_spec)
+    }
+
+    fn fetch_to_checkout(
+        fetch: Fetch,
+        pinned: PinnedGitSpec,
+    ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
+        let root_dir = AbsPathBuf::new(fetch.into_path())
+            .expect("git checkout returned a relative path")
+            .into_assume_dir();
+
+        let path = if let Some(subdir) = &pinned.source.subdirectory {
+            root_dir.join(subdir).into_assume_dir()
         } else {
-            fetch.into_path()
+            root_dir
         };
 
         Ok(SourceCheckout {
-            path,
-            pinned: PinnedSourceSpec::Git(git_spec),
+            path: path.into(),
+            pinned: PinnedSourceSpec::Git(pinned),
         })
     }
 }

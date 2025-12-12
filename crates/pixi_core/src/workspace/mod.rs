@@ -44,6 +44,7 @@ use pixi_manifest::{
     HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
     SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
+use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_lazy_reqwest_clients;
@@ -551,8 +552,13 @@ impl Workspace {
     /// Returns a pre-filled command dispatcher builder that can be used to
     /// construct a [`pixi_command_dispatcher::CommandDispatcher`].
     pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
-        let cache_dirs =
-            CacheDirs::new(pixi_config::get_cache_dir()?).with_workspace(self.pixi_dir());
+        let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
+            .expect("cache dir is not absolute")
+            .into_assume_dir();
+        let workspace_dir = AbsPathBuf::new(self.pixi_dir())
+            .expect("pixi dir is not absolute")
+            .into_assume_dir();
+        let cache_dirs = CacheDirs::new(cache_dir).with_workspace(workspace_dir);
 
         // Determine the tool platform to use
         let tool_platform = self.config().tool_platform();
@@ -568,10 +574,14 @@ impl Workspace {
                 vec![]
             };
 
+        let root_dir = AbsPathBuf::new(self.root().to_path_buf())
+            .expect("root dir is not absolute")
+            .into_assume_dir();
+
         Ok(CommandDispatcher::builder()
             .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
-            .with_root_dir(self.root().to_path_buf())
+            .with_root_dir(root_dir)
             .with_download_client(self.authenticated_client()?.clone())
             .with_max_download_concurrency(self.concurrent_downloads_semaphore())
             .with_limits(Limits {

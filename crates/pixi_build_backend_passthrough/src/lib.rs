@@ -140,7 +140,7 @@ fn generate_variant_outputs(
             project_model,
             index_json,
             params,
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )];
     }
 
@@ -162,7 +162,7 @@ fn generate_variant_outputs(
             project_model,
             index_json,
             params,
-            &BTreeMap::new(),
+            BTreeMap::new(),
         )];
     }
 
@@ -171,7 +171,7 @@ fn generate_variant_outputs(
 
     // Create an output for each variant combination
     combinations
-        .iter()
+        .into_iter()
         .map(|variant| create_output(project_model, index_json, params, variant))
         .collect()
 }
@@ -297,9 +297,40 @@ fn create_output(
     project_model: &ProjectModelV1,
     index_json: &Option<IndexJson>,
     params: &CondaOutputsParams,
-    variant: &BTreeMap<String, VariantValue>,
+    mut variant: BTreeMap<String, VariantValue>,
 ) -> CondaOutput {
+    let subdir = index_json
+        .as_ref()
+        .and_then(|j| j.subdir.as_deref())
+        .map(|subdir| subdir.parse().unwrap())
+        .unwrap_or(Platform::NoArch);
+
+    if !variant.contains_key("target_platform") {
+        variant.insert(
+            String::from("target_platform"),
+            VariantValue::from(subdir.to_string()),
+        );
+    }
+
     CondaOutput {
+        build_dependencies: Some(extract_dependencies(
+            &project_model.targets,
+            |t| t.build_dependencies.as_ref(),
+            params.host_platform,
+            &variant,
+        )),
+        host_dependencies: Some(extract_dependencies(
+            &project_model.targets,
+            |t| t.host_dependencies.as_ref(),
+            params.host_platform,
+            &variant,
+        )),
+        run_dependencies: extract_dependencies(
+            &project_model.targets,
+            |t| t.run_dependencies.as_ref(),
+            params.host_platform,
+            &variant,
+        ),
         metadata: CondaOutputMetadata {
             name: project_model
                 .name
@@ -326,36 +357,14 @@ fn create_output(
                 .as_ref()
                 .map(|j| j.build_number)
                 .unwrap_or_default(),
-            subdir: index_json
-                .as_ref()
-                .and_then(|j| j.subdir.as_deref())
-                .map(|subdir| subdir.parse().unwrap())
-                .unwrap_or(Platform::NoArch),
+            subdir,
             license: project_model.license.clone(),
             license_family: None,
             noarch: index_json.as_ref().map(|j| j.noarch).unwrap_or_default(),
             purls: None,
             python_site_packages_path: None,
-            variant: variant.clone(),
+            variant,
         },
-        build_dependencies: Some(extract_dependencies(
-            &project_model.targets,
-            |t| t.build_dependencies.as_ref(),
-            params.host_platform,
-            variant,
-        )),
-        host_dependencies: Some(extract_dependencies(
-            &project_model.targets,
-            |t| t.host_dependencies.as_ref(),
-            params.host_platform,
-            variant,
-        )),
-        run_dependencies: extract_dependencies(
-            &project_model.targets,
-            |t| t.run_dependencies.as_ref(),
-            params.host_platform,
-            variant,
-        ),
         ignore_run_exports: Default::default(),
         run_exports: Default::default(),
         input_globs: None,
@@ -497,6 +506,9 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
 pub struct PassthroughBackendConfig {
     /// The path to a pre-build conda package.
     pub package: Option<PathBuf>,
+
+    /// Whether this is a noarch package
+    pub noarch: Option<bool>,
 
     /// Build globs
     pub build_globs: Option<BTreeSet<String>>,

@@ -96,6 +96,7 @@ pixi_glob = { path = "crates/pixi_glob" }
 pixi_global = { path = "crates/pixi_global" }
 pixi_install_pypi = { path = "crates/pixi_install_pypi" }
 pixi_manifest = { path = "crates/pixi_manifest" }
+pixi_path = { path = "crates/pixi_path" }
 pixi_progress = { path = "crates/pixi_progress" }
 pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
 pixi_python_status = { path = "crates/pixi_python_status" }

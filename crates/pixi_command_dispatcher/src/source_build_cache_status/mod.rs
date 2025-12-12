@@ -162,7 +162,10 @@ impl SourceBuildCacheStatusSpec {
 
         Ok(SourceBuildCacheEntry {
             cached_build: Mutex::new(cached_build),
-            cache_dir: build_cache_entry.cache_dir().to_path_buf(),
+            cache_dir: build_cache_entry
+                .cache_dir()
+                .to_path_buf()
+                .into_std_path_buf(),
             entry: Mutex::new(build_cache_entry),
         })
     }
@@ -330,7 +333,7 @@ impl SourceBuildCacheStatusSpec {
         // Determine the backend parameters for the package.
         let backend = command_dispatcher
             .discover_backend(
-                &source_checkout.path,
+                source_checkout.path.as_std_path(),
                 self.channel_config.clone(),
                 self.enabled_protocols.clone(),
             )
@@ -376,7 +379,7 @@ impl SourceBuildCacheStatusSpec {
 
         // Compute the modification time of the files that match the source input globs.
         let glob_time = match GlobModificationTime::from_patterns(
-            &source_build_checkout.path,
+            source_build_checkout.path.as_std_path(),
             source_info.globs.iter().map(String::as_str),
         ) {
             Ok(glob_time) => glob_time,

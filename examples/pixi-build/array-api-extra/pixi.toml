@@ -6,7 +6,7 @@ preview = ["pixi-build"]
 version = "0.1.0"
 
 [dependencies]
-array-api-extra = { path = "." }
+array-api-extra = { path = "recipe.yaml" }
 
 [tasks]
 test = "python -c 'import array_api_extra'"

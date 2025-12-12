@@ -5,9 +5,7 @@ use pixi_consts::consts;
 use rattler_conda_types::Platform;
 
 use crate::{
-    common::{
-        LockFileExt, PixiControl,
-    },
+    common::{LockFileExt, PixiControl},
     setup_tracing,
 };
 use pixi_test_utils::{MockRepoData, Package};

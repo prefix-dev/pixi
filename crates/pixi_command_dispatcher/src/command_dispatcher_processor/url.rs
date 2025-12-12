@@ -1,6 +1,7 @@
 use std::collections::hash_map::Entry;
 
 use futures::FutureExt;
+use pixi_path::AbsPathBuf;
 
 use super::{CommandDispatcherProcessor, PendingUrlCheckout, PendingUrlWaiter, TaskResult};
 use crate::{
@@ -81,11 +82,13 @@ impl CommandDispatcherProcessor {
             cancellation_token
                 .run_until_cancelled_owned(async move {
                     resolver
-                        .fetch(spec, client, cache_dir, None)
+                        .fetch(spec, client, cache_dir.into_std_path_buf(), None)
                         .await
                         .map(|fetch| UrlCheckout {
                             pinned_url: fetch.pinned().clone(),
-                            dir: fetch.path().to_path_buf(),
+                            dir: AbsPathBuf::new(fetch.path())
+                                .expect("url fetch does not return absolute path")
+                                .into_assume_dir(),
                         })
                         .map_err(CommandDispatcherError::Failed)
                 })

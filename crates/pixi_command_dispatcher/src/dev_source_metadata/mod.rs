@@ -11,8 +11,6 @@ use crate::{
     CommandDispatcherErrorResultExt,
 };
 
-use crate::cache::build_backend_metadata::MetadataKind;
-
 /// A specification for retrieving dev source metadata.
 ///
 /// This queries the build backend for all outputs from a source and creates
@@ -78,16 +76,6 @@ impl DevSourceMetadataSpec {
             .map_err_with(Box::new)
             .map_err_with(DevSourceMetadataError::BuildBackendMetadata)?;
 
-        // We only support the Outputs protocol for dev sources
-        let outputs = match &build_backend_metadata.metadata.metadata {
-            MetadataKind::Outputs { outputs } => outputs,
-            MetadataKind::GetMetadata { .. } => {
-                return Err(CommandDispatcherError::Failed(
-                    DevSourceMetadataError::UnsupportedProtocol,
-                ));
-            }
-        };
-
         // Create a SourceAnchor for resolving relative paths in dependencies
         let source_anchor = SourceAnchor::from(pixi_spec::SourceSpec::from(
             build_backend_metadata.source.manifest_source().clone(),
@@ -95,14 +83,13 @@ impl DevSourceMetadataSpec {
 
         // Create a DevSourceRecord for each output
         let mut records = Vec::new();
-        for output in outputs {
+        for output in &build_backend_metadata.metadata.outputs {
             if output.metadata.name != self.package_name {
                 continue;
             }
             let record = Self::create_dev_source_record(
                 output,
                 build_backend_metadata.source.manifest_source(),
-                &build_backend_metadata.metadata.input_hash,
                 &source_anchor,
             )?;
             records.push(record);
@@ -121,7 +108,6 @@ impl DevSourceMetadataSpec {
     fn create_dev_source_record(
         output: &pixi_build_types::procedures::conda_outputs::CondaOutput,
         source: &PinnedSourceSpec,
-        input_hash: &Option<pixi_record::InputHash>,
         source_anchor: &SourceAnchor,
     ) -> Result<DevSourceRecord, CommandDispatcherError<DevSourceMetadataError>> {
         // Combine all dependencies into a single map
@@ -186,7 +172,6 @@ impl DevSourceMetadataSpec {
         Ok(DevSourceRecord {
             name: output.metadata.name.clone(),
             source: source.clone(),
-            input_hash: input_hash.clone(),
             variants: variant_values
                 .clone()
                 .into_iter()

@@ -51,6 +51,7 @@ pixi_diff = { workspace = true }
 pixi_git = { workspace = true }
 pixi_global = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
+pixi_path = { workspace = true }
 pixi_progress = { workspace = true }
 pixi_pypi_spec = { workspace = true }
 pixi_record = { workspace = true }
