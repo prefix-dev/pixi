@@ -14,10 +14,10 @@ layers:
       image: docs/assets/prefix-logo-white.png
 
   # Mascot in bottom right
-  - size: {width: 427, height: 379}
-    offset: {x: 750, y: 240}
+  - size: {width: 540, height: 468}
+    offset: {x: 650, y: 140}
     background:
-      image: docs/assets/paxton-as-pixi-small.png
+      image: docs/assets/paxton-as-pixi-small-no-background.png
 
   # Site name in top left
   - size: {width: 400, height: 80}
@@ -33,7 +33,7 @@ layers:
   - size: {width: 700, height: 80}
     offset: {x: 60, y: 130}
     typography:
-      content: "{{ page.meta.description or 'Cross-Platform, Cross-Language Package and Workflow Manager' }}"
+      content: "{{ page.meta.description or 'Cross-platform, language-agnostic package and workflow manager' }}"
       color: "#FFFFFF80"
       font:
         family: Roboto
