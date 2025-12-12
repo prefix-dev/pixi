@@ -9,6 +9,9 @@ channels = {{ channels }}
 name = "{{ name }}"
 platforms = {{ platforms }}
 version = "{{ version }}"
+{%- if pypi_mapping %}
+conda-pypi-map = { {{ pypi_mapping }} }
+{%- endif %}
 
 {%- if index_url or extra_index_urls %}
 

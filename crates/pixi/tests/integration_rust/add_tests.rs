@@ -468,6 +468,7 @@ async fn add_pypi_extra_functionality() {
 name = "test-pypi-extras"
 channels = ["{channel_url}"]
 platforms = ["{platform}"]
+conda-pypi-map = {{}} # disable mapping
 
 [dependencies]
 python = "==3.12.0"
@@ -550,7 +551,10 @@ index-url = "{index_url}"
 
 /// Test the sdist support for pypi packages
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "slow_integration_tests"), not(feature = "online_tests")),
+    ignore
+)]
 async fn add_sdist_functionality() {
     setup_tracing();
 

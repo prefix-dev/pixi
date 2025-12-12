@@ -74,8 +74,16 @@ impl InitBuilder {
         self
     }
 
-    pub fn with_local_channel(self, channel: impl AsRef<Path>) -> Self {
-        self.with_channel(Url::from_directory_path(channel).unwrap())
+    pub fn with_local_channel(mut self, channel: impl AsRef<Path>) -> Self {
+        self.args
+            .channels
+            .get_or_insert_with(Default::default)
+            .push(NamedChannelOrUrl::Url(
+                Url::from_directory_path(channel).unwrap(),
+            ));
+        // Disable the pypi mapping
+        self.args.conda_pypi_map = Some(Vec::new());
+        self
     }
 
     pub fn without_channels(mut self) -> Self {
