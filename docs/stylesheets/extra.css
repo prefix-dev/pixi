@@ -565,8 +565,22 @@ table code {
     border-top-right-radius: 0.25rem !important;
 }
 
+/* Avoid tab overflow on small screens */
+.md-typeset .tabbed-set {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .md-typeset .tabbed-labels {
   box-shadow: none;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.md-typeset .tabbed-labels > label {
+  white-space: nowrap;
 }
 
 .quote-scroll-wrapper {
