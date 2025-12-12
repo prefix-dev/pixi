@@ -16,10 +16,6 @@
     {% include "partials/mycontent.html" %}
 {% endblock %}
 
-{% block extrahead %}
-    <style>.md-content__button {display:none !important}; </style>
-{% endblock %}
-
 {% block outdated %}
   You're not viewing the latest version.
   <a href="{{ '../' ~ base_url }}"> 

@@ -401,6 +401,10 @@
   color: var(--gsd-400);
 }
 
+.md-content__button {
+  display:none !important;
+}
+
 /* Admonition colors using brand palette */
 .md-typeset .admonition.note,
 .md-typeset details.note {
