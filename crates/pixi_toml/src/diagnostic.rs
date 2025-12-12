@@ -50,8 +50,8 @@ impl miette::Diagnostic for TomlDiagnostic {
         let toml_span::Error { kind, .. } = &self.0;
         match kind {
             toml_span::ErrorKind::UnexpectedValue { expected, value } => {
-                if let Some(value) = value {
-                    if let Some((_, similar)) = expected
+                if let Some(value) = value
+                    && let Some((_, similar)) = expected
                         .iter()
                         .filter_map(|expected| {
                             let distance = strsim::jaro(expected, value);
@@ -60,15 +60,14 @@ impl miette::Diagnostic for TomlDiagnostic {
                         .max_by(|(a, _), (b, _)| {
                             a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
                         })
-                    {
-                        return Some(Box::new(format!("Did you mean '{similar}'?")));
-                    }
+                {
+                    return Some(Box::new(format!("Did you mean '{similar}'?")));
                 }
                 None
             }
             toml_span::ErrorKind::UnexpectedKeys { expected, keys } => {
-                if let Ok((single, _)) = keys.iter().exactly_one() {
-                    if let Some((_, similar)) = expected
+                if let Ok((single, _)) = keys.iter().exactly_one()
+                    && let Some((_, similar)) = expected
                         .iter()
                         .filter_map(|expected| {
                             let distance = strsim::jaro(expected, single);
@@ -77,9 +76,8 @@ impl miette::Diagnostic for TomlDiagnostic {
                         .max_by(|(a, _), (b, _)| {
                             a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
                         })
-                    {
-                        return Some(Box::new(format!("Did you mean '{similar}'?")));
-                    }
+                {
+                    return Some(Box::new(format!("Did you mean '{similar}'?")));
                 }
                 None
             }

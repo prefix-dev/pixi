@@ -192,19 +192,19 @@ preview = ["pixi-build"]
 
     let workspace = dbg!(pixi.workspace()).unwrap();
 
-    if let Some(package) = &workspace.package {
-        if let Some(source_spec) = &package.value.build.source {
-            match &source_spec {
-                pixi_spec::SourceLocationSpec::Path(path_spec) => {
-                    let resolved_path = path_spec.resolve(pixi.workspace_path()).unwrap();
-                    let expected_path = absolute_source_dir.canonicalize().unwrap();
-                    let resolved_canonical = resolved_path.canonicalize().unwrap();
+    if let Some(package) = &workspace.package
+        && let Some(source_spec) = &package.value.build.source
+    {
+        match &source_spec {
+            pixi_spec::SourceLocationSpec::Path(path_spec) => {
+                let resolved_path = path_spec.resolve(pixi.workspace_path()).unwrap();
+                let expected_path = absolute_source_dir.canonicalize().unwrap();
+                let resolved_canonical = resolved_path.canonicalize().unwrap();
 
-                    assert_eq!(resolved_canonical, expected_path);
-                    assert!(resolved_path.join("recipe.yaml").exists());
-                }
-                _ => panic!("Expected a path source spec"),
+                assert_eq!(resolved_canonical, expected_path);
+                assert!(resolved_path.join("recipe.yaml").exists());
             }
+            _ => panic!("Expected a path source spec"),
         }
     }
 }
@@ -263,25 +263,25 @@ preview = ["pixi-build"]
 
     let workspace = pixi.workspace().unwrap();
 
-    if let Some(package) = &workspace.package {
-        if let Some(source_spec) = &package.value.build.source {
-            match &source_spec {
-                pixi_spec::SourceLocationSpec::Path(path_spec) => {
-                    // Test that the original relative path is preserved
-                    assert_eq!(path_spec.path.as_str(), "./subdir/source");
+    if let Some(package) = &workspace.package
+        && let Some(source_spec) = &package.value.build.source
+    {
+        match &source_spec {
+            pixi_spec::SourceLocationSpec::Path(path_spec) => {
+                // Test that the original relative path is preserved
+                assert_eq!(path_spec.path.as_str(), "./subdir/source");
 
-                    // Test that it resolves to the correct absolute location
-                    let resolved_path = path_spec.resolve(pixi.workspace_path()).unwrap();
-                    assert!(resolved_path.is_absolute());
-                    assert!(resolved_path.join("recipe.yaml").exists());
+                // Test that it resolves to the correct absolute location
+                let resolved_path = path_spec.resolve(pixi.workspace_path()).unwrap();
+                assert!(resolved_path.is_absolute());
+                assert!(resolved_path.join("recipe.yaml").exists());
 
-                    // Verify the resolved path matches our expectation
-                    let expected_path = subdir_source.canonicalize().unwrap();
-                    let resolved_canonical = resolved_path.canonicalize().unwrap();
-                    assert_eq!(resolved_canonical, expected_path);
-                }
-                _ => panic!("Expected a path source spec"),
+                // Verify the resolved path matches our expectation
+                let expected_path = subdir_source.canonicalize().unwrap();
+                let resolved_canonical = resolved_path.canonicalize().unwrap();
+                assert_eq!(resolved_canonical, expected_path);
             }
+            _ => panic!("Expected a path source spec"),
         }
     }
 }

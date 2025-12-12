@@ -167,10 +167,10 @@ impl PtyProcess {
                 Some(_) | None => thread::sleep(time::Duration::from_millis(100)),
             }
             // kill -9 if timeout is reached
-            if let Some(timeout) = self.kill_timeout {
-                if start.elapsed() > timeout {
-                    signal::kill(self.child_pid, signal::Signal::SIGKILL)?
-                }
+            if let Some(timeout) = self.kill_timeout
+                && start.elapsed() > timeout
+            {
+                signal::kill(self.child_pid, signal::Signal::SIGKILL)?
             }
         }
     }

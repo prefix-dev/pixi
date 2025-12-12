@@ -169,17 +169,17 @@ impl DiscoveredBackend {
         }
 
         // Try to discover a pixi project.
-        if enabled_protocols.enable_pixi {
-            if let Some(pixi) = Self::discover_pixi(source_path.clone(), channel_config)? {
-                return Ok(pixi);
-            }
+        if enabled_protocols.enable_pixi
+            && let Some(pixi) = Self::discover_pixi(source_path.clone(), channel_config)?
+        {
+            return Ok(pixi);
         }
 
         // Try to discover as a rattler-build recipe.
-        if enabled_protocols.enable_rattler_build {
-            if let Some(pixi) = Self::discover_rattler_build(source_path.clone(), channel_config)? {
-                return Ok(pixi);
-            }
+        if enabled_protocols.enable_rattler_build
+            && let Some(pixi) = Self::discover_rattler_build(source_path.clone(), channel_config)?
+        {
+            return Ok(pixi);
         }
 
         Err(DiscoveryError::FailedToDiscover(

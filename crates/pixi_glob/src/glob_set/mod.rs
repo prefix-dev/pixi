@@ -71,10 +71,10 @@ mod tests {
         if let Ok(rel) = path.strip_prefix(root) {
             return rel.to_path_buf();
         }
-        if let Some(parent) = root.parent() {
-            if let Ok(rel) = path.strip_prefix(parent) {
-                return std::path::Path::new("..").join(rel);
-            }
+        if let Some(parent) = root.parent()
+            && let Ok(rel) = path.strip_prefix(parent)
+        {
+            return std::path::Path::new("..").join(rel);
         }
         path.to_path_buf()
     }

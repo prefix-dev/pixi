@@ -122,19 +122,19 @@ impl TaskNode<'_> {
     ) -> miette::Result<Option<String>> {
         let mut cmd = self.task.as_single_command(context)?;
 
-        if let Some(ArgValues::FreeFormArgs(additional_args)) = &self.args {
-            if !additional_args.is_empty() {
-                // Pass each additional argument varbatim by wrapping it in single quotes
-                let formatted_args = format!(" {}", self.format_additional_args());
-                cmd = match cmd {
-                    Some(Cow::Borrowed(s)) => Some(Cow::Owned(format!("{s}{formatted_args}"))),
-                    Some(Cow::Owned(mut s)) => {
-                        s.push_str(&formatted_args);
-                        Some(Cow::Owned(s))
-                    }
-                    None => None,
-                };
-            }
+        if let Some(ArgValues::FreeFormArgs(additional_args)) = &self.args
+            && !additional_args.is_empty()
+        {
+            // Pass each additional argument varbatim by wrapping it in single quotes
+            let formatted_args = format!(" {}", self.format_additional_args());
+            cmd = match cmd {
+                Some(Cow::Borrowed(s)) => Some(Cow::Owned(format!("{s}{formatted_args}"))),
+                Some(Cow::Owned(mut s)) => {
+                    s.push_str(&formatted_args);
+                    Some(Cow::Owned(s))
+                }
+                None => None,
+            };
         }
 
         Ok(cmd.map(|c| c.into_owned()))

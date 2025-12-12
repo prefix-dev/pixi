@@ -92,24 +92,24 @@ impl UpdateSpecs {
         package: LockedPackageRef<'_>,
     ) -> bool {
         // Check if the platform is in the list of platforms to update.
-        if let Some(platforms) = &self.platforms {
-            if !platforms.contains(platform) {
-                return false;
-            }
+        if let Some(platforms) = &self.platforms
+            && !platforms.contains(platform)
+        {
+            return false;
         }
 
         // Check if the environment is in the list of environments to update.
-        if let Some(environments) = &self.environments {
-            if !environments.contains(environment_name) {
-                return false;
-            }
+        if let Some(environments) = &self.environments
+            && !environments.contains(environment_name)
+        {
+            return false;
         }
 
         // Check if the package is in the list of packages to update.
-        if let Some(packages) = &self.packages {
-            if !packages.contains(package.name()) {
-                return false;
-            }
+        if let Some(packages) = &self.packages
+            && !packages.contains(package.name())
+        {
+            return false;
         }
 
         tracing::debug!(
@@ -215,10 +215,10 @@ fn ensure_package_exists(
     let environments = lock_file
         .environments()
         .filter_map(|(name, env)| {
-            if let Some(envs) = &specs.environments {
-                if !envs.contains(name) {
-                    return None;
-                }
+            if let Some(envs) = &specs.environments
+                && !envs.contains(name)
+            {
+                return None;
             }
             Some(env)
         })
@@ -228,10 +228,10 @@ fn ensure_package_exists(
         .iter()
         .flat_map(|env| env.packages_by_platform())
         .filter_map(|(p, packages)| {
-            if let Some(platforms) = &specs.platforms {
-                if !platforms.contains(&p) {
-                    return None;
-                }
+            if let Some(platforms) = &specs.platforms
+                && !platforms.contains(&p)
+            {
+                return None;
             }
             Some(packages)
         })

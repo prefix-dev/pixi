@@ -166,7 +166,7 @@ typecheck-python = "basedpyright"
 typos = "typos --force-exclude"
 
 [feature.rust.dependencies]
-rust = ">=1.88.0,<1.89"
+rust = ">=1.90.0,<1.91"
 
 [feature.build.dependencies]
 # Needed for building
@@ -174,7 +174,7 @@ compilers = ">=1.11.0,<2"
 git = ">=2.51.0,<3"
 openssl = ">=3.5.4,<4"
 pkg-config = ">=0.29.2,<0.30"
-rust-src = ">=1.88.0,<2"
+rust-src = ">=1.90.0,<2"
 
 [feature.build.target.linux.dependencies]
 clang = ">=21.1.2,<22"

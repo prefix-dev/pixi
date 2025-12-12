@@ -627,10 +627,10 @@ pub fn calculate_additional_glob_hash(
     if let Some(project_model) = project_model {
         project_model.hash(&mut hasher);
     }
-    if let Some(variants) = variants {
-        if !variants.is_empty() {
-            variants.hash(&mut hasher);
-        }
+    if let Some(variants) = variants
+        && !variants.is_empty()
+    {
+        variants.hash(&mut hasher);
     }
     hasher.finish().to_ne_bytes().to_vec()
 }

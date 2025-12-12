@@ -65,13 +65,13 @@ impl EnvironmentName {
     ) -> Result<Self, ParseEnvironmentNameError> {
         if let Some(arg_name) = arg_name {
             return EnvironmentName::from_str(&arg_name);
-        } else if std::env::var("PIXI_IN_SHELL").is_ok() {
-            if let Ok(env_var_name) = std::env::var("PIXI_ENVIRONMENT_NAME") {
-                if env_var_name == DEFAULT_ENVIRONMENT_NAME {
-                    return Ok(EnvironmentName::Default);
-                }
-                return Ok(EnvironmentName::Named(env_var_name));
+        } else if std::env::var("PIXI_IN_SHELL").is_ok()
+            && let Ok(env_var_name) = std::env::var("PIXI_ENVIRONMENT_NAME")
+        {
+            if env_var_name == DEFAULT_ENVIRONMENT_NAME {
+                return Ok(EnvironmentName::Default);
             }
+            return Ok(EnvironmentName::Named(env_var_name));
         }
         Ok(EnvironmentName::Default)
     }

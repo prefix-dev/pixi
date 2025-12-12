@@ -81,7 +81,7 @@ impl<I: Interface> WorkspaceContext<I> {
         crate::workspace::workspace::name::set(&self.interface, self.workspace_mut()?, name).await
     }
 
-    pub async fn list_environments(&self) -> Vec<Environment> {
+    pub async fn list_environments(&self) -> Vec<Environment<'_>> {
         crate::workspace::workspace::environment::list(&self.workspace).await
     }
 

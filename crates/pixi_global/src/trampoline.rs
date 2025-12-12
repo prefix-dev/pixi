@@ -114,10 +114,10 @@ pub(crate) async fn extract_executable_from_script(script: &Path) -> miette::Res
         LazyLock::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
 
     // Apply the regex to the script content
-    if let Some(caps) = RE.captures(&script_content) {
-        if let Some(matched) = caps.get(1) {
-            return Ok(PathBuf::from(matched.as_str()));
-        }
+    if let Some(caps) = RE.captures(&script_content)
+        && let Some(matched) = caps.get(1)
+    {
+        return Ok(PathBuf::from(matched.as_str()));
     }
     tracing::debug!(
         "Failed to extract executable path from script {}",

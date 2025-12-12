@@ -154,24 +154,23 @@ impl UrlSource {
 
         let ident = cache_digest(&url);
         let mut cached_digests = self.read_cached_digests(&ident).await?;
-        if self.spec.sha256.is_none() {
-            if let Some(ref digests) = cached_digests {
-                self.spec.sha256 = Some(digests.sha256);
-            }
+        if self.spec.sha256.is_none()
+            && let Some(ref digests) = cached_digests
+        {
+            self.spec.sha256 = Some(digests.sha256);
         }
 
         // Re-use existing checkouts if we already know the hash and it's available.
-        if let Some(sha) = self.spec.sha256 {
-            if let Some((path, md5)) =
+        if let Some(sha) = self.spec.sha256
+            && let Some((path, md5)) =
                 self.reuse_from_cache(&sha, self.spec.md5.is_some(), cached_digests.as_ref())
-            {
-                let pinned = PinnedUrlSpec {
-                    url: url.clone(),
-                    sha256: sha,
-                    md5,
-                };
-                return Ok(Fetch { pinned, path });
-            }
+        {
+            let pinned = PinnedUrlSpec {
+                url: url.clone(),
+                sha256: sha,
+                md5,
+            };
+            return Ok(Fetch { pinned, path });
         }
 
         let lock_dir = self.locks_dir();
@@ -180,25 +179,24 @@ impl UrlSource {
         write_guard.begin().await?;
 
         cached_digests = self.read_cached_digests(&ident).await?;
-        if self.spec.sha256.is_none() {
-            if let Some(ref digests) = cached_digests {
-                self.spec.sha256 = Some(digests.sha256);
-            }
+        if self.spec.sha256.is_none()
+            && let Some(ref digests) = cached_digests
+        {
+            self.spec.sha256 = Some(digests.sha256);
         }
 
         // Re-check after acquiring the lock to avoid duplicate work.
-        if let Some(sha) = self.spec.sha256 {
-            if let Some((path, md5)) =
+        if let Some(sha) = self.spec.sha256
+            && let Some((path, md5)) =
                 self.reuse_from_cache(&sha, self.spec.md5.is_some(), cached_digests.as_ref())
-            {
-                write_guard.finish().await?;
-                let pinned = PinnedUrlSpec {
-                    url,
-                    sha256: sha,
-                    md5,
-                };
-                return Ok(Fetch { pinned, path });
-            }
+        {
+            write_guard.finish().await?;
+            let pinned = PinnedUrlSpec {
+                url,
+                sha256: sha,
+                md5,
+            };
+            return Ok(Fetch { pinned, path });
         }
 
         let archive_name = format!("{ident}-{file_name}");
@@ -220,14 +218,14 @@ impl UrlSource {
             None => sha256,
         };
 
-        if let Some(expected) = self.spec.md5 {
-            if md5 != expected {
-                return Err(UrlError::Md5Mismatch {
-                    url,
-                    expected,
-                    actual: md5,
-                });
-            }
+        if let Some(expected) = self.spec.md5
+            && md5 != expected
+        {
+            return Err(UrlError::Md5Mismatch {
+                url,
+                expected,
+                actual: md5,
+            });
         }
 
         let checkout_path = self.checkout_path(&sha256);

@@ -129,31 +129,31 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
         &'io self,
         dist: &'io Dist,
     ) -> impl Future<Output = WheelMetadataResult> + 'io {
-        if let Dist::Source(SourceDist::Registry(RegistrySourceDist { name, .. })) = dist {
-            if let Some((_, iden)) = self.conda_python_identifiers.get(name) {
-                tracing::debug!("overriding PyPI package metadata request {}", name);
-                // If this is a Source dist and the package is actually installed by conda we
-                // create fake metadata with no dependencies. We assume that all conda installed
-                // packages are properly installed including its dependencies.
-                //
-                let name = uv_normalize::PackageName::from_str(iden.name.as_normalized().as_ref())
-                    .expect("invalid package name");
-                let version = uv_pep440::Version::from_str(&iden.version.to_string())
-                    .expect("could not convert to pypi version");
-                return ready(Ok(MetadataResponse::Found(ArchiveMetadata {
-                    metadata: Metadata {
-                        name,
-                        version,
-                        requires_dist: vec![].into(),
-                        requires_python: None,
-                        provides_extra: iden.extras.iter().cloned().collect(),
-                        dependency_groups: Default::default(),
-                        dynamic: false,
-                    },
-                    hashes: vec![].into(),
-                })))
-                .left_future();
-            }
+        if let Dist::Source(SourceDist::Registry(RegistrySourceDist { name, .. })) = dist
+            && let Some((_, iden)) = self.conda_python_identifiers.get(name)
+        {
+            tracing::debug!("overriding PyPI package metadata request {}", name);
+            // If this is a Source dist and the package is actually installed by conda we
+            // create fake metadata with no dependencies. We assume that all conda installed
+            // packages are properly installed including its dependencies.
+            //
+            let name = uv_normalize::PackageName::from_str(iden.name.as_normalized().as_ref())
+                .expect("invalid package name");
+            let version = uv_pep440::Version::from_str(&iden.version.to_string())
+                .expect("could not convert to pypi version");
+            return ready(Ok(MetadataResponse::Found(ArchiveMetadata {
+                metadata: Metadata {
+                    name,
+                    version,
+                    requires_dist: vec![].into(),
+                    requires_python: None,
+                    provides_extra: iden.extras.iter().cloned().collect(),
+                    dependency_groups: Default::default(),
+                    dynamic: false,
+                },
+                hashes: vec![].into(),
+            })))
+            .left_future();
         }
 
         // Otherwise just call the default implementation

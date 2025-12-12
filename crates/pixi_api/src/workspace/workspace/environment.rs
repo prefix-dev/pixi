@@ -7,7 +7,7 @@ use pixi_manifest::EnvironmentName;
 
 use crate::Interface;
 
-pub async fn list(workspace: &Workspace) -> Vec<Environment> {
+pub async fn list(workspace: &Workspace) -> Vec<Environment<'_>> {
     workspace.environments()
 }
 

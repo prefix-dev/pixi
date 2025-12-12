@@ -233,10 +233,10 @@ impl WorkspaceManifestMut<'_> {
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Check if the task already exists
-        if let Ok(tasks) = self.workspace.tasks(platform, feature_name) {
-            if tasks.contains_key(&name) {
-                miette::bail!("task {} already exists", name);
-            }
+        if let Ok(tasks) = self.workspace.tasks(platform, feature_name)
+            && tasks.contains_key(&name)
+        {
+            miette::bail!("task {} already exists", name);
         }
 
         // Add the task to the Toml manifest
