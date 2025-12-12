@@ -565,7 +565,7 @@ table code {
     border-top-right-radius: 0.25rem !important;
 }
 
-/* Fix tab overflow on small screens */
+/* Avoid tab overflow on small screens */
 .md-typeset .tabbed-set {
   max-width: 100%;
   overflow-x: auto;
