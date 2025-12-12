@@ -2,14 +2,15 @@ use std::{
     collections::BTreeSet,
     hash::{Hash, Hasher},
     io::SeekFrom,
-    path::{Path, PathBuf},
 };
 
+use crate::build::{SourceCodeLocation, source_checkout_cache_key};
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use ordermap::OrderMap;
 use pixi_build_discovery::{BackendInitializationParams, DiscoveredBackend};
 use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
+use pixi_path::{AbsPathBuf, AbsPresumedDirPath, AbsPresumedDirPathBuf, AbsPresumedFilePathBuf};
 use pixi_record::PinnedSourceSpec;
 use pixi_stable_hash::{StableHashBuilder, json::StableJson, map::StableMap};
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
@@ -19,19 +20,17 @@ use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use xxhash_rust::xxh3::Xxh3;
 
-use crate::build::{SourceCodeLocation, source_checkout_cache_key};
-
 /// A cache for caching build artifacts of a source checkout.
 #[derive(Clone)]
 pub struct BuildCache {
-    pub(crate) root: PathBuf,
+    pub(crate) root: AbsPresumedDirPathBuf,
 }
 
 #[derive(Debug, Error)]
 pub enum BuildCacheError {
     /// An I/O error occurred while reading or writing the cache.
     #[error("an IO error occurred while {0} {1}")]
-    IoError(String, PathBuf, #[source] std::io::Error),
+    IoError(String, AbsPathBuf, #[source] std::io::Error),
 }
 
 /// Defines additional input besides the source files that are used to compute
@@ -103,7 +102,7 @@ impl BuildCache {
     pub const CACHE_SUFFIX: &'static str = "v0";
 
     /// Constructs a new instance.
-    pub fn new(root: PathBuf) -> Self {
+    pub fn new(root: AbsPresumedDirPathBuf) -> Self {
         Self { root }
     }
 
@@ -140,18 +139,19 @@ impl BuildCache {
             .root
             .join(source_checkout_cache_key(source))
             .join(&input_key);
-        fs_err::tokio::create_dir_all(&cache_dir)
-            .await
+        let cache_dir = cache_dir
+            .create_dir_all()
             .map_err(|e| {
                 BuildCacheError::IoError(
                     "creating cache directory".to_string(),
                     cache_dir.clone(),
                     e,
                 )
-            })?;
+            })?
+            .to_path_buf();
 
         // Try to acquire a lock on the cache file.
-        let cache_file_path = cache_dir.join(".lock");
+        let cache_file_path = cache_dir.join(".lock").into_assume_file();
         let cache_file = tokio::fs::OpenOptions::new()
             .write(true)
             .read(true)
@@ -162,7 +162,7 @@ impl BuildCache {
             .map_err(|e| {
                 BuildCacheError::IoError(
                     "opening cache file".to_string(),
-                    cache_file_path.clone(),
+                    cache_file_path.clone().into(),
                     e,
                 )
             })?;
@@ -170,7 +170,7 @@ impl BuildCache {
         let mut locked_cache_file = cache_file.lock_write().await.map_err(|e| {
             BuildCacheError::IoError(
                 "locking cache file".to_string(),
-                cache_file_path.clone(),
+                cache_file_path.clone().into(),
                 e.error,
             )
         })?;
@@ -183,7 +183,7 @@ impl BuildCache {
             .map_err(|e| {
                 BuildCacheError::IoError(
                     "reading cache file".to_string(),
-                    cache_file_path.clone(),
+                    cache_file_path.clone().into(),
                     e,
                 )
             })?;
@@ -265,13 +265,13 @@ pub struct BuildHostPackage {
 /// As long as this entry is held, no other process can access this cache entry.
 pub struct BuildCacheEntry {
     file: RwLockWriteGuard<tokio::fs::File>,
-    cache_dir: PathBuf,
-    cache_file_path: PathBuf,
+    cache_dir: AbsPresumedDirPathBuf,
+    cache_file_path: AbsPresumedFilePathBuf,
 }
 
 impl BuildCacheEntry {
     /// The directory where the cache is stored.
-    pub fn cache_dir(&self) -> &Path {
+    pub fn cache_dir(&self) -> &AbsPresumedDirPath {
         &self.cache_dir
     }
 
@@ -283,7 +283,7 @@ impl BuildCacheEntry {
         self.file.seek(SeekFrom::Start(0)).await.map_err(|e| {
             BuildCacheError::IoError(
                 "seeking to start of cache file".to_string(),
-                self.cache_file_path.clone(),
+                self.cache_file_path.clone().into(),
                 e,
             )
         })?;
@@ -291,7 +291,7 @@ impl BuildCacheEntry {
         self.file.write_all(&bytes).await.map_err(|e| {
             BuildCacheError::IoError(
                 "writing metadata to cache file".to_string(),
-                self.cache_file_path.clone(),
+                self.cache_file_path.clone().into(),
                 e,
             )
         })?;
@@ -302,7 +302,7 @@ impl BuildCacheEntry {
             .map_err(|e| {
                 BuildCacheError::IoError(
                     "setting length of cache file".to_string(),
-                    self.cache_file_path.clone(),
+                    self.cache_file_path.clone().into(),
                     e,
                 )
             })?;

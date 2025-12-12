@@ -2232,7 +2232,11 @@ mod tests {
             let command_dispatcher = project
                 .command_dispatcher_builder()
                 .unwrap()
-                .with_cache_dirs(CacheDirs::new(temp_pixi_dir.path().to_path_buf()));
+                .with_cache_dirs(CacheDirs::new(
+                    pixi_path::AbsPathBuf::new(temp_pixi_dir.path())
+                        .expect("tempdir path should be absolute")
+                        .into_assume_dir(),
+                ));
             let command_dispatcher = if let Some(backend_override) = backend_override {
                 command_dispatcher.with_backend_overrides(backend_override)
             } else {

@@ -1,5 +1,11 @@
+use super::common::{
+    CacheError, CacheKey, CachedMetadata, MetadataCache, WriteResult as CommonWriteResult,
+};
+use crate::cache::build_backend_metadata::CachedCondaMetadataId;
+use crate::{BuildEnvironment, build::source_checkout_cache_key, cache::common::VersionedMetadata};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
+use pixi_path::AbsPathBuf;
 use pixi_record::{PinnedSourceSpec, SourceRecord};
 use rattler_conda_types::{ChannelUrl, PackageName};
 use serde::{Deserialize, Serialize};
@@ -8,12 +14,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use thiserror::Error;
-
-use super::common::{
-    CacheError, CacheKey, CachedMetadata, MetadataCache, WriteResult as CommonWriteResult,
-};
-use crate::cache::build_backend_metadata::CachedCondaMetadataId;
-use crate::{BuildEnvironment, build::source_checkout_cache_key, cache::common::VersionedMetadata};
 
 // Re-export WriteResult with the correct type
 pub type WriteResult = CommonWriteResult<CachedSourceMetadata>;
@@ -28,7 +28,7 @@ pub type WriteResult = CommonWriteResult<CachedSourceMetadata>;
 /// some additional properties to determine if the cache is still valid.
 #[derive(Clone, Debug)]
 pub struct SourceMetadataCache {
-    root: PathBuf,
+    root: AbsPathBuf,
 }
 
 #[derive(Debug, Error)]
@@ -63,7 +63,7 @@ impl SourceMetadataCache {
     pub const CACHE_SUFFIX: &'static str = "v0";
 
     /// Constructs a new instance.
-    pub fn new(root: PathBuf) -> Self {
+    pub fn new(root: AbsPathBuf) -> Self {
         Self { root }
     }
 }
@@ -74,7 +74,7 @@ impl MetadataCache for SourceMetadataCache {
     type Error = SourceMetadataCacheError;
 
     fn root(&self) -> &Path {
-        &self.root
+        self.root.as_std_path()
     }
 
     fn cache_file_name(&self) -> &'static str {

@@ -9,6 +9,7 @@ use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
+use pixi_path::AbsPath;
 use pixi_record::{PinnedSourceSpec, PixiRecord, VariantValue};
 use pixi_spec::{SourceAnchor, SourceLocationSpec, SourceSpec};
 use rattler_conda_types::{
@@ -236,7 +237,7 @@ impl SourceBuildSpec {
         // path).
         let discovered_backend = command_dispatcher
             .discover_backend(
-                &manifest_source_checkout.path,
+                manifest_source_checkout.path.as_std_path(),
                 self.channel_config.clone(),
                 self.enabled_protocols.clone(),
             )
@@ -292,11 +293,20 @@ impl SourceBuildSpec {
                     .resolve(SourceAnchor::from(SourceSpec::from(
                         manifest_source.clone(),
                     ))),
-                build_source_dir: build_source_checkout.path.clone(),
+                build_source_dir: build_source_checkout
+                    .path
+                    .as_dir_or_file_parent()
+                    .to_path_buf(),
                 channel_config: self.channel_config.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
-                workspace_root: discovered_backend.init_params.workspace_root.clone(),
-                manifest_path: discovered_backend.init_params.manifest_path.clone(),
+                workspace_root: AbsPath::new(&discovered_backend.init_params.workspace_root)
+                    .expect("workspace root is not absolute")
+                    .assume_dir()
+                    .to_path_buf(),
+                manifest_path: AbsPath::new(&discovered_backend.init_params.manifest_path)
+                    .expect("manifest path is not absolute")
+                    .assume_file()
+                    .to_path_buf(),
                 project_model: discovered_backend.init_params.project_model.clone(),
                 configuration: discovered_backend.init_params.configuration.clone(),
                 target_configuration: discovered_backend.init_params.target_configuration.clone(),
@@ -307,17 +317,21 @@ impl SourceBuildSpec {
         // Determine the working directory for the build.
         let work_directory = match std::mem::take(&mut self.work_directory) {
             Some(work_directory) => work_directory,
-            None => command_dispatcher.cache_dirs().working_dirs().join(
-                WorkDirKey {
-                    source: SourceRecordOrCheckout::Record {
-                        pinned: manifest_source.clone(),
-                        package_name: self.package.name.clone(),
-                    },
-                    host_platform: self.build_environment.host_platform,
-                    build_backend: backend.identifier().to_string(),
-                }
-                .key(),
-            ),
+            None => command_dispatcher
+                .cache_dirs()
+                .working_dirs()
+                .join(
+                    WorkDirKey {
+                        source: SourceRecordOrCheckout::Record {
+                            pinned: manifest_source.clone(),
+                            package_name: self.package.name.clone(),
+                        },
+                        host_platform: self.build_environment.host_platform,
+                        build_backend: backend.identifier().to_string(),
+                    }
+                    .key(),
+                )
+                .into_std_path_buf(),
         };
         tracing::debug!(
             source = %manifest_source,

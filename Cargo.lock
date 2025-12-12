@@ -5163,6 +5163,7 @@ dependencies = [
  "pixi_git",
  "pixi_global",
  "pixi_manifest",
+ "pixi_path",
  "pixi_progress",
  "pixi_pty",
  "pixi_pypi_spec",
@@ -5244,6 +5245,7 @@ dependencies = [
  "pixi_consts",
  "pixi_git",
  "pixi_glob",
+ "pixi_path",
  "pixi_record",
  "pixi_spec",
  "pixi_spec_containers",
@@ -5355,6 +5357,7 @@ dependencies = [
  "pixi_glob",
  "pixi_install_pypi",
  "pixi_manifest",
+ "pixi_path",
  "pixi_progress",
  "pixi_pypi_spec",
  "pixi_python_status",
@@ -5514,6 +5517,7 @@ dependencies = [
  "pixi_consts",
  "pixi_core",
  "pixi_manifest",
+ "pixi_path",
  "pixi_progress",
  "pixi_reporters",
  "pixi_spec",
@@ -5648,6 +5652,15 @@ dependencies = [
  "toml_edit",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "pixi_path"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tempfile",
+ "thiserror 2.0.17",
 ]
 
 [[package]]

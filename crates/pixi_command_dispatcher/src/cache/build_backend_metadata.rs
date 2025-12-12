@@ -7,10 +7,11 @@ use crate::{BuildEnvironment, PackageIdentifier, build::source_checkout_cache_ke
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
+use pixi_path::AbsPathBuf;
 use pixi_record::{PinnedSourceSpec, VariantValue};
 use rattler_conda_types::ChannelUrl;
 use serde::{Deserialize, Serialize};
-use std::collections::BinaryHeap;
+use std::collections::{BTreeSet, BinaryHeap};
 use std::{
     collections::BTreeMap,
     hash::{DefaultHasher, Hash, Hasher},
@@ -31,7 +32,7 @@ pub type WriteResult = CommonWriteResult<CachedCondaMetadata>;
 /// some additional properties to determine if the cache is still valid.
 #[derive(Clone, Debug)]
 pub struct BuildBackendMetadataCache {
-    root: PathBuf,
+    root: AbsPathBuf,
 }
 
 #[derive(Debug, Error)]
@@ -63,7 +64,7 @@ impl BuildBackendMetadataCache {
     pub const CACHE_SUFFIX: &'static str = "v0";
 
     /// Constructs a new instance.
-    pub fn new(root: PathBuf) -> Self {
+    pub fn new(root: AbsPathBuf) -> Self {
         Self { root }
     }
 }
@@ -74,7 +75,7 @@ impl MetadataCache for BuildBackendMetadataCache {
     type Error = BuildBackendMetadataCacheError;
 
     fn root(&self) -> &Path {
-        &self.root
+        self.root.as_std_path()
     }
 
     fn cache_file_name(&self) -> &'static str {
@@ -142,6 +143,10 @@ pub struct CachedCondaMetadata {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub build_variants: BTreeMap<String, Vec<VariantValue>>,
 
+    /// The build variant files
+    #[serde(default, skip_serializing_if = "BinaryHeap::is_empty")]
+    pub build_variant_files: BinaryHeap<PathBuf>,
+
     /// Globs of files from which the metadata was derived. Globs require
     /// recursively iterating the filesystem which can be particularly slow so
     /// we prefer to store direct file paths instead. However, this does not
@@ -152,12 +157,10 @@ pub struct CachedCondaMetadata {
     pub input_globs: BinaryHeap<String>,
 
     /// Paths relative to the source checkout of files that were used to
-    /// determine the metadata. If any of these files change (or are removed),
-    /// we should invalidate the cache.
-    ///
-    /// If the source itself is immutable this is None.
-    #[serde(default, skip_serializing_if = "BinaryHeap::is_empty")]
-    pub input_files: BinaryHeap<PathBuf>,
+    /// determine the metadata. This is the result of the matching the globs
+    /// against the filesystem.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub input_files: BTreeSet<PathBuf>,
 
     /// The timestamp of when the metadata was computed.
     pub timestamp: std::time::SystemTime,

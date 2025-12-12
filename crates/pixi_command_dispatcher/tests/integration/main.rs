@@ -8,6 +8,8 @@ use std::{
     str::FromStr,
 };
 
+use pixi_path::AbsPathBuf;
+
 use event_reporter::EventReporter;
 use fs_err as fs;
 use itertools::Itertools;
@@ -35,9 +37,17 @@ use url::Url;
 
 use crate::{event_reporter::Event, event_tree::EventTree};
 
+/// Converts a PathBuf to AbsPresumedDirPathBuf for tests.
+fn to_abs_dir(path: impl Into<PathBuf>) -> pixi_path::AbsPresumedDirPathBuf {
+    AbsPathBuf::new(path)
+        .expect("path is not absolute")
+        .into_assume_dir()
+}
+
 /// Returns a default set of cache directories for the test.
 fn default_cache_dirs() -> CacheDirs {
-    CacheDirs::new(pixi_config::get_cache_dir().unwrap())
+    let cache_dir = pixi_config::get_cache_dir().unwrap();
+    CacheDirs::new(to_abs_dir(cache_dir))
 }
 
 /// Returns the tool platform that is appropriate for the current platform.
@@ -112,7 +122,7 @@ pub async fn simple_test() {
     let tempdir = tempfile::tempdir().unwrap();
     let prefix_dir = tempdir.path().join("prefix");
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_reporter(reporter)
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages.clone())
@@ -310,7 +320,7 @@ pub async fn dropping_future_cancels_background_task() {
         .cache_dirs()
         .build_backends()
         .join(spec.cache_key());
-    let mut write_guard = pixi_utils::AsyncPrefixGuard::new(&prefix_dir)
+    let mut write_guard = pixi_utils::AsyncPrefixGuard::new(prefix_dir.as_std_path())
         .await
         .unwrap()
         .write()
@@ -379,8 +389,8 @@ pub async fn test_cycle() {
     let root_dir = workspaces_dir().join("cycle");
     let tempdir = tempfile::tempdir().unwrap();
     let dispatcher = CommandDispatcher::builder()
-        .with_root_dir(root_dir.clone())
-        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_reporter(reporter)
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages.clone())
@@ -432,8 +442,8 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
     let build_command_dispatcher = || {
         CommandDispatcher::builder()
-            .with_root_dir(root_dir.clone())
-            .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
             .with_executor(Executor::Serial)
             .with_tool_platform(tool_platform, tool_virtual_packages.clone())
             .with_backend_overrides(BackendOverride::from_memory(
@@ -574,8 +584,8 @@ pub async fn instantiate_backend_with_from_source() {
     fs_err::write(&workspace_toml, content).unwrap();
 
     let dispatcher = CommandDispatcher::builder()
-        .with_root_dir(root_dir.clone())
-        .with_cache_dirs(CacheDirs::new(root_dir.join(".pixi")))
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(CacheDirs::new(to_abs_dir(root_dir.join(".pixi"))))
         .with_executor(Executor::Serial)
         .with_backend_overrides(BackendOverride::InMemory(
             InMemoryOverriddenBackends::Specified(HashMap::from_iter([(
@@ -604,7 +614,7 @@ async fn source_build_cache_status_clear_works() {
     let tmp_dir = tempfile::tempdir().unwrap();
 
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(CacheDirs::new(tmp_dir.path().to_path_buf()))
+        .with_cache_dirs(CacheDirs::new(to_abs_dir(tmp_dir.path())))
         .finish();
 
     let host = Platform::current();
@@ -688,8 +698,8 @@ pub async fn test_dev_source_metadata() {
     let (tool_platform, tool_virtual_packages) = tool_platform();
 
     let dispatcher = CommandDispatcher::builder()
-        .with_root_dir(root_dir.clone())
-        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages.clone())
         .with_backend_overrides(BackendOverride::from_memory(
@@ -777,8 +787,8 @@ pub async fn test_dev_source_metadata_with_variants() {
     let (tool_platform, tool_virtual_packages) = tool_platform();
 
     let dispatcher = CommandDispatcher::builder()
-        .with_root_dir(root_dir.clone())
-        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages.clone())
         .with_backend_overrides(BackendOverride::from_memory(
@@ -910,8 +920,8 @@ pub async fn test_force_rebuild() {
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
     let build_command_dispatcher = || {
         CommandDispatcher::builder()
-            .with_root_dir(root_dir.clone())
-            .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
             .with_executor(Executor::Serial)
             .with_tool_platform(tool_platform, tool_virtual_packages.clone())
             .with_backend_overrides(BackendOverride::from_memory(
@@ -1057,11 +1067,11 @@ pub async fn test_force_rebuild() {
 #[tokio::test]
 pub async fn pin_and_checkout_url_reuses_cached_checkout() {
     let tempdir = tempfile::tempdir().unwrap();
-    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
     let url_cache_root = cache_dirs.url();
 
     let sha = dummy_sha();
-    let checkout_dir = prepare_cached_checkout(&url_cache_root, sha);
+    let checkout_dir = prepare_cached_checkout(url_cache_root.as_std_path(), sha);
 
     let dispatcher = CommandDispatcher::builder()
         .with_cache_dirs(cache_dirs)
@@ -1080,7 +1090,7 @@ pub async fn pin_and_checkout_url_reuses_cached_checkout() {
         .await
         .expect("url checkout should succeed");
 
-    assert_eq!(checkout.path, checkout_dir);
+    assert_eq!(checkout.path.as_std_path(), checkout_dir);
     match checkout.pinned {
         PinnedSourceSpec::Url(pinned) => {
             assert_eq!(pinned.url, spec.url);
@@ -1093,7 +1103,7 @@ pub async fn pin_and_checkout_url_reuses_cached_checkout() {
 #[tokio::test]
 pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request() {
     let tempdir = tempfile::tempdir().unwrap();
-    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
     let archive = tempfile::tempdir().unwrap();
     let url = file_url_for_test(&archive, "archive.zip");
 
@@ -1130,7 +1140,7 @@ pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request()
 #[tokio::test]
 pub async fn pin_and_checkout_url_validates_cached_results() {
     let tempdir = tempfile::tempdir().unwrap();
-    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
     let archive = tempfile::tempdir().unwrap();
     let url = file_url_for_test(&archive, "archive.zip");
 

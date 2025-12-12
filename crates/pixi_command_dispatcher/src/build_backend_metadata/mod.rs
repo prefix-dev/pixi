@@ -1,18 +1,16 @@
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
-use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use once_cell::sync::Lazy;
-use pathdiff::diff_paths;
 use pixi_build_discovery::{CommandSpec, EnabledProtocols};
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
-use pixi_glob::{GlobSet, GlobSetError};
+use pixi_glob::GlobSet;
 use pixi_record::{PinnedSourceSpec, VariantValue};
 use pixi_spec::{SourceAnchor, SourceSpec};
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use std::time::SystemTime;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, HashSet},
     hash::Hash,
     path::PathBuf,
     sync::Mutex,
@@ -33,6 +31,7 @@ use crate::{
 };
 use pixi_build_discovery::BackendSpec;
 use pixi_build_frontend::BackendOverride;
+use pixi_path::AbsPath;
 
 static WARNED_BACKENDS: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(HashSet::new()));
 
@@ -126,18 +125,12 @@ impl BuildBackendMetadataSpec {
         // Discover information about the build backend from the source code (cached by path).
         let discovered_backend = command_dispatcher
             .discover_backend(
-                &manifest_source_checkout.path,
+                manifest_source_checkout.path.as_std_path(),
                 self.channel_config.clone(),
                 self.enabled_protocols.clone(),
             )
             .await
             .map_err_with(BuildBackendMetadataError::Discovery)?;
-
-        let project_model_hash = discovered_backend
-            .init_params
-            .project_model
-            .as_ref()
-            .map(ProjectModelHash::from);
 
         // Determine the location of the source to build from.
         let manifest_source_anchor =
@@ -178,7 +171,7 @@ impl BuildBackendMetadataSpec {
         } else {
             (manifest_source_checkout.clone(), None)
         };
-        let source_location = SourceCodeLocation::new(
+        let manifest_source_location = SourceCodeLocation::new(
             manifest_source_checkout.pinned.clone(),
             build_source.clone(),
         );
@@ -205,6 +198,12 @@ impl BuildBackendMetadataSpec {
             None => (None, 0),
         };
 
+        let project_model_hash = discovered_backend
+            .init_params
+            .project_model
+            .as_ref()
+            .map(ProjectModelHash::from);
+
         if !skip_cache {
             if let Some(cache_entry) = Self::verify_cache_freshness(
                 cached_metadata,
@@ -214,8 +213,9 @@ impl BuildBackendMetadataSpec {
             )
             .await?
             {
+                tracing::debug!("Using cached source metadata for package",);
                 return Ok(BuildBackendMetadata {
-                    source: source_location.clone(),
+                    source: manifest_source_location.clone(),
                     metadata: cache_entry,
                     skip_cache,
                 });
@@ -227,7 +227,6 @@ impl BuildBackendMetadataSpec {
             warn_once_per_backend(backend_name);
         }
 
-        let build_source_dir = build_source_checkout.path.clone();
         // Instantiate the backend with the discovered information.
         let backend = command_dispatcher
             .instantiate_backend(InstantiateBackendSpec {
@@ -235,11 +234,20 @@ impl BuildBackendMetadataSpec {
                     .backend_spec
                     .clone()
                     .resolve(manifest_source_anchor),
-                build_source_dir,
+                build_source_dir: build_source_checkout
+                    .path
+                    .as_dir_or_file_parent()
+                    .to_path_buf(),
                 channel_config: self.channel_config.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
-                workspace_root: discovered_backend.init_params.workspace_root.clone(),
-                manifest_path: discovered_backend.init_params.manifest_path.clone(),
+                workspace_root: AbsPath::new(&discovered_backend.init_params.workspace_root)
+                    .expect("workspace root is not absolute")
+                    .assume_dir()
+                    .to_path_buf(),
+                manifest_path: AbsPath::new(&discovered_backend.init_params.manifest_path)
+                    .expect("manifest path is not absolute")
+                    .assume_file()
+                    .to_path_buf(),
                 project_model: discovered_backend.init_params.project_model.clone(),
                 configuration: discovered_backend.init_params.configuration.clone(),
                 target_configuration: discovered_backend.init_params.target_configuration.clone(),
@@ -294,7 +302,7 @@ impl BuildBackendMetadataSpec {
         }
 
         Ok(BuildBackendMetadata {
-            source: source_location,
+            source: manifest_source_location,
             metadata,
             skip_cache,
         })
@@ -355,7 +363,7 @@ impl BuildBackendMetadataSpec {
 
     async fn verify_cache_freshness(
         cache_entry: Option<CachedCondaMetadata>,
-        source_checkout: &SourceCheckout,
+        build_source_checkout: &SourceCheckout,
         project_model_hash: Option<ProjectModelHash>,
         requested_variants: &Option<BTreeMap<String, Vec<VariantValue>>>,
     ) -> Result<Option<CachedCondaMetadata>, CommandDispatcherError<BuildBackendMetadataError>>
@@ -366,15 +374,15 @@ impl BuildBackendMetadataSpec {
 
         // Check the project model
         if cache_entry.project_model_hash != project_model_hash {
-            tracing::trace!(
+            tracing::info!(
                 "found cached outputs with different project model, invalidating cache."
             );
             return Ok(None);
         }
 
         // Check if the source location changed.
-        if cache_entry.build_source != source_checkout.pinned {
-            tracing::trace!(
+        if cache_entry.build_source != build_source_checkout.pinned {
+            tracing::info!(
                 "found cached outputs with different source code location, invalidating cache."
             );
             return Ok(None);
@@ -382,89 +390,68 @@ impl BuildBackendMetadataSpec {
 
         // Check if the build variants match
         if Some(&cache_entry.build_variants) != requested_variants.as_ref() {
-            tracing::trace!("found cached outputs with different variants, invalidating cache.");
+            tracing::info!("found cached outputs with different variants, invalidating cache.");
             return Ok(None);
         }
 
         // If the build source is immutable, we don't check the contents of the files.
-        if source_checkout.is_immutable() {
+        if build_source_checkout.is_immutable() {
             return Ok(Some(cache_entry));
         }
 
-        // Determine the root
-        let globs_root = &source_checkout.path;
-        let globs = &cache_entry.input_globs;
-        let walk_globs = || {
-            let globs_root = if globs_root.is_dir() {
-                // use the parent directory if the check is a file.
-                globs_root.parent().expect("a dir must have a parent")
-            } else {
-                globs_root
-            };
-            let glob_set = GlobSet::create(globs.iter().map(|p| p.as_str()));
-            match glob_set.collect_matching(globs_root) {
-                Ok(matches) => Either::Left(matches.into_iter().map(|entry| {
-                    entry
-                        .metadata()
-                        .map_err(|err| GlobSetError::Walk(entry.path().to_path_buf(), err))
-                        .map(|m| (m, entry.path().to_path_buf()))
-                })),
-                Err(err) => Either::Right(std::iter::once(Err(err))),
-            }
-        };
-
-        let walk_files = || {
-            cache_entry.input_files.iter().map(|path| {
-                let source_file_path = source_checkout.path.join(path);
-                fs_err::metadata(&source_file_path)
-                    .map_err(|err| GlobSetError::Walk(path.clone(), err.into()))
-                    .map(|m| (m, path.clone()))
-            })
-        };
+        let build_source_dir = build_source_checkout.path.as_dir_or_file_parent();
 
         // Check the files that were explicitly mentioned.
-        for metadata in walk_files().chain(std::iter::once_with(walk_globs).flatten()) {
-            let (metadata, path) = match metadata {
-                Ok(metadata) => metadata,
-                Err(GlobSetError::Walk(path, err))
-                    if err.io_error().map(std::io::Error::kind)
-                        == Some(std::io::ErrorKind::NotFound) =>
-                {
-                    tracing::trace!(
-                        "found cached outputs but '{}' has been deleted, invalidating cache.",
-                        path.display()
-                    );
-                    return Ok(None);
-                }
-                Err(err) => {
-                    return Err(CommandDispatcherError::Failed(
-                        BuildBackendMetadataError::from(err),
-                    ));
-                }
-            };
-
-            match metadata.modified() {
+        for source_file_path in cache_entry
+            .input_files
+            .iter()
+            .map(|path| build_source_dir.join(path).into_std_path_buf())
+            .chain(cache_entry.build_variant_files.iter().cloned())
+        {
+            match source_file_path.metadata().and_then(|m| m.modified()) {
                 Ok(modified_date) => {
                     if modified_date > cache_entry.timestamp {
-                        tracing::trace!(
+                        tracing::info!(
                             "found cached outputs but '{}' has been modified, invalidating cache.",
-                            path.display()
+                            source_file_path.display()
                         );
                         return Ok(None);
                     }
                 }
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                    tracing::info!(
+                        "found cached outputs but '{}' has been deleted, invalidating cache.",
+                        source_file_path.display()
+                    );
+                    return Ok(None);
+                }
                 Err(err) => {
-                    tracing::trace!(
+                    tracing::info!(
                         "found cached outputs but requested metadata for '{}' failed with: {}",
-                        path.display(),
+                        source_file_path.display(),
                         err
                     );
                     return Ok(None);
                 }
+            };
+        }
+
+        let glob_set = GlobSet::create(cache_entry.input_globs.iter().map(String::as_str));
+        for matching_file in glob_set
+            .collect_matching(build_source_dir.as_std_path())
+            .map_err(BuildBackendMetadataError::from)
+            .map_err(CommandDispatcherError::Failed)?
+        {
+            let path = matching_file.into_path();
+            if cache_entry.input_files.contains(&path) {
+                tracing::info!(
+                    "found cached outputs but a new matching file at '{}' has been detected, invalidating cache.",
+                    path.display()
+                );
+                return Ok(None);
             }
         }
 
-        tracing::trace!("found up-to-date cached outputs.");
         Ok(Some(cache_entry))
     }
 
@@ -545,16 +532,20 @@ impl BuildBackendMetadataSpec {
                     .collect()
             }),
             variant_files: self.variant_files.clone(),
-            work_directory: command_dispatcher.cache_dirs().working_dirs().join(
-                WorkDirKey {
-                    source: SourceRecordOrCheckout::Checkout {
-                        checkout: build_source_checkout.clone(),
-                    },
-                    host_platform: self.build_environment.host_platform,
-                    build_backend: backend_identifier.clone(),
-                }
-                .key(),
-            ),
+            work_directory: command_dispatcher
+                .cache_dirs()
+                .working_dirs()
+                .join(
+                    WorkDirKey {
+                        source: SourceRecordOrCheckout::Checkout {
+                            checkout: build_source_checkout.clone(),
+                        },
+                        host_platform: self.build_environment.host_platform,
+                        build_backend: backend_identifier.clone(),
+                    }
+                    .key(),
+                )
+                .into_std_path_buf(),
         };
         let outputs = backend
             .conda_outputs(params, move |line| {
@@ -582,27 +573,32 @@ impl BuildBackendMetadataSpec {
             );
         }
 
-        // Compute the input globs for the mutable source checkouts.
-        let input_globs = extend_input_globs_with_variant_files(
-            outputs.input_globs.clone(),
-            &self.variant_files,
-            &build_source_checkout,
-        );
-        tracing::debug!(
-            backend = %backend_identifier,
-            source = %build_source_checkout.pinned,
-            glob_count = input_globs.len(),
-            "computing metadata input hash",
-        );
-        let (input_globs, input_files) = split_globs(input_globs);
+        // Determine the files that match the input globs.
+        let globs_root = build_source_checkout.path.as_dir_or_file_parent();
+        let input_glob_set = GlobSet::create(outputs.input_globs.iter().map(String::as_str));
+        let globs_root_path = globs_root.as_std_path();
+        let input_glob_files = input_glob_set
+            .collect_matching(globs_root_path)
+            .map_err(BuildBackendMetadataError::from)
+            .map_err(CommandDispatcherError::Failed)?
+            .into_iter()
+            .map(|entry| {
+                let path = entry.into_path();
+                path.strip_prefix(globs_root_path)
+                    .ok()
+                    .unwrap_or(&path)
+                    .to_path_buf()
+            })
+            .collect();
 
         Ok(CachedCondaMetadata {
             id: CachedCondaMetadataId::random(),
             cache_version: 0,
             outputs: outputs.outputs,
             build_variants: self.variant_configuration.unwrap_or_default(),
-            input_globs,
-            input_files,
+            build_variant_files: self.variant_files.into_iter().flatten().collect(),
+            input_globs: outputs.input_globs.into_iter().collect(),
+            input_files: input_glob_files,
             build_source: build_source_checkout.pinned,
             project_model_hash,
             timestamp,
@@ -618,41 +614,6 @@ impl BuildBackendMetadataSpec {
             pinned_source: self.manifest_source.clone(),
         }
     }
-}
-
-/// Returns the input glob set extended with any variant file paths
-/// relative to the source checkout root.
-/// Paths are normalised to use forward slashes so that they are glob-compatible.
-fn extend_input_globs_with_variant_files(
-    mut input_globs: BTreeSet<String>,
-    variant_files: &Option<Vec<PathBuf>>,
-    source_checkout: &SourceCheckout,
-) -> BTreeSet<String> {
-    if let Some(variant_files) = variant_files {
-        for variant_file in variant_files {
-            let relative = match variant_file.strip_prefix(&source_checkout.path) {
-                Ok(stripped) => stripped.to_path_buf(),
-                Err(_) => diff_paths(variant_file, &source_checkout.path)
-                    .unwrap_or_else(|| variant_file.clone()),
-            };
-            let glob = relative.to_string_lossy().replace("\\", "/");
-            input_globs.insert(glob);
-        }
-    }
-    input_globs
-}
-
-/// Splits globs into globs and explicit paths.
-fn split_globs<G: Extend<String> + Default, F: Extend<PathBuf> + Default>(
-    input_globs: BTreeSet<String>,
-) -> (G, F) {
-    input_globs.into_iter().partition_map(|glob| {
-        if glob.contains("*") {
-            Either::Left(glob)
-        } else {
-            Either::Right(PathBuf::from(glob))
-        }
-    })
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -692,6 +653,9 @@ pub enum BuildBackendMetadataError {
 
     #[error(transparent)]
     Cache(#[from] build_backend_metadata::BuildBackendMetadataCacheError),
+
+    #[error("failed to normalize path")]
+    NormalizePath(#[from] pixi_path::NormalizeError),
 }
 
 #[cfg(test)]

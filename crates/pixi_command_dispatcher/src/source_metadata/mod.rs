@@ -78,7 +78,7 @@ impl SourceMetadataSpec {
 
         let build_backend_metadata = build_backend_metadata?;
 
-        tracing::info!(
+        tracing::trace!(
             "Retrieving source metadata for package {}",
             self.package.as_source()
         );
@@ -106,10 +106,7 @@ impl SourceMetadataSpec {
                 Self::verify_cache_freshness(cached_metadata, build_backend_metadata.metadata.id)
                     .await?
             {
-                tracing::debug!(
-                    "Using cached source metadata for package {}",
-                    self.package.as_source()
-                );
+                tracing::debug!("Using cached source metadata for package",);
                 return Ok(SourceMetadata {
                     source: build_backend_metadata.source.clone(),
                     cached_metadata,
@@ -183,11 +180,11 @@ impl SourceMetadataSpec {
         };
 
         if cached_metadata.cached_conda_metadata_id != current_conda_metadata_id {
-            tracing::debug!("cached metadata is outdated.");
+            // Not adding tracing here because the backend metadata would already have done that.
+            tracing::info!("Cached metadata is stale, skipping cache");
             return Ok(None);
         }
 
-        tracing::trace!("found up-to-date cached response");
         Ok(Some(cached_metadata))
     }
 

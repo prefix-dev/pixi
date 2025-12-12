@@ -16,6 +16,7 @@ use pixi_consts::consts::{
 };
 use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart};
 use pixi_manifest::FeaturesExt;
+use pixi_path::AbsPathBuf;
 use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
@@ -187,9 +188,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Construct a command dispatcher based on the workspace.
     let multi_progress = global_multi_progress();
     let anchor_pb = multi_progress.add(ProgressBar::hidden());
-    let mut cache_dirs =
-        CacheDirs::new(pixi_config::get_cache_dir()?).with_workspace(workspace.pixi_dir());
+    let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
+        .expect("cache dir is not absolute")
+        .into_assume_dir();
+    let workspace_dir = AbsPathBuf::new(workspace.pixi_dir())
+        .expect("pixi dir is not absolute")
+        .into_assume_dir();
+    let mut cache_dirs = CacheDirs::new(cache_dir).with_workspace(workspace_dir);
     if let Some(build_dir) = args.build_dir {
+        let build_dir = AbsPathBuf::new(build_dir)
+            .expect("build dir is not absolute")
+            .into_assume_dir();
         cache_dirs.set_working_dirs(build_dir);
     }
     let command_dispatcher = workspace

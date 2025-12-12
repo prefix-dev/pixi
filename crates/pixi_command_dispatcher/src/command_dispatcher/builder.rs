@@ -1,14 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
-
-use pixi_build_frontend::BackendOverride;
-use pixi_git::resolver::GitResolver;
-use pixi_glob::GlobHashCache;
-use pixi_url::resolver::UrlResolver;
-use rattler::package_cache::PackageCache;
-use rattler_conda_types::{GenericVirtualPackage, Platform};
-use rattler_networking::LazyClient;
-use rattler_repodata_gateway::{Gateway, MaxConcurrency};
-use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
+use std::sync::Arc;
 
 use crate::cache::build_backend_metadata::BuildBackendMetadataCache;
 use crate::cache::source_metadata::SourceMetadataCache;
@@ -20,11 +10,21 @@ use crate::{
     command_dispatcher_processor::CommandDispatcherProcessor,
     limits::ResolvedLimits,
 };
+use pixi_build_frontend::BackendOverride;
+use pixi_git::resolver::GitResolver;
+use pixi_glob::GlobHashCache;
+use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
+use pixi_url::resolver::UrlResolver;
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_networking::LazyClient;
+use rattler_repodata_gateway::{Gateway, MaxConcurrency};
+use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 
 #[derive(Default)]
 pub struct CommandDispatcherBuilder {
     gateway: Option<Gateway>,
-    root_dir: Option<PathBuf>,
+    root_dir: Option<AbsPresumedDirPathBuf>,
     reporter: Option<Box<dyn Reporter>>,
     git_resolver: Option<GitResolver>,
     url_resolver: Option<UrlResolver>,
@@ -88,7 +88,7 @@ impl CommandDispatcherBuilder {
     }
 
     /// Sets the root directory for resolving relative paths.
-    pub fn with_root_dir(self, root_dir: PathBuf) -> Self {
+    pub fn with_root_dir(self, root_dir: AbsPresumedDirPathBuf) -> Self {
         Self {
             root_dir: Some(root_dir),
             ..self
@@ -145,19 +145,23 @@ impl CommandDispatcherBuilder {
 
     /// Completes the builder and returns a new [`CommandDispatcher`].
     pub fn finish(self) -> CommandDispatcher {
-        let root_dir = self
-            .root_dir
-            .or(std::env::current_dir().ok())
-            .unwrap_or_default();
+        let root_dir = self.root_dir.unwrap_or_else(|| {
+            let current_dir =
+                std::env::current_dir().expect("failed to determine current directory");
+            AbsPathBuf::new(current_dir)
+                .expect("current directory is not an absolute path")
+                .into_assume_dir()
+        });
+
         let cache_dirs = self
             .cache_dirs
-            .unwrap_or_else(|| CacheDirs::new(root_dir.join(".cache")));
+            .unwrap_or_else(|| CacheDirs::new(root_dir.join(".cache").into_assume_dir()));
         let download_client = self.download_client.unwrap_or_default();
         let package_cache = PackageCache::new(cache_dirs.packages());
         let gateway = self.gateway.unwrap_or_else(|| {
             Gateway::builder()
                 .with_client(download_client.clone())
-                .with_cache_dir(cache_dirs.root().clone())
+                .with_cache_dir(cache_dirs.root().to_owned().into_std_path_buf())
                 .with_package_cache(package_cache.clone())
                 .with_max_concurrent_requests(self.max_download_concurrency)
                 .finish()
@@ -165,10 +169,10 @@ impl CommandDispatcherBuilder {
 
         let git_resolver = self.git_resolver.unwrap_or_default();
         let build_backend_metadata_cache =
-            BuildBackendMetadataCache::new(cache_dirs.build_backend_metadata());
+            BuildBackendMetadataCache::new(cache_dirs.build_backend_metadata().into());
 
         let url_resolver = self.url_resolver.unwrap_or_default();
-        let source_metadata_cache = SourceMetadataCache::new(cache_dirs.source_metadata());
+        let source_metadata_cache = SourceMetadataCache::new(cache_dirs.source_metadata().into());
 
         let build_cache = BuildCache::new(cache_dirs.source_builds());
         let tool_platform = self.tool_platform.unwrap_or_else(|| {
