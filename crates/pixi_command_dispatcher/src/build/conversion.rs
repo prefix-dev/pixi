@@ -1,22 +1,49 @@
 use pixi_build_types::{
-    BinaryPackageSpecV1, CondaPackageMetadata, PackageSpecV1, SourcePackageSpecV1,
+    BinaryPackageSpecV1, CondaPackageMetadata, PackageSpecV1, SourcePackageLocationSpec,
+    SourcePackageSpec,
 };
 use pixi_record::{InputHash, PinnedSourceSpec, SourceRecord};
-use pixi_spec::{BinarySpec, DetailedSpec, SourceLocationSpec, UrlBinarySpec};
+use pixi_spec::{BinarySpec, DetailedSpec, UrlBinarySpec};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, PackageRecord};
 
-/// Converts a [`SourcePackageSpecV1`] to a [`pixi_spec::SourceSpec`].
-pub fn from_source_spec_v1(source: SourcePackageSpecV1) -> pixi_spec::SourceSpec {
-    match source {
-        SourcePackageSpecV1::Url(url) => pixi_spec::SourceSpec {
-            location: SourceLocationSpec::Url(pixi_spec::UrlSourceSpec {
+/// Converts a [`SourcePackageSpec`] to a [`pixi_spec::SourceSpec`].
+pub fn from_source_spec_v1(source: SourcePackageSpec) -> pixi_spec::SourceSpec {
+    let SourcePackageSpec {
+        location,
+        version,
+        build,
+        build_number,
+        subdir,
+        license,
+    } = source;
+    let location = from_source_package_location_spec(location);
+    pixi_spec::SourceSpec {
+        location,
+        version,
+        build,
+        build_number,
+        subdir,
+        license,
+        extras: None,
+        namespace: None,
+        condition: None,
+    }
+}
+
+pub fn from_source_package_location_spec(
+    spec: SourcePackageLocationSpec,
+) -> pixi_spec::SourceLocationSpec {
+    match spec {
+        SourcePackageLocationSpec::Url(url) => {
+            pixi_spec::SourceLocationSpec::Url(pixi_spec::UrlSourceSpec {
                 url: url.url,
                 md5: url.md5,
                 sha256: url.sha256,
-            }),
-        },
-        SourcePackageSpecV1::Git(git) => pixi_spec::SourceSpec {
-            location: SourceLocationSpec::Git(pixi_spec::GitSpec {
+            })
+        }
+
+        SourcePackageLocationSpec::Git(git) => {
+            pixi_spec::SourceLocationSpec::Git(pixi_spec::GitSpec {
                 git: git.git,
                 rev: git.rev.map(|r| match r {
                     pixi_build_frontend::types::GitReferenceV1::Branch(b) => {
@@ -33,13 +60,14 @@ pub fn from_source_spec_v1(source: SourcePackageSpecV1) -> pixi_spec::SourceSpec
                     }
                 }),
                 subdirectory: git.subdirectory,
-            }),
-        },
-        SourcePackageSpecV1::Path(path) => pixi_spec::SourceSpec {
-            location: SourceLocationSpec::Path(pixi_spec::PathSourceSpec {
+            })
+        }
+
+        SourcePackageLocationSpec::Path(path) => {
+            pixi_spec::SourceLocationSpec::Path(pixi_spec::PathSourceSpec {
                 path: path.path.into(),
-            }),
-        },
+            })
+        }
     }
 }
 
@@ -93,7 +121,7 @@ pub fn from_binary_spec_v1(spec: BinaryPackageSpecV1) -> pixi_spec::BinarySpec {
 pub fn from_package_spec_v1(source: PackageSpecV1) -> pixi_spec::PixiSpec {
     match source {
         PackageSpecV1::Source(source) => from_source_spec_v1(source).into(),
-        PackageSpecV1::Binary(binary) => from_binary_spec_v1(*binary).into(),
+        PackageSpecV1::Binary(binary) => from_binary_spec_v1(binary).into(),
     }
 }
 
@@ -117,7 +145,12 @@ pub(crate) fn package_metadata_to_source_records(
                 sources: p
                     .sources
                     .iter()
-                    .map(|(name, source)| (name.clone(), from_source_spec_v1(source.clone())))
+                    .map(|(name, source)| {
+                        (
+                            name.clone(),
+                            from_source_package_location_spec(source.clone()),
+                        )
+                    })
                     .collect(),
                 package_record: PackageRecord {
                     // We cannot now these values from the metadata because no actual package

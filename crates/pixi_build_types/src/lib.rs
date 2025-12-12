@@ -13,8 +13,8 @@ pub use channel_configuration::ChannelConfiguration;
 pub use conda_package_metadata::CondaPackageMetadata;
 pub use project_model::{
     BinaryPackageSpecV1, GitReferenceV1, GitSpecV1, NamedSpecV1, PackageSpecV1, PathSpecV1,
-    ProjectModelV1, SourcePackageName, SourcePackageSpecV1, TargetSelectorV1, TargetV1, TargetsV1,
-    UrlSpecV1, VersionedProjectModel,
+    ProjectModelV1, SourcePackageLocationSpec, SourcePackageName, SourcePackageSpec,
+    TargetSelectorV1, TargetV1, TargetsV1, UrlSpecV1, VersionedProjectModel,
 };
 use rattler_conda_types::{
     GenericVirtualPackage, PackageName, Platform, Version, VersionSpec,

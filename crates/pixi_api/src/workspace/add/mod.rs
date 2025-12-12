@@ -5,7 +5,7 @@ use pixi_core::{
     workspace::{PypiDeps, UpdateDeps, WorkspaceMut},
 };
 use pixi_manifest::{FeatureName, KnownPreviewFeature, SpecType};
-use pixi_spec::{GitSpec, SourceLocationSpec, SourceSpec};
+use pixi_spec::{GitSpec, SourceLocationSpec};
 use rattler_conda_types::{MatchSpec, PackageName};
 
 mod options;
@@ -62,12 +62,7 @@ pub async fn add_conda_dep(
                 };
                 (
                     name.clone(),
-                    (
-                        SourceSpec {
-                            location: SourceLocationSpec::Git(git_spec),
-                        },
-                        *spec_type,
-                    ),
+                    (SourceLocationSpec::Git(git_spec).into(), *spec_type),
                 )
             })
             .collect();

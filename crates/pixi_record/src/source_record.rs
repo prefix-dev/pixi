@@ -5,7 +5,7 @@ use std::{
 };
 
 use pixi_git::{sha::GitSha, url::RepositoryUrl};
-use pixi_spec::{GitReference, SourceSpec};
+use pixi_spec::{GitReference, SourceLocationSpec};
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
 use rattler_digest::{Sha256, Sha256Hash};
 use rattler_lock::{CondaSourceData, GitShallowSpec, PackageBuildSource};
@@ -16,7 +16,7 @@ use url::Url;
 use crate::{ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec, VariantValue};
 
 /// A record of a conda package that still requires building.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SourceRecord {
     /// Information about the conda package. This is metadata of the package
     /// after it has been build.
@@ -42,7 +42,7 @@ pub struct SourceRecord {
 
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
-    pub sources: HashMap<String, SourceSpec>,
+    pub sources: HashMap<String, SourceLocationSpec>,
 }
 
 /// Defines the hash of the input files that were used to build the metadata of
@@ -208,7 +208,7 @@ impl SourceRecord {
             sources: data
                 .sources
                 .into_iter()
-                .map(|(k, v)| (k, SourceSpec::from(v)))
+                .map(|(k, v)| (k, SourceLocationSpec::from(v)))
                 .collect(),
             variants: data.variants.map(|variants| {
                 variants
