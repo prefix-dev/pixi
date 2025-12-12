@@ -250,7 +250,11 @@ plugins:
 
   - search:
       separator: '[\s\u200b\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
-  - social
+  - social:
+      cards_layout_dir: docs/layouts
+      cards_layout: custom
+      # Set debug to true to help troubleshoot social card generation issues
+      debug: false
   - mike:
     # These fields are all optional; the defaults are as below...
     # alias_type: symlink
@@ -308,3 +312,8 @@ plugins:
         Miscellaneous documentation:
           - CHANGELOG.md
           - misc/*.md
+
+watch:
+  - docs/layouts
+  - docs/stylesheets
+  - mkdocs.yml

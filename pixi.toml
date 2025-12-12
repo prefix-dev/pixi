@@ -202,11 +202,16 @@ mkdocs-redirects = ">=1.2.1,<2"
 pillow = ">=12,<13"
 
 [feature.docs.tasks]
-build-docs = "mkdocs build --strict"
+build-docs = { cmd = "mkdocs build --strict", depends-on = ["download-font"] }
 bump-changelog = "git-cliff --unreleased --prepend CHANGELOG.md --tag $RELEASE_VERSION"
 deploy-dev = "mike deploy --push dev devel"
 deploy-latest = "mike deploy --push --update-aliases $RELEASE_VERSION latest"
-docs = { cmd = "mkdocs serve", description = "Serve the docs locally" }
+docs = { cmd = "mkdocs serve", description = "Serve the docs locally", depends-on = [
+  "download-font",
+] }
+download-font = { cmd = "bash docs/layouts/download-font-to-cache.sh", outputs = [
+  ".cache/plugin/social/fonts/Moranga/Medium.ttf",
+] }
 mike-serve = "mike serve"
 
 [feature.schema.tasks]
