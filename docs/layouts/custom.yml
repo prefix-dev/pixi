@@ -30,10 +30,10 @@ layers:
         style: Bold
 
   # Page description
-  - size: {width: 700, height: 80}
+  - size: {width: 650, height: 80}
     offset: {x: 60, y: 130}
     typography:
-      content: "{{ page.meta.description or 'Cross-platform, language-agnostic package and workflow manager' }}"
+      content: "{{ page.meta.description or 'Cross-platform, language-agnostic, package and workflow manager' }}"
       color: "#FFFFFF80"
       font:
         family: Roboto
