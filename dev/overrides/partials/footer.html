@@ -86,7 +86,12 @@
     <!-- Further information -->
     <div class="md-footer-meta md-typeset">
       <div class="md-footer-meta__inner md-grid">
-        {% include "partials/copyright.html" %}
+        <!-- Legal links -->
+        <div class="md-copyright">
+          <a href="https://prefix.dev/imprint" target="_blank">Imprint</a>
+          <span class="md-footer-meta__separator">•</span>
+          <a href="https://prefix.dev/privacy" target="_blank">Privacy</a>
+        </div>
 
         <!-- prefix logo -->
         <div class="md-footer-meta__item md-footer-meta__item--prefix-logo">
@@ -101,5 +106,6 @@
           {% include "partials/social.html" %}
         {% endif %}
       </div>
+      <img referrerpolicy="no-referrer-when-downgrade" src="https://pixel.prefix.dev/a.png?x-pxid=884ea1f4-db32-48c0-9ffd-5eb2adb3d166" style="display:none;" alt="" />
     </div>
   </footer>
