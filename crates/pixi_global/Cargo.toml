@@ -30,6 +30,7 @@ pixi_consts = { workspace = true }
 pixi_core = { workspace = true }
 pixi_manifest = { workspace = true }
 pixi_progress = { workspace = true }
+pixi_record = { workspace = true }
 pixi_reporters = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }
