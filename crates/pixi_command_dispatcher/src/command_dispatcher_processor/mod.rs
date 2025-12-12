@@ -11,14 +11,15 @@ use std::{
 
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher,
-    CommandDispatcherError, CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult,
-    Reporter, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
+    CommandDispatcherError, CommandDispatcherErrorResultExt, DevSourceMetadata,
+    DevSourceMetadataError, DevSourceMetadataSpec, InstallPixiEnvironmentResult, Reporter,
+    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
     SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceBuildError, SourceBuildResult,
     SourceBuildSpec, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
         BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcherChannel,
-        CommandDispatcherContext, CommandDispatcherData, ForegroundMessage,
+        CommandDispatcherContext, CommandDispatcherData, DevSourceMetadataId, ForegroundMessage,
         InstallPixiEnvironmentId, InstantiatedToolEnvId, SolveCondaEnvironmentId,
         SolvePixiEnvironmentId, SourceBuildCacheStatusId, SourceBuildId, SourceMetadataId,
         url::{UrlCheckout, UrlError},
@@ -39,6 +40,7 @@ use tokio_util::sync::CancellationToken;
 
 mod backend_source_build;
 mod build_backend_metadata;
+mod dev_source_metadata;
 mod git;
 mod install_pixi;
 mod instantiate_tool_env;
@@ -132,6 +134,13 @@ pub(crate) struct CommandDispatcherProcessor {
     >,
     source_build_cache_status_ids: HashMap<SourceBuildCacheStatusSpec, SourceBuildCacheStatusId>,
 
+    /// Dev source metadata requests that are currently being processed.
+    dev_source_metadata: HashMap<
+        DevSourceMetadataId,
+        PendingDeduplicatingTask<DevSourceMetadata, DevSourceMetadataError>,
+    >,
+    dev_source_metadata_ids: HashMap<DevSourceMetadataSpec, DevSourceMetadataId>,
+
     /// Backend source builds that are currently being processed.
     backend_source_builds: slotmap::SlotMap<BackendSourceBuildId, PendingBackendSourceBuild>,
     pending_backend_source_builds: VecDeque<(
@@ -187,6 +196,10 @@ enum TaskResult {
     QuerySourceBuildCache(
         SourceBuildCacheStatusId,
         BoxedDispatcherResult<Arc<SourceBuildCacheEntry>, SourceBuildCacheStatusError>,
+    ),
+    DevSourceMetadata(
+        DevSourceMetadataId,
+        BoxedDispatcherResult<DevSourceMetadata, DevSourceMetadataError>,
     ),
     BackendSourceBuild(
         BackendSourceBuildId,
@@ -352,6 +365,8 @@ impl CommandDispatcherProcessor {
                 source_build_ids: HashMap::default(),
                 source_build_cache_status: Default::default(),
                 source_build_cache_status_ids: Default::default(),
+                dev_source_metadata: Default::default(),
+                dev_source_metadata_ids: Default::default(),
                 backend_source_builds: Default::default(),
                 pending_backend_source_builds: Default::default(),
                 pending_futures: ExecutorFutures::new(inner.executor),
@@ -413,6 +428,7 @@ impl CommandDispatcherProcessor {
             ForegroundMessage::QuerySourceBuildCache(task) => {
                 self.on_source_build_cache_status(task)
             }
+            ForegroundMessage::DevSourceMetadata(task) => self.on_dev_source_metadata(task),
             ForegroundMessage::ClearReporter(sender) => self.clear_reporter(sender),
             ForegroundMessage::ClearFilesystemCaches(sender) => {
                 self.clear_filesystem_caches(sender)
@@ -449,6 +465,9 @@ impl CommandDispatcherProcessor {
             }
             TaskResult::QuerySourceBuildCache(id, result) => {
                 self.on_source_build_cache_status_result(id, *result)
+            }
+            TaskResult::DevSourceMetadata(id, result) => {
+                self.on_dev_source_metadata_result(id, *result)
             }
         }
     }
@@ -567,6 +586,9 @@ impl CommandDispatcherProcessor {
                         .map(reporter::ReporterContext::BackendSourceBuild);
                 }
                 CommandDispatcherContext::QuerySourceBuildCache(_id) => {
+                    return None;
+                }
+                CommandDispatcherContext::DevSourceMetadata(_id) => {
                     return None;
                 }
             };

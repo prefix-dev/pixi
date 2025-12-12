@@ -32,12 +32,16 @@ use typed_path::Utf8TypedPath;
 use url::UrlCheckoutTask;
 
 use crate::{
-    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, Executor,
-    InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
-    SourceBuildCacheEntry, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout,
-    SourceCheckoutError, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, DevSourceMetadata,
+    DevSourceMetadataError, DevSourceMetadataSpec, Executor, InvalidPathError, PixiEnvironmentSpec,
+    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
+    SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout, SourceCheckoutError,
+    SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
-    build::{BuildCache, source_metadata_cache::SourceMetadataCache},
+    build::BuildCache,
+    cache::{
+        build_backend_metadata::BuildBackendMetadataCache, source_metadata::SourceMetadataCache,
+    },
     cache_dirs::CacheDirs,
     discover_backend_cache::DiscoveryCache,
     install_pixi::{
@@ -104,6 +108,9 @@ impl Drop for CommandDispatcher {
 pub(crate) struct CommandDispatcherData {
     /// The gateway to use to query conda repodata.
     pub gateway: Gateway,
+
+    /// Backend metadata cache used to store metadata for source packages.
+    pub build_backend_metadata_cache: BuildBackendMetadataCache,
 
     /// Source metadata cache used to store metadata for source packages.
     pub source_metadata_cache: SourceMetadataCache,
@@ -187,6 +194,7 @@ pub(crate) enum CommandDispatcherContext {
     SourceMetadata(SourceMetadataId),
     SourceBuild(SourceBuildId),
     QuerySourceBuildCache(SourceBuildCacheStatusId),
+    DevSourceMetadata(DevSourceMetadataId),
     InstallPixiEnvironment(InstallPixiEnvironmentId),
     InstantiateToolEnv(InstantiatedToolEnvId),
 }
@@ -224,6 +232,10 @@ pub(crate) struct SourceBuildId(pub usize);
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct SourceBuildCacheStatusId(pub usize);
 
+/// An id that uniquely identifies a dev source metadata request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct DevSourceMetadataId(pub usize);
+
 /// An id that uniquely identifies a tool environment.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct InstantiatedToolEnvId(pub usize);
@@ -239,6 +251,7 @@ pub(crate) enum ForegroundMessage {
     SourceMetadata(SourceMetadataTask),
     SourceBuild(SourceBuildTask),
     QuerySourceBuildCache(SourceBuildCacheStatusTask),
+    DevSourceMetadata(DevSourceMetadataTask),
     GitCheckout(GitCheckoutTask),
     UrlCheckout(UrlCheckoutTask),
     InstallPixiEnvironment(InstallPixiEnvironmentTask),
@@ -314,6 +327,13 @@ impl TaskSpec for SourceBuildCacheStatusSpec {
     type Error = SourceBuildCacheStatusError;
 }
 
+pub(crate) type DevSourceMetadataTask = Task<DevSourceMetadataSpec>;
+
+impl TaskSpec for DevSourceMetadataSpec {
+    type Output = DevSourceMetadata;
+    type Error = DevSourceMetadataError;
+}
+
 impl Default for CommandDispatcher {
     fn default() -> Self {
         Self::new()
@@ -334,6 +354,11 @@ impl CommandDispatcher {
     /// Returns the executor used by the command dispatcher.
     pub fn executor(&self) -> Executor {
         self.data.executor
+    }
+
+    /// Returns the cache for source metadata.
+    pub fn build_backend_metadata_cache(&self) -> &BuildBackendMetadataCache {
+        &self.data.build_backend_metadata_cache
     }
 
     /// Returns the cache for source metadata.
@@ -476,6 +501,25 @@ impl CommandDispatcher {
         self.execute_task(spec).await
     }
 
+    /// Returns the metadata for dev sources.
+    ///
+    /// This method queries the build backend for all outputs from a dev source
+    /// and creates DevSourceRecords for each one. These records contain the
+    /// combined dependencies (build, host, run) for each output.
+    ///
+    /// Unlike `source_metadata`, this is specifically for dev sources
+    /// where the dependencies are installed but the package itself is not built.
+    ///
+    /// # Requirements
+    ///
+    /// - The build backend must support the `conda/outputs` procedure (API v1+)
+    pub async fn dev_source_metadata(
+        &self,
+        spec: DevSourceMetadataSpec,
+    ) -> Result<DevSourceMetadata, CommandDispatcherError<DevSourceMetadataError>> {
+        self.execute_task(spec).await
+    }
+
     /// Query the source build cache for a particular source package.
     pub async fn source_build_cache_status(
         &self,
@@ -493,6 +537,7 @@ impl CommandDispatcher {
         self.execute_task(spec).await
     }
 
+    ///
     /// Calls into a pixi build backend to perform a source build.
     pub(crate) async fn backend_source_build(
         &self,

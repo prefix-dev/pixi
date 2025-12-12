@@ -5,7 +5,6 @@ mod build_environment;
 pub mod conversion;
 mod dependencies;
 mod move_file;
-pub(crate) mod source_metadata_cache;
 mod work_dir_key;
 
 use std::hash::{DefaultHasher, Hash, Hasher};

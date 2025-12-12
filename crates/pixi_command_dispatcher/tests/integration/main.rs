@@ -675,6 +675,232 @@ async fn source_build_cache_status_clear_works() {
     );
 }
 
+/// Tests that `dev_source_metadata` correctly retrieves all outputs from a dev source
+/// and creates DevSourceRecords with combined dependencies.
+#[tokio::test]
+pub async fn test_dev_source_metadata() {
+    use pixi_command_dispatcher::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
+    use pixi_record::PinnedPathSpec;
+
+    // Setup: Create a dispatcher with the in-memory backend
+    let root_dir = workspaces_dir().join("dev-sources");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(root_dir.clone())
+        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Pin the source spec to a path
+    let pinned_source = PinnedPathSpec {
+        path: "test-package".into(),
+    }
+    .into();
+
+    // Create the spec for dev source metadata
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("test-package"),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: pinned_source,
+            channel_config: default_channel_config(),
+            channels: vec![],
+            build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
+            variant_configuration: None,
+            variant_files: None,
+            enabled_protocols: Default::default(),
+            preferred_build_source: None,
+        },
+    };
+
+    // Act: Get the dev source metadata
+    let result = dispatcher
+        .dev_source_metadata(spec)
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("dev_source_metadata should succeed");
+
+    // Assert: Should have one record for test-package
+    assert_eq!(
+        result.records.len(),
+        1,
+        "Should have one record for test-package"
+    );
+
+    let record = &result.records[0];
+
+    // Verify the record has the correct name
+    assert_eq!(
+        record.name.as_source(),
+        "test-package",
+        "Record should be for test-package"
+    );
+
+    // Verify all dependencies are combined (build + host + run)
+    // From the test data: build (cmake, make), host (zlib, openssl), run (python, numpy)
+    let dep_names: Vec<_> = record
+        .dependencies
+        .names()
+        .map(|name| name.as_normalized())
+        .sorted()
+        .collect();
+
+    assert_eq!(
+        dep_names,
+        vec!["cmake", "make", "numpy", "openssl", "python", "zlib"],
+        "All dependencies (build, host, run) should be combined"
+    );
+
+    // Verify constraints are empty (test package has no constraints)
+    assert!(
+        record.constraints.is_empty(),
+        "Test package has no constraints"
+    );
+}
+
+/// Tests that the PassthroughBackend generates multiple outputs based on variant configurations
+/// when dependencies have "*" version requirements.
+#[tokio::test]
+pub async fn test_dev_source_metadata_with_variants() {
+    use pixi_command_dispatcher::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
+    use pixi_record::PinnedPathSpec;
+    use std::collections::BTreeMap;
+
+    // Setup: Create a dispatcher with the in-memory backend
+    let root_dir = workspaces_dir().join("dev-sources");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(root_dir.clone())
+        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Pin the source spec to a path
+    let pinned_source = PinnedPathSpec {
+        path: "variant-package".into(),
+    }
+    .into();
+
+    // Create variant configuration for python and numpy
+    let mut variant_config = BTreeMap::new();
+    variant_config.insert(
+        "python".to_string(),
+        vec!["3.10".to_string().into(), "3.11".to_string().into()],
+    );
+    variant_config.insert(
+        "numpy".to_string(),
+        vec!["1.0".to_string().into(), "2.0".to_string().into()],
+    );
+
+    // Create the spec for dev source metadata with variants
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("variant-package"),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: pinned_source,
+            channel_config: default_channel_config(),
+            channels: vec![],
+            build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
+            variant_configuration: Some(variant_config),
+            variant_files: None,
+            enabled_protocols: Default::default(),
+            preferred_build_source: None,
+        },
+    };
+
+    // Act: Get the dev source metadata
+    let result = dispatcher
+        .dev_source_metadata(spec)
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("dev_source_metadata should succeed");
+
+    // Assert: Should have 4 records (2 python versions × 2 numpy versions)
+    assert_eq!(
+        result.records.len(),
+        4,
+        "Should have 4 records for all variant combinations"
+    );
+
+    // Collect all variant combinations
+    let variants: Vec<_> = result
+        .records
+        .iter()
+        .map(|record| {
+            let python = record
+                .variants
+                .get("python")
+                .map(|s| s.to_string())
+                .unwrap_or("none".to_string());
+            let numpy = record
+                .variants
+                .get("numpy")
+                .map(|s| s.to_string())
+                .unwrap_or("none".to_string());
+            (python, numpy)
+        })
+        .sorted()
+        .collect();
+
+    // Verify all expected combinations are present
+    assert_eq!(
+        variants,
+        vec![
+            ("3.10".to_string(), "1.0".to_string()),
+            ("3.10".to_string(), "2.0".to_string()),
+            ("3.11".to_string(), "1.0".to_string()),
+            ("3.11".to_string(), "2.0".to_string()),
+        ],
+        "All variant combinations should be generated"
+    );
+
+    // Verify each record has the correct variant metadata
+    for record in &result.records {
+        assert_eq!(
+            record.name.as_source(),
+            "variant-package",
+            "All records should have the same package name"
+        );
+
+        // Verify the variant is properly set in the record
+        assert!(
+            record.variants.contains_key("python"),
+            "Variant should contain python key"
+        );
+        assert!(
+            record.variants.contains_key("numpy"),
+            "Variant should contain numpy key"
+        );
+
+        // Verify python and numpy are in dependencies (all combined)
+        let dep_names: Vec<_> = record
+            .dependencies
+            .names()
+            .map(|n| n.as_normalized())
+            .sorted()
+            .collect();
+
+        assert!(
+            dep_names.contains(&"python"),
+            "Python should be in dependencies"
+        );
+        assert!(
+            dep_names.contains(&"numpy"),
+            "Numpy should be in dependencies"
+        );
+    }
+}
+
 /// Tests that forcing a rebuild of a package will ignore UpToDate cache status from previous builds.
 #[tokio::test]
 pub async fn test_force_rebuild() {
