@@ -1,6 +1,4 @@
-# `pixi global shortcut`
-
-## About
+# [pixi](../../) [global](../) shortcut
 
 Interact with the shortcuts on your machine
 

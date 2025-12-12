@@ -1,6 +1,4 @@
-# `pixi upgrade`
-
-## About
+# [pixi](../) upgrade
 
 Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file
 

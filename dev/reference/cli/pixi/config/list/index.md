@@ -1,6 +1,4 @@
-# `pixi config list`
-
-## About
+# [pixi](../../) [config](../) list
 
 List configuration values
 

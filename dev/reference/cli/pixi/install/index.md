@@ -1,6 +1,4 @@
-# `pixi install`
-
-## About
+# [pixi](../) install
 
 Install an environment, both updating the lockfile and installing the environment
 

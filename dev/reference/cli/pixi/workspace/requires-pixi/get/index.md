@@ -1,6 +1,4 @@
-# `pixi workspace requires-pixi get`
-
-## About
+# [pixi](../../../) [workspace](../../) [requires-pixi](../) get
 
 Get the pixi minimum version requirement
 

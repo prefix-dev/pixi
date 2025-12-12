@@ -1,6 +1,4 @@
-# `pixi init`
-
-## About
+# [pixi](../) init
 
 Creates a new workspace
 

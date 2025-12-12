@@ -1,6 +1,4 @@
-# `pixi upload s3`
-
-## About
+# [pixi](../../) [upload](../) s3
 
 Options for uploading to S3
 

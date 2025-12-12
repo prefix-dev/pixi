@@ -1,6 +1,4 @@
-# `pixi workspace channel add`
-
-## About
+# [pixi](../../../) [workspace](../../) [channel](../) add
 
 Adds a channel to the manifest and updates the lockfile
 

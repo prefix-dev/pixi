@@ -1,6 +1,4 @@
-# `pixi workspace description set`
-
-## About
+# [pixi](../../../) [workspace](../../) [description](../) set
 
 Set the workspace description
 

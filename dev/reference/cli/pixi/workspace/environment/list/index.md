@@ -1,6 +1,4 @@
-# `pixi workspace environment list`
-
-## About
+# [pixi](../../../) [workspace](../../) [environment](../) list
 
 List the environments in the manifest file
 

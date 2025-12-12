@@ -1,6 +1,4 @@
-# `pixi workspace environment remove`
-
-## About
+# [pixi](../../../) [workspace](../../) [environment](../) remove
 
 Remove an environment from the manifest file
 

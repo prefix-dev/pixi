@@ -1,6 +1,4 @@
-# `pixi workspace feature list`
-
-## About
+# [pixi](../../../) [workspace](../../) [feature](../) list
 
 List the features in the manifest file
 

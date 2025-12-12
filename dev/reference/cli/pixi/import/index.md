@@ -1,6 +1,4 @@
-# `pixi import`
-
-## About
+# [pixi](../) import
 
 Imports a file into an environment in an existing workspace.
 

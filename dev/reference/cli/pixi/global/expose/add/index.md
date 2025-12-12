@@ -1,6 +1,4 @@
-# `pixi global expose add`
-
-## About
+# [pixi](../../../) [global](../../) [expose](../) add
 
 Add exposed binaries from an environment to your global environment
 

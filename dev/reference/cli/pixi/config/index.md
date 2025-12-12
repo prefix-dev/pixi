@@ -1,6 +1,4 @@
-# `pixi config`
-
-## About
+# [pixi](../) config
 
 Configuration management
 

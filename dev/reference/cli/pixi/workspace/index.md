@@ -1,6 +1,4 @@
-# `pixi workspace`
-
-## About
+# [pixi](../) workspace
 
 Modify the workspace configuration file through the command line
 

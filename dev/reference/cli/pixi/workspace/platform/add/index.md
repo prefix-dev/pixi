@@ -1,6 +1,4 @@
-# `pixi workspace platform add`
-
-## About
+# [pixi](../../../) [workspace](../../) [platform](../) add
 
 Adds a platform(s) to the workspace file and updates the lockfile
 

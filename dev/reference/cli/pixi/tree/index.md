@@ -1,6 +1,4 @@
-# `pixi tree`
-
-## About
+# [pixi](../) tree
 
 Show a tree of workspace dependencies
 

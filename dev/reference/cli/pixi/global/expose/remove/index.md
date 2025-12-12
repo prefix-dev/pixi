@@ -1,6 +1,4 @@
-# `pixi global expose remove`
-
-## About
+# [pixi](../../../) [global](../../) [expose](../) remove
 
 Remove exposed binaries from the global environment
 

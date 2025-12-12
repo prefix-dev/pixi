@@ -1,6 +1,4 @@
-# `pixi workspace channel`
-
-## About
+# [pixi](../../) [workspace](../) channel
 
 Commands to manage workspace channels
 

@@ -1,6 +1,4 @@
-# `pixi workspace version`
-
-## About
+# [pixi](../../) [workspace](../) version
 
 Commands to manage workspace version
 

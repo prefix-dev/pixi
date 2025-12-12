@@ -1,6 +1,4 @@
-# `pixi global shortcut remove`
-
-## About
+# [pixi](../../../) [global](../../) [shortcut](../) remove
 
 Remove shortcuts from your machine
 

@@ -1,8 +1,6 @@
-# `pixi build`
+# [pixi](../) build
 
-## About
-
-Lock file and installation configuration with --as-is support Used by shell, shell-hook, and run commands
+Build a conda package from a Pixi package.
 
 ## Usage
 

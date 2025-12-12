@@ -1,6 +1,4 @@
-# `pixi run`
-
-## About
+# [pixi](../) run
 
 Runs task in the pixi environment
 

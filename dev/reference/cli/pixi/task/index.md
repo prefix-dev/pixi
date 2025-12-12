@@ -1,6 +1,4 @@
-# `pixi task`
-
-## About
+# [pixi](../) task
 
 Interact with tasks in the workspace
 

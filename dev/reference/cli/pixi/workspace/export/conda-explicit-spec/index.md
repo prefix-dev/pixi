@@ -1,6 +1,4 @@
-# `pixi workspace export conda-explicit-spec`
-
-## About
+# [pixi](../../../) [workspace](../../) [export](../) conda-explicit-spec
 
 Export workspace environment to a conda explicit specification file
 

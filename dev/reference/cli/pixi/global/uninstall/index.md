@@ -1,6 +1,4 @@
-# `pixi global uninstall`
-
-## About
+# [pixi](../../) [global](../) uninstall
 
 Uninstalls environments from the global environment.
 

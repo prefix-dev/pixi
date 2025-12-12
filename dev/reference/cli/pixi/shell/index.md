@@ -1,6 +1,4 @@
-# `pixi shell`
-
-## About
+# [pixi](../) shell
 
 Start a shell in a pixi environment, run `exit` to leave the shell
 

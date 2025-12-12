@@ -1,6 +1,4 @@
-# `pixi config edit`
-
-## About
+# [pixi](../../) [config](../) edit
 
 Edit the configuration file
 

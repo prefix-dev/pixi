@@ -1,6 +1,4 @@
-# `pixi upload`
-
-## About
+# [pixi](../) upload
 
 Upload conda packages to various channels
 

@@ -1,6 +1,4 @@
-# `pixi task list`
-
-## About
+# [pixi](../../) [task](../) list
 
 List all tasks in the workspace
 

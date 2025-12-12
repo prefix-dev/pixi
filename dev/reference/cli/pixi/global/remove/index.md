@@ -1,6 +1,4 @@
-# `pixi global remove`
-
-## About
+# [pixi](../../) [global](../) remove
 
 Removes dependencies from an environment
 

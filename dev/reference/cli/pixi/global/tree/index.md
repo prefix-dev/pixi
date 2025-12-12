@@ -1,6 +1,4 @@
-# `pixi global tree`
-
-## About
+# [pixi](../../) [global](../) tree
 
 Show a tree of dependencies for a specific global environment
 

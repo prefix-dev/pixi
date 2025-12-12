@@ -1,6 +1,4 @@
-# `pixi upload anaconda`
-
-## About
+# [pixi](../../) [upload](../) anaconda
 
 Options for uploading to a Anaconda.org server
 

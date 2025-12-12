@@ -1,6 +1,4 @@
-# `pixi config unset`
-
-## About
+# [pixi](../../) [config](../) unset
 
 Unset a configuration value
 

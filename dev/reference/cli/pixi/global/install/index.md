@@ -1,6 +1,4 @@
-# `pixi global install`
-
-## About
+# [pixi](../../) [global](../) install
 
 Installs the defined packages in a globally accessible location and exposes their command line applications.
 

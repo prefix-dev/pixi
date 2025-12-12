@@ -1,6 +1,4 @@
-# `pixi global shortcut add`
-
-## About
+# [pixi](../../../) [global](../../) [shortcut](../) add
 
 Add a shortcut from an environment to your machine.
 

@@ -1,6 +1,4 @@
-# `pixi workspace description`
-
-## About
+# [pixi](../../) [workspace](../) description
 
 Commands to manage workspace description
 

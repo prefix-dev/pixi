@@ -1,6 +1,4 @@
-# `pixi workspace feature`
-
-## About
+# [pixi](../../) [workspace](../) feature
 
 Commands to manage workspace features
 

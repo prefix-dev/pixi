@@ -1,6 +1,4 @@
-# `pixi workspace requires-pixi set`
-
-## About
+# [pixi](../../../) [workspace](../../) [requires-pixi](../) set
 
 Set the pixi minimum version requirement
 

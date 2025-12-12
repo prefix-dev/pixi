@@ -1,6 +1,4 @@
-# `pixi global expose`
-
-## About
+# [pixi](../../) [global](../) expose
 
 Interact with the exposure of binaries in the global environment
 

@@ -1,6 +1,4 @@
-# `pixi workspace export`
-
-## About
+# [pixi](../../) [workspace](../) export
 
 Commands to export workspaces to other formats
 

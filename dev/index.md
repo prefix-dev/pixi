@@ -1,20 +1,36 @@
-## Why Pixi?
+# Pixi
 
 Pixi is a **fast, modern, and reproducible** package management tool for developers of all backgrounds.
 
-\[**🔄 Reproducibility**
+```shell
+curl -fsSL https://pixi.sh/install.sh | sh
+```
 
-Isolated, easily recreated environments with lockfiles built-in\](workspace/lockfile) \[**🛠️ Tasks**
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm -useb https://pixi.sh/install.ps1 | iex"
+```
 
-Manage complex pipelines effortlessly.\](workspace/advanced_tasks/) \[**🌐 Multi Platform**
+More installation options can be found [here](installation/).
 
-Works on Linux, macOS, Windows, and more.\](workspace/multi_platform_configuration/) \[**🧩 Multi Environment**
+## Highlights
 
-Compose multiple environments in one manifest.\](workspace/multi_environment/) \[**🐍 Python**
+- [🔄 **Reproducibility**](workspace/lockfile/)\
+  Isolated, easily recreated environments with lockfiles built-in
 
-Support for `pyproject.toml` and PyPI through uv.\](python/tutorial/) \[**🌍 Global Tools**
+- [🛠️ **Tasks**](workspace/advanced_tasks/)\
+  Manage complex pipelines effortlessly.
 
-Install global tools, safely isolated. Replacing `apt`, `homebrew`, `winget`\](global_tools/introduction/)
+- [🌐 **Multi Platform**](workspace/multi_platform_configuration/)\
+  Works on Linux, macOS, Windows, and more.
+
+- [🧩 **Multi Environment**](workspace/multi_environment/)\
+  Compose multiple environments in one manifest.
+
+- [🐍 **Python**](python/tutorial/)\
+  Support for `pyproject.toml` and PyPI through uv.
+
+- [🌍 **Global Tools**](global_tools/introduction/)\
+  Install global tools, safely isolated. Replacing `apt`, `homebrew`, `winget`.
 
 ______________________________________________________________________
 
@@ -37,7 +53,7 @@ pixi global install gh nvim ipython btop ripgrep
 
 ______________________________________________________________________
 
-## What is the difference with Pixi?
+## How Tools Compare to Pixi
 
 | Builtin Core Features       | Pixi | Conda | Pip | Poetry | uv  |
 | --------------------------- | ---- | ----- | --- | ------ | --- |

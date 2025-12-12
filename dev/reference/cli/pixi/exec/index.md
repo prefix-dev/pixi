@@ -1,6 +1,4 @@
-# `pixi exec`
-
-## About
+# [pixi](../) exec
 
 Run a command and install it in a temporary environment
 

@@ -1,6 +1,4 @@
-# `pixi upload artifactory`
-
-## About
+# [pixi](../../) [upload](../) artifactory
 
 Options for uploading to a Artifactory channel. Authentication is used from the keychain / auth-file
 

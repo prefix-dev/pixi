@@ -1,6 +1,4 @@
-# `pixi workspace channel remove`
-
-## About
+# [pixi](../../../) [workspace](../../) [channel](../) remove
 
 Remove channel(s) from the manifest and updates the lockfile
 

@@ -1,6 +1,4 @@
-# `pixi auth logout`
-
-## About
+# [pixi](../../) [auth](../) logout
 
 Remove authentication information for a given host
 

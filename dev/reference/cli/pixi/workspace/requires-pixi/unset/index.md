@@ -1,6 +1,4 @@
-# `pixi workspace requires-pixi unset`
-
-## About
+# [pixi](../../../) [workspace](../../) [requires-pixi](../) unset
 
 Remove the pixi minimum version requirement
 

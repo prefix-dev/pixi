@@ -1,6 +1,4 @@
-# `pixi upload conda-forge`
-
-## About
+# [pixi](../../) [upload](../) conda-forge
 
 Options for uploading to conda-forge
 

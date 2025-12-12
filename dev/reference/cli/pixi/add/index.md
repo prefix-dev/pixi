@@ -1,6 +1,4 @@
-# `pixi add`
-
-## About
+# [pixi](../) add
 
 Adds dependencies to the workspace
 

@@ -1,6 +1,4 @@
-# `pixi update`
-
-## About
+# [pixi](../) update
 
 The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly
 

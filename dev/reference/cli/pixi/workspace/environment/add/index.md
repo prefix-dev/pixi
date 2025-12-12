@@ -1,6 +1,4 @@
-# `pixi workspace environment add`
-
-## About
+# [pixi](../../../) [workspace](../../) [environment](../) add
 
 Adds an environment to the manifest file
 

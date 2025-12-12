@@ -1,6 +1,4 @@
-# `pixi completion`
-
-## About
+# [pixi](../) completion
 
 Generates a completion script for a shell
 

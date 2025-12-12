@@ -1,6 +1,4 @@
-# `pixi auth`
-
-## About
+# [pixi](../) auth
 
 Login to prefix.dev or anaconda.org servers to access private channels
 

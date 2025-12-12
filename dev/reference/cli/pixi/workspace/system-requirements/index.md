@@ -1,6 +1,4 @@
-# `pixi workspace system-requirements`
-
-## About
+# [pixi](../../) [workspace](../) system-requirements
 
 Commands to manage workspace system requirements
 

@@ -1,6 +1,4 @@
-# `pixi workspace version get`
-
-## About
+# [pixi](../../../) [workspace](../../) [version](../) get
 
 Get the workspace version
 

@@ -1,6 +1,4 @@
-# `pixi workspace name get`
-
-## About
+# [pixi](../../../) [workspace](../../) [name](../) get
 
 Get the workspace name
 

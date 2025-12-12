@@ -1,6 +1,4 @@
-# `pixi search`
-
-## About
+# [pixi](../) search
 
 Search a conda package
 

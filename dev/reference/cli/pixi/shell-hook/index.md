@@ -1,6 +1,4 @@
-# `pixi shell-hook`
-
-## About
+# [pixi](../) shell-hook
 
 Print the pixi environment activation script
 

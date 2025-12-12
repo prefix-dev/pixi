@@ -1,6 +1,4 @@
-# `pixi global list`
-
-## About
+# [pixi](../../) [global](../) list
 
 Lists global environments with their dependencies and exposed commands. Can also display all packages within a specific global environment when using the --environment flag.
 

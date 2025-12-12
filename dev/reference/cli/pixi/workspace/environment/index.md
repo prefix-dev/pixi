@@ -1,6 +1,4 @@
-# `pixi workspace environment`
-
-## About
+# [pixi](../../) [workspace](../) environment
 
 Commands to manage workspace environments
 

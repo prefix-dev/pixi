@@ -1,6 +1,4 @@
-# `pixi workspace feature remove`
-
-## About
+# [pixi](../../../) [workspace](../../) [feature](../) remove
 
 Remove a feature from the manifest file
 

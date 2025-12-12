@@ -1,6 +1,4 @@
-# `pixi global upgrade-all`
-
-## About
+# [pixi](../../) [global](../) upgrade-all
 
 Upgrade all globally installed packages This command has been removed, please use `pixi global update` instead
 

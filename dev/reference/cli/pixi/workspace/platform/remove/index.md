@@ -1,6 +1,4 @@
-# `pixi workspace platform remove`
-
-## About
+# [pixi](../../../) [workspace](../../) [platform](../) remove
 
 Remove platform(s) from the workspace file and updates the lockfile
 

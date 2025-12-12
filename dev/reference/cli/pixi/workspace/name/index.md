@@ -1,6 +1,4 @@
-# `pixi workspace name`
-
-## About
+# [pixi](../../) [workspace](../) name
 
 Commands to manage workspace name
 

@@ -1,6 +1,4 @@
-# `pixi workspace version set`
-
-## About
+# [pixi](../../../) [workspace](../../) [version](../) set
 
 Set the workspace version
 

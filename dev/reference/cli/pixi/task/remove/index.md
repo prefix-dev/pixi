@@ -1,6 +1,4 @@
-# `pixi task remove`
-
-## About
+# [pixi](../../) [task](../) remove
 
 Remove a command from the workspace
 

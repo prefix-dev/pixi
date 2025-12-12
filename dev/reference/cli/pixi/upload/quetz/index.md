@@ -1,6 +1,4 @@
-# `pixi upload quetz`
-
-## About
+# [pixi](../../) [upload](../) quetz
 
 Upload to a Quetz server. Authentication is used from the keychain / auth-file
 

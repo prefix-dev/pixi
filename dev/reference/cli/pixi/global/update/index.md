@@ -1,6 +1,4 @@
-# `pixi global update`
-
-## About
+# [pixi](../../) [global](../) update
 
 Updates environments in the global environment
 

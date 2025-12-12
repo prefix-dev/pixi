@@ -1,6 +1,4 @@
-# `pixi config prepend`
-
-## About
+# [pixi](../../) [config](../) prepend
 
 Prepend a value to a list configuration key
 

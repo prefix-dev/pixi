@@ -1,6 +1,4 @@
-# `pixi workspace version major`
-
-## About
+# [pixi](../../../) [workspace](../../) [version](../) major
 
 Bump the workspace version to MAJOR
 

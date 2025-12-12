@@ -1,6 +1,4 @@
-# `pixi task alias`
-
-## About
+# [pixi](../../) [task](../) alias
 
 Alias another specific command
 

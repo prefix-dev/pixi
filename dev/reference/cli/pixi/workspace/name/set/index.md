@@ -1,6 +1,4 @@
-# `pixi workspace name set`
-
-## About
+# [pixi](../../../) [workspace](../../) [name](../) set
 
 Set the workspace name
 

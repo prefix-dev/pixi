@@ -1,6 +1,4 @@
-# `pixi info`
-
-## About
+# [pixi](../) info
 
 Information about the system, workspace and environments for the current machine
 

@@ -1,6 +1,4 @@
-# `pixi clean`
-
-## About
+# [pixi](../) clean
 
 Cleanup the environments
 

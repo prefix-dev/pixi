@@ -1,6 +1,4 @@
-# `pixi clean cache`
-
-## About
+# [pixi](../../) [clean](../) cache
 
 Clean the cache of your system which are touched by pixi
 

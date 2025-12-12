@@ -1,6 +1,4 @@
-# `pixi self-update`
-
-## About
+# [pixi](../) self-update
 
 Update pixi to the latest version or a specific version
 

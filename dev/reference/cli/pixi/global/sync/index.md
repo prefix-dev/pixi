@@ -1,6 +1,4 @@
-# `pixi global sync`
-
-## About
+# [pixi](../../) [global](../) sync
 
 Sync global manifest with installed environments
 

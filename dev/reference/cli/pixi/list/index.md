@@ -1,6 +1,4 @@
-# `pixi list`
-
-## About
+# [pixi](../) list
 
 List the packages of the current workspace
 

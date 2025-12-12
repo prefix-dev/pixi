@@ -1,6 +1,4 @@
-# `pixi lock`
-
-## About
+# [pixi](../) lock
 
 Solve environment and update the lock file without installing the environments
 

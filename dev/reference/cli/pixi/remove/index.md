@@ -1,6 +1,4 @@
-# `pixi remove`
-
-## About
+# [pixi](../) remove
 
 Removes dependencies from the workspace
 

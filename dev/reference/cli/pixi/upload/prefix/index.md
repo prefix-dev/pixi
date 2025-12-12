@@ -1,6 +1,4 @@
-# `pixi upload prefix`
-
-## About
+# [pixi](../../) [upload](../) prefix
 
 Options for uploading to a prefix.dev server. Authentication is used from the keychain / auth-file
 

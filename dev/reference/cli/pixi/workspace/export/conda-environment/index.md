@@ -1,6 +1,4 @@
-# `pixi workspace export conda-environment`
-
-## About
+# [pixi](../../../) [workspace](../../) [export](../) conda-environment
 
 Export workspace environment to a conda environment.yaml file
 

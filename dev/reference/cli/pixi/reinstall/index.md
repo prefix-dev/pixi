@@ -1,6 +1,4 @@
-# `pixi reinstall`
-
-## About
+# [pixi](../) reinstall
 
 Re-install an environment, both updating the lockfile and re-installing the environment
 

@@ -1,6 +1,4 @@
-# `pixi config append`
-
-## About
+# [pixi](../../) [config](../) append
 
 Append a value to a list configuration key
 

@@ -1,6 +1,4 @@
-# `pixi workspace platform list`
-
-## About
+# [pixi](../../../) [workspace](../../) [platform](../) list
 
 List the platforms in the workspace file
 

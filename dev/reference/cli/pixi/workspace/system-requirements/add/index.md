@@ -1,6 +1,4 @@
-# `pixi workspace system-requirements add`
-
-## About
+# [pixi](../../../) [workspace](../../) [system-requirements](../) add
 
 Adds an environment to the manifest file
 

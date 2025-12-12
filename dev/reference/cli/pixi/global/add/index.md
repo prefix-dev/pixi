@@ -1,6 +1,4 @@
-# `pixi global add`
-
-## About
+# [pixi](../../) [global](../) add
 
 Adds dependencies to an environment
 

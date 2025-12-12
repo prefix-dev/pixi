@@ -1,6 +1,4 @@
-# `pixi workspace channel list`
-
-## About
+# [pixi](../../../) [workspace](../../) [channel](../) list
 
 List the channels in the manifest
 

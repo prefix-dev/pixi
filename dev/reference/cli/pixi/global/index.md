@@ -1,6 +1,4 @@
-# `pixi global`
-
-## About
+# [pixi](../) global
 
 Subcommand for global package management actions
 

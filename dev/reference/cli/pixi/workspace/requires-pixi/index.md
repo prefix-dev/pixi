@@ -1,6 +1,4 @@
-# `pixi workspace requires-pixi`
-
-## About
+# [pixi](../../) [workspace](../) requires-pixi
 
 Commands to manage the pixi minimum version requirement
 

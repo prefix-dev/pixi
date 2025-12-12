@@ -1,6 +1,4 @@
-# `pixi config set`
-
-## About
+# [pixi](../../) [config](../) set
 
 Set a configuration value
 

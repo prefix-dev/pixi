@@ -1,6 +1,4 @@
-# `pixi global edit`
-
-## About
+# [pixi](../../) [global](../) edit
 
 Edit the global manifest file
 

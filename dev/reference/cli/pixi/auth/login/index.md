@@ -1,6 +1,4 @@
-# `pixi auth login`
-
-## About
+# [pixi](../../) [auth](../) login
 
 Store authentication information for a given host
 

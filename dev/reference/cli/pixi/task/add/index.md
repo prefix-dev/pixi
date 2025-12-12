@@ -1,6 +1,4 @@
-# `pixi task add`
-
-## About
+# [pixi](../../) [task](../) add
 
 Add a command to the workspace
 

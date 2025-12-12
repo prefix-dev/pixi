@@ -1,6 +1,4 @@
-# `pixi workspace platform`
-
-## About
+# [pixi](../../) [workspace](../) platform
 
 Commands to manage workspace platforms
 
