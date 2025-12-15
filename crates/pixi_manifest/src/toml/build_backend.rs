@@ -198,10 +198,25 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
         let additional_dependencies: UniquePackageMap =
             th.optional("additional-dependencies").unwrap_or_default();
 
-        let source = th
-            .optional_s::<TomlLocationSpec>("source")
-            .map(spec_from_spanned_toml_location)
-            .transpose()?;
+        let source = match th.optional_s::<TomlLocationSpec>("source") {
+            Some(spanned) => {
+                let span = spanned.span;
+                let source_spec = spec_from_spanned_toml_location(spanned)?;
+                if let SourceLocationSpec::Url(url_spec) = &source_spec {
+                    if url_spec.md5.is_some() {
+                        return Err(DeserError::from(Error {
+                            kind: toml_span::ErrorKind::Custom(Cow::Owned(
+                                "package.build.source url md5 is not supported".to_string(),
+                            )),
+                            span,
+                            line_info: None,
+                        }));
+                    }
+                }
+                Some(source_spec)
+            }
+            None => None,
+        };
 
         // Try the new "config" key first, then fall back to deprecated "configuration"
         let configuration = if let Some((_, mut value)) = th.take("config") {
@@ -342,6 +357,20 @@ mod test {
     #[test]
     fn test_missing_backend() {
         assert_snapshot!(expect_parse_failure(""));
+    }
+
+    #[test]
+    fn package_build_source_rejects_url_md5() {
+        let err = expect_parse_failure(
+            r#"
+            backend = { name = "foobar", version = "*" }
+            source = { url = "https://example.com/archive.zip", md5 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+        "#,
+        );
+        assert!(
+            err.contains("package.build.source url md5 is not supported"),
+            "{err}"
+        );
     }
 
     #[test]
