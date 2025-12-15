@@ -73,7 +73,9 @@ jobs:
       - name: Checkout tag
         if: github.event_name == 'workflow_dispatch'
         run: |
-          git checkout tags/${{ github.event.inputs.tag }}
+          git checkout tags/${GITHUB_EVENT_INPUTS_TAG}
+        env:
+          GITHUB_EVENT_INPUTS_TAG: ${{ github.event.inputs.tag }}
 
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
@@ -91,7 +93,9 @@ jobs:
 
       - name: Tag from workflow_dispatch
         if: github.event_name == 'workflow_dispatch'
-        run: echo "RELEASE_VERSION=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+        run: echo "RELEASE_VERSION=${GITHUB_EVENT_INPUTS_TAG}" >> $GITHUB_ENV
+        env:
+          GITHUB_EVENT_INPUTS_TAG: ${{ github.event.inputs.tag }}
 
       - name: Deploy with mike 🚀
         run: |
