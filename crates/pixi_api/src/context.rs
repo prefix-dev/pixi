@@ -169,7 +169,10 @@ impl<I: Interface> WorkspaceContext<I> {
             .await
     }
 
-    pub async fn remove_feature(&self, feature: &FeatureName) -> miette::Result<()> {
+    pub async fn remove_feature(
+        &self,
+        feature: &FeatureName,
+    ) -> miette::Result<Vec<EnvironmentName>> {
         crate::workspace::workspace::feature::remove_feature(
             &self.interface,
             self.workspace_mut()?,
