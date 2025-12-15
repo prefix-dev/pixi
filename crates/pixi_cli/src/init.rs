@@ -1,4 +1,4 @@
-use std::{cmp::PartialEq, path::PathBuf};
+use std::{cmp::PartialEq, path::PathBuf, str::FromStr};
 
 use clap::{Parser, ValueEnum};
 use pixi_api::{WorkspaceContext, workspace::InitOptions};
@@ -11,7 +11,8 @@ use crate::cli_interface::CliInterface;
 /// This command is used to create a new workspace.
 /// It prepares a manifest and some helpers for the user to start working.
 ///
-/// As pixi can both work with `pixi.toml` and `pyproject.toml` files, the user can choose which one to use with `--format`.
+/// As pixi can both work with `pixi.toml` and `pyproject.toml` files, the user
+/// can choose which one to use with `--format`.
 ///
 /// You can import an existing conda environment file with the `--import` flag.
 #[derive(Parser, Debug)]
@@ -49,6 +50,21 @@ pub struct Args {
     /// Source Control Management used for this workspace
     #[arg(short = 's', long = "scm", ignore_case = true)]
     pub scm: Option<GitAttributes>,
+
+    /// Set a mapping between conda channels and pypi channels.
+    #[arg(long = "conda-pypi-map", value_parser = parse_conda_pypi_mapping, value_delimiter = ',')]
+    pub conda_pypi_map: Option<Vec<(NamedChannelOrUrl, String)>>,
+}
+
+fn parse_conda_pypi_mapping(s: &str) -> Result<(NamedChannelOrUrl, String), String> {
+    s.split_once('=')
+        .map(|(k, v)| {
+            NamedChannelOrUrl::from_str(k)
+                .map_err(|err| err.to_string())
+                .map(|value| (value, v.to_string()))
+        })
+        .transpose()?
+        .ok_or("expected KEY=VALUE".into())
 }
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
@@ -86,6 +102,7 @@ impl From<Args> for InitOptions {
             env_file: args.env_file,
             format,
             scm,
+            conda_pypi_mapping: args.conda_pypi_map.map(|map| map.into_iter().collect()),
         }
     }
 }
