@@ -378,19 +378,3 @@ impl Diagnostic for InvalidNonPackageDependencies {
         )))
     }
 }
-
-#[derive(Debug, Error, Diagnostic)]
-#[allow(dead_code)]
-#[error("an error occurred while parsing the manifest")]
-pub struct MultiTomlError {
-    #[related]
-    pub errors: Vec<TomlError>,
-}
-
-impl From<DeserError> for MultiTomlError {
-    fn from(value: DeserError) -> Self {
-        Self {
-            errors: value.errors.into_iter().map(Into::into).collect(),
-        }
-    }
-}
