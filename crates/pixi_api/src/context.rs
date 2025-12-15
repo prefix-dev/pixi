@@ -16,7 +16,7 @@ use rattler_conda_types::{
 
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
-use crate::workspace::{DependencyOptions, InitOptions, ReinstallOptions};
+use crate::workspace::{ChannelOptions, DependencyOptions, InitOptions, ReinstallOptions};
 
 pub struct DefaultContext<I: Interface> {
     _interface: I,
@@ -100,22 +100,52 @@ impl<I: Interface> WorkspaceContext<I> {
         crate::workspace::workspace::channel::list(&self.workspace).await
     }
 
-    pub async fn add_channel(
-        &self,
-        options: crate::workspace::workspace::channel::ChannelOptions,
-    ) -> miette::Result<()> {
+    pub async fn add_channel(&self, options: ChannelOptions) -> miette::Result<()> {
         crate::workspace::workspace::channel::add(&self.interface, self.workspace_mut()?, options)
             .await
     }
 
-    pub async fn remove_channel(
-        &self,
-        options: crate::workspace::workspace::channel::ChannelOptions,
-    ) -> miette::Result<()> {
+    pub async fn remove_channel(&self, options: ChannelOptions) -> miette::Result<()> {
         crate::workspace::workspace::channel::remove(
             &self.interface,
             self.workspace_mut()?,
             options,
+        )
+        .await
+    }
+
+    pub async fn list_platforms(&self) -> HashMap<EnvironmentName, Vec<Platform>> {
+        crate::workspace::workspace::platform::list(&self.workspace).await
+    }
+
+    pub async fn add_platforms(
+        &self,
+        platform: Vec<Platform>,
+        no_install: bool,
+        feature: Option<String>,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::platform::add(
+            &self.interface,
+            self.workspace_mut()?,
+            platform,
+            no_install,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn remove_platforms(
+        &self,
+        platform: Vec<Platform>,
+        no_install: bool,
+        feature: Option<String>,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::platform::remove(
+            &self.interface,
+            self.workspace_mut()?,
+            platform,
+            no_install,
+            feature,
         )
         .await
     }
