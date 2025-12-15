@@ -24,6 +24,7 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 
 use crate::cli_config::LockAndInstallConfig;
 
+/// Build a conda package from a Pixi package.
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
 pub struct Args {
