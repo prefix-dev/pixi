@@ -28,6 +28,8 @@ impl BufferBypass {
         }
     }
 
+    /// Scans the buffer for the configured sequences. If found, writes them to the writer
+    /// immediately and removes them from the buffer.
     fn process(&self, buffer: &mut Vec<u8>, writer: &mut impl Write) -> io::Result<()> {
         for seq in &self.sequences {
             while let Some(pos) = buffer
