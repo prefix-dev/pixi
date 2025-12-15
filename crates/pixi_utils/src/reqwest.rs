@@ -85,6 +85,21 @@ pub fn should_use_native_tls_for_uv(config: &Config) -> bool {
     }
 }
 
+/// Returns the name of the TLS backend used by this build.
+///
+/// This is determined at compile time based on the enabled features.
+pub fn tls_backend() -> &'static str {
+    #[cfg(feature = "native-tls")]
+    {
+        return "native-tls";
+    }
+
+    #[cfg(not(feature = "native-tls"))]
+    {
+        "rustls"
+    }
+}
+
 pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest::ClientBuilder> {
     use pixi_config::TlsRootCerts;
 
