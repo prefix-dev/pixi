@@ -101,8 +101,6 @@ pub fn tls_backend() -> &'static str {
 }
 
 pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest::ClientBuilder> {
-    use pixi_config::TlsRootCerts;
-
     let mut builder = Client::builder()
         .pool_max_idle_per_host(DEFAULT_REQWEST_IDLE_PER_HOST)
         .user_agent(DEFAULT_REQWEST_USER_AGENT.as_str())
@@ -124,6 +122,7 @@ pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest
 
     #[cfg(feature = "rustls-tls")]
     {
+        use pixi_config::TlsRootCerts;
         let tls_root_certs = config.map(|c| c.tls_root_certs()).unwrap_or_default();
 
         builder = builder.use_rustls_tls().tls_built_in_root_certs(false); // Disable auto-loading to choose explicitly
