@@ -2988,10 +2988,11 @@ bar = "*"
         // Check the feature was removed from the manifest
         assert!(manifest.workspace.feature("test").is_none());
 
-        // Remove non-existent feature should return error
-        let result = manifest.remove_feature(&FeatureName::from_str("nonexistent").unwrap());
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("does not exist"));
+        // Remove non-existent feature should succeed
+        let result = manifest
+            .remove_feature(&FeatureName::from_str("nonexistent").unwrap())
+            .unwrap();
+        assert!(result.is_empty());
 
         // Remove feature used by environment should succeed and update environments
         let modified = manifest
