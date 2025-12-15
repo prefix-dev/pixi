@@ -133,7 +133,7 @@ cargo-deny = ">=0.18,<0.18.10" # 0.18.5 breaks license checking for uv crates
 cargo-shear = ">=1.7.1,<2"
 dprint = ">=0.49.1,<0.51"
 go-shfmt = ">=3.12.0,<4"
-lefthook = ">=2.0.9,<3"
+lefthook = ">=2.0.11,<3"
 ruff = ">=0.14.0,<0.15"
 shellcheck = ">=0.10.0,<0.11"
 taplo = ">=0.10.0,<0.11"

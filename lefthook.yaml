@@ -1,4 +1,5 @@
 lefthook: pixi run --no-progress lefthook
+no_auto_install: true
 
 templates:
   run: run --quiet --no-progress --frozen --environment=lint
