@@ -94,8 +94,14 @@ jobs:
       # (PRs run on the *source* but secrets are usually on the *target* -- that's *good*
       # but also really annoying to build CI around when it needs secrets to work right.)
       - id: plan
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          dist ${{ (inputs.tag && inputs.tag != 'dry-run' && format('host --steps=create --tag={0}', inputs.tag)) || 'plan' }} --output-format=json > plan-dist-manifest.json
+          if [[ -n "$INPUT_TAG" && "$INPUT_TAG" != "dry-run" ]]; then
+            dist host --steps=create --tag="$INPUT_TAG" --output-format=json > plan-dist-manifest.json
+          else
+            dist plan --output-format=json > plan-dist-manifest.json
+          fi
           echo "dist ran successfully"
           cat plan-dist-manifest.json
           echo "manifest=$(jq -c "." plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
