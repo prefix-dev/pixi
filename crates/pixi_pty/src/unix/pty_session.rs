@@ -114,10 +114,10 @@ impl PtySession {
         let pattern_timeout = Duration::from_secs(3);
         let pattern_start = Instant::now();
 
-        // Define the sequences that should bypass the buffer
+        // Define the DAQ sequences that should bypass the buffer
         // This is needed for fish >= 4.1.0 which queries the terminal on startup.
         // If we buffer this query, fish hangs waiting for a response.
-        let bypass = BufferBypass::new(&[b"\x1b[c", b"\x1b[0c"]);
+        let daq_bypass = BufferBypass::new(&[b"\x1b[c", b"\x1b[0c"]);
 
         // Make sure anything we have written so far has been flushed.
         self.flush()?;
@@ -204,7 +204,7 @@ impl PtySession {
                             self.rolling_buffer.extend_from_slice(&buf[..bytes_read]);
 
                             // Handle pass-through of Device Attribute Query (\e[c)
-                            bypass.process(&mut self.rolling_buffer, &mut io::stdout())?;
+                            daq_bypass.process(&mut self.rolling_buffer, &mut io::stdout())?;
 
                             // Find the first occurrence of the pattern
                             if let Some(window_pos) = self
