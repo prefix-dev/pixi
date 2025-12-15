@@ -15,6 +15,34 @@ use std::{
     process::Command,
 };
 
+/// A helper struct to handle sequences that should bypass the rolling buffer
+/// and be forwarded immediately to the output.
+struct BufferBypass {
+    sequences: Vec<Vec<u8>>,
+}
+
+impl BufferBypass {
+    fn new(sequences: &[&[u8]]) -> Self {
+        Self {
+            sequences: sequences.iter().map(|s| s.to_vec()).collect(),
+        }
+    }
+
+    fn process(&self, buffer: &mut Vec<u8>, writer: &mut impl Write) -> io::Result<()> {
+        for seq in &self.sequences {
+            while let Some(pos) = buffer
+                .windows(seq.len())
+                .position(|window| window == seq.as_slice())
+            {
+                writer.write_all(seq)?;
+                writer.flush()?;
+                buffer.drain(pos..pos + seq.len());
+            }
+        }
+        Ok(())
+    }
+}
+
 pub struct PtySession {
     pub process: PtyProcess,
 
@@ -85,6 +113,11 @@ impl PtySession {
     pub fn interact(&mut self, wait_until: Option<&str>) -> io::Result<Option<i32>> {
         let pattern_timeout = Duration::from_secs(3);
         let pattern_start = Instant::now();
+
+        // Define the sequences that should bypass the buffer
+        // This is needed for fish >= 4.1.0 which queries the terminal on startup.
+        // If we buffer this query, fish hangs waiting for a response.
+        let bypass = BufferBypass::new(&[b"\x1b[c", b"\x1b[0c"]);
 
         // Make sure anything we have written so far has been flushed.
         self.flush()?;
@@ -171,20 +204,7 @@ impl PtySession {
                             self.rolling_buffer.extend_from_slice(&buf[..bytes_read]);
 
                             // Handle pass-through of Device Attribute Query (\e[c)
-                            // This is needed for fish >= 4.1.0 which queries the terminal on startup.
-                            // If we buffer this query, fish hangs waiting for a response.
-                            let query_seqs: [&[u8]; 2] = [b"\x1b[c", b"\x1b[0c"];
-                            for query_seq in query_seqs {
-                                while let Some(pos) = self
-                                    .rolling_buffer
-                                    .windows(query_seq.len())
-                                    .position(|window| window == query_seq)
-                                {
-                                    io::stdout().write_all(query_seq)?;
-                                    io::stdout().flush()?;
-                                    self.rolling_buffer.drain(pos..pos + query_seq.len());
-                                }
-                            }
+                            bypass.process(&mut self.rolling_buffer, &mut io::stdout())?;
 
                             // Find the first occurrence of the pattern
                             if let Some(window_pos) = self
