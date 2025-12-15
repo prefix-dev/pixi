@@ -1203,3 +1203,105 @@ preview = ['pixi-build']
         insta::assert_snapshot!(workspace.workspace.provenance.read().unwrap().into_inner());
     });
 }
+
+/// Test adding a dependency with --no-resolve flag
+/// This tests that the manifest is updated but the lock file is not modified
+#[tokio::test]
+async fn add_with_no_resolve() {
+    setup_tracing();
+
+    // Create a channel with a single package
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("foobar", "1").finish());
+    let local_channel = package_database.into_channel().await.unwrap();
+
+    // Initialize a new pixi project using the above channel
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().with_channel(local_channel.url()).await.unwrap();
+
+    // Add a package with --no-resolve
+    pixi.add("foobar").with_no_resolve(true).await.unwrap();
+
+    // Check that the dependency was added to the manifest
+    let workspace = pixi.workspace().unwrap();
+    let deps = workspace
+        .default_environment()
+        .combined_dependencies(Some(Platform::current()));
+
+    let (name, _spec) = deps
+        .into_specs()
+        .find(|(name, _)| name.as_normalized() == "foobar")
+        .unwrap();
+    assert_eq!(name.as_normalized(), "foobar");
+
+    // Check that no lock file was created (since we used --no-resolve)
+    let lock_file = pixi.lock_file().await;
+    // The lock file should either not exist or be empty/outdated
+    // We verify by checking that there are no packages in the lock file for the current platform
+    assert!(
+        lock_file.is_err()
+            || lock_file
+                .unwrap()
+                .default_environment()
+                .is_none_or(|env| env.packages(Platform::current()).is_none()),
+        "Lock file should not be updated when using --no-resolve"
+    );
+}
+
+/// Test adding an editable pypi dependency with --no-resolve flag for a different platform
+/// This simulates the issue in GitHub #5123 where users need to add editable packages
+/// that only exist on remote machines
+#[tokio::test]
+async fn add_editable_pypi_with_no_resolve_for_other_platform() {
+    setup_tracing();
+
+    // Create a channel with Python
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::Linux64)
+            .finish(),
+    );
+    let local_channel = package_database.into_channel().await.unwrap();
+
+    // Initialize a new pixi project with multiple platforms
+    let pixi = PixiControl::new().unwrap();
+    pixi.init()
+        .with_channel(local_channel.url())
+        .with_platforms(vec![Platform::current(), Platform::Linux64])
+        .await
+        .unwrap();
+
+    // Add python first
+    pixi.add("python~=3.12.0")
+        .set_type(DependencyType::CondaDependency(SpecType::Run))
+        .await
+        .unwrap();
+
+    // Now add an editable pypi package for linux-64 platform with --no-resolve
+    // Use a non-existent path (simulating a path that only exists on remote machine)
+    pixi.add("my_local_package @ file:///remote/path/to/package")
+        .set_type(DependencyType::PypiDependency)
+        .set_platforms(&[Platform::Linux64])
+        .set_editable(true)
+        .with_no_resolve(true)
+        .await
+        .unwrap();
+
+    // Check that the dependency was added to the manifest
+    let workspace = pixi.workspace().unwrap();
+    let pypi_deps = workspace
+        .default_environment()
+        .pypi_dependencies(Some(Platform::Linux64));
+
+    let found = pypi_deps
+        .into_specs()
+        .any(|(name, _)| name.as_normalized().as_ref() == "my-local-package");
+
+    assert!(found, "Editable package should be in the manifest");
+}

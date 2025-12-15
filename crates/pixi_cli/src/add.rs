@@ -92,17 +92,34 @@ pub struct Args {
     /// Whether the pypi requirement should be editable
     #[arg(long, requires = "pypi")]
     pub editable: bool,
+
+    /// Only update the manifest, do not resolve or update the lock-file.
+    /// This is useful when adding dependencies that can only be resolved on
+    /// a different platform (e.g., adding an editable package that only exists
+    /// on a remote machine). You can update the lock-file later by running
+    /// `pixi install` on the target platform.
+    #[arg(long)]
+    pub no_resolve: bool,
 }
 
 impl TryFrom<&Args> for DependencyOptions {
     type Error = miette::Error;
 
     fn try_from(args: &Args) -> miette::Result<Self> {
+        use pixi_core::environment::LockFileUsage;
+
+        // If --no-resolve is set, use Frozen to skip lock file resolution
+        let lock_file_usage = if args.no_resolve {
+            LockFileUsage::Frozen
+        } else {
+            args.lock_file_update_config.lock_file_usage()?
+        };
+
         Ok(DependencyOptions {
             feature: args.dependency_config.feature.clone(),
             platforms: args.dependency_config.platforms.clone(),
             no_install: args.no_install_config.no_install,
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+            lock_file_usage,
         })
     }
 }
@@ -185,6 +202,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Notify the user we succeeded
         args.dependency_config
             .display_success("Added", update_deps.implicit_constraints);
+    } else if args.no_resolve {
+        // --no-resolve was used, dependencies were added to the manifest only
+        args.dependency_config
+            .display_success("Added", std::collections::HashMap::new());
+        eprintln!(
+            "{}The lock-file was not updated. Run {} to update the lock-file.",
+            console::style(console::Emoji("⚠️  ", "")).yellow(),
+            console::style("pixi install").bold()
+        );
     }
 
     Ok(())

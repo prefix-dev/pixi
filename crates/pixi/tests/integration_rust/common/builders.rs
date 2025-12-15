@@ -258,6 +258,12 @@ impl AddBuilder {
         self.args.no_install_config.no_install = no_install;
         self
     }
+
+    /// Set the no_resolve flag to only update the manifest without lock file resolution
+    pub fn with_no_resolve(mut self, no_resolve: bool) -> Self {
+        self.args.no_resolve = no_resolve;
+        self
+    }
 }
 
 impl HasDependencyConfig for AddBuilder {

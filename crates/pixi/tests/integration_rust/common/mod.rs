@@ -454,6 +454,7 @@ impl PixiControl {
                 },
                 config: Default::default(),
                 editable: false,
+                no_resolve: false,
             },
         }
     }
