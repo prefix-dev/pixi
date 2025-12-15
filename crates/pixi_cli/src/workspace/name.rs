@@ -1,4 +1,7 @@
+use std::io::Write;
+
 use clap::Parser;
+use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
 use pixi_core::WorkspaceLocator;
 
@@ -41,7 +44,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
 
     match args.command {
-        Command::Get => print!("{}", workspace_ctx.name().await),
+        Command::Get => writeln!(std::io::stdout(), "{}", workspace_ctx.name().await)
+            .inspect_err(|e| {
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    std::process::exit(0);
+                }
+            })
+            .into_diagnostic()?,
         Command::Set(args) => workspace_ctx.set_name(&args.name).await?,
     }
 

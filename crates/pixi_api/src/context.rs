@@ -83,6 +83,19 @@ impl<I: Interface> WorkspaceContext<I> {
         crate::workspace::workspace::name::set(&self.interface, self.workspace_mut()?, name).await
     }
 
+    pub async fn description(&self) -> Option<String> {
+        crate::workspace::workspace::description::get(&self.workspace).await
+    }
+
+    pub async fn set_description(&self, description: Option<String>) -> miette::Result<()> {
+        crate::workspace::workspace::description::set(
+            &self.interface,
+            self.workspace_mut()?,
+            description,
+        )
+        .await
+    }
+
     pub async fn list_channel(&self) -> HashMap<EnvironmentName, Vec<NamedChannelOrUrl>> {
         crate::workspace::workspace::channel::list(&self.workspace).await
     }

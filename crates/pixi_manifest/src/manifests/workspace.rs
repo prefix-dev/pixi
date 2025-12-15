@@ -766,10 +766,11 @@ impl WorkspaceManifestMut<'_> {
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn set_description(&mut self, description: &str) -> miette::Result<()> {
+    pub fn set_description(&mut self, description: Option<String>) -> miette::Result<()> {
         // Update in both the manifest and the toml
-        self.workspace.workspace.description = Some(description.to_string());
-        self.document.set_description(description);
+        self.workspace.workspace.description = description.clone();
+        self.document
+            .set_description(&description.unwrap_or_default());
 
         Ok(())
     }
@@ -1983,7 +1984,7 @@ feature_target_dep = "*"
         );
 
         manifest
-            .set_description(&String::from("my new description"))
+            .set_description(Some(String::from("my new description")))
             .unwrap();
 
         assert_eq!(
