@@ -629,7 +629,6 @@ pub struct Config {
     pub default_channels: Vec<NamedChannelOrUrl>,
 
     #[serde(default)]
-    #[serde(alias = "default_platforms")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub default_platforms: Vec<String>,
 
