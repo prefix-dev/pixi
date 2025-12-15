@@ -10,10 +10,11 @@ use pixi_core::{
 use pixi_manifest::FeaturesExt;
 use pixi_manifest::{EnvironmentName, FeatureName, PrioritizedChannel};
 use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl};
+use serde::{Deserialize, Serialize};
 
 use crate::Interface;
 
-#[derive(Debug, Default)]
+#[derive(Deserialize, Serialize, Debug, Default)]
 pub struct ChannelOptions {
     pub channel: Vec<NamedChannelOrUrl>,
     pub priority: Option<i32>,
