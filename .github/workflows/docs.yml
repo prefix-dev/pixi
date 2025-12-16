@@ -34,7 +34,8 @@ concurrency:
   group: "pages"
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   build-docs:

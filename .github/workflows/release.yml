@@ -14,7 +14,8 @@
 # title/body based on your changelogs.
 
 name: Release
-permissions: read-all
+permissions:
+  contents: read
 
 # This task will run whenever you workflow_dispatch with a tag that looks like a version
 # like "1.0.0", "v0.1.0-prerelease.1", "my-app/0.1.0", "releases/v1.0.0", etc.

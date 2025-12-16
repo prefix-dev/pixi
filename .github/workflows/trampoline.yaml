@@ -8,7 +8,8 @@ on:
       - ".github/workflows/trampoline.yaml"
       - "src/global/trampoline.rs"
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   build:
