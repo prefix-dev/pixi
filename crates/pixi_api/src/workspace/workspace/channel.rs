@@ -178,7 +178,6 @@ fn format_channel_message(
 mod tests {
     use super::*;
     use std::path::PathBuf;
-    use url::Url;
 
     fn default_channel_config() -> ChannelConfig {
         ChannelConfig::default_with_root_dir(PathBuf::from("/"))
