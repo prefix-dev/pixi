@@ -205,8 +205,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .format_with(", ", |e, f| f(&e.name().fancy_display()));
         write!(
             &mut message,
-            "The following environments have been installed: {}",
-            env,
+            "The following environments have been installed: {env}",
         )
         .expect("failed to write into message buffer");
     }

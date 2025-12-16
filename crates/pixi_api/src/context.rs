@@ -10,11 +10,13 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{
+    Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform, RepoDataRecord,
+};
 
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
-use crate::workspace::{DependencyOptions, InitOptions, ReinstallOptions};
+use crate::workspace::{ChannelOptions, DependencyOptions, InitOptions, ReinstallOptions};
 
 pub struct DefaultContext<I: Interface> {
     _interface: I,
@@ -79,6 +81,73 @@ impl<I: Interface> WorkspaceContext<I> {
 
     pub async fn set_name(&self, name: &str) -> miette::Result<()> {
         crate::workspace::workspace::name::set(&self.interface, self.workspace_mut()?, name).await
+    }
+
+    pub async fn description(&self) -> Option<String> {
+        crate::workspace::workspace::description::get(&self.workspace).await
+    }
+
+    pub async fn set_description(&self, description: &str) -> miette::Result<()> {
+        crate::workspace::workspace::description::set(
+            &self.interface,
+            self.workspace_mut()?,
+            description,
+        )
+        .await
+    }
+
+    pub async fn list_channel(&self) -> HashMap<EnvironmentName, Vec<NamedChannelOrUrl>> {
+        crate::workspace::workspace::channel::list(&self.workspace).await
+    }
+
+    pub async fn add_channel(&self, options: ChannelOptions) -> miette::Result<()> {
+        crate::workspace::workspace::channel::add(&self.interface, self.workspace_mut()?, options)
+            .await
+    }
+
+    pub async fn remove_channel(&self, options: ChannelOptions) -> miette::Result<()> {
+        crate::workspace::workspace::channel::remove(
+            &self.interface,
+            self.workspace_mut()?,
+            options,
+        )
+        .await
+    }
+
+    pub async fn list_platforms(&self) -> HashMap<EnvironmentName, Vec<Platform>> {
+        crate::workspace::workspace::platform::list(&self.workspace).await
+    }
+
+    pub async fn add_platforms(
+        &self,
+        platform: Vec<Platform>,
+        no_install: bool,
+        feature: Option<String>,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::platform::add(
+            &self.interface,
+            self.workspace_mut()?,
+            platform,
+            no_install,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn remove_platforms(
+        &self,
+        platform: Vec<Platform>,
+        no_install: bool,
+        feature: Option<String>,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::platform::remove(
+            &self.interface,
+            self.workspace_mut()?,
+            platform,
+            no_install,
+            feature,
+        )
+        .await
     }
 
     pub async fn list_environments(&self) -> Vec<Environment<'_>> {

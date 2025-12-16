@@ -497,11 +497,11 @@ impl PixiControl {
     /// Add a new channel to the project.
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
+            workspace_config: WorkspaceConfig {
+                manifest_path: Some(self.manifest_path()),
+                ..Default::default()
+            },
             args: workspace::channel::AddRemoveArgs {
-                workspace_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
-                },
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
@@ -519,12 +519,11 @@ impl PixiControl {
     /// Remove a channel from the project.
     pub fn project_channel_remove(&self) -> ProjectChannelRemoveBuilder {
         ProjectChannelRemoveBuilder {
-            manifest_path: Some(self.manifest_path()),
+            workspace_config: WorkspaceConfig {
+                manifest_path: Some(self.manifest_path()),
+                ..Default::default()
+            },
             args: workspace::channel::AddRemoveArgs {
-                workspace_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
-                },
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
