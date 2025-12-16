@@ -16,7 +16,8 @@ on:
         description: "The operating system to run the tests on"
         required: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   test_common_wheels:
@@ -34,6 +35,7 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           ref: ${{ inputs.sha }}
+          persist-credentials: false
       - name: Create Dev Drive using ReFS
         if: ${{ contains(inputs.arch, 'windows') }}
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
