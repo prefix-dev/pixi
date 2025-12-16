@@ -120,7 +120,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -131,7 +131,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1432,7 +1432,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b03b7db8e0b4b2fdad6c551e634134e99ec000e5c8c3b6856c65e8bbaded7a3b"
 dependencies = [
  "ansi-str",
- "console 0.16.1",
+ "console 0.16.2",
  "crossterm",
  "unicode-segmentation",
  "unicode-width 0.2.2",
@@ -1467,9 +1467,9 @@ dependencies = [
 
 [[package]]
 name = "console"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b430743a6eb14e9764d4260d4c0d8123087d504eeb9c48f2b2a5e810dd369df4"
+checksum = "03e45a4a8926227e4197636ba97a9fc9b00477e9f4bd711395687c5f0734bec4"
 dependencies = [
  "encode_unicode",
  "libc",
@@ -1996,7 +1996,7 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25f104b501bf2364e78d0d3974cbc774f738f5865306ed128e1e0d7499c0ad96"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
  "shell-words",
  "tempfile",
  "zeroize",
@@ -2360,7 +2360,7 @@ dependencies = [
 name = "fancy_display"
 version = "0.1.0"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
 ]
 
 [[package]]
@@ -3455,7 +3455,7 @@ version = "0.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9375e112e4b463ec1b1c6c011953545c65a30164fbab5b581df32b3abf0dcb88"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
  "portable-atomic",
  "unicode-width 0.2.2",
  "unit-prefix",
@@ -4226,7 +4226,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "536bfad37a309d62069485248eeaba1e8d9853aaf951caaeaed0585a95346f08"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4996,7 +4996,7 @@ dependencies = [
 name = "pixi_api"
 version = "0.1.0"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
  "dunce",
  "fancy_display",
  "fs-err",
@@ -5132,7 +5132,7 @@ dependencies = [
  "clap_complete",
  "clap_complete_nushell",
  "comfy-table",
- "console 0.16.1",
+ "console 0.16.2",
  "console-subscriber",
  "ctrlc",
  "deno_task_shell",
@@ -5283,7 +5283,7 @@ name = "pixi_config"
 version = "0.1.0"
 dependencies = [
  "clap",
- "console 0.16.1",
+ "console 0.16.2",
  "dirs",
  "fs-err",
  "insta",
@@ -5309,7 +5309,7 @@ dependencies = [
 name = "pixi_consts"
 version = "0.1.0"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
  "rattler_cache",
  "rattler_conda_types",
  "url",
@@ -5322,7 +5322,7 @@ dependencies = [
  "async-once-cell",
  "barrier_cell",
  "chrono",
- "console 0.16.1",
+ "console 0.16.2",
  "dashmap",
  "dialoguer",
  "dunce",
@@ -5423,7 +5423,7 @@ name = "pixi_diff"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "console 0.16.1",
+ "console 0.16.2",
  "indexmap 2.12.1",
  "itertools 0.14.0",
  "pixi_consts",
@@ -5491,7 +5491,7 @@ name = "pixi_global"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "console 0.16.1",
+ "console 0.16.2",
  "dirs",
  "dunce",
  "fake",
@@ -5548,7 +5548,7 @@ dependencies = [
  "ahash",
  "assert_matches",
  "chrono",
- "console 0.16.1",
+ "console 0.16.2",
  "csv",
  "fancy_display",
  "fs-err",
@@ -5608,7 +5608,7 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "chrono",
- "console 0.16.1",
+ "console 0.16.2",
  "dunce",
  "fancy_display",
  "fs-err",
@@ -5721,7 +5721,7 @@ dependencies = [
 name = "pixi_reporters"
 version = "0.1.0"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
  "futures",
  "human_bytes",
  "indexmap 2.12.1",
@@ -6525,7 +6525,7 @@ checksum = "f2f38d4388230d7d3654a461425dd438a0fb51258e93f53cd8d44b678922ccb0"
 dependencies = [
  "anyhow",
  "clap",
- "console 0.16.1",
+ "console 0.16.2",
  "digest",
  "dirs",
  "fs-err",
@@ -6644,7 +6644,7 @@ version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b12cabcb8dd512fea07a95d71e2a91db09090cefda992253d87e1f72bdb31226"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
  "fs-err",
  "indexmap 2.12.1",
  "rattler_conda_types",
@@ -9538,7 +9538,7 @@ name = "uv-console"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.9.5#d5f39331a73d5042e70ab770463dff632e20c127"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
 ]
 
 [[package]]
@@ -10143,7 +10143,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.9.5#d5f39331a73d5042e70ab770
 dependencies = [
  "anyhow",
  "configparser",
- "console 0.16.1",
+ "console 0.16.2",
  "fs-err",
  "futures",
  "rustc-hash",
@@ -10429,7 +10429,7 @@ name = "uv-virtualenv"
 version = "0.0.4"
 source = "git+https://github.com/astral-sh/uv?tag=0.9.5#d5f39331a73d5042e70ab770463dff632e20c127"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
  "fs-err",
  "itertools 0.14.0",
  "owo-colors",
