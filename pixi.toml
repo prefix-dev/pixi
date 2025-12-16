@@ -48,7 +48,7 @@ test-slow = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all
 dirty-equals = ">=0.11,<0.12"
 filelock = ">=3.19.1,<4"
 inline-snapshot = ">=0.31.1,<0.32"
-py-rattler = ">=0.18,<0.19"
+py-rattler = ">=0.20,<0.21"
 pytest = ">=9.0.2,<10"
 pytest-rerunfailures = ">=16.0.1,<17"
 pytest-timeout = ">=2.4.0,<3"
