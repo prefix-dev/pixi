@@ -51,7 +51,7 @@ impl CommandDispatcherProcessor {
                     task.cancellation_token
                         .run_until_cancelled_owned(async move {
                             resolver
-                                .fetch(task.spec.clone(), client, cache_dir, None)
+                                .fetch(task.spec.clone(), client, cache_dir.into(), None)
                                 .await
                                 .map_err(CommandDispatcherError::Failed)
                         })

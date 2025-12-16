@@ -42,6 +42,7 @@ mod command_dispatcher_processor;
 mod dev_source_metadata;
 mod discover_backend_cache;
 mod executor;
+mod input_hash;
 mod install_pixi;
 mod instantiate_tool_env;
 mod limits;
@@ -59,10 +60,12 @@ pub use backend_source_build::{
     BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method,
 };
 pub use build::BuildEnvironment;
-pub use build_backend_metadata::calculate_additional_glob_hash;
 pub use build_backend_metadata::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
 };
+pub use cache::build_backend_metadata::{BuildBackendMetadataCache, CachedCondaMetadata};
+pub use cache::common::MetadataCache;
+pub use cache::source_metadata::{CachedSourceMetadata, SourceMetadataCache};
 pub use cache_dirs::CacheDirs;
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,

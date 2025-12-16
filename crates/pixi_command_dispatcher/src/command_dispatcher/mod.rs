@@ -7,7 +7,7 @@
 //! and supporting concurrent operations.
 
 use std::{
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
@@ -19,6 +19,7 @@ use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
+use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::{SourceLocationSpec, UrlSpec};
 use pixi_url::UrlResolver;
@@ -125,7 +126,7 @@ pub(crate) struct CommandDispatcherData {
     pub url_resolver: UrlResolver,
 
     /// The base directory to use if relative paths are discovered.
-    pub root_dir: PathBuf,
+    pub root_dir: AbsPresumedDirPathBuf,
 
     /// The location to store caches.
     pub cache_dirs: CacheDirs,
@@ -719,56 +720,29 @@ impl CommandDispatcherData {
     ///
     /// This function does not check if the path exists and also does not follow
     /// symlinks.
-    fn resolve_typed_path(&self, path_spec: Utf8TypedPath) -> Result<PathBuf, InvalidPathError> {
+    fn resolve_typed_path(&self, path_spec: Utf8TypedPath) -> Result<AbsPathBuf, InvalidPathError> {
         if path_spec.is_absolute() {
-            Ok(Path::new(path_spec.as_str()).to_path_buf())
+            // SAFETY: we checked that the path is absolute
+            Ok(unsafe { AbsPathBuf::new_unchecked(PathBuf::from(path_spec.as_str())) })
         } else if let Ok(user_path) = path_spec.strip_prefix("~/") {
             let home_dir = dirs::home_dir().ok_or_else(|| {
                 InvalidPathError::CouldNotDetermineHomeDirectory(PathBuf::from(path_spec.as_str()))
             })?;
-            debug_assert!(home_dir.is_absolute());
-            normalize_absolute_path(&home_dir.join(Path::new(user_path.as_str())))
+            let home_dir = AbsPathBuf::new(home_dir)
+                .expect("the home directory is absolute")
+                .into_assume_dir();
+            home_dir
+                .join(Path::new(user_path.as_str()))
+                .normalized()
+                .map_err(Into::into)
         } else {
-            let root_dir = self.root_dir.as_path();
             let native_path = Path::new(path_spec.as_str());
-            debug_assert!(root_dir.is_absolute());
-            normalize_absolute_path(&root_dir.join(native_path))
+            self.root_dir
+                .join(native_path)
+                .normalized()
+                .map_err(Into::into)
         }
     }
-}
-
-/// Normalize a path, removing things like `.` and `..`.
-///
-/// Source: <https://github.com/rust-lang/cargo/blob/b48c41aedbd69ee3990d62a0e2006edbb506a480/crates/cargo-util/src/paths.rs#L76C1-L109C2>
-fn normalize_absolute_path(path: &Path) -> Result<PathBuf, InvalidPathError> {
-    let mut components = path.components().peekable();
-    let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().copied() {
-        components.next();
-        PathBuf::from(c.as_os_str())
-    } else {
-        PathBuf::new()
-    };
-
-    for component in components {
-        match component {
-            Component::Prefix(..) => unreachable!(),
-            Component::RootDir => {
-                ret.push(component.as_os_str());
-            }
-            Component::CurDir => {}
-            Component::ParentDir => {
-                if !ret.pop() {
-                    return Err(InvalidPathError::RelativePathEscapesRoot(
-                        path.to_path_buf(),
-                    ));
-                }
-            }
-            Component::Normal(c) => {
-                ret.push(c);
-            }
-        }
-    }
-    Ok(ret)
 }
 
 /// Defines the inputs and outputs of a certain foreground task specification.

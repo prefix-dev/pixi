@@ -1,5 +1,11 @@
-use std::path::PathBuf;
-
+use crate::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherErrorResultExt, SourceCheckoutError,
+    command_dispatcher::error::CommandDispatcherError,
+    instantiate_tool_env::{
+        InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult,
+        InstantiateToolEnvironmentSpec,
+    },
+};
 use miette::Diagnostic;
 use ordermap::OrderMap;
 use pixi_build_discovery::{BackendSpec, CommandSpec, EnabledProtocols};
@@ -11,6 +17,7 @@ use pixi_build_frontend::{
 use pixi_build_types::{
     PixiBuildApiVersion, ProjectModelV1, TargetSelectorV1, procedures::initialize::InitializeParams,
 };
+use pixi_path::{AbsPresumedDirPathBuf, AbsPresumedFilePathBuf};
 use pixi_spec::SpecConversionError;
 use rattler_conda_types::ChannelConfig;
 use rattler_shell::{
@@ -20,25 +27,16 @@ use rattler_shell::{
 use rattler_virtual_packages::DetectVirtualPackageError;
 use thiserror::Error;
 
-use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherErrorResultExt, SourceCheckoutError,
-    command_dispatcher::error::CommandDispatcherError,
-    instantiate_tool_env::{
-        InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult,
-        InstantiateToolEnvironmentSpec,
-    },
-};
-
 #[derive(Debug)]
 pub struct InstantiateBackendSpec {
     /// The backend specification
     pub backend_spec: BackendSpec,
 
     /// The root directory of the workspace.
-    pub workspace_root: PathBuf,
+    pub workspace_root: AbsPresumedDirPathBuf,
 
     /// The absolute path of the discovered manifest
-    pub manifest_path: PathBuf,
+    pub manifest_path: AbsPresumedFilePathBuf,
 
     /// Optionally, the manifest of the discovered package.
     pub project_model: Option<ProjectModelV1>,
@@ -50,7 +48,7 @@ pub struct InstantiateBackendSpec {
     pub target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
 
     /// The source directory to use for the backend
-    pub build_source_dir: PathBuf,
+    pub build_source_dir: AbsPresumedDirPathBuf,
 
     /// The channel configuration to use for any source packages required by the
     /// backend.
@@ -90,10 +88,10 @@ impl CommandDispatcher {
                 if let Some(in_mem) = backend {
                     let memory = in_mem
                         .initialize(InitializeParams {
-                            manifest_path: spec.manifest_path,
+                            manifest_path: spec.manifest_path.to_std_path_buf(),
                             source_dir: Some(source_dir),
-                            workspace_root: Some(spec.workspace_root),
-                            cache_directory: Some(self.cache_dirs().root().clone()),
+                            workspace_root: Some(spec.workspace_root.to_std_path_buf()),
+                            cache_directory: Some(self.cache_dirs().root().to_owned().into()),
                             project_model: spec.project_model.map(Into::into),
                             configuration: spec.configuration,
                             target_configuration: spec.target_configuration,
@@ -187,12 +185,12 @@ impl CommandDispatcher {
 
         JsonRpcBackend::setup(
             source_dir,
-            spec.manifest_path,
-            spec.workspace_root,
+            spec.manifest_path.to_std_path_buf(),
+            spec.workspace_root.to_std_path_buf(),
             spec.project_model,
             spec.configuration,
             spec.target_configuration,
-            Some(self.cache_dirs().root().clone()),
+            Some(self.cache_dirs().root().to_owned().into()),
             tool,
         )
         .await

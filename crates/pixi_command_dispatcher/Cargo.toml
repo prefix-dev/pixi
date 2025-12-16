@@ -23,7 +23,6 @@ itertools = { workspace = true }
 miette = { workspace = true }
 once_cell = { workspace = true }
 ordermap = { workspace = true }
-pathdiff = { workspace = true }
 pin-project-lite = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -55,6 +54,7 @@ pixi_build_types = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
+pixi_path = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }
