@@ -5040,6 +5040,7 @@ name = "pixi_build_backend_passthrough"
 version = "0.1.0"
 dependencies = [
  "fs-err",
+ "itertools 0.14.0",
  "ordermap",
  "pixi_build_frontend",
  "pixi_build_types",
@@ -5162,6 +5163,7 @@ dependencies = [
  "pixi_git",
  "pixi_global",
  "pixi_manifest",
+ "pixi_path",
  "pixi_progress",
  "pixi_pty",
  "pixi_pypi_spec",
@@ -5233,7 +5235,6 @@ dependencies = [
  "miette 7.6.0",
  "once_cell",
  "ordermap",
- "pathdiff",
  "pin-project-lite",
  "pixi_build_backend_passthrough",
  "pixi_build_discovery",
@@ -5243,6 +5244,7 @@ dependencies = [
  "pixi_consts",
  "pixi_git",
  "pixi_glob",
+ "pixi_path",
  "pixi_record",
  "pixi_spec",
  "pixi_spec_containers",
@@ -5250,6 +5252,7 @@ dependencies = [
  "pixi_test_utils",
  "pixi_url",
  "pixi_utils",
+ "pixi_variant",
  "rand 0.9.2",
  "rattler",
  "rattler_conda_types",
@@ -5342,6 +5345,7 @@ dependencies = [
  "pathdiff",
  "pep440_rs",
  "pep508_rs",
+ "pixi_build_backend_passthrough",
  "pixi_build_discovery",
  "pixi_build_frontend",
  "pixi_command_dispatcher",
@@ -5353,6 +5357,7 @@ dependencies = [
  "pixi_glob",
  "pixi_install_pypi",
  "pixi_manifest",
+ "pixi_path",
  "pixi_progress",
  "pixi_pypi_spec",
  "pixi_python_status",
@@ -5512,6 +5517,7 @@ dependencies = [
  "pixi_consts",
  "pixi_core",
  "pixi_manifest",
+ "pixi_path",
  "pixi_progress",
  "pixi_reporters",
  "pixi_spec",
@@ -5649,6 +5655,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_path"
+version = "0.1.0"
+dependencies = [
+ "fs-err",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "pixi_progress"
 version = "0.1.0"
 dependencies = [
@@ -5701,10 +5717,12 @@ dependencies = [
  "dunce",
  "file_url",
  "insta",
+ "itertools 0.14.0",
  "miette 7.6.0",
  "pathdiff",
  "pixi_git",
  "pixi_spec",
+ "pixi_spec_containers",
  "pixi_variant",
  "rattler_conda_types",
  "rattler_digest",

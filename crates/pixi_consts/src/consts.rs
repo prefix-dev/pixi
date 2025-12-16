@@ -43,7 +43,8 @@ pub const CACHED_URL_DIR: &str = "url-v0";
 pub const CACHED_BUILD_WORK_DIR: &str = "work";
 pub const CACHED_BUILD_BACKENDS: &str = "backends-v0";
 pub const CACHED_PACKAGES: &str = "pkgs";
-pub const CACHED_SOURCE_METADATA: &str = "metadata";
+pub const CACHED_BUILD_BACKEND_METADATA: &str = "metadata";
+pub const CACHED_SOURCE_METADATA: &str = "source_metadata";
 pub const CACHED_SOURCE_BUILDS: &str = "pkgs";
 
 /// The directory relative to the .pixi folder that stores build related caches.

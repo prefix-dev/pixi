@@ -8,7 +8,12 @@ authors = [
 channels = ["https://prefix.dev/conda-forge"]
 description = "Package management made easy!"
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
+preview = ["pixi-build"]
 requires-pixi = ">=0.45"
+
+[workspace.target.linux-64.build-variants]
+#c_stdlib = ["sysroot"]
+c_stdlib_version = ["2.17"]
 
 [dependencies]
 cargo-insta = "*"
@@ -258,6 +263,7 @@ description = "Build build-backends used for testing purposes"
 [feature.dist.dependencies]
 zig = ">=0.15.1,<0.16"
 
+
 # Feature for native-certs testing
 [feature.native-certs-test.dependencies]
 mkcert = ">=1.4.4,<2"
@@ -303,3 +309,18 @@ schema = { features = [
 test-export = { features = ["micromamba"], no-default-feature = true }
 test-native-certs = { features = ["native-certs-test", "build"] }
 trampoline = { features = ["trampoline"], no-default-feature = true }
+
+
+#
+# Package descriptions
+#
+
+[package]
+name = "pixi"
+
+[package.build]
+backend = { name = "pixi-build-rust", version = "*" }
+source = { path = "crates/pixi" }
+
+[package.target.unix.build-dependencies]
+clang = "*"

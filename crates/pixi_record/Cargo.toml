@@ -12,10 +12,12 @@ version = "0.1.0"
 [dependencies]
 dunce = { workspace = true }
 file_url = { workspace = true }
+itertools = { workspace = true }
 miette = { workspace = true }
 pathdiff = { workspace = true }
 pixi_git = { workspace = true }
 pixi_spec = { workspace = true, features = ["rattler_lock"] }
+pixi_spec_containers = { workspace = true }
 pixi_variant = { workspace = true, features = [
   "rattler_lock",
   "pixi_build_types",

@@ -2,7 +2,7 @@
 source: crates/pixi_manifest/src/manifests/workspace.rs
 expression: "expect_parse_failure(&format!(\"{PROJECT_BOILERPLATE}\\n[target.win-64.hostdependencies]\"))"
 ---
-  × Unexpected keys, expected only 'dependencies', 'host-dependencies', 'build-dependencies', 'pypi-dependencies', 'activation', 'tasks'
+  × Unexpected keys, expected only 'dependencies', 'host-dependencies', 'build-dependencies', 'pypi-dependencies', 'dev', 'activation', 'tasks'
    ╭─[pixi.toml:8:16]
  7 │
  8 │ [target.win-64.hostdependencies]

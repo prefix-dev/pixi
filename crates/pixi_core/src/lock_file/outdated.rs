@@ -8,8 +8,8 @@ use crate::{
 };
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
+use pixi_command_dispatcher::CommandDispatcher;
 use pixi_consts::consts;
-use pixi_glob::GlobHashCache;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackageRef};
@@ -62,15 +62,15 @@ impl<'p> OutdatedEnvironments<'p> {
     /// lock-file and finding any mismatches.
     pub(crate) async fn from_workspace_and_lock_file(
         workspace: &'p Workspace,
+        command_dispatcher: CommandDispatcher,
         lock_file: &LockFile,
-        glob_hash_cache: GlobHashCache,
     ) -> Self {
         // Find all targets that are not satisfied by the lock-file
         let UnsatisfiableTargets {
             mut outdated_conda,
             mut outdated_pypi,
             disregard_locked_content,
-        } = find_unsatisfiable_targets(workspace, lock_file, glob_hash_cache).await;
+        } = find_unsatisfiable_targets(workspace, command_dispatcher, lock_file).await;
 
         // Extend the outdated targets to include the solve groups
         let (mut conda_solve_groups_out_of_date, mut pypi_solve_groups_out_of_date) =
@@ -139,8 +139,8 @@ struct UnsatisfiableTargets<'p> {
 /// requirements in the `project` are not satisfied by the `lock_file`.
 async fn find_unsatisfiable_targets<'p>(
     project: &'p Workspace,
+    command_dispatcher: CommandDispatcher,
     lock_file: &LockFile,
-    glob_hash_cache: GlobHashCache,
 ) -> UnsatisfiableTargets<'p> {
     let mut verified_environments = HashMap::new();
     let mut unsatisfiable_targets = UnsatisfiableTargets::default();
@@ -229,10 +229,10 @@ async fn find_unsatisfiable_targets<'p>(
         for platform in platforms {
             match verify_platform_satisfiability(
                 &environment,
+                command_dispatcher.clone(),
                 locked_environment,
                 platform,
                 project.root(),
-                glob_hash_cache.clone(),
             )
             .await
             {
