@@ -66,13 +66,25 @@ Pixi solves the dependencies for all these platforms and puts them in the lock f
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```
 
-The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html)
+The available platforms (except `noarch` and `unknown`) are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html)
 
-!!! tip "Special macOS behavior"
-    macOS has two platforms: `osx-64` for Intel Macs and `osx-arm64` for Apple Silicon Macs.
-    To support both, include both in your platforms list.
-    Fallback: If `osx-arm64` can't resolve, use `osx-64`.
-    Running `osx-64` on Apple Silicon uses [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment) for Intel binaries.
+!!! tip "Special macOS and Windows ARM behavior"
+    To support both architectures on macOS or Windows, include both platforms in your list.
+
+    ```toml
+    # Specific environment for all platforms
+    platforms = ["osx-64", "osx-arm64", "win-64", "win-arm64"]
+    # Environments that run on both Intel and ARM setups but using the emulators:
+    platforms = ["osx-64", "win-64"]
+    ```
+
+    | OS      | Platform    | Architecture  | Notes                                                                                                                                  |
+    |---------|-------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------|
+    | macOS   | `osx-64`    | Intel         | Runs on Apple Silicon via [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment) |
+    | macOS   | `osx-arm64` | Apple Silicon | Optimized binaries for Apple Silicon (recommended).                                                                                    |
+    | Windows | `win-64`    | Intel/AMD64   | Runs on ARM processors with [Prism](https://learn.microsoft.com/en-us/windows/arm/apps-on-arm-x86-emulation)                           |                                         |
+    | Windows | `win-arm64` | ARM64         | Optimized binaries for ARM, not all packages support this yet.                                                                         |
+
 
 ### `name` (optional)
 

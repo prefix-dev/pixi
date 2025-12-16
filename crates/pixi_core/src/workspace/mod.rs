@@ -433,7 +433,7 @@ impl Workspace {
     }
 
     /// Returns the environments in this project.
-    pub fn environments(&self) -> Vec<Environment> {
+    pub fn environments(&self) -> Vec<Environment<'_>> {
         self.workspace
             .value
             .environments
@@ -443,7 +443,7 @@ impl Workspace {
     }
 
     /// Returns a HashMap of environments in this project.
-    pub fn named_environments(&self) -> HashMap<EnvironmentName, Environment> {
+    pub fn named_environments(&self) -> HashMap<EnvironmentName, Environment<'_>> {
         self.environments()
             .iter()
             .map(|env| (env.name().clone(), env.clone()))
@@ -455,14 +455,14 @@ impl Workspace {
     pub fn environment_from_name_or_env_var(
         &self,
         name: Option<String>,
-    ) -> miette::Result<Environment> {
+    ) -> miette::Result<Environment<'_>> {
         let environment_name = EnvironmentName::from_arg_or_env_var(name).into_diagnostic()?;
         self.environment(&environment_name)
             .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))
     }
 
     /// Returns all the solve groups in the project.
-    pub(crate) fn solve_groups(&self) -> Vec<SolveGroup> {
+    pub(crate) fn solve_groups(&self) -> Vec<SolveGroup<'_>> {
         self.workspace
             .value
             .solve_groups
@@ -476,7 +476,7 @@ impl Workspace {
 
     /// Returns the solve group with the given name or `None` if no such group
     /// exists.
-    pub(crate) fn solve_group(&self, name: &str) -> Option<SolveGroup> {
+    pub(crate) fn solve_group(&self, name: &str) -> Option<SolveGroup<'_>> {
         self.workspace
             .value
             .solve_groups
@@ -762,12 +762,12 @@ impl Workspace {
 
     /// Verify the pixi version requirement.
     pub fn verify_current_pixi_meets_requirement(&self) -> Result<(), ExplicitManifestError> {
-        if let Some(ref requires_pixi) = self.workspace.value.workspace.requires_pixi {
-            if !requires_pixi.matches(&Version::from_str(consts::PIXI_VERSION)?) {
-                return Err(ExplicitManifestError::SelfVersionMatchError {
-                    requires_pixi: requires_pixi.clone(),
-                });
-            }
+        if let Some(ref requires_pixi) = self.workspace.value.workspace.requires_pixi
+            && !requires_pixi.matches(&Version::from_str(consts::PIXI_VERSION)?)
+        {
+            return Err(ExplicitManifestError::SelfVersionMatchError {
+                requires_pixi: requires_pixi.clone(),
+            });
         }
         Ok(())
     }

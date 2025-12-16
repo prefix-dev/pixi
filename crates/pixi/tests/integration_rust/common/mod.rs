@@ -143,7 +143,7 @@ pub trait LockFileExt {
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<LockedPackageRef>;
+    ) -> Option<LockedPackageRef<'_>>;
 
     /// Check if a PyPI package is marked as editable in the lock file
     fn is_pypi_package_editable(
@@ -234,7 +234,7 @@ impl LockFileExt for LockFile {
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<LockedPackageRef> {
+    ) -> Option<LockedPackageRef<'_>> {
         self.environment(environment).and_then(|env| {
             env.packages(platform)
                 .and_then(|mut packages| packages.find(|p| p.name() == package))
@@ -401,6 +401,7 @@ impl PixiControl {
                 format: None,
                 pyproject_toml: false,
                 scm: Some(GitAttributes::Github),
+                conda_pypi_map: None,
             },
         }
     }
@@ -419,6 +420,7 @@ impl PixiControl {
                 format: None,
                 pyproject_toml: false,
                 scm: Some(GitAttributes::Github),
+                conda_pypi_map: None,
             },
         }
     }
@@ -739,7 +741,7 @@ impl PixiControl {
         }
     }
 
-    pub fn tasks(&self) -> TasksControl {
+    pub fn tasks(&self) -> TasksControl<'_> {
         TasksControl { pixi: self }
     }
 }

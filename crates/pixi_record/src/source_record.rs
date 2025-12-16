@@ -117,8 +117,7 @@ impl SourceRecord {
                 // Check if this is a relative subdirectory (same repo checkout)
                 if let (Some(subdir), PinnedSourceSpec::Git(manifest_git)) =
                     (&subdir, &manifest_source)
-                {
-                    if same_git_checkout_url_commit(manifest_git, &url, &rev) {
+                    && same_git_checkout_url_commit(manifest_git, &url, &rev) {
                         // The subdirectory is relative to the manifest, use from_relative_to
                         let relative_path = Utf8UnixPathBuf::from(subdir.as_str());
                         return PinnedSourceSpec::from_relative_to(
@@ -128,7 +127,6 @@ impl SourceRecord {
                         )
                         .expect("from_relative_to should succeed for same-repo git checkouts, this is a bug");
                     }
-                }
 
                 // Different repository
                 let reference = git_reference_from_shallow(spec, &rev);

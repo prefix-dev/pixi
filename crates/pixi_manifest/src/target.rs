@@ -90,13 +90,13 @@ impl WorkspaceTarget {
 
         // Count and find the first non-empty spec type
         for spec_type in [SpecType::Run, SpecType::Host, SpecType::Build] {
-            if let Some(specs) = self.dependencies.get(&spec_type) {
-                if !specs.is_empty() {
-                    if first_deps.is_none() {
-                        first_deps = Some(specs);
-                    }
-                    count += 1;
+            if let Some(specs) = self.dependencies.get(&spec_type)
+                && !specs.is_empty()
+            {
+                if first_deps.is_none() {
+                    first_deps = Some(specs);
                 }
+                count += 1;
             }
         }
 

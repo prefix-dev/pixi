@@ -324,25 +324,22 @@ impl PixiEnvironmentSpec {
         channel_config: &ChannelConfig,
     ) -> Result<(), Box<SolvePixiEnvironmentError>> {
         for (pkg, spec) in binary_specs.iter_specs() {
-            if let BinarySpec::DetailedVersion(v) = spec {
-                if let Some(channel) = &v.channel {
-                    let base_url =
-                        channel
-                            .clone()
-                            .into_base_url(channel_config)
-                            .map_err(|err| {
-                                Box::new(SolvePixiEnvironmentError::ParseChannelError(err))
-                            })?;
+            if let BinarySpec::DetailedVersion(v) = spec
+                && let Some(channel) = &v.channel
+            {
+                let base_url = channel
+                    .clone()
+                    .into_base_url(channel_config)
+                    .map_err(|err| Box::new(SolvePixiEnvironmentError::ParseChannelError(err)))?;
 
-                    if !channels.iter().any(|c| c == &base_url) {
-                        return Err(Box::new(SolvePixiEnvironmentError::MissingChannel(
-                            MissingChannelError {
-                                package: pkg.as_normalized().to_string(),
-                                channel: base_url,
-                                advice: None,
-                            },
-                        )));
-                    }
+                if !channels.iter().any(|c| c == &base_url) {
+                    return Err(Box::new(SolvePixiEnvironmentError::MissingChannel(
+                        MissingChannelError {
+                            package: pkg.as_normalized().to_string(),
+                            channel: base_url,
+                            advice: None,
+                        },
+                    )));
                 }
             }
         }

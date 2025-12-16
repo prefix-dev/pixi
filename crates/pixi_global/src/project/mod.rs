@@ -780,10 +780,9 @@ impl Project {
             if !package_executables
                 .iter()
                 .any(|executable| executable.name.as_str() == package_name.as_normalized())
+                && let Some(exec) = find_binary_by_name(&prefix, package_name).await?
             {
-                if let Some(exec) = find_binary_by_name(&prefix, package_name).await? {
-                    package_executables.push(exec);
-                }
+                package_executables.push(exec);
             }
 
             executables_for_package.insert(package_name.clone(), package_executables);

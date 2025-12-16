@@ -233,10 +233,10 @@ impl WorkspaceManifestMut<'_> {
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Check if the task already exists
-        if let Ok(tasks) = self.workspace.tasks(platform, feature_name) {
-            if tasks.contains_key(&name) {
-                miette::bail!("task {} already exists", name);
-            }
+        if let Ok(tasks) = self.workspace.tasks(platform, feature_name)
+            && tasks.contains_key(&name)
+        {
+            miette::bail!("task {} already exists", name);
         }
 
         // Add the task to the Toml manifest
@@ -358,13 +358,17 @@ impl WorkspaceManifestMut<'_> {
     /// `ManifestProvenance::save` to persist the changes to disk.
     ///
     /// Returns the list of environments that were modified.
-    pub fn remove_feature(&mut self, feature_name: &FeatureName) -> miette::Result<Vec<String>> {
+    pub fn remove_feature(
+        &mut self,
+        feature_name: &FeatureName,
+    ) -> miette::Result<Vec<EnvironmentName>> {
         if feature_name.is_default() {
             miette::bail!("Cannot remove the default feature");
         }
 
         if self.workspace.features.get(feature_name).is_none() {
-            miette::bail!("Feature '{}' does not exist", feature_name);
+            tracing::warn!("Feature `{}` doesn't exist", feature_name);
+            return Ok(Vec::new());
         }
 
         self.workspace.features.shift_remove(feature_name);
@@ -417,7 +421,7 @@ impl WorkspaceManifestMut<'_> {
 
         let modified_environments = environments_using_feature
             .iter()
-            .map(|env| env.name.to_string())
+            .map(|env| env.name.clone())
             .collect();
 
         Ok(modified_environments)
@@ -2984,16 +2988,20 @@ bar = "*"
         // Check the feature was removed from the manifest
         assert!(manifest.workspace.feature("test").is_none());
 
-        // Remove non-existent feature should return error
-        let result = manifest.remove_feature(&FeatureName::from_str("nonexistent").unwrap());
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("does not exist"));
+        // Remove non-existent feature should succeed
+        let result = manifest
+            .remove_feature(&FeatureName::from_str("nonexistent").unwrap())
+            .unwrap();
+        assert!(result.is_empty());
 
         // Remove feature used by environment should succeed and update environments
         let modified = manifest
             .remove_feature(&FeatureName::from_str("used").unwrap())
             .unwrap();
-        assert_eq!(modified, vec!["test-env"]);
+        assert_eq!(
+            modified,
+            vec![EnvironmentName::from_str("test-env").unwrap()]
+        );
 
         // Check the feature was removed from the manifest
         assert!(manifest.workspace.feature("used").is_none());

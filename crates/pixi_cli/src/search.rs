@@ -103,10 +103,10 @@ pub async fn execute_impl<W: Write>(
                     .iter()
                     .filter(|p| p.package_record != newest_package.package_record)
                     .collect::<Vec<_>>();
-                if let Err(e) = print_package_info(newest_package, &other_versions, out) {
-                    if e.kind() != std::io::ErrorKind::BrokenPipe {
-                        return Err(e).into_diagnostic();
-                    }
+                if let Err(e) = print_package_info(newest_package, &other_versions, out)
+                    && e.kind() != std::io::ErrorKind::BrokenPipe
+                {
+                    return Err(e).into_diagnostic();
                 }
             }
         }
@@ -132,12 +132,11 @@ pub async fn execute_impl<W: Write>(
             .await?
         };
 
-        if let Some(packages) = packages.as_ref() {
-            if let Err(e) = print_matching_packages(packages, out, args.limit) {
-                if e.kind() != std::io::ErrorKind::BrokenPipe {
-                    return Err(e).into_diagnostic();
-                }
-            }
+        if let Some(packages) = packages.as_ref()
+            && let Err(e) = print_matching_packages(packages, out, args.limit)
+            && e.kind() != std::io::ErrorKind::BrokenPipe
+        {
+            return Err(e).into_diagnostic();
         }
 
         packages

@@ -156,8 +156,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             per_platform,
         } = specs;
 
-        if !default_match_specs.is_empty() || !default_pypi_deps.is_empty() {
-            if let Some(update) = workspace
+        if (!default_match_specs.is_empty() || !default_pypi_deps.is_empty())
+            && let Some(update) = workspace
                 .update_dependencies(
                     default_match_specs,
                     default_pypi_deps,
@@ -170,15 +170,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     args.dry_run,
                 )
                 .await?
-            {
-                let diff = update.lock_file_diff;
-                if !args.json {
-                    diff.print()
-                        .into_diagnostic()
-                        .context("failed to print lock-file diff")?;
-                }
-                printed_any = true;
+        {
+            let diff = update.lock_file_diff;
+            if !args.json {
+                diff.print()
+                    .into_diagnostic()
+                    .context("failed to print lock-file diff")?;
             }
+            printed_any = true;
         }
 
         for (platform, (platform_match_specs, platform_pypi_deps)) in per_platform {
@@ -404,25 +403,25 @@ pub fn parse_specs_for_platform(
                 nameless_match_spec.version = None;
 
                 // If the package as specifically requested, unset more fields
-                if let Some(packages) = &args.specs.packages {
-                    if packages.contains(&name.as_normalized().to_string()) {
-                        // If the build contains a wildcard, keep it
-                        nameless_match_spec.build = match nameless_match_spec.build {
-                            Some(
-                                build @ StringMatcher::Glob(_) | build @ StringMatcher::Regex(_),
-                            ) => Some(build),
-                            _ => None,
-                        };
-                        nameless_match_spec.build_number = None;
-                        nameless_match_spec.md5 = None;
-                        nameless_match_spec.sha256 = None;
-                        // These are still to sensitive to be unset, so skipping
-                        // these for now
-                        // nameless_match_spec.url = None;
-                        // nameless_match_spec.file_name = None;
-                        // nameless_match_spec.channel = None;
-                        // nameless_match_spec.subdir = None;
-                    }
+                if let Some(packages) = &args.specs.packages
+                    && packages.contains(&name.as_normalized().to_string())
+                {
+                    // If the build contains a wildcard, keep it
+                    nameless_match_spec.build = match nameless_match_spec.build {
+                        Some(build @ StringMatcher::Glob(_) | build @ StringMatcher::Regex(_)) => {
+                            Some(build)
+                        }
+                        _ => None,
+                    };
+                    nameless_match_spec.build_number = None;
+                    nameless_match_spec.md5 = None;
+                    nameless_match_spec.sha256 = None;
+                    // These are still to sensitive to be unset, so skipping
+                    // these for now
+                    // nameless_match_spec.url = None;
+                    // nameless_match_spec.file_name = None;
+                    // nameless_match_spec.channel = None;
+                    // nameless_match_spec.subdir = None;
                 }
 
                 Some((
@@ -442,17 +441,14 @@ pub fn parse_specs_for_platform(
         // Only upgrade in pyproject.toml if it is explicitly mentioned in
         // `tool.pixi.dependencies.python`
         .filter(|(name, _)| {
-            if name.as_normalized() == "python" {
-                if let pixi_manifest::ManifestDocument::PyProjectToml(document) =
+            if name.as_normalized() == "python"
+                && let pixi_manifest::ManifestDocument::PyProjectToml(document) =
                     workspace.document()
-                {
-                    if document
-                        .get_nested_table(&["tool", "pixi", "dependencies", "python"])
-                        .is_err()
-                    {
-                        return false;
-                    }
-                }
+                && document
+                    .get_nested_table(&["tool", "pixi", "dependencies", "python"])
+                    .is_err()
+            {
+                return false;
             }
             true
         })

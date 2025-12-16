@@ -83,15 +83,15 @@ fn fmt_cached_build_status(
 ) -> fmt::Result {
     write!(f, "{state} {}", build.record.package_record)?;
 
-    if let Some(channel) = &build.record.channel {
-        if !channel.is_empty() {
-            write!(f, " @ {channel}")?;
-            let subdir = build.record.package_record.subdir.as_str();
-            if !subdir.is_empty() {
-                write!(f, "/{subdir}")?;
-            }
-            return Ok(());
+    if let Some(channel) = &build.record.channel
+        && !channel.is_empty()
+    {
+        write!(f, " @ {channel}")?;
+        let subdir = build.record.package_record.subdir.as_str();
+        if !subdir.is_empty() {
+            write!(f, "/{subdir}")?;
         }
+        return Ok(());
     }
 
     let subdir = build.record.package_record.subdir.as_str();
