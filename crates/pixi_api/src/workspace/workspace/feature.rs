@@ -95,7 +95,7 @@ pub async fn remove_feature<I: Interface>(
     interface: &I,
     mut workspace: WorkspaceMut,
     feature: &FeatureName,
-) -> miette::Result<()> {
+) -> miette::Result<Vec<EnvironmentName>> {
     // Check which environments use this feature
     let environments_using_feature: Vec<String> = environment::list(workspace.workspace())
         .await
@@ -122,17 +122,17 @@ pub async fn remove_feature<I: Interface>(
         let confirmed = interface.confirm(&message).await?;
 
         if !confirmed {
-            return Ok(());
+            return Ok(Vec::new());
         }
     }
 
     // Remove the feature
-    workspace.manifest().remove_feature(feature)?;
+    let modified_envs = workspace.manifest().remove_feature(feature)?;
     workspace.save().await.into_diagnostic()?;
 
     interface
         .success(&format!("Removed feature {feature}"))
         .await;
 
-    Ok(())
+    Ok(modified_envs)
 }

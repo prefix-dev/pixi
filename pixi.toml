@@ -133,11 +133,12 @@ cargo-deny = ">=0.18,<0.18.10" # 0.18.5 breaks license checking for uv crates
 cargo-shear = ">=1.7.1,<2"
 dprint = ">=0.49.1,<0.51"
 go-shfmt = ">=3.12.0,<4"
-lefthook = ">=2.0.9,<3"
+lefthook = ">=2.0.11,<3"
 ruff = ">=0.14.0,<0.15"
 shellcheck = ">=0.10.0,<0.11"
 taplo = ">=0.10.0,<0.11"
 typos = ">=1.38.1,<2"
+zizmor = ">=1.18.0,<2"
 
 [feature.lint.tasks]
 actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" } }
@@ -164,6 +165,7 @@ toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
 toml-lint = "taplo lint --verbose **/pixi.toml"
 typecheck-python = "basedpyright"
 typos = "typos --force-exclude"
+zizmor = "zizmor .github/ --min-severity=high"
 
 [feature.rust.dependencies]
 rust = ">=1.90.0,<1.91"
@@ -202,11 +204,16 @@ mkdocs-redirects = ">=1.2.1,<2"
 pillow = ">=12,<13"
 
 [feature.docs.tasks]
-build-docs = "mkdocs build --strict"
+build-docs = { cmd = "mkdocs build --strict", depends-on = ["download-font"] }
 bump-changelog = "git-cliff --unreleased --prepend CHANGELOG.md --tag $RELEASE_VERSION"
 deploy-dev = "mike deploy --push dev devel"
 deploy-latest = "mike deploy --push --update-aliases $RELEASE_VERSION latest"
-docs = { cmd = "mkdocs serve", description = "Serve the docs locally" }
+docs = { cmd = "mkdocs serve", description = "Serve the docs locally", depends-on = [
+  "download-font",
+] }
+download-font = { cmd = "bash docs/layouts/download-font-to-cache.sh", outputs = [
+  ".cache/plugin/social/fonts/Moranga/Medium.ttf",
+] }
 mike-serve = "mike serve"
 
 [feature.schema.tasks]
