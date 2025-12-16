@@ -71,7 +71,3 @@ pixi workspace channel remove [OPTIONS] <CHANNEL>...
   ```
   **env**: `PIXI_LOCKED`
   ```
-
-## Global Options
-
-- [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
