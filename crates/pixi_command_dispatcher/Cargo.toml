@@ -23,7 +23,6 @@ itertools = { workspace = true }
 miette = { workspace = true }
 once_cell = { workspace = true }
 ordermap = { workspace = true }
-pathdiff = { workspace = true }
 pin-project-lite = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
