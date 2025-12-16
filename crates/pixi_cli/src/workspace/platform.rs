@@ -16,7 +16,6 @@ pub struct Args {
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
-    /// The subcommand to execute
     #[clap(subcommand)]
     pub command: Command,
 }
