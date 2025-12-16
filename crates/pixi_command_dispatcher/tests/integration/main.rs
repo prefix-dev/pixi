@@ -1256,8 +1256,7 @@ pub async fn test_package_not_rebuilt_across_sessions_when_no_files_changed() {
 
     assert!(
         rebuild_packages.is_empty(),
-        "No packages should be rebuilt across sessions when no files changed, but got: {:?}",
-        rebuild_packages
+        "No packages should be rebuilt across sessions when no files changed, but got: {rebuild_packages:?}"
     );
 }
 
@@ -1530,8 +1529,7 @@ pub async fn test_package_not_rebuilt_when_no_files_changed() {
 
     assert!(
         rebuild_packages.is_empty(),
-        "No packages should be rebuilt when no files changed, but got: {:?}",
-        rebuild_packages
+        "No packages should be rebuilt when no files changed, but got: {rebuild_packages:?}"
     );
 }
 
