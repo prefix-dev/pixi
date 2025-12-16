@@ -229,7 +229,7 @@ impl AbsPath {
 
     /// Creates the directory at this path, including all parent directories.
     ///
-    /// This is equivalent to [`std::fs::create_dir_all`].
+    /// This is equivalent to [`fs_err::create_dir_all`].
     ///
     /// # Errors
     ///
@@ -463,7 +463,7 @@ impl AbsPathBuf {
     /// Creates the directory at this path, including all parent directories,
     /// and returns the path as an [`AbsPresumedDirPathBuf`].
     ///
-    /// This is equivalent to [`std::fs::create_dir_all`].
+    /// This is equivalent to [`fs_err::create_dir_all`].
     ///
     /// # Errors
     ///
@@ -1088,7 +1088,7 @@ mod tests {
     fn test_abs_path_directory_on_file() {
         let temp = get_test_dir();
         let file_path = temp.path().join("test_file.txt");
-        std::fs::write(&file_path, "test").unwrap();
+        fs_err::write(&file_path, "test").unwrap();
 
         let abs = AbsPath::new(&file_path).unwrap();
         let dir = abs.directory().unwrap();
@@ -1106,7 +1106,7 @@ mod tests {
     fn test_abs_path_parent() {
         let temp = get_test_dir();
         let child_path = temp.path().join("child");
-        std::fs::create_dir(&child_path).unwrap();
+        fs_err::create_dir(&child_path).unwrap();
 
         let abs = AbsPath::new(&child_path).unwrap();
         let parent = abs.parent().unwrap();
