@@ -22,6 +22,8 @@ pre-commit:
   jobs:
     - name: actionlint
       run: pixi {run} actionlint
+    - name: zizmor
+      run: pixi {run} zizmor
     - name: cargo-fmt
       glob: "*.rs"
       stage_fixed: true

@@ -90,7 +90,7 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - name: Set up pixi
-        uses: prefix-dev/setup-pixi@main
+        uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           environments: lint
           cache-write: ${{ github.ref == 'refs/heads/main' }}
@@ -117,7 +117,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-      - uses: prefix-dev/setup-pixi@main
+      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
@@ -132,7 +132,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-      - uses: prefix-dev/setup-pixi@main
+      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
 
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
@@ -168,7 +168,7 @@ jobs:
     runs-on: namespace-profile-ubuntu-24-04-x86-64-4
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-      - uses: prefix-dev/setup-pixi@main
+      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
@@ -190,7 +190,7 @@ jobs:
     runs-on: namespace-profile-macos-15-arm64-6
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-      - uses: prefix-dev/setup-pixi@main
+      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
@@ -212,7 +212,7 @@ jobs:
     runs-on: namespace-profile-macos-15-arm64-6
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-      - uses: prefix-dev/setup-pixi@main
+      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
@@ -237,7 +237,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
-      - uses: prefix-dev/setup-pixi@main
+      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
@@ -917,7 +917,7 @@ jobs:
           ref: feat/change-manifest-path-to-path-in-pixi-build
 
       - name: Set up pixi
-        uses: prefix-dev/setup-pixi@main
+        uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
 
@@ -955,7 +955,7 @@ jobs:
         run: Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
 
       - name: Set up pixi
-        uses: prefix-dev/setup-pixi@main
+        uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           manifest-path: ${{ env.PIXI_WORKSPACE }}/pixi.toml
           cache-write: ${{ github.ref == 'refs/heads/main' }}
@@ -988,7 +988,7 @@ jobs:
           ref: feat/change-manifest-path-to-path-in-pixi-build
 
       - name: Set up pixi
-        uses: prefix-dev/setup-pixi@main
+        uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
 
