@@ -56,6 +56,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
         id: changed
@@ -89,6 +90,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
@@ -105,6 +108,8 @@ jobs:
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -117,6 +122,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
@@ -132,6 +139,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
 
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
@@ -168,6 +177,8 @@ jobs:
     runs-on: namespace-profile-ubuntu-24-04-x86-64-4
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
@@ -190,6 +201,8 @@ jobs:
     runs-on: namespace-profile-macos-15-arm64-6
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
@@ -212,6 +225,8 @@ jobs:
     runs-on: namespace-profile-macos-15-arm64-6
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
@@ -235,6 +250,8 @@ jobs:
     steps:
       # We don't use the dev drive here since we run out of space otherwise
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
@@ -263,6 +280,8 @@ jobs:
     name: "build binary | linux x86_64"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - uses: rui314/setup-mold@725a8794d15fc7563f59595bd9556495c0564878 # v1
       - name: "Setup musl"
         run: |
@@ -293,6 +312,8 @@ jobs:
     name: "build binary | macos aarch64"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -316,6 +337,8 @@ jobs:
     name: "build binary | macos x86_64"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -339,6 +362,8 @@ jobs:
     name: "build binary | windows x86_64"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
@@ -370,6 +395,8 @@ jobs:
     name: "build binary | windows aarch64"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
@@ -409,6 +436,8 @@ jobs:
       TARGET_RELEASE: "target/pixi/release"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
@@ -437,6 +466,8 @@ jobs:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Download binary from build
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
@@ -461,6 +492,8 @@ jobs:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Download binary from build
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
@@ -486,6 +519,8 @@ jobs:
       TARGET_RELEASE: "target/pixi/release"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
@@ -521,6 +556,8 @@ jobs:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Download binary from build
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
@@ -555,6 +592,8 @@ jobs:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Download binary from build
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
@@ -590,6 +629,8 @@ jobs:
       TARGET_RELEASE: "target/pixi/release"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
@@ -613,6 +654,7 @@ jobs:
         with:
           repository: Deltares/Ribasim
           path: ribasim
+          persist-credentials: false
       - name: Copy Deltares/Ribasim to Dev Drive
         run: Copy-Item -Path "${{ github.workspace }}/ribasim" -Destination "${{ env.PIXI_WORKSPACE }}/ribasim" -Recurse
       - name: Install Deltares/Ribasim
@@ -624,6 +666,7 @@ jobs:
         with:
           repository: quantco/polarify
           path: polarify
+          persist-credentials: false
       - name: Copy quantco/polarify to Dev Drive
         run: Copy-Item -Path "${{ github.workspace }}/polarify" -Destination "${{ env.PIXI_WORKSPACE }}/polarify" -Recurse
       - name: Install quantco/polarify
@@ -647,6 +690,8 @@ jobs:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Download binary from build
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
@@ -668,6 +713,7 @@ jobs:
         with:
           repository: Deltares/Ribasim
           path: ribasim
+          persist-credentials: false
       - name: "Install Deltares/Ribasim"
         run: pixi install -vvv --locked
         working-directory: ribasim
@@ -677,6 +723,7 @@ jobs:
         with:
           repository: quantco/polarify
           path: polarify
+          persist-credentials: false
       - name: "Install quantco/polarify"
         run: pixi install -vvv --locked
         working-directory: polarify
@@ -695,6 +742,8 @@ jobs:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Download binary from build
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
@@ -716,6 +765,7 @@ jobs:
         with:
           repository: nerfstudio-project/nerfstudio
           path: nerfstudio
+          persist-credentials: false
       - name: "Install nerfstudio-project/nerfstudio"
         # Not using locked as their lockfile is not in sync
         run: pixi install -vvv
@@ -726,6 +776,7 @@ jobs:
         with:
           repository: Deltares/Ribasim
           path: ribasim
+          persist-credentials: false
       - name: "Install Deltares/Ribasim"
         run: pixi install -vvv --locked
         working-directory: ribasim
@@ -735,6 +786,7 @@ jobs:
         with:
           repository: quantco/polarify
           path: polarify
+          persist-credentials: false
       - name: "Install quantco/polarify"
         run: pixi install -vvv --locked
         working-directory: polarify
@@ -791,6 +843,8 @@ jobs:
     if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: "Install"
         run: |
           uname -a
@@ -806,6 +860,8 @@ jobs:
     if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Setup latest Alpine Linux
         uses: jirutka/setup-alpine@ae3b3ddba35054804fc4a3507b519fa7e8152050 # v1.4.1
       - name: "Install"
@@ -825,6 +881,8 @@ jobs:
     if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Setup latest Alpine Linux
         uses: jirutka/setup-alpine@ae3b3ddba35054804fc4a3507b519fa7e8152050 # v1.4.1
       - name: "Install"
@@ -846,6 +904,8 @@ jobs:
     if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Setup ucrt64 msys2
         uses: msys2/setup-msys2@4f806de0a5a7294ffabaff804b38a9b435a73bda # v2
         with:
@@ -868,6 +928,8 @@ jobs:
     if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Setup ucrt64 msys2
         uses: msys2/setup-msys2@4f806de0a5a7294ffabaff804b38a9b435a73bda # v2
         with:
@@ -890,6 +952,8 @@ jobs:
       PIXI_REPOURL: "https://github.com/prefix-dev/pixi/"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - name: Setup ucrt64 msys2
         uses: msys2/setup-msys2@4f806de0a5a7294ffabaff804b38a9b435a73bda # v2
         with:
@@ -915,6 +979,7 @@ jobs:
         with:
           repository: nichmor/pixi-build-testsuite
           ref: feat/change-manifest-path-to-path-in-pixi-build
+          persist-credentials: false
 
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
@@ -947,6 +1012,7 @@ jobs:
         with:
           repository: nichmor/pixi-build-testsuite
           ref: feat/change-manifest-path-to-path-in-pixi-build
+          persist-credentials: false
 
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
@@ -986,6 +1052,7 @@ jobs:
         with:
           repository: nichmor/pixi-build-testsuite
           ref: feat/change-manifest-path-to-path-in-pixi-build
+          persist-credentials: false
 
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3

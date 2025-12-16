@@ -165,7 +165,7 @@ toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
 toml-lint = "taplo lint --verbose **/pixi.toml"
 typecheck-python = "basedpyright"
 typos = "typos --force-exclude"
-zizmor = "zizmor .github/ --min-severity=high"
+zizmor = "zizmor .github/ --min-severity=medium"
 
 [feature.rust.dependencies]
 rust = ">=1.90.0,<1.91"

@@ -61,6 +61,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           submodules: recursive
+          persist-credentials: false
       # Turn back on when we're on the released version of dist
       #      - name: Install dist
       #        # we specify bash to get pipefail; it guards against the `curl` command
@@ -152,6 +153,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           submodules: recursive
+          persist-credentials: false
 
       # Use fork of dist to allow for binaries in the root of the tarball
       - name: Install cargo-dist from git
@@ -238,6 +240,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           submodules: recursive
+          persist-credentials: false
       - name: Install cached dist
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
@@ -287,6 +290,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           submodules: recursive
+          persist-credentials: false
       - name: Install cached dist
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
@@ -408,6 +412,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           submodules: recursive
+          persist-credentials: false
       # Create a GitHub Release while uploading all files to it
       - name: "Download GitHub Artifacts"
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
