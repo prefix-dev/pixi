@@ -217,7 +217,7 @@ where
 }
 
 /// Unpacks a pixi archive (typically downloaded from GitHub releases) into a temporary directory.
-async fn unpack_release_archive<R>(mut archive: R, archive_name: &str) -> miette::Result<TempDir>
+fn unpack_release_archive<R>(mut archive: R, archive_name: &str) -> miette::Result<TempDir>
 where
     R: Read + Seek,
 {
@@ -409,7 +409,7 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
             );
         }
 
-        let binary_tempdir = unpack_release_archive(archive.as_file(), &archive_name).await?;
+        let binary_tempdir = unpack_release_archive(archive.as_file(), &archive_name)?;
 
         if !is_quiet {
             eprintln!(
