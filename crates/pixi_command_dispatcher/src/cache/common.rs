@@ -154,16 +154,13 @@ pub trait MetadataCache: Clone + Sized {
             })?;
 
         // If cache exists and has different version, return conflict
-        if !current_contents.is_empty() {
-            if let Ok(current_metadata) = serde_json::from_str::<Self::Metadata>(&current_contents)
-            {
-                if current_metadata.cache_version() != expected_version {
+        if !current_contents.is_empty()
+            && let Ok(current_metadata) = serde_json::from_str::<Self::Metadata>(&current_contents)
+                && current_metadata.cache_version() != expected_version {
                     // Cache was updated by another process
                     drop(locked_cache_file);
                     return Ok(WriteResult::Conflict(current_metadata));
                 }
-            }
-        }
 
         // Version matches (or cache is empty), write new data
         let mut new_metadata = metadata;

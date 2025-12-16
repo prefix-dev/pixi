@@ -101,8 +101,8 @@ impl SourceMetadataSpec {
             None => (None, 0),
         };
 
-        if !skip_cache {
-            if let Some(cached_metadata) =
+        if !skip_cache
+            && let Some(cached_metadata) =
                 Self::verify_cache_freshness(cached_metadata, build_backend_metadata.metadata.id)
                     .await?
             {
@@ -112,7 +112,6 @@ impl SourceMetadataSpec {
                     cached_metadata,
                 });
             }
-        }
 
         let mut futures = ExecutorFutures::new(command_dispatcher.executor());
         let source_location = build_backend_metadata.source.clone();
