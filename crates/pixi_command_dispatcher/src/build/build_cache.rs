@@ -1,7 +1,8 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, BinaryHeap},
     hash::{Hash, Hasher},
     io::SeekFrom,
+    path::PathBuf,
 };
 
 use crate::build::{SourceCodeLocation, source_checkout_cache_key};
@@ -225,9 +226,17 @@ pub struct CachedBuild {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CachedBuildSourceInfo {
-    /// The files that were used during the build process. If any of these
-    /// change, the build should be considered stale.
-    pub globs: BTreeSet<String>,
+    /// Glob patterns that define which files affect the build. If any matching
+    /// file changes, the build should be considered stale.
+    #[serde(default, skip_serializing_if = "BinaryHeap::is_empty")]
+    pub input_globs: BinaryHeap<String>,
+
+    /// The actual files that matched the globs at the time of the build. This
+    /// allows detecting file deletions and additions by comparing against
+    /// current glob matches.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub input_files: BTreeSet<PathBuf>,
+
     /// The packages that were used during the build process.
     #[serde(default)]
     pub build: BuildHostEnvironment,

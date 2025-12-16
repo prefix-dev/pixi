@@ -79,6 +79,7 @@ impl CommandDispatcher {
         Self::fetch_to_checkout(fetch, git_spec)
     }
 
+    #[allow(clippy::result_large_err)]
     fn fetch_to_checkout(
         fetch: Fetch,
         pinned: PinnedGitSpec,

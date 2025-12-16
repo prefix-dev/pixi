@@ -351,11 +351,17 @@ impl SourceBuildSpec {
 
         // Build the package using the v1 build method.
         let source_for_logging = manifest_source.clone();
+        let source_dir = build_source_checkout
+            .path
+            .as_dir_or_file_parent()
+            .as_std_path()
+            .to_path_buf();
         let mut built_source = self
             .build_v1(
                 command_dispatcher,
                 backend,
                 work_directory,
+                source_dir,
                 package_build_input_hash,
                 reporter,
                 log_sink,
@@ -513,11 +519,13 @@ impl SourceBuildSpec {
         self.build_profile == BuildProfile::Development && self.source.source_code().is_mutable()
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn build_v1(
         self,
         command_dispatcher: CommandDispatcher,
         backend: Backend,
         work_directory: PathBuf,
+        source_dir: PathBuf,
         package_build_input_hash: PackageBuildInputHash,
         reporter: Option<Arc<dyn RunExportsReporter>>,
         mut log_sink: UnboundedSender<String>,
@@ -775,7 +783,7 @@ impl SourceBuildSpec {
                 }),
                 backend,
                 package: self.package,
-                source: manifest_source,
+                source_dir,
                 work_directory,
                 channels: self.channels,
                 channel_config: self.channel_config,
@@ -786,7 +794,8 @@ impl SourceBuildSpec {
         Ok(BuiltPackage {
             output_file: built_source.output_file,
             metadata: CachedBuildSourceInfo {
-                globs: built_source.input_globs,
+                input_globs: built_source.input_globs,
+                input_files: built_source.input_files,
                 build: BuildHostEnvironment {
                     packages: build_records,
                 },
@@ -979,6 +988,9 @@ pub enum SourceBuildError {
 
     #[error("the package does not contain a valid subdir")]
     ConvertSubdir(#[source] ConvertSubdirError),
+
+    #[error(transparent)]
+    GlobSet(#[from] pixi_glob::GlobSetError),
 }
 
 impl From<DependenciesError> for SourceBuildError {
@@ -999,6 +1011,7 @@ impl From<SourceBuildCacheStatusError> for SourceBuildError {
             SourceBuildCacheStatusError::SourceCheckout(err) => {
                 SourceBuildError::SourceCheckout(err)
             }
+            SourceBuildCacheStatusError::GlobSet(err) => SourceBuildError::GlobSet(err),
             SourceBuildCacheStatusError::Cycle => {
                 unreachable!("a build time cycle should never happen")
             }

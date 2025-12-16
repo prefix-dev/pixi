@@ -5235,7 +5235,6 @@ dependencies = [
  "miette 7.6.0",
  "once_cell",
  "ordermap",
- "pathdiff",
  "pin-project-lite",
  "pixi_build_backend_passthrough",
  "pixi_build_discovery",
@@ -5658,6 +5657,7 @@ dependencies = [
 name = "pixi_path"
 version = "0.1.0"
 dependencies = [
+ "fs-err",
  "serde",
  "tempfile",
  "thiserror 2.0.17",

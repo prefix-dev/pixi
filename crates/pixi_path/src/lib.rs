@@ -235,7 +235,7 @@ impl AbsPath {
     ///
     /// Returns an [`std::io::Error`] if the directory could not be created.
     pub fn create_dir_all(&self) -> std::io::Result<&AbsPresumedDirPath> {
-        std::fs::create_dir_all(&self.0)?;
+        fs_err::create_dir_all(&self.0)?;
         // SAFETY: We just created the directory, so it exists and is a directory
         Ok(unsafe { AbsPresumedDirPath::new_unchecked(&self.0) })
     }
@@ -469,7 +469,7 @@ impl AbsPathBuf {
     ///
     /// Returns an [`std::io::Error`] if the directory could not be created.
     pub fn into_create_dir_all(self) -> std::io::Result<AbsPresumedDirPathBuf> {
-        std::fs::create_dir_all(&self.0)?;
+        fs_err::create_dir_all(&self.0)?;
         // SAFETY: We just created the directory, so it exists and is a directory
         Ok(unsafe { AbsPresumedDirPathBuf::new_unchecked(self.0) })
     }
