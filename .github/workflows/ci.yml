@@ -914,7 +914,6 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           repository: prefix-dev/pixi-build-testsuite
-          ref: feat/change-manifest-path-to-path-in-pixi-build
 
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
@@ -946,7 +945,6 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           repository: prefix-dev/pixi-build-testsuite
-          ref: feat/change-manifest-path-to-path-in-pixi-build
 
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
@@ -985,7 +983,6 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           repository: prefix-dev/pixi-build-testsuite
-          ref: feat/change-manifest-path-to-path-in-pixi-build
 
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
