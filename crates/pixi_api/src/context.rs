@@ -150,7 +150,7 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
-    pub async fn list_environments(&self) -> Vec<Environment> {
+    pub async fn list_environments(&self) -> Vec<Environment<'_>> {
         crate::workspace::workspace::environment::list(&self.workspace).await
     }
 
