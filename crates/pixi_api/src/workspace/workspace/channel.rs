@@ -135,39 +135,77 @@ fn prioritized_channels(
 
 async fn report<I: Interface>(
     interface: &I,
-    channel: &Vec<NamedChannelOrUrl>,
+    channels: &Vec<NamedChannelOrUrl>,
     priority: Option<i32>,
     operation: &str,
     channel_config: &ChannelConfig,
 ) -> miette::Result<()> {
-    for channel in channel {
-        match channel {
-            NamedChannelOrUrl::Name(name) => {
-                interface
-                    .success(&format!(
-                        "{operation} {} ({}){}",
-                        name,
-                        channel
-                            .clone()
-                            .into_base_url(channel_config)
-                            .into_diagnostic()?,
-                        priority.map_or_else(|| "".to_string(), |p| format!(" at priority {p}"))
-                    ))
-                    .await
-            }
-            NamedChannelOrUrl::Url(url) => {
-                interface
-                    .success(&format!(
-                        "{operation} {}{}",
-                        url,
-                        priority.map_or_else(|| "".to_string(), |p| format!(" at priority {p}")),
-                    ))
-                    .await
-            }
-            NamedChannelOrUrl::Path(path) => {
-                interface.success(&format!("{operation} {path}")).await
-            }
-        }
+    for channel in channels {
+        let message = format_channel_message(channel, priority, operation, channel_config)?;
+        interface.success(&message).await;
     }
     Ok(())
+}
+
+fn format_channel_message(
+    channel: &NamedChannelOrUrl,
+    priority: Option<i32>,
+    operation: &str,
+    channel_config: &ChannelConfig,
+) -> miette::Result<String> {
+    let priority_suffix = priority.map_or_else(String::new, |p| format!(" at priority {p}"));
+
+    let message = match channel {
+        NamedChannelOrUrl::Name(name) => {
+            let base_url = channel
+                .clone()
+                .into_base_url(channel_config)
+                .into_diagnostic()?;
+            format!("{operation} {name} ({base_url}){priority_suffix}")
+        }
+        NamedChannelOrUrl::Url(url) => {
+            format!("{operation} {url}{priority_suffix}")
+        }
+        NamedChannelOrUrl::Path(path) => {
+            format!("{operation} {path}{priority_suffix}")
+        }
+    };
+
+    Ok(message)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use url::Url;
+
+    fn default_channel_config() -> ChannelConfig {
+        ChannelConfig::default_with_root_dir(PathBuf::from("/"))
+    }
+
+    #[test]
+    fn test_format_named_channel_without_priority() {
+        let channel = NamedChannelOrUrl::Name("conda-forge".into());
+        let result =
+            format_channel_message(&channel, None, "Added", &default_channel_config()).unwrap();
+
+        assert_eq!(
+            result,
+            "Added conda-forge (https://conda.anaconda.org/conda-forge/)"
+        );
+        assert!(!result.contains("at priority"));
+    }
+
+    #[test]
+    fn test_format_named_channel_with_priority() {
+        let channel = NamedChannelOrUrl::Name("conda-forge".into());
+        let result =
+            format_channel_message(&channel, Some(10), "Added", &default_channel_config()).unwrap();
+
+        assert_eq!(
+            result,
+            "Added conda-forge (https://conda.anaconda.org/conda-forge/) at priority 10"
+        );
+    }
 }
