@@ -72,10 +72,10 @@ impl GlobModificationTime {
                 .modified()
                 .map_err(|e| GlobModificationTimeError::CalculateMTime(matched_path.clone(), e))?;
 
-            if let Some(cur) = latest {
-                if cur >= modified {
-                    continue;
-                }
+            if let Some(cur) = latest
+                && cur >= modified
+            {
+                continue;
             }
             latest = Some(modified);
             designated_file = matched_path;

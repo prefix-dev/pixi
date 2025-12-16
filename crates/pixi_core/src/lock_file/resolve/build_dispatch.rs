@@ -575,7 +575,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
             .expect("extra build requires not initialized, this is a programming error")
     }
 
-    fn build_isolation(&self) -> uv_types::BuildIsolation {
+    fn build_isolation(&self) -> uv_types::BuildIsolation<'_> {
         // In similar fashion to interpreter()
         // the build dispatch should be initialized
         self.build_dispatch
