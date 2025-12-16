@@ -59,11 +59,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .into_diagnostic()?;
             }
         }
-        Command::Set(args) => {
-            workspace_ctx
-                .set_description(Some(args.description))
-                .await?
-        }
+        Command::Set(args) => workspace_ctx.set_description(&args.description).await?,
     }
 
     Ok(())

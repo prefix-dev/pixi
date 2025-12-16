@@ -10,25 +10,18 @@ pub async fn get(workspace: &Workspace) -> Option<String> {
 pub async fn set<I: Interface>(
     interface: &I,
     mut workspace: WorkspaceMut,
-    description: Option<String>,
+    description: &str,
 ) -> miette::Result<()> {
     // Set the description
     workspace.manifest().set_description(description)?;
 
     // Save the manifest on disk
-    let workspace = workspace.save().await.into_diagnostic()?;
+    let _ = workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
     interface
         .success(&format!(
-            "Updated workspace description to '{}'.",
-            workspace
-                .workspace
-                .value
-                .workspace
-                .description
-                .as_ref()
-                .expect("we just set the description, so it should be there")
+            "Updated workspace description to '{description}'.",
         ))
         .await;
 

@@ -96,11 +96,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     match args.command {
         Command::Add(add_args) => workspace_ctx.add_channel(add_args.try_into()?).await,
-        Command::List(args) => workspace_ctx
-            .list_channel()
-            .await
-            .into_iter()
-            .map(|(env_name, channels)| {
+        Command::List(args) => {
+            let environments = workspace_ctx.list_channel().await;
+            for (env_name, channels) in environments {
                 let _ = writeln!(
                     std::io::stdout(),
                     "{} {}",
@@ -112,33 +110,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         std::process::exit(0);
                     }
                 });
-                channels
-            })
-            .try_for_each(|c| -> Result<(), rattler_conda_types::ParseChannelError> {
-                c.into_iter().try_for_each(
-                    |channel| -> Result<(), rattler_conda_types::ParseChannelError> {
-                        let _ = writeln!(
-                            std::io::stdout(),
-                            "- {}",
-                            if args.urls {
-                                match channel.clone().into_base_url(&channel_config) {
-                                    Ok(url) => url.to_string(),
-                                    Err(e) => return Err(e),
-                                }
-                            } else {
-                                channel.to_string()
-                            }
-                        )
-                        .inspect_err(|e| {
-                            if e.kind() == std::io::ErrorKind::BrokenPipe {
-                                std::process::exit(0);
-                            }
-                        });
-                        Ok(())
-                    },
-                )
-            })
-            .into_diagnostic(),
+
+                for channel in channels {
+                    let _ = writeln!(
+                        std::io::stdout(),
+                        "- {}",
+                        if args.urls {
+                            channel
+                                .clone()
+                                .into_base_url(&channel_config)
+                                .into_diagnostic()?
+                                .to_string()
+                        } else {
+                            channel.to_string()
+                        }
+                    )
+                    .inspect_err(|e| {
+                        if e.kind() == std::io::ErrorKind::BrokenPipe {
+                            std::process::exit(0);
+                        }
+                    });
+                }
+            }
+            Ok(())
+        }
         Command::Remove(remove_args) => workspace_ctx.remove_channel(remove_args.try_into()?).await,
     }
 }

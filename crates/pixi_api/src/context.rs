@@ -87,7 +87,7 @@ impl<I: Interface> WorkspaceContext<I> {
         crate::workspace::workspace::description::get(&self.workspace).await
     }
 
-    pub async fn set_description(&self, description: Option<String>) -> miette::Result<()> {
+    pub async fn set_description(&self, description: &str) -> miette::Result<()> {
         crate::workspace::workspace::description::set(
             &self.interface,
             self.workspace_mut()?,

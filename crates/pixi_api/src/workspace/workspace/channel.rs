@@ -165,13 +165,7 @@ async fn report<I: Interface>(
                     .await
             }
             NamedChannelOrUrl::Path(path) => {
-                interface
-                    .success(&format!(
-                        "{}{operation} {}",
-                        console::style(console::Emoji("✔ ", "")).green(),
-                        path
-                    ))
-                    .await
+                interface.success(&format!("{operation} {path}")).await
             }
         }
     }
