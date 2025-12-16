@@ -773,6 +773,72 @@ pub async fn test_dev_source_metadata() {
     );
 }
 
+/// Tests that `dev_source_metadata` returns an error when requesting a package
+/// that is not provided by the source.
+#[tokio::test]
+pub async fn test_dev_source_metadata_package_not_provided() {
+    use pixi_command_dispatcher::{
+        BuildBackendMetadataSpec, CommandDispatcherError, DevSourceMetadataError,
+        DevSourceMetadataSpec, PackageNotProvidedError,
+    };
+    use pixi_record::PinnedPathSpec;
+
+    // Setup: Create a dispatcher with the in-memory backend
+    let root_dir = workspaces_dir().join("dev-sources");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Pin the source spec to test-package which provides "test-package"
+    let pinned_source = PinnedPathSpec {
+        path: "test-package".into(),
+    }
+    .into();
+
+    // Request a package name that doesn't exist in the source
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("non-existent-package"),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: pinned_source,
+            channel_config: default_channel_config(),
+            channels: vec![],
+            build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
+            variant_configuration: None,
+            variant_files: None,
+            enabled_protocols: Default::default(),
+            preferred_build_source: None,
+        },
+    };
+
+    // Act: Get the dev source metadata - should fail
+    let result = dispatcher.dev_source_metadata(spec).await;
+
+    // Assert: Should return PackageNotProvided error
+    let err = result.expect_err("should fail when package is not provided by source");
+
+    match err {
+        CommandDispatcherError::Failed(DevSourceMetadataError::PackageNotProvided(
+            PackageNotProvidedError { name, .. },
+        )) => {
+            assert_eq!(
+                name.as_source(),
+                "non-existent-package",
+                "Error should contain the requested package name"
+            );
+        }
+        other => panic!("expected PackageNotProvided error, got: {other}"),
+    }
+}
+
 /// Tests that the PassthroughBackend generates multiple outputs based on variant configurations
 /// when dependencies have "*" version requirements.
 #[tokio::test]

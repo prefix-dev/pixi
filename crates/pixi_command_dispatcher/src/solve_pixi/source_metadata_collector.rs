@@ -14,7 +14,7 @@ use thiserror::Error;
 
 use crate::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
-    SourceCheckoutError, SourceMetadataSpec,
+    PackageNotProvidedError, SourceCheckoutError, SourceMetadataSpec,
     executor::ExecutorFutures,
     source_metadata::{CycleEnvironment, SourceMetadata, SourceMetadataError},
 };
@@ -52,11 +52,9 @@ pub enum CollectSourceMetadataError {
         #[diagnostic_source]
         error: SourceMetadataError,
     },
-    #[error("the package '{}' is not provided by the project located at '{}'", .name.as_source(), &.pinned_source)]
-    PackageMetadataNotFound {
-        name: rattler_conda_types::PackageName,
-        pinned_source: Box<PinnedSourceSpec>,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PackageNotProvided(#[from] PackageNotProvidedError),
     #[error("failed to checkout source for package '{name}'")]
     SourceCheckoutError {
         name: String,
@@ -229,17 +227,6 @@ impl SourceMetadataCollector {
             }
             Ok(metadata) => metadata,
         };
-
-        // Make sure that a package with the name defined in spec is available from the
-        // backend.
-        if source_metadata.cached_metadata.records.is_empty() {
-            return Err(CommandDispatcherError::Failed(
-                CollectSourceMetadataError::PackageMetadataNotFound {
-                    name,
-                    pinned_source: Box::new(source_metadata.source.manifest_source().clone()),
-                },
-            ));
-        }
 
         Ok((source_metadata, chain))
     }

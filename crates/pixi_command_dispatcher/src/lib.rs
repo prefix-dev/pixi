@@ -71,7 +71,9 @@ pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
     CommandDispatcherErrorResultExt, InstantiateBackendError, InstantiateBackendSpec,
 };
-pub use dev_source_metadata::{DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataSpec};
+pub use dev_source_metadata::{
+    DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataSpec, PackageNotProvidedError,
+};
 pub use executor::Executor;
 pub use install_pixi::{
     InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,

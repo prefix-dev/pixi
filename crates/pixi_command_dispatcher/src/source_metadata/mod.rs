@@ -25,8 +25,8 @@ use crate::cache::build_backend_metadata::CachedCondaMetadataId;
 use crate::cache::source_metadata::CachedSourceMetadataId;
 use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
-    CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
-    SolvePixiEnvironmentError,
+    CommandDispatcherError, CommandDispatcherErrorResultExt, PackageNotProvidedError,
+    PixiEnvironmentSpec, SolvePixiEnvironmentError,
     build::{Dependencies, DependenciesError, PixiRunExports, SourceCodeLocation},
     cache::{
         common::MetadataCache,
@@ -128,10 +128,29 @@ impl SourceMetadataSpec {
             ));
         }
 
+        let records: Vec<SourceRecord> = futures.try_collect().await?;
+
+        // Ensure the source provides the requested package
+        if records.is_empty() {
+            let available_names = build_backend_metadata
+                .metadata
+                .outputs
+                .iter()
+                .map(|output| output.metadata.name.clone());
+            return Err(CommandDispatcherError::Failed(
+                PackageNotProvidedError::new(
+                    self.package,
+                    build_backend_metadata.source.manifest_source().clone(),
+                    available_names,
+                )
+                .into(),
+            ));
+        }
+
         let cached_source_metadata = CachedSourceMetadata {
             id: CachedSourceMetadataId::random(),
             cache_version,
-            records: futures.try_collect().await?,
+            records,
             cached_conda_metadata_id: build_backend_metadata.metadata.id,
         };
 
@@ -592,6 +611,10 @@ pub enum SourceMetadataError {
 
     #[error(transparent)]
     Cache(#[from] source_metadata::SourceMetadataCacheError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PackageNotProvided(#[from] PackageNotProvidedError),
 }
 
 impl From<DependenciesError> for SourceMetadataError {

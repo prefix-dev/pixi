@@ -1,3 +1,6 @@
+use std::fmt::Display;
+
+use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_record::{DevSourceRecord, PinnedSourceSpec};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec};
@@ -48,6 +51,71 @@ pub enum DevSourceMetadataError {
 
     #[error("detected a cycle while trying to retrieve dev source metadata")]
     Cycle,
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PackageNotProvided(#[from] PackageNotProvidedError),
+}
+
+/// Error for when a package is not provided by the source.
+#[derive(Debug, Error)]
+pub struct PackageNotProvidedError {
+    /// The name of the package that was requested
+    pub name: PackageName,
+    /// The pinned source specification
+    pub pinned_source: Box<PinnedSourceSpec>,
+    /// Similar package names that are provided by the source
+    pub similar_names: Vec<String>,
+}
+
+impl PackageNotProvidedError {
+    /// Creates a new `PackageNotProvidedError` with suggestions based on string similarity.
+    pub fn new(
+        name: PackageName,
+        pinned_source: PinnedSourceSpec,
+        available_names: impl IntoIterator<Item = PackageName>,
+    ) -> Self {
+        let name_str = name.as_source();
+        let similar_names = available_names
+            .into_iter()
+            .filter_map(|available| {
+                let distance = strsim::jaro(available.as_source(), name_str);
+                (distance > 0.6).then_some((distance, available.as_source().to_string()))
+            })
+            .sorted_by(|(a, _), (b, _)| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(_, name)| name)
+            .take(2)
+            .collect();
+        Self {
+            name,
+            pinned_source: Box::new(pinned_source),
+            similar_names,
+        }
+    }
+}
+
+impl Display for PackageNotProvidedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "the package '{}' is not provided by the project located at '{}'",
+            self.name.as_source(),
+            self.pinned_source
+        )
+    }
+}
+
+impl Diagnostic for PackageNotProvidedError {
+    fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
+        if !self.similar_names.is_empty() {
+            Some(Box::new(format!(
+                "Did you mean '{}'?",
+                self.similar_names.join("' or '")
+            )))
+        } else {
+            None
+        }
+    }
 }
 
 impl DevSourceMetadataSpec {
@@ -93,6 +161,23 @@ impl DevSourceMetadataSpec {
                 &source_anchor,
             )?;
             records.push(record);
+        }
+
+        // Ensure the source provides the requested package
+        if records.is_empty() {
+            let available_names = build_backend_metadata
+                .metadata
+                .outputs
+                .iter()
+                .map(|output| output.metadata.name.clone());
+            return Err(CommandDispatcherError::Failed(
+                PackageNotProvidedError::new(
+                    self.package_name,
+                    build_backend_metadata.source.manifest_source().clone(),
+                    available_names,
+                )
+                .into(),
+            ));
         }
 
         Ok(DevSourceMetadata {
