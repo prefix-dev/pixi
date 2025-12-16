@@ -913,7 +913,7 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
-          repository: nichmor/pixi-build-testsuite
+          repository: prefix-dev/pixi-build-testsuite
           ref: feat/change-manifest-path-to-path-in-pixi-build
 
       - name: Set up pixi
@@ -945,7 +945,7 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
-          repository: nichmor/pixi-build-testsuite
+          repository: prefix-dev/pixi-build-testsuite
           ref: feat/change-manifest-path-to-path-in-pixi-build
 
       - name: Create Dev Drive
@@ -984,7 +984,7 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
-          repository: nichmor/pixi-build-testsuite
+          repository: prefix-dev/pixi-build-testsuite
           ref: feat/change-manifest-path-to-path-in-pixi-build
 
       - name: Set up pixi
