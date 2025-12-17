@@ -17,7 +17,6 @@ use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackageRef};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::{
     collections::HashMap,
@@ -31,7 +30,10 @@ use crate::workspace;
 use crate::{
     Workspace,
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode},
-    workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
+    workspace::{
+        Environment, HasWorkspaceRef, errors::UnsupportedPlatformError,
+        grouped_environment::GroupedEnvironment,
+    },
 };
 
 /// Verify the location of the prefix folder is not changed so the applied
@@ -558,15 +560,15 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     let workspace = environments[0].workspace();
 
     let no_install = update_lock_file_options.no_install;
-    let mut no_install_envs = HashSet::new();
     for env in environments {
         let current_platform = env.best_platform();
         if !no_install && !env.platforms().contains(&current_platform) {
-            tracing::warn!(
-                "Not installing dependency for ({}) on current platform: ({current_platform}) as it is not part of this project's supported platforms.",
-                env.name()
-            );
-            no_install_envs.insert(env);
+            return Err(UnsupportedPlatformError {
+                environments_platforms: env.platforms().into_iter().collect(),
+                environment: env.name().clone(),
+                platform: current_platform,
+            }
+            .into());
         }
     }
 
@@ -592,7 +594,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     let reinstall_packages = &reinstall_packages;
     let prefixes = stream::iter(environments.iter())
         .map(move |env| {
-            if no_install || no_install_envs.contains(env) {
+            if no_install {
                 std::future::ready(Ok(Prefix::new(env.dir()))).left_future()
             } else {
                 lock_file_ref
