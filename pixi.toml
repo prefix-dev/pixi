@@ -185,9 +185,6 @@ compilers = ">=1.6.0"
 make = ">=4.4.1,<5"
 mold = ">=2.40.2,<3"
 
-#[feature.build.target.win-64.dependencies]
-#vs2017_win-64 = ">=19.16.27033,<20"
-
 [feature.build.target.unix.activation]
 scripts = ["scripts/activate.sh"]
 
@@ -308,6 +305,11 @@ trampoline = { features = ["trampoline"], no-default-feature = true }
 # TODO: This should be derived from the toolchain file.
 rust_compiler_version = ["1.90.*"]
 
+# TODO: Set these as default in the rust backend.
+[workspace.target.win-64.build-variants]
+c_compiler = ["vs2019"]
+cxx_compiler = ["vs2019"]
+
 #
 # Package descriptions
 #
@@ -316,12 +318,19 @@ name = "pixi"
 
 [package.build]
 backend = { name = "pixi-build-rust", version = "*" }
-config = { compilers = ["cxx", "c", "rust"] }
 source = { path = "crates/pixi" }
+
+[package.build.config]
+compilers = ["cxx", "c", "rust"]
+
+[package.build.config.env]
+CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS = "-C link-arg=-Wl,-rpath,$CONDA_PREFIX/lib"
+CARGO_TARGET_X86_64_APPLE_DARWIN_RUSTFLAGS = "-C link-arg=-Wl,-rpath,$CONDA_PREFIX/lib"
+CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER = "clang"
+CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS = "-Clink-arg=-fuse-ld=$CONDA_PREFIX/bin/mold -Clink-arg=-Wl,--no-rosegment"
 
 [package.target.unix.build-dependencies]
 clang = ">=21.1.2,<22"
 
 [package.target.linux.build-dependencies]
-clang = ">=21.1.2,<22"
 mold = ">=2.40.2,<3"
