@@ -17,8 +17,4 @@ pixi workspace channel list [OPTIONS]
 - <a id="arg---urls" href="#arg---urls">`--urls`</a>
 :  Whether to display the channel's names or urls
 
-## Global Options
-- <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>
-:  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
-
 --8<-- "docs/reference/cli/pixi/workspace/channel/list_extender:example"

@@ -45,6 +45,7 @@ pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
 pixi_install_pypi = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
+pixi_path = { workspace = true }
 pixi_progress = { workspace = true }
 pixi_pypi_spec = { workspace = true }
 pixi_python_status = { workspace = true }
@@ -106,6 +107,7 @@ libc = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "glob", "filters"] }
+pixi_build_backend_passthrough = { workspace = true }
 pixi_test_utils = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true }
