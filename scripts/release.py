@@ -1,6 +1,7 @@
 import subprocess
 import re
 import os
+import shutil
 from pathlib import Path
 import atexit
 from enum import Enum
@@ -62,12 +63,11 @@ def get_release_version() -> str:
 
 
 def get_pixi() -> Path:
-    pixi_bin = Path().home().joinpath(".pixi/bin/pixi").resolve()
-
-    if pixi_bin.is_file() and pixi_bin.exists():
-        return pixi_bin
+    pixi_bin = shutil.which("pixi")
+    if pixi_bin:
+        return Path(pixi_bin)
     else:
-        raise ValueError(f"The path {pixi_bin} doesn't exist.")
+        raise ValueError("pixi not found in PATH")
 
 
 def print_summary() -> None:

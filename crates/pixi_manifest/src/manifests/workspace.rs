@@ -1982,9 +1982,7 @@ feature_target_dep = "*"
             String::from("foo description")
         );
 
-        manifest
-            .set_description(&String::from("my new description"))
-            .unwrap();
+        manifest.set_description("my new description").unwrap();
 
         assert_eq!(
             manifest

@@ -15,13 +15,16 @@ on:
       - "schema/**"
       - "**/schema.yml"
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   test-schema:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}

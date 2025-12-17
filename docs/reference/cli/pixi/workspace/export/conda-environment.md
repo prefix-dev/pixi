@@ -26,7 +26,7 @@ pixi workspace export conda-environment [OPTIONS] [OUTPUT_PATH]
 :  The name to use for the rendered conda environment. Defaults to the environment name
 
 ## Global Options
-- <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
+- <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 --8<-- "docs/reference/cli/pixi/workspace/export/conda-environment_extender:example"
