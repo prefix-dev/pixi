@@ -426,6 +426,36 @@ jobs:
           retention-days: 14
 
   #
+  # Build conda packages and upload to prefix.dev/pixi-ci
+  #
+
+  conda-build:
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
+    strategy:
+      matrix:
+        include:
+          - runner: namespace-profile-ubuntu-24-04-x86-64-4
+            name: linux-x86_64
+          - runner: namespace-profile-macos-15-arm64-6
+            name: macos-aarch64
+          - runner: namespace-profile-windows-2022-x86-64-8
+            name: windows-x86_64
+    runs-on: ${{ matrix.runner }}
+    name: "conda build | ${{ matrix.name }}"
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
+        with:
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
+      - name: "Build"
+        run: pixi build --output-dir ${{ env.CICD_INTERMEDIATES_DIR }}
+      - name: "Upload to prefix.dev"
+        run: pixi upload prefix --channel pixi-ci ${{ env.CICD_INTERMEDIATES_DIR }}/*.conda
+
+  #
   # Run integration tests on important platforms
   #
 

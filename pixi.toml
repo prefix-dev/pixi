@@ -172,16 +172,12 @@ typecheck-python = "basedpyright"
 typos = "typos --force-exclude"
 zizmor = "zizmor .github/ --min-severity=medium"
 
-[feature.rust.dependencies]
-rust = ">=1.90.0,<1.91"
-
 [feature.build.dependencies]
-# Needed for building
-compilers = ">=1.11.0,<2"
 git = ">=2.51.0,<3"
-openssl = ">=3.5.4,<4"
-pkg-config = ">=0.29.2,<0.30"
-rust-src = ">=1.90.0,<2"
+rust-src = ">=1.90.0,<1.91"
+
+[feature.build.dev]
+pixi = { path = "." }
 
 [feature.build.target.linux.dependencies]
 clang = ">=21.1.2,<22"
@@ -189,8 +185,8 @@ compilers = ">=1.6.0"
 make = ">=4.4.1,<5"
 mold = ">=2.40.2,<3"
 
-[feature.build.target.win-64.dependencies]
-vs2017_win-64 = ">=19.16.27033,<20"
+#[feature.build.target.win-64.dependencies]
+#vs2017_win-64 = ">=19.16.27033,<20"
 
 [feature.build.target.unix.activation]
 scripts = ["scripts/activate.sh"]
@@ -286,7 +282,6 @@ default = { features = [
   "dev",
   "schema",
   "pytest",
-  "rust",
 ], solve-group = "default" }
 dist = { features = ["dist"], no-default-feature = true }
 docs = { features = [
@@ -294,7 +289,6 @@ docs = { features = [
 ], no-default-feature = true, solve-group = "default" }
 lint = { features = [
   "lint",
-  "rust",
   "pytest",
   "build",
   "schema",
@@ -315,6 +309,9 @@ trampoline = { features = ["trampoline"], no-default-feature = true }
 # Package descriptions
 #
 
+[workspace.build-variants]
+rust = ["1.90.*"]
+
 [package]
 name = "pixi"
 
@@ -323,4 +320,8 @@ backend = { name = "pixi-build-rust", version = "*" }
 source = { path = "crates/pixi" }
 
 [package.target.unix.build-dependencies]
-clang = "*"
+clang = ">=21.1.2,<22"
+
+[package.target.linux.build-dependencies]
+clang = ">=21.1.2,<22"
+mold = ">=2.40.2,<3"
