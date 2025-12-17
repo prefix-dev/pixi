@@ -1184,7 +1184,7 @@ fn determine_pypi_solve_permits(project: &Workspace) -> usize {
     for environment in environments {
         for (_, req) in environment.pypi_dependencies(None).iter() {
             for dep in req {
-                if dep.is_direct_dependency() {
+                if dep.is_source_dependency() {
                     return 1;
                 }
             }
