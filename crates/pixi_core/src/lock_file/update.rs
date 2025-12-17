@@ -1804,6 +1804,7 @@ impl<'p> UpdateContext<'p> {
                 platform,
                 grouped_repodata_records,
                 grouped_pypi_records,
+                self.command_dispatcher.clone(),
             );
             pending_futures.push(extract_resolution_task.boxed_local());
 
@@ -2292,6 +2293,7 @@ async fn spawn_extract_environment_task(
     platform: Platform,
     grouped_repodata_records: impl Future<Output = Arc<PixiRecordsByName>>,
     grouped_pypi_records: impl Future<Output = Arc<PypiRecordsByName>>,
+    command_dispatcher: CommandDispatcher,
 ) -> miette::Result<TaskResult> {
     let group = GroupedEnvironment::from(environment.clone());
 
@@ -2325,12 +2327,68 @@ async fn spawn_extract_environment_task(
     }
 
     // Determine the conda packages we need.
-    let conda_package_names = environment
+    let mut conda_package_names: Vec<_> = environment
         .combined_dependencies(Some(platform))
         .names()
         .cloned()
         .map(PackageName::Conda)
-        .collect::<Vec<_>>();
+        .collect();
+
+    // Also include packages from dev dependencies.
+    // Dev dependencies are source packages that bring in their own dependencies.
+    let dev_dependencies: Vec<_> = environment
+        .combined_dev_dependencies(Some(platform))
+        .into_specs()
+        .collect();
+
+    if !dev_dependencies.is_empty() {
+        // Resolve the dev dependencies to find what packages they bring in
+        let workspace = environment.workspace();
+        let channel_config = workspace.channel_config();
+        let channels: Vec<_> = environment
+            .channels()
+            .into_iter()
+            .filter_map(|c| c.clone().into_base_url(&channel_config).ok())
+            .collect();
+
+        let VariantConfig {
+            variant_configuration,
+            variant_files,
+        } = workspace
+            .variants(platform)
+            .into_diagnostic()
+            .wrap_err("failed to get variant configuration")?;
+
+        // Get virtual packages for the build environment
+        let virtual_packages: Vec<_> = environment
+            .virtual_packages(platform)
+            .into_iter()
+            .map(GenericVirtualPackage::from)
+            .collect();
+
+        let build_environment = BuildEnvironment::simple(platform, virtual_packages);
+
+        // Resolve dev dependencies
+        let resolved_dev_deps = super::resolve_dev_dependencies(
+            dev_dependencies,
+            &command_dispatcher,
+            &channel_config,
+            &channels,
+            &build_environment,
+            &variant_configuration,
+            &variant_files,
+        )
+        .await
+        .into_diagnostic()
+        .wrap_err("failed to resolve dev dependencies")?;
+
+        // Add the resolved dev dependency package names to the queue
+        for dep in resolved_dev_deps {
+            if let Some(name) = dep.conda_package_name() {
+                conda_package_names.push(PackageName::Conda(name));
+            }
+        }
+    }
 
     // Determine the pypi packages we need.
     let pypi_dependencies = environment.pypi_dependencies(Some(platform));
