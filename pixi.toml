@@ -316,6 +316,7 @@ name = "pixi"
 
 [package.build]
 backend = { name = "pixi-build-rust", version = "*" }
+config = { compilers = ["cxx", "c", "rust"] }
 source = { path = "crates/pixi" }
 
 [package.target.unix.build-dependencies]
