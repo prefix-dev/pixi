@@ -458,6 +458,7 @@ jobs:
       - name: "Build"
         run: pixi build
       - name: "Upload to prefix.dev"
+        shell: bash
         run: pixi upload prefix --skip-existing --channel pixi-ci ./*.conda
 
 #  #
