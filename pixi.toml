@@ -323,14 +323,21 @@ source = { path = "crates/pixi" }
 [package.build.config]
 compilers = ["cxx", "c", "rust"]
 
-[package.build.config.env]
-CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS = "-C link-arg=-Wl,-rpath,$CONDA_PREFIX/lib"
-CARGO_TARGET_X86_64_APPLE_DARWIN_RUSTFLAGS = "-C link-arg=-Wl,-rpath,$CONDA_PREFIX/lib"
-CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER = "clang"
-CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS = "-Clink-arg=-fuse-ld=$CONDA_PREFIX/bin/mold -Clink-arg=-Wl,--no-rosegment"
+#[package.build.config.env]
+#CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS = "-C link-arg=-Wl,-rpath,$CONDA_PREFIX/lib"
+#CARGO_TARGET_X86_64_APPLE_DARWIN_RUSTFLAGS = "-C link-arg=-Wl,-rpath,$CONDA_PREFIX/lib"
+#CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER = "clang"
+#CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS = "-Clink-arg=-fuse-ld=$CONDA_PREFIX/bin/mold -Clink-arg=-Wl,--no-rosegment"
+
+[package.build-dependencies]
+cmake = "*"
+pkg-config = "*"
 
 [package.target.unix.build-dependencies]
-clang = ">=21.1.2,<22"
+make = "*"
 
-[package.target.linux.build-dependencies]
-mold = ">=2.40.2,<3"
+[package.target.linux.host-dependencies]
+openssl = "*"
+
+[package.target.win.host-dependencies]
+libgit2 = "*"
