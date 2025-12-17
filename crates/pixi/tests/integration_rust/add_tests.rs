@@ -1202,85 +1202,64 @@ preview = ['pixi-build']
     ]}, {
         insta::assert_snapshot!(workspace.workspace.provenance.read().unwrap().into_inner());
     });
-    /// Test the `pixi add --pypi --index` functionality
-    #[cfg(unix)]
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-
-    async fn add_pypi_with_index() {
-        use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
-        setup_tracing();
-
-        // Create local PyPI index with test package
-
-        let pypi_index = PyPIDatabase::new()
-            .with(PyPIPackage::new("requests", "2.32.0"))
-            .into_simple_index()
-            .unwrap();
-
-        // Create local conda channel with Python
-
-        let mut package_db = MockRepoData::default();
-
-        package_db.add_package(
-            Package::build("python", "3.12.0")
-                .with_subdir(Platform::current())
-                .finish(),
+}
+/// Test the `pixi add --pypi --index` functionality
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn add_pypi_with_index() {
+    use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
+    setup_tracing();
+    // Create local PyPI index with test package
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("requests", "2.32.0"))
+        .into_simple_index()
+        .unwrap();
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+    let pixi = PixiControl::new().unwrap();
+    pixi.init()
+        .without_channels()
+        .with_local_channel(channel.url().to_file_path().unwrap())
+        .await
+        .unwrap();
+    // Add python
+    pixi.add("python==3.12.0")
+        .set_type(DependencyType::CondaDependency(SpecType::Run))
+        .await
+        .unwrap();
+    // Add a pypi package with custom index
+    let custom_index = pypi_index.index_url().to_string();
+    pixi.add("requests")
+        .set_type(DependencyType::PypiDependency)
+        .with_index(custom_index.clone())
+        .await
+        .unwrap();
+    // Read project and check if index is set
+    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let pypi_deps: Vec<_> = project
+        .default_environment()
+        .pypi_dependencies(None)
+        .into_specs()
+        .collect();
+    // Find the requests package
+    let (_name, spec) = pypi_deps
+        .iter()
+        .find(|(name, _)| *name == PypiPackageName::from_str("requests").unwrap())
+        .expect("requests package should be in dependencies");
+    // Verify the index is set correctly
+    if let PixiPypiSpec::Version { index, .. } = spec {
+        assert_eq!(
+            index.as_ref().map(|u| u.as_str()),
+            Some(custom_index.as_str()),
+            "Index URL should match the provided custom index"
         );
-
-        let channel = package_db.into_channel().await.unwrap();
-
-        let pixi = PixiControl::new().unwrap();
-
-        pixi.init()
-            .without_channels()
-            .with_local_channel(channel.url().to_file_path().unwrap())
-            .await
-            .unwrap();
-
-        // Add python
-
-        pixi.add("python==3.12.0")
-            .set_type(DependencyType::CondaDependency(SpecType::Run))
-            .await
-            .unwrap();
-
-        // Add a pypi package with custom index
-
-        let custom_index = pypi_index.index_url().to_string();
-
-        pixi.add("requests")
-            .set_type(DependencyType::PypiDependency)
-            .with_index(custom_index.clone())
-            .await
-            .unwrap();
-
-        // Read project and check if index is set
-
-        let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
-
-        let pypi_deps: Vec<_> = project
-            .default_environment()
-            .pypi_dependencies(None)
-            .into_specs()
-            .collect();
-
-        // Find the requests package
-
-        let (_name, spec) = pypi_deps
-            .iter()
-            .find(|(name, _)| *name == PypiPackageName::from_str("requests").unwrap())
-            .expect("requests package should be in dependencies");
-
-        // Verify the index is set correctly
-
-        if let PixiPypiSpec::Version { index, .. } = spec {
-            assert_eq!(
-                index.as_ref().map(|u| u.as_str()),
-                Some(custom_index.as_str()),
-                "Index URL should match the provided custom index"
-            );
-        } else {
-            panic!("Expected PixiPypiSpec::Version variant");
-        }
+    } else {
+        panic!("Expected PixiPypiSpec::Version variant");
     }
 }
