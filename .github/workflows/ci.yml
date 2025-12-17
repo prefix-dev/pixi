@@ -456,9 +456,9 @@ jobs:
           run-install: false
           locked: false
       - name: "Build"
-        run: pixi build --output-dir ${{ env.CICD_INTERMEDIATES_DIR }}
+        run: pixi build
       - name: "Upload to prefix.dev"
-        run: pixi upload prefix --skip-existing --channel pixi-ci ${{ env.CICD_INTERMEDIATES_DIR }}/*.conda
+        run: pixi upload prefix --skip-existing --channel pixi-ci ./*.conda
 
 #  #
 #  # Run integration tests on important platforms
