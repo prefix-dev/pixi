@@ -1068,6 +1068,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "cache_dir": IsStr,
             "cache_size": AnyThing,
             "auth_dir": IsStr,
+            "tls_backend": IsStr,
             "global_info": {
                 "bin_dir": IsStr,
                 "env_dir": IsStr,
