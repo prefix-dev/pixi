@@ -105,13 +105,13 @@ impl SourceMetadataSpec {
             && let Some(cached_metadata) =
                 Self::verify_cache_freshness(cached_metadata, build_backend_metadata.metadata.id)
                     .await?
-            {
-                tracing::debug!("Using cached source metadata for package",);
-                return Ok(SourceMetadata {
-                    source: build_backend_metadata.source.clone(),
-                    cached_metadata,
-                });
-            }
+        {
+            tracing::debug!("Using cached source metadata for package",);
+            return Ok(SourceMetadata {
+                source: build_backend_metadata.source.clone(),
+                cached_metadata,
+            });
+        }
 
         let mut futures = ExecutorFutures::new(command_dispatcher.executor());
         let source_location = build_backend_metadata.source.clone();

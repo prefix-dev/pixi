@@ -107,8 +107,8 @@ libc = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "glob", "filters"] }
+pixi_build_backend_passthrough = { workspace = true }
 pixi_test_utils = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
-pixi_build_backend_passthrough = { workspace = true }
