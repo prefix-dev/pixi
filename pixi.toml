@@ -304,14 +304,13 @@ test-export = { features = ["micromamba"], no-default-feature = true }
 test-native-certs = { features = ["native-certs-test", "build"] }
 trampoline = { features = ["trampoline"], no-default-feature = true }
 
+[workspace.build-variants]
+# TODO: This should be derived from the toolchain file.
+rust_compiler_version = ["1.90.*"]
 
 #
 # Package descriptions
 #
-
-[workspace.build-variants]
-rust = ["1.90.*"]
-
 [package]
 name = "pixi"
 
