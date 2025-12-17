@@ -431,11 +431,11 @@ jobs:
 
   conda-build:
     permissions:
-      contents: read
       id-token: write
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - runner: namespace-profile-ubuntu-24-04-x86-64-4
