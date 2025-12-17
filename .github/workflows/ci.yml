@@ -275,155 +275,155 @@ jobs:
   # Builds the binary artifacts on different platforms
   #
 
-  build-binary-linux-x86_64:
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: namespace-profile-ubuntu-24-04-x86-64-4
-    name: "build binary | linux x86_64"
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-        with:
-          persist-credentials: false
-      - uses: rui314/setup-mold@725a8794d15fc7563f59595bd9556495c0564878 # v1
-      - name: "Setup musl"
-        run: |
-          sudo apt update
-          sudo apt install musl-tools
-          rustup target add x86_64-unknown-linux-musl
-      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: "Build"
-        run: >
-          cargo build
-          --locked
-          --target x86_64-unknown-linux-musl
-          --profile $CARGO_BUILD_PROFILE
-          --features self_update
-      - name: "Upload binary"
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: pixi-linux-x86_64-${{ github.sha }}
-          path: ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
-          retention-days: 14
-
-  build-binary-macos-aarch64:
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: namespace-profile-macos-15-arm64-6
-    name: "build binary | macos aarch64"
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-        with:
-          persist-credentials: false
-      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: "Build"
-        run: >
-          cargo build
-          --locked
-          --profile $CARGO_BUILD_PROFILE
-          --features self_update
-      - name: "Upload binary"
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: pixi-macos-aarch64-${{ github.sha }}
-          path: ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
-          retention-days: 14
-
-  build-binary-macos-x86_64:
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }} # Only run on the main branch
-    runs-on: macos-15-intel
-    name: "build binary | macos x86_64"
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-        with:
-          persist-credentials: false
-      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: "Build"
-        run: >
-          cargo build
-          --locked
-          --profile $CARGO_BUILD_PROFILE
-          --features self_update
-      - name: "Upload binary"
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: pixi-macos-x86_64-${{ github.sha }}
-          path: ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
-          retention-days: 14
-
-  build-binary-windows-x86_64:
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: namespace-profile-windows-2022-x86-64-8
-    name: "build binary | windows x86_64"
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-        with:
-          persist-credentials: false
-      - name: Create Dev Drive
-        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
-      - name: Copy Git Repo to Dev Drive
-        run: |
-          Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
-      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
-        with:
-          workspaces: ${{ env.PIXI_WORKSPACE }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: "Build"
-        working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: >
-          cargo build
-          --locked
-          --profile $env:CARGO_BUILD_PROFILE
-          --features self_update
-      - name: "Upload binary"
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: pixi-windows-x86_64-${{ github.sha }}
-          path: ${{ env.PIXI_WORKSPACE }}/target/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
-          retention-days: 14
-
-  build-binary-windows-aarch64:
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main'  || contains(github.event.pull_request.labels.*.name, 'test:extra_slow')}} # Only run on the main branch
-    # Using windows-latest as it's only run on main, thus speed is not that important
-    runs-on: windows-latest
-    name: "build binary | windows aarch64"
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-        with:
-          persist-credentials: false
-      - name: Create Dev Drive
-        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
-      - name: Copy Git Repo to Dev Drive
-        run: |
-          Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
-      - name: "Install Rust toolchain"
-        run: rustup target add aarch64-pc-windows-msvc
-      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
-        with:
-          workspaces: ${{ env.PIXI_WORKSPACE }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: "Build"
-        working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: >
-          cargo build
-          --locked
-          --target aarch64-pc-windows-msvc
-          --profile $env:CARGO_BUILD_PROFILE
-          --features self_update
-      - name: "Upload binary"
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: pixi-windows-aarch64-${{ github.sha }}
-          path: ${{ env.PIXI_WORKSPACE }}/target/aarch64-pc-windows-msvc/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
-          retention-days: 14
+  #  build-binary-linux-x86_64:
+  #    needs: determine_changes
+  #    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
+  #    runs-on: namespace-profile-ubuntu-24-04-x86-64-4
+  #    name: "build binary | linux x86_64"
+  #    steps:
+  #      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+  #        with:
+  #          persist-credentials: false
+  #      - uses: rui314/setup-mold@725a8794d15fc7563f59595bd9556495c0564878 # v1
+  #      - name: "Setup musl"
+  #        run: |
+  #          sudo apt update
+  #          sudo apt install musl-tools
+  #          rustup target add x86_64-unknown-linux-musl
+  #      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+  #        with:
+  #          save-if: ${{ github.ref == 'refs/heads/main' }}
+  #      - name: "Build"
+  #        run: >
+  #          cargo build
+  #          --locked
+  #          --target x86_64-unknown-linux-musl
+  #          --profile $CARGO_BUILD_PROFILE
+  #          --features self_update
+  #      - name: "Upload binary"
+  #        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+  #        with:
+  #          name: pixi-linux-x86_64-${{ github.sha }}
+  #          path: ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
+  #          retention-days: 14
+  #
+  #  build-binary-macos-aarch64:
+  #    needs: determine_changes
+  #    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
+  #    runs-on: namespace-profile-macos-15-arm64-6
+  #    name: "build binary | macos aarch64"
+  #    steps:
+  #      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+  #        with:
+  #          persist-credentials: false
+  #      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+  #        with:
+  #          save-if: ${{ github.ref == 'refs/heads/main' }}
+  #      - name: "Build"
+  #        run: >
+  #          cargo build
+  #          --locked
+  #          --profile $CARGO_BUILD_PROFILE
+  #          --features self_update
+  #      - name: "Upload binary"
+  #        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+  #        with:
+  #          name: pixi-macos-aarch64-${{ github.sha }}
+  #          path: ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
+  #          retention-days: 14
+  #
+  #  build-binary-macos-x86_64:
+  #    needs: determine_changes
+  #    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }} # Only run on the main branch
+  #    runs-on: macos-15-intel
+  #    name: "build binary | macos x86_64"
+  #    steps:
+  #      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+  #        with:
+  #          persist-credentials: false
+  #      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+  #        with:
+  #          save-if: ${{ github.ref == 'refs/heads/main' }}
+  #      - name: "Build"
+  #        run: >
+  #          cargo build
+  #          --locked
+  #          --profile $CARGO_BUILD_PROFILE
+  #          --features self_update
+  #      - name: "Upload binary"
+  #        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+  #        with:
+  #          name: pixi-macos-x86_64-${{ github.sha }}
+  #          path: ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
+  #          retention-days: 14
+  #
+  #  build-binary-windows-x86_64:
+  #    needs: determine_changes
+  #    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
+  #    runs-on: namespace-profile-windows-2022-x86-64-8
+  #    name: "build binary | windows x86_64"
+  #    steps:
+  #      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+  #        with:
+  #          persist-credentials: false
+  #      - name: Create Dev Drive
+  #        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
+  #      - name: Copy Git Repo to Dev Drive
+  #        run: |
+  #          Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
+  #      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+  #        with:
+  #          workspaces: ${{ env.PIXI_WORKSPACE }}
+  #          save-if: ${{ github.ref == 'refs/heads/main' }}
+  #      - name: "Build"
+  #        working-directory: ${{ env.PIXI_WORKSPACE }}
+  #        run: >
+  #          cargo build
+  #          --locked
+  #          --profile $env:CARGO_BUILD_PROFILE
+  #          --features self_update
+  #      - name: "Upload binary"
+  #        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+  #        with:
+  #          name: pixi-windows-x86_64-${{ github.sha }}
+  #          path: ${{ env.PIXI_WORKSPACE }}/target/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
+  #          retention-days: 14
+  #
+  #  build-binary-windows-aarch64:
+  #    needs: determine_changes
+  #    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main'  || contains(github.event.pull_request.labels.*.name, 'test:extra_slow')}} # Only run on the main branch
+  #    # Using windows-latest as it's only run on main, thus speed is not that important
+  #    runs-on: windows-latest
+  #    name: "build binary | windows aarch64"
+  #    steps:
+  #      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+  #        with:
+  #          persist-credentials: false
+  #      - name: Create Dev Drive
+  #        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
+  #      - name: Copy Git Repo to Dev Drive
+  #        run: |
+  #          Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
+  #      - name: "Install Rust toolchain"
+  #        run: rustup target add aarch64-pc-windows-msvc
+  #      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+  #        with:
+  #          workspaces: ${{ env.PIXI_WORKSPACE }}
+  #          save-if: ${{ github.ref == 'refs/heads/main' }}
+  #      - name: "Build"
+  #        working-directory: ${{ env.PIXI_WORKSPACE }}
+  #        run: >
+  #          cargo build
+  #          --locked
+  #          --target aarch64-pc-windows-msvc
+  #          --profile $env:CARGO_BUILD_PROFILE
+  #          --features self_update
+  #      - name: "Upload binary"
+  #        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+  #        with:
+  #          name: pixi-windows-aarch64-${{ github.sha }}
+  #          path: ${{ env.PIXI_WORKSPACE }}/target/aarch64-pc-windows-msvc/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
+  #          retention-days: 14
 
   #
   # Build conda packages and upload to prefix.dev/pixi-ci
