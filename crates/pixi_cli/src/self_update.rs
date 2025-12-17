@@ -244,18 +244,28 @@ where
 pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Result<()> {
     let is_quiet = global_options.quiet > 0;
 
+    // If a URL is provided, use the archive from there
     if let Some(url) = args.url {
+        let print_success_msg = || {
+            if !is_quiet {
+                eprintln!(
+                    "{}Pixi has been updated from URL {url}",
+                    console::style(console::Emoji("✔ ", "")).green(),
+                );
+            }
+        };
+
+        // Don't actually do anything if `--dry-run` is passed
+        if args.dry_run {
+            print_success_msg();
+            return Ok(());
+        }
+
         let mut tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
-        // If a URL is provided, download the archive from the URL
         download(url.clone(), &mut tempfile).await?;
         self_replace::self_replace(tempfile).into_diagnostic()?;
 
-        if !is_quiet {
-            eprintln!(
-                "{}Pixi has been updated from URL {url}",
-                console::style(console::Emoji("✔ ", "")).green(),
-            );
-        }
+        print_success_msg();
 
         Ok(())
     } else {
