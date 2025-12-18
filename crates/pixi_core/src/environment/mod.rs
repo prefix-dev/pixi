@@ -10,7 +10,7 @@ use pixi_git::credentials::store_credentials_from_url;
 pub use pixi_install_pypi::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 use pixi_manifest::FeaturesExt;
 use pixi_progress::await_in_progress;
-use pixi_pypi_spec::PixiPypiSpec;
+use pixi_pypi_spec::PixiPypiSource;
 pub use pixi_python_status::PythonStatus;
 use pixi_spec::{GitSpec, PixiSpec};
 use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
@@ -350,8 +350,8 @@ pub fn extract_git_requirements_from_workspace(project: &Workspace) -> Vec<GitSp
 
             for (_, pypi_spec) in pypi_dependencies {
                 for spec in pypi_spec {
-                    if let PixiPypiSpec::Git { url, .. } = spec {
-                        requirements.push(url);
+                    if let PixiPypiSource::Git { git, .. } = &spec.source {
+                        requirements.push(git.clone());
                     }
                 }
             }

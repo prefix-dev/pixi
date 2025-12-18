@@ -1,4 +1,4 @@
-use crate::{PixiPypiSpec, VersionOrStar};
+use crate::{PixiPypiSource, PixiPypiSpec, VersionOrStar};
 use itertools::Itertools;
 use pep508_rs::ExtraName;
 use pixi_spec::{GitReference, GitSpec};
@@ -110,18 +110,22 @@ impl RawPyPiRequirement {
             return Err(SpecConversion::VersionWithNonDetailedKeys { non_detailed_keys });
         }
 
-        let req = match (self.url, self.path, self.git, self.extras, self.index) {
-            (Some(url), None, None, extras, None) => PixiPypiSpec::Url {
-                url,
-                extras,
-                subdirectory: self.subdirectory,
-            },
-            (None, Some(path), None, extras, None) => PixiPypiSpec::Path {
-                path,
-                editable: self.editable,
-                extras,
-            },
-            (None, None, Some(git), extras, None) => {
+        let req = match (self.url, self.path, self.git, self.index) {
+            (Some(url), None, None, None) => PixiPypiSpec::with_extras(
+                PixiPypiSource::Url {
+                    url,
+                    subdirectory: self.subdirectory,
+                },
+                self.extras,
+            ),
+            (None, Some(path), None, None) => PixiPypiSpec::with_extras(
+                PixiPypiSource::Path {
+                    path,
+                    editable: self.editable,
+                },
+                self.extras,
+            ),
+            (None, None, Some(git), None) => {
                 let rev = match (self.branch, self.rev, self.tag) {
                     (Some(branch), None, None) => Some(GitReference::Branch(branch)),
                     (None, Some(rev), None) => Some(GitReference::Rev(rev)),
@@ -131,25 +135,24 @@ impl RawPyPiRequirement {
                         return Err(SpecConversion::MultipleGitSpecifiers);
                     }
                 };
-                PixiPypiSpec::Git {
-                    url: GitSpec {
-                        git,
-                        rev,
-                        subdirectory: self.subdirectory,
+                PixiPypiSpec::with_extras(
+                    PixiPypiSource::Git {
+                        git: GitSpec {
+                            git,
+                            rev,
+                            subdirectory: self.subdirectory,
+                        },
                     },
-                    extras,
-                }
+                    self.extras,
+                )
             }
-            (None, None, None, extras, index) => PixiPypiSpec::Version {
-                version: self.version.unwrap_or(VersionOrStar::Star),
-                extras,
-                index,
-            },
-            (_, _, _, extras, index) if !extras.is_empty() => PixiPypiSpec::Version {
-                version: self.version.unwrap_or(VersionOrStar::Star),
-                extras,
-                index,
-            },
+            (None, None, None, index) => PixiPypiSpec::with_extras(
+                PixiPypiSource::Registry {
+                    version: self.version.unwrap_or(VersionOrStar::Star),
+                    index,
+                },
+                self.extras,
+            ),
             _ => {
                 return Err(SpecConversion::MultipleVersionSpecifiers);
             }
@@ -214,16 +217,18 @@ impl<'de> toml_span::Deserialize<'de> for RawPyPiRequirement {
 impl<'de> toml_span::Deserialize<'de> for PixiPypiSpec {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         if let Some(str) = value.as_str() {
-            return Ok(PixiPypiSpec::RawVersion(
-                VersionOrStar::from_str(str).map_err(|e| toml_span::Error {
-                    kind: toml_span::ErrorKind::Custom(
-                        version_requirement_error(str)
-                            .map_or(e.to_string().into(), |e| e.to_string().into()),
-                    ),
-                    span: value.span,
-                    line_info: None,
-                })?,
-            ));
+            let version = VersionOrStar::from_str(str).map_err(|e| toml_span::Error {
+                kind: toml_span::ErrorKind::Custom(
+                    version_requirement_error(str)
+                        .map_or(e.to_string().into(), |e| e.to_string().into()),
+                ),
+                span: value.span,
+                line_info: None,
+            })?;
+            return Ok(PixiPypiSpec::new(PixiPypiSource::Registry {
+                version,
+                index: None,
+            }));
         }
 
         <RawPyPiRequirement as toml_span::Deserialize>::deserialize(value)?
@@ -268,19 +273,15 @@ impl From<PixiPypiSpec> for toml_edit::Value {
             }
         }
 
-        match &val {
-            PixiPypiSpec::Version {
-                version,
-                extras,
-                index,
-            } if extras.is_empty() && index.is_none() => {
+        let extras = &val.extras;
+
+        match &val.source {
+            // Simple version string (no extras, no index)
+            PixiPypiSource::Registry { version, index } if extras.is_empty() && index.is_none() => {
                 toml_edit::Value::from(version.to_string())
             }
-            PixiPypiSpec::Version {
-                version,
-                extras,
-                index,
-            } => {
+            // Registry with extras or index
+            PixiPypiSource::Registry { version, index } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
                 table.insert(
                     "version",
@@ -290,14 +291,13 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                 insert_index(&mut table, index);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
-            PixiPypiSpec::Git {
-                url:
+            PixiPypiSource::Git {
+                git:
                     GitSpec {
                         git,
                         rev,
                         subdirectory,
                     },
-                extras,
             } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
                 table.insert(
@@ -340,11 +340,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                 insert_extras(&mut table, extras);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
-            PixiPypiSpec::Path {
-                path,
-                editable,
-                extras,
-            } => {
+            PixiPypiSource::Path { path, editable } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
                 table.insert(
                     "path",
@@ -361,11 +357,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                 insert_extras(&mut table, extras);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
-            PixiPypiSpec::Url {
-                url,
-                extras,
-                subdirectory,
-            } => {
+            PixiPypiSource::Url { url, subdirectory } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
                 table.insert(
                     "url",
@@ -382,16 +374,13 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                 insert_extras(&mut table, extras);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
-            PixiPypiSpec::RawVersion(version) => {
-                toml_edit::Value::String(toml_edit::Formatted::new(version.to_string()))
-            }
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::PixiPypiSpec;
+    use crate::{PixiPypiSource, PixiPypiSpec};
     use insta::assert_snapshot;
     use pep508_rs::ExtraName;
     use pixi_spec::{GitReference, GitSpec};
@@ -428,7 +417,10 @@ mod test {
         );
         assert_eq!(
             requirement.first().unwrap().1,
-            &PixiPypiSpec::RawVersion(">=3.12".parse().unwrap())
+            &PixiPypiSpec::new(PixiPypiSource::Registry {
+                version: ">=3.12".parse().unwrap(),
+                index: None,
+            })
         );
 
         let requirement = from_toml_str::<TomlIndexMap<pep508_rs::PackageName, PixiPypiSpec>>(
@@ -438,7 +430,10 @@ mod test {
         .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
-            &PixiPypiSpec::RawVersion("==3.12.0".parse().unwrap())
+            &PixiPypiSpec::new(PixiPypiSource::Registry {
+                version: "==3.12.0".parse().unwrap(),
+                index: None,
+            })
         );
 
         let requirement = from_toml_str::<TomlIndexMap<pep508_rs::PackageName, PixiPypiSpec>>(
@@ -448,7 +443,10 @@ mod test {
         .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
-            &PixiPypiSpec::RawVersion("~=2.1.3".parse().unwrap())
+            &PixiPypiSpec::new(PixiPypiSource::Registry {
+                version: "~=2.1.3".parse().unwrap(),
+                index: None,
+            })
         );
 
         let requirement =
@@ -474,11 +472,13 @@ mod test {
         );
         assert_eq!(
             requirement.first().unwrap().1,
-            &PixiPypiSpec::Version {
-                version: ">=3.12".parse().unwrap(),
-                extras: vec![ExtraName::from_str("bar").unwrap()],
-                index: None,
-            }
+            &PixiPypiSpec::with_extras(
+                PixiPypiSource::Registry {
+                    version: ">=3.12".parse().unwrap(),
+                    index: None,
+                },
+                vec![ExtraName::from_str("bar").unwrap()],
+            )
         );
 
         let requirement = from_toml_str::<TomlIndexMap<pep508_rs::PackageName, PixiPypiSpec>>(
@@ -492,14 +492,16 @@ mod test {
         );
         assert_eq!(
             requirement.first().unwrap().1,
-            &PixiPypiSpec::Version {
-                version: ">=3.12,<3.13.0".parse().unwrap(),
-                extras: vec![
+            &PixiPypiSpec::with_extras(
+                PixiPypiSource::Registry {
+                    version: ">=3.12,<3.13.0".parse().unwrap(),
+                    index: None,
+                },
+                vec![
                     ExtraName::from_str("bar").unwrap(),
                     ExtraName::from_str("foo").unwrap(),
                 ],
-                index: None,
-            }
+            )
         );
     }
 
@@ -515,14 +517,16 @@ mod test {
 
         assert_eq!(
             pypi_requirement,
-            PixiPypiSpec::Version {
-                version: "==1.2.3".parse().unwrap(),
-                extras: vec![
+            PixiPypiSpec::with_extras(
+                PixiPypiSource::Registry {
+                    version: "==1.2.3".parse().unwrap(),
+                    index: None,
+                },
+                vec![
                     ExtraName::from_str("feature1").unwrap(),
                     ExtraName::from_str("feature2").unwrap()
                 ],
-                index: None,
-            }
+            )
         );
     }
 
@@ -534,7 +538,10 @@ mod test {
         .unwrap();
         assert_eq!(
             pypi_requirement,
-            PixiPypiSpec::RawVersion("==1.2.3".parse().unwrap())
+            PixiPypiSpec::new(PixiPypiSource::Registry {
+                version: "==1.2.3".parse().unwrap(),
+                index: None,
+            })
         );
     }
 
@@ -555,11 +562,10 @@ mod test {
         .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
-            &PixiPypiSpec::Path {
+            &PixiPypiSpec::new(PixiPypiSource::Path {
                 path: PathBuf::from("../numpy-test"),
                 editable: None,
-                extras: vec![],
-            },
+            }),
         );
     }
     #[test]
@@ -571,11 +577,10 @@ mod test {
         .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
-            &PixiPypiSpec::Path {
+            &PixiPypiSpec::new(PixiPypiSource::Path {
                 path: PathBuf::from("../numpy-test"),
                 editable: Some(true),
-                extras: vec![],
-            }
+            })
         );
     }
 
@@ -602,11 +607,10 @@ mod test {
 
         assert_eq!(
             requirement.first().unwrap().1,
-            &PixiPypiSpec::Url {
+            &PixiPypiSpec::new(PixiPypiSource::Url {
                 url: Url::parse("https://test.url.com").unwrap(),
-                extras: vec![],
                 subdirectory: None,
-            }
+            })
         );
     }
 
@@ -619,14 +623,13 @@ mod test {
         .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
-            &PixiPypiSpec::Git {
-                url: GitSpec {
+            &PixiPypiSpec::new(PixiPypiSource::Git {
+                git: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
                     rev: None,
                     subdirectory: None,
                 },
-                extras: vec![],
-            }
+            })
         );
     }
 
@@ -639,14 +642,13 @@ mod test {
         .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
-            &PixiPypiSpec::Git {
-                url: GitSpec {
+            &PixiPypiSpec::new(PixiPypiSource::Git {
+                git: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
                     rev: Some(GitReference::Branch("main".to_string())),
                     subdirectory: None,
                 },
-                extras: vec![],
-            }
+            })
         );
     }
 
@@ -659,14 +661,13 @@ mod test {
         .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
-            &PixiPypiSpec::Git {
-                url: GitSpec {
+            &PixiPypiSpec::new(PixiPypiSource::Git {
+                git: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
                     rev: Some(GitReference::Tag("v.1.2.3".to_string())),
                     subdirectory: None,
                 },
-                extras: vec![],
-            }
+            })
         );
     }
 
@@ -679,14 +680,13 @@ mod test {
         .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
-            &PixiPypiSpec::Git {
-                url: GitSpec {
+            &PixiPypiSpec::new(PixiPypiSource::Git {
+                git: GitSpec {
                     git: Url::parse("https://github.com/pallets/flask.git").unwrap(),
                     rev: Some(GitReference::Tag("3.0.0".to_string())),
                     subdirectory: None,
                 },
-                extras: vec![],
-            },
+            }),
         );
     }
 
@@ -699,14 +699,13 @@ mod test {
         .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
-            &PixiPypiSpec::Git {
-                url: GitSpec {
+            &PixiPypiSpec::new(PixiPypiSource::Git {
+                git: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
                     rev: Some(GitReference::Rev("123456".to_string())),
                     subdirectory: None,
                 },
-                extras: vec![],
-            }
+            })
         );
     }
 }
