@@ -662,14 +662,7 @@ mod test {
             .filter_map(|task| {
                 let context = pixi_manifest::task::TaskRenderContext {
                     platform: task.run_environment.best_platform(),
-                    environment_name: {
-                        if task.task.default_environment.is_some() {
-                            task.task.default_environment.as_ref();
-                            println!("{task.task.default_environment.unwrap()}");
-                        } else {
-                            task.run_environment.name()
-                        };
-                    },
+                    environment_name: task.run_environment.name(),
                     manifest_path: Some(&project.workspace.provenance.path),
                     args: task.args.as_ref(),
                 };
