@@ -22,9 +22,8 @@ python = ">=3.13.5,<3.15"
 
 [tasks]
 build-debug = "cargo build"
-# At least one test requires the self_update feature. Since this feature has a
-# small footprint, it's faster to enable it once for all tests instead of
-# building two different binaries
+# At least one test requires the self_update feature, so we need a different
+# flavour of the binary for tests
 build-debug-tests = "cargo build --features self_update"
 build-release = "cargo build --release"
 build-release-tests = "cargo build --release --features self_update"
