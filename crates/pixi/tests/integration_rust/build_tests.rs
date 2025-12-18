@@ -1,5 +1,5 @@
 use fs_err as fs;
-use pixi_build_backend_passthrough::PassthroughBackend;
+use pixi_build_backend_passthrough::{ObservableBackend, PassthroughBackend};
 use pixi_build_frontend::BackendOverride;
 use pixi_consts::consts;
 use rattler_conda_types::Platform;
@@ -7,6 +7,7 @@ use tempfile::TempDir;
 
 use crate::{
     common::{LockFileExt, PixiControl},
+    develop_dependencies_tests::create_test_package_database,
     setup_tracing,
 };
 use pixi_test_utils::{MockRepoData, Package};
@@ -543,4 +544,107 @@ backend.version = "0.1.0"
         gitignore_path.exists(),
         ".pixi/.gitignore file was not created after build"
     );
+}
+
+/// Test that demonstrates using PassthroughBackend with PixiControl
+/// to test build operations without requiring actual backend processes.
+#[tokio::test]
+async fn test_different_variants_have_different_caches() {
+    setup_tracing();
+
+    // Create a package database with common dependencies
+    let package_database = create_test_package_database();
+
+    // Convert to channel
+    let channel = package_database.into_channel().await.unwrap();
+
+    // Create a PixiControl instance with PassthroughBackend
+    // Create an observable backend and get the observer
+    let (instantiator, mut observer) =
+        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+
+    let backend_override = BackendOverride::from_memory(instantiator);
+
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create a simple source directory
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+
+    // Create a pixi.toml that the PassthroughBackend will read
+    let pixi_toml_content = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.host-dependencies]
+sdl2 = "*"
+
+[package.build.config]
+on-the-fly = true
+"#;
+    fs::write(source_dir.join("pixi.toml"), pixi_toml_content).unwrap();
+
+    // Create a manifest with a source dependency
+    // Note: my-package must be a feature-specific dependency so that each environment
+    // resolves it with its own sdl2 constraint, resulting in different variants.
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = ["{}"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[workspace.build-variants]
+sdl2 = ["2.26.5", "2.32.*"]
+
+[feature.sdl2-26.dependencies]
+sdl2 = "2.26.5"
+
+[feature.sdl2-32.dependencies]
+sdl2 = "2.32.*"
+
+[environments]
+sdl2-26 = {{ features = ["sdl2-26"] }}
+sdl2-32 = {{ features = ["sdl2-32"] }}
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        channel.url(),
+        Platform::current(),
+    );
+
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // install first time the environment with sdl2-26
+    pixi.install()
+        .with_environment(vec!["sdl2-26".to_string()])
+        .await
+        .unwrap();
+
+    // do again, but we should have only one build
+    pixi.install()
+        .with_environment(vec!["sdl2-26".to_string()])
+        .await
+        .unwrap();
+
+    let events = observer.build_events();
+
+    assert_eq!(events.len(), 1, "Expected only one build for sdl2-26");
+
+    // do again for different environment, we should have another build for sdl2-32
+    pixi.install()
+        .with_environment(vec!["sdl2-32".to_string()])
+        .await
+        .unwrap();
+
+    let events = observer.build_events();
+
+    assert_eq!(events.len(), 1, "Expected another build for sdl2-32");
 }

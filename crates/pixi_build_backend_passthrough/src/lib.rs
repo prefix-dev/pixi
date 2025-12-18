@@ -7,7 +7,8 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
+    hash::{Hash, Hasher},
+    path::{Path, PathBuf},
 };
 
 use ordermap::OrderMap;
@@ -29,7 +30,10 @@ use pixi_build_types::{
         initialize::InitializeParams,
     },
 };
-use rattler_conda_types::{PackageName, Platform, Version, VersionSpec, package::IndexJson};
+use rattler_conda_types::{
+    PackageName, Platform, Version, VersionSpec,
+    package::{IndexJson, PathType, PathsEntry, PathsJson},
+};
 use serde::Deserialize;
 
 const BACKEND_NAME: &str = "passthrough";
@@ -94,24 +98,77 @@ impl InMemoryBackend for PassthroughBackend {
         params: CondaBuildV1Params,
         _output_stream: &(dyn BackendOutputStream + Send + 'static),
     ) -> Result<CondaBuildV1Result, Box<CommunicationError>> {
-        let (Some(index_json), Some(package)) = (&self.index_json, &self.config.package) else {
+        let Some(index_json) = &self.index_json else {
             return Err(Box::new(
-                BackendError::new("no 'package' configured for passthrough backend").into(),
+                BackendError::new(
+                    "no 'package' or 'on-the-fly' configured for passthrough backend",
+                )
+                .into(),
             ));
         };
-        let absolute_path = self.source_dir.join(package);
-        let output_file = params
+
+        // Compute the variant-aware build string (must match what conda_outputs returns)
+        let variant: BTreeMap<String, VariantValue> = params
+            .output
+            .variant
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let build_string = if variant.is_empty() {
+            index_json.build.clone()
+        } else {
+            let variant_hash = compute_variant_hash(&variant);
+            if index_json.build.is_empty() {
+                variant_hash
+            } else {
+                format!("{}_{}", index_json.build, variant_hash)
+            }
+        };
+
+        let output_dir = params
             .output_directory
-            .unwrap_or(params.work_directory)
-            .join(package);
-        fs_err::copy(absolute_path, &output_file).unwrap();
+            .unwrap_or(params.work_directory.clone());
+
+        let output_file = if self.config.on_the_fly.unwrap_or(false) {
+            // Generate the package on the fly
+            let file_name = format!(
+                "{}-{}-{}.conda",
+                index_json.name.as_normalized(),
+                index_json.version,
+                &build_string
+            );
+            let output_path = output_dir.join(&file_name);
+
+            // Create a modified index_json with the variant-aware build string
+            let mut modified_index_json = index_json.clone();
+            modified_index_json.build = build_string.clone();
+
+            create_conda_package_on_the_fly(&modified_index_json, &output_path).map_err(|err| {
+                Box::new(
+                    BackendError::new(format!("failed to create conda package: {}", err)).into(),
+                )
+            })?;
+
+            output_path
+        } else {
+            // Copy existing package
+            let Some(package) = &self.config.package else {
+                return Err(Box::new(
+                    BackendError::new("no 'package' configured for passthrough backend").into(),
+                ));
+            };
+            let absolute_path = self.source_dir.join(package);
+            let output_path = output_dir.join(package);
+            fs_err::copy(absolute_path, &output_path).unwrap();
+            output_path
+        };
 
         Ok(CondaBuildV1Result {
             output_file,
             input_globs: self.config.build_globs.clone().unwrap_or_default(),
             name: index_json.name.as_normalized().to_owned(),
             version: index_json.version.clone(),
-            build: index_json.build.clone(),
+            build: build_string,
             subdir: index_json
                 .subdir
                 .as_ref()
@@ -120,6 +177,73 @@ impl InMemoryBackend for PassthroughBackend {
                 .expect("invalid subdir in index.json"),
         })
     }
+}
+
+/// Creates a conda package on the fly with the given IndexJson metadata.
+fn create_conda_package_on_the_fly(
+    index_json: &IndexJson,
+    output_path: &Path,
+) -> Result<(), std::io::Error> {
+    use rattler_conda_types::compression_level::CompressionLevel;
+
+    // Create a temporary directory to stage the package contents
+    let temp_dir = tempfile::tempdir()?;
+    let info_dir = temp_dir.path().join("info");
+    fs_err::create_dir_all(&info_dir)?;
+
+    // Write index.json
+    let index_json_content = serde_json::to_string_pretty(index_json)?;
+    let index_json_path = info_dir.join("index.json");
+    fs_err::write(&index_json_path, &index_json_content)?;
+
+    // Create paths.json with the index.json entry
+    let index_json_bytes = index_json_content.as_bytes();
+    let index_json_sha256 =
+        rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(index_json_bytes);
+
+    let paths_json = PathsJson {
+        paths: vec![PathsEntry {
+            relative_path: PathBuf::from("info/index.json"),
+            no_link: false,
+            path_type: PathType::HardLink,
+            prefix_placeholder: None,
+            sha256: Some(index_json_sha256),
+            size_in_bytes: Some(index_json_bytes.len() as u64),
+        }],
+        paths_version: 1,
+    };
+
+    let paths_json_content = serde_json::to_string_pretty(&paths_json)?;
+    let paths_json_path = info_dir.join("paths.json");
+    fs_err::write(&paths_json_path, &paths_json_content)?;
+
+    // Collect paths to include in the package
+    let paths = vec![info_dir.join("index.json"), info_dir.join("paths.json")];
+
+    // Create the output file
+    let output_file = fs_err::File::create(output_path)?;
+
+    // Determine the package name stem (without extension)
+    let out_name = format!(
+        "{}-{}-{}",
+        index_json.name.as_normalized(),
+        index_json.version,
+        index_json.build
+    );
+
+    // Write the conda package
+    rattler_package_streaming::write::write_conda_package(
+        output_file,
+        temp_dir.path(),
+        &paths,
+        CompressionLevel::Default,
+        None, // Use default thread count
+        &out_name,
+        None, // No specific timestamp
+        None, // No progress bar
+    )?;
+
+    Ok(())
 }
 
 /// Generates all variant outputs for a package based on the variant configuration.
@@ -292,6 +416,21 @@ fn generate_variant_combinations(
         .collect()
 }
 
+/// Computes a short hash of the variant for use in build strings.
+/// This ensures that different variants produce different build strings.
+fn compute_variant_hash(variant: &BTreeMap<String, VariantValue>) -> String {
+    use std::collections::hash_map::DefaultHasher;
+
+    let mut hasher = DefaultHasher::new();
+    for (key, value) in variant {
+        key.hash(&mut hasher);
+        value.to_string().hash(&mut hasher);
+    }
+    let hash = hasher.finish();
+    // Use first 8 hex characters for a shorter, readable hash
+    format!("{:08x}", hash as u32)
+}
+
 /// Creates a single output with the given variant configuration.
 fn create_output(
     project_model: &ProjectModelV1,
@@ -349,10 +488,23 @@ fn create_output(
                 .cloned()
                 .unwrap_or_else(|| Version::major(0))
                 .into(),
-            build: index_json
-                .as_ref()
-                .map(|j| j.build.clone())
-                .unwrap_or_default(),
+            build: {
+                let base_build = index_json
+                    .as_ref()
+                    .map(|j| j.build.clone())
+                    .unwrap_or_default();
+                // If there are variants, append a hash to make the build string unique
+                if variant.is_empty() {
+                    base_build
+                } else {
+                    let variant_hash = compute_variant_hash(&variant);
+                    if base_build.is_empty() {
+                        variant_hash
+                    } else {
+                        format!("{}_{}", base_build, variant_hash)
+                    }
+                }
+            },
             build_number: index_json
                 .as_ref()
                 .map(|j| j.build_number)
@@ -466,26 +618,58 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
             None => PassthroughBackendConfig::default(),
         };
 
-        // Read the package file if it is specified
+        // Read the package file if it is specified, or create IndexJson for on_the_fly mode
         let source_dir = params.source_dir.expect("Missing source directory");
-        let index_json = match &config.package {
-            Some(path) => {
-                let path = source_dir.join(path);
-                match rattler_package_streaming::seek::read_package_file(&path) {
-                    Err(err) => {
-                        return Err(Box::new(
-                            BackendError::new(format!(
-                                "failed to read '{}' file: {}",
-                                path.display(),
-                                err
-                            ))
-                            .into(),
-                        ));
+        let index_json = if config.on_the_fly.unwrap_or(false) {
+            // Create IndexJson from project model for on-the-fly package generation
+            Some(IndexJson {
+                arch: None,
+                build: String::from("0"),
+                build_number: 0,
+                constrains: vec![],
+                depends: vec![],
+                experimental_extra_depends: Default::default(),
+                features: None,
+                license: project_model.license.clone(),
+                license_family: None,
+                name: project_model
+                    .name
+                    .as_ref()
+                    .map(|n| PackageName::try_from(n.as_str()).unwrap())
+                    .unwrap_or_else(|| PackageName::try_from("on-the-fly-package").unwrap()),
+                noarch: Default::default(),
+                platform: None,
+                purls: None,
+                python_site_packages_path: None,
+                subdir: Some(Platform::current().to_string()),
+                timestamp: None,
+                track_features: vec![],
+                version: project_model
+                    .version
+                    .clone()
+                    .unwrap_or_else(|| Version::major(0))
+                    .into(),
+            })
+        } else {
+            match &config.package {
+                Some(path) => {
+                    let path = source_dir.join(path);
+                    match rattler_package_streaming::seek::read_package_file(&path) {
+                        Err(err) => {
+                            return Err(Box::new(
+                                BackendError::new(format!(
+                                    "failed to read '{}' file: {}",
+                                    path.display(),
+                                    err
+                                ))
+                                .into(),
+                            ));
+                        }
+                        Ok(index_json) => Some(index_json),
                     }
-                    Ok(index_json) => Some(index_json),
                 }
+                None => None,
             }
-            None => None,
         };
 
         Ok(PassthroughBackend {
@@ -510,6 +694,9 @@ pub struct PassthroughBackendConfig {
     /// Whether this is a noarch package
     pub noarch: Option<bool>,
 
+    /// Whether this package should be built on the fly
+    pub on_the_fly: Option<bool>,
+
     /// Build globs
     pub build_globs: Option<BTreeSet<String>>,
 }
@@ -528,6 +715,19 @@ impl BackendObserver {
         let mut events = Vec::new();
         while let Ok(event) = self.receiver.try_recv() {
             events.push(event);
+        }
+        events
+    }
+
+    /// Collects all build events from the channel using try_recv.
+    /// This is non-blocking and returns immediately with all events that
+    /// are currently in the channel.
+    pub fn build_events(&mut self) -> Vec<BackendEvent> {
+        let mut events = Vec::new();
+        while let Ok(event) = self.receiver.try_recv() {
+            if matches!(event, BackendEvent::CondaBuildV1Called) {
+                events.push(event);
+            }
         }
         events
     }

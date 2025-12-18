@@ -10,6 +10,8 @@ use crate::{
 impl CommandDispatcherProcessor {
     /// Called when a [`BackendBuildSourceTask`] task was received.
     pub(crate) fn on_backend_source_build(&mut self, task: BackendSourceBuildTask) {
+        eprintln!("Received backend source build task: {:?}", task.spec);
+
         // Notify the reporter that a new solve has been queued.
         let parent_context = task
             .parent
@@ -27,6 +29,8 @@ impl CommandDispatcherProcessor {
                 tx: task.tx,
                 reporter_id,
             });
+
+        eprintln!("Assigned backend source build ID: {:?}", pending_id);
 
         // Store the parent context for the task.
         if let Some(parent_context) = task.parent {

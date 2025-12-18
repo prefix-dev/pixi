@@ -144,6 +144,7 @@ impl BuildCache {
             channel_urls = ?input.channel_urls,
             host_virtual_packages = ?input.host_virtual_packages,
             build_virtual_packages = ?input.build_virtual_packages,
+            variants = ?input.variants,
             "opening source build cache entry",
         );
 
