@@ -800,11 +800,25 @@ pub async fn verify_platform_satisfiability(
 }
 
 #[allow(clippy::large_enum_variant)]
-enum Dependency {
+/// A dependency that needs to be checked in the lock file
+pub enum Dependency {
     Input(PackageName, PixiSpec, Cow<'static, str>),
     Conda(MatchSpec, Cow<'static, str>),
     CondaSource(PackageName, MatchSpec, SourceSpec, Cow<'static, str>),
     PyPi(uv_distribution_types::Requirement, Cow<'static, str>),
+}
+
+impl Dependency {
+    /// Extract the conda package name from this dependency, if it has one.
+    /// Returns None for PyPi dependencies.
+    pub fn conda_package_name(&self) -> Option<PackageName> {
+        match self {
+            Dependency::Input(name, _, _) => Some(name.clone()),
+            Dependency::Conda(spec, _) => spec.name.as_ref().and_then(|m| m.as_exact().cloned()),
+            Dependency::CondaSource(name, _, _, _) => Some(name.clone()),
+            Dependency::PyPi(_, _) => None,
+        }
+    }
 }
 
 /// Check satatisfiability of a pypi requirement against a locked pypi package
@@ -1187,7 +1201,7 @@ fn format_source_record(r: &SourceRecord) -> String {
 }
 
 /// Resolve dev dependencies and get all their dependencies
-async fn resolve_dev_dependencies(
+pub async fn resolve_dev_dependencies(
     dev_dependencies: Vec<(PackageName, SourceSpec)>,
     command_dispatcher: &CommandDispatcher,
     channel_config: &rattler_conda_types::ChannelConfig,
