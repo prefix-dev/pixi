@@ -339,7 +339,7 @@ pub async fn find_binary_by_name(
 ) -> miette::Result<Option<Executable>> {
     let installed_packages = prefix.find_installed_packages()?;
     for package in &installed_packages {
-        let executables = prefix.find_executables(&[package.clone()]);
+        let executables = prefix.find_executables(std::slice::from_ref(package));
 
         // Check if any of the executables match the package name
         if let Some(executable) = executables

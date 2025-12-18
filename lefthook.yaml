@@ -1,4 +1,5 @@
 lefthook: pixi run --no-progress lefthook
+no_auto_install: true
 
 templates:
   run: run --quiet --no-progress --frozen --environment=lint
@@ -21,6 +22,8 @@ pre-commit:
   jobs:
     - name: actionlint
       run: pixi {run} actionlint
+    - name: zizmor
+      run: pixi {run} zizmor
     - name: cargo-fmt
       glob: "*.rs"
       stage_fixed: true

@@ -1,10 +1,9 @@
 use std::{fmt, path::PathBuf};
 
-use chrono::Utc;
 use itertools::chain;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_glob::GlobModificationTime;
+use pixi_glob::GlobSet;
 use pixi_record::PinnedSourceSpec;
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use tokio::sync::Mutex;
@@ -84,15 +83,15 @@ fn fmt_cached_build_status(
 ) -> fmt::Result {
     write!(f, "{state} {}", build.record.package_record)?;
 
-    if let Some(channel) = &build.record.channel {
-        if !channel.is_empty() {
-            write!(f, " @ {channel}")?;
-            let subdir = build.record.package_record.subdir.as_str();
-            if !subdir.is_empty() {
-                write!(f, "/{subdir}")?;
-            }
-            return Ok(());
+    if let Some(channel) = &build.record.channel
+        && !channel.is_empty()
+    {
+        write!(f, " @ {channel}")?;
+        let subdir = build.record.package_record.subdir.as_str();
+        if !subdir.is_empty() {
+            write!(f, "/{subdir}")?;
         }
+        return Ok(());
     }
 
     let subdir = build.record.package_record.subdir.as_str();
@@ -162,7 +161,10 @@ impl SourceBuildCacheStatusSpec {
 
         Ok(SourceBuildCacheEntry {
             cached_build: Mutex::new(cached_build),
-            cache_dir: build_cache_entry.cache_dir().to_path_buf(),
+            cache_dir: build_cache_entry
+                .cache_dir()
+                .to_path_buf()
+                .into_std_path_buf(),
             entry: Mutex::new(build_cache_entry),
         })
     }
@@ -330,7 +332,7 @@ impl SourceBuildCacheStatusSpec {
         // Determine the backend parameters for the package.
         let backend = command_dispatcher
             .discover_backend(
-                &source_checkout.path,
+                source_checkout.path.as_std_path(),
                 self.channel_config.clone(),
                 self.enabled_protocols.clone(),
             )
@@ -364,7 +366,11 @@ impl SourceBuildCacheStatusSpec {
     ) -> Result<CachedBuildStatus, CommandDispatcherError<SourceBuildCacheStatusError>> {
         // If there are no source globs, we always consider the cached package
         // up-to-date.
-        let Some(source_info) = cached_build.source.as_ref().filter(|p| !p.globs.is_empty()) else {
+        let Some(source_info) = cached_build
+            .source
+            .as_ref()
+            .filter(|p| !p.input_globs.is_empty())
+        else {
             return Ok(CachedBuildStatus::UpToDate(cached_build));
         };
 
@@ -374,46 +380,66 @@ impl SourceBuildCacheStatusSpec {
             .await
             .map_err_with(SourceBuildCacheStatusError::SourceCheckout)?;
 
-        // Compute the modification time of the files that match the source input globs.
-        let glob_time = match GlobModificationTime::from_patterns(
-            &source_build_checkout.path,
-            source_info.globs.iter().map(String::as_str),
-        ) {
-            Ok(glob_time) => glob_time,
-            Err(e) => {
-                tracing::warn!(
-                    "failed to determine modification time of input files: {}. Assuming the package is out-of-date.",
-                    e
-                );
-                return Ok(CachedBuildStatus::Stale(cached_build));
-            }
-        };
+        let source_dir = source_build_checkout.path.as_std_path();
+        let timestamp = cached_build.record.package_record.timestamp;
 
-        // Determine the staleness of the package based on the timestamps of the last
-        // updated file and the package itself.
-        match glob_time {
-            GlobModificationTime::MatchesFound {
-                modified_at,
-                designated_file,
-            } => {
-                if cached_build
-                    .record
-                    .package_record
-                    .timestamp
-                    .map(|t| t < chrono::DateTime::<Utc>::from(modified_at))
-                    .unwrap_or(true)
-                {
+        // Check the files that were explicitly recorded at cache time.
+        // This detects file modifications and deletions.
+        for source_file_path in source_info
+            .input_files
+            .iter()
+            .map(|path| source_dir.join(path))
+        {
+            match source_file_path.metadata().and_then(|m| m.modified()) {
+                Ok(modified_date) => {
+                    // Check if the file was modified after the package was built.
+                    let modified_date = chrono::DateTime::<chrono::Utc>::from(modified_date);
+                    let is_stale = timestamp.map(|t| t < modified_date).unwrap_or(true);
+                    if is_stale {
+                        tracing::debug!(
+                            "package is stale, the file '{}' has been modified",
+                            source_file_path.display()
+                        );
+                        return Ok(CachedBuildStatus::Stale(cached_build));
+                    }
+                }
+                Err(err) => {
+                    // File was deleted or is no longer accessible.
                     tracing::debug!(
-                        "package is stale, the file {} is newer than the package in cache",
-                        designated_file.display()
+                        "package is stale, requested metadata for '{}' failed with: {}",
+                        source_file_path.display(),
+                        err
                     );
                     return Ok(CachedBuildStatus::Stale(cached_build));
                 }
-            }
-            GlobModificationTime::NoMatches => {
+            };
+        }
+
+        // Check if any new files match the globs that weren't recorded at cache time.
+        // This detects file additions.
+        let glob_set = GlobSet::create(source_info.input_globs.iter().map(String::as_str));
+        let matching_files = glob_set
+            .collect_matching(source_dir)
+            .map_err(SourceBuildCacheStatusError::GlobSet)
+            .map_err(CommandDispatcherError::Failed)?;
+
+        for matching_file in matching_files {
+            let path = matching_file.into_path();
+            let relative_path = path
+                .strip_prefix(source_dir)
+                .ok()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| path.clone());
+
+            if !source_info.input_files.contains(&relative_path) {
+                tracing::debug!(
+                    "package is stale, a new matching file at '{}' has been detected",
+                    path.display()
+                );
                 return Ok(CachedBuildStatus::Stale(cached_build));
             }
         }
+
         Ok(CachedBuildStatus::UpToDate(cached_build))
     }
 }
@@ -430,6 +456,9 @@ pub enum SourceBuildCacheStatusError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Discovery(pixi_build_discovery::DiscoveryError),
+
+    #[error(transparent)]
+    GlobSet(#[from] pixi_glob::GlobSetError),
 
     #[error("a cycle was detected in the build/host dependencies of the package")]
     Cycle,

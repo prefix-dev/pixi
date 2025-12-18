@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, HashMap},
     path::Path,
     str::FromStr,
 };
@@ -7,16 +7,14 @@ use std::{
 use pixi_git::{sha::GitSha, url::RepositoryUrl};
 use pixi_spec::{GitReference, SourceLocationSpec};
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
-use rattler_digest::{Sha256, Sha256Hash};
 use rattler_lock::{CondaSourceData, GitShallowSpec, PackageBuildSource};
-use serde::{Deserialize, Serialize};
 use typed_path::{Utf8TypedPathBuf, Utf8UnixPathBuf};
 use url::Url;
 
 use crate::{ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec, VariantValue};
 
 /// A record of a conda package that still requires building.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SourceRecord {
     /// Information about the conda package. This is metadata of the package
     /// after it has been build.
@@ -33,32 +31,9 @@ pub struct SourceRecord {
     /// The variants that uniquely identify the way this package was built.
     pub variants: Option<BTreeMap<String, VariantValue>>,
 
-    /// The hash of the input that was used to build the metadata of the
-    /// package. This can be used to verify that the metadata is still valid.
-    ///
-    /// If this is `None`, the input hash was not computed or is not relevant
-    /// for this record. The record can always be considered up to date.
-    pub input_hash: Option<InputHash>,
-
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
     pub sources: HashMap<String, SourceLocationSpec>,
-}
-
-/// Defines the hash of the input files that were used to build the metadata of
-/// the record. If reevaluating and hashing the globs results in a different
-/// hash, the metadata is considered invalid.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InputHash {
-    /// The hash of the input files that matched the globs.
-    #[serde(
-        serialize_with = "rattler_digest::serde::serialize::<_, Sha256>",
-        deserialize_with = "rattler_digest::serde::deserialize::<_, Sha256>"
-    )]
-    pub hash: Sha256Hash,
-
-    /// The globs that were used to compute the hash.
-    pub globs: BTreeSet<String>,
 }
 
 impl SourceRecord {
@@ -107,10 +82,8 @@ impl SourceRecord {
             package_record: self.package_record,
             location: self.manifest_source.clone().into(),
             package_build_source,
-            input: self.input_hash.map(|i| rattler_lock::InputHash {
-                hash: i.hash,
-                globs: Vec::from_iter(i.globs),
-            }),
+            // Don't write input_hash to lock file
+            input: None,
             sources: self
                 .sources
                 .into_iter()
@@ -144,8 +117,7 @@ impl SourceRecord {
                 // Check if this is a relative subdirectory (same repo checkout)
                 if let (Some(subdir), PinnedSourceSpec::Git(manifest_git)) =
                     (&subdir, &manifest_source)
-                {
-                    if same_git_checkout_url_commit(manifest_git, &url, &rev) {
+                    && same_git_checkout_url_commit(manifest_git, &url, &rev) {
                         // The subdirectory is relative to the manifest, use from_relative_to
                         let relative_path = Utf8UnixPathBuf::from(subdir.as_str());
                         return PinnedSourceSpec::from_relative_to(
@@ -155,7 +127,6 @@ impl SourceRecord {
                         )
                         .expect("from_relative_to should succeed for same-repo git checkouts, this is a bug");
                     }
-                }
 
                 // Different repository
                 let reference = git_reference_from_shallow(spec, &rev);
@@ -200,10 +171,6 @@ impl SourceRecord {
         Ok(Self {
             package_record: data.package_record,
             manifest_source,
-            input_hash: data.input.map(|hash| InputHash {
-                hash: hash.hash,
-                globs: BTreeSet::from_iter(hash.globs),
-            }),
             build_source,
             sources: data
                 .sources
@@ -217,6 +184,27 @@ impl SourceRecord {
                     .collect()
             }),
         })
+    }
+
+    /// Returns true if this source record refers to the same output as the other source record.
+    /// This is determined by comparing the package name, and either the variants (if both records have them)
+    /// or the build, version and subdir (if variants are not present).
+    pub fn refers_to_same_output(&self, other: &SourceRecord) -> bool {
+        if self.package_record.name != other.package_record.name {
+            return false;
+        }
+
+        match (&self.variants, &other.variants) {
+            (Some(variants), Some(other_variants)) => {
+                // If both records have variants, we use that to identify them.
+                variants == other_variants
+            }
+            _ => {
+                self.package_record.build == other.package_record.build
+                    && self.package_record.version == other.package_record.version
+                    && self.package_record.subdir == other.package_record.subdir
+            }
+        }
     }
 }
 
@@ -323,7 +311,6 @@ mod tests {
             package_record,
             manifest_source: manifest_source.clone(),
             build_source: Some(build_source),
-            input_hash: None,
             sources: Default::default(),
             variants: None,
         };
@@ -403,7 +390,6 @@ mod tests {
             package_record,
             manifest_source: manifest_source.clone(),
             build_source: Some(build_source),
-            input_hash: None,
             sources: Default::default(),
             variants: None,
         };
@@ -489,7 +475,6 @@ mod tests {
             package_record,
             manifest_source: manifest_source.clone(),
             build_source: Some(build_source),
-            input_hash: None,
             sources: Default::default(),
             variants: None,
         };

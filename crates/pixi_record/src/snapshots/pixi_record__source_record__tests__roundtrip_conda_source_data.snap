@@ -30,10 +30,6 @@ packages:
   sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   md5: d41d8cd98f00b204e9800998ecf8427e
   channel: null
-  input:
-    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    globs:
-    - '**/*.c'
   package_build_source:
     path: ../src
 - conda: git+https://github.com/example/repo.git?tag=v1.0.0#abc123def456abc123def456abc123def456abc1
@@ -45,10 +41,6 @@ packages:
   sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   md5: d41d8cd98f00b204e9800998ecf8427e
   channel: null
-  input:
-    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    globs:
-    - src/**/*.rs
   package_build_source:
     path: build/subdir
 - conda: git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
@@ -60,11 +52,6 @@ packages:
   sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   md5: d41d8cd98f00b204e9800998ecf8427e
   channel: null
-  input:
-    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    globs:
-    - '**/*.py'
-    - '**/*.txt'
   package_build_source:
     path: ../non-nested
 - conda: /workspace/absolute-recipe
@@ -75,10 +62,6 @@ packages:
   noarch: false
   sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   md5: d41d8cd98f00b204e9800998ecf8427e
-  input:
-    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    globs:
-    - '**/*.sh'
   package_build_source:
     path: ../src
 - conda: recipes/my-package
@@ -89,10 +72,6 @@ packages:
   noarch: false
   sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   md5: d41d8cd98f00b204e9800998ecf8427e
-  input:
-    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    globs:
-    - '**/*.cpp'
   package_build_source:
     path: ../../src/lib
 - conda: recipes/no-build
@@ -103,10 +82,6 @@ packages:
   noarch: false
   sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   md5: d41d8cd98f00b204e9800998ecf8427e
-  input:
-    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    globs:
-    - '**/*.md'
 - conda: recipes/my-package
   name: path-sibling-test
   version: 2.0.0
@@ -115,9 +90,5 @@ packages:
   noarch: false
   sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   md5: d41d8cd98f00b204e9800998ecf8427e
-  input:
-    hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    globs:
-    - '**/*.rs'
   package_build_source:
     path: ../../other-package/src

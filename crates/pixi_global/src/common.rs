@@ -924,31 +924,28 @@ pub(crate) fn shortcuts_sync_status(
 
 pub fn contains_menuinst_document(prefix_record: &PrefixRecord, prefix_root: &Path) -> bool {
     for file in &prefix_record.files {
-        if file.extension().is_some_and(|ext| ext == "json") {
-            if let Some(parent) = file.parent() {
-                if parent.file_name().is_some_and(|f| f == "Menu") {
-                    if let Ok(content) = fs::read_to_string(prefix_root.join(file)) {
-                        if let Err(err) = serde_json::from_str::<
-                            rattler_menuinst::schema::MenuInstSchema,
-                        >(&content)
-                        {
-                            tracing::warn!(
-                                "{} contains shortcuts, but they couldn't be parsed: {}",
-                                console::style(
-                                    prefix_record
-                                        .repodata_record
-                                        .package_record
-                                        .name
-                                        .as_normalized()
-                                )
-                                .green(),
-                                err
-                            )
-                        } else {
-                            return true;
-                        }
-                    }
-                }
+        if file.extension().is_some_and(|ext| ext == "json")
+            && let Some(parent) = file.parent()
+            && parent.file_name().is_some_and(|f| f == "Menu")
+            && let Ok(content) = fs::read_to_string(prefix_root.join(file))
+        {
+            if let Err(err) =
+                serde_json::from_str::<rattler_menuinst::schema::MenuInstSchema>(&content)
+            {
+                tracing::warn!(
+                    "{} contains shortcuts, but they couldn't be parsed: {}",
+                    console::style(
+                        prefix_record
+                            .repodata_record
+                            .package_record
+                            .name
+                            .as_normalized()
+                    )
+                    .green(),
+                    err
+                )
+            } else {
+                return true;
             }
         }
     }

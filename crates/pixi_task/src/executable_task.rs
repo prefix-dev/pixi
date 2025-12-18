@@ -131,7 +131,7 @@ impl<'p> ExecutableTask<'p> {
     /// Creates a properly populated `TaskRenderContext` for this task.
     ///
     /// This includes the platform, environment name, manifest path, and arguments.
-    pub fn render_context(&self) -> pixi_manifest::task::TaskRenderContext {
+    pub fn render_context(&self) -> pixi_manifest::task::TaskRenderContext<'_> {
         pixi_manifest::task::TaskRenderContext {
             platform: self.run_environment.best_platform(),
             environment_name: self.run_environment.name(),
@@ -227,11 +227,11 @@ impl<'p> ExecutableTask<'p> {
             .map(|c| c.into_owned());
 
         if let Some(mut cmd) = original_cmd {
-            if let ArgValues::FreeFormArgs(additional_args) = &self.args {
-                if !additional_args.is_empty() {
-                    cmd.push(' ');
-                    cmd.push_str(&additional_args.join(" "));
-                }
+            if let ArgValues::FreeFormArgs(additional_args) = &self.args
+                && !additional_args.is_empty()
+            {
+                cmd.push(' ');
+                cmd.push_str(&additional_args.join(" "));
             }
             Ok(Some(cmd))
         } else {
@@ -334,27 +334,29 @@ impl<'p> ExecutableTask<'p> {
         };
 
         // Outputs warning
-        if rendered_outputs.is_some() && post_hash.outputs.is_none() {
-            if let Some(globs) = rendered_outputs.as_ref() {
-                tracing::warn!(
-                    "No files matched the output globs for task '{}'",
-                    self.name().unwrap_or_default()
-                );
-                let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
-                tracing::warn!("Output globs: {}", formatted);
-            }
+        if rendered_outputs.is_some()
+            && post_hash.outputs.is_none()
+            && let Some(globs) = rendered_outputs.as_ref()
+        {
+            tracing::warn!(
+                "No files matched the output globs for task '{}'",
+                self.name().unwrap_or_default()
+            );
+            let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
+            tracing::warn!("Output globs: {}", formatted);
         }
 
         // Inputs warning
-        if rendered_inputs.is_some() && post_hash.inputs.is_none() {
-            if let Some(globs) = rendered_inputs.as_ref() {
-                tracing::warn!(
-                    "No files matched the input globs for task '{}'",
-                    self.name().unwrap_or_default()
-                );
-                let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
-                tracing::warn!("Input globs: {}", formatted);
-            }
+        if rendered_inputs.is_some()
+            && post_hash.inputs.is_none()
+            && let Some(globs) = rendered_inputs.as_ref()
+        {
+            tracing::warn!(
+                "No files matched the input globs for task '{}'",
+                self.name().unwrap_or_default()
+            );
+            let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
+            tracing::warn!("Input globs: {}", formatted);
         }
     }
 
@@ -454,14 +456,14 @@ impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
                         .apply_to(command.as_deref().unwrap_or("<alias>"))
                         .bold()
                 )?;
-                if let ArgValues::FreeFormArgs(additional_args) = &self.task.args {
-                    if !additional_args.is_empty() {
-                        write!(
-                            f,
-                            " {}",
-                            consts::TASK_STYLE.apply_to(additional_args.iter().format(" "))
-                        )?;
-                    }
+                if let ArgValues::FreeFormArgs(additional_args) = &self.task.args
+                    && !additional_args.is_empty()
+                {
+                    write!(
+                        f,
+                        " {}",
+                        consts::TASK_STYLE.apply_to(additional_args.iter().format(" "))
+                    )?;
                 }
                 Ok(())
             }

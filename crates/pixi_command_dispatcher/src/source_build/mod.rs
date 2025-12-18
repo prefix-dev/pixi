@@ -9,6 +9,7 @@ use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
+use pixi_path::AbsPath;
 use pixi_record::{PinnedSourceSpec, PixiRecord, VariantValue};
 use pixi_spec::{SourceAnchor, SourceLocationSpec};
 use rattler_conda_types::{
@@ -127,7 +128,7 @@ impl SourceBuildSpec {
         name = "source-build",
         fields(
             manifest_source = %self.source.manifest_source(),
-            build_source = ?self.source.build_source(),
+            build_source = self.source.build_source().as_ref().map(tracing::field::display),
             package = %self.package,
         )
     )]
@@ -236,7 +237,7 @@ impl SourceBuildSpec {
         // path).
         let discovered_backend = command_dispatcher
             .discover_backend(
-                &manifest_source_checkout.path,
+                manifest_source_checkout.path.as_std_path(),
                 self.channel_config.clone(),
                 self.enabled_protocols.clone(),
             )
@@ -254,10 +255,9 @@ impl SourceBuildSpec {
         if let (Some(PinnedSourceSpec::Git(pinned_git)), Some(SourceLocationSpec::Git(git_spec))) = (
             build_source.as_mut(),
             discovered_backend.init_params.build_source.clone(),
-        ) {
-            if pinned_git.source.subdirectory.is_none() {
-                pinned_git.source.subdirectory = git_spec.subdirectory.clone();
-            }
+        ) && pinned_git.source.subdirectory.is_none()
+        {
+            pinned_git.source.subdirectory = git_spec.subdirectory.clone();
         }
 
         // Here we have to get path in which we will run build. We have those options in order of decreasing priority:
@@ -292,11 +292,20 @@ impl SourceBuildSpec {
                     .resolve(SourceAnchor::from(SourceLocationSpec::from(
                         manifest_source.clone(),
                     ))),
-                build_source_dir: build_source_checkout.path.clone(),
+                build_source_dir: build_source_checkout
+                    .path
+                    .as_dir_or_file_parent()
+                    .to_path_buf(),
                 channel_config: self.channel_config.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
-                workspace_root: discovered_backend.init_params.workspace_root.clone(),
-                manifest_path: discovered_backend.init_params.manifest_path.clone(),
+                workspace_root: AbsPath::new(&discovered_backend.init_params.workspace_root)
+                    .expect("workspace root is not absolute")
+                    .assume_dir()
+                    .to_path_buf(),
+                manifest_path: AbsPath::new(&discovered_backend.init_params.manifest_path)
+                    .expect("manifest path is not absolute")
+                    .assume_file()
+                    .to_path_buf(),
                 project_model: discovered_backend.init_params.project_model.clone(),
                 configuration: discovered_backend.init_params.configuration.clone(),
                 target_configuration: discovered_backend.init_params.target_configuration.clone(),
@@ -307,17 +316,21 @@ impl SourceBuildSpec {
         // Determine the working directory for the build.
         let work_directory = match std::mem::take(&mut self.work_directory) {
             Some(work_directory) => work_directory,
-            None => command_dispatcher.cache_dirs().working_dirs().join(
-                WorkDirKey {
-                    source: SourceRecordOrCheckout::Record {
-                        pinned: manifest_source.clone(),
-                        package_name: self.package.name.clone(),
-                    },
-                    host_platform: self.build_environment.host_platform,
-                    build_backend: backend.identifier().to_string(),
-                }
-                .key(),
-            ),
+            None => command_dispatcher
+                .cache_dirs()
+                .working_dirs()
+                .join(
+                    WorkDirKey {
+                        source: SourceRecordOrCheckout::Record {
+                            pinned: manifest_source.clone(),
+                            package_name: self.package.name.clone(),
+                        },
+                        host_platform: self.build_environment.host_platform,
+                        build_backend: backend.identifier().to_string(),
+                    }
+                    .key(),
+                )
+                .into_std_path_buf(),
         };
         tracing::debug!(
             source = %manifest_source,
@@ -327,21 +340,27 @@ impl SourceBuildSpec {
         );
 
         // Clean the working directory if requested.
-        if self.clean {
-            if let Err(err) = fs_err::remove_dir_all(&work_directory) {
-                return Err(CommandDispatcherError::Failed(
-                    SourceBuildError::CleanWorkingDirectory(work_directory, err),
-                ));
-            }
+        if self.clean
+            && let Err(err) = fs_err::remove_dir_all(&work_directory)
+        {
+            return Err(CommandDispatcherError::Failed(
+                SourceBuildError::CleanWorkingDirectory(work_directory, err),
+            ));
         }
 
         // Build the package using the v1 build method.
         let source_for_logging = manifest_source.clone();
+        let source_dir = build_source_checkout
+            .path
+            .as_dir_or_file_parent()
+            .as_std_path()
+            .to_path_buf();
         let mut built_source = self
             .build_v1(
                 command_dispatcher,
                 backend,
                 work_directory,
+                source_dir,
                 package_build_input_hash,
                 reporter,
                 log_sink,
@@ -499,11 +518,13 @@ impl SourceBuildSpec {
         self.build_profile == BuildProfile::Development && self.source.source_code().is_mutable()
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn build_v1(
         self,
         command_dispatcher: CommandDispatcher,
         backend: Backend,
         work_directory: PathBuf,
+        source_dir: PathBuf,
         package_build_input_hash: PackageBuildInputHash,
         reporter: Option<Arc<dyn RunExportsReporter>>,
         mut log_sink: UnboundedSender<String>,
@@ -614,7 +635,7 @@ impl SourceBuildSpec {
                 reporter.clone(),
             )
             .await
-            .map_err(SourceBuildError::from)
+            .map_err(|err| SourceBuildError::RunExportsExtraction(String::from("build"), err))
             .map_err(CommandDispatcherError::Failed)?;
 
         // Solve the host environment for the output.
@@ -646,7 +667,7 @@ impl SourceBuildSpec {
                 reporter,
             )
             .await
-            .map_err(SourceBuildError::from)
+            .map_err(|err| SourceBuildError::RunExportsExtraction(String::from("host"), err))
             .map_err(CommandDispatcherError::Failed)?;
 
         // Install the build environment
@@ -761,7 +782,7 @@ impl SourceBuildSpec {
                 }),
                 backend,
                 package: self.package,
-                source: manifest_source,
+                source_dir,
                 work_directory,
                 channels: self.channels,
                 channel_config: self.channel_config,
@@ -772,7 +793,8 @@ impl SourceBuildSpec {
         Ok(BuiltPackage {
             output_file: built_source.output_file,
             metadata: CachedBuildSourceInfo {
-                globs: built_source.input_globs,
+                input_globs: built_source.input_globs,
+                input_files: built_source.input_files,
                 build: BuildHostEnvironment {
                     packages: build_records,
                 },
@@ -807,6 +829,7 @@ impl SourceBuildSpec {
                     .into_specs()
                     .map(|(name, spec)| (name, spec.value))
                     .collect(),
+                dev_sources: Default::default(),
                 installed: vec![], // TODO: To lock build environments, fill this.
                 build_environment,
                 channels: self.channels.clone(),
@@ -885,8 +908,8 @@ pub enum SourceBuildError {
     #[error(transparent)]
     BuildCache(#[from] BuildCacheError),
 
-    #[error("failed to amend run exports: {0}")]
-    RunExportsExtraction(#[from] RunExportExtractorError),
+    #[error("failed to amend run exports for {0} environment")]
+    RunExportsExtraction(String, #[source] RunExportExtractorError),
 
     #[error(transparent)]
     CreateWorkDirectory(std::io::Error),
@@ -964,6 +987,9 @@ pub enum SourceBuildError {
 
     #[error("the package does not contain a valid subdir")]
     ConvertSubdir(#[source] ConvertSubdirError),
+
+    #[error(transparent)]
+    GlobSet(#[from] pixi_glob::GlobSetError),
 }
 
 impl From<DependenciesError> for SourceBuildError {
@@ -984,6 +1010,7 @@ impl From<SourceBuildCacheStatusError> for SourceBuildError {
             SourceBuildCacheStatusError::SourceCheckout(err) => {
                 SourceBuildError::SourceCheckout(err)
             }
+            SourceBuildCacheStatusError::GlobSet(err) => SourceBuildError::GlobSet(err),
             SourceBuildCacheStatusError::Cycle => {
                 unreachable!("a build time cycle should never happen")
             }

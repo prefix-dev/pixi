@@ -9,6 +9,7 @@
 //! binary packages.
 
 mod detailed;
+mod dev_source;
 mod git;
 mod path;
 mod source_anchor;
@@ -18,6 +19,7 @@ mod url;
 use std::{fmt::Display, path::PathBuf, str::FromStr};
 
 pub use detailed::DetailedSpec;
+pub use dev_source::DevSourceSpec;
 pub use git::{GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
 pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
@@ -349,6 +351,18 @@ impl PixiSpec {
         ::serde::Serialize::serialize(self, toml_edit::ser::ValueSerializer::new())
             .expect("conversion to toml cannot fail")
     }
+
+    /// Returns a [`NamelessMatchSpec`] that represents this spec disregarding
+    /// any source specification.
+    pub fn try_into_nameless_match_spec_ref(
+        self,
+        channel_config: &ChannelConfig,
+    ) -> Result<NamelessMatchSpec, SpecConversionError> {
+        match self.into_source_or_binary() {
+            Either::Left(_source) => Ok(NamelessMatchSpec::default()),
+            Either::Right(binary) => binary.try_into_nameless_match_spec(channel_config),
+        }
+    }
 }
 
 /// A specification for a source package.
@@ -403,7 +417,7 @@ impl From<SourceLocationSpec> for SourceSpec {
 }
 
 /// A specification for a source location.
-#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 pub enum SourceLocationSpec {
     /// The spec is represented as an archive that can be downloaded from the

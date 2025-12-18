@@ -143,7 +143,15 @@ pub trait LockFileExt {
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<LockedPackageRef>;
+    ) -> Option<LockedPackageRef<'_>>;
+
+    /// Check if a PyPI package is marked as editable in the lock file
+    fn is_pypi_package_editable(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<bool>;
 }
 
 impl LockFileExt for LockFile {
@@ -226,7 +234,7 @@ impl LockFileExt for LockFile {
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<LockedPackageRef> {
+    ) -> Option<LockedPackageRef<'_>> {
         self.environment(environment).and_then(|env| {
             env.packages(platform)
                 .and_then(|mut packages| packages.find(|p| p.name() == package))
@@ -245,6 +253,21 @@ impl LockFileExt for LockFile {
                     .and_then(|mut packages| packages.find(|p| p.name() == package))
             })
             .map(|p| p.location().clone())
+    }
+
+    fn is_pypi_package_editable(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<bool> {
+        self.environment(environment)
+            .and_then(|env| {
+                env.pypi_packages(platform).and_then(|mut packages| {
+                    packages.find(|(data, _)| data.name.as_ref() == package)
+                })
+            })
+            .map(|(data, _)| data.editable)
     }
 }
 
@@ -378,6 +401,7 @@ impl PixiControl {
                 format: None,
                 pyproject_toml: false,
                 scm: Some(GitAttributes::Github),
+                conda_pypi_map: None,
             },
         }
     }
@@ -396,6 +420,7 @@ impl PixiControl {
                 format: None,
                 pyproject_toml: false,
                 scm: Some(GitAttributes::Github),
+                conda_pypi_map: None,
             },
         }
     }
@@ -472,11 +497,11 @@ impl PixiControl {
     /// Add a new channel to the project.
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
+            workspace_config: WorkspaceConfig {
+                manifest_path: Some(self.manifest_path()),
+                ..Default::default()
+            },
             args: workspace::channel::AddRemoveArgs {
-                workspace_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
-                },
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
@@ -494,12 +519,11 @@ impl PixiControl {
     /// Remove a channel from the project.
     pub fn project_channel_remove(&self) -> ProjectChannelRemoveBuilder {
         ProjectChannelRemoveBuilder {
-            manifest_path: Some(self.manifest_path()),
+            workspace_config: WorkspaceConfig {
+                manifest_path: Some(self.manifest_path()),
+                ..Default::default()
+            },
             args: workspace::channel::AddRemoveArgs {
-                workspace_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
-                },
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
@@ -716,7 +740,7 @@ impl PixiControl {
         }
     }
 
-    pub fn tasks(&self) -> TasksControl {
+    pub fn tasks(&self) -> TasksControl<'_> {
         TasksControl { pixi: self }
     }
 }

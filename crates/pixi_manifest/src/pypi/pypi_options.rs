@@ -491,11 +491,17 @@ mod tests {
             dependency_overrides: Some(IndexMap::from_iter([
                 (
                     "pkg1".parse().unwrap(),
-                    PixiPypiSpec::RawVersion("==1.0.0".parse().unwrap()),
+                    PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Registry {
+                        version: "==1.0.0".parse().unwrap(),
+                        index: None,
+                    }),
                 ),
                 (
                     "pkg2".parse().unwrap(),
-                    PixiPypiSpec::RawVersion("==2.0.0".parse().unwrap()),
+                    PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Registry {
+                        version: "==2.0.0".parse().unwrap(),
+                        index: None,
+                    }),
                 ),
             ])),
             no_binary: Default::default(),
@@ -516,11 +522,17 @@ mod tests {
             dependency_overrides: Some(IndexMap::from_iter([
                 (
                     "pkg1".parse().unwrap(),
-                    PixiPypiSpec::RawVersion("==1.2.0".parse().unwrap()),
+                    PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Registry {
+                        version: "==1.2.0".parse().unwrap(),
+                        index: None,
+                    }),
                 ),
                 (
                     "pkg3".parse().unwrap(),
-                    PixiPypiSpec::RawVersion("==3.2.0".parse().unwrap()),
+                    PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Registry {
+                        version: "==3.2.0".parse().unwrap(),
+                        index: None,
+                    }),
                 ),
             ])),
 

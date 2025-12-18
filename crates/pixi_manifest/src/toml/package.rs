@@ -353,15 +353,14 @@ impl TomlPackage {
             value: license,
             span,
         })) = &self.license
+            && let Err(e) = spdx::Expression::parse(license)
         {
-            if let Err(e) = spdx::Expression::parse(license) {
-                return Err(
-                    GenericError::new("'license' is not a valid SPDX expression")
-                        .with_span((*span).into())
-                        .with_span_label(e.to_string())
-                        .into(),
-                );
-            }
+            return Err(
+                GenericError::new("'license' is not a valid SPDX expression")
+                    .with_span((*span).into())
+                    .with_span_label(e.to_string())
+                    .into(),
+            );
         }
 
         // Check file existence for resolved paths with 3-tier hierarchy
