@@ -1647,6 +1647,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../build/dev/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dev Packages
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3340,6 +3368,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-dev-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The dev table
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-package-section" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4192,6 +4231,17 @@
     <span class="md-ellipsis">
       
         Preview features
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-dev-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The dev table
       
     </span>
   </a>
@@ -5171,13 +5221,20 @@ As shown in the example above, in the simplest of cases, it is possible to defin
 </span><span id="__span-61-2"><a id="__codelineno-61-2" name="__codelineno-61-2" href="#__codelineno-61-2"></a><span class="n">preview</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <p>Preview features in the documentation will be marked as such on the relevant pages.</p>
+<h2 id="the-dev-table">The <code>dev</code> table<a class="headerlink" href="#the-dev-table" title="Permanent link">#</a></h2>
+<p>The <code>dev</code> table allows you to depend on the development dependencies of a source package.</p>
+<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-62-1"><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a><span class="k">[dev]</span>
+</span><span id="__span-62-2"><a id="__codelineno-62-2" name="__codelineno-62-2" href="#__codelineno-62-2"></a><span class="n">my-package</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;src/my-package&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+This will install the <code>build-dependencies</code>, <code>host-dependencies</code> and <code>run-dependencies</code> defined in the package located at <code>src/my-package</code>.
+More information can be found in the <a href="../../build/dev/">Dev packages</a> documentation.</p>
 <h2 id="the-package-section">The <code>package</code> section<a class="headerlink" href="#the-package-section" title="Permanent link">#</a></h2>
 <div class="admonition warning">
 <p class="admonition-title">Important note</p>
 <p><code>pixi-build</code> is a <a href="#preview-features">preview feature</a>, and will change until it is stabilized.
 Please keep that in mind when you use it for your workspaces.
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-62-1"><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a><span class="k">[workspace]</span>
-</span><span id="__span-62-2"><a id="__codelineno-62-2" name="__codelineno-62-2" href="#__codelineno-62-2"></a><span class="n">preview</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-63-1"><a id="__codelineno-63-1" name="__codelineno-63-1" href="#__codelineno-63-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-63-2"><a id="__codelineno-63-2" name="__codelineno-63-2" href="#__codelineno-63-2"></a><span class="n">preview</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span>
 </span></code></pre></div></p>
 </div>
 <p>The package section can be added
@@ -5206,27 +5263,27 @@ The package section is defined using the following fields:</p>
 <li><code>repository</code>: The repository link of the package.</li>
 <li><code>documentation</code>: The documentation link of the package.</li>
 </ul>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-63-1"><a id="__codelineno-63-1" name="__codelineno-63-1" href="#__codelineno-63-1"></a><span class="k">[package]</span>
-</span><span id="__span-63-2"><a id="__codelineno-63-2" name="__codelineno-63-2" href="#__codelineno-63-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;package&quot;</span>
-</span><span id="__span-63-3"><a id="__codelineno-63-3" name="__codelineno-63-3" href="#__codelineno-63-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
-</span><span id="__span-63-4"><a id="__codelineno-63-4" name="__codelineno-63-4" href="#__codelineno-63-4"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Author Name &lt;author.name@email.org&gt;&quot;</span><span class="p">]</span>
-</span><span id="__span-63-5"><a id="__codelineno-63-5" name="__codelineno-63-5" href="#__codelineno-63-5"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;A package description&quot;</span>
-</span><span id="__span-63-6"><a id="__codelineno-63-6" name="__codelineno-63-6" href="#__codelineno-63-6"></a><span class="n">documentation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://docs.example.com&quot;</span>
-</span><span id="__span-63-7"><a id="__codelineno-63-7" name="__codelineno-63-7" href="#__codelineno-63-7"></a><span class="n">homepage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://example.com&quot;</span>
-</span><span id="__span-63-8"><a id="__codelineno-63-8" name="__codelineno-63-8" href="#__codelineno-63-8"></a><span class="n">license</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MIT&quot;</span>
-</span><span id="__span-63-9"><a id="__codelineno-63-9" name="__codelineno-63-9" href="#__codelineno-63-9"></a><span class="n">license-file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;LICENSE&quot;</span>
-</span><span id="__span-63-10"><a id="__codelineno-63-10" name="__codelineno-63-10" href="#__codelineno-63-10"></a><span class="n">readme</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;README.md&quot;</span>
-</span><span id="__span-63-11"><a id="__codelineno-63-11" name="__codelineno-63-11" href="#__codelineno-63-11"></a><span class="n">repository</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/user/repo&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-64-1"><a id="__codelineno-64-1" name="__codelineno-64-1" href="#__codelineno-64-1"></a><span class="k">[package]</span>
+</span><span id="__span-64-2"><a id="__codelineno-64-2" name="__codelineno-64-2" href="#__codelineno-64-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;package&quot;</span>
+</span><span id="__span-64-3"><a id="__codelineno-64-3" name="__codelineno-64-3" href="#__codelineno-64-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
+</span><span id="__span-64-4"><a id="__codelineno-64-4" name="__codelineno-64-4" href="#__codelineno-64-4"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Author Name &lt;author.name@email.org&gt;&quot;</span><span class="p">]</span>
+</span><span id="__span-64-5"><a id="__codelineno-64-5" name="__codelineno-64-5" href="#__codelineno-64-5"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;A package description&quot;</span>
+</span><span id="__span-64-6"><a id="__codelineno-64-6" name="__codelineno-64-6" href="#__codelineno-64-6"></a><span class="n">documentation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://docs.example.com&quot;</span>
+</span><span id="__span-64-7"><a id="__codelineno-64-7" name="__codelineno-64-7" href="#__codelineno-64-7"></a><span class="n">homepage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://example.com&quot;</span>
+</span><span id="__span-64-8"><a id="__codelineno-64-8" name="__codelineno-64-8" href="#__codelineno-64-8"></a><span class="n">license</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MIT&quot;</span>
+</span><span id="__span-64-9"><a id="__codelineno-64-9" name="__codelineno-64-9" href="#__codelineno-64-9"></a><span class="n">license-file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;LICENSE&quot;</span>
+</span><span id="__span-64-10"><a id="__codelineno-64-10" name="__codelineno-64-10" href="#__codelineno-64-10"></a><span class="n">readme</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;README.md&quot;</span>
+</span><span id="__span-64-11"><a id="__codelineno-64-11" name="__codelineno-64-11" href="#__codelineno-64-11"></a><span class="n">repository</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/user/repo&quot;</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Workspace inheritance</p>
 <p>Most extra fields can be inherited from the workspace manifest.
 This means that you can define the <code>description</code>, <code>authors</code>, <code>license</code> in the workspace manifest, and they will be inherited by the package manifest.
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-64-1"><a id="__codelineno-64-1" name="__codelineno-64-1" href="#__codelineno-64-1"></a><span class="k">[workspace]</span>
-</span><span id="__span-64-2"><a id="__codelineno-64-2" name="__codelineno-64-2" href="#__codelineno-64-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my-workspace&quot;</span>
-</span><span id="__span-64-3"><a id="__codelineno-64-3" name="__codelineno-64-3" href="#__codelineno-64-3"></a>
-</span><span id="__span-64-4"><a id="__codelineno-64-4" name="__codelineno-64-4" href="#__codelineno-64-4"></a><span class="k">[package]</span>
-</span><span id="__span-64-5"><a id="__codelineno-64-5" name="__codelineno-64-5" href="#__codelineno-64-5"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># Inherit the name from the workspace</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-65-1"><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-65-2"><a id="__codelineno-65-2" name="__codelineno-65-2" href="#__codelineno-65-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my-workspace&quot;</span>
+</span><span id="__span-65-3"><a id="__codelineno-65-3" name="__codelineno-65-3" href="#__codelineno-65-3"></a>
+</span><span id="__span-65-4"><a id="__codelineno-65-4" name="__codelineno-65-4" href="#__codelineno-65-4"></a><span class="k">[package]</span>
+</span><span id="__span-65-5"><a id="__codelineno-65-5" name="__codelineno-65-5" href="#__codelineno-65-5"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># Inherit the name from the workspace</span>
 </span></code></pre></div></p>
 </div>
 <h3 id="build-table"><code>build</code> table<a class="headerlink" href="#build-table" title="Permanent link">#</a></h3>
@@ -5254,28 +5311,28 @@ The build system is a table that can contain the following fields:</p>
 </ul>
 <p>More documentation on the backends can be found in the <a href="../../build/backends/">build backend documentation</a>.</p>
 <h4 id="basic-build-configuration-example">Basic build configuration example<a class="headerlink" href="#basic-build-configuration-example" title="Permanent link">#</a></h4>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-65-1"><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a><span class="k">[package.build]</span>
-</span><span id="__span-65-2"><a id="__codelineno-65-2" name="__codelineno-65-2" href="#__codelineno-65-2"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-cmake&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0.3.*&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-65-3"><a id="__codelineno-65-3" name="__codelineno-65-3" href="#__codelineno-65-3"></a><span class="c1"># not required:</span>
-</span><span id="__span-65-4"><a id="__codelineno-65-4" name="__codelineno-65-4" href="#__codelineno-65-4"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-65-5"><a id="__codelineno-65-5" name="__codelineno-65-5" href="#__codelineno-65-5"></a><span class="n">config</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">key</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;value&quot;</span><span class="w"> </span><span class="p">}</span><span class="w">                    </span><span class="c1"># Optional configuration, specific to the build backend</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-66-1"><a id="__codelineno-66-1" name="__codelineno-66-1" href="#__codelineno-66-1"></a><span class="k">[package.build]</span>
+</span><span id="__span-66-2"><a id="__codelineno-66-2" name="__codelineno-66-2" href="#__codelineno-66-2"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-cmake&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0.3.*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-66-3"><a id="__codelineno-66-3" name="__codelineno-66-3" href="#__codelineno-66-3"></a><span class="c1"># not required:</span>
+</span><span id="__span-66-4"><a id="__codelineno-66-4" name="__codelineno-66-4" href="#__codelineno-66-4"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-66-5"><a id="__codelineno-66-5" name="__codelineno-66-5" href="#__codelineno-66-5"></a><span class="n">config</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">key</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;value&quot;</span><span class="w"> </span><span class="p">}</span><span class="w">                    </span><span class="c1"># Optional configuration, specific to the build backend</span>
 </span></code></pre></div>
 <h4 id="target-specific-build-configuration-example">Target-specific build configuration example<a class="headerlink" href="#target-specific-build-configuration-example" title="Permanent link">#</a></h4>
 <p>For platform-specific build configuration, use the <code>[package.build.target.&lt;platform&gt;]</code> table:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-66-1"><a id="__codelineno-66-1" name="__codelineno-66-1" href="#__codelineno-66-1"></a><span class="k">[package.build]</span>
-</span><span id="__span-66-2"><a id="__codelineno-66-2" name="__codelineno-66-2" href="#__codelineno-66-2"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-cmake&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0.3.*&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-66-3"><a id="__codelineno-66-3" name="__codelineno-66-3" href="#__codelineno-66-3"></a>
-</span><span id="__span-66-4"><a id="__codelineno-66-4" name="__codelineno-66-4" href="#__codelineno-66-4"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-66-5"><a id="__codelineno-66-5" name="__codelineno-66-5" href="#__codelineno-66-5"></a><span class="c1"># Base configuration applied to all platforms</span>
-</span><span id="__span-66-6"><a id="__codelineno-66-6" name="__codelineno-66-6" href="#__codelineno-66-6"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-DCMAKE_BUILD_TYPE=Release&quot;</span><span class="p">]</span>
-</span><span id="__span-66-7"><a id="__codelineno-66-7" name="__codelineno-66-7" href="#__codelineno-66-7"></a>
-</span><span id="__span-66-8"><a id="__codelineno-66-8" name="__codelineno-66-8" href="#__codelineno-66-8"></a><span class="k">[package.build.target.linux-64.config]</span>
-</span><span id="__span-66-9"><a id="__codelineno-66-9" name="__codelineno-66-9" href="#__codelineno-66-9"></a><span class="c1"># Linux-specific configuration</span>
-</span><span id="__span-66-10"><a id="__codelineno-66-10" name="__codelineno-66-10" href="#__codelineno-66-10"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-DCMAKE_BUILD_TYPE=Debug&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;-DLINUX_FLAG=ON&quot;</span><span class="p">]</span>
-</span><span id="__span-66-11"><a id="__codelineno-66-11" name="__codelineno-66-11" href="#__codelineno-66-11"></a>
-</span><span id="__span-66-12"><a id="__codelineno-66-12" name="__codelineno-66-12" href="#__codelineno-66-12"></a><span class="k">[package.build.target.win-64.config]</span>
-</span><span id="__span-66-13"><a id="__codelineno-66-13" name="__codelineno-66-13" href="#__codelineno-66-13"></a><span class="c1"># Windows-specific configuration</span>
-</span><span id="__span-66-14"><a id="__codelineno-66-14" name="__codelineno-66-14" href="#__codelineno-66-14"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-DCMAKE_BUILD_TYPE=Debug&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;-DWIN_FLAG=ON&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-67-1"><a id="__codelineno-67-1" name="__codelineno-67-1" href="#__codelineno-67-1"></a><span class="k">[package.build]</span>
+</span><span id="__span-67-2"><a id="__codelineno-67-2" name="__codelineno-67-2" href="#__codelineno-67-2"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-cmake&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0.3.*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-67-3"><a id="__codelineno-67-3" name="__codelineno-67-3" href="#__codelineno-67-3"></a>
+</span><span id="__span-67-4"><a id="__codelineno-67-4" name="__codelineno-67-4" href="#__codelineno-67-4"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-67-5"><a id="__codelineno-67-5" name="__codelineno-67-5" href="#__codelineno-67-5"></a><span class="c1"># Base configuration applied to all platforms</span>
+</span><span id="__span-67-6"><a id="__codelineno-67-6" name="__codelineno-67-6" href="#__codelineno-67-6"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-DCMAKE_BUILD_TYPE=Release&quot;</span><span class="p">]</span>
+</span><span id="__span-67-7"><a id="__codelineno-67-7" name="__codelineno-67-7" href="#__codelineno-67-7"></a>
+</span><span id="__span-67-8"><a id="__codelineno-67-8" name="__codelineno-67-8" href="#__codelineno-67-8"></a><span class="k">[package.build.target.linux-64.config]</span>
+</span><span id="__span-67-9"><a id="__codelineno-67-9" name="__codelineno-67-9" href="#__codelineno-67-9"></a><span class="c1"># Linux-specific configuration</span>
+</span><span id="__span-67-10"><a id="__codelineno-67-10" name="__codelineno-67-10" href="#__codelineno-67-10"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-DCMAKE_BUILD_TYPE=Debug&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;-DLINUX_FLAG=ON&quot;</span><span class="p">]</span>
+</span><span id="__span-67-11"><a id="__codelineno-67-11" name="__codelineno-67-11" href="#__codelineno-67-11"></a>
+</span><span id="__span-67-12"><a id="__codelineno-67-12" name="__codelineno-67-12" href="#__codelineno-67-12"></a><span class="k">[package.build.target.win-64.config]</span>
+</span><span id="__span-67-13"><a id="__codelineno-67-13" name="__codelineno-67-13" href="#__codelineno-67-13"></a><span class="c1"># Windows-specific configuration</span>
+</span><span id="__span-67-14"><a id="__codelineno-67-14" name="__codelineno-67-14" href="#__codelineno-67-14"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-DCMAKE_BUILD_TYPE=Debug&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;-DWIN_FLAG=ON&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <h3 id="the-build-host-and-run-dependencies-tables">The <code>build</code> <code>host</code> and <code>run</code> dependencies tables<a class="headerlink" href="#the-build-host-and-run-dependencies-tables" title="Permanent link">#</a></h3>
 <p>The dependencies of a package are split into three tables.
@@ -5302,9 +5359,9 @@ You can do this by running <code>ssh-add</code> which will prompt you for your S
 Make sure that the <code>ssh-add</code> agent or service is running and you have a generated public/private SSH key.
 For more details on how to do this, check the <a href="https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent">Github SSH documentation</a>.</p>
 </details>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-67-1"><a id="__codelineno-67-1" name="__codelineno-67-1" href="#__codelineno-67-1"></a><span class="k">[package.build-dependencies]</span>
-</span><span id="__span-67-2"><a id="__codelineno-67-2" name="__codelineno-67-2" href="#__codelineno-67-2"></a><span class="n">cmake</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
-</span><span id="__span-67-3"><a id="__codelineno-67-3" name="__codelineno-67-3" href="#__codelineno-67-3"></a><span class="n">git</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-68-1"><a id="__codelineno-68-1" name="__codelineno-68-1" href="#__codelineno-68-1"></a><span class="k">[package.build-dependencies]</span>
+</span><span id="__span-68-2"><a id="__codelineno-68-2" name="__codelineno-68-2" href="#__codelineno-68-2"></a><span class="n">cmake</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-68-3"><a id="__codelineno-68-3" name="__codelineno-68-3" href="#__codelineno-68-3"></a><span class="n">git</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span></code></pre></div>
 <h3 id="host-dependencies"><code>host-dependencies</code><a class="headerlink" href="#host-dependencies" title="Permanent link">#</a></h3>
 <p>Host dependencies are required during build phase, but in contrast to build packages they have to be present on the host.</p>
@@ -5315,8 +5372,8 @@ For more details on how to do this, check the <a href="https://docs.github.com/e
 <li><code>python</code>, <code>r-base</code></li>
 <li><code>setuptools</code>, <code>pip</code></li>
 </ul>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-68-1"><a id="__codelineno-68-1" name="__codelineno-68-1" href="#__codelineno-68-1"></a><span class="k">[package.host-dependencies]</span>
-</span><span id="__span-68-2"><a id="__codelineno-68-2" name="__codelineno-68-2" href="#__codelineno-68-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-69-1"><a id="__codelineno-69-1" name="__codelineno-69-1" href="#__codelineno-69-1"></a><span class="k">[package.host-dependencies]</span>
+</span><span id="__span-69-2"><a id="__codelineno-69-2" name="__codelineno-69-2" href="#__codelineno-69-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span></code></pre></div>
 <h3 id="run-dependencies"><code>run-dependencies</code><a class="headerlink" href="#run-dependencies" title="Permanent link">#</a></h3>
 <p>The <code>run-dependencies</code> are the packages that will be installed in the environment when the package is run.</p>
@@ -5325,8 +5382,8 @@ For more details on how to do this, check the <a href="https://docs.github.com/e
 <li>Extra data file packages</li>
 <li>Python/R packages that are not needed during build time</li>
 </ul>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-69-1"><a id="__codelineno-69-1" name="__codelineno-69-1" href="#__codelineno-69-1"></a><span class="k">[package.run-dependencies]</span>
-</span><span id="__span-69-2"><a id="__codelineno-69-2" name="__codelineno-69-2" href="#__codelineno-69-2"></a><span class="n">rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=13.9.4,&lt;14&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-70-1"><a id="__codelineno-70-1" name="__codelineno-70-1" href="#__codelineno-70-1"></a><span class="k">[package.run-dependencies]</span>
+</span><span id="__span-70-2"><a id="__codelineno-70-2" name="__codelineno-70-2" href="#__codelineno-70-2"></a><span class="n">rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=13.9.4,&lt;14&quot;</span>
 </span></code></pre></div>
 
 

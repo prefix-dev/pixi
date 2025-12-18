@@ -1013,6 +1013,17 @@ preview = ["pixi-build"]
 
 Preview features in the documentation will be marked as such on the relevant pages.
 
+## The `dev` table
+
+The `dev` table allows you to depend on the development dependencies of a source package.
+
+```toml
+[dev]
+my-package = { path = "src/my-package" }
+```
+
+This will install the `build-dependencies`, `host-dependencies` and `run-dependencies` defined in the package located at `src/my-package`. More information can be found in the [Dev packages](../../build/dev/) documentation.
+
 ## The `package` section
 
 Important note
