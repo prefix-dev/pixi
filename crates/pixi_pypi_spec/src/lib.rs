@@ -369,7 +369,7 @@ mod tests {
             },
             vec![extra.clone()],
         );
-        assert_eq!(spec.extras(), &[extra.clone()]);
+        assert_eq!(spec.extras(), std::slice::from_ref(&extra));
 
         // Spec without extras
         let spec = PixiPypiSpec::new(PixiPypiSource::Registry {
