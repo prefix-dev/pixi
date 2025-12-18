@@ -13,15 +13,16 @@ packages:
     version: 0.0.1
     build: ""
     subdir: noarch
+    noarch: false
     depends:
-      - foobar 0.1.0 baz
+      - foobar
     # This should cause the lock-file to be invalid because `foobar` should be a source package,
     # but it is installed in the environment as a binary package.
     variants:
       target_platform: noarch
     sources:
       foobar:
-        path: "foobar"
+        path: "../foobar"
   - conda: https://conda.anaconda.org/conda-forge/win-64/foobar-0.1.0-baz.conda
     sha256: 90553586879bf328f2f9efb8d8faa958ecba822faf379f0a20c3461467b9b955
     md5: defd5d375853a2caff36a19d2d81a28e
