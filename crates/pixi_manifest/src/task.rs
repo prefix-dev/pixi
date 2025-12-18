@@ -790,7 +790,7 @@ impl Display for Task {
 
         let default_environment = self.default_environment();
         if let Some(default_environment) = default_environment {
-            write!(f, ", default_environment = {}", default_environment)?;
+            write!(f, ", default_environment = {default_environment}")?;
         }
         let env = self.env();
         if let Some(env) = env {
