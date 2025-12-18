@@ -290,7 +290,7 @@ impl<'p> TaskGraph<'p> {
         }
 
         // When no task is found, just execute the command verbatim.
-        let mut run_environment = search_envs
+        let run_environment = search_envs
             .explicit_environment
             .clone()
             .unwrap_or_else(|| project.default_environment());
