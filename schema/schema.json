@@ -2105,6 +2105,12 @@
           "type": "string",
           "pattern": "^[^\\\\]+$"
         },
+        "default_environment": {
+          "title": "default_environment",
+          "description": "A default environment to run the task",
+          "type": "string",
+          "pattern": "^[^\\\\]+$"
+        },
         "depends-on": {
           "title": "Depends-On",
           "description": "The tasks that this task depends on. Environment variables will **not** be expanded.",

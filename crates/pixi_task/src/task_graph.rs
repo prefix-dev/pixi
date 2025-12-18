@@ -218,10 +218,20 @@ impl<'p> TaskGraph<'p> {
                 Ok((task_env, task)) => {
                     // If an explicit environment was specified and the task is from the default
                     // environment use the specified environment instead.
-                    let run_env = match search_envs.explicit_environment.clone() {
+                    let mut run_env = match search_envs.explicit_environment.clone() {
                         Some(explicit_env) if task_env.is_default() => explicit_env,
                         _ => task_env,
                     };
+
+                    // If the task itself declares a `default_environment`, prefer that
+                    // environment when constructing the root node (if it exists in the
+                    // project). Do not fail if the named environment is missing; fall
+                    // back to the resolved `run_env`.
+                    if let Some(default_env_name) = task.default_environment() {
+                        if let Some(env) = project.environment(default_env_name) {
+                            run_env = env;
+                        }
+                    }
 
                     let task_name = args.remove(0);
 
@@ -280,7 +290,7 @@ impl<'p> TaskGraph<'p> {
         }
 
         // When no task is found, just execute the command verbatim.
-        let run_environment = search_envs
+        let mut run_environment = search_envs
             .explicit_environment
             .clone()
             .unwrap_or_else(|| project.default_environment());
@@ -400,9 +410,18 @@ impl<'p> TaskGraph<'p> {
                     }
                     Ok(result) => result,
                 };
+                // If the task defines a `default_environment`, prefer that environment
+                // when running the dependency. Fall back to the environment returned
+                // by `find_task` if the named environment cannot be resolved.
+                let resolved_run_env =
+                    if let Some(default_env_name) = task_dependency.default_environment() {
+                        project.environment(default_env_name).unwrap_or(task_env)
+                    } else {
+                        task_env
+                    };
 
                 // Store the dependency data for processing later
-                deps_to_process.push((dependency, task_env, task_dependency));
+                deps_to_process.push((dependency, resolved_run_env, task_dependency));
             }
 
             // Process all dependencies after collecting them
@@ -643,7 +662,14 @@ mod test {
             .filter_map(|task| {
                 let context = pixi_manifest::task::TaskRenderContext {
                     platform: task.run_environment.best_platform(),
-                    environment_name: task.run_environment.name(),
+                    environment_name: {
+                        if task.task.default_environment.is_some() {
+                            task.task.default_environment.as_ref();
+                            println!("{task.task.default_environment.unwrap()}");
+                        } else {
+                            task.run_environment.name()
+                        };
+                    },
                     manifest_path: Some(&project.workspace.provenance.path),
                     args: task.args.as_ref(),
                 };

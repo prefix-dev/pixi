@@ -91,6 +91,10 @@ pub struct AddArgs {
     #[arg(long, value_parser = parse_key_val)]
     pub env: Vec<(String, String)>,
 
+    // Add a default environment for the task.
+    #[arg(long)]
+    pub default_environment: Option<EnvironmentName>,
+
     /// A description of the task to be added.
     #[arg(long)]
     pub description: Option<String>,
@@ -162,7 +166,7 @@ impl From<AddArgs> for Task {
         let depends_on = value.depends_on.unwrap_or_default();
         // description or none
         let description = value.description;
-
+        let default_environment = value.default_environment;
         // Convert the arguments into a single string representation
         let cmd_args = value
             .commands
@@ -189,6 +193,7 @@ impl From<AddArgs> for Task {
         } else if depends_on.is_empty()
             && value.cwd.is_none()
             && value.env.is_empty()
+            && default_environment.is_none()
             && description.is_none()
             && value.args.is_none()
         {
@@ -196,6 +201,7 @@ impl From<AddArgs> for Task {
         } else {
             let clean_env = value.clean_env;
             let cwd = value.cwd;
+            let default_environment = default_environment;
             let env = if value.env.is_empty() {
                 None
             } else {
@@ -214,6 +220,7 @@ impl From<AddArgs> for Task {
                 outputs: None,
                 cwd,
                 env,
+                default_environment,
                 description,
                 clean_env,
                 args,
@@ -495,6 +502,7 @@ pub struct TaskInfo {
     args: Option<Vec<TaskArg>>,
     cwd: Option<PathBuf>,
     env: Option<IndexMap<String, String>>,
+    default_environment: Option<EnvironmentName>,
     clean_env: bool,
     inputs: Option<Vec<String>>,
     outputs: Option<Vec<String>>,
@@ -512,6 +520,7 @@ impl From<&Task> for TaskInfo {
             args: task.args().map(|args| args.to_vec()),
             cwd: task.working_directory().map(PathBuf::from),
             env: task.env().cloned(),
+            default_environment: task.default_environment().cloned(),
             clean_env: task.clean_env(),
             inputs: task.inputs().map(|inputs| {
                 inputs

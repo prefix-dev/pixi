@@ -286,6 +286,14 @@ impl Task {
         }
     }
 
+    // Returns the default environment of the task
+    pub fn default_environment(&self) -> Option<&EnvironmentName> {
+        match self {
+            Task::Execute(exe) => exe.default_environment.as_ref(),
+            _ => None,
+        }
+    }
+
     /// Returns the arguments of the task.
     pub fn args(&self) -> Option<&[TaskArg]> {
         match self {
@@ -350,6 +358,9 @@ pub struct Execute {
 
     /// A list of environment variables to set before running the command
     pub env: Option<IndexMap<String, String>>,
+
+    /// A default environment to run the task in.
+    pub default_environment: Option<EnvironmentName>,
 
     /// A description of the task
     pub description: Option<String>,
@@ -777,6 +788,10 @@ impl Display for Task {
             }
         }
 
+        let default_environment = self.default_environment();
+        if let Some(default_environment) = default_environment {
+            write!(f, ", default_environment = {}", default_environment)?;
+        }
         let env = self.env();
         if let Some(env) = env {
             if !env.is_empty() {
