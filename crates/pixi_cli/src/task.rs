@@ -166,7 +166,6 @@ impl From<AddArgs> for Task {
         let depends_on = value.depends_on.unwrap_or_default();
         // description or none
         let description = value.description;
-        let default_environment = value.default_environment;
         // Convert the arguments into a single string representation
         let cmd_args = value
             .commands
@@ -193,7 +192,7 @@ impl From<AddArgs> for Task {
         } else if depends_on.is_empty()
             && value.cwd.is_none()
             && value.env.is_empty()
-            && default_environment.is_none()
+            && value.default_environment.is_none()
             && description.is_none()
             && value.args.is_none()
         {
@@ -201,7 +200,7 @@ impl From<AddArgs> for Task {
         } else {
             let clean_env = value.clean_env;
             let cwd = value.cwd;
-            let default_environment = default_environment;
+            let default_environment = value.default_environment;
             let env = if value.env.is_empty() {
                 None
             } else {
