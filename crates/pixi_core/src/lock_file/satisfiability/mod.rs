@@ -424,11 +424,21 @@ pub enum PlatformUnsat {
     )]
     PackageBuildSourceMismatch(String, SourceMismatchError),
 
-    #[error("the locked metadata of '{0}' package changed")]
+    #[error("the locked metadata of '{0}' package changed (see trace logs for details)")]
     SourcePackageMetadataChanged(String),
 
     #[error("the source location '{0}' changed from '{1}' to '{2}'")]
     SourceBuildLocationChanged(String, String, String),
+
+    #[error(
+        "the source dependency '{dependency}' of package '{package}' changed from '{locked}' to '{current}'"
+    )]
+    SourceDependencyChanged {
+        package: String,
+        dependency: String,
+        locked: String,
+        current: String,
+    },
 
     #[error(
         "locked source package '{package_name}' not found in current metadata for '{manifest_path}'. Was the package renamed?"
@@ -1148,7 +1158,7 @@ async fn verify_source_metadata(
                     }));
                 };
 
-                // Check if the current record matches what's in the lock file
+                // Check if the build source location changed
                 if current_record.build_source != source_record.build_source {
                     return Err(Box::new(PlatformUnsat::SourceBuildLocationChanged(
                         source_record.package_record.name.as_source().to_string(),
@@ -1165,13 +1175,56 @@ async fn verify_source_metadata(
                     )));
                 }
 
-                // Check if the current record matches what's in the lock file
+                // Check if the source dependencies match
+                let package_name = source_record.package_record.name.as_source().to_string();
+                for (source_name, locked_source_spec) in &source_record.sources {
+                    match current_record.sources.get(source_name) {
+                        Some(current_source_spec) => {
+                            if locked_source_spec != current_source_spec {
+                                return Err(Box::new(PlatformUnsat::SourceDependencyChanged {
+                                    package: package_name,
+                                    dependency: source_name.clone(),
+                                    locked: locked_source_spec.to_string(),
+                                    current: current_source_spec.to_string(),
+                                }));
+                            }
+                        }
+                        None => {
+                            return Err(Box::new(PlatformUnsat::SourceDependencyChanged {
+                                package: package_name,
+                                dependency: source_name.clone(),
+                                locked: locked_source_spec.to_string(),
+                                current: "(removed)".to_string(),
+                            }));
+                        }
+                    }
+                }
+
+                // Check if there are any new sources in current that weren't in locked
+                for (source_name, current_source_spec) in &current_record.sources {
+                    if !source_record.sources.contains_key(source_name) {
+                        return Err(Box::new(PlatformUnsat::SourceDependencyChanged {
+                            package: package_name.clone(),
+                            dependency: source_name.clone(),
+                            locked: "(not present)".to_string(),
+                            current: current_source_spec.to_string(),
+                        }));
+                    }
+                }
+
+                // Check if the package record metadata matches
+                let package_name = source_record.package_record.name.as_source();
+                tracing::trace!(
+                    "Checking package record equality for '{}' (current vs locked)",
+                    package_name
+                );
+
                 if !package_records_are_equal(
                     &current_record.package_record,
                     &source_record.package_record,
                 ) {
                     return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
-                        source_record.package_record.name.as_source().to_string(),
+                        package_name.to_string(),
                     )));
                 }
 
@@ -2298,6 +2351,7 @@ mod tests {
     use pixi_command_dispatcher::CacheDirs;
     use rattler_lock::LockFile;
     use rstest::rstest;
+    use tracing_test::traced_test;
 
     use super::*;
     use crate::Workspace;
@@ -2399,6 +2453,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
+    #[traced_test]
     async fn test_good_satisfiability(
         #[files("../../tests/data/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
@@ -2432,6 +2487,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
+    #[traced_test]
     async fn test_example_satisfiability(
         #[files("../../examples/**/p*.toml")] manifest_path: PathBuf,
     ) {
@@ -2466,6 +2522,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
+    #[traced_test]
     async fn test_failing_satisiability(
         #[files("../../tests/data/non-satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
