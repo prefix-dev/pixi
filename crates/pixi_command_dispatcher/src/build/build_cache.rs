@@ -97,8 +97,6 @@ impl BuildInput {
         sorted_build_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));
         sorted_build_virtual_packages.hash(&mut hasher);
 
-        tracing::debug!("variants for build cache key: {:?}", variants);
-
         // Include variants in the hash to ensure different variant values
         // get different cache keys. BTreeMap is already sorted by key, so we
         // can hash it directly for deterministic results.
