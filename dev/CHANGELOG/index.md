@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.62.1] - 2025-12-18
+
+#### ✨ Highlights
+
+Small release with fixes related to the conda source dependencies.
+
+#### Added
+
+- Resolving PyPI deps with a `SourceRecord` Python by @lucascolley in [#5159](https://github.com/prefix-dev/pixi/pull/5159)
+- Refactor pixi pypi spec by @tdejager in [#5155](https://github.com/prefix-dev/pixi/pull/5155)
+
+#### Documentation
+
+- Add `dev` table documentation by @ruben-arts in [#5163](https://github.com/prefix-dev/pixi/pull/5163)
+
+#### Fixed
+
+- Let `pixi run` or `pixi install` fail on unsupported platforms by @Hofer-Julian in [#5141](https://github.com/prefix-dev/pixi/pull/5141)
+- Include dev dependencies when extracting packages from solve groups by @baszalmstra in [#5156](https://github.com/prefix-dev/pixi/pull/5156)
+- Update lock-file on change by @baszalmstra in [#5158](https://github.com/prefix-dev/pixi/pull/5158)
+
 ### [0.62.0] - 2025-12-17
 
 #### ✨ Highlights
