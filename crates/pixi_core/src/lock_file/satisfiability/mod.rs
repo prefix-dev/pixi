@@ -37,10 +37,7 @@ use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, PackageName,
     PackageRecord, ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
 };
-use rattler_lock::{
-    LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable,
-    UrlOrPath,
-};
+use rattler_lock::{LockedPackageRef, PypiIndexes, PypiPackageData, UrlOrPath};
 use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
@@ -183,43 +180,36 @@ impl Display for IndexesMismatch {
     }
 }
 
+/// Represents a mismatch between the source metadata and the locked metadata
+/// for a path-based PyPI package.
 #[derive(Debug, Error)]
-pub struct SourceTreeHashMismatch {
-    pub computed: PackageHashes,
-    pub locked: Option<PackageHashes>,
+pub struct PypiSourceMetadataMismatch {
+    pub field: &'static str,
+    pub source_value: String,
+    pub locked_value: String,
 }
 
-impl Display for SourceTreeHashMismatch {
+impl Display for PypiSourceMetadataMismatch {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let computed_hash = self
-            .computed
-            .sha256()
-            .map(|hash| format!("{hash:x}"))
-            .or(self.computed.md5().map(|hash| format!("{hash:x}")));
-        let locked_hash = self.locked.as_ref().and_then(|hash| {
-            hash.sha256()
-                .map(|hash| format!("{hash:x}"))
-                .or(hash.md5().map(|hash| format!("{hash:x}")))
-        });
-
-        match (computed_hash, locked_hash) {
-            (None, None) => write!(f, "could not compute a source tree hash"),
-            (Some(computed), None) => {
-                write!(
-                    f,
-                    "the computed source tree hash is '{computed}', but the lock-file does not contain a hash"
-                )
-            }
-            (Some(computed), Some(locked)) => write!(
-                f,
-                "the computed source tree hash is '{computed}', but the lock-file contains '{locked}'"
-            ),
-            (None, Some(locked)) => write!(
-                f,
-                "could not compute a source tree hash, but the lock-file contains '{locked}'"
-            ),
-        }
+        write!(
+            f,
+            "{} changed from '{}' (locked) to '{}' (source)",
+            self.field, self.locked_value, self.source_value
+        )
     }
+}
+
+/// Error type for parsing pyproject.toml metadata
+#[derive(Debug, Error)]
+pub enum PypiSourceMetadataError {
+    #[error("failed to read pyproject.toml: {0}")]
+    ReadError(std::io::Error),
+    #[error("failed to parse pyproject.toml: {0}")]
+    ParseError(String),
+    #[error("missing [project] section in pyproject.toml")]
+    MissingProjectSection,
+    #[error("missing project.name in pyproject.toml")]
+    MissingName,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -314,11 +304,11 @@ pub enum PlatformUnsat {
     #[error("the editable package path '{0}', lock does not equal spec path '{1}' == '{2}'")]
     EditablePackagePathMismatch(uv_normalize::PackageName, PathBuf, PathBuf),
 
-    #[error("failed to determine pypi source tree hash for {0}")]
-    FailedToDetermineSourceTreeHash(pep508_rs::PackageName, std::io::Error),
+    #[error("failed to read pypi source metadata for {0}")]
+    FailedToReadPypiSourceMetadata(pep508_rs::PackageName, #[source] PypiSourceMetadataError),
 
-    #[error("source tree hash for {0} does not match the hash in the lock-file")]
-    SourceTreeHashMismatch(pep508_rs::PackageName, #[source] SourceTreeHashMismatch),
+    #[error("pypi source metadata for {0} does not match the lock-file")]
+    PypiSourceMetadataMismatch(pep508_rs::PackageName, #[source] PypiSourceMetadataMismatch),
 
     #[error("the path '{0}, cannot be canonicalized")]
     FailedToCanonicalizePath(PathBuf, #[source] std::io::Error),
@@ -473,11 +463,79 @@ impl PlatformUnsat {
             PlatformUnsat::UnsatisfiableRequirement(_, _)
                 | PlatformUnsat::TooManyPypiPackages(_)
                 | PlatformUnsat::AsPep508Error(_, _)
-                | PlatformUnsat::FailedToDetermineSourceTreeHash(_, _)
+                | PlatformUnsat::FailedToReadPypiSourceMetadata(_, _)
                 | PlatformUnsat::PythonVersionMismatch(_, _, _)
-                | PlatformUnsat::SourceTreeHashMismatch(..),
+                | PlatformUnsat::PypiSourceMetadataMismatch(..),
         )
     }
+}
+
+/// Parsed metadata from a pyproject.toml file for comparison purposes.
+#[derive(Debug)]
+struct PypiSourceMetadata {
+    name: String,
+    version: Option<String>,
+}
+
+/// Parse metadata from a pyproject.toml file in the given directory.
+/// Only extracts static metadata (name, version) for comparison.
+fn parse_pypi_source_metadata(directory: &Path) -> Result<PypiSourceMetadata, PypiSourceMetadataError> {
+    let pyproject_path = directory.join("pyproject.toml");
+    let content = std::fs::read_to_string(&pyproject_path)
+        .map_err(PypiSourceMetadataError::ReadError)?;
+
+    let doc: toml_edit::DocumentMut = content
+        .parse()
+        .map_err(|e: toml_edit::TomlError| PypiSourceMetadataError::ParseError(e.to_string()))?;
+
+    let project = doc
+        .get("project")
+        .ok_or(PypiSourceMetadataError::MissingProjectSection)?;
+
+    let name = project
+        .get("name")
+        .and_then(|v| v.as_str())
+        .ok_or(PypiSourceMetadataError::MissingName)?
+        .to_string();
+
+    let version = project
+        .get("version")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    Ok(PypiSourceMetadata { name, version })
+}
+
+/// Compare source metadata with locked metadata and return a mismatch if found.
+fn check_pypi_source_metadata_mismatch(
+    source_metadata: &PypiSourceMetadata,
+    locked_data: &PypiPackageData,
+) -> Option<PypiSourceMetadataMismatch> {
+    // Normalize names for comparison (PEP 503)
+    let source_name_normalized = source_metadata.name.to_lowercase().replace(['-', '.'], "_");
+    let locked_name_normalized = locked_data.name.to_string().to_lowercase().replace(['-', '.'], "_");
+
+    if source_name_normalized != locked_name_normalized {
+        return Some(PypiSourceMetadataMismatch {
+            field: "name",
+            source_value: source_metadata.name.clone(),
+            locked_value: locked_data.name.to_string(),
+        });
+    }
+
+    // Compare version if both are present
+    if let Some(source_version) = &source_metadata.version {
+        let locked_version = locked_data.version.to_string();
+        if source_version != &locked_version {
+            return Some(PypiSourceMetadataMismatch {
+                field: "version",
+                source_value: source_version.clone(),
+                locked_value: locked_version,
+            });
+        }
+    }
+
+    None
 }
 
 /// Verifies that all the requirements of the specified `environment` can be
@@ -1917,8 +1975,8 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 };
 
                 if pypi_packages_visited.insert(idx) {
-                    // If this is path based package we need to check if the source tree hash still
-                    // matches. and if it is a directory
+                    // If this is path based package we need to check if the source metadata
+                    // still matches the locked metadata
                     if let UrlOrPath::Path(path) = &record.0.location {
                         let absolute_path = if path.is_absolute() {
                             Cow::Borrowed(Path::new(path.as_str()))
@@ -1927,24 +1985,23 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         };
 
                         if absolute_path.is_dir() {
-                            match PypiSourceTreeHashable::from_directory(&absolute_path)
-                                .map(|hashable| hashable.hash())
-                            {
-                                Ok(hashable) if Some(&hashable) != record.0.hash.as_ref() => {
-                                    delayed_pypi_error.get_or_insert_with(|| {
-                                        Box::new(PlatformUnsat::SourceTreeHashMismatch(
-                                            record.0.name.clone(),
-                                            SourceTreeHashMismatch {
-                                                computed: hashable,
-                                                locked: record.0.hash.clone(),
-                                            },
-                                        ))
-                                    });
+                            match parse_pypi_source_metadata(&absolute_path) {
+                                Ok(source_metadata) => {
+                                    if let Some(mismatch) = check_pypi_source_metadata_mismatch(
+                                        &source_metadata,
+                                        &record.0,
+                                    ) {
+                                        delayed_pypi_error.get_or_insert_with(|| {
+                                            Box::new(PlatformUnsat::PypiSourceMetadataMismatch(
+                                                record.0.name.clone(),
+                                                mismatch,
+                                            ))
+                                        });
+                                    }
                                 }
-                                Ok(_) => {}
                                 Err(err) => {
                                     delayed_pypi_error.get_or_insert_with(|| {
-                                        Box::new(PlatformUnsat::FailedToDetermineSourceTreeHash(
+                                        Box::new(PlatformUnsat::FailedToReadPypiSourceMetadata(
                                             record.0.name.clone(),
                                             err,
                                         ))
