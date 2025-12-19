@@ -4,7 +4,7 @@ use pixi_cli::cli_config::GitRev;
 use pixi_consts::consts;
 use pixi_core::{DependencyType, Workspace};
 use pixi_manifest::{FeaturesExt, SpecType};
-use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName, VersionOrStar};
+use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{PackageName, Platform};
 use tempfile::TempDir;
 use url::Url;
@@ -539,10 +539,12 @@ index-url = "{index_url}"
             if name == PypiPackageName::from_str("black").unwrap() {
                 assert_eq!(
                     spec,
-                    PixiPypiSpec::Version {
-                        version: VersionOrStar::from_str("==24.8.0").unwrap(),
+                    PixiPypiSpec {
                         extras: vec![pep508_rs::ExtraName::from_str("cli").unwrap()],
-                        index: None
+                        source: PixiPypiSource::Registry {
+                            version: VersionOrStar::from_str("==24.8.0").unwrap(),
+                            index: None,
+                        }
                     }
                 );
             }

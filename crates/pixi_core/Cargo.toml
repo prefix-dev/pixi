@@ -112,3 +112,4 @@ pixi_test_utils = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
+tracing-test = { workspace = true }

@@ -758,3 +758,105 @@ python = ["3.10", "3.12"]
         "Should select python 3.10 (constrained by dependency <3.12), not 3.12"
     );
 }
+
+/// Test that dev dependencies work correctly with solve groups.
+///
+/// When two environments share a solve group, and one of them has dev dependencies,
+/// the environment with dev dependencies should include the packages that those
+/// dev dependencies bring in.
+///
+/// This test verifies that when extracting packages for each environment from
+/// the solve group's solution, dev dependencies are properly taken into account.
+#[tokio::test]
+async fn test_dev_dependencies_in_solve_group() {
+    setup_tracing();
+
+    let package_database = create_test_package_database();
+
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create a dev package that has run-dependencies
+    let _dev_package = create_source_package(
+        pixi.workspace_path(),
+        "dev-tools",
+        "1.0.0",
+        r#"
+[package.run-dependencies]
+cmake = ">=3.0"
+make = ">=4.0"
+"#,
+    );
+
+    // Create a manifest with:
+    // - Two environments in the same solve-group
+    // - One environment (dev) has dev dependencies
+    // - One environment (prod) does not have dev dependencies
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = ["{}"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+python = "*"
+
+[feature.dev-feature.dev]
+dev-tools = {{ path = "./dev-tools" }}
+
+[environments]
+prod = {{ solve-group = "main" }}
+dev = {{ features = ["dev-feature"], solve-group = "main" }}
+"#,
+        channel.url(),
+        Platform::current()
+    );
+
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // Update the lock-file
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // Both environments should have python (shared dependency)
+    assert!(
+        lock_file.contains_conda_package("prod", Platform::current(), "python"),
+        "prod environment should have python"
+    );
+    assert!(
+        lock_file.contains_conda_package("dev", Platform::current(), "python"),
+        "dev environment should have python"
+    );
+
+    // The dev environment should have the dependencies brought in by dev-tools
+    // (cmake and make are run-dependencies of dev-tools)
+    assert!(
+        lock_file.contains_conda_package("dev", Platform::current(), "cmake"),
+        "dev environment should have cmake (run-dependency of dev-tools)"
+    );
+    assert!(
+        lock_file.contains_conda_package("dev", Platform::current(), "make"),
+        "dev environment should have make (run-dependency of dev-tools)"
+    );
+
+    // The prod environment should NOT have cmake and make
+    // (they are only brought in by dev-tools which is only in the dev environment)
+    assert!(
+        !lock_file.contains_conda_package("prod", Platform::current(), "cmake"),
+        "prod environment should NOT have cmake"
+    );
+    assert!(
+        !lock_file.contains_conda_package("prod", Platform::current(), "make"),
+        "prod environment should NOT have make"
+    );
+
+    // dev-tools itself should NOT be built (it's a dev dependency)
+    assert!(
+        !lock_file.contains_conda_package("dev", Platform::current(), "dev-tools"),
+        "dev-tools should NOT be in the lock-file (it's a dev dependency)"
+    );
+}

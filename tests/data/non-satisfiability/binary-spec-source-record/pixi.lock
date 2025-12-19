@@ -9,8 +9,9 @@ environments:
 packages:
   - conda: source
     name: source
-    version: 0.0.1
+    version: "0"
     build: ""
+    noarch: false
     subdir: noarch
     variants:
       target_platform: noarch

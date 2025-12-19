@@ -19,41 +19,121 @@ use url::Url;
 pub use name::PypiPackageName;
 pub use version_or_star::VersionOrStar;
 
-/// A representation of a PyPI requirement specifier used in pixi.
+/// The source of a PyPI package - where/how to obtain it.
+///
+/// This enum represents the different ways a package can be sourced:
+/// - `Registry`: From a package registry with version constraints
+/// - `Git`: From a git repository
+/// - `Path`: From a local file system path
+/// - `Url`: From a direct URL to a package archive
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash)]
-#[serde(untagged, rename_all = "kebab-case", deny_unknown_fields)]
-pub enum PixiPypiSpec {
-    Git {
-        url: GitSpec,
-        #[serde(default)]
-        extras: Vec<ExtraName>,
-    },
-    Path {
-        path: PathBuf,
-        editable: Option<bool>,
-        #[serde(default)]
-        extras: Vec<ExtraName>,
-    },
-    Url {
-        url: Url,
-        subdirectory: Option<String>,
-        #[serde(default)]
-        extras: Vec<ExtraName>,
-    },
-    Version {
+#[serde(untagged, rename_all = "kebab-case")]
+pub enum PixiPypiSource {
+    /// From a package registry with version constraints.
+    Registry {
         version: VersionOrStar,
-        #[serde(default)]
-        extras: Vec<ExtraName>,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         index: Option<Url>,
     },
-    RawVersion(VersionOrStar),
+    /// From a git repository.
+    Git {
+        #[serde(flatten)]
+        git: GitSpec,
+    },
+    /// From a local file system path (directory or file).
+    Path {
+        path: PathBuf,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        editable: Option<bool>,
+    },
+    /// From a direct URL to a package archive.
+    Url {
+        url: Url,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        subdirectory: Option<String>,
+    },
 }
 
-impl Default for PixiPypiSpec {
-    fn default() -> Self {
-        PixiPypiSpec::RawVersion(VersionOrStar::Star)
+impl PixiPypiSource {
+    /// Returns the path if this is a Path source.
+    pub fn as_path(&self) -> Option<&PathBuf> {
+        match self {
+            PixiPypiSource::Path { path, .. } => Some(path),
+            _ => None,
+        }
     }
+
+    /// Returns the git spec if this is a Git source.
+    pub fn as_git(&self) -> Option<&GitSpec> {
+        match self {
+            PixiPypiSource::Git { git, .. } => Some(git),
+            _ => None,
+        }
+    }
+
+    /// Returns the URL if this is a Url source.
+    pub fn as_url(&self) -> Option<&Url> {
+        match self {
+            PixiPypiSource::Url { url, .. } => Some(url),
+            _ => None,
+        }
+    }
+
+    /// Returns the version if this is a Registry source.
+    pub fn as_version(&self) -> Option<&VersionOrStar> {
+        match self {
+            PixiPypiSource::Registry { version, .. } => Some(version),
+            _ => None,
+        }
+    }
+
+    /// Returns the editability setting if this is a Path source.
+    pub fn editable(&self) -> Option<bool> {
+        match self {
+            PixiPypiSource::Path { editable, .. } => *editable,
+            _ => None,
+        }
+    }
+
+    /// Returns the custom index URL if this is a Registry source.
+    pub fn index(&self) -> Option<&Url> {
+        match self {
+            PixiPypiSource::Registry { index, .. } => index.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// Returns true if this is a source dependency (Git, Path, or Url).
+    /// Registry sources are not considered source dependencies.
+    pub fn is_source_dependency(&self) -> bool {
+        !matches!(self, PixiPypiSource::Registry { .. })
+    }
+}
+
+impl Default for PixiPypiSource {
+    fn default() -> Self {
+        PixiPypiSource::Registry {
+            version: VersionOrStar::Star,
+            index: None,
+        }
+    }
+}
+
+/// A complete PyPI dependency specification.
+///
+/// This is the main type used throughout pixi for PyPI dependencies. It combines
+/// the package source (where/how to get it) with optional extras.
+///
+/// This design follows UV's pattern where common fields like `extras` are at the
+/// struct level, and a source is used per spec.
+#[derive(Debug, Default, Serialize, Clone, PartialEq, Eq, Hash)]
+pub struct PixiPypiSpec {
+    /// Optional package extras to install.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extras: Vec<ExtraName>,
+    /// The source for this package.
+    #[serde(flatten)]
+    pub source: PixiPypiSource,
 }
 
 /// The type of parse error that occurred when parsing match spec.
@@ -96,54 +176,69 @@ impl From<VersionSpecifiers> for VersionOrStar {
     }
 }
 
+impl From<PixiPypiSource> for PixiPypiSpec {
+    fn from(source: PixiPypiSource) -> Self {
+        PixiPypiSpec {
+            extras: Vec::new(),
+            source,
+        }
+    }
+}
+
 impl PixiPypiSpec {
-    /// Returns true if the requirement is a direct dependency.
-    /// I.e. a url, path or git requirement.
-    pub fn is_direct_dependency(&self) -> bool {
-        matches!(
-            self,
-            PixiPypiSpec::Git { .. } | PixiPypiSpec::Path { .. } | PixiPypiSpec::Url { .. }
-        )
+    /// Creates a new spec with the given source and no extras.
+    pub fn new(source: PixiPypiSource) -> Self {
+        PixiPypiSpec {
+            extras: Vec::new(),
+            source,
+        }
+    }
+
+    /// Creates a new spec with the given source and extras.
+    pub fn with_extras(source: PixiPypiSource, extras: Vec<ExtraName>) -> Self {
+        PixiPypiSpec { extras, source }
+    }
+
+    /// Returns a reference to the source.
+    pub fn source(&self) -> &PixiPypiSource {
+        &self.source
+    }
+
+    /// Returns a mutable reference to the source.
+    pub fn source_mut(&mut self) -> &mut PixiPypiSource {
+        &mut self.source
+    }
+
+    /// Returns true if this is a source dependency (Git, Path, or Url).
+    /// Registry sources are not considered source dependencies.
+    pub fn is_source_dependency(&self) -> bool {
+        self.source.is_source_dependency()
     }
 
     /// Returns the path of the requirement if it is a path requirement.
     pub fn as_path(&self) -> Option<&PathBuf> {
-        match self {
-            PixiPypiSpec::Path { path, .. } => Some(path),
-            _ => None,
-        }
+        self.source.as_path()
     }
 
     /// Returns the git spec of the requirement if it is a git requirement.
     pub fn as_git(&self) -> Option<&GitSpec> {
-        match self {
-            PixiPypiSpec::Git { url, .. } => Some(url),
-            _ => None,
-        }
+        self.source.as_git()
     }
 
     /// Returns the url of the requirement if it is a url requirement.
     pub fn as_url(&self) -> Option<&Url> {
-        match self {
-            PixiPypiSpec::Url { url, .. } => Some(url),
-            _ => None,
-        }
+        self.source.as_url()
     }
 
     /// Returns the version of the requirement if it is a version requirement.
     pub fn as_version(&self) -> Option<&VersionOrStar> {
-        match self {
-            PixiPypiSpec::Version { version, .. } | PixiPypiSpec::RawVersion(version) => {
-                Some(version)
-            }
-            _ => None,
-        }
+        self.source.as_version()
     }
 
     /// Define whether the requirement is editable.
     pub fn set_editable(&mut self, editable: bool) {
-        match self {
-            PixiPypiSpec::Path { editable: e, .. } => {
+        match &mut self.source {
+            PixiPypiSource::Path { editable: e, .. } => {
                 *e = Some(editable);
             }
             _ if editable => {
@@ -153,24 +248,21 @@ impl PixiPypiSpec {
         }
     }
 
+    /// Returns the extras for this spec.
     pub fn extras(&self) -> &[ExtraName] {
-        match self {
-            PixiPypiSpec::Version { extras, .. } => extras,
-            PixiPypiSpec::Git { extras, .. } => extras,
-            PixiPypiSpec::Path { extras, .. } => extras,
-            PixiPypiSpec::Url { extras, .. } => extras,
-            PixiPypiSpec::RawVersion(_) => &[],
-        }
+        &self.extras
     }
 
     /// Returns the editability setting from the manifest.
     /// Only `Path` specs can be editable. Returns `None` for non-path specs
     /// or if editability is not explicitly specified.
     pub fn editable(&self) -> Option<bool> {
-        match self {
-            PixiPypiSpec::Path { editable, .. } => *editable,
-            _ => None,
-        }
+        self.source.editable()
+    }
+
+    /// Returns the custom index URL if specified.
+    pub fn index(&self) -> Option<&Url> {
+        self.source.index()
     }
 
     /// Updates this spec with a new PEP 508 requirement, preserving pixi-specific
@@ -185,28 +277,20 @@ impl PixiPypiSpec {
     ) -> Result<Self, Box<Pep508ToPyPiRequirementError>> {
         let mut updated: PixiPypiSpec = requirement.clone().try_into().map_err(Box::new)?;
 
-        match (&mut updated, self) {
-            // Both are Version variants - copy the index
-            (
-                PixiPypiSpec::Version {
-                    index: new_index, ..
-                },
-                PixiPypiSpec::Version { index, .. },
-            ) => {
-                *new_index = index.clone();
-            }
-            // Updated is RawVersion but self was Version with index or extras
-            // Convert to Version to preserve these fields
-            (PixiPypiSpec::RawVersion(version), PixiPypiSpec::Version { index, extras, .. })
-                if index.is_some() || !extras.is_empty() =>
-            {
-                updated = PixiPypiSpec::Version {
-                    version: version.clone(),
-                    extras: extras.clone(),
-                    index: index.clone(),
-                };
-            }
-            _ => {}
+        // Preserve index from self if both are Registry sources
+        if let (
+            PixiPypiSource::Registry {
+                index: new_index, ..
+            },
+            PixiPypiSource::Registry { index, .. },
+        ) = (&mut updated.source, &self.source)
+        {
+            *new_index = index.clone();
+        }
+
+        // Preserve extras from self if updated has none
+        if updated.extras.is_empty() && !self.extras.is_empty() {
+            updated.extras = self.extras.clone();
         }
 
         Ok(updated)
@@ -226,6 +310,157 @@ mod tests {
     use pixi_toml::TomlDiagnostic;
     use serde_json::{Value, json};
     use toml_span::de_helpers::TableHelper;
+
+    // ============================================
+    // Tests for the new UV-style struct design
+    // ============================================
+
+    #[test]
+    fn test_is_source_dependency_for_git() {
+        let spec = PixiPypiSpec::new(PixiPypiSource::Git {
+            git: GitSpec {
+                git: Url::parse("https://github.com/example/repo").unwrap(),
+                rev: None,
+                subdirectory: None,
+            },
+        });
+        assert!(spec.is_source_dependency());
+    }
+
+    #[test]
+    fn test_is_source_dependency_for_path() {
+        let spec = PixiPypiSpec::new(PixiPypiSource::Path {
+            path: PathBuf::from("./local"),
+            editable: None,
+        });
+        assert!(spec.is_source_dependency());
+    }
+
+    #[test]
+    fn test_is_source_dependency_for_url() {
+        let spec = PixiPypiSpec::new(PixiPypiSource::Url {
+            url: Url::parse("https://example.com/pkg.whl").unwrap(),
+            subdirectory: None,
+        });
+        assert!(spec.is_source_dependency());
+    }
+
+    #[test]
+    fn test_is_not_direct_dependency_for_registry() {
+        let spec = PixiPypiSpec::new(PixiPypiSource::Registry {
+            version: VersionOrStar::Star,
+            index: None,
+        });
+        assert!(!spec.is_source_dependency());
+    }
+
+    #[test]
+    fn test_extras_accessor() {
+        let extra = ExtraName::new("test".to_string()).unwrap();
+
+        // Spec with extras
+        let spec = PixiPypiSpec::with_extras(
+            PixiPypiSource::Git {
+                git: GitSpec {
+                    git: Url::parse("https://github.com/example/repo").unwrap(),
+                    rev: None,
+                    subdirectory: None,
+                },
+            },
+            vec![extra.clone()],
+        );
+        assert_eq!(spec.extras(), std::slice::from_ref(&extra));
+
+        // Spec without extras
+        let spec = PixiPypiSpec::new(PixiPypiSource::Registry {
+            version: VersionOrStar::Star,
+            index: None,
+        });
+        assert!(spec.extras().is_empty());
+    }
+
+    #[test]
+    fn test_source_accessor() {
+        let spec = PixiPypiSpec::new(PixiPypiSource::Path {
+            path: PathBuf::from("./local"),
+            editable: Some(true),
+        });
+
+        assert!(matches!(spec.source(), PixiPypiSource::Path { .. }));
+
+        if let PixiPypiSource::Path { editable, .. } = spec.source() {
+            assert_eq!(*editable, Some(true));
+        } else {
+            panic!("Expected Path source");
+        }
+    }
+
+    #[test]
+    fn test_as_version_for_registry() {
+        let spec = PixiPypiSpec::new(PixiPypiSource::Registry {
+            version: VersionOrStar::Star,
+            index: Some(Url::parse("https://pypi.example.com").unwrap()),
+        });
+        assert!(spec.as_version().is_some());
+        assert_eq!(spec.as_version().unwrap(), &VersionOrStar::Star);
+    }
+
+    #[test]
+    fn test_as_version_returns_none_for_non_registry() {
+        let spec = PixiPypiSpec::new(PixiPypiSource::Path {
+            path: PathBuf::from("./local"),
+            editable: None,
+        });
+        assert!(spec.as_version().is_none());
+    }
+
+    #[test]
+    fn test_index_accessor() {
+        let index_url = Url::parse("https://pypi.example.com").unwrap();
+        let spec = PixiPypiSpec::new(PixiPypiSource::Registry {
+            version: VersionOrStar::Star,
+            index: Some(index_url.clone()),
+        });
+        assert_eq!(spec.index(), Some(&index_url));
+
+        // No index
+        let spec = PixiPypiSpec::new(PixiPypiSource::Registry {
+            version: VersionOrStar::Star,
+            index: None,
+        });
+        assert!(spec.index().is_none());
+
+        // Non-registry source
+        let spec = PixiPypiSpec::new(PixiPypiSource::Path {
+            path: PathBuf::from("./local"),
+            editable: None,
+        });
+        assert!(spec.index().is_none());
+    }
+
+    #[test]
+    fn test_from_source_conversion() {
+        let source = PixiPypiSource::Path {
+            path: PathBuf::from("./local"),
+            editable: Some(true),
+        };
+        let spec: PixiPypiSpec = source.clone().into();
+        assert_eq!(spec.source, source);
+        assert!(spec.extras.is_empty());
+    }
+
+    #[test]
+    fn test_default_spec() {
+        let spec = PixiPypiSpec::default();
+        assert!(spec.extras.is_empty());
+        assert!(matches!(
+            spec.source,
+            PixiPypiSource::Registry {
+                version: VersionOrStar::Star,
+                index: None
+            }
+        ));
+    }
 
     #[test]
     fn test_pypi_to_string() {
@@ -260,39 +495,37 @@ mod tests {
         let as_pypi_req: PixiPypiSpec = pypi.try_into().unwrap();
         assert_eq!(
             as_pypi_req,
-            PixiPypiSpec::Git {
-                url: GitSpec {
+            PixiPypiSpec::new(PixiPypiSource::Git {
+                git: GitSpec {
                     git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
                     rev: Some(GitReference::DefaultBranch),
                     subdirectory: None,
                 },
-                extras: vec![]
-            }
+            })
         );
 
         let pypi: Requirement = "exchangelib @ git+https://github.com/ecederstrand/exchangelib@b283011c6df4a9e034baca9aea19aa8e5a70e3ab".parse().unwrap();
         let as_pypi_req: PixiPypiSpec = pypi.try_into().unwrap();
         assert_eq!(
             as_pypi_req,
-            PixiPypiSpec::Git {
-                url: GitSpec {
+            PixiPypiSpec::new(PixiPypiSource::Git {
+                git: GitSpec {
                     git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
                     rev: Some(GitReference::Rev(
                         "b283011c6df4a9e034baca9aea19aa8e5a70e3ab".to_string()
                     )),
                     subdirectory: None,
                 },
-                extras: vec![]
-            }
+            })
         );
 
         let pypi: Requirement = "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl".parse().unwrap();
         let as_pypi_req: PixiPypiSpec = pypi.try_into().unwrap();
-        assert_eq!(as_pypi_req, PixiPypiSpec::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), extras: vec![], subdirectory: None });
+        assert_eq!(as_pypi_req, PixiPypiSpec::new(PixiPypiSource::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), subdirectory: None }));
 
         let pypi: Requirement = "boltons[nichita] @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl".parse().unwrap();
         let as_pypi_req: PixiPypiSpec = pypi.try_into().unwrap();
-        assert_eq!(as_pypi_req, PixiPypiSpec::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), extras: vec![ExtraName::new("nichita".to_string()).unwrap()], subdirectory: None });
+        assert_eq!(as_pypi_req, PixiPypiSpec::with_extras(PixiPypiSource::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), subdirectory: None }, vec![ExtraName::new("nichita".to_string()).unwrap()]));
 
         #[cfg(target_os = "windows")]
         let pypi: Requirement = "boltons @ file:///C:/path/to/boltons".parse().unwrap();
@@ -304,20 +537,18 @@ mod tests {
         #[cfg(target_os = "windows")]
         assert_eq!(
             as_pypi_req,
-            PixiPypiSpec::Path {
+            PixiPypiSpec::new(PixiPypiSource::Path {
                 path: PathBuf::from("C:/path/to/boltons"),
                 editable: None,
-                extras: vec![]
-            }
+            })
         );
         #[cfg(not(target_os = "windows"))]
         assert_eq!(
             as_pypi_req,
-            PixiPypiSpec::Path {
+            PixiPypiSpec::new(PixiPypiSource::Path {
                 path: PathBuf::from("/path/to/boltons"),
                 editable: None,
-                extras: vec![]
-            }
+            })
         );
     }
 
@@ -329,15 +560,13 @@ mod tests {
         .unwrap();
         assert_eq!(
             PixiPypiSpec::try_from(parsed).unwrap(),
-            PixiPypiSpec::Git {
-                url: GitSpec {
+            PixiPypiSpec::new(PixiPypiSource::Git {
+                git: GitSpec {
                     git: Url::parse("ssh://git@github.com/python-attrs/attrs.git").unwrap(),
                     rev: Some(GitReference::Rev("main".to_string())),
                     subdirectory: None
                 },
-
-                extras: vec![]
-            }
+            })
         );
 
         // With subdirectory
@@ -347,14 +576,13 @@ mod tests {
         .unwrap();
         assert_eq!(
             PixiPypiSpec::try_from(parsed).unwrap(),
-            PixiPypiSpec::Git {
-                url: GitSpec {
+            PixiPypiSpec::new(PixiPypiSource::Git {
+                git: GitSpec {
                     git: Url::parse("https://github.com/Deltares/Ribasim.git").unwrap(),
                     rev: Some(GitReference::DefaultBranch),
                     subdirectory: Some("python/ribasim".to_string()),
                 },
-                extras: vec![],
-            }
+            })
         );
     }
 

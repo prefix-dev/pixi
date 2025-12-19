@@ -145,6 +145,7 @@ nav:
       - Dependency Types: build/dependency_types.md
       - Build Backends: build/backends.md
       - Package Source: build/package_source.md
+      - Dev Packages: build/dev.md
   - Distributing:
       - Pixi Pack: deployment/pixi_pack.md
       - Authentication: deployment/authentication.md
