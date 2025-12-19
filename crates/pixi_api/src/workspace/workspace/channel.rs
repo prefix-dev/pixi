@@ -150,7 +150,7 @@ pub async fn set<I: Interface>(
         interface,
         &options.channels,
         None,
-        "Set",
+        "Using",
         &workspace.channel_config(),
     )
     .await?;
