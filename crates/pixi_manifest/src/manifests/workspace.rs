@@ -3243,7 +3243,15 @@ channels = ["nvidia", "pytorch"]
             .unwrap();
         assert!(cuda_channels.is_empty());
 
-        assert_snapshot!(manifest.document.to_string());
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = ["bioconda", "conda-forge"]
+        platforms = ["linux-64", "win-64"]
+
+        [feature.cuda]
+        channels = []
+        "###);
     }
 
     #[test]
