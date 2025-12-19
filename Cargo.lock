@@ -5045,9 +5045,11 @@ dependencies = [
  "pixi_build_frontend",
  "pixi_build_types",
  "rattler_conda_types",
+ "rattler_digest",
  "rattler_package_streaming",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
 ]
 
@@ -5856,6 +5858,7 @@ dependencies = [
  "miette 7.6.0",
  "rattler_conda_types",
  "rattler_digest",
+ "rattler_package_streaming",
  "serde_json",
  "tempfile",
  "tokio",

@@ -1,10 +1,10 @@
-use std::{fmt, path::PathBuf};
+use std::{collections::BTreeMap, fmt, path::PathBuf};
 
 use itertools::chain;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_glob::GlobSet;
-use pixi_record::PinnedSourceSpec;
+use pixi_record::{PinnedSourceSpec, VariantValue};
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use tokio::sync::Mutex;
 use tracing::instrument;
@@ -48,6 +48,10 @@ pub struct SourceBuildCacheStatusSpec {
 
     /// The protocols that are enabled when discovering the build backend.
     pub enabled_protocols: EnabledProtocols,
+
+    /// The specific variant values for this build. Different variants result
+    /// in different cache keys to ensure they are cached separately.
+    pub variants: Option<BTreeMap<String, VariantValue>>,
 }
 
 #[derive(Debug)]
@@ -132,6 +136,7 @@ impl SourceBuildCacheStatusSpec {
             host_platform: self.build_environment.host_platform,
             host_virtual_packages: self.build_environment.host_virtual_packages.clone(),
             build_virtual_packages: self.build_environment.build_virtual_packages.clone(),
+            variants: self.variants.clone(),
         };
         let (cached_build, build_cache_entry) = command_dispatcher
             .build_cache()
@@ -141,10 +146,6 @@ impl SourceBuildCacheStatusSpec {
             .map_err(CommandDispatcherError::Failed)?;
 
         // Check the staleness of the cached entry
-        tracing::debug!(
-            "determining cache status for package '{}' from source build cache",
-            self.package,
-        );
         let cached_build = match cached_build {
             Some(cached_build) => {
                 self.determine_cache_status(&command_dispatcher, cached_build)
@@ -253,6 +254,7 @@ impl SourceBuildCacheStatusSpec {
                     build_environment: self.build_environment.clone(),
                     channel_config: self.channel_config.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
+                    variants: self.variants.clone(),
                 })
                 .await
                 .try_into_failed()?
