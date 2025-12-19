@@ -5,7 +5,7 @@ use std::{
 };
 
 use pixi_git::{sha::GitSha, url::RepositoryUrl};
-use pixi_spec::{GitReference, SourceSpec};
+use pixi_spec::{GitReference, SourceLocationSpec};
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
 use rattler_lock::{CondaSourceData, GitShallowSpec, PackageBuildSource};
 use typed_path::{Utf8TypedPathBuf, Utf8UnixPathBuf};
@@ -33,7 +33,7 @@ pub struct SourceRecord {
 
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
-    pub sources: HashMap<String, SourceSpec>,
+    pub sources: HashMap<String, SourceLocationSpec>,
 }
 
 impl SourceRecord {
@@ -56,7 +56,7 @@ impl SourceRecord {
                     PinnedSourceSpec::Url(pinned_url_spec) => Some(PackageBuildSource::Url {
                         url: pinned_url_spec.url,
                         sha256: pinned_url_spec.sha256,
-                        subdir: None,
+                        subdir: pinned_url_spec.subdirectory.map(Into::into),
                     }),
                     PinnedSourceSpec::Git(pinned_git_spec) => Some(PackageBuildSource::Git {
                         url: pinned_git_spec.git,
@@ -142,11 +142,12 @@ impl SourceRecord {
             PackageBuildSource::Url {
                 url,
                 sha256,
-                subdir: _,
+                subdir,
             } => PinnedSourceSpec::Url(crate::PinnedUrlSpec {
                 url,
                 sha256,
                 md5: None,
+                subdirectory: subdir.map(|s| s.to_string()),
             }),
             PackageBuildSource::Path { path } => {
                 // Convert path to Unix format for from_relative_to
@@ -175,7 +176,7 @@ impl SourceRecord {
             sources: data
                 .sources
                 .into_iter()
-                .map(|(k, v)| (k, SourceSpec::from(v)))
+                .map(|(k, v)| (k, SourceLocationSpec::from(v)))
                 .collect(),
             variants: data.variants.map(|variants| {
                 variants

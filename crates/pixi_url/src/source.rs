@@ -146,6 +146,7 @@ impl UrlSource {
         async_fs::create_dir_all(self.checkouts_dir()).await?;
         async_fs::create_dir_all(self.locks_dir()).await?;
 
+        let subdirectory = self.spec.subdirectory.clone();
         let url = self.spec.url.clone();
         let file_name = url_file_name(&url);
         if !extract::is_archive(&file_name) {
@@ -169,6 +170,7 @@ impl UrlSource {
                 url: url.clone(),
                 sha256: sha,
                 md5,
+                subdirectory,
             };
             return Ok(Fetch { pinned, path });
         }
@@ -195,6 +197,7 @@ impl UrlSource {
                 url,
                 sha256: sha,
                 md5,
+                subdirectory,
             };
             return Ok(Fetch { pinned, path });
         }
@@ -247,6 +250,7 @@ impl UrlSource {
             url,
             sha256,
             md5: Some(md5),
+            subdirectory,
         };
 
         Ok(Fetch {

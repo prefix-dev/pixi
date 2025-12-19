@@ -127,6 +127,14 @@ impl IsDefault for i32 {
     }
 }
 
+impl IsDefault for u64 {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip numeric fields
+    }
+}
+
 impl IsDefault for std::path::PathBuf {
     type Item = Self;
 

@@ -7,9 +7,6 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 /// Capabilities that the backend provides.
 pub struct BackendCapabilities {
-    /// The highest supported project model version.
-    pub highest_supported_project_model: Option<u32>,
-
     /// Whether the backend provides the `conda/outputs` API.
     pub provides_conda_outputs: Option<bool>,
 
@@ -22,10 +19,6 @@ impl BackendCapabilities {
     pub fn mask_with_api_version(&self, version: &PixiBuildApiVersion) -> Self {
         let expected = version.expected_backend_capabilities();
         Self {
-            highest_supported_project_model: Some(
-                self.highest_supported_project_model()
-                    .min(expected.highest_supported_project_model()),
-            ),
             provides_conda_outputs: Some(
                 self.provides_conda_outputs() && expected.provides_conda_outputs(),
             ),
@@ -33,11 +26,6 @@ impl BackendCapabilities {
                 self.provides_conda_build_v1() && expected.provides_conda_build_v1(),
             ),
         }
-    }
-
-    /// The highest supported project model version.
-    pub fn highest_supported_project_model(&self) -> u32 {
-        self.highest_supported_project_model.unwrap_or(0)
     }
 
     /// Whether the backend provides the `conda/outputs` API.

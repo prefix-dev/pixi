@@ -2,13 +2,13 @@ use std::{fmt::Display, hash::Hash, str::FromStr, sync::Arc};
 
 use itertools::Either;
 use pixi_build_types::{
-    BinaryPackageSpecV1, NamedSpecV1, PackageSpecV1,
+    BinaryPackageSpec, NamedSpec, PackageSpec,
     procedures::conda_outputs::{
         CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputRunExports,
     },
 };
 use pixi_record::PixiRecord;
-use pixi_spec::{BinarySpec, DetailedSpec, PixiSpec, SourceAnchor, SourceSpec, UrlBinarySpec};
+use pixi_spec::{BinarySpec, DetailedSpec, PixiSpec, SourceAnchor, UrlBinarySpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     InvalidPackageNameError, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName,
@@ -95,12 +95,12 @@ impl Dependencies {
             })?;
             match conversion::from_package_spec_v1(depend.spec.clone()).into_source_or_binary() {
                 Either::Left(source) => {
-                    let location = if let Some(anchor) = &source_anchor {
-                        anchor.resolve(source.location)
+                    let source = if let Some(anchor) = &source_anchor {
+                        source.resolve(anchor)
                     } else {
-                        source.location
+                        source
                     };
-                    dependencies.insert(name, PixiSpec::from(SourceSpec { location }).into());
+                    dependencies.insert(name, PixiSpec::from(source).into());
                 }
                 Either::Right(binary) => {
                     dependencies.insert(name, PixiSpec::from(binary).into());
@@ -372,7 +372,7 @@ impl PixiRunExports {
     /// Converts a [`CondaOutputRunExports`] to a [`PixiRunExports`].
     pub fn try_from_protocol(output: &CondaOutputRunExports) -> Result<Self, DependenciesError> {
         fn convert_package_spec(
-            specs: &[NamedSpecV1<PackageSpecV1>],
+            specs: &[NamedSpec<PackageSpec>],
         ) -> Result<DependencyMap<PackageName, PixiSpec>, DependenciesError> {
             specs
                 .iter()
@@ -388,7 +388,7 @@ impl PixiRunExports {
         }
 
         fn convert_binary_spec(
-            specs: &[NamedSpecV1<BinaryPackageSpecV1>],
+            specs: &[NamedSpec<BinaryPackageSpec>],
         ) -> Result<DependencyMap<PackageName, BinarySpec>, DependenciesError> {
             specs
                 .iter()

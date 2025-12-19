@@ -107,6 +107,7 @@ async fn url_source_uses_existing_checkout_when_sha_and_files_present() {
         url: Url::parse("https://example.com/hello.zip").unwrap(),
         md5: None,
         sha256: Some(sha),
+        subdirectory: None,
     };
 
     let fetch = UrlSource::new(spec, panic_client(), cache.path())
@@ -132,6 +133,7 @@ async fn resolver_reuses_cached_sha_without_downloading() {
         url,
         md5: None,
         sha256: None,
+        subdirectory: None,
     };
 
     let fetch = resolver
@@ -154,6 +156,7 @@ async fn url_source_downloads_and_reuses_checkout() {
         url: url.clone(),
         md5: None,
         sha256: None,
+        subdirectory: None,
     };
 
     let first = UrlSource::new(spec.clone(), client.clone(), cache.path())
@@ -180,6 +183,7 @@ async fn url_source_errors_on_sha_mismatch() {
         url: file_url(&archive, "sha-mismatch.zip"),
         md5: None,
         sha256: Some(Sha256Hash::from([0u8; 32])),
+        subdirectory: None,
     };
 
     let err = UrlSource::new(spec, LazyClient::default(), cache.path())
@@ -198,6 +202,7 @@ async fn url_source_errors_on_md5_mismatch() {
         url: file_url(&archive, "md5-mismatch.zip"),
         md5: Some(bogus_md5()),
         sha256: Some(archive_sha()),
+        subdirectory: None,
     };
 
     let err = UrlSource::new(spec, LazyClient::default(), cache.path())
@@ -215,6 +220,7 @@ async fn url_source_downloads_over_http_and_extracts_contents() {
         url: server.url().clone(),
         md5: None,
         sha256: Some(archive_sha()),
+        subdirectory: None,
     };
 
     let fetch = UrlSource::new(spec, LazyClient::default(), cache.path())

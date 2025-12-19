@@ -3,7 +3,7 @@ use std::fmt::Display;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_record::{DevSourceRecord, PinnedSourceSpec};
-use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec};
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::PackageName;
 use thiserror::Error;
@@ -145,7 +145,7 @@ impl DevSourceMetadataSpec {
             .map_err_with(DevSourceMetadataError::BuildBackendMetadata)?;
 
         // Create a SourceAnchor for resolving relative paths in dependencies
-        let source_anchor = SourceAnchor::from(pixi_spec::SourceSpec::from(
+        let source_anchor = SourceAnchor::from(SourceLocationSpec::from(
             build_backend_metadata.source.manifest_source().clone(),
         ));
 
@@ -215,9 +215,9 @@ impl DevSourceMetadataSpec {
 
                         // Resolve relative paths for source dependencies
                         let resolved_spec = match spec.into_source_or_binary() {
-                            itertools::Either::Left(source_spec) => PixiSpec::from(SourceSpec {
-                                location: source_anchor.resolve(source_spec.location),
-                            }),
+                            itertools::Either::Left(source_spec) => {
+                                PixiSpec::from(source_spec.resolve(source_anchor))
+                            }
                             itertools::Either::Right(binary_spec) => PixiSpec::from(binary_spec),
                         };
                         dependencies.insert(name, resolved_spec);

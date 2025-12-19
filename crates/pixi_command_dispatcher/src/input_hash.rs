@@ -1,4 +1,4 @@
-use pixi_build_types::ProjectModelV1;
+use pixi_build_types::ProjectModel;
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use xxhash_rust::xxh3::Xxh3;
@@ -7,8 +7,8 @@ use xxhash_rust::xxh3::Xxh3;
 #[serde(transparent)]
 pub struct ProjectModelHash(u64);
 
-impl From<&'_ ProjectModelV1> for ProjectModelHash {
-    fn from(value: &'_ ProjectModelV1) -> Self {
+impl From<&'_ ProjectModel> for ProjectModelHash {
+    fn from(value: &'_ ProjectModel) -> Self {
         let mut hasher = Xxh3::new();
         value.hash(&mut hasher);
         Self(hasher.finish())

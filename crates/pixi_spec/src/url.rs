@@ -24,6 +24,10 @@ pub struct UrlSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Sha256>>")]
     pub sha256: Option<Sha256Hash>,
+
+    /// The subdirectory of the package inside the archive
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subdirectory: Option<String>,
 }
 
 impl UrlSpec {
@@ -54,6 +58,7 @@ impl UrlSpec {
                 url: self.url,
                 md5: self.md5,
                 sha256: self.sha256,
+                subdirectory: self.subdirectory,
             })
         }
     }
@@ -72,6 +77,7 @@ impl UrlSpec {
                 url: self.url,
                 md5: self.md5,
                 sha256: self.sha256,
+                subdirectory: self.subdirectory,
             })
         }
     }
@@ -111,6 +117,10 @@ pub struct UrlSourceSpec {
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Sha256>>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sha256: Option<Sha256Hash>,
+
+    /// The subdirectory of the package inside the archive
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subdirectory: Option<String>,
 }
 
 impl Display for UrlSourceSpec {
@@ -122,6 +132,9 @@ impl Display for UrlSourceSpec {
         if let Some(sha256) = &self.sha256 {
             write!(f, " sha256={sha256:x}")?;
         }
+        if let Some(subdirectory) = &self.subdirectory {
+            write!(f, " subdirectory={subdirectory}")?;
+        }
         Ok(())
     }
 }
@@ -132,6 +145,7 @@ impl From<UrlSourceSpec> for UrlSpec {
             url: value.url,
             md5: value.md5,
             sha256: value.sha256,
+            subdirectory: value.subdirectory,
         }
     }
 }
@@ -155,6 +169,8 @@ impl From<UrlBinarySpec> for UrlSpec {
             url: value.url,
             md5: value.md5,
             sha256: value.sha256,
+            // A binary url spec is already a conda package so it cannot have a subdirectory
+            subdirectory: None,
         }
     }
 }

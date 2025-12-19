@@ -4,7 +4,7 @@ use rattler_conda_types::{NoArchType, PackageName, Platform, VersionWithSource};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::SourcePackageSpecV1;
+use crate::project_model::SourcePackageLocationSpec;
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -45,5 +45,5 @@ pub struct CondaPackageMetadata {
     /// Describes any packages that should be built from a particular
     /// source.
     #[serde(default)]
-    pub sources: HashMap<String, SourcePackageSpecV1>,
+    pub sources: HashMap<String, SourcePackageLocationSpec>,
 }

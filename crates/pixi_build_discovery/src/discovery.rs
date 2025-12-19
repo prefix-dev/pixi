@@ -7,7 +7,7 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use ordermap::OrderMap;
 use pixi_build_type_conversions::{to_project_model_v1, to_target_selector_v1};
-use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
+use pixi_build_types::{ProjectModel, TargetSelector};
 use pixi_config::Config;
 use pixi_consts::consts::{RATTLER_BUILD_DIRS, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES};
 use pixi_manifest::{
@@ -55,13 +55,13 @@ pub struct BackendInitializationParams {
     pub manifest_path: PathBuf,
 
     /// Optionally, the manifest of the discovered package.
-    pub project_model: Option<ProjectModelV1>,
+    pub project_model: Option<ProjectModel>,
 
     /// Additional configuration that applies to the backend.
     pub configuration: Option<serde_json::Value>,
 
     /// Targets that apply to the backend.
-    pub target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
+    pub target_configuration: Option<OrderMap<TargetSelector, serde_json::Value>>,
 }
 
 /// Configuration to enable or disable certain protocols discovery.
@@ -377,7 +377,7 @@ impl DiscoveredBackend {
                         package_xml_absolute_path.clone(),
                     ))?
                     .to_path_buf(),
-                project_model: Some(ProjectModelV1::default()),
+                project_model: Some(ProjectModel::default()),
                 configuration: None,
                 target_configuration: None,
             },

@@ -15,7 +15,7 @@ use pixi_build_frontend::{
     tool::{IsolatedTool, SystemTool, Tool},
 };
 use pixi_build_types::{
-    PixiBuildApiVersion, ProjectModelV1, TargetSelectorV1, procedures::initialize::InitializeParams,
+    PixiBuildApiVersion, ProjectModel, TargetSelector, procedures::initialize::InitializeParams,
 };
 use pixi_path::{AbsPresumedDirPathBuf, AbsPresumedFilePathBuf};
 use pixi_spec::SpecConversionError;
@@ -39,13 +39,13 @@ pub struct InstantiateBackendSpec {
     pub manifest_path: AbsPresumedFilePathBuf,
 
     /// Optionally, the manifest of the discovered package.
-    pub project_model: Option<ProjectModelV1>,
+    pub project_model: Option<ProjectModel>,
 
     /// Additional configuration that applies to the backend.
     pub configuration: Option<serde_json::Value>,
 
     /// Targets that apply to the backend.
-    pub target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
+    pub target_configuration: Option<OrderMap<TargetSelector, serde_json::Value>>,
 
     /// The source directory to use for the backend
     pub build_source_dir: AbsPresumedDirPathBuf,
@@ -89,10 +89,10 @@ impl CommandDispatcher {
                     let memory = in_mem
                         .initialize(InitializeParams {
                             manifest_path: spec.manifest_path.to_std_path_buf(),
-                            source_dir: Some(source_dir),
-                            workspace_root: Some(spec.workspace_root.to_std_path_buf()),
+                            source_directory: Some(source_dir),
+                            workspace_directory: Some(spec.workspace_root.to_std_path_buf()),
                             cache_directory: Some(self.cache_dirs().root().to_owned().into()),
-                            project_model: spec.project_model.map(Into::into),
+                            project_model: spec.project_model,
                             configuration: spec.configuration,
                             target_configuration: spec.target_configuration,
                         })
