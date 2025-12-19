@@ -167,6 +167,14 @@ impl<T: IsDefault> IsDefault for &T {
     }
 }
 
+impl IsDefault for bool {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self)
+    }
+}
+
 #[cfg(feature = "url")]
 impl IsDefault for url::Url {
     type Item = Self;

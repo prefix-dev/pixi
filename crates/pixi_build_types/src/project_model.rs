@@ -1,6 +1,6 @@
 //! This module is a collection of types that represent a pixi package in a
 //! protocol format that can be sent over the wire.
-//! We need to vendor a lot of the types, and simplify them in some cases, so
+//! We need to vendor a lot of the types and simplify them in some cases so
 //! that we have a stable protocol that can be used to communicate in the build
 //! tasks.
 //!
@@ -9,12 +9,12 @@
 //! that we try not to break this in pixi as much as possible. So as long as
 //! older pixi TOMLs keep loading, we can send them to the backend.
 use std::{convert::Infallible, fmt::Display, hash::Hash, path::PathBuf, str::FromStr};
-
+use std::hash::Hasher;
 use ordermap::OrderMap;
 use pixi_stable_hash::{IsDefault, StableHashBuilder};
 use rattler_conda_types::{BuildNumber, BuildNumberSpec, StringMatcher, Version, VersionSpec};
 use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay, serde_as};
 use url::Url;
 
@@ -208,6 +208,39 @@ pub enum PackageSpec {
     Binary(BinaryPackageSpec),
     /// This is a dependency on a source package
     Source(SourcePackageSpec),
+    /// Pin to a version that is compatible with a version from the "previous" environment
+    PinCompatible(PinCompatibleSpec),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PinCompatibleSpec {
+    /// A minimum pin to a version, using `x.x.x...` as syntax
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lower_bound: Option<PinBound>,
+
+    /// A pin to a version, using `x.x.x...` as syntax
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upper_bound: Option<PinBound>,
+
+    /// If an exact pin is given, we pin the exact version & hash
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub exact: bool,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build: Option<String>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum PinBound {
+    Expression(String),
+    Version(
+        #[cfg_attr(feature = "schemars", schemars(with = "String"))]
+        Version,
+    ),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
@@ -577,7 +610,47 @@ impl Hash for PackageSpec {
                 1u8.hash(state);
                 spec.hash(state);
             }
+            PackageSpec::PinCompatible(spec) => {
+                2u8.hash(state);
+                spec.hash(state);
+            }
         }
+    }
+}
+
+impl Hash for PinCompatibleSpec {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let PinCompatibleSpec { lower_bound, upper_bound, exact, build } = self;
+
+        StableHashBuilder::<H>::new()
+            .field("lower_bound", lower_bound)
+            .field("upper_bound", upper_bound)
+            .field("exact", exact)
+            .field("build", build)
+            .finish(state);
+    }
+}
+
+impl Hash for PinBound {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            PinBound::Expression(expr) => {
+                0u8.hash(state);
+                expr.hash(state);
+            }
+            PinBound::Version(ver) => {
+                1u8.hash(state);
+                ver.hash(state);
+            }
+        }
+    }
+}
+
+impl IsDefault for PinBound {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self)
     }
 }
 
@@ -592,7 +665,7 @@ impl Hash for SourcePackageSpec {
             license,
         } = self;
 
-        // Hash the location first, to ensure compatibility with older versions.
+        // Hash the location first to ensure compatibility with older versions.
         location.hash(state);
 
         // Add the new fields using StableHashBuilder for forward/backward
@@ -756,7 +829,7 @@ mod tests {
 
         let hash1 = calculate_hash(&project_model);
 
-        // Add empty targets field - with corrected implementation, this should NOT
+        // Add an empty targets field - with corrected implementation, this should NOT
         // change hash because we only include discriminants for
         // non-default/non-empty values
         project_model.targets = Some(Targets {
@@ -765,7 +838,7 @@ mod tests {
         });
         let hash2 = calculate_hash(&project_model);
 
-        // Add a target with empty dependencies - this should also NOT change hash
+        // Add a target with empty dependencies - this should also NOT change the hash
         let empty_target = Target {
             host_dependencies: Some(OrderMap::new()),
             build_dependencies: Some(OrderMap::new()),

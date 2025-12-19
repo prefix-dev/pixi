@@ -14,7 +14,7 @@ pub use conda_package_metadata::CondaPackageMetadata;
 pub use project_model::{
     BinaryPackageSpec, GitReference, GitSpec, NamedSpec, PackageSpec, PathSpec, ProjectModel,
     SourcePackageLocationSpec, SourcePackageName, SourcePackageSpec, Target, TargetSelector,
-    Targets, UrlSpec,
+    Targets, UrlSpec, PinCompatibleSpec, PinBound
 };
 use rattler_conda_types::{
     GenericVirtualPackage, PackageName, Platform, Version, VersionSpec,
