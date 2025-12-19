@@ -309,9 +309,7 @@ mod tests {
 
     #[test]
     fn test_git_spec_semantically_equal_rev_vs_branch() {
-        // GitReference::Rev("main") and GitReference::Branch("main") are not equal
-        // because they represent different semantic meanings (even if they might
-        // resolve to the same commit)
+        // Rev and Branch variants have different semantic meanings even with same name
         let spec1 = GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: Some(GitReference::Rev("main".to_string())),
