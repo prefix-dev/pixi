@@ -89,6 +89,9 @@ pub struct Workspace {
 
     /// Exclude package candidates that are newer than this date.
     pub exclude_newer: Option<ExcludeNewer>,
+
+    /// Whether to resolve symlinked manifest paths to their real file location.
+    pub resolve_symlinks: Option<bool>,
 }
 
 /// A source that contributes additional build variant definitions.

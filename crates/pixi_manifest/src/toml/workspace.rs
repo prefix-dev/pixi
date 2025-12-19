@@ -54,6 +54,7 @@ pub struct TomlWorkspace {
     pub build_variant_files: Option<Vec<Spanned<TomlFromStr<PathBuf>>>>,
     pub requires_pixi: Option<VersionSpec>,
     pub exclude_newer: Option<ExcludeNewer>,
+    pub resolve_symlinks: Option<bool>,
 
     pub span: Span,
 }
@@ -147,6 +148,7 @@ impl TomlWorkspace {
             ),
             requires_pixi: self.requires_pixi,
             exclude_newer: self.exclude_newer,
+            resolve_symlinks: self.resolve_symlinks,
         })
         .with_warnings(warnings))
     }
@@ -246,6 +248,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let exclude_newer = th
             .optional::<TomlWith<_, TomlFromStr<_>>>("exclude-newer")
             .map(TomlWith::into_inner);
+        let resolve_symlinks = th.optional("resolve-symlinks");
 
         th.finalize(None)?;
 
@@ -273,6 +276,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             build_variant_files,
             requires_pixi,
             exclude_newer,
+            resolve_symlinks,
             span: value.span,
         })
     }
