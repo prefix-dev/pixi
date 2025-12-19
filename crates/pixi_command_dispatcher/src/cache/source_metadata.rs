@@ -6,10 +6,11 @@ use crate::{BuildEnvironment, build::source_checkout_cache_key, cache::common::V
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_path::AbsPathBuf;
-use pixi_record::{PinnedSourceSpec, SourceRecord};
+use pixi_record::{PinnedSourceSpec, SourceRecord, VariantValue};
 use rattler_conda_types::{ChannelUrl, PackageName};
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeMap,
     hash::{DefaultHasher, Hash, Hasher},
     path::{Path, PathBuf},
 };
@@ -56,6 +57,10 @@ pub struct SourceMetadataCacheShard {
 
     /// The pinned source location
     pub pinned_source: PinnedSourceSpec,
+
+    /// The variant configuration used for building. Different variants produce
+    /// different metadata outputs, so this must be part of the cache key.
+    pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
 }
 
 impl SourceMetadataCache {
@@ -100,6 +105,11 @@ impl CacheKey for SourceMetadataCacheShard {
         host_virtual_packages.hash(&mut hasher);
 
         self.enabled_protocols.hash(&mut hasher);
+
+        // Include variant configuration in the hash to ensure different variant
+        // configurations produce different cache keys.
+        self.variant_configuration.hash(&mut hasher);
+
         let source_dir = source_checkout_cache_key(&self.pinned_source);
         format!(
             "{source_dir}/{}/{}-{}",

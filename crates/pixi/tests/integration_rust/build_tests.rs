@@ -2,7 +2,7 @@ use fs_err as fs;
 use pixi_build_backend_passthrough::{ObservableBackend, PassthroughBackend};
 use pixi_build_frontend::BackendOverride;
 use pixi_consts::consts;
-use rattler_conda_types::Platform;
+use rattler_conda_types::{Platform, package::RunExportsJson};
 use tempfile::TempDir;
 
 use crate::{
@@ -552,15 +552,26 @@ async fn test_different_variants_have_different_caches() {
     setup_tracing();
 
     // Create a package database with common dependencies
+    // Each sdl2 package has run_exports that propagate itself, so when a package
+    // has sdl2 as a host-dependency, the specific sdl2 version becomes a run-dependency.
+    // This allows the solver to distinguish between variants built with different sdl2 versions.
     let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("sdl2", "2.26.5")
             .with_materialize(true)
+            .with_run_exports(RunExportsJson {
+                weak: vec!["sdl2 ==2.26.5".to_string()],
+                ..Default::default()
+            })
             .finish(),
     );
     package_database.add_package(
         Package::build("sdl2", "2.32.0")
             .with_materialize(true)
+            .with_run_exports(RunExportsJson {
+                weak: vec!["sdl2 2.32.*".to_string()],
+                ..Default::default()
+            })
             .finish(),
     );
 
