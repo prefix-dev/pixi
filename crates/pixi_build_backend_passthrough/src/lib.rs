@@ -434,6 +434,11 @@ fn create_output(
         .map(|s| s.parse().unwrap())
         .unwrap_or(Platform::NoArch);
 
+    // Track if there were actual variants before we add target_platform.
+    // We only compute a build hash when there are real variants (not just target_platform).
+    let has_real_variants = !variant.is_empty();
+
+    // Always add target_platform for consistency
     if !variant.contains_key("target_platform") {
         variant.insert(
             String::from("target_platform"),
@@ -475,8 +480,8 @@ fn create_output(
                 .into(),
             build: {
                 let base_build = index_json.build.clone();
-                // If there are variants, append a hash to make the build string unique
-                if variant.is_empty() {
+                // Only compute a hash when there are real variants (not just target_platform)
+                if !has_real_variants {
                     base_build
                 } else {
                     let variant_hash = compute_variant_hash(&variant);
