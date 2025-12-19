@@ -16,9 +16,7 @@ use crate::Interface;
 
 #[derive(Deserialize, Serialize, Debug, Default)]
 pub struct ChannelOptions {
-    pub channel: Vec<NamedChannelOrUrl>,
-    pub priority: Option<i32>,
-    pub prepend: bool,
+    pub channels: Vec<NamedChannelOrUrl>,
     pub feature: Option<String>,
     pub no_install: bool,
     pub lock_file_usage: LockFileUsage,
@@ -41,12 +39,14 @@ pub async fn add<I: Interface>(
     interface: &I,
     mut workspace: WorkspaceMut,
     options: ChannelOptions,
+    priority: Option<i32>,
+    prepend: bool,
 ) -> miette::Result<()> {
     // Add the channels to the manifest
     workspace.manifest().add_channels(
-        prioritized_channels(&options.channel, options.priority),
+        prioritized_channels(&options.channels, priority),
         &feature_name(&options.feature),
-        options.prepend,
+        prepend,
     )?;
 
     // TODO: Update all environments touched by the features defined.
@@ -68,8 +68,8 @@ pub async fn add<I: Interface>(
     // Report back to the user
     report(
         interface,
-        &options.channel,
-        options.priority,
+        &options.channels,
+        priority,
         "Added",
         &workspace.channel_config(),
     )
@@ -82,10 +82,11 @@ pub async fn remove<I: Interface>(
     interface: &I,
     mut workspace: WorkspaceMut,
     options: ChannelOptions,
+    priority: Option<i32>,
 ) -> miette::Result<()> {
     // Remove the channels from the manifest
     workspace.manifest().remove_channels(
-        prioritized_channels(&options.channel, options.priority),
+        prioritized_channels(&options.channels, priority),
         &feature_name(&options.feature),
     )?;
 
@@ -107,9 +108,49 @@ pub async fn remove<I: Interface>(
     // Report back to the user
     report(
         interface,
-        &options.channel,
-        options.priority,
+        &options.channels,
+        priority,
         "Removed",
+        &workspace.channel_config(),
+    )
+    .await?;
+
+    Ok(())
+}
+
+pub async fn set<I: Interface>(
+    interface: &I,
+    mut workspace: WorkspaceMut,
+    options: ChannelOptions,
+) -> miette::Result<()> {
+    // Set the channels in the manifest (this replaces all existing channels)
+    workspace.manifest().set_channels(
+        prioritized_channels(&options.channels, None),
+        &feature_name(&options.feature),
+    )?;
+
+    // Update the lock file with the new channel configuration
+    get_update_lock_file_and_prefix(
+        &workspace.workspace().default_environment(),
+        UpdateMode::Revalidate,
+        UpdateLockFileOptions {
+            lock_file_usage: options.lock_file_usage,
+            no_install: options.no_install,
+            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
+        },
+        ReinstallPackages::default(),
+        &InstallFilter::default(),
+    )
+    .await?;
+
+    let workspace = workspace.save().await.into_diagnostic()?;
+
+    // Report back to the user
+    report(
+        interface,
+        &options.channels,
+        None,
+        "Set",
         &workspace.channel_config(),
     )
     .await?;

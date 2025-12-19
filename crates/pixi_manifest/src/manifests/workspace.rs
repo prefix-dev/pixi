@@ -752,6 +752,40 @@ impl WorkspaceManifestMut<'_> {
         Ok(())
     }
 
+    /// Sets / replaces all channels of a manifest.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_channels(
+        &mut self,
+        channels: impl IntoIterator<Item = PrioritizedChannel>,
+        feature_name: &FeatureName,
+    ) -> miette::Result<()> {
+        let channels: Vec<_> = channels.into_iter().collect();
+
+        // Get the current channels
+        let current = if feature_name.is_default() {
+            &mut self.workspace.workspace.channels
+        } else {
+            self.workspace
+                .get_or_insert_feature_mut(feature_name)
+                .channels_mut()
+        };
+
+        // Replace with the new channels
+        current.clear();
+        current.extend(channels.iter().cloned());
+
+        // Update the TOML document
+        let toml_channels = self.document.get_array_mut("channels", feature_name)?;
+        toml_channels.clear();
+        for channel in &channels {
+            toml_channels.push(Value::from(channel.clone()));
+        }
+
+        Ok(())
+    }
+
     /// Set the workspace name.
     ///
     /// This function modifies both the workspace and the TOML document. Use
