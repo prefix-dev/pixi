@@ -7,7 +7,6 @@ use tempfile::TempDir;
 
 use crate::{
     common::{LockFileExt, PixiControl},
-    develop_dependencies_tests::create_test_package_database,
     setup_tracing,
 };
 use pixi_test_utils::{MockRepoData, Package};
@@ -553,7 +552,7 @@ async fn test_different_variants_have_different_caches() {
     setup_tracing();
 
     // Create a package database with common dependencies
-    let mut package_database = create_test_package_database();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("sdl2", "2.26.5")
             .with_materialize(true)

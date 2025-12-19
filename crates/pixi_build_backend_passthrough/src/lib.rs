@@ -120,6 +120,14 @@ impl InMemoryBackend for PassthroughBackend {
             .output_directory
             .unwrap_or(params.work_directory.clone());
 
+        // Determine the subdir - use the one from index_json if present, otherwise default to NoArch
+        let subdir = self
+            .index_json
+            .subdir
+            .as_ref()
+            .map(|s| s.parse().expect("invalid subdir in index.json"))
+            .unwrap_or(Platform::NoArch);
+
         let output_file = match &self.config.package {
             Some(package) => {
                 let absolute_path = self.source_dir.join(package);
@@ -136,9 +144,19 @@ impl InMemoryBackend for PassthroughBackend {
                 );
                 let output_path = output_dir.join(&file_name);
 
-                // Create a modified index_json with the variant-aware build string
+                // Create a modified index_json with augmented fields from project_model
+                // This must match what conda_outputs returns in CondaOutputMetadata
                 let mut modified_index_json = self.index_json.clone();
                 modified_index_json.build = build_string.clone();
+                modified_index_json.subdir = Some(subdir.to_string());
+                if let Some(name) = &self.project_model.name {
+                    modified_index_json.name =
+                        PackageName::try_from(name.as_str()).expect("invalid package name");
+                }
+                if let Some(version) = &self.project_model.version {
+                    modified_index_json.version = version.clone().into();
+                }
+                modified_index_json.license = self.project_model.license.clone();
 
                 create_conda_package_on_the_fly(&modified_index_json, &output_path).map_err(
                     |err| {
@@ -158,13 +176,7 @@ impl InMemoryBackend for PassthroughBackend {
             name: self.index_json.name.as_normalized().to_owned(),
             version: self.index_json.version.clone(),
             build: build_string,
-            subdir: self
-                .index_json
-                .subdir
-                .as_ref()
-                .expect("missing subdir in index.json")
-                .parse()
-                .expect("invalid subdir in index.json"),
+            subdir,
         })
     }
 }
