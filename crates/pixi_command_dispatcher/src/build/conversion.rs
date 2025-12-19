@@ -1,5 +1,5 @@
 use pixi_build_types::{
-    BinaryPackageSpecV1, PackageSpecV1, SourcePackageLocationSpec, SourcePackageSpec,
+    BinaryPackageSpec, PackageSpec, SourcePackageLocationSpec, SourcePackageSpec,
 };
 use pixi_spec::{BinarySpec, DetailedSpec, UrlBinarySpec};
 use rattler_conda_types::NamedChannelOrUrl;
@@ -37,6 +37,7 @@ pub fn from_source_package_location_spec(
                 url: url.url,
                 md5: url.md5,
                 sha256: url.sha256,
+                subdirectory: url.subdirectory,
             })
         }
 
@@ -44,16 +45,16 @@ pub fn from_source_package_location_spec(
             pixi_spec::SourceLocationSpec::Git(pixi_spec::GitSpec {
                 git: git.git,
                 rev: git.rev.map(|r| match r {
-                    pixi_build_frontend::types::GitReferenceV1::Branch(b) => {
+                    pixi_build_frontend::types::GitReference::Branch(b) => {
                         pixi_spec::GitReference::Branch(b)
                     }
-                    pixi_build_frontend::types::GitReferenceV1::Tag(t) => {
+                    pixi_build_frontend::types::GitReference::Tag(t) => {
                         pixi_spec::GitReference::Tag(t)
                     }
-                    pixi_build_frontend::types::GitReferenceV1::Rev(rev) => {
+                    pixi_build_frontend::types::GitReference::Rev(rev) => {
                         pixi_spec::GitReference::Rev(rev)
                     }
-                    pixi_build_frontend::types::GitReferenceV1::DefaultBranch => {
+                    pixi_build_frontend::types::GitReference::DefaultBranch => {
                         pixi_spec::GitReference::DefaultBranch
                     }
                 }),
@@ -69,16 +70,16 @@ pub fn from_source_package_location_spec(
     }
 }
 
-/// Converts a [`BinaryPackageSpecV1`] to a [`pixi_spec::BinarySpec`].
-pub fn from_binary_spec_v1(spec: BinaryPackageSpecV1) -> pixi_spec::BinarySpec {
+/// Converts a [`BinaryPackageSpec`] to a [`pixi_spec::BinarySpec`].
+pub fn from_binary_spec_v1(spec: BinaryPackageSpec) -> pixi_spec::BinarySpec {
     match spec {
-        BinaryPackageSpecV1 {
+        BinaryPackageSpec {
             url: Some(url),
             sha256,
             md5,
             ..
         } => BinarySpec::Url(UrlBinarySpec { url, md5, sha256 }),
-        BinaryPackageSpecV1 {
+        BinaryPackageSpec {
             version: Some(version),
             build: None,
             build_number: None,
@@ -90,7 +91,7 @@ pub fn from_binary_spec_v1(spec: BinaryPackageSpecV1) -> pixi_spec::BinarySpec {
             license: None,
             url: _,
         } => BinarySpec::Version(version),
-        BinaryPackageSpecV1 {
+        BinaryPackageSpec {
             version,
             build,
             build_number,
@@ -115,10 +116,10 @@ pub fn from_binary_spec_v1(spec: BinaryPackageSpecV1) -> pixi_spec::BinarySpec {
     }
 }
 
-/// Converts a [`PackageSpecV1`] to a [`pixi_spec::PixiSpec`].
-pub fn from_package_spec_v1(source: PackageSpecV1) -> pixi_spec::PixiSpec {
+/// Converts a [`PackageSpec`] to a [`pixi_spec::PixiSpec`].
+pub fn from_package_spec_v1(source: PackageSpec) -> pixi_spec::PixiSpec {
     match source {
-        PackageSpecV1::Source(source) => from_source_spec_v1(source).into(),
-        PackageSpecV1::Binary(binary) => from_binary_spec_v1(binary).into(),
+        PackageSpec::Source(source) => from_source_spec_v1(source).into(),
+        PackageSpec::Binary(binary) => from_binary_spec_v1(binary).into(),
     }
 }

@@ -132,6 +132,9 @@ impl PixiSpec {
                 url,
                 md5: spec.md5,
                 sha256: spec.sha256,
+                // A namelessmatchspec always describes a binary spec which cannot have a
+                // subdirectory
+                subdirectory: None,
             })
         } else if spec.build.is_none()
             && spec.build_number.is_none()
@@ -335,7 +338,8 @@ impl PixiSpec {
     }
 
     /// Returns true if this spec represents a mutable source.
-    /// A spec is mutable if it points to a local path-based source (non-binary).
+    /// A spec is mutable if it points to a local path-based source
+    /// (non-binary).
     pub fn is_mutable(&self) -> bool {
         match self {
             Self::Version(_) => false,
@@ -674,10 +678,13 @@ impl From<SourceLocationSpec> for rattler_lock::source::SourceLocation {
 #[cfg(feature = "rattler_lock")]
 impl From<rattler_lock::source::UrlSourceLocation> for UrlSourceSpec {
     fn from(value: rattler_lock::source::UrlSourceLocation) -> Self {
+        let rattler_lock::source::UrlSourceLocation { url, md5, sha256 } = value;
+
         Self {
-            url: value.url,
-            md5: value.md5,
-            sha256: value.sha256,
+            url,
+            md5,
+            sha256,
+            subdirectory: None,
         }
     }
 }

@@ -8,74 +8,35 @@
 //! and backwards compatibility. The idea for **backwards compatibility** is
 //! that we try not to break this in pixi as much as possible. So as long as
 //! older pixi TOMLs keep loading, we can send them to the backend.
-//!
-//! In regards to forwards compatibility, we want to be able to keep converting
-//! to all versions of the `VersionedProjectModel` as much as possible.
-//!
-//! This is why we append a `V{version}` to the type names, to indicate the
-//! version of the protocol.
-//!
-//! Only the whole ProjectModel is versioned explicitly in an enum.
-//! When making a change to one of the types, be sure to add another enum
-//! declaration if it is breaking.
 use std::{convert::Infallible, fmt::Display, hash::Hash, path::PathBuf, str::FromStr};
 
 use ordermap::OrderMap;
 use pixi_stable_hash::{IsDefault, StableHashBuilder};
-use rattler_conda_types::{BuildNumberSpec, StringMatcher, Version, VersionSpec};
+use rattler_conda_types::{BuildNumber, BuildNumberSpec, StringMatcher, Version, VersionSpec};
 use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay, serde_as};
 use url::Url;
 
-/// Enum containing all versions of the project model.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "version", content = "data")]
-#[serde(rename_all = "camelCase")]
-pub enum VersionedProjectModel {
-    /// Version 1 of the project model.
-    #[serde(rename = "1")]
-    V1(ProjectModelV1),
-    // When adding don't forget to update the highest_version function
-}
-
-impl VersionedProjectModel {
-    /// Highest version of the project model.
-    pub fn highest_version() -> u32 {
-        // increase this when adding a new version
-        1
-    }
-
-    /// Move into the v1 type, returns None if the version is not v1.
-    pub fn into_v1(self) -> Option<ProjectModelV1> {
-        match self {
-            VersionedProjectModel::V1(v) => Some(v),
-            // Add this once we have more versions
-            //_ => None,
-        }
-    }
-
-    /// Returns a reference to the v1 type, returns None if the version is not
-    /// v1.
-    pub fn as_v1(&self) -> Option<&ProjectModelV1> {
-        match self {
-            VersionedProjectModel::V1(v) => Some(v),
-            // Add this once we have more versions
-            //_ => None,
-        }
-    }
-}
-
 /// The source package name of a package. Not normalized per se.
 pub type SourcePackageName = String;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectModelV1 {
+pub struct ProjectModel {
     /// The name of the project
     pub name: Option<String>,
 
+    /// A build string configured by the user.
+    pub build_string: Option<String>,
+
+    /// The build number configured by the user.
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<u64>"))]
+    pub build_number: Option<BuildNumber>,
+
     /// The version of the project
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub version: Option<Version>,
 
     /// An optional project description
@@ -104,10 +65,10 @@ pub struct ProjectModelV1 {
 
     /// The target of the project, this may contain
     /// platform specific configurations.
-    pub targets: Option<TargetsV1>,
+    pub targets: Option<Targets>,
 }
 
-impl IsDefault for ProjectModelV1 {
+impl IsDefault for ProjectModel {
     type Item = Self;
 
     fn is_non_default(&self) -> Option<&Self::Item> {
@@ -115,16 +76,11 @@ impl IsDefault for ProjectModelV1 {
     }
 }
 
-impl From<ProjectModelV1> for VersionedProjectModel {
-    fn from(value: ProjectModelV1) -> Self {
-        VersionedProjectModel::V1(value)
-    }
-}
-
 /// Represents a target selector. Currently, we only support explicit platform
 /// selection.
 #[derive(Debug, Clone, DeserializeFromStr, SerializeDisplay, Eq, PartialEq)]
-pub enum TargetSelectorV1 {
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub enum TargetSelector {
     // Platform specific configuration
     Unix,
     Linux,
@@ -134,43 +90,48 @@ pub enum TargetSelectorV1 {
     // TODO: Add minijinja coolness here.
 }
 
-impl Display for TargetSelectorV1 {
+impl Display for TargetSelector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TargetSelectorV1::Unix => write!(f, "unix"),
-            TargetSelectorV1::Linux => write!(f, "linux"),
-            TargetSelectorV1::Win => write!(f, "win"),
-            TargetSelectorV1::MacOs => write!(f, "macos"),
-            TargetSelectorV1::Platform(p) => write!(f, "{p}"),
+            TargetSelector::Unix => write!(f, "unix"),
+            TargetSelector::Linux => write!(f, "linux"),
+            TargetSelector::Win => write!(f, "win"),
+            TargetSelector::MacOs => write!(f, "macos"),
+            TargetSelector::Platform(p) => write!(f, "{p}"),
         }
     }
 }
-impl FromStr for TargetSelectorV1 {
+impl FromStr for TargetSelector {
     type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "unix" => Ok(TargetSelectorV1::Unix),
-            "linux" => Ok(TargetSelectorV1::Linux),
-            "win" => Ok(TargetSelectorV1::Win),
-            "macos" => Ok(TargetSelectorV1::MacOs),
-            _ => Ok(TargetSelectorV1::Platform(s.to_string())),
+            "unix" => Ok(TargetSelector::Unix),
+            "linux" => Ok(TargetSelector::Linux),
+            "win" => Ok(TargetSelector::Win),
+            "macos" => Ok(TargetSelector::MacOs),
+            _ => Ok(TargetSelector::Platform(s.to_string())),
         }
     }
 }
 
 /// A collect of targets including a default target.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct TargetsV1 {
-    pub default_target: Option<TargetV1>,
+pub struct Targets {
+    pub default_target: Option<Target>,
 
     /// We use an [`OrderMap`] to preserve the order in which the items where
     /// defined in the manifest.
-    pub targets: Option<OrderMap<TargetSelectorV1, TargetV1>>,
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<TargetSelector, Target>>")
+    )]
+    pub targets: Option<OrderMap<TargetSelector, Target>>,
 }
 
-impl TargetsV1 {
+impl Targets {
     /// Check if this targets struct is effectively empty (contains no
     /// meaningful data that should affect the hash).
     pub fn is_empty(&self) -> bool {
@@ -182,7 +143,7 @@ impl TargetsV1 {
     }
 }
 
-impl IsDefault for TargetsV1 {
+impl IsDefault for Targets {
     type Item = Self;
 
     fn is_non_default(&self) -> Option<&Self::Item> {
@@ -191,19 +152,32 @@ impl IsDefault for TargetsV1 {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct TargetV1 {
+pub struct Target {
     /// Host dependencies of the project
-    pub host_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<SourcePackageName, PackageSpec>>")
+    )]
+    pub host_dependencies: Option<OrderMap<SourcePackageName, PackageSpec>>,
 
     /// Build dependencies of the project
-    pub build_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<SourcePackageName, PackageSpec>>")
+    )]
+    pub build_dependencies: Option<OrderMap<SourcePackageName, PackageSpec>>,
 
     /// Run dependencies of the project
-    pub run_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<SourcePackageName, PackageSpec>>")
+    )]
+    pub run_dependencies: Option<OrderMap<SourcePackageName, PackageSpec>>,
 }
 
-impl TargetV1 {
+impl Target {
     /// Check if this target is effectively empty (contains no meaningful data
     /// that should affect the hash).
     pub fn is_empty(&self) -> bool {
@@ -218,7 +192,7 @@ impl TargetV1 {
     }
 }
 
-impl IsDefault for TargetV1 {
+impl IsDefault for Target {
     type Item = Self;
 
     fn is_non_default(&self) -> Option<&Self::Item> {
@@ -227,17 +201,19 @@ impl IsDefault for TargetV1 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub enum PackageSpecV1 {
+pub enum PackageSpec {
     /// This is a binary dependency
-    Binary(BinaryPackageSpecV1),
+    Binary(BinaryPackageSpec),
     /// This is a dependency on a source package
     Source(SourcePackageSpec),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct NamedSpecV1<T> {
+pub struct NamedSpec<T> {
     pub name: SourcePackageName,
 
     #[serde(flatten)]
@@ -246,17 +222,21 @@ pub struct NamedSpecV1<T> {
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SourcePackageSpec {
     #[serde(flatten)]
     pub location: SourcePackageLocationSpec,
     /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
     #[serde_as(as = "Option<DisplayFromStr>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub version: Option<VersionSpec>,
     /// The build string of the package (e.g. `py37_0`, `py37h6de7cb9_0`, `py*`)
     #[serde_as(as = "Option<DisplayFromStr>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub build: Option<StringMatcher>,
     /// The build number of the package
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub build_number: Option<BuildNumberSpec>,
     /// The subdir of the channel
     pub subdir: Option<String>,
@@ -265,8 +245,8 @@ pub struct SourcePackageSpec {
     pub license: Option<String>,
 }
 
-impl From<PathSpecV1> for SourcePackageSpec {
-    fn from(value: PathSpecV1) -> Self {
+impl From<PathSpec> for SourcePackageSpec {
+    fn from(value: PathSpec) -> Self {
         Self {
             location: SourcePackageLocationSpec::Path(value),
             version: None,
@@ -278,8 +258,8 @@ impl From<PathSpecV1> for SourcePackageSpec {
     }
 }
 
-impl From<UrlSpecV1> for SourcePackageSpec {
-    fn from(value: UrlSpecV1) -> Self {
+impl From<UrlSpec> for SourcePackageSpec {
+    fn from(value: UrlSpec) -> Self {
         Self {
             location: SourcePackageLocationSpec::Url(value),
             version: None,
@@ -291,8 +271,8 @@ impl From<UrlSpecV1> for SourcePackageSpec {
     }
 }
 
-impl From<GitSpecV1> for SourcePackageSpec {
-    fn from(value: GitSpecV1) -> Self {
+impl From<GitSpec> for SourcePackageSpec {
+    fn from(value: GitSpec) -> Self {
         Self {
             location: SourcePackageLocationSpec::Git(value),
             version: None,
@@ -305,42 +285,50 @@ impl From<GitSpecV1> for SourcePackageSpec {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
 pub enum SourcePackageLocationSpec {
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL. The package should be retrieved from the URL and can
     /// either represent a source or binary package depending on the archive
     /// type.
-    Url(UrlSpecV1),
+    Url(UrlSpec),
 
     /// The spec is represented as a git repository. The package represents a
     /// source distribution of some kind.
-    Git(GitSpecV1),
+    Git(GitSpec),
 
     /// The spec is represented as a local path. The package should be retrieved
     /// from the local filesystem. The package can be either a source or binary
     /// package.
-    Path(PathSpecV1),
+    Path(PathSpec),
 }
 
 #[serde_as]
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct UrlSpecV1 {
+pub struct UrlSpec {
     /// The URL of the package
     pub url: Url,
 
     /// The md5 hash of the package
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Md5>>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub md5: Option<Md5Hash>,
 
     /// The sha256 hash of the package
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Sha256>>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub sha256: Option<Sha256Hash>,
+
+    /// The subdirectory of the package in the archive
+    pub subdirectory: Option<String>,
 }
 
-impl std::fmt::Debug for UrlSpecV1 {
+impl std::fmt::Debug for UrlSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut debug_struct = f.debug_struct("UrlSpecV1");
+        let mut debug_struct = f.debug_struct("UrlSpec");
 
         debug_struct.field("url", &self.url);
         if let Some(md5) = &self.md5 {
@@ -355,13 +343,14 @@ impl std::fmt::Debug for UrlSpecV1 {
 
 /// A specification of a package from a git repository.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct GitSpecV1 {
+pub struct GitSpec {
     /// The git url of the package which can contain git+ prefixes.
     pub git: Url,
 
     /// The git revision of the package
-    pub rev: Option<GitReferenceV1>,
+    pub rev: Option<GitReference>,
 
     /// The git subdirectory of the package
     pub subdirectory: Option<String>,
@@ -369,16 +358,18 @@ pub struct GitSpecV1 {
 
 /// A specification of a package from a path
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct PathSpecV1 {
+pub struct PathSpec {
     /// The path to the package
     pub path: String,
 }
 
 /// A reference to a specific commit in a git repository.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub enum GitReferenceV1 {
+pub enum GitReference {
     /// The HEAD commit of a branch.
     Branch(String),
 
@@ -395,15 +386,19 @@ pub enum GitReferenceV1 {
 /// Similar to a [`rattler_conda_types::NamelessMatchSpec`]
 #[serde_as]
 #[derive(Clone, Serialize, Deserialize, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct BinaryPackageSpecV1 {
+pub struct BinaryPackageSpec {
     /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
     #[serde_as(as = "Option<DisplayFromStr>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub version: Option<VersionSpec>,
     /// The build string of the package (e.g. `py37_0`, `py37h6de7cb9_0`, `py*`)
     #[serde_as(as = "Option<DisplayFromStr>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub build: Option<StringMatcher>,
     /// The build number of the package
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub build_number: Option<BuildNumberSpec>,
     /// Match the specific filename of the package
     pub file_name: Option<String>,
@@ -413,9 +408,11 @@ pub struct BinaryPackageSpecV1 {
     pub subdir: Option<String>,
     /// The md5 hash of the package
     #[serde_as(as = "Option<SerializableHash<Md5>>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub md5: Option<Md5Hash>,
     /// The sha256 hash of the package
     #[serde_as(as = "Option<SerializableHash<Sha256>>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub sha256: Option<Sha256Hash>,
     /// The URL of the package, if it is available
     pub url: Option<Url>,
@@ -423,7 +420,7 @@ pub struct BinaryPackageSpecV1 {
     pub license: Option<String>,
 }
 
-impl From<VersionSpec> for BinaryPackageSpecV1 {
+impl From<VersionSpec> for BinaryPackageSpec {
     fn from(value: VersionSpec) -> Self {
         Self {
             version: Some(value),
@@ -432,7 +429,7 @@ impl From<VersionSpec> for BinaryPackageSpecV1 {
     }
 }
 
-impl From<&VersionSpec> for BinaryPackageSpecV1 {
+impl From<&VersionSpec> for BinaryPackageSpec {
     fn from(value: &VersionSpec) -> Self {
         Self {
             version: Some(value.clone()),
@@ -441,7 +438,7 @@ impl From<&VersionSpec> for BinaryPackageSpecV1 {
     }
 }
 
-impl std::fmt::Debug for BinaryPackageSpecV1 {
+impl std::fmt::Debug for BinaryPackageSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut debug_struct = f.debug_struct("NamelessMatchSpecV1");
 
@@ -475,13 +472,15 @@ impl std::fmt::Debug for BinaryPackageSpecV1 {
 }
 
 // Custom Hash implementations that skip default values for stability
-impl Hash for ProjectModelV1 {
+impl Hash for ProjectModel {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let ProjectModelV1 {
+        let ProjectModel {
             name,
+            build_string,
+            build_number,
             version,
             description,
             authors,
@@ -496,6 +495,8 @@ impl Hash for ProjectModelV1 {
 
         StableHashBuilder::<H>::new()
             .field("authors", authors)
+            .field("build_string", build_string)
+            .field("build_number", build_number)
             .field("description", description)
             .field("documentation", documentation)
             .field("homepage", homepage)
@@ -510,16 +511,16 @@ impl Hash for ProjectModelV1 {
     }
 }
 
-impl Hash for TargetSelectorV1 {
+impl Hash for TargetSelector {
     /// Custom hash implementation that uses discriminant values to keep the
     /// hash as stable as possible when adding new enum variants.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            TargetSelectorV1::Unix => 0u8.hash(state),
-            TargetSelectorV1::Linux => 1u8.hash(state),
-            TargetSelectorV1::Win => 2u8.hash(state),
-            TargetSelectorV1::MacOs => 3u8.hash(state),
-            TargetSelectorV1::Platform(p) => {
+            TargetSelector::Unix => 0u8.hash(state),
+            TargetSelector::Linux => 1u8.hash(state),
+            TargetSelector::Win => 2u8.hash(state),
+            TargetSelector::MacOs => 3u8.hash(state),
+            TargetSelector::Platform(p) => {
                 4u8.hash(state);
                 p.hash(state);
             }
@@ -527,12 +528,12 @@ impl Hash for TargetSelectorV1 {
     }
 }
 
-impl Hash for TargetsV1 {
+impl Hash for Targets {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let TargetsV1 {
+        let Targets {
             default_target,
             targets,
         } = self;
@@ -544,12 +545,12 @@ impl Hash for TargetsV1 {
     }
 }
 
-impl Hash for TargetV1 {
+impl Hash for Target {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let TargetV1 {
+        let Target {
             build_dependencies,
             host_dependencies,
             run_dependencies,
@@ -563,16 +564,16 @@ impl Hash for TargetV1 {
     }
 }
 
-impl Hash for PackageSpecV1 {
+impl Hash for PackageSpec {
     /// Custom hash implementation that uses discriminant values to keep the
     /// hash as stable as possible when adding new enum variants.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            PackageSpecV1::Binary(spec) => {
+            PackageSpec::Binary(spec) => {
                 0u8.hash(state);
                 spec.hash(state);
             }
-            PackageSpecV1::Source(spec) => {
+            PackageSpec::Source(spec) => {
                 1u8.hash(state);
                 spec.hash(state);
             }
@@ -594,7 +595,8 @@ impl Hash for SourcePackageSpec {
         // Hash the location first, to ensure compatibility with older versions.
         location.hash(state);
 
-        // Add the new fields using StableHashBuilder for forward/backward compatibility.
+        // Add the new fields using StableHashBuilder for forward/backward
+        // compatibility.
         StableHashBuilder::<H>::new()
             .field("build", build)
             .field("build_number", build_number)
@@ -626,22 +628,28 @@ impl Hash for SourcePackageLocationSpec {
     }
 }
 
-impl Hash for UrlSpecV1 {
+impl Hash for UrlSpec {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let UrlSpecV1 { url, md5, sha256 } = self;
+        let UrlSpec {
+            url,
+            md5,
+            sha256,
+            subdirectory,
+        } = self;
 
         StableHashBuilder::<H>::new()
             .field("md5", md5)
             .field("sha256", sha256)
             .field("url", url)
+            .field("subdirectory", subdirectory)
             .finish(state);
     }
 }
 
-impl Hash for GitSpecV1 {
+impl Hash for GitSpec {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
@@ -654,40 +662,40 @@ impl Hash for GitSpecV1 {
     }
 }
 
-impl Hash for PathSpecV1 {
+impl Hash for PathSpec {
     /// Custom hash implementation to keep the hash as stable as possible.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let PathSpecV1 { path } = self;
+        let PathSpec { path } = self;
 
         path.hash(state);
     }
 }
 
-impl Hash for GitReferenceV1 {
+impl Hash for GitReference {
     /// Custom hash implementation that uses discriminant values to keep the
     /// hash as stable as possible when adding new enum variants.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            GitReferenceV1::Branch(b) => {
+            GitReference::Branch(b) => {
                 0u8.hash(state);
                 b.hash(state);
             }
-            GitReferenceV1::Tag(t) => {
+            GitReference::Tag(t) => {
                 1u8.hash(state);
                 t.hash(state);
             }
-            GitReferenceV1::Rev(r) => {
+            GitReference::Rev(r) => {
                 2u8.hash(state);
                 r.hash(state);
             }
-            GitReferenceV1::DefaultBranch => {
+            GitReference::DefaultBranch => {
                 3u8.hash(state);
             }
         }
     }
 }
 
-impl IsDefault for GitReferenceV1 {
+impl IsDefault for GitReference {
     type Item = Self;
 
     fn is_non_default(&self) -> Option<&Self::Item> {
@@ -695,7 +703,7 @@ impl IsDefault for GitReferenceV1 {
     }
 }
 
-impl Hash for BinaryPackageSpecV1 {
+impl Hash for BinaryPackageSpec {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
@@ -730,8 +738,10 @@ mod tests {
     #[test]
     fn test_hash_stability_with_default_values() {
         // Create a minimal ProjectModelV1 instance
-        let mut project_model = ProjectModelV1 {
+        let mut project_model = ProjectModel {
             name: Some("test-project".to_string()),
+            build_number: None,
+            build_string: None,
             version: None,
             description: None,
             authors: None,
@@ -749,19 +759,19 @@ mod tests {
         // Add empty targets field - with corrected implementation, this should NOT
         // change hash because we only include discriminants for
         // non-default/non-empty values
-        project_model.targets = Some(TargetsV1 {
+        project_model.targets = Some(Targets {
             default_target: None,
             targets: Some(OrderMap::new()),
         });
         let hash2 = calculate_hash(&project_model);
 
         // Add a target with empty dependencies - this should also NOT change hash
-        let empty_target = TargetV1 {
+        let empty_target = Target {
             host_dependencies: Some(OrderMap::new()),
             build_dependencies: Some(OrderMap::new()),
             run_dependencies: Some(OrderMap::new()),
         };
-        project_model.targets = Some(TargetsV1 {
+        project_model.targets = Some(Targets {
             default_target: Some(empty_target),
             targets: Some(OrderMap::new()),
         });
@@ -786,8 +796,10 @@ mod tests {
     #[test]
     fn test_hash_changes_with_meaningful_values() {
         // Create a minimal ProjectModelV1 instance
-        let mut project_model = ProjectModelV1 {
+        let mut project_model = ProjectModel {
             name: Some("test-project".to_string()),
+            build_number: None,
+            build_string: None,
             version: None,
             description: None,
             authors: None,
@@ -810,15 +822,15 @@ mod tests {
         let mut deps = OrderMap::new();
         deps.insert(
             "python".to_string(),
-            PackageSpecV1::Binary(BinaryPackageSpecV1::default()),
+            PackageSpec::Binary(BinaryPackageSpec::default()),
         );
 
-        let target_with_deps = TargetV1 {
+        let target_with_deps = Target {
             host_dependencies: Some(deps),
             build_dependencies: Some(OrderMap::new()),
             run_dependencies: Some(OrderMap::new()),
         };
-        project_model.targets = Some(TargetsV1 {
+        project_model.targets = Some(Targets {
             default_target: Some(target_with_deps),
             targets: Some(OrderMap::new()),
         });
@@ -838,11 +850,11 @@ mod tests {
 
     #[test]
     fn test_binary_package_spec_hash_stability() {
-        let spec1 = BinaryPackageSpecV1::default();
+        let spec1 = BinaryPackageSpec::default();
         let hash1 = calculate_hash(&spec1);
 
         // Create another default spec with explicit None values
-        let spec2 = BinaryPackageSpecV1 {
+        let spec2 = BinaryPackageSpec {
             version: None,
             build: None,
             build_number: None,
@@ -863,7 +875,7 @@ mod tests {
         );
 
         // Add a meaningful value
-        let spec3 = BinaryPackageSpecV1 {
+        let spec3 = BinaryPackageSpec {
             file_name: Some("test.tar.bz2".to_string()),
             ..Default::default()
         };
@@ -878,8 +890,8 @@ mod tests {
     #[test]
     fn test_enum_variant_hash_stability() {
         // Test PackageSpecV1 enum variants
-        let binary_spec = PackageSpecV1::Binary(BinaryPackageSpecV1::default());
-        let source_spec = PackageSpecV1::Source(SourcePackageSpec::from(PathSpecV1 {
+        let binary_spec = PackageSpec::Binary(BinaryPackageSpec::default());
+        let source_spec = PackageSpec::Source(SourcePackageSpec::from(PathSpec {
             path: "test".to_string(),
         }));
 
@@ -893,7 +905,7 @@ mod tests {
         );
 
         // Same variant with same content should have same hash
-        let binary_spec2 = PackageSpecV1::Binary(BinaryPackageSpecV1::default());
+        let binary_spec2 = PackageSpec::Binary(BinaryPackageSpec::default());
         let hash3 = calculate_hash(&binary_spec2);
 
         assert_eq!(
@@ -902,26 +914,26 @@ mod tests {
         );
     }
 
-    fn create_sample_target_v1() -> TargetV1 {
-        TargetV1 {
+    fn create_sample_target_v1() -> Target {
+        Target {
             host_dependencies: Some(OrderMap::from([(
                 "host_dep1".to_string(),
-                PackageSpecV1::Binary(BinaryPackageSpecV1::default()),
+                PackageSpec::Binary(BinaryPackageSpec::default()),
             )])),
             build_dependencies: Some(OrderMap::from([(
                 "build_dep1".to_string(),
-                PackageSpecV1::Binary(BinaryPackageSpecV1::default()),
+                PackageSpec::Binary(BinaryPackageSpec::default()),
             )])),
             run_dependencies: Some(OrderMap::from([(
                 "run_dep1".to_string(),
-                PackageSpecV1::Binary(BinaryPackageSpecV1::default()),
+                PackageSpec::Binary(BinaryPackageSpec::default()),
             )])),
         }
     }
 
     #[test]
     fn serialize_targets_v1_with_default_target() {
-        let targets = TargetsV1 {
+        let targets = Targets {
             default_target: Some(create_sample_target_v1()),
             targets: None,
         };
@@ -946,17 +958,17 @@ mod tests {
             "win-arm64",
         ];
 
-        let targets = TargetsV1 {
+        let targets = Targets {
             default_target: None,
             targets: Some(
                 platform_strs
                     .iter()
                     .map(|s| {
                         let selector = match *s {
-                            "unix" => TargetSelectorV1::Unix,
-                            "win" => TargetSelectorV1::Win,
-                            "macos" => TargetSelectorV1::MacOs,
-                            other => TargetSelectorV1::Platform(other.to_string()),
+                            "unix" => TargetSelector::Unix,
+                            "win" => TargetSelector::Win,
+                            "macos" => TargetSelector::MacOs,
+                            other => TargetSelector::Platform(other.to_string()),
                         };
                         (selector, create_sample_target_v1())
                     })
@@ -978,7 +990,7 @@ mod tests {
             "targets": null
         }"#;
 
-        let deserialized: TargetsV1 = serde_json::from_str(json).unwrap();
+        let deserialized: Targets = serde_json::from_str(json).unwrap();
         assert!(deserialized.default_target.is_none());
         assert!(deserialized.targets.is_none());
     }
@@ -1004,14 +1016,14 @@ mod tests {
             }
         }"#;
 
-        let deserialized: TargetsV1 = serde_json::from_str(json).unwrap();
+        let deserialized: Targets = serde_json::from_str(json).unwrap();
         assert!(deserialized.default_target.is_some());
         assert!(deserialized.targets.is_some());
         assert!(
             deserialized
                 .targets
                 .unwrap()
-                .contains_key(&TargetSelectorV1::Unix)
+                .contains_key(&TargetSelector::Unix)
         );
     }
 
@@ -1023,25 +1035,25 @@ mod tests {
         let mut deps = OrderMap::new();
         deps.insert(
             "python".to_string(),
-            PackageSpecV1::Binary(BinaryPackageSpecV1::default()),
+            PackageSpec::Binary(BinaryPackageSpec::default()),
         );
 
         // Same dependency in host_dependencies
-        let target1 = TargetV1 {
+        let target1 = Target {
             host_dependencies: Some(deps.clone()),
             build_dependencies: None,
             run_dependencies: None,
         };
 
         // Same dependency in run_dependencies
-        let target2 = TargetV1 {
+        let target2 = Target {
             host_dependencies: None,
             build_dependencies: None,
             run_dependencies: Some(deps.clone()),
         };
 
         // Same dependency in build_dependencies
-        let target3 = TargetV1 {
+        let target3 = Target {
             host_dependencies: None,
             build_dependencies: Some(deps.clone()),
             run_dependencies: None,
@@ -1065,12 +1077,12 @@ mod tests {
         );
 
         // Test with TargetsV1 as well
-        let targets1 = TargetsV1 {
+        let targets1 = Targets {
             default_target: Some(target1),
             targets: None,
         };
 
-        let targets2 = TargetsV1 {
+        let targets2 = Targets {
             default_target: Some(target2),
             targets: None,
         };
@@ -1087,14 +1099,14 @@ mod tests {
     #[test]
     fn test_hash_collision_bug_project_model() {
         // Test the same issue in ProjectModelV1
-        let project1 = ProjectModelV1 {
+        let project1 = ProjectModel {
             name: Some("test".to_string()),
             description: Some("test description".to_string()),
             license: None,
             ..Default::default()
         };
 
-        let project2 = ProjectModelV1 {
+        let project2 = ProjectModel {
             name: Some("test".to_string()),
             description: None,
             license: Some("test description".to_string()),

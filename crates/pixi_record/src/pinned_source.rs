@@ -5,7 +5,6 @@ use std::{
     str::FromStr,
 };
 
-use crate::path_utils::unixify_relative_path;
 use miette::IntoDiagnostic;
 use pixi_git::{
     GitUrl,
@@ -20,6 +19,8 @@ use serde_with::serde_as;
 use thiserror::Error;
 use typed_path::{Utf8TypedPathBuf, Utf8UnixPathBuf};
 use url::Url;
+
+use crate::path_utils::unixify_relative_path;
 
 /// Describes an exact revision of a source checkout. This is used to pin a
 /// particular source definition to a revision. A git source spec does not
@@ -197,8 +198,9 @@ impl PinnedSourceSpec {
                 // If source spec specifies a subdirectory, it must match
                 match (&source_git.subdirectory, &pinned_git.source.subdirectory) {
                     (Some(source_subdir), Some(pinned_subdir)) => source_subdir == pinned_subdir,
-                    (Some(_), None) => false, // Source expects subdirectory, but pinned doesn't have one
-                    (None, _) => true,        // Source doesn't care about subdirectory
+                    (Some(_), None) => false, /* Source expects subdirectory, but pinned doesn't
+                    * have one */
+                    (None, _) => true, // Source doesn't care about subdirectory
                 }
             }
 
@@ -212,12 +214,12 @@ impl PinnedSourceSpec {
         }
     }
 
-    /// Resolves a relative path from the lock file back into a full pinned source spec.
-    /// This is the inverse of `make_relative_to`.
+    /// Resolves a relative path from the lock file back into a full pinned
+    /// source spec. This is the inverse of `make_relative_to`.
     ///
-    /// Given a relative path (typically from a lock file's `build_source`) and a base
-    /// pinned source (typically the `manifest_source`), this reconstructs the full
-    /// pinned source spec.
+    /// Given a relative path (typically from a lock file's `build_source`) and
+    /// a base pinned source (typically the `manifest_source`), this
+    /// reconstructs the full pinned source spec.
     ///
     /// Returns `None` if:
     /// - The base is not a compatible type
@@ -225,7 +227,8 @@ impl PinnedSourceSpec {
     ///
     /// # Arguments
     /// * `build_source_path` - The possibly relative path from the lock file
-    /// * `base` - The base pinned source to resolve against (typically the manifest_source)
+    /// * `base` - The base pinned source to resolve against (typically the
+    ///   manifest_source)
     /// * `workspace_root` - The workspace root directory
     pub fn from_relative_to(
         build_source_path: Utf8UnixPathBuf,
@@ -307,16 +310,18 @@ impl PinnedSourceSpec {
         }
     }
 
-    /// Makes this pinned source relative to another pinned source if both are path sources
-    /// or both are git sources pointing to the same repository.
-    /// This is useful for making `build_source` relative to `manifest_source` in lock files.
+    /// Makes this pinned source relative to another pinned source if both are
+    /// path sources or both are git sources pointing to the same
+    /// repository. This is useful for making `build_source` relative to
+    /// `manifest_source` in lock files.
     ///
     /// Returns `None` if:
     /// - Not a compatible combination (different types or different git repos)
     /// - The sources cannot be made relative to each other
     ///
     /// # Arguments
-    /// * `base` - The base pinned source to make this path relative to (typically the manifest_source)
+    /// * `base` - The base pinned source to make this path relative to
+    ///   (typically the manifest_source)
     pub fn make_relative_to(
         &self,
         base: &PinnedSourceSpec,
@@ -360,7 +365,8 @@ impl PinnedSourceSpec {
                 let this_path = std::path::Path::new(this_subdir);
 
                 let relative = pathdiff::diff_paths(this_path, base_path)?;
-                // Same here: ensure lock only contains `/` even when diff runs on Windows paths.
+                // Same here: ensure lock only contains `/` even when diff runs on Windows
+                // paths.
                 let relative_str = unixify_relative_path(relative.as_path());
 
                 Some(Utf8UnixPathBuf::from(relative_str))
@@ -409,6 +415,9 @@ pub struct PinnedUrlSpec {
     /// The md5 hash of the archive.
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Md5>>")]
     pub md5: Option<Md5Hash>,
+    /// The subdirectory of the package inside the archive
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subdirectory: Option<String>,
 }
 
 impl PinnedUrlSpec {
@@ -848,6 +857,19 @@ pub enum SourceMismatchError {
         requested: Option<String>,
     },
 
+    #[error(
+        "the locked url subdirectory '{locked}' for '{url}' does not match the requested git subdirectory '{requested}'"
+    )]
+    /// The locked git rev does not match the requested git rev.
+    UrlSubdirectoryMismatch {
+        /// The url.
+        url: Url,
+        /// The locked git subdirectory.
+        locked: String,
+        /// The requested git subdirectory.
+        requested: String,
+    },
+
     #[error("the locked source type does not match the requested type")]
     /// The locked source type does not match the requested type.
     SourceTypeMismatch,
@@ -898,6 +920,13 @@ impl PinnedUrlSpec {
                     .md5
                     .map_or("None".to_string(), |md5| format!("{md5:x}")),
                 requested: format!("{md5:x}"),
+            });
+        }
+        if spec.subdirectory != self.subdirectory {
+            return Err(SourceMismatchError::UrlSubdirectoryMismatch {
+                url: self.url.clone(),
+                locked: self.subdirectory.as_deref().unwrap_or("None").to_string(),
+                requested: spec.subdirectory.as_deref().unwrap_or("None").to_string(),
             });
         }
         Ok(())
@@ -1013,6 +1042,7 @@ impl From<PinnedUrlSpec> for UrlSourceSpec {
             url: value.url,
             sha256: Some(value.sha256),
             md5: value.md5,
+            subdirectory: value.subdirectory,
         }
     }
 }
@@ -1029,16 +1059,16 @@ impl From<PinnedGitSpec> for GitSpec {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
+    use std::{path::Path, str::FromStr};
 
     use pixi_git::sha::GitSha;
     use pixi_spec::{GitReference, GitSpec};
     use url::Url;
 
-    use crate::{PinnedGitCheckout, PinnedGitSpec, PinnedUrlSpec, SourceMismatchError};
-    use std::path::Path;
-
-    use crate::{PinnedPathSpec, PinnedSourceSpec};
+    use crate::{
+        PinnedGitCheckout, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec,
+        SourceMismatchError,
+    };
 
     #[test]
     fn test_spec_satisfies() {
@@ -1437,12 +1467,14 @@ mod tests {
             )
             .unwrap(),
             md5: None,
+            subdirectory: None,
         });
 
         let spec = SourceLocationSpec::Url(UrlSourceSpec {
             url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
             sha256: None,
             md5: None,
+            subdirectory: None,
         });
 
         assert!(pinned.matches_source_spec(&spec));
@@ -1457,12 +1489,14 @@ mod tests {
             )
             .unwrap(),
             md5: None,
+            subdirectory: None,
         });
 
         let spec = SourceLocationSpec::Url(UrlSourceSpec {
             url: Url::parse("https://example.com/different.tar.gz").unwrap(),
             sha256: None,
             md5: None,
+            subdirectory: None,
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1498,6 +1532,7 @@ mod tests {
             url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
             sha256: None,
             md5: None,
+            subdirectory: None,
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1512,6 +1547,7 @@ mod tests {
             )
             .unwrap(),
             md5: None,
+            subdirectory: None,
         });
 
         let spec = SourceLocationSpec::Path(PathSourceSpec {
@@ -1538,7 +1574,8 @@ mod tests {
             subdirectory: None,
         });
 
-        // Should match - we only compare repository and subdirectory, not the commit/rev
+        // Should match - we only compare repository and subdirectory, not the
+        // commit/rev
         assert!(pinned.matches_source_spec(&spec));
     }
 
@@ -1565,7 +1602,8 @@ mod tests {
 
     #[test]
     fn test_relative_to_relative() {
-        // Both paths are relative - after resolution they become absolute, then relative path is computed
+        // Both paths are relative - after resolution they become absolute, then
+        // relative path is computed
         let workspace_root = Path::new("/workspace");
 
         let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {

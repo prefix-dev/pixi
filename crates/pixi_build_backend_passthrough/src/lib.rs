@@ -18,8 +18,8 @@ use pixi_build_frontend::{
     json_rpc::CommunicationError,
 };
 use pixi_build_types::{
-    BackendCapabilities, BinaryPackageSpecV1, NamedSpecV1, PackageSpecV1, ProjectModelV1,
-    SourcePackageName, TargetSelectorV1, TargetV1, TargetsV1, VariantValue, VersionedProjectModel,
+    BackendCapabilities, BinaryPackageSpec, NamedSpec, PackageSpec, ProjectModel,
+    SourcePackageName, Target, TargetSelector, Targets, VariantValue,
     procedures::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{
@@ -48,7 +48,7 @@ pub enum BackendEvent {
 /// backend is useful for testing and debugging purposes, as it does not perform
 /// any actual building or processing of the project model.
 pub struct PassthroughBackend {
-    project_model: ProjectModelV1,
+    project_model: ProjectModel,
     config: PassthroughBackendConfig,
     source_dir: PathBuf,
     index_json: Option<IndexJson>,
@@ -67,7 +67,6 @@ impl InMemoryBackend for PassthroughBackend {
         BackendCapabilities {
             provides_conda_outputs: Some(true),
             provides_conda_build_v1: Some(true),
-            ..BackendCapabilities::default()
         }
     }
 
@@ -129,7 +128,7 @@ impl InMemoryBackend for PassthroughBackend {
 /// configuration for that package, multiple outputs will be generated - one for
 /// each variant combination.
 fn generate_variant_outputs(
-    project_model: &ProjectModelV1,
+    project_model: &ProjectModel,
     index_json: &Option<IndexJson>,
     params: &CondaOutputsParams,
 ) -> Vec<CondaOutput> {
@@ -180,7 +179,7 @@ fn generate_variant_outputs(
 
 /// Finds all dependency names that have "*" requirements and have variant
 /// configurations.
-fn find_variant_keys(project_model: &ProjectModelV1, params: &CondaOutputsParams) -> Vec<String> {
+fn find_variant_keys(project_model: &ProjectModel, params: &CondaOutputsParams) -> Vec<String> {
     let Some(targets) = &project_model.targets else {
         return Vec::new();
     };
@@ -192,7 +191,7 @@ fn find_variant_keys(project_model: &ProjectModelV1, params: &CondaOutputsParams
     let mut variant_keys = BTreeSet::new();
 
     // Helper to check dependencies in a target
-    let mut check_deps = |deps: Option<&OrderMap<SourcePackageName, PackageSpecV1>>| {
+    let mut check_deps = |deps: Option<&OrderMap<SourcePackageName, PackageSpec>>| {
         if let Some(deps) = deps {
             for (name, spec) in deps {
                 // Check if this dependency has a "*" requirement
@@ -229,13 +228,13 @@ fn find_variant_keys(project_model: &ProjectModelV1, params: &CondaOutputsParams
 }
 
 /// Checks if a package spec has a "*" version requirement.
-fn is_star_requirement(spec: &PackageSpecV1) -> bool {
-    let PackageSpecV1::Binary(boxed) = spec else {
+fn is_star_requirement(spec: &PackageSpec) -> bool {
+    let PackageSpec::Binary(boxed) = spec else {
         return false;
     };
 
     match boxed {
-        BinaryPackageSpecV1 {
+        BinaryPackageSpec {
             version,
             build: None,
             build_number: None,
@@ -297,7 +296,7 @@ fn generate_variant_combinations(
 
 /// Creates a single output with the given variant configuration.
 fn create_output(
-    project_model: &ProjectModelV1,
+    project_model: &ProjectModel,
     index_json: &Option<IndexJson>,
     params: &CondaOutputsParams,
     mut variant: BTreeMap<String, VariantValue>,
@@ -374,8 +373,8 @@ fn create_output(
     }
 }
 
-fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, PackageSpecV1>>>(
-    targets: &Option<TargetsV1>,
+fn extract_dependencies<F: Fn(&Target) -> Option<&OrderMap<SourcePackageName, PackageSpec>>>(
+    targets: &Option<Targets>,
     extract: F,
     platform: Platform,
     variant: &BTreeMap<String, VariantValue>,
@@ -401,7 +400,7 @@ fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, 
                     let resolved_spec = if is_star_requirement(spec) {
                         if let Some(variant_value) = variant.get(name.as_str()) {
                             // Replace with a version spec using the variant value
-                            PackageSpecV1::Binary(BinaryPackageSpecV1 {
+                            PackageSpec::Binary(BinaryPackageSpec {
                                 version: Some(
                                     rattler_conda_types::VersionSpec::from_str(
                                         variant_value.to_string().as_str(),
@@ -418,7 +417,7 @@ fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, 
                         spec.clone()
                     };
 
-                    NamedSpecV1 {
+                    NamedSpec {
                         name: name.clone(),
                         spec: resolved_spec,
                     }
@@ -432,15 +431,15 @@ fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, 
     }
 }
 
-/// Returns true if the given [`TargetSelectorV1`] matches the specified
+/// Returns true if the given [`TargetSelector`] matches the specified
 /// `platform`.
-fn matches_target_selector(selector: &TargetSelectorV1, platform: Platform) -> bool {
+fn matches_target_selector(selector: &TargetSelector, platform: Platform) -> bool {
     match selector {
-        TargetSelectorV1::Unix => platform.is_unix(),
-        TargetSelectorV1::Linux => platform.is_linux(),
-        TargetSelectorV1::Win => platform.is_windows(),
-        TargetSelectorV1::MacOs => platform.is_osx(),
-        TargetSelectorV1::Platform(target_platform) => target_platform == platform.as_str(),
+        TargetSelector::Unix => platform.is_unix(),
+        TargetSelector::Linux => platform.is_linux(),
+        TargetSelector::Win => platform.is_windows(),
+        TargetSelector::MacOs => platform.is_osx(),
+        TargetSelector::Platform(target_platform) => target_platform == platform.as_str(),
     }
 }
 
@@ -456,10 +455,10 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
         params: InitializeParams,
     ) -> Result<Self::Backend, Box<CommunicationError>> {
         let project_model = match params.project_model {
-            Some(VersionedProjectModel::V1(project_model)) => project_model,
-            _ => {
+            Some(project_model) => project_model,
+            None => {
                 return Err(Box::new(CommunicationError::BackendError(
-                    BackendError::new("Passthrough backend only supports project model v1"),
+                    BackendError::new("Passthrough backend requires a project model"),
                 )));
             }
         };
@@ -470,7 +469,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
         };
 
         // Read the package file if it is specified
-        let source_dir = params.source_dir.expect("Missing source directory");
+        let source_dir = params.source_directory.expect("Missing source directory");
         let index_json = match &config.package {
             Some(path) => {
                 let path = source_dir.join(path);
@@ -637,14 +636,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use pixi_build_types::{BinaryPackageSpecV1, PackageSpecV1};
+    use pixi_build_types::{BinaryPackageSpec, PackageSpec};
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
     use super::*;
 
     #[test]
     fn test_is_star_requirement_with_star() {
-        let spec = PackageSpecV1::Binary(BinaryPackageSpecV1 {
+        let spec = PackageSpec::Binary(BinaryPackageSpec {
             version: Some(VersionSpec::from_str("*", ParseStrictness::Lenient).unwrap()),
             ..Default::default()
         });
@@ -654,7 +653,7 @@ mod tests {
 
     #[test]
     fn test_is_star_requirement_with_version() {
-        let spec = PackageSpecV1::Binary(BinaryPackageSpecV1 {
+        let spec = PackageSpec::Binary(BinaryPackageSpec {
             version: Some(VersionSpec::from_str(">=1.0", ParseStrictness::Lenient).unwrap()),
             ..Default::default()
         });
@@ -664,7 +663,7 @@ mod tests {
 
     #[test]
     fn test_is_star_requirement_with_no_version() {
-        let spec = PackageSpecV1::Binary(BinaryPackageSpecV1::default());
+        let spec = PackageSpec::Binary(BinaryPackageSpec::default());
 
         assert!(is_star_requirement(&spec));
     }

@@ -2,7 +2,7 @@ use std::{fmt::Display, hash::Hash, str::FromStr, sync::Arc};
 
 use itertools::Either;
 use pixi_build_types::{
-    BinaryPackageSpecV1, NamedSpecV1, PackageSpecV1,
+    BinaryPackageSpec, NamedSpec, PackageSpec,
     procedures::conda_outputs::{
         CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputRunExports,
     },
@@ -372,7 +372,7 @@ impl PixiRunExports {
     /// Converts a [`CondaOutputRunExports`] to a [`PixiRunExports`].
     pub fn try_from_protocol(output: &CondaOutputRunExports) -> Result<Self, DependenciesError> {
         fn convert_package_spec(
-            specs: &[NamedSpecV1<PackageSpecV1>],
+            specs: &[NamedSpec<PackageSpec>],
         ) -> Result<DependencyMap<PackageName, PixiSpec>, DependenciesError> {
             specs
                 .iter()
@@ -388,7 +388,7 @@ impl PixiRunExports {
         }
 
         fn convert_binary_spec(
-            specs: &[NamedSpecV1<BinaryPackageSpecV1>],
+            specs: &[NamedSpec<BinaryPackageSpec>],
         ) -> Result<DependencyMap<PackageName, BinarySpec>, DependenciesError> {
             specs
                 .iter()
