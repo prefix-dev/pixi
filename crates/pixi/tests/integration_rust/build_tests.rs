@@ -553,7 +553,17 @@ async fn test_different_variants_have_different_caches() {
     setup_tracing();
 
     // Create a package database with common dependencies
-    let package_database = create_test_package_database();
+    let mut package_database = create_test_package_database();
+    package_database.add_package(
+        Package::build("sdl2", "2.26.5")
+            .with_materialize(true)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("sdl2", "2.32.0")
+            .with_materialize(true)
+            .finish(),
+    );
 
     // Convert to channel
     let channel = package_database.into_channel().await.unwrap();

@@ -27,16 +27,6 @@ pub(crate) fn create_test_package_database() -> MockRepoData {
     db.add_package(Package::build("python", "3.13.0").finish());
     db.add_package(Package::build("numpy", "1.21.0").finish());
     db.add_package(Package::build("requests", "2.26.0").finish());
-    db.add_package(
-        Package::build("sdl2", "2.26.5")
-            .with_materialize(true)
-            .finish(),
-    );
-    db.add_package(
-        Package::build("sdl2", "2.32.0")
-            .with_materialize(true)
-            .finish(),
-    );
 
     db
 }
