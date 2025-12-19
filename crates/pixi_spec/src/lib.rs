@@ -418,6 +418,25 @@ impl SourceSpec {
         ::serde::Serialize::serialize(&self.location, toml_edit::ser::ValueSerializer::new())
             .expect("conversion to toml cannot fail")
     }
+
+    /// Checks if two `SourceSpec` objects are semantically equal.
+    ///
+    /// This comparison is more lenient than exact equality (`PartialEq`):
+    /// - For git specs: Uses `GitSpec::semantically_equal` which normalizes URLs
+    ///   and treats `None` as equivalent to `DefaultBranch`
+    /// - For other specs: Uses exact equality
+    ///
+    /// This is useful for comparing source specs from different sources (e.g., lock file
+    /// vs. current metadata) where the same logical reference might be represented
+    /// differently.
+    pub fn semantically_equal(&self, other: &SourceSpec) -> bool {
+        match (&self.location, &other.location) {
+            (SourceLocationSpec::Git(a), SourceLocationSpec::Git(b)) => a.semantically_equal(b),
+            (SourceLocationSpec::Url(a), SourceLocationSpec::Url(b)) => a == b,
+            (SourceLocationSpec::Path(a), SourceLocationSpec::Path(b)) => a == b,
+            _ => false,
+        }
+    }
 }
 
 impl SourceLocationSpec {
@@ -661,7 +680,10 @@ mod test {
     use serde_json::{Value, json};
     use url::Url;
 
-    use crate::PixiSpec;
+    use crate::{
+        GitReference, GitSpec, PathSourceSpec, PixiSpec, SourceLocationSpec, SourceSpec,
+        UrlSourceSpec,
+    };
 
     #[test]
     fn test_is_binary() {
@@ -751,5 +773,56 @@ mod test {
         ]}, {
             insta::assert_yaml_snapshot!(snapshot);
         });
+    }
+
+    #[test]
+    fn test_source_spec_semantically_equal_git() {
+        let spec1 = SourceSpec {
+            location: SourceLocationSpec::Git(GitSpec {
+                git: Url::parse("https://github.com/user/repo").unwrap(),
+                rev: None,
+                subdirectory: None,
+            }),
+        };
+        let spec2 = SourceSpec {
+            location: SourceLocationSpec::Git(GitSpec {
+                git: Url::parse("https://github.com/user/repo").unwrap(),
+                rev: Some(GitReference::DefaultBranch),
+                subdirectory: None,
+            }),
+        };
+        // None and DefaultBranch should be semantically equal
+        assert!(spec1.semantically_equal(&spec2));
+    }
+
+    #[test]
+    fn test_source_spec_semantically_equal_url() {
+        let spec1 = SourceSpec {
+            location: SourceLocationSpec::Url(UrlSourceSpec {
+                url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
+                md5: None,
+                sha256: None,
+            }),
+        };
+        let spec2 = spec1.clone();
+        assert!(spec1.semantically_equal(&spec2));
+    }
+
+    #[test]
+    fn test_source_spec_semantically_equal_mismatched_types() {
+        let git_spec = SourceSpec {
+            location: SourceLocationSpec::Git(GitSpec {
+                git: Url::parse("https://github.com/user/repo").unwrap(),
+                rev: None,
+                subdirectory: None,
+            }),
+        };
+        let path_spec = SourceSpec {
+            location: SourceLocationSpec::Path(PathSourceSpec {
+                path: "/some/path".into(),
+            }),
+        };
+        // Different types should not be semantically equal
+        assert!(!git_spec.semantically_equal(&path_spec));
     }
 }

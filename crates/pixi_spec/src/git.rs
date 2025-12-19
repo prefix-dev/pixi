@@ -34,6 +34,43 @@ impl Display for GitSpec {
     }
 }
 
+impl GitSpec {
+    /// Checks if two `GitSpec` objects are semantically equal.
+    ///
+    /// This comparison is more lenient than exact equality (`PartialEq`):
+    /// - URLs are compared using `RepositoryUrl` which normalizes `.git` suffix and case
+    /// - `rev: None` is considered equal to `rev: Some(GitReference::DefaultBranch)`
+    /// - Subdirectories are compared exactly
+    ///
+    /// This is useful for comparing git specs from different sources (e.g., lock file
+    /// vs. current metadata) where the same logical reference might be represented
+    /// differently.
+    pub fn semantically_equal(&self, other: &GitSpec) -> bool {
+        use pixi_git::url::RepositoryUrl;
+
+        // Compare repository URLs (ignoring .git suffix, case, etc.)
+        if RepositoryUrl::new(&self.git) != RepositoryUrl::new(&other.git) {
+            return false;
+        }
+
+        // Compare subdirectories exactly
+        if self.subdirectory != other.subdirectory {
+            return false;
+        }
+
+        // Compare revisions semantically
+        // `None` and `Some(DefaultBranch)` are considered equivalent
+        let self_is_default = GitReference::is_default_branch(&self.rev);
+        let other_is_default = GitReference::is_default_branch(&other.rev);
+
+        match (self_is_default, other_is_default) {
+            (true, true) => true,
+            (false, false) => self.rev == other.rev,
+            _ => false,
+        }
+    }
+}
+
 /// A reference to a specific commit in a git repository.
 #[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord, ::serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -171,5 +208,137 @@ impl From<GitReference> for git::GitReference {
             GitReference::Rev(rev) => git::GitReference::from_rev(rev),
             GitReference::DefaultBranch => git::GitReference::DefaultBranch,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use url::Url;
+
+    #[test]
+    fn test_git_spec_semantically_equal_same_specs() {
+        let spec1 = GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: Some(GitReference::Branch("main".to_string())),
+            subdirectory: None,
+        };
+        let spec2 = spec1.clone();
+        assert!(spec1.semantically_equal(&spec2));
+    }
+
+    #[test]
+    fn test_git_spec_semantically_equal_url_normalization() {
+        // URLs with and without .git suffix should be equal
+        let spec1 = GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: Some(GitReference::Branch("main".to_string())),
+            subdirectory: None,
+        };
+        let spec2 = GitSpec {
+            git: Url::parse("https://github.com/user/repo.git").unwrap(),
+            rev: Some(GitReference::Branch("main".to_string())),
+            subdirectory: None,
+        };
+        assert!(spec1.semantically_equal(&spec2));
+    }
+
+    #[test]
+    fn test_git_spec_semantically_equal_default_branch_vs_none() {
+        // None and DefaultBranch should be considered equal
+        let spec1 = GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: None,
+            subdirectory: None,
+        };
+        let spec2 = GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: Some(GitReference::DefaultBranch),
+            subdirectory: None,
+        };
+        assert!(spec1.semantically_equal(&spec2));
+    }
+
+    #[test]
+    fn test_git_spec_semantically_equal_different_revs() {
+        // Different explicit revisions should not be equal
+        let spec1 = GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: Some(GitReference::Branch("main".to_string())),
+            subdirectory: None,
+        };
+        let spec2 = GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: Some(GitReference::Branch("develop".to_string())),
+            subdirectory: None,
+        };
+        assert!(!spec1.semantically_equal(&spec2));
+    }
+
+    #[test]
+    fn test_git_spec_semantically_equal_different_repos() {
+        // Different repositories should not be equal
+        let spec1 = GitSpec {
+            git: Url::parse("https://github.com/user/repo1").unwrap(),
+            rev: Some(GitReference::Branch("main".to_string())),
+            subdirectory: None,
+        };
+        let spec2 = GitSpec {
+            git: Url::parse("https://github.com/user/repo2").unwrap(),
+            rev: Some(GitReference::Branch("main".to_string())),
+            subdirectory: None,
+        };
+        assert!(!spec1.semantically_equal(&spec2));
+    }
+
+    #[test]
+    fn test_git_spec_semantically_equal_different_subdirectories() {
+        // Different subdirectories should not be equal
+        let spec1 = GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: Some(GitReference::Branch("main".to_string())),
+            subdirectory: Some("dir1".to_string()),
+        };
+        let spec2 = GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: Some(GitReference::Branch("main".to_string())),
+            subdirectory: Some("dir2".to_string()),
+        };
+        assert!(!spec1.semantically_equal(&spec2));
+    }
+
+    #[test]
+    fn test_git_spec_semantically_equal_rev_vs_branch() {
+        // GitReference::Rev("main") and GitReference::Branch("main") are not equal
+        // because they represent different semantic meanings (even if they might
+        // resolve to the same commit)
+        let spec1 = GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: Some(GitReference::Rev("main".to_string())),
+            subdirectory: None,
+        };
+        let spec2 = GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: Some(GitReference::Branch("main".to_string())),
+            subdirectory: None,
+        };
+        // These are different because Rev and Branch are different enum variants
+        assert!(!spec1.semantically_equal(&spec2));
+    }
+
+    #[test]
+    fn test_git_spec_semantically_equal_tag_vs_rev() {
+        // Tag and Rev with same name should not be equal
+        let spec1 = GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: Some(GitReference::Tag("v1.0".to_string())),
+            subdirectory: None,
+        };
+        let spec2 = GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: Some(GitReference::Rev("v1.0".to_string())),
+            subdirectory: None,
+        };
+        assert!(!spec1.semantically_equal(&spec2));
     }
 }

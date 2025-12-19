@@ -1180,7 +1180,9 @@ async fn verify_source_metadata(
                 for (source_name, locked_source_spec) in &source_record.sources {
                     match current_record.sources.get(source_name) {
                         Some(current_source_spec) => {
-                            if locked_source_spec != current_source_spec {
+                            // Use semantic equality which handles git spec normalization
+                            // (e.g., None vs DefaultBranch, URL normalization)
+                            if !locked_source_spec.semantically_equal(current_source_spec) {
                                 return Err(Box::new(PlatformUnsat::SourceDependencyChanged {
                                     package: package_name,
                                     dependency: source_name.clone(),
