@@ -105,16 +105,10 @@ impl InMemoryBackend for PassthroughBackend {
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
-        let build_string = if variant.is_empty() {
-            self.index_json.build.clone()
-        } else {
-            let variant_hash = compute_variant_hash(&variant);
-            if self.index_json.build.is_empty() {
-                variant_hash
-            } else {
-                format!("{}_{}", self.index_json.build, variant_hash)
-            }
-        };
+        // Check if there are real variants (not just target_platform)
+        let has_real_variants = variant.keys().any(|k| k != "target_platform");
+        let build_string =
+            compute_build_string(&self.index_json.build, &variant, has_real_variants);
 
         let output_dir = params
             .output_directory
@@ -418,6 +412,28 @@ fn generate_variant_combinations(
         .collect()
 }
 
+/// Computes the build string for a package with optional variant hash.
+///
+/// When there are real variants (variants other than just target_platform),
+/// the build string is augmented with a hash of the variant to ensure unique
+/// package identities.
+fn compute_build_string(
+    base_build: &str,
+    variant: &BTreeMap<String, VariantValue>,
+    has_real_variants: bool,
+) -> String {
+    if !has_real_variants {
+        base_build.to_string()
+    } else {
+        let variant_hash = compute_variant_hash(variant);
+        if base_build.is_empty() {
+            variant_hash
+        } else {
+            format!("{}_{}", base_build, variant_hash)
+        }
+    }
+}
+
 /// Computes a short hash of the variant for use in build strings.
 /// This ensures that different variants produce different build strings.
 fn compute_variant_hash(variant: &BTreeMap<String, VariantValue>) -> String {
@@ -490,20 +506,7 @@ fn create_output(
                 .cloned()
                 .unwrap_or_else(|| Version::major(0))
                 .into(),
-            build: {
-                let base_build = index_json.build.clone();
-                // Only compute a hash when there are real variants (not just target_platform)
-                if !has_real_variants {
-                    base_build
-                } else {
-                    let variant_hash = compute_variant_hash(&variant);
-                    if base_build.is_empty() {
-                        variant_hash
-                    } else {
-                        format!("{}_{}", base_build, variant_hash)
-                    }
-                }
-            },
+            build: compute_build_string(&index_json.build, &variant, has_real_variants),
             build_number: index_json.build_number,
             subdir,
             license: project_model.license.clone(),

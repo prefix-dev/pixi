@@ -11,7 +11,7 @@ use crate::{
 use pixi_test_utils::{MockRepoData, Package};
 
 /// Helper function to create a package database with common test dependencies
-pub(crate) fn create_test_package_database() -> MockRepoData {
+fn create_test_package_database() -> MockRepoData {
     let mut db = MockRepoData::default();
 
     // Add common dependencies that our test packages will need
