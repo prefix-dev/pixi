@@ -620,7 +620,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                 // Create IndexJson from project model for on-the-fly package generation
                 IndexJson {
                     arch: None,
-                    build: String::from("0"),
+                    build: String::new(),
                     build_number: 0,
                     constrains: vec![],
                     depends: vec![],
@@ -637,7 +637,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                     platform: None,
                     purls: None,
                     python_site_packages_path: None,
-                    subdir: Some(Platform::current().to_string()),
+                    subdir: None,
                     timestamp: None,
                     track_features: vec![],
                     version: project_model
