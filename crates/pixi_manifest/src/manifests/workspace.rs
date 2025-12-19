@@ -3163,6 +3163,90 @@ bar = "*"
     }
 
     #[test]
+    fn test_set_channels() {
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = ["conda-forge", "nvidia"]
+platforms = ["linux-64", "win-64"]
+
+[feature.cuda]
+channels = ["nvidia", "pytorch"]
+    "#;
+
+        let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
+
+        // Verify initial state
+        let initial_channels: Vec<_> = manifest
+            .workspace
+            .workspace
+            .channels
+            .iter()
+            .map(|c| c.channel.to_string())
+            .collect();
+        assert_eq!(initial_channels, vec!["conda-forge", "nvidia"]);
+
+        // Set channels for default feature (replacing all existing channels)
+        let new_channels = vec![
+            PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("bioconda"))),
+            PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("conda-forge"))),
+        ];
+        manifest
+            .set_channels(new_channels, &FeatureName::DEFAULT)
+            .unwrap();
+
+        // Verify channels were replaced
+        let channels: Vec<_> = manifest
+            .workspace
+            .workspace
+            .channels
+            .iter()
+            .map(|c| c.channel.to_string())
+            .collect();
+        assert_eq!(channels, vec!["bioconda", "conda-forge"]);
+
+        // Set channels for cuda feature
+        let cuda_feature = FeatureName::from("cuda");
+        let cuda_channels = vec![PrioritizedChannel::from(NamedChannelOrUrl::Name(
+            String::from("cudachannel"),
+        ))];
+        manifest.set_channels(cuda_channels, &cuda_feature).unwrap();
+
+        // Verify cuda feature channels were replaced
+        let cuda_channels: Vec<_> = manifest
+            .workspace
+            .features
+            .get(&cuda_feature)
+            .unwrap()
+            .channels
+            .clone()
+            .unwrap()
+            .iter()
+            .map(|c| c.channel.to_string())
+            .collect();
+        assert_eq!(cuda_channels, vec!["cudachannel"]);
+
+        // Set empty channels
+        manifest
+            .set_channels(Vec::<PrioritizedChannel>::new(), &cuda_feature)
+            .unwrap();
+
+        // Verify cuda feature has empty channels
+        let cuda_channels = manifest
+            .workspace
+            .features
+            .get(&cuda_feature)
+            .unwrap()
+            .channels
+            .clone()
+            .unwrap();
+        assert!(cuda_channels.is_empty());
+
+        assert_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
     fn test_validation_failure_source_dependency() {
         let toml = r#"
         [project]
