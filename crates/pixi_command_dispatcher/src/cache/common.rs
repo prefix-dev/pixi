@@ -85,7 +85,15 @@ pub trait MetadataCache: Clone + Sized {
         // Parse after lock is released
         let metadata: Self::Metadata = match serde_json::from_str(&cache_file_contents) {
             Ok(m) => m,
-            Err(_) => return Ok(None), // Invalid cache
+            Err(err) => {
+                tracing::debug!(
+                    "failed to parse cache file '{}': {}",
+                    cache_file_path.display(),
+                    err
+                );
+                // Invalid cache
+                return Ok(None);
+            }
         };
 
         let version = metadata.cache_version();
@@ -156,11 +164,12 @@ pub trait MetadataCache: Clone + Sized {
         // If cache exists and has different version, return conflict
         if !current_contents.is_empty()
             && let Ok(current_metadata) = serde_json::from_str::<Self::Metadata>(&current_contents)
-                && current_metadata.cache_version() != expected_version {
-                    // Cache was updated by another process
-                    drop(locked_cache_file);
-                    return Ok(WriteResult::Conflict(current_metadata));
-                }
+            && current_metadata.cache_version() != expected_version
+        {
+            // Cache was updated by another process
+            drop(locked_cache_file);
+            return Ok(WriteResult::Conflict(current_metadata));
+        }
 
         // Version matches (or cache is empty), write new data
         let mut new_metadata = metadata;
