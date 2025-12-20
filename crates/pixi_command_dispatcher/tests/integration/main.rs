@@ -645,6 +645,7 @@ async fn source_build_cache_status_clear_works() {
         build_environment: build_env,
         channel_config: default_channel_config(),
         enabled_protocols: Default::default(),
+        variants: None,
     };
 
     let first = dispatcher

@@ -6,7 +6,7 @@ use miette::{Context, IntoDiagnostic};
 use pep508_rs::ExtraName;
 use pixi_core::{WorkspaceLocator, workspace::Environment};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::FindLinksUrlOrPath};
-use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName, VersionOrStar};
+use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{
     ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl,
     ParseStrictness, Platform,
@@ -49,11 +49,10 @@ fn format_pip_extras(extras: &[ExtraName]) -> String {
 }
 
 fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> String {
-    match requirement {
-        PixiPypiSpec::Git {
-            url: git_url,
-            extras,
-        } => {
+    let extras = &requirement.extras;
+
+    match &requirement.source {
+        PixiPypiSource::Git { git: git_url } => {
             let mut git_string = format!(
                 "{name}{extras} @ git+{url}",
                 name = name.as_normalized(),
@@ -71,12 +70,8 @@ fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> 
 
             git_string
         }
-        PixiPypiSpec::Path {
-            path,
-            editable,
-            extras,
-        } => {
-            if let Some(_editable) = editable {
+        PixiPypiSource::Path { path, editable } => {
+            if editable.is_some() {
                 format!(
                     "-e {path}{extras}",
                     path = path.to_string_lossy(),
@@ -90,11 +85,7 @@ fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> 
                 )
             }
         }
-        PixiPypiSpec::Url {
-            url,
-            subdirectory,
-            extras,
-        } => {
+        PixiPypiSource::Url { url, subdirectory } => {
             let mut url_string = format!(
                 "{name}{extras} @ {url}",
                 name = name.as_normalized(),
@@ -108,23 +99,21 @@ fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> 
 
             url_string
         }
-        PixiPypiSpec::Version {
-            version, extras, ..
-        } => {
-            format!(
+        PixiPypiSource::Registry { version, .. } => match version {
+            VersionOrStar::Version(_) => format!(
                 "{name}{extras}{version}",
                 name = name.as_normalized(),
                 extras = format_pip_extras(extras),
                 version = version
-            )
-        }
-        PixiPypiSpec::RawVersion(version) => match version {
-            VersionOrStar::Version(_) => format!(
-                "{name}{version}",
-                name = name.as_normalized(),
-                version = version
             ),
-            VersionOrStar::Star => format!("{name}", name = name.as_normalized()),
+            VersionOrStar::Star if extras.is_empty() => {
+                format!("{name}", name = name.as_normalized())
+            }
+            VersionOrStar::Star => format!(
+                "{name}{extras}",
+                name = name.as_normalized(),
+                extras = format_pip_extras(extras)
+            ),
         },
     }
 }

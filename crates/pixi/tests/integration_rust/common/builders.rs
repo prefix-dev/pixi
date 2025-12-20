@@ -497,6 +497,11 @@ impl InstallBuilder {
         self.args.only = Some(pkg);
         self
     }
+
+    pub fn with_environment(mut self, env: Vec<String>) -> Self {
+        self.args.environment = Some(env);
+        self
+    }
 }
 
 impl IntoFuture for InstallBuilder {

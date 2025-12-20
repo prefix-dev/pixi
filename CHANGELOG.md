@@ -5,6 +5,93 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.62.1] - 2025-12-18
+#### ✨ Highlights
+
+Small release with fixes related to the conda source dependencies.
+
+#### Added
+
+- Resolving PyPI deps with a `SourceRecord` Python by @lucascolley in [#5159](https://github.com/prefix-dev/pixi/pull/5159)
+- Refactor pixi pypi spec by @tdejager in [#5155](https://github.com/prefix-dev/pixi/pull/5155)
+
+#### Documentation
+
+- Add `dev` table documentation by @ruben-arts in [#5163](https://github.com/prefix-dev/pixi/pull/5163)
+
+#### Fixed
+
+- Let `pixi run` or `pixi install` fail on unsupported platforms by @Hofer-Julian in [#5141](https://github.com/prefix-dev/pixi/pull/5141)
+- Include dev dependencies when extracting packages from solve groups by @baszalmstra in [#5156](https://github.com/prefix-dev/pixi/pull/5156)
+- Update lock-file on change by @baszalmstra in [#5158](https://github.com/prefix-dev/pixi/pull/5158)
+
+
+### [0.62.0] - 2025-12-17
+#### ✨ Highlights
+
+Do you need all the build/host/run dependencies of a package? 
+Now you can add source packages to the `[dev]` table to get them all at once without installing the package itself.
+
+```toml
+[dev]
+my-package = { path = "src" }
+```
+
+
+#### Breaking change for `pixi-build` preview
+
+This release removes the input hashes from the lockfile for source dependencies to reduce unnecessary lockfile changes. This may cause some lockfiles with source dependencies to become invalid. Rerun `pixi lock` to fix the lockfile. The changes in this release should significantly reduce lockfile churn when working with source packages going forward.
+
+#### Added
+
+- Add cache path in the error by @nichmor in [#5091](https://github.com/prefix-dev/pixi/pull/5091)
+- Add `feature` CLI commands and add remove_feature to pixi_api by @haecker-felix in [#5086](https://github.com/prefix-dev/pixi/pull/5086)
+- Stop recording PyPI `editable` in lockfile by @tdejager in [#5106](https://github.com/prefix-dev/pixi/pull/5106)
+- Add `--fields` argument to `pixi list` by @baszalmstra in [#5105](https://github.com/prefix-dev/pixi/pull/5105)
+- Add `-m` short alias for manifest_path option by @paugier in [#5066](https://github.com/prefix-dev/pixi/pull/5066)
+- Add description / channel / platform functionality by @haecker-felix in [#5107](https://github.com/prefix-dev/pixi/pull/5107)
+- Add `[dev]` dependencies by @baszalmstra in [#4778](https://github.com/prefix-dev/pixi/pull/4778)
+- Remove `input.hash` from the lockfile by @nichmor [#5011](https://github.com/prefix-dev/pixi/pull/5011)
+
+
+#### Documentation
+
+- Add documentation for RATTLER_AUTH_FILE environment variable by @Hofer-Julian in [#5116](https://github.com/prefix-dev/pixi/pull/5116)
+- Add imprint and privacy policy by @wolfv in [#5120](https://github.com/prefix-dev/pixi/pull/5120)
+- Improve platforms clarity by @ruben-arts in [#5133](https://github.com/prefix-dev/pixi/pull/5133)
+
+
+#### Fixed
+
+- Exclude reserved names from task arg names in schema by @bollwyvl in [#5078](https://github.com/prefix-dev/pixi/pull/5078)
+- Change binary to source should always select source by @baszalmstra in [#5098](https://github.com/prefix-dev/pixi/pull/5098)
+- Handle empty dirs when `global install bla` fails by @mrswastik-robot in [#4860](https://github.com/prefix-dev/pixi/pull/4860)
+- Enhance feature removal confirmation message by @Hofer-Julian in [#5115](https://github.com/prefix-dev/pixi/pull/5115)
+- Use global config tls setting with `self-update` by @tdejager in [#5119](https://github.com/prefix-dev/pixi/pull/5119)
+- Mark more tests as online by @baszalmstra in [#5104](https://github.com/prefix-dev/pixi/pull/5104)
+- DAQ passthrough by @TheSkyentist in [#5126](https://github.com/prefix-dev/pixi/pull/5126)
+- Enforce github actions security with zizmor by @Hofer-Julian in [#5134](https://github.com/prefix-dev/pixi/pull/5134)
+- Accidentally always compiling for rustls by @tdejager in [#5132](https://github.com/prefix-dev/pixi/pull/5132)
+- Zizmor medium severity lints by @Hofer-Julian in [#5144](https://github.com/prefix-dev/pixi/pull/5144)
+
+
+#### Refactor
+
+- Sync "pixi workspace feature remove" behaviour with "pixi remove" by @haecker-felix in [#5129](https://github.com/prefix-dev/pixi/pull/5129)
+- Bumping up to rust v1.90 by @prady0t in [#5112](https://github.com/prefix-dev/pixi/pull/5112)
+
+
+#### New Contributors
+* @prady0t made their first contribution in [#5112](https://github.com/prefix-dev/pixi/pull/5112)
+* @TheSkyentist made their first contribution in [#5126](https://github.com/prefix-dev/pixi/pull/5126)
+
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 ### [0.61.0] - 2025-12-09
 #### ✨ Highlights
 

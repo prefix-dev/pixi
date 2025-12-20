@@ -10,7 +10,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
       - conda: https://prefix.dev/conda-forge/linux-64/_openmp_mutex-4.5-2_gnu.tar.bz2
       - conda: https://prefix.dev/conda-forge/noarch/array-api-compat-1.12.0-pyhe01879c_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/boltons-25.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/bzip2-1.0.8-hda65f42_8.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.11.12-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/ld_impl_linux-64-2.45-default_hbd61a6d_104.conda
@@ -34,7 +33,6 @@ environments:
       - conda: recipe.yaml
       osx-64:
       - conda: https://prefix.dev/conda-forge/noarch/array-api-compat-1.12.0-pyhe01879c_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/boltons-25.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/bzip2-1.0.8-h500dc9f_8.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.11.12-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/icu-75.1-h120a0e1_0.conda
@@ -55,7 +53,6 @@ environments:
       - conda: recipe.yaml
       osx-arm64:
       - conda: https://prefix.dev/conda-forge/noarch/array-api-compat-1.12.0-pyhe01879c_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/boltons-25.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-hd037594_8.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.11.12-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/libexpat-2.7.3-haf25636_0.conda
@@ -75,7 +72,6 @@ environments:
       - conda: recipe.yaml
       win-64:
       - conda: https://prefix.dev/conda-forge/noarch/array-api-compat-1.12.0-pyhe01879c_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/boltons-25.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/bzip2-1.0.8-h0ad9c76_8.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.11.12-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/libexpat-2.7.3-hac47afa_0.conda
@@ -136,17 +132,7 @@ packages:
   - python >=3.10
   - python *
   - array-api-compat
-  - boltons
   license: MIT
-- conda: https://prefix.dev/conda-forge/noarch/boltons-25.0.0-pyhd8ed1ab_0.conda
-  sha256: ea5f4c876eff2ed469551b57f1cc889a3c01128bf3e2e10b1fea11c3ef39eac2
-  md5: c7eb87af73750d6fd97eff8bbee8cb9c
-  depends:
-  - python >=3.9
-  license: BSD-3-Clause
-  license_family: BSD
-  size: 302296
-  timestamp: 1749686302834
 - conda: https://prefix.dev/conda-forge/linux-64/bzip2-1.0.8-hda65f42_8.conda
   sha256: c30daba32ddebbb7ded490f0e371eae90f51e72db620554089103b4a6934b0d5
   md5: 51a19bba1b8ebfb60df25cde030b7ebc

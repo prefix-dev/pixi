@@ -359,10 +359,7 @@ pub async fn resolve_pypi(
     // packages.
     let python_record = locked_pixi_records
         .iter()
-        .find(|r| match r {
-            PixiRecord::Binary(r) => is_python_record(r),
-            _ => false,
-        })
+        .find(|r| is_python_record(r))
         .ok_or_else(|| {
             miette::miette!(
                 help = format!("Try: {}", consts::TASK_STYLE.apply_to("pixi add python")),

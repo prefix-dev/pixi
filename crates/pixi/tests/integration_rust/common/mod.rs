@@ -642,9 +642,9 @@ impl PixiControl {
         InstallBuilder {
             args: Args {
                 environment: None,
-                project_config: WorkspaceConfig {
+                workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
+                    backend_override: self.backend_override.clone(),
                 },
                 lock_file_usage: LockFileUsageConfig {
                     frozen: false,
