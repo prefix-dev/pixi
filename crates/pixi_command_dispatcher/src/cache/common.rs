@@ -85,7 +85,15 @@ pub trait MetadataCache: Clone + Sized {
         // Parse after lock is released
         let metadata: Self::Metadata = match serde_json::from_str(&cache_file_contents) {
             Ok(m) => m,
-            Err(_) => return Ok(None), // Invalid cache
+            Err(err) => {
+                tracing::debug!(
+                    "failed to parse cache file '{}': {}",
+                    cache_file_path.display(),
+                    err
+                );
+                // Invalid cache
+                return Ok(None);
+            }
         };
 
         let version = metadata.cache_version();
