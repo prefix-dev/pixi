@@ -2109,7 +2109,7 @@
           "title": "Default-Environment",
           "description": "A default environment to run the task",
           "type": "string",
-          "minLength": 1
+          "pattern": "^[a-z\\d\\-]+$"
         },
         "depends-on": {
           "title": "Depends-On",
@@ -2163,7 +2163,7 @@
           "title": "Description",
           "description": "A short description of the task",
           "type": "string",
-          "pattern": "^[a-z\\d\\-]+$"
+          "minLength": 1
         },
         "env": {
           "title": "Env",

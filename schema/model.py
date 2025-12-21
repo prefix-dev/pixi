@@ -406,11 +406,11 @@ class TaskInlineTable(StrictBaseModel):
         description="A map of environment variables to values, used in the task, these will be overwritten by the shell.",
         examples=[{"key": "value"}, {"ARGUMENT": "value"}],
     )
-    default_environment: NonEmptyStr | None = Field(
+    default_environment: EnvironmentName | None = Field(
         None,
         description="A default environment to run the task",
     )
-    description: EnvironmentName | None = Field(
+    description: NonEmptyStr | None = Field(
         None,
         description="A short description of the task",
     )
