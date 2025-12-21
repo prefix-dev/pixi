@@ -864,6 +864,13 @@ impl From<Task> for Item {
                     table.insert("args", Value::Array(args_array));
                 }
 
+                if let Some(default_environment) = &process.default_environment {
+                    table.insert(
+                        "default-environment",
+                        default_environment.as_str().to_string().into(),
+                    );
+                }
+
                 if !process.depends_on.is_empty() {
                     table.insert(
                         "depends-on",
