@@ -2106,11 +2106,10 @@
           "pattern": "^[^\\\\]+$"
         },
         "default-environment": {
-          "title": "default-environment",
+          "title": "Default-Environment",
           "description": "A default environment to run the task",
           "type": "string",
-          "minLength": 1,
-          "pattern": "^[^\\\\]+$"
+          "minLength": 1
         },
         "depends-on": {
           "title": "Depends-On",
@@ -2164,10 +2163,7 @@
           "title": "Description",
           "description": "A short description of the task",
           "type": "string",
-          "minLength": 1,
-          "examples": [
-            "Build the project"
-          ]
+          "pattern": "^[a-z\\d\\-]+$"
         },
         "env": {
           "title": "Env",

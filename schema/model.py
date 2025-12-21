@@ -409,15 +409,10 @@ class TaskInlineTable(StrictBaseModel):
     default_environment: NonEmptyStr | None = Field(
         None,
         description="A default environment to run the task",
-        json_schema_extra={
-            "title": "default-environment",
-            "pattern": "^[^\\\\]+$",
-        },
     )
-    description: NonEmptyStr | None = Field(
+    description: EnvironmentName | None = Field(
         None,
         description="A short description of the task",
-        examples=["Build the project"],
     )
     clean_env: bool | None = Field(
         None,
