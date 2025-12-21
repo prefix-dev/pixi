@@ -1022,6 +1022,7 @@ def test_pixi_task_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
                                 "depends_on": [],
                                 "args": [{"name": "name", "default": "World"}],
                                 "cwd": None,
+                                "default_environment": None,
                                 "env": None,
                                 "clean_env": False,
                                 "inputs": None,

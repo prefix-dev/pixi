@@ -227,10 +227,10 @@ impl<'p> TaskGraph<'p> {
                     // environment when constructing the root node (if it exists in the
                     // project). Do not fail if the named environment is missing; fall
                     // back to the resolved `run_env`.
-                    if let Some(default_env_name) = task.default_environment() {
-                        if let Some(env) = project.environment(default_env_name) {
-                            run_env = env;
-                        }
+                    if let Some(default_env_name) = task.default_environment()
+                        && let Some(env) = project.environment(default_env_name)
+                    {
+                        run_env = env;
                     }
 
                     let task_name = args.remove(0);
