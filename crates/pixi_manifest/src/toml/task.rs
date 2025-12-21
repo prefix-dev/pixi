@@ -220,7 +220,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 .optional::<TomlIndexMap<_, _>>("env")
                 .map(TomlIndexMap::into_inner);
             let default_environment = th
-                .optional::<TomlFromStr<EnvironmentName>>("default_environment")
+                .optional::<TomlFromStr<EnvironmentName>>("default-environment")
                 .map(TomlFromStr::into_inner);
             let description = th.optional("description");
             let clean_env = th.optional("clean-env").unwrap_or(false);
