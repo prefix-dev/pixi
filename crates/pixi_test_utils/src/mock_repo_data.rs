@@ -193,7 +193,10 @@ impl Package {
             md5: None,
             purls: None,
             materialize: false,
-            run_exports: None,
+            // Default to empty run_exports to prevent the gateway from trying to
+            // extract run_exports from the actual conda file, which doesn't exist
+            // for non-materialized mock packages.
+            run_exports: Some(RunExportsJson::default()),
         }
     }
 
