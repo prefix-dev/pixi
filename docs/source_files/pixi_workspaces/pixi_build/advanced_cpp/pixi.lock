@@ -3,6 +3,8 @@ environments:
   default:
     channels:
     - url: https://prefix.dev/conda-forge/
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://prefix.dev/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
@@ -34,7 +36,7 @@ environments:
       osx-64:
       - conda: https://prefix.dev/conda-forge/osx-64/bzip2-1.0.8-hfdf4475_7.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.8.3-hbd8a1cb_0.conda
-      - conda: https://prefix.dev/conda-forge/osx-64/libcxx-20.1.8-h3d58e20_1.conda
+      - conda: https://prefix.dev/conda-forge/osx-64/libcxx-21.1.8-h3d58e20_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/libexpat-2.7.1-h21dd04a_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/libffi-3.4.6-h281671d_1.conda
       - conda: https://prefix.dev/conda-forge/osx-64/liblzma-5.8.1-hd471939_2.conda
@@ -53,7 +55,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-h99b78c6_7.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.8.3-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/icu-75.1-hfee45f7_0.conda
-      - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-20.1.8-hf598326_1.conda
+      - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-21.1.8-hf598326_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/libexpat-2.7.1-hec049ff_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/libffi-3.4.6-h1da3d7d_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/liblzma-5.8.1-h39f12f2_2.conda
@@ -167,25 +169,21 @@ packages:
   version: 0.1.0
   build: h0dc7051_0
   subdir: osx-64
+  variants:
+    target_platform: osx-64
   depends:
-  - libcxx >=20
+  - libcxx >=21
   - python_abi 3.12.* *_cp312
-  input:
-    hash: 1150ac6a309b72393cf6e642260d4eae1aeb1bcb9b089f53396ffeb6ba34d620
-    globs:
-    - recipe.yaml
 - conda: .
   name: cpp_math
   version: 0.1.0
   build: h60d57d3_0
   subdir: osx-arm64
+  variants:
+    target_platform: osx-arm64
   depends:
-  - libcxx >=20
+  - libcxx >=21
   - python_abi 3.12.* *_cp312
-  input:
-    hash: 1150ac6a309b72393cf6e642260d4eae1aeb1bcb9b089f53396ffeb6ba34d620
-    globs:
-    - recipe.yaml
 - conda: .
   name: cpp_math
   version: 0.1.0
@@ -195,10 +193,6 @@ packages:
   - vc >=14.1,<15
   - vc14_runtime >=14.16.27033
   - python_abi 3.12.* *_cp312
-  input:
-    hash: 1150ac6a309b72393cf6e642260d4eae1aeb1bcb9b089f53396ffeb6ba34d620
-    globs:
-    - recipe.yaml
 - conda: .
   name: cpp_math
   version: 0.1.0
@@ -208,10 +202,6 @@ packages:
   - libstdcxx >=15
   - libgcc >=15
   - python_abi 3.12.* *_cp312
-  input:
-    hash: 1150ac6a309b72393cf6e642260d4eae1aeb1bcb9b089f53396ffeb6ba34d620
-    globs:
-    - recipe.yaml
 - conda: https://prefix.dev/conda-forge/osx-arm64/icu-75.1-hfee45f7_0.conda
   sha256: 9ba12c93406f3df5ab0a43db8a4b4ef67a5871dfd401010fbe29b218b2cbe620
   md5: 5eb22c1d7b3fc4abb50d92d621583137
@@ -232,24 +222,24 @@ packages:
   license_family: GPL
   size: 676044
   timestamp: 1752032747103
-- conda: https://prefix.dev/conda-forge/osx-64/libcxx-20.1.8-h3d58e20_1.conda
-  sha256: 9643d6c5a94499cddb5ae1bccc4f78aef8cfd77bcf6b37ad325bc7232a8a870f
-  md5: d2db320b940047515f7a27f870984fe7
+- conda: https://prefix.dev/conda-forge/osx-64/libcxx-21.1.8-h3d58e20_0.conda
+  sha256: cbd8e821e97436d8fc126c24b50df838b05ba4c80494fbb93ccaf2e3b2d109fb
+  md5: 9f8a60a77ecafb7966ca961c94f33bd1
   depends:
   - __osx >=10.13
   license: Apache-2.0 WITH LLVM-exception
   license_family: Apache
-  size: 564830
-  timestamp: 1752814841086
-- conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-20.1.8-hf598326_1.conda
-  sha256: 119b3ac75cb1ea29981e5053c2cb10d5f0b06fcc81b486cb7281f160daf673a1
-  md5: a69ef3239d3268ef8602c7a7823fd982
+  size: 569777
+  timestamp: 1765919624323
+- conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-21.1.8-hf598326_0.conda
+  sha256: 82e228975fd491bcf1071ecd0a6ec2a0fcc5f57eb0bd1d52cb13a18d57c67786
+  md5: 780f0251b757564e062187044232c2b7
   depends:
   - __osx >=11.0
   license: Apache-2.0 WITH LLVM-exception
   license_family: Apache
-  size: 568267
-  timestamp: 1752814881595
+  size: 569118
+  timestamp: 1765919724254
 - conda: https://prefix.dev/conda-forge/linux-64/libexpat-2.7.1-hecca717_0.conda
   sha256: da2080da8f0288b95dd86765c801c6e166c4619b910b11f9a8446fb852438dc2
   md5: 4211416ecba1866fab0c6470986c22d6

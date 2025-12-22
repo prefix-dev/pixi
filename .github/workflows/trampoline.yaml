@@ -8,7 +8,8 @@ on:
       - ".github/workflows/trampoline.yaml"
       - "src/global/trampoline.rs"
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -58,6 +59,7 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           fetch-depth: 0 # Fetch full history so we have branch information
+          persist-credentials: false
 
       - name: Set up Rust
         uses: taiki-e/setup-cross-toolchain-action@84e58a47fc2bcd3821a2aa8c153595bbffb0e10f # v1
@@ -65,7 +67,7 @@ jobs:
           target: ${{ matrix.target }}
 
       - name: Set up pixi
-        uses: prefix-dev/setup-pixi@main
+        uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           environments: trampoline
           cache-write: ${{ github.ref == 'refs/heads/main' }}
@@ -74,7 +76,7 @@ jobs:
         run: pixi run build-trampoline --target ${{ matrix.target }}
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: trampoline-${{ matrix.target }}
           path: trampoline/binaries/pixi-trampoline-${{ matrix.target }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}.zst
@@ -91,7 +93,7 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Download all binaries
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           path: trampoline/binaries/
           merge-multiple: true
@@ -100,7 +102,7 @@ jobs:
         run: ls -R trampoline/binaries/
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: trampolines
           path: trampoline/binaries/

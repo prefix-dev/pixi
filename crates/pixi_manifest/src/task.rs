@@ -203,7 +203,7 @@ impl Task {
     pub fn as_single_command(
         &self,
         context: &TaskRenderContext,
-    ) -> Result<Option<Cow<str>>, TemplateStringError> {
+    ) -> Result<Option<Cow<'_, str>>, TemplateStringError> {
         match self {
             Task::Plain(str) => match str.render(context) {
                 Ok(rendered) => Ok(Some(Cow::Owned(rendered))),
@@ -215,7 +215,7 @@ impl Task {
         }
     }
 
-    pub fn as_single_command_no_render(&self) -> Result<Option<Cow<str>>, TemplateStringError> {
+    pub fn as_single_command_no_render(&self) -> Result<Option<Cow<'_, str>>, TemplateStringError> {
         match self {
             Task::Plain(str) => Ok(Some(Cow::Owned(str.source().to_string()))),
             Task::Custom(custom) => custom.cmd.as_single_no_render(),
@@ -706,7 +706,7 @@ impl CmdArgs {
     pub fn as_single(
         &self,
         context: &TaskRenderContext,
-    ) -> Result<Option<Cow<str>>, TemplateStringError> {
+    ) -> Result<Option<Cow<'_, str>>, TemplateStringError> {
         match self {
             CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.render(context)?))),
             CmdArgs::Multiple(args) => {
@@ -742,7 +742,7 @@ impl CmdArgs {
         }
     }
 
-    pub fn as_single_no_render(&self) -> Result<Option<Cow<str>>, TemplateStringError> {
+    pub fn as_single_no_render(&self) -> Result<Option<Cow<'_, str>>, TemplateStringError> {
         match self {
             CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.source().to_string()))),
             CmdArgs::Multiple(args) => Ok(Some(Cow::Owned(
@@ -793,10 +793,10 @@ impl Display for Task {
             write!(f, ", default_environment = {default_environment}")?;
         }
         let env = self.env();
-        if let Some(env) = env {
-            if !env.is_empty() {
-                write!(f, ", env = {env:?}")?;
-            }
+        if let Some(env) = env
+            && !env.is_empty()
+        {
+            write!(f, ", env = {env:?}")?;
         }
         let description = self.description();
         if let Some(description) = description {
@@ -809,7 +809,7 @@ impl Display for Task {
 
 /// Quotes a string argument if it requires quotes to be able to be properly
 /// represented in our shell implementation.
-pub fn quote(in_str: &str) -> Cow<str> {
+pub fn quote(in_str: &str) -> Cow<'_, str> {
     if in_str.is_empty() {
         "\"\"".into()
     } else if in_str.contains(['\t', '\r', '\n', ' ', '[', ']']) {

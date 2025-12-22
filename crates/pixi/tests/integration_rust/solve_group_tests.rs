@@ -101,7 +101,10 @@ async fn conda_solve_group_functionality() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_purl_are_added_for_pypi() {
     setup_tracing();
 
@@ -878,4 +881,168 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
             "boltons should not have purls when not specified in custom conda-pypi-map"
         );
     }
+}
+
+/// Test that environments in a solve-group can have different editability settings
+/// for the same path-based PyPI package.
+///
+/// This test verifies that:
+/// - Two environments in the same solve-group can specify the same local package
+/// - One environment can have it as editable, the other as non-editable
+/// - The lock file stores editable=false for both (editability is looked up from manifest at install time)
+///
+/// Note: With the new architecture, the lock file always stores `editable=false` (omitted in JSON).
+/// The actual editability is determined from the manifest at install time, which allows different
+/// environments in a solve-group to have different editability settings without affecting the lock file.
+#[tokio::test]
+async fn test_solve_group_per_environment_editability() {
+    setup_tracing();
+
+    // Create a fake channel with Python
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("python", "3.10.0").finish());
+
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let channel = Url::from_file_path(channel_dir.path()).unwrap();
+    let platform = Platform::current();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-editability"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+conda-pypi-map = {{}} # disable mapping
+
+    [dependencies]
+    python = "*"
+
+    [feature.prod.pypi-dependencies]
+    # Non-editable in prod
+    my-local-pkg = {{ path = "./my-local-pkg", editable = false }}
+
+    [feature.dev.pypi-dependencies]
+    # Editable in dev
+    my-local-pkg = {{ path = "./my-local-pkg", editable = true }}
+
+    [environments]
+    prod = {{ features = ["prod"], solve-group = "default" }}
+    dev = {{ features = ["dev"], solve-group = "default" }}
+    "#
+    ))
+    .unwrap();
+
+    // Create the local package directory structure
+    let project_path = pixi.workspace_path();
+    let pkg_dir = project_path.join("my-local-pkg");
+    fs_err::create_dir_all(&pkg_dir).unwrap();
+
+    // Create a minimal pyproject.toml for the local package (using setuptools which is simpler)
+    fs_err::write(
+        pkg_dir.join("pyproject.toml"),
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "my-local-pkg"
+version = "0.1.0"
+"#,
+    )
+    .unwrap();
+
+    // Create the package source
+    let src_dir = pkg_dir.join("my_local_pkg");
+    fs_err::create_dir_all(&src_dir).unwrap();
+    fs_err::write(src_dir.join("__init__.py"), "").unwrap();
+
+    // Lock the project
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // Verify the package is present in both environments
+    assert!(
+        lock_file.contains_pypi_package("prod", platform, "my-local-pkg"),
+        "prod environment should contain my-local-pkg"
+    );
+    assert!(
+        lock_file.contains_pypi_package("dev", platform, "my-local-pkg"),
+        "dev environment should contain my-local-pkg"
+    );
+
+    // With the new architecture, the lock file always stores editable=false
+    // The actual editability is determined from the manifest at install time
+    let prod_editable = lock_file
+        .is_pypi_package_editable("prod", platform, "my-local-pkg")
+        .expect("should find my-local-pkg in prod");
+    let dev_editable = lock_file
+        .is_pypi_package_editable("dev", platform, "my-local-pkg")
+        .expect("should find my-local-pkg in dev");
+
+    // Both should have editable=false in the lock file
+    // The actual editability is applied at install time based on the manifest
+    assert!(
+        !prod_editable,
+        "prod environment should have my-local-pkg with editable=false in lock file, but got editable={prod_editable}",
+    );
+    assert!(
+        !dev_editable,
+        "dev environment should have my-local-pkg with editable=false in lock file, but got editable={dev_editable}",
+    );
+
+    // The key benefit of this architecture is that changing editability in the manifest
+    // does NOT require re-locking - only re-installing. Both environments share the same
+    // lock file entry but can have different editability at install time.
+}
+
+#[tokio::test]
+async fn test_missing_mapping_file_error_includes_path() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let client = project.authenticated_client().unwrap();
+
+    // Use a non-existent file path for the custom mapping
+    let non_existent_path = Path::new("/this/path/does/not/exist/mapping.json");
+
+    let source = HashMap::from([(
+        "https://conda.anaconda.org/conda-forge".to_owned(),
+        MappingLocation::Path(non_existent_path.to_path_buf()),
+    )]);
+
+    let foo_bar_package = Package::build("foo-bar-car", "2").finish();
+
+    let mut repo_data_record = RepoDataRecord {
+        package_record: foo_bar_package.package_record,
+        file_name: "foo-bar-car".to_owned(),
+        url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
+        channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
+    };
+
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let result = mapping_client
+        .amend_purls(
+            &MappingSource::Custom(Arc::new(CustomMapping::new(source))),
+            vec![&mut repo_data_record],
+            None,
+        )
+        .await;
+
+    // The operation should fail because the mapping file doesn't exist
+    let err = result.expect_err("Expected an error when mapping file doesn't exist");
+    insta::with_settings!({filters => vec![
+        (r#"path: "([^"]+)""#, "[MAPPING_PATH]"),
+        (r#"message: "[^"]+""#, "[MAPPING_MESSAGE]"),
+        (r#"\bcode:\s*\d+\b"#, "[MAPPING_CODE]"),
+    ]}, {
+        insta::assert_debug_snapshot!(err);
+    });
 }

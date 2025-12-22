@@ -131,15 +131,13 @@ impl BackendSourceBuildReporter for SyncReporter {
 
         // If the build failed, we want to print the output from the backend.
         let progress_bar = self.multi_progress.clone();
-        if failed {
-            if let Some(mut build_output_receiver) = build_output_receiver {
-                tokio::spawn(async move {
-                    while let Some(line) = build_output_receiver.recv().await {
-                        // Suspend the main progress bar while we print the line.
-                        progress_bar.suspend(|| eprintln!("{line}"));
-                    }
-                });
-            }
+        if failed && let Some(mut build_output_receiver) = build_output_receiver {
+            tokio::spawn(async move {
+                while let Some(line) = build_output_receiver.recv().await {
+                    // Suspend the main progress bar while we print the line.
+                    progress_bar.suspend(|| eprintln!("{line}"));
+                }
+            });
         }
     }
 }

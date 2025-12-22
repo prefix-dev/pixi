@@ -1,0 +1,37 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+preview = ["pixi-build"]
+
+[tasks]
+start = "cmake --version && python -VV && bat --version"
+test = [{ task = "start" }]
+
+[dev]
+# This will install all the dependencies of this project into the default environment
+minimal-example = { path = "." }
+
+#[dependencies]
+## This will install the `minimal-example` package into the default environment
+#minimal-example = { path = "." }
+
+[package]
+name = "minimal-example"
+version = "0.1.0"
+
+[package.build.backend]
+name = "pixi-build-cmake"
+version = "0.3.*"
+
+# These dependencies make little sense for this example, but are here to
+# showcase that they are added to the dev workspace environment.
+[package.build-dependencies]
+cmake = ">=3.27.8,<4.0"
+
+[package.host-dependencies]
+# This ensures that SDL2 is available at build time.
+python = ">=3.12.4,<4"
+sdl2 = ">=2.26.5,<3.0"
+
+[package.run-dependencies]
+bat = "*"

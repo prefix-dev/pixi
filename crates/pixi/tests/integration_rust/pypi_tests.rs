@@ -57,6 +57,7 @@ test = ["recursive-optional-groups[np]", "pytest", {{include-group = "docs"}}]
 [tool.pixi.workspace]
 channels = ["{channel_url}"]
 platforms = ["{platform_str}"]
+conda-pypi-map = {{}}
 
 [tool.pixi.dependencies]
 python = "==3.11.0"
@@ -120,10 +121,11 @@ async fn test_flat_links_based_index_returns_path() {
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-flat-find-links"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
         python = "==3.12.0"
@@ -175,10 +177,11 @@ async fn test_file_based_index_returns_path() {
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
         python = "==3.12.0"
@@ -209,6 +212,7 @@ async fn test_file_based_index_returns_path() {
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_index_strategy() {
     setup_tracing();
 
@@ -238,10 +242,11 @@ async fn test_index_strategy() {
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
         python = "==3.12.0"
@@ -328,10 +333,11 @@ async fn test_pinning_index() {
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-pinning-index"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
         python = "==3.12.0"
@@ -390,10 +396,11 @@ async fn pin_torch() {
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-pinning-index"
         platforms = [{platforms}]
         channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
         python = "==3.12.0"
@@ -443,10 +450,11 @@ async fn test_allow_insecure_host() {
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
         python = "==3.12.0"
@@ -507,10 +515,11 @@ async fn test_tls_no_verify_with_pypi_dependencies() {
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-tls-test"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
         python = "==3.12.0"
@@ -590,10 +599,11 @@ async fn test_tls_verify_still_fails_without_config() {
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-tls-verify-test"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
         python = "==3.12.0"
@@ -630,7 +640,10 @@ async fn test_tls_verify_still_fails_without_config() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
     setup_tracing();
 
@@ -740,7 +753,10 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
 /// even when the lower version appears first in `extra-index-urls`.
 /// This was an issue in: https://github.com/prefix-dev/pixi/issues/4588
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_index_strategy_respected_for_build_dependencies() {
     setup_tracing();
 
@@ -829,10 +845,11 @@ async fn test_cross_platform_resolve_with_no_build() {
         .expect("failed to create flat index");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
         python = "==3.12.0"
@@ -899,6 +916,7 @@ async fn test_pinned_help_message() {
         r#"
         [workspace]
         channels = ["{channel}"]
+        conda-pypi-map = {{}}
         name = "local-pinned-help"
         platforms = ["{platform}"]
         version = "0.1.0"
@@ -979,6 +997,7 @@ async fn test_uv_index_correctly_parsed() {
         [tool.pixi.workspace]
         channels = ["{channel_url}"]
         platforms = ["{platform}"]
+        conda-pypi-map = {{}} # Disable mapping
 
         [tool.pixi.pypi-dependencies]
         simple = {{ path = "." }}
@@ -1033,10 +1052,11 @@ async fn test_prerelease_mode_allow() {
     // With prerelease-mode = "allow", the resolver should pick the pre-release 2.0.0a1
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "prerelease-test"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
+        conda-pypi-map = {{}} # Disable mapping
 
         [dependencies]
         python = "==3.12.0"
@@ -1094,10 +1114,11 @@ async fn test_prerelease_mode_disallow() {
     // With prerelease-mode = "disallow", the resolver should pick the stable 1.0.0
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "prerelease-test"
         platforms = ["{platform}"]
         channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
         python = "==3.12.0"

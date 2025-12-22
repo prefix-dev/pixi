@@ -1,13 +1,17 @@
 use std::collections::HashMap;
 
 use indexmap::{IndexMap, IndexSet};
-use pixi_core::Workspace;
+use miette::IntoDiagnostic;
+use pixi_core::{Workspace, workspace::WorkspaceMut};
 use pixi_manifest::{
-    EnvironmentName, Feature, FeatureName, PrioritizedChannel, TargetSelector, Task, TaskName,
+    EnvironmentName, Feature, FeatureName, HasFeaturesIter, PrioritizedChannel, TargetSelector,
+    Task, TaskName,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::PackageName;
+
+use crate::{Interface, workspace::workspace::environment};
 
 pub async fn list_features(workspace: &Workspace) -> IndexMap<FeatureName, Feature> {
     workspace.workspace.value.features.clone()
@@ -85,4 +89,50 @@ pub async fn feature_by_task(
     }
 
     None
+}
+
+pub async fn remove_feature<I: Interface>(
+    interface: &I,
+    mut workspace: WorkspaceMut,
+    feature: &FeatureName,
+) -> miette::Result<Vec<EnvironmentName>> {
+    // Check which environments use this feature
+    let environments_using_feature: Vec<String> = environment::list(workspace.workspace())
+        .await
+        .into_iter()
+        .filter(|env| env.features().any(|f| f.name == *feature))
+        .map(|env| env.name().to_string())
+        .collect();
+
+    // If the feature is used in environments, ask for confirmation
+    if !environments_using_feature.is_empty() {
+        let message = if environments_using_feature.len() == 1 {
+            format!(
+                "Feature '{}' is used by environment '{}'. Do you want to remove it anyway?",
+                feature, environments_using_feature[0]
+            )
+        } else {
+            format!(
+                "Feature '{}' is used by the following environments: {}. Do you want to remove it anyway?",
+                feature,
+                environments_using_feature.join(", ")
+            )
+        };
+
+        let confirmed = interface.confirm(&message).await?;
+
+        if !confirmed {
+            return Ok(Vec::new());
+        }
+    }
+
+    // Remove the feature
+    let modified_envs = workspace.manifest().remove_feature(feature)?;
+    workspace.save().await.into_diagnostic()?;
+
+    interface
+        .success(&format!("Removed feature {feature}"))
+        .await;
+
+    Ok(modified_envs)
 }

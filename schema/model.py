@@ -249,6 +249,22 @@ class MatchspecTable(StrictBaseModel):
     subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
 
 
+class SourceSpecTable(StrictBaseModel):
+    """A precise description of a source package location."""
+
+    path: NonEmptyStr | None = Field(None, description="The path to the source package")
+
+    url: NonEmptyStr | None = Field(None, description="The URL to the source package")
+    md5: Md5Sum | None = Field(None, description="The md5 hash of the source package")
+    sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the source package")
+
+    git: NonEmptyStr | None = Field(None, description="The git URL to the source repo")
+    rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
+    tag: NonEmptyStr | None = Field(None, description="A git tag to use")
+    branch: NonEmptyStr | None = Field(None, description="A git branch to use")
+    subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
+
+
 MatchSpec = NonEmptyStr | MatchspecTable
 CondaPackageName = NonEmptyStr
 
@@ -343,12 +359,29 @@ RunDependenciesField = Field(
 )
 Dependencies = dict[CondaPackageName, MatchSpec] | None
 
+
 ################
 # Task section #
 ################
+class ReservedTaskArgName(str, Enum):
+    """A reserved task arg name."""
+
+    #: a namespace for runtime `pixi` data
+    pixi = "pixi"
+
+
 TaskName = Annotated[str, Field(pattern=r"^[^\s\$]+$", description="A valid task name.")]
+NotReservedSchema: Any = {"not": {"enum": sorted(r.value for r in ReservedTaskArgName)}}
 TaskArgName = Annotated[
-    str, Field(pattern=r"^[a-zA-Z_][a-zA-Z\d_]*$", description="A valid task argument name")
+    str,
+    Field(
+        pattern=r"^[a-zA-Z_][a-zA-Z\d_]*$",
+        description=(
+            "A valid task argument name; may not be any of: "
+            f"""{", ".join(sorted(r.value for r in ReservedTaskArgName))}"""
+        ),
+        json_schema_extra=NotReservedSchema,
+    ),
 ]
 TaskArgInlineTable = Annotated[
     dict[TaskArgName, str],
@@ -522,6 +555,10 @@ class Target(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies for this target"
     )
+    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
+        None,
+        description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
+    )
     tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the target"
     )
@@ -564,6 +601,10 @@ class Feature(StrictBaseModel):
     build_dependencies: Dependencies = BuildDependenciesField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies of this feature"
+    )
+    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
+        None,
+        description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
     )
     tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks provided by this feature"
@@ -856,6 +897,10 @@ class BaseManifest(StrictBaseModel):
     build_dependencies: Dependencies = BuildDependenciesField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies"
+    )
+    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
+        None,
+        description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
     )
     tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the project"
