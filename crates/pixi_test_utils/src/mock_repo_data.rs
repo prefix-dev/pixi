@@ -419,29 +419,16 @@ pub fn create_conda_package(
     let paths_json_path = info_dir.join("paths.json");
     fs_err::write(&paths_json_path, &paths_json_content)?;
 
-    // Create run_exports.json if the package has run exports
-    let run_exports_path = if let Some(run_exports) = &package.package_record.run_exports {
-        // Only create the file if there are actual run exports
-        if !run_exports.weak.is_empty()
-            || !run_exports.strong.is_empty()
-            || !run_exports.noarch.is_empty()
-            || !run_exports.weak_constrains.is_empty()
-            || !run_exports.strong_constrains.is_empty()
-        {
-            let run_exports_content = serde_json::to_string_pretty(run_exports)?;
-            let run_exports_path = info_dir.join("run_exports.json");
-            fs_err::write(&run_exports_path, &run_exports_content)?;
-            Some(run_exports_path)
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
     // Collect paths to include in the package
     let mut paths = vec![info_dir.join("index.json"), info_dir.join("paths.json")];
-    if let Some(run_exports_path) = run_exports_path {
+
+    // Create run_exports.json if the package has run exports
+    if let Some(run_exports) = &package.package_record.run_exports
+        && !run_exports.is_empty()
+    {
+        let run_exports_content = serde_json::to_string_pretty(run_exports)?;
+        let run_exports_path = info_dir.join("run_exports.json");
+        fs_err::write(&run_exports_path, &run_exports_content)?;
         paths.push(run_exports_path);
     }
 
