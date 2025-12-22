@@ -352,6 +352,11 @@
   color: var(--text-light);
 }
 
+[data-md-color-scheme="default"] .md-footer-meta.md-typeset a:hover {
+  color: var(--text-light);
+  opacity: 0.6;
+}
+
 
 .md-footer__link {
   display: flex;
@@ -369,7 +374,6 @@
 }
 
 [data-md-color-scheme="default"] .md-footer__link {
-  background-color: white;
   color: var(--md-accent-fg-color);
   border: 1px solid var(--gsd-100);
 }
