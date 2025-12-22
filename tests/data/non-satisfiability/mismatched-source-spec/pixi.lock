@@ -14,5 +14,6 @@ packages:
     version: 0.0.1
     build: ""
     subdir: noarch
-    variant:
+    noarch: false
+    variants:
       target_platform: noarch

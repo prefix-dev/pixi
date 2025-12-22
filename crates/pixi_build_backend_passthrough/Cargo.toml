@@ -16,7 +16,9 @@ ordermap = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_build_types = { workspace = true }
 rattler_conda_types = { workspace = true }
+rattler_digest = { workspace = true }
 rattler_package_streaming = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }

@@ -13,8 +13,9 @@ packages:
     version: 0.0.1
     build: ""
     subdir: noarch
+    noarch: false
     depends:
-      - foobar 0.1.0 baz
+      - foobar
     # This should cause the lock-file to be invalid because the package `foobar`
     # does not come from the directory `not-foobar`.
     sources:
@@ -25,7 +26,8 @@ packages:
   - conda: foobar
     name: foobar
     version: 0.0.1
-    build:
+    build: ""
     subdir: noarch
+    noarch: false
     variants:
       target_platform: noarch

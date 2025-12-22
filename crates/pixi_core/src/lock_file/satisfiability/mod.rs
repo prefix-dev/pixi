@@ -1,3 +1,12 @@
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    fmt::{Display, Formatter},
+    hash::Hash,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
 use futures::stream::{FuturesUnordered, StreamExt};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
@@ -26,26 +35,17 @@ use pixi_uv_conversions::{
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, PackageName,
-    ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
+    PackageRecord, ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
 };
 use rattler_lock::{
     LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable,
     UrlOrPath,
 };
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet},
-    fmt::{Display, Formatter},
-    hash::Hash,
-    path::{Path, PathBuf},
-    str::FromStr,
-};
 use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
-use uv_distribution_types::RequirementSource;
-use uv_distribution_types::RequiresPython;
+use uv_distribution_types::{RequirementSource, RequiresPython};
 use uv_git_types::GitReference;
 use uv_pypi_types::ParsedUrlError;
 
@@ -254,7 +254,8 @@ pub enum PlatformUnsat {
     #[error("the requirement '{0}' failed to parse")]
     FailedToParseMatchSpec(String, #[source] ParseMatchSpecError),
 
-    #[error("there are more conda packages in the lock-file than are used by the environment: {}", .0.iter().map(rattler_conda_types::PackageName::as_source).format(", "))]
+    #[error("there are more conda packages in the lock-file than are used by the environment: {}", .0.iter().map(rattler_conda_types::PackageName::as_source).format(", ")
+    )]
     TooManyCondaPackages(Vec<PackageName>),
 
     #[error("missing purls")]
@@ -423,11 +424,21 @@ pub enum PlatformUnsat {
     )]
     PackageBuildSourceMismatch(String, SourceMismatchError),
 
-    #[error("the locked metadata of '{0}' package changed")]
+    #[error("the locked metadata of '{0}' package changed (see trace logs for details)")]
     SourcePackageMetadataChanged(String),
 
     #[error("the source location '{0}' changed from '{1}' to '{2}'")]
     SourceBuildLocationChanged(String, String, String),
+
+    #[error(
+        "the source dependency '{dependency}' of package '{package}' changed from '{locked}' to '{current}'"
+    )]
+    SourceDependencyChanged {
+        package: String,
+        dependency: String,
+        locked: String,
+        current: String,
+    },
 
     #[error(
         "locked source package '{package_name}' not found in current metadata for '{manifest_path}'. Was the package renamed?"
@@ -1055,10 +1066,12 @@ pub struct VerifiedIndividualEnvironment {
     pub conda_packages_used_by_pypi: HashSet<PackageName>,
 }
 
-/// Verify that source packages in the lock file still match their current metadata.
+/// Verify that source packages in the lock file still match their current
+/// metadata.
 ///
-/// This function fetches the current metadata for each source package and compares
-/// it with the locked metadata to detect if any source packages have changed.
+/// This function fetches the current metadata for each source package and
+/// compares it with the locked metadata to detect if any source packages have
+/// changed.
 #[allow(clippy::too_many_arguments)]
 async fn verify_source_metadata(
     source_records: Vec<&pixi_record::SourceRecord>,
@@ -1145,7 +1158,7 @@ async fn verify_source_metadata(
                     }));
                 };
 
-                // Check if the current record matches what's in the lock file
+                // Check if the build source location changed
                 if current_record.build_source != source_record.build_source {
                     return Err(Box::new(PlatformUnsat::SourceBuildLocationChanged(
                         source_record.package_record.name.as_source().to_string(),
@@ -1162,10 +1175,56 @@ async fn verify_source_metadata(
                     )));
                 }
 
-                // Check if the current record matches what's in the lock file
-                if current_record.package_record == source_record.package_record {
+                // Check if the source dependencies match
+                let package_name = source_record.package_record.name.as_source().to_string();
+                for (source_name, locked_source_spec) in &source_record.sources {
+                    match current_record.sources.get(source_name) {
+                        Some(current_source_spec) => {
+                            if locked_source_spec != current_source_spec {
+                                return Err(Box::new(PlatformUnsat::SourceDependencyChanged {
+                                    package: package_name,
+                                    dependency: source_name.clone(),
+                                    locked: locked_source_spec.to_string(),
+                                    current: current_source_spec.to_string(),
+                                }));
+                            }
+                        }
+                        None => {
+                            return Err(Box::new(PlatformUnsat::SourceDependencyChanged {
+                                package: package_name,
+                                dependency: source_name.clone(),
+                                locked: locked_source_spec.to_string(),
+                                current: "(removed)".to_string(),
+                            }));
+                        }
+                    }
+                }
+
+                // Check if there are any new sources in current that weren't in locked
+                for (source_name, current_source_spec) in &current_record.sources {
+                    if !source_record.sources.contains_key(source_name) {
+                        return Err(Box::new(PlatformUnsat::SourceDependencyChanged {
+                            package: package_name.clone(),
+                            dependency: source_name.clone(),
+                            locked: "(not present)".to_string(),
+                            current: current_source_spec.to_string(),
+                        }));
+                    }
+                }
+
+                // Check if the package record metadata matches
+                let package_name = source_record.package_record.name.as_source();
+                tracing::trace!(
+                    "Checking package record equality for '{}' (current vs locked)",
+                    package_name
+                );
+
+                if !package_records_are_equal(
+                    &current_record.package_record,
+                    &source_record.package_record,
+                ) {
                     return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
-                        source_record.package_record.name.as_source().to_string(),
+                        package_name.to_string(),
                     )));
                 }
 
@@ -1180,6 +1239,85 @@ async fn verify_source_metadata(
     }
 
     Ok(())
+}
+
+/// Returns true if the package records are considered equal.
+fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> bool {
+    // Use destructuring to ensure we get compiler errors if these types change significantly.
+    let PackageRecord {
+        arch: _,
+        build: a_build,
+        build_number: a_build_number,
+        constrains: a_constrains,
+        depends: a_depends,
+        experimental_extra_depends: a_extra_depends,
+        features: a_features,
+        legacy_bz2_md5: _,
+        legacy_bz2_size: _,
+        license: a_license,
+        license_family: a_license_family,
+        md5: _,
+        name: a_name,
+        noarch: a_noarch,
+        platform: _,
+        purls: a_purls,
+        python_site_packages_path: a_python_site_packages_path,
+        run_exports: a_run_exports,
+        sha256: _,
+        size: _,
+        subdir: a_subdir,
+        timestamp: _,
+        track_features: a_track_features,
+        version: a_version,
+    } = &a;
+    let PackageRecord {
+        arch: _,
+        build: b_build,
+        build_number: b_build_number,
+        constrains: b_constrains,
+        depends: b_depends,
+        experimental_extra_depends: b_extra_depends,
+        features: b_features,
+        legacy_bz2_md5: _,
+        legacy_bz2_size: _,
+        license: b_license,
+        license_family: b_license_family,
+        md5: _,
+        name: b_name,
+        noarch: b_noarch,
+        platform: _,
+        purls: b_purls,
+        python_site_packages_path: b_python_site_packages_path,
+        run_exports: b_run_exports,
+        sha256: _,
+        size: _,
+        subdir: b_subdir,
+        timestamp: _,
+        track_features: b_track_features,
+        version: b_version,
+    } = &b;
+
+    a_build == b_build
+        && a_build_number == b_build_number
+        && a_constrains == b_constrains
+        && a_depends == b_depends
+        && a_extra_depends == b_extra_depends
+        && a_features == b_features
+        && a_license == b_license
+        && a_license_family == b_license_family
+        && a_name == b_name
+        && a_noarch == b_noarch
+        && a_purls == b_purls
+        && a_python_site_packages_path == b_python_site_packages_path
+        && match (a_run_exports, b_run_exports) {
+            (Some(a_run_exports), Some(b_run_exports)) => a_run_exports == b_run_exports,
+            (Some(a_run_exports), None) => a_run_exports.is_empty(),
+            (None, Some(b_run_exports)) => b_run_exports.is_empty(),
+            (None, None) => true,
+        }
+        && a_subdir == b_subdir
+        && a_track_features == b_track_features
+        && a_version == b_version
 }
 
 fn format_source_record(r: &SourceRecord) -> String {
@@ -1908,7 +2046,8 @@ pub(crate) async fn verify_package_platform_satisfiability(
         }
     }
 
-    // Now that we checked all conda requirements, check if there were any pypi issues.
+    // Now that we checked all conda requirements, check if there were any pypi
+    // issues.
     if let Some(err) = delayed_pypi_error {
         return Err(err);
     }
@@ -1929,10 +2068,11 @@ pub(crate) async fn verify_package_platform_satisfiability(
         )));
     }
 
-    // Note: Editability is NOT checked here. The lock file always stores editable=false
-    // (which is omitted from serialization). Editability is looked up from the manifest
-    // at install time. This allows different environments in a solve-group to have
-    // different editability settings for the same path-based package.
+    // Note: Editability is NOT checked here. The lock file always stores
+    // editable=false (which is omitted from serialization). Editability is
+    // looked up from the manifest at install time. This allows different
+    // environments in a solve-group to have different editability settings for
+    // the same path-based package.
 
     // Verify the pixi build package's package_build_source matches the manifest.
     verify_build_source_matches_manifest(environment, locked_pixi_records)?;
@@ -2211,6 +2351,7 @@ mod tests {
     use pixi_command_dispatcher::CacheDirs;
     use rattler_lock::LockFile;
     use rstest::rstest;
+    use tracing_test::traced_test;
 
     use super::*;
     use crate::Workspace;
@@ -2312,6 +2453,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
+    #[traced_test]
     async fn test_good_satisfiability(
         #[files("../../tests/data/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
@@ -2345,6 +2487,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
+    #[traced_test]
     async fn test_example_satisfiability(
         #[files("../../examples/**/p*.toml")] manifest_path: PathBuf,
     ) {
@@ -2379,6 +2522,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
+    #[traced_test]
     async fn test_failing_satisiability(
         #[files("../../tests/data/non-satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {

@@ -33,7 +33,7 @@ use crate::cli_config::WorkspaceConfig;
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: WorkspaceConfig,
+    pub workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
     pub lock_file_usage: crate::LockFileUsageConfig,
@@ -70,10 +70,15 @@ pub struct Args {
 const SKIP_CUTOFF: usize = 5;
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let workspace = WorkspaceLocator::for_cli()
-        .with_search_start(args.project_config.workspace_locator_start())
+    let mut workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
         .with_cli_config(args.config);
+
+    // Apply backend override if provided (primarily for testing)
+    if let Some(backend_override) = args.workspace_config.backend_override.clone() {
+        workspace = workspace.with_backend_override(backend_override);
+    }
 
     // Install either:
     //
