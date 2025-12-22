@@ -32,7 +32,7 @@ use pixi_build_types::{
 };
 use rattler_conda_types::{
     PackageName, Platform, Version, VersionSpec,
-    package::{IndexJson, PathType, PathsEntry, PathsJson},
+    package::{IndexJson, PathType, PathsEntry, PathsJson, RunExportsJson},
 };
 use serde::Deserialize;
 
@@ -56,13 +56,16 @@ pub struct PassthroughBackend {
     config: PassthroughBackendConfig,
     source_dir: PathBuf,
     index_json: IndexJson,
+    /// Run exports configuration for simulating package run_exports.
+    /// Maps package names to their run_exports definitions.
+    run_exports: BTreeMap<String, RunExportsJson>,
 }
 
 impl PassthroughBackend {
     /// Returns an object that can be used to instantiate a
     /// [`PassthroughBackend`].
-    pub fn instantiator() -> impl InMemoryBackendInstantiator<Backend = Self> {
-        PassthroughBackendInstantiator
+    pub fn instantiator() -> PassthroughBackendInstantiator {
+        PassthroughBackendInstantiator::default()
     }
 }
 
@@ -85,7 +88,12 @@ impl InMemoryBackend for PassthroughBackend {
         _output_stream: &(dyn BackendOutputStream + Send + 'static),
     ) -> Result<CondaOutputsResult, Box<CommunicationError>> {
         // Generate outputs for all variant combinations
-        let outputs = generate_variant_outputs(&self.project_model, &self.index_json, &params);
+        let outputs = generate_variant_outputs(
+            &self.project_model,
+            &self.index_json,
+            &params,
+            &self.run_exports,
+        );
 
         Ok(CondaOutputsResult {
             outputs,
@@ -250,6 +258,7 @@ fn generate_variant_outputs(
     project_model: &ProjectModelV1,
     index_json: &IndexJson,
     params: &CondaOutputsParams,
+    run_exports: &BTreeMap<String, RunExportsJson>,
 ) -> Vec<CondaOutput> {
     // Check if we have variant configurations and dependencies with "*"
     let variant_keys = find_variant_keys(project_model, params);
@@ -261,6 +270,7 @@ fn generate_variant_outputs(
             index_json,
             params,
             BTreeMap::new(),
+            run_exports,
         )];
     }
 
@@ -283,6 +293,7 @@ fn generate_variant_outputs(
             index_json,
             params,
             BTreeMap::new(),
+            run_exports,
         )];
     }
 
@@ -292,7 +303,7 @@ fn generate_variant_outputs(
     // Create an output for each variant combination
     combinations
         .into_iter()
-        .map(|variant| create_output(project_model, index_json, params, variant))
+        .map(|variant| create_output(project_model, index_json, params, variant, run_exports))
         .collect()
 }
 
@@ -455,6 +466,7 @@ fn create_output(
     index_json: &IndexJson,
     params: &CondaOutputsParams,
     mut variant: BTreeMap<String, VariantValue>,
+    run_exports_config: &BTreeMap<String, RunExportsJson>,
 ) -> CondaOutput {
     let subdir = index_json
         .subdir
@@ -474,6 +486,37 @@ fn create_output(
         );
     }
 
+    // Extract explicit run dependencies
+    let mut run_dependencies = extract_dependencies(
+        &project_model.targets,
+        |t| t.run_dependencies.as_ref(),
+        params.host_platform,
+        &variant,
+    );
+
+    // Extract host dependencies
+    let host_deps = extract_dependencies(
+        &project_model.targets,
+        |t| t.host_dependencies.as_ref(),
+        params.host_platform,
+        &variant,
+    );
+
+    // Apply run_exports from host dependencies.
+    // For each host dependency that has run_exports configured, add the weak exports
+    // to run_dependencies with variant values substituted.
+    for host_dep in &host_deps.depends {
+        if let Some(pkg_run_exports) = run_exports_config.get(host_dep.name.as_str()) {
+            // Apply weak run_exports (most common case)
+            for weak_export in &pkg_run_exports.weak {
+                // Parse the run_export spec and substitute variant values
+                if let Some(pinned_spec) = resolve_run_export_spec(weak_export, &variant) {
+                    run_dependencies.depends.push(pinned_spec);
+                }
+            }
+        }
+    }
+
     CondaOutput {
         build_dependencies: Some(extract_dependencies(
             &project_model.targets,
@@ -481,18 +524,8 @@ fn create_output(
             params.host_platform,
             &variant,
         )),
-        host_dependencies: Some(extract_dependencies(
-            &project_model.targets,
-            |t| t.host_dependencies.as_ref(),
-            params.host_platform,
-            &variant,
-        )),
-        run_dependencies: extract_dependencies(
-            &project_model.targets,
-            |t| t.run_dependencies.as_ref(),
-            params.host_platform,
-            &variant,
-        ),
+        host_dependencies: Some(host_deps),
+        run_dependencies,
         metadata: CondaOutputMetadata {
             name: project_model
                 .name
@@ -580,6 +613,59 @@ fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, 
     }
 }
 
+/// Resolves a run_export spec string (like "sdl2 *") by substituting variant values.
+///
+/// If the spec contains a "*" version and there's a variant value for the package name,
+/// the version is replaced with the variant value. Otherwise returns the spec as-is.
+fn resolve_run_export_spec(
+    run_export_str: &str,
+    variant: &BTreeMap<String, VariantValue>,
+) -> Option<NamedSpecV1<PackageSpecV1>> {
+    // Parse the run_export string as a MatchSpec
+    let match_spec = rattler_conda_types::MatchSpec::from_str(
+        run_export_str,
+        rattler_conda_types::ParseStrictness::Lenient,
+    )
+    .ok()?;
+
+    let name = match_spec
+        .name
+        .as_ref()?
+        .as_exact()?
+        .as_source()
+        .to_string();
+
+    // Check if there's a variant value for this package
+    let version_spec = if match_spec
+        .version
+        .as_ref()
+        .is_none_or(|v| matches!(v, VersionSpec::Any))
+    {
+        // If version is "*" or unspecified, try to use the variant value
+        if let Some(variant_value) = variant.get(&name) {
+            Some(
+                VersionSpec::from_str(
+                    variant_value.to_string().as_str(),
+                    rattler_conda_types::ParseStrictness::Lenient,
+                )
+                .ok()?,
+            )
+        } else {
+            match_spec.version.clone()
+        }
+    } else {
+        match_spec.version.clone()
+    };
+
+    Some(NamedSpecV1 {
+        name: SourcePackageName::from(name),
+        spec: PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1 {
+            version: version_spec,
+            ..Default::default()
+        })),
+    })
+}
+
 /// Returns true if the given [`TargetSelectorV1`] matches the specified
 /// `platform`.
 fn matches_target_selector(selector: &TargetSelectorV1, platform: Platform) -> bool {
@@ -594,7 +680,24 @@ fn matches_target_selector(selector: &TargetSelectorV1, platform: Platform) -> b
 
 /// An implementation of the [`InMemoryBackendInstantiator`] that creates a
 /// [`PassthroughBackend`].
-pub struct PassthroughBackendInstantiator;
+#[derive(Default)]
+pub struct PassthroughBackendInstantiator {
+    /// Run exports configuration for simulating package run_exports.
+    /// Maps package names to their run_exports definitions.
+    run_exports: BTreeMap<String, RunExportsJson>,
+}
+
+impl PassthroughBackendInstantiator {
+    /// Adds run_exports configuration for a package.
+    pub fn with_run_exports(
+        mut self,
+        package_name: impl Into<String>,
+        run_exports: RunExportsJson,
+    ) -> Self {
+        self.run_exports.insert(package_name.into(), run_exports);
+        self
+    }
+}
 
 impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
     type Backend = PassthroughBackend;
@@ -674,6 +777,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
             config,
             source_dir,
             index_json,
+            run_exports: self.run_exports.clone(),
         })
     }
 
@@ -723,6 +827,36 @@ impl BackendObserver {
                 events.push(event);
             }
         }
+        events
+    }
+
+    /// Waits for build events with a timeout.
+    /// Returns all build events received within the timeout period.
+    /// This is useful for tests where the build might happen asynchronously.
+    pub async fn wait_for_build_events(
+        &mut self,
+        timeout: std::time::Duration,
+    ) -> Vec<BackendEvent> {
+        let mut events = Vec::new();
+        let deadline = tokio::time::Instant::now() + timeout;
+
+        loop {
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+
+            match tokio::time::timeout(remaining, self.receiver.recv()).await {
+                Ok(Some(event)) => {
+                    if matches!(event, BackendEvent::CondaBuildV1Called) {
+                        events.push(event);
+                    }
+                }
+                Ok(None) => break, // Channel closed
+                Err(_) => break,   // Timeout
+            }
+        }
+
         events
     }
 }
