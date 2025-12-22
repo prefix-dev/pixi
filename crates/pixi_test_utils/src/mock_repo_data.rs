@@ -343,7 +343,7 @@ impl PackageBuilder {
                 track_features: vec![],
                 version: self.version,
                 purls: self.purls,
-                run_exports: Some(self.run_exports.unwrap_or_default()),
+                run_exports: self.run_exports.clone(),
                 python_site_packages_path: None,
                 experimental_extra_depends: Default::default(),
             },
