@@ -46,7 +46,6 @@ use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
 use uv_distribution_types::{RequirementSource, RequiresPython};
-use uv_git_types::GitReference;
 use uv_pypi_types::ParsedUrlError;
 
 use super::{
@@ -970,11 +969,6 @@ pub(crate) fn pypi_satifisfies_requirement(
                             }
                             .into());
                         }
-                        // If the spec does not specify a revision than any will do
-                        // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
-                        if *reference == GitReference::DefaultBranch {
-                            return Ok(());
-                        }
 
                         if pinned_git_spec.source.subdirectory
                             != subdirectory
@@ -995,8 +989,9 @@ pub(crate) fn pypi_satifisfies_requirement(
                             }
                             .into());
                         }
-                        // If the spec does specify a revision than the revision must match
-                        // convert first to the same type
+                        // The git reference (branch/tag/rev) must match exactly between
+                        // the requirement and the lock file. This ensures that if a user
+                        // adds or removes a branch specification, the lock file will update.
                         let pixi_reference = into_pixi_reference(reference.clone());
 
                         if pinned_git_spec.source.reference == pixi_reference {
@@ -2608,12 +2603,28 @@ mod tests {
         .unwrap();
         // This should not
         pypi_satifisfies_requirement(&non_matching_spec, &locked_data, &project_root).unwrap_err();
-        // Removing the rev from the Requirement should satisfy any revision
+        // Removing the rev from the Requirement now requires the lock file to also
+        // not have an explicit rev (must match exactly). This is a fix for issue #5185.
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap(),
         )
         .unwrap();
-        pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap();
+        // This should now fail because the lock file has an explicit rev but the spec doesn't
+        pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap_err();
+
+        // But if the lock file also doesn't have an explicit rev, it should match
+        let locked_data_no_rev = PypiPackageData {
+            name: "mypkg".parse().unwrap(),
+            version: Version::from_str("0.1.0").unwrap(),
+            location: "git+https://github.com/mypkg.git#29932f3915935d773dc8d52c292cadd81c81071d"
+                .parse()
+                .expect("failed to parse url"),
+            hash: None,
+            requires_dist: vec![],
+            requires_python: None,
+            editable: false,
+        };
+        pypi_satifisfies_requirement(&spec, &locked_data_no_rev, &project_root).unwrap();
     }
 
     // Currently this test is missing from `good_satisfiability`, so we test the

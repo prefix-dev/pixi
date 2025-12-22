@@ -27,9 +27,10 @@ use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_uv_conversions::{
     ConversionError, as_uv_req, configure_insecure_hosts_for_tls_bypass,
-    convert_uv_requirements_to_pep508, into_pinned_git_spec, pypi_options_to_build_options,
-    pypi_options_to_index_locations, to_exclude_newer, to_index_strategy, to_normalize,
-    to_prerelease_mode, to_requirements, to_uv_normalize, to_uv_version, to_version_specifiers,
+    convert_uv_requirements_to_pep508, into_pinned_git_spec, into_pixi_reference,
+    into_uv_git_reference, pypi_options_to_build_options, pypi_options_to_index_locations,
+    to_exclude_newer, to_index_strategy, to_normalize, to_prerelease_mode, to_requirements,
+    to_uv_normalize, to_uv_version, to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -48,8 +49,8 @@ use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
     BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy,
-    IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
-    SourceDist, ToUrlError,
+    IndexCapabilities, IndexUrl, Name, Requirement, RequirementSource, RequiresPython, Resolution,
+    ResolvedDist, SourceDist, ToUrlError,
 };
 use uv_git_types::GitUrl;
 use uv_pep508::VerbatimUrl;
@@ -355,6 +356,10 @@ pub async fn resolve_pypi(
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
+    // Clone requirements for later use in lock file generation
+    // We need this because requirements will be moved into the resolver
+    let requirements_for_locking = requirements.clone();
+
     // Determine the python interpreter that is installed as part of the conda
     // packages.
     let python_record = locked_pixi_records
@@ -629,7 +634,13 @@ pub async fn resolve_pypi(
                     let git_oid =
                         uv_git_types::GitOid::from_str(&pinned_git_spec.source.commit.to_string())?;
 
-                    let git_url = GitUrl::try_from(display_safe)?.with_precise(git_oid);
+                    // Construct the GitUrl with the reference (branch/tag) from the pinned_git_spec
+                    // to preserve the branch information in the lock file
+                    let git_url = GitUrl::from_fields(
+                        display_safe,
+                        into_uv_git_reference(pinned_git_spec.source.reference.into()),
+                        Some(git_oid),
+                    )?;
 
                     let constraint_source = RequirementSource::Git {
                         git: git_url,
@@ -821,6 +832,7 @@ pub async fn resolve_pypi(
         &context.capabilities,
         context.concurrency.downloads,
         project_root,
+        &requirements_for_locking,
     )
     .await?;
 
@@ -943,6 +955,7 @@ fn get_url_or_path(
 }
 
 /// Create a vector of locked packages from a resolution
+#[allow(clippy::too_many_arguments)]
 async fn lock_pypi_packages(
     conda_python_packages: CondaPythonPackages,
     pixi_build_dispatch: &LazyBuildDispatch<'_>,
@@ -951,6 +964,7 @@ async fn lock_pypi_packages(
     index_capabilities: &IndexCapabilities,
     concurrent_downloads: usize,
     abs_project_root: &Path,
+    original_requirements: &[Requirement],
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     let database =
@@ -1071,7 +1085,22 @@ async fn lock_pypi_packages(
                         }
                         SourceDist::Git(git) => {
                             // convert resolved source dist into a pinned git spec
-                            let pinned_git_spec = into_pinned_git_spec(git.clone());
+                            let mut pinned_git_spec = into_pinned_git_spec(git.clone());
+
+                            // Look up the original requirement to get the git reference (branch/tag)
+                            // It may have resolved the reference to just a commit, losing the branch/tag info
+                            if let Some(original_req) = original_requirements
+                                .iter()
+                                .find(|r| &r.name == dist.name())
+                                && let RequirementSource::Git {
+                                    git: original_git, ..
+                                } = &original_req.source
+                            {
+                                // Use the reference from the original requirement instead of what UV resolved
+                                pinned_git_spec.source.reference =
+                                    into_pixi_reference(original_git.reference().clone());
+                            }
+
                             (
                                 pinned_git_spec.into_locked_git_url().to_url().into(),
                                 hash,
