@@ -185,7 +185,6 @@ impl SourceMetadataSpec {
             build_environment: self.backend_metadata.build_environment.clone(),
             enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
             pinned_source: self.backend_metadata.manifest_source.clone(),
-            variant_configuration: self.backend_metadata.variant_configuration.clone(),
         }
     }
 
