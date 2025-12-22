@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.62.2] - 2025-12-22
+
+#### ✨ Highlights
+
+This is a small patch release fixing issues with source packages and caching.
+
+#### Fixed
+
+- Include variants when calculating cache key by @nichmor in [#5167](https://github.com/prefix-dev/pixi/pull/5167)
+- Source packages with git source were always out-of-date by @baszalmstra in [#5178](https://github.com/prefix-dev/pixi/pull/5178)
+
 ### [0.62.1] - 2025-12-18
 
 #### ✨ Highlights
