@@ -424,6 +424,19 @@ async fn execute_task(
 fn disambiguate_task_interactive<'p>(
     problem: &AmbiguousTask<'p>,
 ) -> Option<TaskAndEnvironment<'p>> {
+    // If any of the candidate tasks declares a `default-environment` that
+    // corresponds to one of the candidate environments, prefer that
+    // environment automatically.
+    if let Some(idx) = problem.environments.iter().position(|(env, task)| {
+        if let Some(default_env_name) = task.default_environment() {
+            default_env_name == env.name()
+        } else {
+            false
+        }
+    }) {
+        return Some(problem.environments[idx].clone());
+    }
+
     let environment_names = problem
         .environments
         .iter()
