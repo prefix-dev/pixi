@@ -91,7 +91,7 @@ pub struct AddArgs {
     #[arg(long, value_parser = parse_key_val)]
     pub env: Vec<(String, String)>,
 
-    // Add a default environment for the task.
+    /// Add a default environment for the task.
     #[arg(long)]
     pub default_environment: Option<EnvironmentName>,
 
