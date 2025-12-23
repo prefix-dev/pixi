@@ -176,7 +176,7 @@ thiserror = "2.0.12"
 tokio = "1.43.0"
 tokio-util = "0.7.13"
 toml-span = "0.6.0"
-toml_edit = "0.23.0"
+toml_edit = "0.24.0"
 tracing = "0.1.41"
 xz2 = "0.1.7"
 # Forcing the version due to this PR https://github.com/tokio-rs/tracing/pull/3368
