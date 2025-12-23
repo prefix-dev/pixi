@@ -218,7 +218,7 @@ impl<'p> TaskGraph<'p> {
                 Ok((task_env, task)) => {
                     // If an explicit environment was specified and the task is from the default
                     // environment use the specified environment instead.
-                    let mut run_env = match search_envs.explicit_environment.clone() {
+                    let run_env = match search_envs.explicit_environment.clone() {
                         Some(explicit_env) if task_env.is_default() => explicit_env,
                         _ => task_env,
                     };
