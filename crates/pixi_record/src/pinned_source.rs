@@ -262,14 +262,18 @@ impl PinnedSourceSpec {
 
                 // Normalize the path (resolve . and ..)
                 let normalized = crate::path_utils::normalize_path(&target_path_abs);
-                // Convert back to a path that's either absolute or relative to workspace
-                let path_spec = normalized.strip_prefix(workspace_root).expect(
-                    "the workspace_root should be part of the source build path at this point",
-                );
 
-                Some(PinnedSourceSpec::Path(PinnedPathSpec {
-                    path: Utf8TypedPathBuf::from(path_spec.to_string_lossy().as_ref()),
-                }))
+                // Try to make the path relative to workspace_root if it's within the workspace
+                // Otherwise, keep it as absolute (to avoid panic for paths outside workspace)
+                let path = if let Ok(relative) = normalized.strip_prefix(workspace_root) {
+                    // Path is within workspace, make it relative
+                    Utf8TypedPathBuf::from(relative.to_string_lossy().as_ref())
+                } else {
+                    // Path is outside workspace, keep it absolute
+                    Utf8TypedPathBuf::from(normalized.to_string_lossy().as_ref())
+                };
+
+                Some(PinnedSourceSpec::Path(PinnedPathSpec { path }))
             }
 
             // Git-to-Git: If same repository, convert relative path to subdirectory
@@ -1040,6 +1044,7 @@ mod tests {
 
     use pixi_git::sha::GitSha;
     use pixi_spec::{GitReference, GitSpec};
+    use typed_path::Utf8UnixPathBuf;
     use url::Url;
 
     use crate::{PinnedGitCheckout, PinnedGitSpec, PinnedUrlSpec, SourceMismatchError};
@@ -1676,5 +1681,48 @@ mod tests {
         let path = result.expect("Should return Some");
         // From /foo/baz/quux to /foo/bar/qux requires ../../bar/qux
         assert_eq!(path.as_str(), "../../bar/qux");
+    }
+
+    /// Regression test for #5178: from_relative_to should handle paths outside workspace
+    ///
+    /// This test verifies that when converting a relative path from a lock file back
+    /// to a full pinned source spec, paths that resolve outside the workspace_root
+    /// don't cause a panic.
+    ///
+    /// The bug was that the old code tried to strip workspace_root prefix from all
+    /// normalized paths with `.expect()`, which would panic when the path was outside
+    /// the workspace.
+    ///
+    /// Scenario: A build_source in a sibling directory outside the workspace
+    /// - workspace is at /workspace/project
+    /// - manifest_source is at /workspace/project/manifest
+    /// - build_source is at /workspace/alternative-source (outside project)
+    /// - relative path from manifest to build: ../../alternative-source
+    #[test]
+    fn test_from_relative_to_with_out_of_workspace_path() {
+        let workspace_root = Path::new("/workspace/project");
+
+        // Base (manifest_source) is relative to workspace
+        let base_spec = PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "manifest".into(), // Resolves to /workspace/project/manifest
+        });
+
+        // build_source path relative to manifest_source points outside workspace
+        let relative_path = Utf8UnixPathBuf::from("../../alternative-source");
+
+        // This should NOT panic - it should return the normalized absolute path
+        let result = PinnedSourceSpec::from_relative_to(relative_path, &base_spec, workspace_root);
+
+        let result_spec = result.expect("Should return Some for valid relative path");
+
+        // Verify the result is a path spec with absolute path outside workspace
+        let path_spec = result_spec.as_path().expect("Should be a path spec");
+        let resolved = path_spec.resolve(workspace_root);
+
+        assert!(
+            resolved.ends_with("alternative-source"),
+            "Resolved path should end with 'alternative-source', got: {}",
+            resolved.display()
+        );
     }
 }
