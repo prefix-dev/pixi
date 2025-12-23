@@ -1,0 +1,8 @@
+[package]
+edition = "2024"
+name = "dev-package"
+version = "0.1.0"
+
+[workspace]
+
+[dependencies]

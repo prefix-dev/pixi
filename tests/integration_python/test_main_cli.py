@@ -3,10 +3,10 @@ import platform
 import shutil
 import sys
 import tomllib
-import tomli_w
 from pathlib import Path
 
 import pytest
+import tomli_w
 from dirty_equals import AnyThing, IsList, IsStr
 from inline_snapshot import snapshot
 
@@ -38,7 +38,7 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command(
         [
             pixi,
-            "project",
+            "workspace",
             "--manifest-path",
             manifest_path,
             "channel",
@@ -47,13 +47,13 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ],
     )
     verify_cli_command(
-        [pixi, "project", "--manifest-path", manifest_path, "channel", "list"],
+        [pixi, "workspace", "--manifest-path", manifest_path, "channel", "list"],
         stdout_contains="bioconda",
     )
     verify_cli_command(
         [
             pixi,
-            "project",
+            "workspace",
             "--manifest-path",
             manifest_path,
             "channel",
@@ -66,7 +66,7 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command(
         [
             pixi,
-            "project",
+            "workspace",
             "--manifest-path",
             manifest_path,
             "description",
@@ -75,7 +75,7 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ],
     )
     verify_cli_command(
-        [pixi, "project", "--manifest-path", manifest_path, "description", "get"],
+        [pixi, "workspace", "--manifest-path", manifest_path, "description", "get"],
         stdout_contains="blabla",
     )
 
@@ -83,7 +83,7 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command(
         [
             pixi,
-            "project",
+            "workspace",
             "--manifest-path",
             manifest_path,
             "environment",
@@ -92,13 +92,13 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ],
     )
     verify_cli_command(
-        [pixi, "project", "--manifest-path", manifest_path, "environment", "list"],
+        [pixi, "workspace", "--manifest-path", manifest_path, "environment", "list"],
         stdout_contains="test",
     )
     verify_cli_command(
         [
             pixi,
-            "project",
+            "workspace",
             "--manifest-path",
             manifest_path,
             "environment",
@@ -107,7 +107,7 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ],
     )
     verify_cli_command(
-        [pixi, "project", "--manifest-path", manifest_path, "environment", "list"],
+        [pixi, "workspace", "--manifest-path", manifest_path, "environment", "list"],
         stdout_excludes="test",
     )
 
@@ -115,75 +115,76 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command(
         [
             pixi,
-            "project",
+            "workspace",
             "--manifest-path",
             manifest_path,
             "platform",
             "add",
             "linux-64",
             "osx-arm64",
+            "wasi-wasm32",
         ],
     )
     verify_cli_command(
-        [pixi, "project", "--manifest-path", manifest_path, "platform", "list"],
-        stdout_contains=["linux-64", "osx-arm64"],
+        [pixi, "workspace", "--manifest-path", manifest_path, "platform", "list"],
+        stdout_contains=["linux-64", "osx-arm64", "wasi-wasm32"],
     )
     verify_cli_command(
         [
             pixi,
-            "project",
+            "workspace",
             "--manifest-path",
             manifest_path,
             "platform",
             "remove",
-            "linux-64",
+            "wasi-wasm32",
         ],
     )
     verify_cli_command(
         [
             pixi,
-            "project",
+            "workspace",
             "--manifest-path",
             manifest_path,
             "platform",
             "remove",
-            "linux-64",
+            "wasi-wasm32",
         ],
         ExitCode.FAILURE,
-        stderr_contains="linux-64",
+        stderr_contains="wasi-wasm32",
     )
     verify_cli_command(
-        [pixi, "project", "--manifest-path", manifest_path, "platform", "list"],
+        [pixi, "workspace", "--manifest-path", manifest_path, "platform", "list"],
         stdout_contains="osx-arm64",
-        stdout_excludes="linux-64",
+        stdout_excludes="wasi-wasm32",
     )
 
     # Version commands
     verify_cli_command(
-        [pixi, "project", "--manifest-path", manifest_path, "version", "set", "1.2.3"],
+        [pixi, "workspace", "--manifest-path", manifest_path, "version", "set", "1.2.3"],
     )
     verify_cli_command(
-        [pixi, "project", "--manifest-path", manifest_path, "version", "get"],
+        [pixi, "workspace", "--manifest-path", manifest_path, "version", "get"],
         stdout_contains="1.2.3",
     )
     verify_cli_command(
-        [pixi, "project", "--manifest-path", manifest_path, "version", "major"],
+        [pixi, "workspace", "--manifest-path", manifest_path, "version", "major"],
         stderr_contains="2.0.0",
     )
     verify_cli_command(
-        [pixi, "project", "--manifest-path", manifest_path, "version", "minor"],
+        [pixi, "workspace", "--manifest-path", manifest_path, "version", "minor"],
         stderr_contains="2.1.0",
     )
     verify_cli_command(
-        [pixi, "project", "--manifest-path", manifest_path, "version", "patch"],
+        [pixi, "workspace", "--manifest-path", manifest_path, "version", "patch"],
         stderr_contains="2.1.1",
     )
     verify_cli_command(
-        [pixi, "project", "--manifest-path", manifest_path, "name", "get"],
+        [pixi, "workspace", "--manifest-path", manifest_path, "name", "get"],
         stdout_contains="test_project_commands",
     )
     verify_cli_command(
-        [pixi, "project", "--manifest-path", manifest_path, "name", "set", "new-name"],
+        [pixi, "workspace", "--manifest-path", manifest_path, "name", "set", "new-name"],
         stderr_contains="new-name",
     )
 
@@ -1069,6 +1070,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "cache_dir": IsStr,
             "cache_size": AnyThing,
             "auth_dir": IsStr,
+            "tls_backend": IsStr,
             "global_info": {
                 "bin_dir": IsStr,
                 "env_dir": IsStr,
@@ -1373,6 +1375,7 @@ def test_quiet_flag_with_rust_log_env(
     )
 
 
+@pytest.mark.slow
 def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """
     Check that a helpful error message is raised when attempting to

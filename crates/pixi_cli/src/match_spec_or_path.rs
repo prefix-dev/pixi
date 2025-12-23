@@ -66,18 +66,18 @@ impl FromStr for MatchSpecOrPath {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         // Check if this is a URL pointing to a conda package
         // Rattler's MatchSpec parser doesn't recognize URLs with schemes, so we handle them here
-        if let Ok(url) = url::Url::parse(value) {
-            if let Some(archive) = ArchiveIdentifier::try_from_url(&url) {
-                // This is a URL to a conda package
-                let name = PackageName::try_from(archive.name)
-                    .map_err(|e| format!("invalid package name: {e}"))?;
+        if let Ok(url) = url::Url::parse(value)
+            && let Some(archive) = ArchiveIdentifier::try_from_url(&url)
+        {
+            // This is a URL to a conda package
+            let name = PackageName::try_from(archive.name)
+                .map_err(|e| format!("invalid package name: {e}"))?;
 
-                return Ok(Self::MatchSpec(Box::new(MatchSpec {
-                    name: Some(name.into()),
-                    url: Some(url),
-                    ..MatchSpec::default()
-                })));
-            }
+            return Ok(Self::MatchSpec(Box::new(MatchSpec {
+                name: Some(name.into()),
+                url: Some(url),
+                ..MatchSpec::default()
+            })));
         }
 
         match MatchSpec::from_str(value, ParseStrictness::Lenient) {

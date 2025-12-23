@@ -171,12 +171,10 @@ fn start_winbash(
             shell_script.set_env_var(key, value).into_diagnostic()?;
         }
     }
-    if source_shell_completions {
-        if let Some(completions_dir) = bash.completion_script_location() {
-            shell_script
-                .source_completions(&prefix.root().join(completions_dir))
-                .into_diagnostic()?;
-        }
+    if source_shell_completions && let Some(completions_dir) = bash.completion_script_location() {
+        shell_script
+            .source_completions(&prefix.root().join(completions_dir))
+            .into_diagnostic()?;
     }
     temp_file
         .write_all(shell_script.contents().into_diagnostic()?.as_bytes())
@@ -228,12 +226,10 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
         shell_script.set_env_var(key, value).into_diagnostic()?;
     }
 
-    if source_shell_completions {
-        if let Some(completions_dir) = shell.completion_script_location() {
-            shell_script
-                .source_completions(&prefix.root().join(completions_dir))
-                .into_diagnostic()?;
-        }
+    if source_shell_completions && let Some(completions_dir) = shell.completion_script_location() {
+        shell_script
+            .source_completions(&prefix.root().join(completions_dir))
+            .into_diagnostic()?;
     }
     const DONE_STR: &str = "PIXI_SHELL_ACTIVATION_DONE";
     shell_script.echo(DONE_STR).into_diagnostic()?;

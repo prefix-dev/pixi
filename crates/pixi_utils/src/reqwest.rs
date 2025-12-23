@@ -11,11 +11,12 @@ use pixi_config::Config;
 use pixi_consts::consts;
 use rattler_networking::{
     GCSMiddleware, LazyClient, MirrorMiddleware, OciMiddleware, S3Middleware,
-    mirror_middleware::Mirror, retry_policies::ExponentialBackoff,
+    mirror_middleware::Mirror,
 };
 use reqwest::Client;
 use reqwest_middleware::{ClientWithMiddleware, Middleware};
 use reqwest_retry::RetryTransientMiddleware;
+use retry_policies::policies::ExponentialBackoff;
 
 /// The default retry policy employed by pixi.
 /// TODO: At some point we might want to make this configurable.
@@ -84,9 +85,22 @@ pub fn should_use_native_tls_for_uv(config: &Config) -> bool {
     }
 }
 
-pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest::ClientBuilder> {
-    use pixi_config::TlsRootCerts;
+/// Returns the name of the TLS backend used by this build.
+///
+/// This is determined at compile time based on the enabled features.
+pub fn tls_backend() -> &'static str {
+    #[cfg(feature = "native-tls")]
+    {
+        return "native-tls";
+    }
 
+    #[cfg(not(feature = "native-tls"))]
+    {
+        "rustls"
+    }
+}
+
+pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest::ClientBuilder> {
     let mut builder = Client::builder()
         .pool_max_idle_per_host(DEFAULT_REQWEST_IDLE_PER_HOST)
         .user_agent(DEFAULT_REQWEST_USER_AGENT.as_str())
@@ -108,6 +122,7 @@ pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest
 
     #[cfg(feature = "rustls-tls")]
     {
+        use pixi_config::TlsRootCerts;
         let tls_root_certs = config.map(|c| c.tls_root_certs()).unwrap_or_default();
 
         builder = builder.use_rustls_tls().tls_built_in_root_certs(false); // Disable auto-loading to choose explicitly

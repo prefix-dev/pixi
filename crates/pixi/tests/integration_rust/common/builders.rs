@@ -74,8 +74,16 @@ impl InitBuilder {
         self
     }
 
-    pub fn with_local_channel(self, channel: impl AsRef<Path>) -> Self {
-        self.with_channel(Url::from_directory_path(channel).unwrap())
+    pub fn with_local_channel(mut self, channel: impl AsRef<Path>) -> Self {
+        self.args
+            .channels
+            .get_or_insert_with(Default::default)
+            .push(NamedChannelOrUrl::Url(
+                Url::from_directory_path(channel).unwrap(),
+            ));
+        // Disable the pypi mapping
+        self.args.conda_pypi_map = Some(Vec::new());
+        self
     }
 
     pub fn without_channels(mut self) -> Self {
@@ -392,6 +400,7 @@ impl TaskAliasBuilder {
 }
 
 pub struct ProjectChannelAddBuilder {
+    pub workspace_config: WorkspaceConfig,
     pub args: workspace::channel::AddRemoveArgs,
 }
 
@@ -421,6 +430,7 @@ impl IntoFuture for ProjectChannelAddBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         workspace::channel::execute(workspace::channel::Args {
+            workspace_config: self.workspace_config,
             command: workspace::channel::Command::Add(self.args),
         })
         .boxed_local()
@@ -428,7 +438,7 @@ impl IntoFuture for ProjectChannelAddBuilder {
 }
 
 pub struct ProjectChannelRemoveBuilder {
-    pub manifest_path: Option<PathBuf>,
+    pub workspace_config: WorkspaceConfig,
     pub args: workspace::channel::AddRemoveArgs,
 }
 
@@ -453,6 +463,7 @@ impl IntoFuture for ProjectChannelRemoveBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         workspace::channel::execute(workspace::channel::Args {
+            workspace_config: self.workspace_config,
             command: workspace::channel::Command::Remove(self.args),
         })
         .boxed_local()
@@ -484,6 +495,11 @@ impl InstallBuilder {
     }
     pub fn with_only_package(mut self, pkg: Vec<String>) -> Self {
         self.args.only = Some(pkg);
+        self
+    }
+
+    pub fn with_environment(mut self, env: Vec<String>) -> Self {
+        self.args.environment = Some(env);
         self
     }
 }

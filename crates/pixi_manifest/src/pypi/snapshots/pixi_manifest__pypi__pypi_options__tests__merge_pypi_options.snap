@@ -18,7 +18,10 @@ index-strategy: ~
 prerelease-mode: ~
 no-build: all
 dependency-overrides:
-  pkg1: "==1.0.0"
-  pkg3: "==3.2.0"
-  pkg2: "==2.0.0"
+  pkg1:
+    version: "==1.0.0"
+  pkg3:
+    version: "==3.2.0"
+  pkg2:
+    version: "==2.0.0"
 no-binary: ~

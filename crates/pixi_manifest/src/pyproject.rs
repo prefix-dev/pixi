@@ -220,13 +220,13 @@ impl PyProjectManifest {
                 SpecType::Run,
                 InternalDependencyBehavior::Overwrite,
             );
-        } else if let Some(_spec) = python_spec {
-            if target.has_dependency(&python, SpecType::Run, None) {
-                // TODO: implement some comparison or spec merging logic here
-                tracing::info!(
-                    "Overriding the requires-python with the one defined in pixi dependencies"
-                )
-            }
+        } else if let Some(_spec) = python_spec
+            && target.has_dependency(&python, SpecType::Run, None)
+        {
+            // TODO: implement some comparison or spec merging logic here
+            tracing::info!(
+                "Overriding the requires-python with the one defined in pixi dependencies"
+            )
         }
 
         // Add pyproject dependencies as pypi dependencies

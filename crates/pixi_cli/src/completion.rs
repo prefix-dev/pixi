@@ -88,7 +88,7 @@ fn get_completion_script(shell: Shell) -> String {
 }
 
 /// Replace the parts of the bash completion script that need different functionality.
-fn replace_bash_completion(script: &str) -> Cow<str> {
+fn replace_bash_completion(script: &str) -> Cow<'_, str> {
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
     // Replace the '-' with '__' since that's what clap's generator does as well for Bash Shell completion.
@@ -117,7 +117,7 @@ fn replace_bash_completion(script: &str) -> Cow<str> {
 }
 
 /// Replace the parts of the zsh completion script that need different functionality.
-fn replace_zsh_completion(script: &str) -> Cow<str> {
+fn replace_zsh_completion(script: &str) -> Cow<'_, str> {
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
     let pattern = r"(?ms)(\(run\))(?:.*?)(_arguments.*?)(\*::task)";
@@ -137,7 +137,7 @@ $2::task"#;
     re.replace(script, replacement.replace("BIN_NAME", bin_name))
 }
 
-fn replace_fish_completion(script: &str) -> Cow<str> {
+fn replace_fish_completion(script: &str) -> Cow<'_, str> {
     // Adds tab completion to the pixi run command.
     let bin_name = pixi_utils::executable_name();
     let addition = format!(
@@ -152,7 +152,7 @@ fn replace_fish_completion(script: &str) -> Cow<str> {
 }
 
 /// Replace the parts of the nushell completion script that need different functionality.
-fn replace_nushell_completion(script: &str) -> Cow<str> {
+fn replace_nushell_completion(script: &str) -> Cow<'_, str> {
     fn insert_after_module<'a>(input: &'a str, insert: &str) -> Cow<'a, str> {
         // Match the literal line
         let re = Regex::new(r"(?m)^module completions \{").expect("static regex must be valid");

@@ -1,7 +1,3 @@
-[build-system]
-build-backend = "hatchling.build"
-requires = ["hatchling"]
-
 [project]
 authors = [{ name = "prefix.dev", email = "noreply@prefix.dev" }]
 classifiers = [
@@ -13,7 +9,11 @@ name = "docker-project"
 requires-python = ">=3.12"
 version = "0.1.0"
 
-[tool.pixi.project]
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.pixi.workspace]
 channels = ["conda-forge"]
 name = "docker-project"
 platforms = ["linux-64", "linux-aarch64", "osx-arm64"]
@@ -24,38 +24,26 @@ flask = ">=3.0.2,<3.1"
 gunicorn = ">=21.2.0,<21.3"
 
 [tool.pixi.feature.dev.pypi-dependencies]
-# Built editable in development mode
+# Installed as editable in development mode for fast iteration
 docker-project = { path = ".", editable = true }
+
+[tool.pixi.feature.prod.pypi-dependencies]
+# Installed as non-editable in production for a clean deployment
+# Both dev and prod can be in the same solve-group despite different editability
+docker-project = { path = ".", editable = false }
 
 [tool.pixi.feature.test.dependencies]
 pytest = "*"
 
-# Used for installing into production, as a post-process step
-# we would like make better integration for this in the future.
-[tool.pixi.feature.prod.host-dependencies]
-uv = "0.4.3"
-
-# We use dependencies from conda to use it to build the wheel
-[tool.pixi.feature.build.dependencies]
-hatch = "1.12.0"
-
-[tool.pixi.feature.build.tasks]
-# Create a wheel for installation
-build-wheel = "hatch build -t wheel"
-
-[tool.pixi.feature.prod.tasks]
-# Install into the production environment
-install-wheel = "uv pip install --no-deps --disable-pip-version-check --no-cache-dir dist/docker_project-*.whl"
+[tool.pixi.feature.test.tasks]
+test = "pytest"
 
 [tool.pixi.tasks]
 dev = "flask --app docker_project:app run --debug"
 start = "gunicorn -w 4 docker_project:app --bind :8000"
 
-[tool.pixi.feature.test.tasks]
-test = "pytest"
-
 [tool.pixi.environments]
-# Default environment, has features for running in development, testing and building
-default = { features = ["test", "dev", "build"], solve-group = "default" }
-# Leaner environment for use in production
+# Default environment for development and testing (editable install)
+default = { features = ["test", "dev"], solve-group = "default" }
+# Both environments share the same solve-group but have different editability
 prod = { features = ["prod"], solve-group = "default" }

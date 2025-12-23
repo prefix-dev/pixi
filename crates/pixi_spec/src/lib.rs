@@ -9,6 +9,7 @@
 //! binary packages.
 
 mod detailed;
+mod dev_source;
 mod git;
 mod path;
 mod source_anchor;
@@ -18,6 +19,7 @@ mod url;
 use std::{fmt::Display, path::PathBuf, str::FromStr};
 
 pub use detailed::DetailedSpec;
+pub use dev_source::DevSourceSpec;
 pub use git::{GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
 pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
@@ -355,6 +357,18 @@ impl PixiSpec {
     pub fn to_toml_value(&self) -> toml_edit::Value {
         ::serde::Serialize::serialize(self, toml_edit::ser::ValueSerializer::new())
             .expect("conversion to toml cannot fail")
+    }
+
+    /// Returns a [`NamelessMatchSpec`] that represents this spec disregarding
+    /// any source specification.
+    pub fn try_into_nameless_match_spec_ref(
+        self,
+        channel_config: &ChannelConfig,
+    ) -> Result<NamelessMatchSpec, SpecConversionError> {
+        match self.into_source_or_binary() {
+            Either::Left(_source) => Ok(NamelessMatchSpec::default()),
+            Either::Right(binary) => binary.try_into_nameless_match_spec(channel_config),
+        }
     }
 }
 

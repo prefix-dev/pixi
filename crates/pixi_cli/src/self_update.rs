@@ -5,6 +5,7 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 
 use miette::IntoDiagnostic;
+use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_utils::reqwest::{build_reqwest_clients, reqwest_client_builder};
 use reqwest::redirect::Policy;
@@ -89,8 +90,11 @@ async fn latest_version() -> miette::Result<Version> {
     // Uses the public Github Releases /latest endpoint to get the latest tag from the URL
     let url = format!("{}/latest", consts::RELEASES_URL);
 
+    // Load global config to respect TLS settings (e.g., tls-root-certs = "native")
+    let config = Config::load_global();
+
     // Create a client with a redirect policy
-    let no_redirect_client = reqwest_client_builder(None)?
+    let no_redirect_client = reqwest_client_builder(Some(&config))?
         .redirect(Policy::none())
         .build()
         .into_diagnostic()?; // Prevent automatic redirects

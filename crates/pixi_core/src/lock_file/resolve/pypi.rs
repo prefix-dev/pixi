@@ -359,10 +359,7 @@ pub async fn resolve_pypi(
     // packages.
     let python_record = locked_pixi_records
         .iter()
-        .find(|r| match r {
-            PixiRecord::Binary(r) => is_python_record(r),
-            _ => false,
-        })
+        .find(|r| is_python_record(r))
         .ok_or_else(|| {
             miette::miette!(
                 help = format!("Try: {}", consts::TASK_STYLE.apply_to("pixi add python")),
@@ -1130,7 +1127,9 @@ async fn lock_pypi_packages(
                             // instead of from the source path to copy the path that was passed in
                             // from the requirement.
                             let url_or_path = UrlOrPath::Path(install_path);
-                            (url_or_path, hash, dir.editable.unwrap_or(false))
+                            // Always set editable to false in lock file.
+                            // Editability is looked up from manifest at install time.
+                            (url_or_path, hash, false)
                         }
                     };
 

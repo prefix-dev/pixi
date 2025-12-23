@@ -4,7 +4,7 @@ use pixi_cli::cli_config::GitRev;
 use pixi_consts::consts;
 use pixi_core::{DependencyType, Workspace};
 use pixi_manifest::{FeaturesExt, SpecType};
-use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName, VersionOrStar};
+use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{PackageName, Platform};
 use tempfile::TempDir;
 use url::Url;
@@ -468,6 +468,7 @@ async fn add_pypi_extra_functionality() {
 name = "test-pypi-extras"
 channels = ["{channel_url}"]
 platforms = ["{platform}"]
+conda-pypi-map = {{}} # disable mapping
 
 [dependencies]
 python = "==3.12.0"
@@ -538,10 +539,12 @@ index-url = "{index_url}"
             if name == PypiPackageName::from_str("black").unwrap() {
                 assert_eq!(
                     spec,
-                    PixiPypiSpec::Version {
-                        version: VersionOrStar::from_str("==24.8.0").unwrap(),
+                    PixiPypiSpec {
                         extras: vec![pep508_rs::ExtraName::from_str("cli").unwrap()],
-                        index: None
+                        source: PixiPypiSource::Registry {
+                            version: VersionOrStar::from_str("==24.8.0").unwrap(),
+                            index: None,
+                        }
                     }
                 );
             }
@@ -550,7 +553,10 @@ index-url = "{index_url}"
 
 /// Test the sdist support for pypi packages
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "slow_integration_tests"), not(feature = "online_tests")),
+    ignore
+)]
 async fn add_sdist_functionality() {
     setup_tracing();
 
