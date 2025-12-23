@@ -223,16 +223,6 @@ impl<'p> TaskGraph<'p> {
                         _ => task_env,
                     };
 
-                    // If the task itself declares a `default_environment`, prefer that
-                    // environment when constructing the root node (if it exists in the
-                    // project). Do not fail if the named environment is missing; fall
-                    // back to the resolved `run_env`.
-                    if let Some(default_env_name) = task.default_environment()
-                        && let Some(env) = project.environment(default_env_name)
-                    {
-                        run_env = env;
-                    }
-
                     let task_name = args.remove(0);
 
                     let arg_values = if let Some(task_arguments) = task.args() {
@@ -410,18 +400,9 @@ impl<'p> TaskGraph<'p> {
                     }
                     Ok(result) => result,
                 };
-                // If the task defines a `default_environment`, prefer that environment
-                // when running the dependency. Fall back to the environment returned
-                // by `find_task` if the named environment cannot be resolved.
-                let resolved_run_env =
-                    if let Some(default_env_name) = task_dependency.default_environment() {
-                        project.environment(default_env_name).unwrap_or(task_env)
-                    } else {
-                        task_env
-                    };
 
                 // Store the dependency data for processing later
-                deps_to_process.push((dependency, resolved_run_env, task_dependency));
+                deps_to_process.push((dependency, task_env, task_dependency));
             }
 
             // Process all dependencies after collecting them
