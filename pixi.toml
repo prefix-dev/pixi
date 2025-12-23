@@ -22,7 +22,11 @@ python = ">=3.13.5,<3.15"
 
 [tasks]
 build-debug = "cargo build"
+# At least one test requires the self_update feature, so we need a different
+# flavour of the binary for tests
+build-debug-tests = "cargo build --features self_update"
 build-release = "cargo build --release"
+build-release-tests = "cargo build --release --features self_update"
 bump = "tbump --only-patch $RELEASE_VERSION"
 generate-cli-docs = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml"
 insta = "cargo insta"
@@ -66,19 +70,19 @@ types-pyyaml = ">=6.0.12.20250915,<7"
 
 [feature.pytest.tasks]
 test-common-wheels = { cmd = "pytest -s --numprocesses=auto tests/wheel_tests/", depends-on = [
-  "build-release",
+  "build-release-tests",
 ] }
 test-common-wheels-ci = { cmd = "pytest --numprocesses=auto --verbose tests/wheel_tests/" }
 test-integration-ci = "pytest --numprocesses=auto --durations=0 --timeout=100 --verbose -m 'not extra_slow' tests/integration_python"
 test-integration-extra-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=600 tests/integration_python", depends-on = [
-  "build-release",
+  "build-release-tests",
 ] }
 test-integration-extra-slow-ci = "pytest --numprocesses=auto --durations=0 --timeout=600 tests/integration_python"
 test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=auto --durations=0 --timeout=100 -m 'not slow and not extra_slow' tests/integration_python", depends-on = [
-  "build-debug",
+  "build-debug-tests",
 ] }
 test-integration-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=100 -m 'not extra_slow' tests/integration_python", depends-on = [
-  "build-release",
+  "build-release-tests",
 ] }
 # pass the file to run as an argument to the task
 # you can also pass a specific test function, like this:
@@ -86,12 +90,12 @@ test-integration-slow = { cmd = "pytest --numprocesses=auto --durations=0 --time
 test-specific-test = { cmd = "pytest -k '{{ test_substring }}'", args = [
   "test_substring",
 ], depends-on = [
-  "build-release",
+  "build-release-tests",
 ] }
 test-specific-test-debug = { cmd = "pytest --pixi-build=debug -k '{{ test_substring }}'", args = [
   "test_substring",
 ], depends-on = [
-  "build-debug",
+  "build-debug-tests",
 ] }
 # Update one test channel by passing on value of `mappings.toml`
 # e.g. "multiple_versions_channel_1"
