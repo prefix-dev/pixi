@@ -2509,6 +2509,11 @@
             ">=0.40"
           ]
         },
+        "resolve-symlinks": {
+          "title": "Resolve-Symlinks",
+          "description": "Whether to resolve symlinked manifest paths to their real file location. When true (default), the workspace root becomes the real file's directory. When false, the workspace root is where the symlink lives.",
+          "type": "boolean"
+        },
         "s3-options": {
           "title": "S3-Options",
           "description": "Options related to S3 for this project",

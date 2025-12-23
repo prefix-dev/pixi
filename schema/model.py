@@ -203,6 +203,10 @@ class Workspace(StrictBaseModel):
         description="The required version spec for pixi itself to resolve and build the project.",
         examples=[">=0.40"],
     )
+    resolve_symlinks: bool | None = Field(
+        None,
+        description="Whether to resolve symlinked manifest paths to their real file location. When true (default), the workspace root becomes the real file's directory. When false, the workspace root is where the symlink lives.",
+    )
     target: dict[TargetName, WorkspaceTarget] | None = Field(
         None, description="The workspace targets"
     )
