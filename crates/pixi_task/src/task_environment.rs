@@ -127,6 +127,22 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
             let default_env = self.project.default_environment();
             // If the default environment has the task
             if let Ok(default_env_task) = default_env.task(&name, self.platform) {
+                // If the task in the default environment declares a `default-environment`
+                // and that environment exists and can run on this platform, prefer that
+                // environment instead of returning the default environment.
+                if let Some(default_env_name) = default_env_task.default_environment()
+                    && let Some(env) = self
+                        .project
+                        .environments()
+                        .into_iter()
+                        .find(|e| e.name() == default_env_name)
+                {
+                    if verify_current_platform_can_run_environment(&env, None).is_ok() {
+                        if let Ok(task_in_env) = env.task(&name, self.platform) {
+                            return Ok((env.clone(), task_in_env));
+                        }
+                    }
+                }
                 // If no other environment has the task name but a different task, return the
                 // default environment
                 if !self
@@ -444,5 +460,35 @@ mod tests {
         let result = search.find_task("test3".into(), FindTaskSource::CmdArgs, None);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().0.name().as_str(), "two");
+    }
+
+    #[test]
+    fn test_top_level_task_default_environment_is_used() {
+        let manifest_str = r#"
+            [workspace]
+            channels = []
+            platforms = ["osx-arm64"]
+
+            [tasks]
+            test = { cmd = "echo test", default-environment = "test" }
+
+            [feature.test.dependencies]
+            # pytest = "*"
+
+            [environments]
+            test = ["test"]
+        "#;
+
+        let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+
+        // Build a SearchEnvironments that will apply default behavior.
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+
+        // Resolve `test` task; since the task declares `default-environment = "test"`
+        // we expect the resolved environment to be `test` rather than the default.
+        let result = search
+            .find_task("test".into(), FindTaskSource::CmdArgs, None)
+            .expect("should resolve to an environment");
+        assert_eq!(result.0.name().as_str(), "test");
     }
 }
