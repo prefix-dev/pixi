@@ -136,12 +136,10 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
                         .environments()
                         .into_iter()
                         .find(|e| e.name() == default_env_name)
+                    && verify_current_platform_can_run_environment(&env, None).is_ok()
+                    && let Ok(task_in_env) = env.task(&name, self.platform)
                 {
-                    if verify_current_platform_can_run_environment(&env, None).is_ok()
-                        && let Ok(task_in_env) = env.task(&name, self.platform)
-                    {
-                        return Ok((env.clone(), task_in_env));
-                    }
+                    return Ok((env.clone(), task_in_env));
                 }
                 // If no other environment has the task name but a different task, return the
                 // default environment
