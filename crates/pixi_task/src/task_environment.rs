@@ -378,7 +378,7 @@ mod tests {
         let manifest_str = r#"
             [workspace]
             channels = []
-            platforms = ["osx-arm64"]
+            platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
 
             [tasks]
             test = "echo test"
@@ -435,7 +435,7 @@ mod tests {
             [project]
             name = "foo"
             channels = []
-            platforms = ["osx-arm64"]
+            platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
 
             [feature.test.tasks]
             test3 = { cmd = "echo test3", default-environment = "three" }
@@ -465,7 +465,7 @@ mod tests {
         let manifest_str = r#"
             [workspace]
             channels = []
-            platforms = ["osx-arm64"]
+            platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
 
             [tasks]
             test = { cmd = "echo test", default-environment = "test" }
