@@ -28,9 +28,9 @@ use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_uv_conversions::{
     ConversionError, as_uv_req, configure_insecure_hosts_for_tls_bypass,
     convert_uv_requirements_to_pep508, into_pinned_git_spec, into_pixi_reference,
-    into_uv_git_reference, pypi_options_to_build_options, pypi_options_to_index_locations,
-    to_exclude_newer, to_index_strategy, to_normalize, to_prerelease_mode, to_requirements,
-    to_uv_normalize, to_uv_version, to_version_specifiers,
+    pypi_options_to_build_options, pypi_options_to_index_locations, to_exclude_newer,
+    to_index_strategy, to_normalize, to_prerelease_mode, to_requirements, to_uv_normalize,
+    to_uv_version, to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -636,11 +636,7 @@ pub async fn resolve_pypi(
 
                     // Construct the GitUrl with the reference (branch/tag) from the pinned_git_spec
                     // to preserve the branch information in the lock file
-                    let git_url = GitUrl::from_fields(
-                        display_safe,
-                        into_uv_git_reference(pinned_git_spec.source.reference.into()),
-                        Some(git_oid),
-                    )?;
+                    let git_url = GitUrl::try_from(display_safe)?.with_precise(git_oid);
 
                     let constraint_source = RequirementSource::Git {
                         git: git_url,
