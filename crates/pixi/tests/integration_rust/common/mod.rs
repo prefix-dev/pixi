@@ -767,6 +767,7 @@ impl TasksControl<'_> {
                 platform,
                 feature: feature_name.non_default().map(str::to_owned),
                 cwd: None,
+                default_environment: None,
                 env: Default::default(),
                 description: None,
                 clean_env: false,

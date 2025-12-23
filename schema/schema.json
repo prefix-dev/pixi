@@ -2215,6 +2215,12 @@
           "type": "string",
           "pattern": "^[^\\\\]+$"
         },
+        "default-environment": {
+          "title": "Default-Environment",
+          "description": "A default environment to run the task",
+          "type": "string",
+          "pattern": "^[a-z\\d\\-]+$"
+        },
         "depends-on": {
           "title": "Depends-On",
           "description": "The tasks that this task depends on. Environment variables will **not** be expanded.",
@@ -2267,10 +2273,7 @@
           "title": "Description",
           "description": "A short description of the task",
           "type": "string",
-          "minLength": 1,
-          "examples": [
-            "Build the project"
-          ]
+          "minLength": 1
         },
         "env": {
           "title": "Env",
