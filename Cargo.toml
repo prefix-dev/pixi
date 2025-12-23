@@ -146,7 +146,7 @@ retry-policies = "0.4"
 # reqwest-retry = "0.7.0"
 bzip2 = "0.6.1"
 reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
-reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
+reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "e7108bdb1a0e05a2147414d07c6396681aa99904" }
 rlimit = "0.10.2"
 rstest = "0.26.0"
 same-file = "1.0.6"
