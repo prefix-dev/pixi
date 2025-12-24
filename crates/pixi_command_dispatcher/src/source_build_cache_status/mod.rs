@@ -106,6 +106,7 @@ fn fmt_cached_build_status(
     Ok(())
 }
 
+#[derive(Debug)]
 pub struct SourceBuildCacheEntry {
     /// The information stored in the build cache. Or `None` if the build did
     /// not exist in the cache.
@@ -382,7 +383,7 @@ impl SourceBuildCacheStatusSpec {
             .await
             .map_err_with(SourceBuildCacheStatusError::SourceCheckout)?;
 
-        let source_dir = source_build_checkout.path.as_std_path();
+        let source_dir = source_build_checkout.path.as_dir_or_file_parent();
         let timestamp = cached_build.record.package_record.timestamp;
 
         // Check the files that were explicitly recorded at cache time.
@@ -421,14 +422,14 @@ impl SourceBuildCacheStatusSpec {
         // This detects file additions.
         let glob_set = GlobSet::create(source_info.input_globs.iter().map(String::as_str));
         let matching_files = glob_set
-            .collect_matching(source_dir)
+            .collect_matching(source_dir.as_std_path())
             .map_err(SourceBuildCacheStatusError::GlobSet)
             .map_err(CommandDispatcherError::Failed)?;
 
         for matching_file in matching_files {
             let path = matching_file.into_path();
             let relative_path = path
-                .strip_prefix(source_dir)
+                .strip_prefix(source_dir.as_std_path())
                 .ok()
                 .map(|p| p.to_path_buf())
                 .unwrap_or_else(|| path.clone());
