@@ -61,7 +61,11 @@ impl SourceAnchor {
                 // Use the parent directory as the base when the base path ends with
                 // a file name (e.g., `package-a/pixi.toml` -> `package-a`).
                 // This ensures relative paths like `../package-b` resolve correctly.
-                let base_dir = base.parent().unwrap_or(base.to_path());
+                let base_dir = base
+                    .file_name()
+                    .and_then(|_| base.parent())
+                    .unwrap_or_else(|| base.to_path());
+
                 let relative_path = normalize_typed(base_dir.join(path).to_path());
                 SourceLocationSpec::Path(PathSourceSpec {
                     path: relative_path,
