@@ -283,7 +283,6 @@ pub struct BuildHostPackage {
 /// updating the cache.
 ///
 /// As long as this entry is held, no other process can access this cache entry.
-#[derive(Debug)]
 pub struct BuildCacheEntry {
     file: RwLockWriteGuard<tokio::fs::File>,
     cache_dir: AbsPresumedDirPathBuf,

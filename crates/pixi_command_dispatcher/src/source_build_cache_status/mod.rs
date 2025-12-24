@@ -106,7 +106,6 @@ fn fmt_cached_build_status(
     Ok(())
 }
 
-#[derive(Debug)]
 pub struct SourceBuildCacheEntry {
     /// The information stored in the build cache. Or `None` if the build did
     /// not exist in the cache.
