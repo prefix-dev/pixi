@@ -1,0 +1,18 @@
+[project]
+authors = [{ name = "nichmor", email = "nmorkotilo@gmail.com" }]
+name = "pixi-demo"
+requires-python = ">= 3.11"
+version = "0.1.0"
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+pixi_demo = { path = ".", editable = true }
+
+[tool.pixi.tasks]

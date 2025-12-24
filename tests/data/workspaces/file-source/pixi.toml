@@ -1,0 +1,11 @@
+[package]
+name = "file-source-pkg"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }
+
+[package.build.config]
+# This glob pattern should match the source file itself
+build-globs = ["pixi.toml"]
+package = "file-source-pkg-0.1.0-h4616a5c_0.conda"

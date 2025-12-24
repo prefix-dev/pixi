@@ -491,16 +491,6 @@ impl CommandDispatcherProcessor {
         }
     }
 
-    /// Resolves the reporter context for a given dispatcher context.
-    ///
-    /// This method handles a race condition where child task messages may arrive
-    /// after their parent task has already completed and been removed from the SlotMap.
-    /// In such cases, we walk up the parent chain via `parent_contexts` to find an
-    /// ancestor with a valid reporter context, maintaining the reporting hierarchy.
-    ///
-    /// This prevents both:
-    /// - Panics from accessing invalid SlotMap keys (issue #5200)
-    /// - Silent execution when child tasks can't find their parent's reporter context
     fn reporter_context(
         &self,
         context: CommandDispatcherContext,
@@ -509,28 +499,14 @@ impl CommandDispatcherProcessor {
         while let Some(context) = parent_context.take() {
             parent_context = match context {
                 CommandDispatcherContext::SolveCondaEnvironment(id) => {
-                    // If the id exists and has a reporter_id, return it
-                    if let Some(pending) = self.conda_solves.get(id)
-                        && let Some(reporter_id) = pending.reporter_id
-                    {
-                        return Some(reporter::ReporterContext::SolveConda(reporter_id));
-                    }
-                    // If the id doesn't exist or has no reporter_id, walk up the parent chain
-                    self.parent_contexts
-                        .get(&CommandDispatcherContext::SolveCondaEnvironment(id))
-                        .cloned()
+                    return self.conda_solves[id]
+                        .reporter_id
+                        .map(reporter::ReporterContext::SolveConda);
                 }
                 CommandDispatcherContext::SolvePixiEnvironment(id) => {
-                    // If the id exists and has a reporter_id, return it
-                    if let Some(pending) = self.solve_pixi_environments.get(id)
-                        && let Some(reporter_id) = pending.reporter_id
-                    {
-                        return Some(reporter::ReporterContext::SolvePixi(reporter_id));
-                    }
-                    // If the id doesn't exist or has no reporter_id, walk up the parent chain
-                    self.parent_contexts
-                        .get(&CommandDispatcherContext::SolvePixiEnvironment(id))
-                        .cloned()
+                    return self.solve_pixi_environments[id]
+                        .reporter_id
+                        .map(reporter::ReporterContext::SolvePixi);
                 }
                 CommandDispatcherContext::BuildBackendMetadata(id) => {
                     if let Some(context) = self
@@ -569,16 +545,9 @@ impl CommandDispatcherProcessor {
                         })?
                 }
                 CommandDispatcherContext::InstallPixiEnvironment(id) => {
-                    // If the id exists and has a reporter_id, return it
-                    if let Some(pending) = self.install_pixi_environment.get(id)
-                        && let Some(reporter_id) = pending.reporter_id
-                    {
-                        return Some(reporter::ReporterContext::InstallPixi(reporter_id));
-                    }
-                    // If the id doesn't exist or has no reporter_id, walk up the parent chain
-                    self.parent_contexts
-                        .get(&CommandDispatcherContext::InstallPixiEnvironment(id))
-                        .cloned()
+                    return self.install_pixi_environment[id]
+                        .reporter_id
+                        .map(reporter::ReporterContext::InstallPixi);
                 }
                 CommandDispatcherContext::InstantiateToolEnv(id) => {
                     if let Some(context) = self
@@ -617,16 +586,9 @@ impl CommandDispatcherProcessor {
                         })?
                 }
                 CommandDispatcherContext::BackendSourceBuild(id) => {
-                    // If the id exists and has a reporter_id, return it
-                    if let Some(pending) = self.backend_source_builds.get(id)
-                        && let Some(reporter_id) = pending.reporter_id
-                    {
-                        return Some(reporter::ReporterContext::BackendSourceBuild(reporter_id));
-                    }
-                    // If the id doesn't exist or has no reporter_id, walk up the parent chain
-                    self.parent_contexts
-                        .get(&CommandDispatcherContext::BackendSourceBuild(id))
-                        .cloned()
+                    return self.backend_source_builds[id]
+                        .reporter_id
+                        .map(reporter::ReporterContext::BackendSourceBuild);
                 }
                 CommandDispatcherContext::QuerySourceBuildCache(_id) => {
                     return None;

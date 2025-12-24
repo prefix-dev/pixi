@@ -1,0 +1,15 @@
+[workspace]
+authors = ["Felix Häcker <felix.haecker@posteo.de>"]
+channels = ["conda-forge"]
+name = "myproject"
+platforms = ["osx-arm64", "linux-64", "win-64"]
+version = "0.1.0"
+
+[system-requirements]
+cuda = "12.0"
+
+[tasks]
+preprocess = { cmd = "echo \"hello\"", inputs = ["hello.txt"] }
+train = { cmd = "echo \"training\"", depends-on = ["preprocess"] }
+
+[dependencies]
