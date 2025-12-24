@@ -86,6 +86,7 @@ impl CommandDispatcherProcessor {
                     source_metadata_id,
                     task.spec,
                     task.cancellation_token,
+                    task.parent,
                 );
             }
         }
@@ -97,17 +98,22 @@ impl CommandDispatcherProcessor {
         source_metadata_id: SourceMetadataId,
         spec: SourceMetadataSpec,
         cancellation_token: CancellationToken,
+        parent: Option<CommandDispatcherContext>,
     ) {
-        let dispatcher = self.create_task_command_dispatcher(
-            CommandDispatcherContext::SourceMetadata(source_metadata_id),
-        );
-
         let dispatcher_context = CommandDispatcherContext::SourceMetadata(source_metadata_id);
+        let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
+
         let reporter_context = self.reporter_context(dispatcher_context);
         let run_exports_reporter = self
             .reporter
             .as_mut()
             .and_then(|reporter| reporter.create_run_exports_reporter(reporter_context));
+
+        // Create a child cancellation token linked to parent's token (if any).
+        let cancellation_token = self.get_child_cancellation_token(parent, cancellation_token);
+
+        // Store the cancellation token for this context so child tasks can link to it.
+        self.store_cancellation_token(dispatcher_context, cancellation_token.clone());
 
         self.pending_futures.push(
             cancellation_token
@@ -136,6 +142,9 @@ impl CommandDispatcherProcessor {
         id: SourceMetadataId,
         result: Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
     ) {
+        let context = CommandDispatcherContext::SourceMetadata(id);
+        self.remove_cancellation_token(context);
+
         if let Some((reporter, reporter_id)) = self
             .reporter
             .as_deref_mut()

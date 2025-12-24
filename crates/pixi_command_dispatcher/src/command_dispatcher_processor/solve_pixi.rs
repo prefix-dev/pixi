@@ -51,10 +51,18 @@ impl CommandDispatcherProcessor {
             .as_deref_mut()
             .and_then(|reporter| reporter.create_gateway_reporter(reporter_context));
 
+        // Create a child cancellation token linked to parent's token (if any).
+        // This ensures that when the parent task is cancelled, this task is also cancelled.
+        let cancellation_token =
+            self.get_child_cancellation_token(task.parent, task.cancellation_token);
+
+        // Store the cancellation token for this context so child tasks can link to it.
+        self.store_cancellation_token(dispatcher_context, cancellation_token.clone());
+
         // Add the task to the list of pending futures.
         let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
         self.pending_futures.push(
-            task.cancellation_token
+            cancellation_token
                 .run_until_cancelled_owned(task.spec.solve(dispatcher, gateway_reporter))
                 .map(move |result| {
                     TaskResult::SolvePixiEnvironment(
@@ -76,7 +84,9 @@ impl CommandDispatcherProcessor {
         id: SolvePixiEnvironmentId,
         result: Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>>,
     ) {
-        self.parent_contexts.remove(&id.into());
+        let context = CommandDispatcherContext::SolvePixiEnvironment(id);
+        self.parent_contexts.remove(&context);
+        self.remove_cancellation_token(context);
         let env = self
             .solve_pixi_environments
             .remove(id)

@@ -59,6 +59,10 @@ pub(crate) struct CommandDispatcherProcessor {
     /// Keeps track of the parent context for each task that is being processed.
     parent_contexts: HashMap<CommandDispatcherContext, CommandDispatcherContext>,
 
+    /// Keeps track of cancellation tokens for each task context.
+    /// Used to create child tokens that are automatically cancelled when the parent is cancelled.
+    cancellation_tokens: HashMap<CommandDispatcherContext, CancellationToken>,
+
     /// A weak reference to the sender. This is used to allow constructing new
     /// [`Dispatchers`] without keeping the channel alive if there are no
     /// dispatchers alive. This is important because the command_dispatcher
@@ -344,6 +348,7 @@ impl CommandDispatcherProcessor {
             let task = Self {
                 receiver: rx,
                 parent_contexts: HashMap::new(),
+                cancellation_tokens: HashMap::new(),
                 sender: weak_tx,
                 conda_solves: slotmap::SlotMap::default(),
                 pending_conda_solves: VecDeque::new(),
@@ -626,5 +631,35 @@ impl CommandDispatcherProcessor {
         std::iter::successors(parent, |ctx| self.parent_contexts.get(ctx).cloned())
             .filter_map(|context| T::try_from(context).ok())
             .contains(&id)
+    }
+
+    /// Creates a child cancellation token linked to the parent's token.
+    ///
+    /// If the parent context has a stored cancellation token, creates a child token
+    /// that will be automatically cancelled when the parent is cancelled.
+    /// Otherwise, returns the provided token unchanged.
+    fn get_child_cancellation_token(
+        &self,
+        parent: Option<CommandDispatcherContext>,
+        token: CancellationToken,
+    ) -> CancellationToken {
+        parent
+            .and_then(|ctx| self.cancellation_tokens.get(&ctx))
+            .map(|parent_token| parent_token.child_token())
+            .unwrap_or(token)
+    }
+
+    /// Stores a cancellation token for the given context.
+    fn store_cancellation_token(
+        &mut self,
+        context: CommandDispatcherContext,
+        token: CancellationToken,
+    ) {
+        self.cancellation_tokens.insert(context, token);
+    }
+
+    /// Removes the cancellation token for the given context.
+    fn remove_cancellation_token(&mut self, context: CommandDispatcherContext) {
+        self.cancellation_tokens.remove(&context);
     }
 }

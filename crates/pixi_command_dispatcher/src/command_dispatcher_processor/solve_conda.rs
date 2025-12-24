@@ -33,9 +33,13 @@ impl CommandDispatcherProcessor {
             self.parent_contexts.insert(environment_id.into(), parent);
         }
 
+        // Create a child cancellation token linked to parent's token (if any).
+        let cancellation_token =
+            self.get_child_cancellation_token(task.parent, task.cancellation_token);
+
         // Add the environment to the list of pending environments.
         self.pending_conda_solves
-            .push_back((environment_id, task.spec, task.cancellation_token));
+            .push_back((environment_id, task.spec, cancellation_token));
 
         // Queue up as many solves as possible.
         self.start_next_conda_environment_solves();
@@ -43,6 +47,8 @@ impl CommandDispatcherProcessor {
 
     /// Queue as many solves as possible within the allowed limits.
     fn start_next_conda_environment_solves(&mut self) {
+        use crate::command_dispatcher::CommandDispatcherContext;
+
         let limit = self
             .inner
             .limits
@@ -66,6 +72,10 @@ impl CommandDispatcherProcessor {
             {
                 reporter.on_start(id)
             }
+
+            // Store the cancellation token for this context so child tasks can link to it.
+            let context = CommandDispatcherContext::SolveCondaEnvironment(environment_id);
+            self.store_cancellation_token(context, cancellation_token.clone());
 
             // Add the task to the list of pending futures.
             self.pending_futures.push(
@@ -92,7 +102,11 @@ impl CommandDispatcherProcessor {
         id: SolveCondaEnvironmentId,
         result: Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>>,
     ) {
-        self.parent_contexts.remove(&id.into());
+        use crate::command_dispatcher::CommandDispatcherContext;
+
+        let context = CommandDispatcherContext::SolveCondaEnvironment(id);
+        self.parent_contexts.remove(&context);
+        self.remove_cancellation_token(context);
         let env = self
             .conda_solves
             .remove(id)

@@ -63,6 +63,11 @@ impl IsolatedTool {
             activation_scripts: activation,
         }
     }
+
+    /// Get the prefix of the isolated tool.
+    pub fn prefix(&self) -> &PathBuf {
+        &self.prefix
+    }
 }
 
 impl Tool {

@@ -34,17 +34,20 @@ impl CommandDispatcherProcessor {
                 .insert(pending_id.into(), parent_context);
         }
 
+        // Create a child cancellation token linked to parent's token (if any).
+        let cancellation_token =
+            self.get_child_cancellation_token(task.parent, task.cancellation_token);
+
         // Add to the list of pending tasks
-        self.pending_backend_source_builds.push_back((
-            pending_id,
-            *task.spec,
-            task.cancellation_token,
-        ));
+        self.pending_backend_source_builds
+            .push_back((pending_id, *task.spec, cancellation_token));
 
         self.start_next_backend_source_build();
     }
 
     fn start_next_backend_source_build(&mut self) {
+        use crate::command_dispatcher::CommandDispatcherContext;
+
         let limit = self
             .inner
             .limits
@@ -72,6 +75,10 @@ impl CommandDispatcherProcessor {
                 reporter.on_started(id, Box::new(rx));
             }
 
+            // Store the cancellation token for this context so child tasks can link to it.
+            let context = CommandDispatcherContext::BackendSourceBuild(backend_source_build_id);
+            self.store_cancellation_token(context, cancellation_token.clone());
+
             // Add the task to the list of pending futures.
             self.pending_futures.push(
                 cancellation_token
@@ -97,7 +104,12 @@ impl CommandDispatcherProcessor {
         id: BackendSourceBuildId,
         result: Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>>,
     ) {
-        self.parent_contexts.remove(&id.into());
+        use crate::command_dispatcher::CommandDispatcherContext;
+
+        let context = CommandDispatcherContext::BackendSourceBuild(id);
+        self.parent_contexts.remove(&context);
+        self.remove_cancellation_token(context);
+
         let env = self
             .backend_source_builds
             .remove(id)

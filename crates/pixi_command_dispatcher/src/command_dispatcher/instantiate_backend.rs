@@ -165,10 +165,15 @@ impl CommandDispatcher {
 
         // Add debug information about what the backend supports.
         tracing::info!(
-            "Instantiated backend {}{}, negotiated API version {}",
+            "Instantiated backend {}{}, negotiated API version {}{}",
             tool.executable(),
             tool.version().map_or_else(String::new, |v| format!("@{v}")),
             api_version,
+            if let Some(isolated_tool) = tool.as_isolated() {
+                format!(", from prefix {}", isolated_tool.prefix().display())
+            } else {
+                "".to_string()
+            },
         );
 
         // Make sure that the project model is compatible with the API version.
