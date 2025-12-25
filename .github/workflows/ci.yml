@@ -307,6 +307,38 @@ jobs:
           path: ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
           retention-days: 14
 
+  build-binary-linux-riscv64gc:
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    name: "build binary | linux riscv64gc"
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+      - uses: rui314/setup-mold@725a8794d15fc7563f59595bd9556495c0564878 # v1
+      - name: "Setup musl"
+        run: |
+          sudo apt update
+          sudo apt install musl-tools
+          rustup target add riscv64gc-unknown-linux-musl
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: "Build"
+        run: >
+          cargo build
+          --locked
+          --target riscv64gc-unknown-linux-musl
+          --profile $CARGO_BUILD_PROFILE
+          --features self_update
+      - name: "Upload binary"
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: pixi-linux-riscv64gc-${{ github.sha }}
+          path: ./target/riscv64gc-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
+          retention-days: 14
+
   build-binary-macos-aarch64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
