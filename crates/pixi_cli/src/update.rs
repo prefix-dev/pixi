@@ -1,6 +1,7 @@
 use std::{cmp::Ordering, collections::HashSet};
 
 use clap::Parser;
+use dialoguer::{MultiSelect, theme::ColorfulTheme};
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
@@ -44,6 +45,10 @@ pub struct Args {
     /// Output the changes in JSON format.
     #[clap(long)]
     pub json: bool,
+
+    /// Run in interactive mode
+    #[clap(short = 'i', long)]
+    pub interactive: bool,
 }
 
 #[derive(Parser, Debug, Default)]
@@ -130,7 +135,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(config);
 
-    let specs = UpdateSpecs::from(args.specs);
+    let mut specs = UpdateSpecs::from(args.specs);
 
     // If the user specified an environment name, check to see if it exists.
     if let Some(env) = &specs.environments {
@@ -150,6 +155,45 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .load_lock_file()
         .await?
         .into_lock_file_or_empty_with_warning();
+
+    // If interactive mode is requested and no packages were explicitly
+    // specified, prompt the user to choose which packages to update.
+    if args.interactive && specs.packages.is_none() {
+        // Collect unique package names from the lock-file.
+        let mut package_names: Vec<String> = loaded_lock_file
+            .environments()
+            .flat_map(|(_, env)| {
+                env.packages_by_platform()
+                    .into_iter()
+                    .flat_map(|(_p, packages)| packages.into_iter().map(|p| p.name().to_string()))
+                    .collect::<Vec<_>>()
+            })
+            .unique()
+            .sorted()
+            .collect();
+
+        if !package_names.is_empty() {
+            let theme = ColorfulTheme {
+                active_item_style: console::Style::new().for_stderr().magenta(),
+                ..ColorfulTheme::default()
+            };
+
+            let prompt = "Select packages to update (space to select, enter to confirm):";
+            let selections = MultiSelect::with_theme(&theme)
+                .with_prompt(prompt)
+                .items(&package_names)
+                .interact()
+                .unwrap();
+
+            if !selections.is_empty() {
+                let selected: HashSet<String> = selections
+                    .into_iter()
+                    .map(|i| package_names[i].clone())
+                    .collect();
+                specs.packages = Some(selected);
+            }
+        }
+    }
 
     // If the user specified a package name, check to see if it is even locked.
     if let Some(packages) = &specs.packages {
