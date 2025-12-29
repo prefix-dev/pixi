@@ -58,13 +58,14 @@ impl SourceAnchor {
 
         match base {
             SourceLocationSpec::Path(PathSourceSpec { path: base }) => {
-                // Use the parent directory as the base when the base path ends with
-                // a file name (e.g., `package-a/pixi.toml` -> `package-a`).
+                // Use the parent directory as the base when the base path points to
+                // a manifest file (e.g., `package-a/pixi.toml` -> `package-a`).
                 // This ensures relative paths like `../package-b` resolve correctly.
-                let base_dir = base
-                    .file_name()
-                    .and_then(|_| base.parent())
-                    .unwrap_or_else(|| base.to_path());
+                let base_dir = if std::path::Path::new(base.as_str()).is_file() {
+                    base.parent().unwrap_or_else(|| base.to_path())
+                } else {
+                    base.to_path()
+                };
 
                 let relative_path = normalize_typed(base_dir.join(path).to_path());
                 SourceLocationSpec::Path(PathSourceSpec {
