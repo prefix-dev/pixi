@@ -160,11 +160,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // specified, prompt the user to choose which packages to update.
     if args.interactive && specs.packages.is_none() {
         // Collect unique package names from the lock-file.
-        let mut package_names: Vec<String> = loaded_lock_file
+        let package_names: Vec<String> = loaded_lock_file
             .environments()
             .flat_map(|(_, env)| {
                 env.packages_by_platform()
-                    .into_iter()
                     .flat_map(|(_p, packages)| packages.into_iter().map(|p| p.name().to_string()))
                     .collect::<Vec<_>>()
             })
