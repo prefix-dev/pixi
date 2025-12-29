@@ -471,7 +471,6 @@ mod tests {
             test = { cmd = "echo test", default-environment = "test" }
 
             [feature.test.dependencies]
-            # pytest = "*"
 
             [environments]
             test = ["test"]
