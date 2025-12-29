@@ -1,3 +1,4 @@
+use pixi_consts::consts::{KNOWN_MANIFEST_FILES, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES};
 use typed_path::{
     Utf8Component, Utf8Encoding, Utf8Path, Utf8PathBuf, Utf8TypedPath, Utf8TypedPathBuf,
 };
@@ -61,7 +62,11 @@ impl SourceAnchor {
                 // Use the parent directory as the base when the base path points to
                 // a manifest file (e.g., `package-a/pixi.toml` -> `package-a`).
                 // This ensures relative paths like `../package-b` resolve correctly.
-                let base_dir = if std::path::Path::new(base.as_str()).is_file() {
+                //
+                // We check for known manifest file names rather than using filesystem
+                // checks because the path may be relative to the workspace root,
+                // not the current working directory.
+                let base_dir = if is_known_manifest_file(base.to_path()) {
                     base.parent().unwrap_or_else(|| base.to_path())
                 } else {
                     base.to_path()
@@ -93,6 +98,22 @@ impl SourceAnchor {
             }
         }
     }
+}
+
+/// Checks if a path's filename matches a known manifest file name.
+///
+/// This is used to determine if a path points to a file rather than a directory,
+/// without requiring filesystem access
+/// which wouldn't work for paths relative
+/// to the workspace root.
+fn is_known_manifest_file(path: Utf8TypedPath<'_>) -> bool {
+    path.file_name()
+        .map(|name| {
+            KNOWN_MANIFEST_FILES.contains(&name)
+                || RATTLER_BUILD_FILE_NAMES.contains(&name)
+                || ROS_BACKEND_FILE_NAMES.contains(&name)
+        })
+        .unwrap_or(false)
 }
 
 /// A slightly modified version of [`Utf8TypedPath::normalize`] that retains

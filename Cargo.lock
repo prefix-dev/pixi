@@ -5777,6 +5777,7 @@ dependencies = [
  "file_url",
  "insta",
  "itertools 0.14.0",
+ "pixi_consts",
  "pixi_git",
  "pixi_toml",
  "rattler_conda_types",
