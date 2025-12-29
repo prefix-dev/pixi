@@ -2,13 +2,15 @@
 //! package definitions. Using this struct it becomes easier to generate controllable fake repodata.
 
 use chrono::{DateTime, Utc};
-use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{
     ChannelInfo, PackageName, PackageRecord, PackageUrl, Platform, RepoData, VersionWithSource,
-    package::ArchiveType,
+    package::{ArchiveType, IndexJson, PathType, PathsEntry, PathsJson, RunExportsJson},
 };
-use std::{collections::HashSet, path::Path};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 use tempfile::TempDir;
 use url::Url;
 
@@ -41,7 +43,8 @@ impl MockRepoData {
         self.packages.push(package);
     }
 
-    /// Writes the repodata of this instance to the specified channel directory
+    /// Writes the repodata of this instance to the specified channel directory.
+    /// For packages with `materialize` enabled, actual .conda files will be created.
     pub async fn write_repodata(&self, channel_path: &Path) -> miette::Result<()> {
         let mut platforms = self.platforms();
 
@@ -59,31 +62,55 @@ impl MockRepoData {
         for platform in platforms {
             let subdir_path = channel_path.join(platform.as_str());
 
+            // Create the subdir first
+            tokio::fs::create_dir_all(&subdir_path)
+                .await
+                .into_diagnostic()?;
+
+            // Process packages and create materialized ones if needed
+            let mut tar_bz2_packages = Vec::new();
+            let mut conda_packages = Vec::new();
+
+            for pkg in self.packages_by_platform(platform) {
+                let (file_name, package_record) = if pkg.materialize {
+                    // Create the actual .conda file and get the real hashes
+                    let package_path = subdir_path.join(pkg.file_name());
+                    let (sha256, md5, size) =
+                        create_conda_package(pkg, &package_path).into_diagnostic()?;
+
+                    // Create updated package record with real hashes
+                    let mut updated_record = pkg.package_record.clone();
+                    updated_record.sha256 = Some(sha256);
+                    updated_record.md5 = Some(md5);
+                    updated_record.size = Some(size);
+
+                    (pkg.file_name(), updated_record)
+                } else {
+                    (pkg.file_name(), pkg.package_record.clone())
+                };
+
+                match pkg.archive_type {
+                    ArchiveType::TarBz2 => tar_bz2_packages.push((file_name, package_record)),
+                    ArchiveType::Conda => conda_packages.push((file_name, package_record)),
+                }
+            }
+
+            // Sort packages by filename for reproducibility
+            tar_bz2_packages.sort_by(|a, b| a.0.cmp(&b.0));
+            conda_packages.sort_by(|a, b| a.0.cmp(&b.0));
+
             let repodata = RepoData {
                 info: Some(ChannelInfo {
                     subdir: Some(platform.to_string()),
                     base_url: None,
                 }),
-                packages: self
-                    .packages_by_platform(platform)
-                    .filter(|pkg| pkg.archive_type == ArchiveType::TarBz2)
-                    .map(|pkg| (pkg.file_name(), pkg.package_record.clone()))
-                    .sorted_by(|a, b| a.0.cmp(&b.0))
-                    .collect(),
-                conda_packages: self
-                    .packages_by_platform(platform)
-                    .filter(|pkg| pkg.archive_type == ArchiveType::Conda)
-                    .map(|pkg| (pkg.file_name(), pkg.package_record.clone()))
-                    .sorted_by(|a, b| a.0.cmp(&b.0))
-                    .collect(),
+                packages: tar_bz2_packages.into_iter().collect(),
+                conda_packages: conda_packages.into_iter().collect(),
                 removed: Default::default(),
                 version: Some(1),
             };
             let repodata_str = serde_json::to_string_pretty(&repodata).into_diagnostic()?;
 
-            tokio::fs::create_dir_all(&subdir_path)
-                .await
-                .into_diagnostic()?;
             tokio::fs::write(subdir_path.join("repodata.json"), repodata_str)
                 .await
                 .into_diagnostic()?;
@@ -121,6 +148,8 @@ pub struct Package {
     pub package_record: PackageRecord,
     subdir: Platform,
     archive_type: ArchiveType,
+    /// If true, a materialized .conda file will be created for this package
+    materialize: bool,
 }
 
 // Implement `AsRef` for a `PackageRecord` allows using `Package` in a number of algorithms used in
@@ -144,6 +173,8 @@ pub struct PackageBuilder {
     md5: Option<String>,
     sha256: Option<String>,
     purls: Option<std::collections::BTreeSet<PackageUrl>>,
+    materialize: bool,
+    run_exports: Option<RunExportsJson>,
 }
 
 impl Package {
@@ -161,7 +192,17 @@ impl Package {
             sha256: None,
             md5: None,
             purls: None,
+            materialize: false,
+            // Default to empty run_exports to prevent the gateway from trying to
+            // extract run_exports from the actual conda file, which doesn't exist
+            // for non-materialized mock packages.
+            run_exports: Some(RunExportsJson::default()),
         }
+    }
+
+    /// Returns whether this package should be materialized as a .conda file
+    pub fn should_materialize(&self) -> bool {
+        self.materialize
     }
 
     /// Returns the file name for this package.
@@ -238,6 +279,20 @@ impl PackageBuilder {
         self
     }
 
+    /// Enable materialization for this package.
+    /// When enabled, a real .conda file will be created containing index.json and paths.json
+    pub fn with_materialize(mut self, materialize: bool) -> Self {
+        self.materialize = materialize;
+        self
+    }
+
+    /// Set the run exports for this package.
+    /// Run exports propagate dependencies from host to run.
+    pub fn with_run_exports(mut self, run_exports: RunExportsJson) -> Self {
+        self.run_exports = Some(run_exports);
+        self
+    }
+
     /// Finish construction of the package
     pub fn finish(self) -> Package {
         let subdir = self.subdir.unwrap_or(Platform::NoArch);
@@ -291,12 +346,123 @@ impl PackageBuilder {
                 track_features: vec![],
                 version: self.version,
                 purls: self.purls,
-                run_exports: None,
+                run_exports: self.run_exports.clone(),
                 python_site_packages_path: None,
                 experimental_extra_depends: Default::default(),
             },
             subdir,
             archive_type: self.archive_type,
+            materialize: self.materialize,
         }
     }
+}
+
+/// Creates a materialized .conda package file at the specified path.
+///
+/// This function creates a minimal but valid .conda archive containing:
+/// - info/index.json - package metadata
+/// - info/paths.json - list of files in the package
+///
+/// The package record's hash fields will be updated with the actual file hashes.
+pub fn create_conda_package(
+    package: &Package,
+    output_path: &Path,
+) -> Result<(rattler_digest::Sha256Hash, rattler_digest::Md5Hash, u64), std::io::Error> {
+    use rattler_conda_types::compression_level::CompressionLevel;
+
+    // Create a temporary directory to stage the package contents
+    let temp_dir = tempfile::tempdir()?;
+    let info_dir = temp_dir.path().join("info");
+    fs_err::create_dir_all(&info_dir)?;
+
+    // Create index.json
+    let index_json = IndexJson {
+        arch: None,
+        build: package.package_record.build.clone(),
+        build_number: package.package_record.build_number,
+        constrains: package.package_record.constrains.clone(),
+        depends: package.package_record.depends.clone(),
+        experimental_extra_depends: package.package_record.experimental_extra_depends.clone(),
+        features: package.package_record.features.clone(),
+        license: package.package_record.license.clone(),
+        license_family: package.package_record.license_family.clone(),
+        name: package.package_record.name.clone(),
+        noarch: package.package_record.noarch,
+        platform: package.package_record.platform.clone(),
+        purls: package.package_record.purls.clone(),
+        python_site_packages_path: package.package_record.python_site_packages_path.clone(),
+        subdir: Some(package.subdir.to_string()),
+        timestamp: package.package_record.timestamp,
+        track_features: package.package_record.track_features.clone(),
+        version: package.package_record.version.clone(),
+    };
+
+    let index_json_content = serde_json::to_string_pretty(&index_json)?;
+    let index_json_path = info_dir.join("index.json");
+    fs_err::write(&index_json_path, &index_json_content)?;
+
+    // Create paths.json (minimal - just containing the index.json entry)
+    let index_json_bytes = index_json_content.as_bytes();
+    let index_json_sha256 =
+        rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(index_json_bytes);
+
+    let paths_json = PathsJson {
+        paths: vec![PathsEntry {
+            relative_path: PathBuf::from("info/index.json"),
+            no_link: false,
+            path_type: PathType::HardLink,
+            prefix_placeholder: None,
+            sha256: Some(index_json_sha256),
+            size_in_bytes: Some(index_json_bytes.len() as u64),
+        }],
+        paths_version: 1,
+    };
+
+    let paths_json_content = serde_json::to_string_pretty(&paths_json)?;
+    let paths_json_path = info_dir.join("paths.json");
+    fs_err::write(&paths_json_path, &paths_json_content)?;
+
+    // Collect paths to include in the package
+    let mut paths = vec![info_dir.join("index.json"), info_dir.join("paths.json")];
+
+    // Create run_exports.json if the package has run exports
+    if let Some(run_exports) = &package.package_record.run_exports
+        && !run_exports.is_empty()
+    {
+        let run_exports_content = serde_json::to_string_pretty(run_exports)?;
+        let run_exports_path = info_dir.join("run_exports.json");
+        fs_err::write(&run_exports_path, &run_exports_content)?;
+        paths.push(run_exports_path);
+    }
+
+    // Create the output file
+    let output_file = fs_err::File::create(output_path)?;
+
+    // Determine the package name stem (without extension)
+    let out_name = format!(
+        "{}-{}-{}",
+        package.package_record.name.as_normalized(),
+        package.package_record.version,
+        package.package_record.build
+    );
+
+    // Write the conda package
+    rattler_package_streaming::write::write_conda_package(
+        output_file,
+        temp_dir.path(),
+        &paths,
+        CompressionLevel::Default,
+        None, // Use default thread count
+        &out_name,
+        None, // No specific timestamp
+        None, // No progress bar
+    )?;
+
+    // Calculate the hash and size of the created package
+    let package_bytes = fs_err::read(output_path)?;
+    let sha256 = rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(&package_bytes);
+    let md5 = rattler_digest::compute_bytes_digest::<rattler_digest::Md5>(&package_bytes);
+    let size = package_bytes.len() as u64;
+
+    Ok((sha256, md5, size))
 }

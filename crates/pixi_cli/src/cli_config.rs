@@ -28,7 +28,7 @@ use pixi_pypi_spec::PypiPackageName;
 #[derive(Parser, Debug, Default, Clone)]
 pub struct WorkspaceConfig {
     /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
-    #[arg(long, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    #[arg(long, short, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub manifest_path: Option<PathBuf>,
 
     /// Backend override for testing purposes. This field is ignored by clap
@@ -429,13 +429,13 @@ fn build_vcs_requirement(
         "git+"
     };
     let mut vcs_req = format!("{package_name} @ {scheme}{git}");
-    if let Some(revision) = rev {
-        if let Some(rev_str) = revision.as_str().map(|s| s.to_string()) {
-            vcs_req.push_str(&format!("@{rev_str}"));
+    if let Some(revision) = rev
+        && let Some(rev_str) = revision.as_str().map(|s| s.to_string())
+    {
+        vcs_req.push_str(&format!("@{rev_str}"));
 
-            if let Some(rev_type) = revision.reference_type() {
-                vcs_req.push_str(&format!("?{GIT_URL_QUERY_REV_TYPE}={rev_type}"));
-            }
+        if let Some(rev_type) = revision.reference_type() {
+            vcs_req.push_str(&format!("?{GIT_URL_QUERY_REV_TYPE}={rev_type}"));
         }
     }
     if let Some(subdir) = subdir {

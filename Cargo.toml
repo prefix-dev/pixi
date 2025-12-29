@@ -15,6 +15,7 @@ homepage = "https://github.com/prefix-dev/pixi"
 license = "BSD-3-Clause"
 readme = "README.md"
 repository = "https://github.com/prefix-dev/pixi"
+rust-version = "1.90"
 
 [workspace.dependencies]
 ahash = "0.8.11"
@@ -32,6 +33,7 @@ clap_complete = "4.5.46"
 clap_complete_nushell = "4.5.5"
 # Rattler crates
 coalesced_map = "0.1.2"
+comfy-table = "7.2.1"
 console = "0.16.1"
 console-subscriber = "0.5.0"
 crossbeam-channel = "0.5.14"
@@ -95,6 +97,7 @@ pixi_glob = { path = "crates/pixi_glob" }
 pixi_global = { path = "crates/pixi_global" }
 pixi_install_pypi = { path = "crates/pixi_install_pypi" }
 pixi_manifest = { path = "crates/pixi_manifest" }
+pixi_path = { path = "crates/pixi_path" }
 pixi_progress = { path = "crates/pixi_progress" }
 pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
 pixi_python_status = { path = "crates/pixi_python_status" }
@@ -178,6 +181,7 @@ tracing = "0.1.41"
 xz2 = "0.1.7"
 # Forcing the version due to this PR https://github.com/tokio-rs/tracing/pull/3368
 tracing-subscriber = "=0.3.19"
+tracing-test = "0.2"
 typed-path = "0.12.0"
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.4"

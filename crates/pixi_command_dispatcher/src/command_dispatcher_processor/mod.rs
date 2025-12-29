@@ -11,14 +11,15 @@ use std::{
 
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher,
-    CommandDispatcherError, CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult,
-    Reporter, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
+    CommandDispatcherError, CommandDispatcherErrorResultExt, DevSourceMetadata,
+    DevSourceMetadataError, DevSourceMetadataSpec, InstallPixiEnvironmentResult, Reporter,
+    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
     SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceBuildError, SourceBuildResult,
     SourceBuildSpec, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
         BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcherChannel,
-        CommandDispatcherContext, CommandDispatcherData, ForegroundMessage,
+        CommandDispatcherContext, CommandDispatcherData, DevSourceMetadataId, ForegroundMessage,
         InstallPixiEnvironmentId, InstantiatedToolEnvId, SolveCondaEnvironmentId,
         SolvePixiEnvironmentId, SourceBuildCacheStatusId, SourceBuildId, SourceMetadataId,
         url::{UrlCheckout, UrlError},
@@ -39,6 +40,7 @@ use tokio_util::sync::CancellationToken;
 
 mod backend_source_build;
 mod build_backend_metadata;
+mod dev_source_metadata;
 mod git;
 mod install_pixi;
 mod instantiate_tool_env;
@@ -56,6 +58,10 @@ pub(crate) struct CommandDispatcherProcessor {
 
     /// Keeps track of the parent context for each task that is being processed.
     parent_contexts: HashMap<CommandDispatcherContext, CommandDispatcherContext>,
+
+    /// Keeps track of cancellation tokens for each task context.
+    /// Used to create child tokens that are automatically cancelled when the parent is cancelled.
+    cancellation_tokens: HashMap<CommandDispatcherContext, CancellationToken>,
 
     /// A weak reference to the sender. This is used to allow constructing new
     /// [`Dispatchers`] without keeping the channel alive if there are no
@@ -132,6 +138,13 @@ pub(crate) struct CommandDispatcherProcessor {
     >,
     source_build_cache_status_ids: HashMap<SourceBuildCacheStatusSpec, SourceBuildCacheStatusId>,
 
+    /// Dev source metadata requests that are currently being processed.
+    dev_source_metadata: HashMap<
+        DevSourceMetadataId,
+        PendingDeduplicatingTask<DevSourceMetadata, DevSourceMetadataError>,
+    >,
+    dev_source_metadata_ids: HashMap<DevSourceMetadataSpec, DevSourceMetadataId>,
+
     /// Backend source builds that are currently being processed.
     backend_source_builds: slotmap::SlotMap<BackendSourceBuildId, PendingBackendSourceBuild>,
     pending_backend_source_builds: VecDeque<(
@@ -187,6 +200,10 @@ enum TaskResult {
     QuerySourceBuildCache(
         SourceBuildCacheStatusId,
         BoxedDispatcherResult<Arc<SourceBuildCacheEntry>, SourceBuildCacheStatusError>,
+    ),
+    DevSourceMetadata(
+        DevSourceMetadataId,
+        BoxedDispatcherResult<DevSourceMetadata, DevSourceMetadataError>,
     ),
     BackendSourceBuild(
         BackendSourceBuildId,
@@ -331,6 +348,7 @@ impl CommandDispatcherProcessor {
             let task = Self {
                 receiver: rx,
                 parent_contexts: HashMap::new(),
+                cancellation_tokens: HashMap::new(),
                 sender: weak_tx,
                 conda_solves: slotmap::SlotMap::default(),
                 pending_conda_solves: VecDeque::new(),
@@ -352,6 +370,8 @@ impl CommandDispatcherProcessor {
                 source_build_ids: HashMap::default(),
                 source_build_cache_status: Default::default(),
                 source_build_cache_status_ids: Default::default(),
+                dev_source_metadata: Default::default(),
+                dev_source_metadata_ids: Default::default(),
                 backend_source_builds: Default::default(),
                 pending_backend_source_builds: Default::default(),
                 pending_futures: ExecutorFutures::new(inner.executor),
@@ -413,6 +433,7 @@ impl CommandDispatcherProcessor {
             ForegroundMessage::QuerySourceBuildCache(task) => {
                 self.on_source_build_cache_status(task)
             }
+            ForegroundMessage::DevSourceMetadata(task) => self.on_dev_source_metadata(task),
             ForegroundMessage::ClearReporter(sender) => self.clear_reporter(sender),
             ForegroundMessage::ClearFilesystemCaches(sender) => {
                 self.clear_filesystem_caches(sender)
@@ -449,6 +470,9 @@ impl CommandDispatcherProcessor {
             }
             TaskResult::QuerySourceBuildCache(id, result) => {
                 self.on_source_build_cache_status_result(id, *result)
+            }
+            TaskResult::DevSourceMetadata(id, result) => {
+                self.on_dev_source_metadata_result(id, *result)
             }
         }
     }
@@ -569,6 +593,9 @@ impl CommandDispatcherProcessor {
                 CommandDispatcherContext::QuerySourceBuildCache(_id) => {
                     return None;
                 }
+                CommandDispatcherContext::DevSourceMetadata(_id) => {
+                    return None;
+                }
             };
         }
 
@@ -604,5 +631,35 @@ impl CommandDispatcherProcessor {
         std::iter::successors(parent, |ctx| self.parent_contexts.get(ctx).cloned())
             .filter_map(|context| T::try_from(context).ok())
             .contains(&id)
+    }
+
+    /// Creates a child cancellation token linked to the parent's token.
+    ///
+    /// If the parent context has a stored cancellation token, creates a child token
+    /// that will be automatically cancelled when the parent is cancelled.
+    /// Otherwise, returns the provided token unchanged.
+    fn get_child_cancellation_token(
+        &self,
+        parent: Option<CommandDispatcherContext>,
+        token: CancellationToken,
+    ) -> CancellationToken {
+        parent
+            .and_then(|ctx| self.cancellation_tokens.get(&ctx))
+            .map(|parent_token| parent_token.child_token())
+            .unwrap_or(token)
+    }
+
+    /// Stores a cancellation token for the given context.
+    fn store_cancellation_token(
+        &mut self,
+        context: CommandDispatcherContext,
+        token: CancellationToken,
+    ) {
+        self.cancellation_tokens.insert(context, token);
+    }
+
+    /// Removes the cancellation token for the given context.
+    fn remove_cancellation_token(&mut self, context: CommandDispatcherContext) {
+        self.cancellation_tokens.remove(&context);
     }
 }

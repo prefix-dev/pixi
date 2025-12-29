@@ -13,6 +13,7 @@ use pixi_manifest::{EnvironmentName, FeatureName, SystemRequirements};
 use pixi_manifest::{FeaturesExt, HasFeaturesIter};
 use pixi_progress::await_in_progress;
 use pixi_task::TaskName;
+use pixi_utils::reqwest::tls_backend;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::authentication_storage;
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
@@ -227,6 +228,7 @@ pub struct Info {
     #[serde_as(as = "Vec<DisplayFromStr>")]
     virtual_packages: Vec<GenericVirtualPackage>,
     version: String,
+    tls_backend: String,
     cache_dir: Option<PathBuf>,
     cache_size: Option<String>,
     auth_dir: PathBuf,
@@ -249,6 +251,12 @@ impl Display for Info {
             "{:>WIDTH$}: {}",
             bold.apply_to("Pixi version"),
             console::style(&self.version).green()
+        )?;
+        writeln!(
+            f,
+            "{:>WIDTH$}: {}",
+            bold.apply_to("TLS backend"),
+            self.tls_backend
         )?;
         writeln!(
             f,
@@ -481,6 +489,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         platform: Platform::current().to_string(),
         virtual_packages,
         version: consts::PIXI_VERSION.to_string(),
+        tls_backend: tls_backend().to_string(),
         cache_dir: Some(pixi_config::get_cache_dir()?),
         cache_size,
         auth_dir: auth_file,

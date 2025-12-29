@@ -1,4 +1,4 @@
-use pixi_pypi_spec::{PixiPypiSpec, VersionOrStar};
+use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, VersionOrStar};
 use pixi_spec::{GitReference, GitSpec};
 use rattler_lock::UrlOrPath;
 use std::{
@@ -96,27 +96,23 @@ pub fn as_uv_req(
     project_root: &Path,
 ) -> Result<uv_distribution_types::Requirement, AsPep508Error> {
     let name = PackageName::from_str(name)?;
-    let source = match req {
-        PixiPypiSpec::Version { version, index, .. } => {
-            // TODO: implement index later
-            RequirementSource::Registry {
-                specifier: manifest_version_to_version_specifiers(version)?,
-                index: index.clone().map(|url| {
-                    uv_distribution_types::IndexMetadata::from(
-                        uv_distribution_types::IndexUrl::from(VerbatimUrl::from_url(url.into())),
-                    )
-                }),
-                conflict: None,
-            }
-        }
-        PixiPypiSpec::Git {
-            url:
+    let source = match &req.source {
+        PixiPypiSource::Registry { version, index } => RequirementSource::Registry {
+            specifier: manifest_version_to_version_specifiers(version)?,
+            index: index.clone().map(|url| {
+                uv_distribution_types::IndexMetadata::from(uv_distribution_types::IndexUrl::from(
+                    VerbatimUrl::from_url(url.into()),
+                ))
+            }),
+            conflict: None,
+        },
+        PixiPypiSource::Git {
+            git:
                 GitSpec {
                     git,
                     rev,
                     subdirectory,
                 },
-            ..
         } => {
             let git_url = GitUrlWithPrefix::from(git);
 
@@ -158,11 +154,7 @@ pub fn as_uv_req(
                 },
             }
         }
-        PixiPypiSpec::Path {
-            path,
-            editable,
-            extras: _,
-        } => {
+        PixiPypiSource::Path { path, editable } => {
             let joined = project_root.join(path);
             let canonicalized =
                 dunce::canonicalize(&joined).map_err(|e| AsPep508Error::CanonicalizeError {
@@ -178,7 +170,12 @@ pub fn as_uv_req(
             if canonicalized.is_dir() {
                 RequirementSource::Directory {
                     install_path: canonicalized.into_boxed_path(),
-                    editable: Some(editable.unwrap_or_default()),
+                    // Always set editable to false during resolution.
+                    // Editability doesn't affect resolution and is looked up from the
+                    // manifest at install time. This allows different environments in a
+                    // solve-group to have different editability settings without causing
+                    // "conflicting URLs" errors from the uv resolver.
+                    editable: Some(false),
                     url: verbatim,
                     // TODO: we could see if we ever need this
                     // AFAICS it would be useful for constrainging dependencies
@@ -198,9 +195,7 @@ pub fn as_uv_req(
                 }
             }
         }
-        PixiPypiSpec::Url {
-            url, subdirectory, ..
-        } => {
+        PixiPypiSource::Url { url, subdirectory } => {
             // We will clone the original URL and strip it's SHA256 fragment,
             // So that we can normalize the URL for comparison.
             let mut location_url = url.clone();
@@ -216,11 +211,6 @@ pub fn as_uv_req(
                 ext: DistExtension::from_path(url.path())?,
             }
         }
-        PixiPypiSpec::RawVersion(version) => RequirementSource::Registry {
-            specifier: manifest_version_to_version_specifiers(version)?,
-            index: None,
-            conflict: None,
-        },
     };
 
     Ok(uv_distribution_types::Requirement {
@@ -325,16 +315,15 @@ mod tests {
 
     #[test]
     fn test_git_url() {
-        let pypi_req = PixiPypiSpec::Git {
-            url: GitSpec {
+        let pypi_req = PixiPypiSpec::new(PixiPypiSource::Git {
+            git: GitSpec {
                 git: Url::parse("ssh://git@github.com/user/test.git").unwrap(),
                 rev: Some(GitReference::Rev(
                     "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
                 )),
                 subdirectory: None,
             },
-            extras: vec![],
-        };
+        });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
 
         let expected_uv_req = RequirementSource::Git {
@@ -353,16 +342,15 @@ mod tests {
         );
 
         // With git+ prefix
-        let pypi_req = PixiPypiSpec::Git {
-            url: GitSpec {
+        let pypi_req = PixiPypiSpec::new(PixiPypiSource::Git {
+            git: GitSpec {
                 git: Url::parse("git+https://github.com/user/test.git").unwrap(),
                 rev: Some(GitReference::Rev(
                     "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
                 )),
                 subdirectory: None,
             },
-            extras: vec![],
-        };
+        });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
         let expected_uv_req = RequirementSource::Git {
             git: uv_git_types::GitUrl::from_fields(
@@ -391,11 +379,10 @@ mod tests {
     fn test_url_with_hash() {
         let url_with_hash =
             Url::parse("https://example.com/package.tar.gz#sha256=abc123def456").unwrap();
-        let pypi_req = PixiPypiSpec::Url {
+        let pypi_req = PixiPypiSpec::new(PixiPypiSource::Url {
             url: url_with_hash.clone(),
             subdirectory: None,
-            extras: vec![],
-        };
+        });
 
         let uv_req = as_uv_req(&pypi_req, "test-package", Path::new("")).unwrap();
 

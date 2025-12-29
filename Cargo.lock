@@ -66,6 +66,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ansi-str"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "060de1453b69f46304b28274f382132f4e72c55637cf362920926a70d090890d"
+dependencies = [
+ "ansitok",
+]
+
+[[package]]
+name = "ansitok"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0a8acea8c2f1c60f0a92a8cd26bf96ca97db56f10bbcab238bbe0cceba659ee"
+dependencies = [
+ "nom 7.1.3",
+ "vte",
+]
+
+[[package]]
 name = "anstream"
 version = "0.6.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -149,6 +168,12 @@ name = "arcstr"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03918c3dbd7701a85c6b9887732e2921175f26c350b4563841d0958c21d57e6d"
+
+[[package]]
+name = "arrayvec"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
 name = "assert_matches"
@@ -830,9 +855,9 @@ dependencies = [
 
 [[package]]
 name = "axum"
-version = "0.8.7"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b098575ebe77cb6d14fc7f32749631a6e44edbef6b796f89b020e99ba20d425"
+checksum = "8b52af3cb4058c895d37317bb27508dccc8e5f2d39454016b297bf4a400597b8"
 dependencies = [
  "axum-core",
  "bytes",
@@ -1340,9 +1365,9 @@ dependencies = [
 
 [[package]]
 name = "clap_complete"
-version = "4.5.61"
+version = "4.5.62"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39615915e2ece2550c0149addac32fb5bd312c657f43845bb9088cb9c8a7c992"
+checksum = "004eef6b14ce34759aa7de4aea3217e368f463f46a3ed3764ca4b5a4404003b4"
 dependencies = [
  "clap",
 ]
@@ -1402,6 +1427,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "comfy-table"
+version = "7.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b03b7db8e0b4b2fdad6c551e634134e99ec000e5c8c3b6856c65e8bbaded7a3b"
+dependencies = [
+ "ansi-str",
+ "console 0.16.2",
+ "crossterm",
+ "unicode-segmentation",
+ "unicode-width 0.2.2",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1430,9 +1468,9 @@ dependencies = [
 
 [[package]]
 name = "console"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b430743a6eb14e9764d4260d4c0d8123087d504eeb9c48f2b2a5e810dd369df4"
+checksum = "03e45a4a8926227e4197636ba97a9fc9b00477e9f4bd711395687c5f0734bec4"
 dependencies = [
  "encode_unicode",
  "libc",
@@ -1621,6 +1659,29 @@ name = "crossbeam-utils"
 version = "0.8.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
+
+[[package]]
+name = "crossterm"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8b9f2e4c67f833b660cdb0a3523065869fb35570177239812ed4c905aeff87b"
+dependencies = [
+ "bitflags",
+ "crossterm_winapi",
+ "document-features",
+ "parking_lot",
+ "rustix 1.1.2",
+ "winapi",
+]
+
+[[package]]
+name = "crossterm_winapi"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acdd7c62a3665c7f6830a51635d9ac9b23ed385797f70a83bb8bafe9c572ab2b"
+dependencies = [
+ "winapi",
+]
 
 [[package]]
 name = "crunchy"
@@ -1905,18 +1966,18 @@ dependencies = [
 
 [[package]]
 name = "derive_more"
-version = "2.1.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10b768e943bed7bf2cab53df09f4bc34bfd217cdb57d971e769874c9a6710618"
+checksum = "d751e9e49156b02b44f9c1815bcb94b984cdcc4396ecc32521c739452808b134"
 dependencies = [
  "derive_more-impl",
 ]
 
 [[package]]
 name = "derive_more-impl"
-version = "2.1.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d286bfdaf75e988b4a78e013ecd79c581e06399ab53fbacd2d916c2f904f30b"
+checksum = "799a97264921d8623a957f6c3b9011f3b5492f557bbb7a5a19b7fa6d06ba8dcb"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1936,7 +1997,7 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25f104b501bf2364e78d0d3974cbc774f738f5865306ed128e1e0d7499c0ad96"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
  "shell-words",
  "tempfile",
  "zeroize",
@@ -1972,7 +2033,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2005,6 +2066,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "442039f5147480ba31067cb00ada1adae6892028e40e45fc5de7b7df6dcc1b5f"
 dependencies = [
  "const-random",
+]
+
+[[package]]
+name = "document-features"
+version = "0.2.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4b8a88685455ed29a21542a33abd9cb6510b6b129abadabdcef0f4c55bc8f61"
+dependencies = [
+ "litrs",
 ]
 
 [[package]]
@@ -2230,7 +2300,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2291,7 +2361,7 @@ dependencies = [
 name = "fancy_display"
 version = "0.1.0"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
 ]
 
 [[package]]
@@ -2427,9 +2497,9 @@ dependencies = [
 
 [[package]]
 name = "fs-err"
-version = "3.2.0"
+version = "3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62d91fd049c123429b018c47887d3f75a265540dd3c30ba9cb7bae9197edb03a"
+checksum = "824f08d01d0f496b3eca4f001a13cf17690a6ee930043d20817f547455fd98f8"
 dependencies = [
  "autocfg",
  "tokio",
@@ -3206,7 +3276,7 @@ dependencies = [
  "tokio",
  "tower-service",
  "tracing",
- "windows-registry 0.6.1",
+ "windows-registry",
 ]
 
 [[package]]
@@ -3221,7 +3291,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.59.0",
+ "windows-core 0.62.2",
 ]
 
 [[package]]
@@ -3386,7 +3456,7 @@ version = "0.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9375e112e4b463ec1b1c6c011953545c65a30164fbab5b581df32b3abf0dcb88"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
  "portable-atomic",
  "unicode-width 0.2.2",
  "unit-prefix",
@@ -3511,7 +3581,7 @@ dependencies = [
  "portable-atomic",
  "portable-atomic-util",
  "serde_core",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3784,7 +3854,7 @@ version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d463f34ca3c400fde3a054da0e0b8c6ffa21e4590922f3e18281bb5eeef4cbdc"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3903,6 +3973,12 @@ name = "litemap"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6373607a59f0be73a39b6fe456b8192fcc3585f602af20751600e974dd455e77"
+
+[[package]]
+name = "litrs"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
 
 [[package]]
 name = "lock_api"
@@ -4111,9 +4187,9 @@ dependencies = [
 
 [[package]]
 name = "minijinja"
-version = "2.13.0"
+version = "2.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0adbe6e92a6ce0fd6c4aac593fdfd3e3950b0f61b1a63aa9731eb6fd85776fa3"
+checksum = "12ea9ac0a51fb5112607099560fdf0f90366ab088a2a9e6e8ae176794e9806aa"
 dependencies = [
  "serde",
 ]
@@ -4874,7 +4950,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.61.0"
+version = "0.62.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4938,7 +5014,7 @@ dependencies = [
 name = "pixi_api"
 version = "0.1.0"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
  "dunce",
  "fancy_display",
  "fs-err",
@@ -5005,13 +5081,16 @@ name = "pixi_build_backend_passthrough"
 version = "0.1.0"
 dependencies = [
  "fs-err",
+ "itertools 0.14.0",
  "ordermap",
  "pixi_build_frontend",
  "pixi_build_types",
  "rattler_conda_types",
+ "rattler_digest",
  "rattler_package_streaming",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
 ]
 
@@ -5096,7 +5175,8 @@ dependencies = [
  "clap",
  "clap_complete",
  "clap_complete_nushell",
- "console 0.16.1",
+ "comfy-table",
+ "console 0.16.2",
  "console-subscriber",
  "ctrlc",
  "deno_task_shell",
@@ -5106,7 +5186,6 @@ dependencies = [
  "flate2",
  "fs-err",
  "futures",
- "human_bytes",
  "indexmap 2.12.1",
  "indicatif",
  "insta",
@@ -5127,6 +5206,7 @@ dependencies = [
  "pixi_git",
  "pixi_global",
  "pixi_manifest",
+ "pixi_path",
  "pixi_progress",
  "pixi_pty",
  "pixi_pypi_spec",
@@ -5198,7 +5278,6 @@ dependencies = [
  "miette 7.6.0",
  "once_cell",
  "ordermap",
- "pathdiff",
  "pin-project-lite",
  "pixi_build_backend_passthrough",
  "pixi_build_discovery",
@@ -5208,6 +5287,7 @@ dependencies = [
  "pixi_consts",
  "pixi_git",
  "pixi_glob",
+ "pixi_path",
  "pixi_record",
  "pixi_spec",
  "pixi_spec_containers",
@@ -5215,6 +5295,7 @@ dependencies = [
  "pixi_test_utils",
  "pixi_url",
  "pixi_utils",
+ "pixi_variant",
  "rand 0.9.2",
  "rattler",
  "rattler_conda_types",
@@ -5248,7 +5329,7 @@ name = "pixi_config"
 version = "0.1.0"
 dependencies = [
  "clap",
- "console 0.16.1",
+ "console 0.16.2",
  "dirs",
  "fs-err",
  "insta",
@@ -5274,7 +5355,7 @@ dependencies = [
 name = "pixi_consts"
 version = "0.1.0"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
  "rattler_cache",
  "rattler_conda_types",
  "url",
@@ -5287,7 +5368,7 @@ dependencies = [
  "async-once-cell",
  "barrier_cell",
  "chrono",
- "console 0.16.1",
+ "console 0.16.2",
  "dashmap",
  "dialoguer",
  "dunce",
@@ -5307,6 +5388,7 @@ dependencies = [
  "pathdiff",
  "pep440_rs",
  "pep508_rs",
+ "pixi_build_backend_passthrough",
  "pixi_build_discovery",
  "pixi_build_frontend",
  "pixi_command_dispatcher",
@@ -5318,6 +5400,7 @@ dependencies = [
  "pixi_glob",
  "pixi_install_pypi",
  "pixi_manifest",
+ "pixi_path",
  "pixi_progress",
  "pixi_pypi_spec",
  "pixi_python_status",
@@ -5348,6 +5431,7 @@ dependencies = [
  "tokio",
  "toml_edit",
  "tracing",
+ "tracing-test",
  "typed-path",
  "url",
  "uv-build-frontend",
@@ -5388,7 +5472,7 @@ name = "pixi_diff"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "console 0.16.1",
+ "console 0.16.2",
  "indexmap 2.12.1",
  "itertools 0.14.0",
  "pixi_consts",
@@ -5456,7 +5540,7 @@ name = "pixi_global"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "console 0.16.1",
+ "console 0.16.2",
  "dirs",
  "dunce",
  "fake",
@@ -5477,6 +5561,7 @@ dependencies = [
  "pixi_consts",
  "pixi_core",
  "pixi_manifest",
+ "pixi_path",
  "pixi_progress",
  "pixi_reporters",
  "pixi_spec",
@@ -5513,7 +5598,7 @@ dependencies = [
  "ahash",
  "assert_matches",
  "chrono",
- "console 0.16.1",
+ "console 0.16.2",
  "csv",
  "fancy_display",
  "fs-err",
@@ -5573,7 +5658,7 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "chrono",
- "console 0.16.1",
+ "console 0.16.2",
  "dunce",
  "fancy_display",
  "fs-err",
@@ -5611,6 +5696,16 @@ dependencies = [
  "toml_edit",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "pixi_path"
+version = "0.1.0"
+dependencies = [
+ "fs-err",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -5666,10 +5761,12 @@ dependencies = [
  "dunce",
  "file_url",
  "insta",
+ "itertools 0.14.0",
  "miette 7.6.0",
  "pathdiff",
  "pixi_git",
  "pixi_spec",
+ "pixi_spec_containers",
  "pixi_variant",
  "rattler_conda_types",
  "rattler_digest",
@@ -5686,7 +5783,7 @@ dependencies = [
 name = "pixi_reporters"
 version = "0.1.0"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
  "futures",
  "human_bytes",
  "indexmap 2.12.1",
@@ -5802,6 +5899,7 @@ dependencies = [
  "miette 7.6.0",
  "rattler_conda_types",
  "rattler_digest",
+ "rattler_package_streaming",
  "serde_json",
  "tempfile",
  "tokio",
@@ -6375,7 +6473,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -6490,7 +6588,7 @@ checksum = "f2f38d4388230d7d3654a461425dd438a0fb51258e93f53cd8d44b678922ccb0"
 dependencies = [
  "anyhow",
  "clap",
- "console 0.16.1",
+ "console 0.16.2",
  "digest",
  "dirs",
  "fs-err",
@@ -6609,7 +6707,7 @@ version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b12cabcb8dd512fea07a95d71e2a91db09090cefda992253d87e1f72bdb31226"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
  "fs-err",
  "indexmap 2.12.1",
  "rattler_conda_types",
@@ -6704,7 +6802,7 @@ dependencies = [
  "unicode-normalization",
  "which",
  "windows 0.61.3",
- "windows-registry 0.5.3",
+ "windows-registry",
 ]
 
 [[package]]
@@ -7235,9 +7333,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.25"
+version = "0.12.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6eff9328d40131d43bd911d42d79eb6a47312002a4daefc9e37f17e74a7701a"
+checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -7581,7 +7679,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.11.0",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7996,9 +8094,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.145"
+version = "1.0.146"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "402a6f66d8c709116cf22f558eab210f5a50187f702eb4d7e5ef38d9a7f1c79c"
+checksum = "217ca874ae0207aac254aa02c957ded05585a90892cc8d87f9e5fa49669dadd8"
 dependencies = [
  "indexmap 2.12.1",
  "itoa",
@@ -8618,7 +8716,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.2",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9024,9 +9122,9 @@ checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 
 [[package]]
 name = "tracing"
-version = "0.1.43"
+version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d15d90a0b5c19378952d479dc858407149d7bb45a14de0142f6c534b16fc647"
+checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
 dependencies = [
  "log",
  "pin-project-lite",
@@ -9047,9 +9145,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.35"
+version = "0.1.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a04e24fab5c89c6a36eb8558c9656f30d81de51dfa4d3b45f26b21d61fa0a6c"
+checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
  "valuable",
@@ -9082,6 +9180,27 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "tracing-test"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "557b891436fe0d5e0e363427fc7f217abf9ccd510d5136549847bdcbcd011d68"
+dependencies = [
+ "tracing-core",
+ "tracing-subscriber",
+ "tracing-test-macro",
+]
+
+[[package]]
+name = "tracing-test-macro"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04659ddb06c87d233c566112c1c9c5b9e98256d9af50ec3bc9c8327f873a7568"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -9157,6 +9276,12 @@ checksum = "5fd4f6878c9cb28d874b009da9e8d183b5abc80117c40bbd187a1fde336be6e8"
 dependencies = [
  "tinyvec",
 ]
+
+[[package]]
+name = "unicode-segmentation"
+version = "1.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6ccf251212114b54433ec949fd6a7841275f9ada20dddd2f29e9ceea4501493"
 
 [[package]]
 name = "unicode-width"
@@ -9499,7 +9624,7 @@ name = "uv-console"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.9.5#d5f39331a73d5042e70ab770463dff632e20c127"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
 ]
 
 [[package]]
@@ -10083,7 +10208,7 @@ dependencies = [
  "uv-warnings",
  "which",
  "windows 0.59.0",
- "windows-registry 0.5.3",
+ "windows-registry",
 ]
 
 [[package]]
@@ -10104,7 +10229,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.9.5#d5f39331a73d5042e70ab770
 dependencies = [
  "anyhow",
  "configparser",
- "console 0.16.1",
+ "console 0.16.2",
  "fs-err",
  "futures",
  "rustc-hash",
@@ -10293,7 +10418,7 @@ dependencies = [
  "uv-fs",
  "uv-static",
  "windows 0.59.0",
- "windows-registry 0.5.3",
+ "windows-registry",
 ]
 
 [[package]]
@@ -10390,7 +10515,7 @@ name = "uv-virtualenv"
 version = "0.0.4"
 source = "git+https://github.com/astral-sh/uv?tag=0.9.5#d5f39331a73d5042e70ab770463dff632e20c127"
 dependencies = [
- "console 0.16.1",
+ "console 0.16.2",
  "fs-err",
  "itertools 0.14.0",
  "owo-colors",
@@ -10496,6 +10621,16 @@ name = "vsimd"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
+
+[[package]]
+name = "vte"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "231fdcd7ef3037e8330d8e17e61011a2c244126acc0a982f4040ac3f9f0bc077"
+dependencies = [
+ "arrayvec",
+ "memchr",
+]
 
 [[package]]
 name = "wait-timeout"
@@ -10706,7 +10841,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10912,17 +11047,6 @@ dependencies = [
  "windows-link 0.1.3",
  "windows-result 0.3.4",
  "windows-strings 0.4.2",
-]
-
-[[package]]
-name = "windows-registry"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02752bf7fbdcce7f2a27a742f798510f3e5ad88dbe84871e5168e2120c3d5720"
-dependencies = [
- "windows-link 0.2.1",
- "windows-result 0.4.1",
- "windows-strings 0.5.1",
 ]
 
 [[package]]

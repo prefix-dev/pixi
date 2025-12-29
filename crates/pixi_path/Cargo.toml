@@ -1,0 +1,18 @@
+[package]
+authors.workspace = true
+description = "Type-safe path wrappers with guarantees about absolute paths and directories"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_path"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+fs-err = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

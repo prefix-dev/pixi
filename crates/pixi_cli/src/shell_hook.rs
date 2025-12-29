@@ -95,13 +95,13 @@ async fn generate_activation_script(
         })
         .into_diagnostic()?;
 
-    if project.config().shell.source_completion_scripts() {
-        if let Some(completions_dir) = shell.completion_script_location() {
-            result
-                .script
-                .source_completions(&environment.dir().join(completions_dir))
-                .into_diagnostic()?;
-        }
+    if project.config().shell.source_completion_scripts()
+        && let Some(completions_dir) = shell.completion_script_location()
+    {
+        result
+            .script
+            .source_completions(&environment.dir().join(completions_dir))
+            .into_diagnostic()?;
     }
 
     let script = result.script.contents().into_diagnostic()?;

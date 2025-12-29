@@ -297,8 +297,8 @@ impl Workspace {
         // Check which environments are out of date.
         let outdated = OutdatedEnvironments::from_workspace_and_lock_file(
             self,
+            command_dispatcher.clone(),
             &lock_file,
-            glob_hash_cache.clone(),
         )
         .await;
         if outdated.is_empty() {
@@ -328,13 +328,12 @@ impl Workspace {
         }
 
         // Construct an update context and perform the actual update.
-        let lock_file_derived_data = UpdateContext::builder(self)
+        let lock_file_derived_data = UpdateContext::builder(self, Some(command_dispatcher))?
             .with_package_cache(package_cache)
             .with_no_install(options.no_install)
             .with_outdated_environments(outdated)
             .with_lock_file(lock_file)
             .with_glob_hash_cache(glob_hash_cache)
-            .with_command_dispatcher(command_dispatcher)
             .finish()
             .await?
             .update()
@@ -550,10 +549,10 @@ impl<'p> LockFileDerivedData<'p> {
         // Check if the prefix is already up-to-date by validating the hash with the
         // environment file
         let hash = self.locked_environment_hash(environment)?;
-        if update_mode == UpdateMode::QuickValidate {
-            if let Some(prefix) = self.cached_prefix(environment, &hash) {
-                return prefix;
-            }
+        if update_mode == UpdateMode::QuickValidate
+            && let Some(prefix) = self.cached_prefix(environment, &hash)
+        {
+            return prefix;
         }
 
         // Get the up-to-date prefix
@@ -685,10 +684,23 @@ impl<'p> LockFileDerivedData<'p> {
                 let pixi_records =
                     locked_packages_to_pixi_records(conda_packages, self.workspace.root())?;
 
+                // Get the manifest's pypi dependencies for this environment to look up editability.
+                // The lock file always stores editable=false, so we apply the actual
+                // editability from the manifest at install time.
+                let manifest_pypi_deps = environment.pypi_dependencies(Some(platform));
+
                 let pypi_records = pypi_packages
                     .into_iter()
                     .filter_map(LockedPackageRef::as_pypi)
-                    .map(|(data, env_data)| (data.clone(), env_data.clone()))
+                    .map(|(data, env_data)| {
+                        let mut data = data.clone();
+                        data.editable = manifest_pypi_deps
+                            .get(&data.name)
+                            .and_then(|specs| specs.last())
+                            .and_then(|spec| spec.editable())
+                            .unwrap_or(data.editable);
+                        (data, env_data.clone())
+                    })
                     .collect::<Vec<_>>();
 
                 let conda_reinstall_packages = match reinstall_packages {
@@ -1171,7 +1183,7 @@ fn determine_pypi_solve_permits(project: &Workspace) -> usize {
     for environment in environments {
         for (_, req) in environment.pypi_dependencies(None).iter() {
             for dep in req {
-                if dep.is_direct_dependency() {
+                if dep.is_source_dependency() {
                     return 1;
                 }
             }
@@ -1211,7 +1223,7 @@ pub struct UpdateContextBuilder<'p> {
     glob_hash_cache: Option<GlobHashCache>,
 
     /// Set the command dispatcher to use for the update process.
-    command_dispatcher: Option<CommandDispatcher>,
+    command_dispatcher: CommandDispatcher,
 
     /// Optional list of package names explicitly targeted for update.
     update_targets: Option<std::collections::HashSet<String>>,
@@ -1245,14 +1257,6 @@ impl<'p> UpdateContextBuilder<'p> {
     /// previously locked packages.
     pub fn with_lock_file(self, lock_file: LockFile) -> Self {
         Self { lock_file, ..self }
-    }
-
-    /// Sets the command dispatcher to use for the update process.
-    pub(crate) fn with_command_dispatcher(self, command_dispatcher: CommandDispatcher) -> Self {
-        Self {
-            command_dispatcher: Some(command_dispatcher),
-            ..self
-        }
     }
 
     /// Sets the packages explicitly targeted for update.
@@ -1298,13 +1302,17 @@ impl<'p> UpdateContextBuilder<'p> {
         };
         let lock_file = self.lock_file;
         let glob_hash_cache = self.glob_hash_cache.unwrap_or_default();
+
+        let multi_progress = pixi_progress::global_multi_progress();
+        let anchor_pb = multi_progress.add(indicatif::ProgressBar::hidden());
+
         let outdated = match self.outdated_environments {
             Some(outdated) => outdated,
             None => {
                 OutdatedEnvironments::from_workspace_and_lock_file(
                     project,
+                    self.command_dispatcher.clone(),
                     &lock_file,
-                    glob_hash_cache.clone(),
                 )
                 .await
             }
@@ -1466,21 +1474,6 @@ impl<'p> UpdateContextBuilder<'p> {
 
         let client = project.authenticated_client()?.clone();
 
-        // Construct a command dispatcher that will be used to run the tasks.
-        let multi_progress = global_multi_progress();
-        let anchor_pb = multi_progress.add(ProgressBar::hidden());
-        let command_dispatcher = match self.command_dispatcher {
-            Some(dispatcher) => dispatcher,
-            None => self
-                .project
-                .command_dispatcher_builder()?
-                .with_reporter(pixi_reporters::TopLevelProgress::new(
-                    global_multi_progress(),
-                    anchor_pb.clone(),
-                ))
-                .finish(),
-        };
-
         let mapping_client = self.mapping_client.unwrap_or_else(|| {
             MappingClient::builder(client)
                 .with_concurrency_limit(project.concurrent_downloads_semaphore())
@@ -1506,7 +1499,7 @@ impl<'p> UpdateContextBuilder<'p> {
             package_cache,
             pypi_solve_semaphore: Arc::new(Semaphore::new(determine_pypi_solve_permits(project))),
             io_concurrency_limit: self.io_concurrency_limit.unwrap_or_default(),
-            command_dispatcher,
+            command_dispatcher: self.command_dispatcher.clone(),
             glob_hash_cache,
             dispatcher_progress_bar: anchor_pb,
 
@@ -1518,8 +1511,25 @@ impl<'p> UpdateContextBuilder<'p> {
 
 impl<'p> UpdateContext<'p> {
     /// Construct a new builder for the update context.
-    pub fn builder(project: &'p Workspace) -> UpdateContextBuilder<'p> {
-        UpdateContextBuilder {
+    pub fn builder(
+        project: &'p Workspace,
+        command_dispatcher: Option<CommandDispatcher>,
+    ) -> miette::Result<UpdateContextBuilder<'p>> {
+        let multi_progress = pixi_progress::global_multi_progress();
+        let anchor_pb = multi_progress.add(indicatif::ProgressBar::hidden());
+
+        let command_dispatcher = match command_dispatcher {
+            Some(cd) => cd,
+            None => project
+                .command_dispatcher_builder()?
+                .with_reporter(pixi_reporters::TopLevelProgress::new(
+                    multi_progress,
+                    anchor_pb,
+                ))
+                .finish(),
+        };
+
+        Ok(UpdateContextBuilder {
             project,
             lock_file: LockFile::default(),
             outdated_environments: None,
@@ -1528,9 +1538,9 @@ impl<'p> UpdateContext<'p> {
             io_concurrency_limit: None,
             glob_hash_cache: None,
             mapping_client: None,
-            command_dispatcher: None,
+            command_dispatcher,
             update_targets: None,
-        }
+        })
     }
 
     pub async fn update(mut self) -> miette::Result<LockFileDerivedData<'p>> {
@@ -1794,6 +1804,7 @@ impl<'p> UpdateContext<'p> {
                 platform,
                 grouped_repodata_records,
                 grouped_pypi_records,
+                self.command_dispatcher.clone(),
             );
             pending_futures.push(extract_resolution_task.boxed_local());
 
@@ -2152,6 +2163,9 @@ async fn spawn_solve_conda_environment_task(
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
 
+    // Get the dev dependencies for this platform
+    let dev_dependencies = group.combined_dev_dependencies(Some(platform));
+
     // Get solve options
     let exclude_newer = group.exclude_newer();
     let strategy = group.solve_strategy().into();
@@ -2159,8 +2173,8 @@ async fn spawn_solve_conda_environment_task(
     // Get the environment name
     let group_name = group.name();
 
-    // Early out if there are no dependencies to solve.
-    if dependencies.is_empty() {
+    // Early out if there are no dependencies to solve and no dev dependencies to expand.
+    if dependencies.is_empty() && dev_dependencies.is_empty() {
         return Ok(TaskResult::CondaGroupSolved(
             group_name,
             platform,
@@ -2172,9 +2186,6 @@ async fn spawn_solve_conda_environment_task(
     // Get the virtual packages for this platform
     let virtual_packages = group.virtual_packages(platform);
 
-    // The list of channels and platforms we need for this task
-    let channels = group.channels().into_iter().cloned().collect_vec();
-
     // Whether there are pypi dependencies, and we should fetch purls.
     let has_pypi_dependencies = group.has_pypi_dependencies();
 
@@ -2184,6 +2195,9 @@ async fn spawn_solve_conda_environment_task(
         .pypi_name_mapping_source()
         .map_err(|err| SolveCondaEnvironmentError::PypiMappingFailed(err.into()))?
         .clone();
+
+    // The list of channels and platforms we need for this task
+    let channels = group.channels().into_iter().cloned().collect_vec();
 
     // Get the channel configuration
     let channel_config = group.workspace().channel_config();
@@ -2201,6 +2215,21 @@ async fn spawn_solve_conda_environment_task(
         variant_files,
     } = group.workspace().variants(platform)?;
 
+    // Convert dev dependencies to DevSourceSpecs
+    let dev_sources: IndexMap<_, _> = dev_dependencies
+        .into_iter()
+        .flat_map(|(name, source_specs)| {
+            source_specs.into_iter().map(move |source_spec| {
+                (
+                    name.clone(),
+                    pixi_spec::DevSourceSpec {
+                        source: source_spec,
+                    },
+                )
+            })
+        })
+        .collect();
+
     let start = Instant::now();
 
     // Solve the environment using the command dispatcher.
@@ -2210,6 +2239,7 @@ async fn spawn_solve_conda_environment_task(
             name: Some(group_name.to_string()),
             dependencies,
             constraints: Default::default(),
+            dev_sources,
             installed: existing_repodata_records.records.clone(),
             build_environment: BuildEnvironment::simple(platform, virtual_packages),
             channels,
@@ -2263,6 +2293,7 @@ async fn spawn_extract_environment_task(
     platform: Platform,
     grouped_repodata_records: impl Future<Output = Arc<PixiRecordsByName>>,
     grouped_pypi_records: impl Future<Output = Arc<PypiRecordsByName>>,
+    command_dispatcher: CommandDispatcher,
 ) -> miette::Result<TaskResult> {
     let group = GroupedEnvironment::from(environment.clone());
 
@@ -2296,12 +2327,68 @@ async fn spawn_extract_environment_task(
     }
 
     // Determine the conda packages we need.
-    let conda_package_names = environment
+    let mut conda_package_names: Vec<_> = environment
         .combined_dependencies(Some(platform))
         .names()
         .cloned()
         .map(PackageName::Conda)
-        .collect::<Vec<_>>();
+        .collect();
+
+    // Also include packages from dev dependencies.
+    // Dev dependencies are source packages that bring in their own dependencies.
+    let dev_dependencies: Vec<_> = environment
+        .combined_dev_dependencies(Some(platform))
+        .into_specs()
+        .collect();
+
+    if !dev_dependencies.is_empty() {
+        // Resolve the dev dependencies to find what packages they bring in
+        let workspace = environment.workspace();
+        let channel_config = workspace.channel_config();
+        let channels: Vec<_> = environment
+            .channels()
+            .into_iter()
+            .filter_map(|c| c.clone().into_base_url(&channel_config).ok())
+            .collect();
+
+        let VariantConfig {
+            variant_configuration,
+            variant_files,
+        } = workspace
+            .variants(platform)
+            .into_diagnostic()
+            .wrap_err("failed to get variant configuration")?;
+
+        // Get virtual packages for the build environment
+        let virtual_packages: Vec<_> = environment
+            .virtual_packages(platform)
+            .into_iter()
+            .map(GenericVirtualPackage::from)
+            .collect();
+
+        let build_environment = BuildEnvironment::simple(platform, virtual_packages);
+
+        // Resolve dev dependencies
+        let resolved_dev_deps = super::resolve_dev_dependencies(
+            dev_dependencies,
+            &command_dispatcher,
+            &channel_config,
+            &channels,
+            &build_environment,
+            &variant_configuration,
+            &variant_files,
+        )
+        .await
+        .into_diagnostic()
+        .wrap_err("failed to resolve dev dependencies")?;
+
+        // Add the resolved dev dependency package names to the queue
+        for dep in resolved_dev_deps {
+            if let Some(name) = dep.conda_package_name() {
+                conda_package_names.push(PackageName::Conda(name));
+            }
+        }
+    }
 
     // Determine the pypi packages we need.
     let pypi_dependencies = environment.pypi_dependencies(Some(platform));

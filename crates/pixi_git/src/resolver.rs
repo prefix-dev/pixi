@@ -42,7 +42,7 @@ impl GitResolver {
     }
 
     /// Returns the [`GitSha`] for the given [`RepositoryReference`], if it exists.
-    fn get(&self, reference: &RepositoryReference) -> Option<Ref<RepositoryReference, GitSha>> {
+    fn get(&self, reference: &RepositoryReference) -> Option<Ref<'_, RepositoryReference, GitSha>> {
         self.0.get(reference)
     }
 

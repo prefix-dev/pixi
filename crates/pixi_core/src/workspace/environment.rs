@@ -187,10 +187,10 @@ impl<'p> Environment<'p> {
 
         if self.platforms().len() == 1 {
             // Take the first platform and see if it is a WASM one.
-            if let Some(platform) = self.platforms().iter().next() {
-                if platform.arch() == Some(Arch::Wasm32) {
-                    return *platform;
-                }
+            if let Some(platform) = self.platforms().iter().next()
+                && platform.arch() == Some(Arch::Wasm32)
+            {
+                return *platform;
             }
         }
 
@@ -241,7 +241,7 @@ impl<'p> Environment<'p> {
         &self,
         name: &TaskName,
         platform: Option<Platform>,
-    ) -> Result<&'p Task, UnknownTask> {
+    ) -> Result<&'p Task, UnknownTask<'_>> {
         match self.tasks(platform).map(|tasks| tasks.get(name).copied()) {
             Err(_) | Ok(None) => Err(UnknownTask {
                 project: self.workspace,
@@ -329,14 +329,14 @@ impl<'p> Environment<'p> {
         &self,
         platform: Option<Platform>,
     ) -> Result<(), UnsupportedPlatformError> {
-        if let Some(platform) = platform {
-            if !self.platforms().contains(&platform) {
-                return Err(UnsupportedPlatformError {
-                    environments_platforms: self.platforms().into_iter().collect(),
-                    environment: self.name().clone(),
-                    platform,
-                });
-            }
+        if let Some(platform) = platform
+            && !self.platforms().contains(&platform)
+        {
+            return Err(UnsupportedPlatformError {
+                environments_platforms: self.platforms().into_iter().collect(),
+                environment: self.name().clone(),
+                platform,
+            });
         }
 
         Ok(())

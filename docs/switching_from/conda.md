@@ -49,7 +49,7 @@ pixi config set detached-environments true
 # or a specific location
 pixi config set detached-environments /path/to/envs
 ```
-This doesn't allow you to activate the environments using `pixi shell -n` but it will make the installation of the environments go to the same folder.
+This will make the installation of the environments go to the same folder.
 
 `pixi` does have the `pixi global` command to install tools on your machine. (See [global](../reference/cli/pixi/global.md))
 This is not a replacement for `conda` but works the same as [`pipx`](https://pipx.pypa.io/stable/) and [`condax`](https://mariusvniekerk.github.io/condax/).

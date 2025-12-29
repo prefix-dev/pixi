@@ -371,7 +371,7 @@ impl WorkspaceMut {
             command_dispatcher,
             glob_hash_cache,
             io_concurrency_limit,
-        } = UpdateContext::builder(self.workspace())
+        } = UpdateContext::builder(self.workspace(), None)?
             .with_lock_file(unlocked_lock_file)
             .with_no_install(no_install || dry_run)
             .finish()
@@ -381,18 +381,16 @@ impl WorkspaceMut {
             .map_err(|mut e| {
                 if let Some(SolveCondaEnvironmentError::SolveFailed { source, .. }) =
                     e.downcast_mut::<SolveCondaEnvironmentError>()
-                {
-                    if let CommandDispatcherError::Failed(MissingChannel(MissingChannelError {
+                    && let CommandDispatcherError::Failed(MissingChannel(MissingChannelError {
                         package: _,
                         channel,
                         advice,
                     })) = source.as_mut()
-                    {
-                        *advice = Some(format!(
-                            "To add the missing channel to a workspace, use:\n\n  {}",
-                            console::style(format!("pixi workspace channel add {channel}")).bold(),
-                        ));
-                    }
+                {
+                    *advice = Some(format!(
+                        "To add the missing channel to a workspace, use:\n\n  {}",
+                        console::style(format!("pixi workspace channel add {channel}")).bold(),
+                    ));
                 }
                 e
             })?;
@@ -670,16 +668,16 @@ impl WorkspaceMut {
 
 impl Drop for WorkspaceMut {
     fn drop(&mut self) {
-        if let (Some(workspace), Some(original)) = (self.workspace.take(), self.original.take()) {
-            if self.modified {
-                let path = workspace.workspace.provenance.path;
-                if let Err(err) = fs_err::write(&path, &original.source) {
-                    tracing::error!(
-                        "Failed to revert manifest changes to {}: {}",
-                        path.display(),
-                        err
-                    );
-                }
+        if let (Some(workspace), Some(original)) = (self.workspace.take(), self.original.take())
+            && self.modified
+        {
+            let path = workspace.workspace.provenance.path;
+            if let Err(err) = fs_err::write(&path, &original.source) {
+                tracing::error!(
+                    "Failed to revert manifest changes to {}: {}",
+                    path.display(),
+                    err
+                );
             }
         }
     }

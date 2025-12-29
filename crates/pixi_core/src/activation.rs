@@ -342,35 +342,33 @@ pub async fn run_activation(
 
     // If the lock file is provided, and we can compute the environment hash, let's rewrite the
     // cache file.
-    if experimental {
-        if let Some(lock_file) = lock_file {
-            // Get the current environment variables from the shell to be part of the hash
-            let current_input_env_vars = get_environment_variable_from_shell_environment(
-                activator_result.keys().map(String::as_str).collect(),
-            );
-            let cache_file = environment.activation_cache_file_path();
-            let cache = ActivationCache {
-                hash: EnvironmentHash::from_environment(
-                    environment,
-                    &current_input_env_vars,
-                    lock_file,
-                ),
-                environment_variables: activator_result.clone(),
-            };
-            let cache = serde_json::to_string(&cache).into_diagnostic()?;
+    if experimental && let Some(lock_file) = lock_file {
+        // Get the current environment variables from the shell to be part of the hash
+        let current_input_env_vars = get_environment_variable_from_shell_environment(
+            activator_result.keys().map(String::as_str).collect(),
+        );
+        let cache_file = environment.activation_cache_file_path();
+        let cache = ActivationCache {
+            hash: EnvironmentHash::from_environment(
+                environment,
+                &current_input_env_vars,
+                lock_file,
+            ),
+            environment_variables: activator_result.clone(),
+        };
+        let cache = serde_json::to_string(&cache).into_diagnostic()?;
 
-            tokio_fs::create_dir_all(environment.workspace().activation_env_cache_folder())
-                .await
-                .into_diagnostic()?;
-            tokio_fs::write(&cache_file, cache)
-                .await
-                .into_diagnostic()?;
-            tracing::debug!(
-                "Wrote activation cache for {} to {}",
-                environment.name(),
-                cache_file.display()
-            );
-        }
+        tokio_fs::create_dir_all(environment.workspace().activation_env_cache_folder())
+            .await
+            .into_diagnostic()?;
+        tokio_fs::write(&cache_file, cache)
+            .await
+            .into_diagnostic()?;
+        tracing::debug!(
+            "Wrote activation cache for {} to {}",
+            environment.name(),
+            cache_file.display()
+        );
     }
 
     Ok(activator_result)
