@@ -2,7 +2,7 @@ use fs_err as fs;
 use pixi_build_backend_passthrough::{ObservableBackend, PassthroughBackend};
 use pixi_build_frontend::BackendOverride;
 use pixi_consts::consts;
-use rattler_conda_types::Platform;
+use rattler_conda_types::{Platform, package::RunExportsJson};
 use tempfile::TempDir;
 
 use crate::{
@@ -552,15 +552,26 @@ async fn test_different_variants_have_different_caches() {
     setup_tracing();
 
     // Create a package database with common dependencies
+    // Each sdl2 package has run_exports that propagate itself, so when a package
+    // has sdl2 as a host-dependency, the specific sdl2 version becomes a run-dependency.
+    // This allows the solver to distinguish between variants built with different sdl2 versions.
+
+    let run_exports = RunExportsJson {
+        weak: vec!["sdl2 *".to_string()],
+        ..Default::default()
+    };
+
     let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("sdl2", "2.26.5")
             .with_materialize(true)
+            .with_run_exports(run_exports.clone())
             .finish(),
     );
     package_database.add_package(
         Package::build("sdl2", "2.32.0")
             .with_materialize(true)
+            .with_run_exports(run_exports.clone())
             .finish(),
     );
 
@@ -568,9 +579,12 @@ async fn test_different_variants_have_different_caches() {
     let channel = package_database.into_channel().await.unwrap();
 
     // Create a PixiControl instance with PassthroughBackend
+    // Configure the backend to apply run_exports from sdl2 (simulating what the mock packages define)
+    let passthrough =
+        PassthroughBackend::instantiator().with_run_exports("sdl2", run_exports.clone());
+
     // Create an observable backend and get the observer
-    let (instantiator, mut observer) =
-        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+    let (instantiator, mut observer) = ObservableBackend::instantiator(passthrough);
 
     let backend_override = BackendOverride::from_memory(instantiator);
 
@@ -593,9 +607,6 @@ backend = { name = "in-memory", version = "0.1.0" }
 
 [package.host-dependencies]
 sdl2 = "*"
-
-[package.build.config]
-on-the-fly = true
 "#;
     fs::write(source_dir.join("pixi.toml"), pixi_toml_content).unwrap();
 

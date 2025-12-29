@@ -713,7 +713,7 @@ impl PixiControl {
             args: lock::Args {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
+                    backend_override: self.backend_override.clone(),
                 },
                 no_install_config: NoInstallConfig { no_install: false },
                 check: false,

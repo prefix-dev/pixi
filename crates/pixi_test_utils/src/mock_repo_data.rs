@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use miette::IntoDiagnostic;
 use rattler_conda_types::{
     ChannelInfo, PackageName, PackageRecord, PackageUrl, Platform, RepoData, VersionWithSource,
-    package::{ArchiveType, IndexJson, PathType, PathsEntry, PathsJson},
+    package::{ArchiveType, IndexJson, PathType, PathsEntry, PathsJson, RunExportsJson},
 };
 use std::{
     collections::HashSet,
@@ -174,6 +174,7 @@ pub struct PackageBuilder {
     sha256: Option<String>,
     purls: Option<std::collections::BTreeSet<PackageUrl>>,
     materialize: bool,
+    run_exports: Option<RunExportsJson>,
 }
 
 impl Package {
@@ -192,6 +193,10 @@ impl Package {
             md5: None,
             purls: None,
             materialize: false,
+            // Default to empty run_exports to prevent the gateway from trying to
+            // extract run_exports from the actual conda file, which doesn't exist
+            // for non-materialized mock packages.
+            run_exports: Some(RunExportsJson::default()),
         }
     }
 
@@ -281,6 +286,13 @@ impl PackageBuilder {
         self
     }
 
+    /// Set the run exports for this package.
+    /// Run exports propagate dependencies from host to run.
+    pub fn with_run_exports(mut self, run_exports: RunExportsJson) -> Self {
+        self.run_exports = Some(run_exports);
+        self
+    }
+
     /// Finish construction of the package
     pub fn finish(self) -> Package {
         let subdir = self.subdir.unwrap_or(Platform::NoArch);
@@ -334,7 +346,7 @@ impl PackageBuilder {
                 track_features: vec![],
                 version: self.version,
                 purls: self.purls,
-                run_exports: Some(Default::default()),
+                run_exports: self.run_exports.clone(),
                 python_site_packages_path: None,
                 experimental_extra_depends: Default::default(),
             },
@@ -411,7 +423,17 @@ pub fn create_conda_package(
     fs_err::write(&paths_json_path, &paths_json_content)?;
 
     // Collect paths to include in the package
-    let paths = vec![info_dir.join("index.json"), info_dir.join("paths.json")];
+    let mut paths = vec![info_dir.join("index.json"), info_dir.join("paths.json")];
+
+    // Create run_exports.json if the package has run exports
+    if let Some(run_exports) = &package.package_record.run_exports
+        && !run_exports.is_empty()
+    {
+        let run_exports_content = serde_json::to_string_pretty(run_exports)?;
+        let run_exports_path = info_dir.join("run_exports.json");
+        fs_err::write(&run_exports_path, &run_exports_content)?;
+        paths.push(run_exports_path);
+    }
 
     // Create the output file
     let output_file = fs_err::File::create(output_path)?;
