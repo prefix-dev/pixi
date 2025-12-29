@@ -183,7 +183,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .with_prompt(prompt)
                 .items(&package_names)
                 .interact()
-                .unwrap();
+                .expect("Failed to load packages.");
 
             if !selections.is_empty() {
                 let selected: HashSet<String> = selections
