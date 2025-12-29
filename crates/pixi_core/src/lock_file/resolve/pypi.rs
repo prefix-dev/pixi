@@ -263,7 +263,8 @@ fn create_solve_error(
                 None
             } else {
                 Some(format!(
-                    "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\n{}",
+                    "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\n{}
+See https://pixi.sh/latest/concepts/conda_pypi/#pinned-package-conflicts for more information.",
                     conflicting_packages.join("\n")
                 ))
             };
