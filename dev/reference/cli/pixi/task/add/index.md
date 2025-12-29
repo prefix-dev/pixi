@@ -44,6 +44,8 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
   May be provided more than once.
   ```
 
+- [`--default-environment <DEFAULT_ENVIRONMENT>`](#arg---default-environment) : Add a default environment for the task
+
 - [`--description <DESCRIPTION>`](#arg---description) : A description of the task to be added
 
 - [`--clean-env`](#arg---clean-env) : Isolate the task from the shell environment, and only use the pixi environment to run the task
