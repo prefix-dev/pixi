@@ -149,6 +149,7 @@ pub enum Event {
     },
 }
 
+#[derive(Clone)]
 pub struct EventReporter {
     events: EventStore,
     next_conda_solve_id: usize,
