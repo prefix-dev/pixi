@@ -50,7 +50,9 @@ use uv_distribution_types::{
     IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
     SourceDist, ToUrlError,
 };
+use uv_pep508::VerbatimUrl;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
+use uv_redacted::DisplaySafeUrl;
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
@@ -115,6 +117,51 @@ fn parse_hashes_from_hash_vec(hashes: &HashDigests) -> Result<Option<PackageHash
         ))),
         (None, None) => Ok(None),
     }
+}
+
+/// Error type for creating a constraint source from a locked git URL.
+#[derive(Debug, thiserror::Error)]
+pub enum LockedGitSourceError {
+    #[error("failed to parse locked git URL: {0}")]
+    Parse(String),
+    #[error("failed to parse git OID: {0}")]
+    GitOid(#[from] uv_git_types::OidParseError),
+    #[error("failed to parse git URL: {0}")]
+    GitUrlParse(#[from] uv_git_types::GitUrlParseError),
+}
+
+/// Creates a [`RequirementSource::Git`] from a previously locked git URL.
+///
+/// This creates the GitUrl with DefaultBranch reference (via try_from) and then
+/// adds the precise commit. The cache must be pre-populated with the
+/// (url, reference) -> commit mapping before using this, otherwise uv's redirect
+/// mechanism will panic in debug mode.
+pub(crate) fn locked_git_url_to_requirement_source(
+    location: &Url,
+) -> Result<RequirementSource, LockedGitSourceError> {
+    let git_locked_url = LockedGitUrl::from(location.clone());
+    let pinned_git_spec = git_locked_url
+        .to_pinned_git_spec()
+        .map_err(|e| LockedGitSourceError::Parse(e.to_string()))?;
+
+    let verbatim_url = VerbatimUrl::from(location.clone());
+
+    let display_safe = DisplaySafeUrl::from(pinned_git_spec.git.clone());
+
+    let git_oid = uv_git_types::GitOid::from_str(&pinned_git_spec.source.commit.to_string())?;
+
+    // Use try_from + with_precise. The cache should already have the
+    // (url, DefaultBranch) -> commit mapping from pre-population.
+    let git_url = uv_git_types::GitUrl::try_from(display_safe)?.with_precise(git_oid);
+
+    Ok(RequirementSource::Git {
+        git: git_url,
+        subdirectory: pinned_git_spec
+            .source
+            .subdirectory
+            .map(|s| PathBuf::from(s).into_boxed_path()),
+        url: verbatim_url,
+    })
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -343,7 +390,7 @@ pub async fn resolve_pypi(
         tracing::info!("there are no python packages installed by conda");
     }
 
-    let requirements = dependencies
+    let mut requirements = dependencies
         .into_iter()
         .flat_map(|(name, req)| {
             req.into_iter()
@@ -579,6 +626,34 @@ pub async fn resolve_pypi(
         // Other(miette::ErrReport),
     }
 
+    // Pre-populate the GitResolver cache with locked git commits.
+    // This is necessary because when we enrich requirements with locked precise commits,
+    // uv's redirect mechanism looks up the commit in the GitResolver cache.
+    // Without pre-population, the lookup fails and causes a panic in debug mode.
+    for (package_data, _) in locked_pypi_packages.iter() {
+        if let Some(location) = package_data.location.as_url() {
+            if LockedGitUrl::is_locked_git_url(location) {
+                if let Ok(pinned_git_spec) =
+                    LockedGitUrl::from(location.clone()).to_pinned_git_spec()
+                {
+                    // Create the repository reference that matches what the manifest will use
+                    let display_safe =
+                        uv_redacted::DisplaySafeUrl::from(pinned_git_spec.git.clone());
+                    if let Ok(git_url) = uv_git_types::GitUrl::try_from(display_safe) {
+                        // Parse the commit SHA
+                        if let Ok(git_oid) = uv_git_types::GitOid::from_str(
+                            &pinned_git_spec.source.commit.to_string(),
+                        ) {
+                            // Insert the (url, reference) -> commit mapping into the cache
+                            let repo_ref = uv_git::RepositoryReference::from(&git_url);
+                            context.shared_state.git().insert(repo_ref, git_oid);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Create preferences from the locked pypi packages
     // This will ensure minimal lock file updates
     let preferences = locked_pypi_packages
@@ -606,11 +681,28 @@ pub async fn resolve_pypi(
             // This will help the resolver to pick the commit that we already have locked
             // instead of updating to a newer commit that also matches the requirement.
             if let Some(location) = package_data.location.as_url() {
-                // For git URLs, we don't use locked constraints to enrich requirements.
-                // This is because uv's resolver cache is keyed by (url, reference), and
-                // setting a precise commit from the lock file without going through uv's
-                // normal resolution flow causes cache lookup failures and panics.
+                // Check if it's a git URL that we can enrich with locked commit
                 if LockedGitUrl::is_locked_git_url(location) {
+                    // Find this requirement in the requirements list
+                    let req_from_dep = requirements.iter_mut().find(|r| r.name == requirement.name);
+                    if let Some(req) = req_from_dep {
+                        // Only enrich git requirements that don't already have a precise commit
+                        if let RequirementSource::Git { git, .. } = &req.source {
+                            if git.precise().is_none() {
+                                // Create the constraint source with precise commit
+                                // The GitResolver cache was pre-populated above, so this won't panic
+                                if let Ok(constraint_source) =
+                                    locked_git_url_to_requirement_source(location)
+                                {
+                                    tracing::debug!(
+                                        "updating requirement source to precise git commit for requirement: {:?}",
+                                        &req
+                                    );
+                                    req.source = constraint_source;
+                                }
+                            }
+                        }
+                    }
                     return Ok(None);
                 }
                 Ok(None)
