@@ -390,6 +390,20 @@ pub async fn resolve_pypi(
         tracing::info!("there are no python packages installed by conda");
     }
 
+    // Build a lookup map of original git references before consuming dependencies.
+    // This is used later to preserve branch/tag info in the lock file that uv normalizes away.
+    let original_git_references = dependencies
+        .iter()
+        .filter_map(|(name, specs)| {
+            specs.iter().find_map(|spec| {
+                spec.source
+                    .as_git()
+                    .and_then(|git_spec| git_spec.rev.clone())
+                    .map(|rev| (name.clone(), rev))
+            })
+        })
+        .collect();
+
     let mut requirements = dependencies
         .into_iter()
         .flat_map(|(name, req)| {
@@ -870,6 +884,7 @@ pub async fn resolve_pypi(
         &context.capabilities,
         context.concurrency.downloads,
         project_root,
+        &original_git_references,
     )
     .await?;
 
@@ -1000,6 +1015,7 @@ async fn lock_pypi_packages(
     index_capabilities: &IndexCapabilities,
     concurrent_downloads: usize,
     abs_project_root: &Path,
+    original_git_references: &HashMap<uv_normalize::PackageName, pixi_spec::GitReference>,
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     let database =
@@ -1119,8 +1135,15 @@ async fn lock_pypi_packages(
                             (direct_url.into(), hash, false)
                         }
                         SourceDist::Git(git) => {
+                            // Look up the original git reference from the manifest dependencies
+                            // to preserve branch/tag info that uv normalizes away
+                            let package_name = uv_normalize::PackageName::from(git.name.clone());
+                            let original_reference =
+                                original_git_references.get(&package_name).cloned();
+
                             // convert resolved source dist into a pinned git spec
-                            let pinned_git_spec = into_pinned_git_spec(git.clone());
+                            let pinned_git_spec =
+                                into_pinned_git_spec(git.clone(), original_reference);
                             (
                                 pinned_git_spec.into_locked_git_url().to_url().into(),
                                 hash,

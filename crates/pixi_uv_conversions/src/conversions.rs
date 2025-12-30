@@ -292,8 +292,20 @@ pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiRef
 }
 
 /// Convert a solved [`GitSourceDist`] into [`PinnedGitSpec`]
-pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
-    let reference = into_pixi_reference(dist.git.reference().clone());
+///
+/// The `original_reference` parameter allows preserving the original git reference
+/// from the manifest (e.g., `Branch("main")`). When uv resolves a git dependency,
+/// it may normalize branch references to `DefaultBranch`, losing the original
+/// branch information. If provided, this original reference will be used instead
+/// of the one from uv's resolution.
+pub fn into_pinned_git_spec(
+    dist: GitSourceDist,
+    original_reference: Option<PixiReference>,
+) -> PinnedGitSpec {
+    // Use the original reference from the manifest if provided,
+    // otherwise fall back to what uv returned
+    let reference =
+        original_reference.unwrap_or_else(|| into_pixi_reference(dist.git.reference().clone()));
 
     // Necessary to convert between our gitsha and uv gitsha.
     let git_sha = PixiGitSha::from_str(
