@@ -25,6 +25,7 @@ use pixi_manifest::{
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_reporters::{UvReporter, UvReporterOptions};
+use pixi_uv_conversions::into_uv_git_reference;
 use pixi_uv_conversions::{
     ConversionError, as_uv_req, configure_insecure_hosts_for_tls_bypass,
     convert_uv_requirements_to_pep508, into_pinned_git_spec, pypi_options_to_build_options,
@@ -51,7 +52,6 @@ use uv_distribution_types::{
     IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
     SourceDist, ToUrlError,
 };
-use uv_git_types::GitUrl;
 use uv_pep508::VerbatimUrl;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
 use uv_redacted::DisplaySafeUrl;
@@ -146,20 +146,15 @@ pub enum LockedGitSourceError {
 pub(crate) fn locked_git_url_to_requirement_source(
     location: &Url,
 ) -> Result<RequirementSource, LockedGitSourceError> {
-    use pixi_uv_conversions::into_uv_git_reference;
-
     let git_locked_url = LockedGitUrl::from(location.clone());
     let pinned_git_spec = git_locked_url
         .to_pinned_git_spec()
         .map_err(|e| LockedGitSourceError::Parse(e.to_string()))?;
 
-    // Create VerbatimUrl from the original location
     let verbatim_url = VerbatimUrl::from(location.clone());
 
-    // Get the display safe URL from the PinnedGitSpec (without git+ prefix)
     let display_safe = DisplaySafeUrl::from(pinned_git_spec.git.clone());
 
-    // Parse the commit OID
     let git_oid = uv_git_types::GitOid::from_str(&pinned_git_spec.source.commit.to_string())?;
 
     // Convert the pixi git reference to uv git reference
@@ -167,7 +162,7 @@ pub(crate) fn locked_git_url_to_requirement_source(
     let uv_reference = into_uv_git_reference(pinned_git_spec.source.reference.clone().into());
 
     // Create the GitUrl with the correct reference and precise commit
-    let git_url = GitUrl::from_commit(display_safe, uv_reference, git_oid)?;
+    let git_url = uv_git_types::GitUrl::from_commit(display_safe, uv_reference, git_oid)?;
 
     Ok(RequirementSource::Git {
         git: git_url,
