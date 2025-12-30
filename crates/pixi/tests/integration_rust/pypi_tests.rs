@@ -942,7 +942,8 @@ async fn test_pinned_help_message() {
     // Should contain pinned help message for pandas==1.0.0
     assert_eq!(
         format!("{}", err.help().unwrap()),
-        "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\npandas==1.0.0"
+        "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\npandas==1.0.0
+See https://pixi.sh/latest/concepts/conda_pypi/#pinned-package-conflicts for more information."
     );
 }
 
