@@ -29,7 +29,7 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 url.workspace = true
-xz2.workspace = true
+lzma-rust2.workspace = true
 zip.workspace = true
 zstd.workspace = true
 
