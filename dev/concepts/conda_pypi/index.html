@@ -1205,6 +1205,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Solvers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pinned-package-conflicts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pinned package conflicts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -3290,6 +3307,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Solvers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pinned-package-conflicts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pinned package conflicts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -3430,6 +3464,55 @@ Which results in the following output:
 In this example, Pixi will first resolve the conda dependencies and install the <code>python</code> conda package.
 Then, since <code>numpy</code> is not specified as a conda dependency, Pixi will resolve the PyPI dependencies and install the <code>numpy</code> PyPI package.</p>
 <p>To override or change the mapping of conda packages to PyPI packages, you can use the <a href="../../reference/pixi_manifest/#conda-pypi-map-optional"><code>conda-pypi-map</code></a> field in the <code>pixi.toml</code> file.</p>
+<h3 id="pinned-package-conflicts">Pinned package conflicts<a class="headerlink" href="#pinned-package-conflicts" title="Permanent link">#</a></h3>
+<p>When trying to install conda and PyPI dependencies,
+such as with the following <code>pixi.toml</code> manifest:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[dependencies]</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">typing_extensions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">[pypi-dependencies]</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">typing_extensions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==4.14&quot;</span>
+</span></code></pre></div>
+<p>you might encounter the following error message:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Error:   × failed to solve the pypi requirements of environment &#39;default&#39; for platform &#39;osx-arm64&#39;
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  ├─▶ failed to resolve pypi dependencies
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  ╰─▶ Because you require typing-extensions==4.14 and typing-extensions==4.15.0, we can conclude that your requirements are unsatisfiable.
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>  help: The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>        typing-extensions==4.15.0
+</span></code></pre></div>
+<p>This is due to the (current) two-stage solve.
+First, the conda dependencies are resolved.
+As any version (<code>*</code>) of <code>typing_extensions</code> is valid,
+it resolves to the latest available (<code>4.15.0</code> in this case).
+Then, the PyPI dependencies are resolved (<code>typing_extensions == 4.14</code>),
+with the constraints of the already resolved conda dependencies (<code>typing_extensions == 4.15.0</code>).
+These two dependencies are incompatible and the solve fails.</p>
+<p>While this might be a trivial case,
+it is less obvious when the packages are not explicit dependencies:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[dependencies]</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">some-conda-package</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w">  </span><span class="c1">#  depends on any typing-extensions</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">[pypi-dependencies]</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">some-pypi-package</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==0.1.0&quot;</span><span class="w">  </span><span class="c1"># depends on typing-extensions&lt;4.14</span>
+</span></code></pre></div>
+<p>which produces the following solve error:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Error:   × failed to solve the pypi requirements of environment &#39;default&#39; for platform &#39;osx-arm64&#39;
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>  ├─▶ failed to resolve pypi dependencies
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>  ╰─▶ Because some-pypi-dependency==0.1.0 depends on typing-extensions&lt;4.15 and typing-extensions==4.15.0, we can conclude that some-pypi-dependency==0.1.0
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>      cannot be used.
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>      And because only some-pypi-dependency==0.1.0 is available and you require some-pypi-dependency, we can conclude that your requirements are unsatisfiable.
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>  help: The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>        typing-extensions==4.15.0
+</span></code></pre></div>
+<p>A solution in this case would be to add to the conda dependencies <code>typing-extensions &lt; 4.15</code>,
+that is, the same constraint imposed by the PyPI package(s):</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">[dependencies]</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">some-conda-package</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w">  </span><span class="c1">#  depends on any typing-extensions</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">typing_extensions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&lt;4.15&quot;</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="k">[pypi-dependencies]</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="n">some-pypi-package</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==0.1.0&quot;</span><span class="w">  </span><span class="c1"># depends on typing-extensions&lt;4.14</span>
+</span></code></pre></div>
 
 
 
