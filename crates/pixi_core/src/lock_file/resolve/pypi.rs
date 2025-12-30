@@ -132,17 +132,9 @@ pub enum LockedGitSourceError {
     GitUrlParse(#[from] uv_git_types::GitUrlParseError),
 }
 
-/// Creates a [`RequirementSource::Git`] from a locked git URL.
-///
-/// This function is used to create a constraint source from a previously locked
-/// git dependency, preserving the git reference (branch, tag, or rev) so that
+/// Creates a [`RequirementSource::Git`] from a previously locked git URL
+/// preserving the git reference (branch, tag, or rev) so that
 /// the resolver can use the same reference when re-resolving.
-///
-/// # Arguments
-/// * `location` - The locked git URL from the lock file
-///
-/// # Returns
-/// A `RequirementSource::Git` that can be used as a constraint for the resolver.
 pub(crate) fn locked_git_url_to_requirement_source(
     location: &Url,
 ) -> Result<RequirementSource, LockedGitSourceError> {
