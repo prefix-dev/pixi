@@ -970,10 +970,30 @@ pub(crate) fn pypi_satifisfies_requirement(
                             }
                             .into());
                         }
-                        // If the spec does not specify a revision than any will do
-                        // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
+                        // If the spec uses DefaultBranch, we need to check what the lock has:
+                        // - If lock has Branch("main") or Tag("v1.0") → NOT satisfiable
+                        //   (user removed explicit branch/tag, should re-resolve)
+                        // - If lock has DefaultBranch or Rev (specific commit) → satisfiable
+                        //   (specific commit is still valid even without explicit ref)
                         if *reference == GitReference::DefaultBranch {
-                            return Ok(());
+                            match &pinned_git_spec.source.reference {
+                                // These are explicit named references - not satisfiable
+                                // when manifest has DefaultBranch (user removed the explicit ref)
+                                pixi_spec::GitReference::Branch(_)
+                                | pixi_spec::GitReference::Tag(_) => {
+                                    return Err(PlatformUnsat::LockedPyPIGitRefMismatch {
+                                        name: spec.name.clone().to_string(),
+                                        expected_ref: reference.to_string(),
+                                        found_ref: pinned_git_spec.source.reference.to_string(),
+                                    }
+                                    .into());
+                                }
+                                // These are satisfiable - either DefaultBranch or specific commits
+                                pixi_spec::GitReference::DefaultBranch
+                                | pixi_spec::GitReference::Rev(_) => {
+                                    return Ok(());
+                                }
+                            }
                         }
 
                         if pinned_git_spec.source.subdirectory

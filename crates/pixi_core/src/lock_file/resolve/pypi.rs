@@ -18,14 +18,12 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
-use pixi_git::git::GitReference;
 use pixi_manifest::{
     EnvironmentName, SolveStrategy, SystemRequirements, pypi::pypi_options::PypiOptions,
 };
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_reporters::{UvReporter, UvReporterOptions};
-use pixi_uv_conversions::into_uv_git_reference;
 use pixi_uv_conversions::{
     ConversionError, as_uv_req, configure_insecure_hosts_for_tls_bypass,
     convert_uv_requirements_to_pep508, into_pinned_git_spec, pypi_options_to_build_options,
@@ -52,9 +50,7 @@ use uv_distribution_types::{
     IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
     SourceDist, ToUrlError,
 };
-use uv_pep508::VerbatimUrl;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
-use uv_redacted::DisplaySafeUrl;
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
@@ -119,51 +115,6 @@ fn parse_hashes_from_hash_vec(hashes: &HashDigests) -> Result<Option<PackageHash
         ))),
         (None, None) => Ok(None),
     }
-}
-
-/// Error type for creating a constraint source from a locked git URL.
-#[derive(Debug, thiserror::Error)]
-pub enum LockedGitSourceError {
-    #[error("failed to parse locked git URL: {0}")]
-    Parse(String),
-    #[error("failed to parse git OID: {0}")]
-    GitOid(#[from] uv_git_types::OidParseError),
-    #[error("failed to parse git URL: {0}")]
-    GitUrlParse(#[from] uv_git_types::GitUrlParseError),
-}
-
-/// Creates a [`RequirementSource::Git`] from a previously locked git URL
-/// preserving the git reference (branch, tag, or rev) so that
-/// the resolver can use the same reference when re-resolving.
-pub(crate) fn locked_git_url_to_requirement_source(
-    location: &Url,
-) -> Result<RequirementSource, LockedGitSourceError> {
-    let git_locked_url = LockedGitUrl::from(location.clone());
-    let pinned_git_spec = git_locked_url
-        .to_pinned_git_spec()
-        .map_err(|e| LockedGitSourceError::Parse(e.to_string()))?;
-
-    let verbatim_url = VerbatimUrl::from(location.clone());
-
-    let display_safe = DisplaySafeUrl::from(pinned_git_spec.git.clone());
-
-    let git_oid = uv_git_types::GitOid::from_str(&pinned_git_spec.source.commit.to_string())?;
-
-    // Convert the pixi git reference to uv git reference
-    // This preserves the branch/tag/rev from the locked spec
-    let uv_reference = into_uv_git_reference(pinned_git_spec.source.reference.clone().into());
-
-    // Create the GitUrl with the correct reference and precise commit
-    let git_url = uv_git_types::GitUrl::from_commit(display_safe, uv_reference, git_oid)?;
-
-    Ok(RequirementSource::Git {
-        git: git_url,
-        subdirectory: pinned_git_spec
-            .source
-            .subdirectory
-            .map(|s| PathBuf::from(s).into_boxed_path()),
-        url: verbatim_url,
-    })
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -392,7 +343,7 @@ pub async fn resolve_pypi(
         tracing::info!("there are no python packages installed by conda");
     }
 
-    let mut requirements = dependencies
+    let requirements = dependencies
         .into_iter()
         .flat_map(|(name, req)| {
             req.into_iter()
@@ -624,9 +575,8 @@ pub async fn resolve_pypi(
 
         #[error(transparent)]
         GitUrlParse(#[from] uv_git_types::GitUrlParseError),
-
-        #[error("{0}")]
-        Other(miette::ErrReport),
+        // #[error("{0}")]
+        // Other(miette::ErrReport),
     }
 
     // Create preferences from the locked pypi packages
@@ -656,31 +606,12 @@ pub async fn resolve_pypi(
             // This will help the resolver to pick the commit that we already have locked
             // instead of updating to a newer commit that also matches the requirement.
             if let Some(location) = package_data.location.as_url() {
-                // now check if it's a git url
+                // For git URLs, we don't use locked constraints to enrich requirements.
+                // This is because uv's resolver cache is keyed by (url, reference), and
+                // setting a precise commit from the lock file without going through uv's
+                // normal resolution flow causes cache lookup failures and panics.
                 if LockedGitUrl::is_locked_git_url(location) {
-                    // Create a constraint source from the locked git URL,
-                    // preserving the git reference (branch/tag/rev)
-                    let constraint_source = locked_git_url_to_requirement_source(location)
-                        .map_err(|e| PixiPreferencesError::Other(miette::miette!("{e}")))?;
-
-                    // find this requirements in dependencies and skip adding it as preference
-                    let req_from_dep = requirements.iter_mut().find(|r| r.name == requirement.name);
-                    if let Some(req) = req_from_dep {
-                        // we need to update the requirement source in the requirements list
-                        // to use the precise git commit
-                        // only if the requirements do not already have a source set with something specific
-                        if let RequirementSource::Git { git, .. } = &req.source {
-                                // only update if the git url does not already have a precise commit
-                                if git.precise().is_none() && !GitReference::looks_like_commit_hash(git.reference().as_rev()) {
-                                    tracing::debug!(
-                                        "updating requirement source to precise git commit for requirement: {:?}",
-                                        &req
-                                    );
-                                    req.source = constraint_source.clone();
-                                }
-
-                            }
-                    }
+                    return Ok(None);
                 }
                 Ok(None)
             } else {
@@ -1322,105 +1253,5 @@ mod tests {
             process_uv_path_url(&url, &PathBuf::from("C:\\a\\b\\c"), &PathBuf::from("C:\\a"))
                 .unwrap();
         assert_eq!(path.as_str(), "C:/a/b/c");
-    }
-
-    /// Test for issue #5185: git reference must be preserved when enriching
-    /// requirements from locked packages.
-    ///
-    /// When a locked git package has a specific reference (e.g., `branch=master`),
-    /// the constraint_source created from it should preserve that reference.
-    #[test]
-    fn test_git_reference_preserved_in_constraint_source() {
-        use super::locked_git_url_to_requirement_source;
-
-        // Create a locked git URL with a specific branch reference
-        // This simulates what's stored in the lock file for a git dependency with `rev = "master"`
-        let locked_url = url::Url::parse(
-            "git+https://github.com/example/repo.git?branch=master#abc123def456abc123def456abc123def456abc1",
-        )
-        .unwrap();
-
-        // Use the extracted function to create the constraint source
-        let constraint_source = locked_git_url_to_requirement_source(&locked_url).unwrap();
-
-        // Verify that the constraint source has the correct git reference
-        match constraint_source {
-            uv_distribution_types::RequirementSource::Git { git, .. } => {
-                assert_eq!(
-                    git.reference(),
-                    &uv_git_types::GitReference::Branch("master".into()),
-                    "The git reference should be preserved from the locked spec. \
-                     This is the fix for issue #5185."
-                );
-            }
-            _ => panic!("Expected RequirementSource::Git"),
-        }
-    }
-
-    /// Test that various git reference types are preserved correctly.
-    #[test]
-    fn test_git_reference_types_preserved() {
-        use super::locked_git_url_to_requirement_source;
-
-        // Test branch reference
-        let url_with_branch = url::Url::parse(
-            "git+https://github.com/example/repo.git?branch=develop#abc123def456abc123def456abc123def456abc1",
-        ).unwrap();
-        let source = locked_git_url_to_requirement_source(&url_with_branch).unwrap();
-        if let uv_distribution_types::RequirementSource::Git { git, .. } = source {
-            assert_eq!(
-                git.reference(),
-                &uv_git_types::GitReference::Branch("develop".into())
-            );
-        }
-
-        // Test tag reference
-        let url_with_tag = url::Url::parse(
-            "git+https://github.com/example/repo.git?tag=v1.0.0#abc123def456abc123def456abc123def456abc1",
-        ).unwrap();
-        let source = locked_git_url_to_requirement_source(&url_with_tag).unwrap();
-        if let uv_distribution_types::RequirementSource::Git { git, .. } = source {
-            assert_eq!(
-                git.reference(),
-                &uv_git_types::GitReference::Tag("v1.0.0".into())
-            );
-        }
-
-        // Test rev reference (short string that doesn't look like a commit hash)
-        // "abc123" is only 6 chars, so it becomes BranchOrTag (needs 7+ hex chars for commit hash)
-        let url_with_rev = url::Url::parse(
-            "git+https://github.com/example/repo.git?rev=abc123#abc123def456abc123def456abc123def456abc1",
-        ).unwrap();
-        let source = locked_git_url_to_requirement_source(&url_with_rev).unwrap();
-        if let uv_distribution_types::RequirementSource::Git { git, .. } = source {
-            // Rev with <7 chars becomes BranchOrTag in uv
-            assert!(matches!(
-                git.reference(),
-                uv_git_types::GitReference::BranchOrTag(r) if r == "abc123"
-            ));
-        }
-
-        // Test rev reference with commit-like hash (7+ hex chars)
-        let url_with_commit_rev = url::Url::parse(
-            "git+https://github.com/example/repo.git?rev=abc1234#abc123def456abc123def456abc123def456abc1",
-        ).unwrap();
-        let source = locked_git_url_to_requirement_source(&url_with_commit_rev).unwrap();
-        if let uv_distribution_types::RequirementSource::Git { git, .. } = source {
-            // Rev with 7+ hex chars becomes BranchOrTagOrCommit in uv
-            assert!(matches!(
-                git.reference(),
-                uv_git_types::GitReference::BranchOrTagOrCommit(r) if r == "abc1234"
-            ));
-        }
-
-        // Test default branch (no explicit reference)
-        let url_default = url::Url::parse(
-            "git+https://github.com/example/repo.git#abc123def456abc123def456abc123def456abc1",
-        )
-        .unwrap();
-        let source = locked_git_url_to_requirement_source(&url_default).unwrap();
-        if let uv_distribution_types::RequirementSource::Git { git, .. } = source {
-            assert_eq!(git.reference(), &uv_git_types::GitReference::DefaultBranch);
-        }
     }
 }
