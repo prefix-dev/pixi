@@ -8,8 +8,6 @@ pixi global install ruff
 pixi global install starship rattler-build
 # Specify the channel(s)
 pixi global install --channel conda-forge --channel bioconda trackplot
-# Or in a more concise form
-pixi global install -c conda-forge -c bioconda trackplot
 
 # Support full conda matchspec
 pixi global install python=3.9.*
@@ -32,6 +30,20 @@ pixi global install --expose "py39=python3.9" "python=3.9.*"
 --8<-- [end:example]
 
 --8<-- [start:description]
+
+!!! tip "Need to specify build strings?"
+    For advanced package specifications including build strings, see the [Package Specifications](../../../../concepts/package_specifications.md) guide.
+
+    Examples (both syntaxes work):
+    ```shell
+    # Equals syntax (compact)
+    pixi global install "pytorch=*=*cuda*" --channel pytorch
+    pixi global install "jax=*=*cuda*"
+
+    # Bracket syntax (explicit)
+    pixi global install "pytorch [build='*cuda*']" --channel pytorch
+    pixi global install "jax [build='*cuda*']"
+    ```
 
 !!! tip
 Running `osx-64` on Apple Silicon will install the Intel binary but run it using [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment)
