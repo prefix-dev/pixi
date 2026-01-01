@@ -26,9 +26,10 @@ use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_uv_conversions::{
     ConversionError, as_uv_req, configure_insecure_hosts_for_tls_bypass,
-    convert_uv_requirements_to_pep508, into_pinned_git_spec, pypi_options_to_build_options,
-    pypi_options_to_index_locations, to_exclude_newer, to_index_strategy, to_normalize,
-    to_prerelease_mode, to_requirements, to_uv_normalize, to_uv_version, to_version_specifiers,
+    convert_uv_requirements_to_pep508, into_pinned_git_spec, into_uv_git_reference,
+    into_uv_git_sha, pypi_options_to_build_options, pypi_options_to_index_locations,
+    to_exclude_newer, to_index_strategy, to_normalize, to_prerelease_mode, to_requirements,
+    to_uv_normalize, to_uv_version, to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -40,6 +41,7 @@ use rattler_lock::{
 };
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
+use uv_cache_key::RepositoryUrl;
 use uv_client::{
     BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder,
 };
@@ -50,9 +52,8 @@ use uv_distribution_types::{
     IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
     SourceDist, ToUrlError,
 };
-use uv_pep508::VerbatimUrl;
+use uv_git::RepositoryReference;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
-use uv_redacted::DisplaySafeUrl;
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
@@ -117,51 +118,6 @@ fn parse_hashes_from_hash_vec(hashes: &HashDigests) -> Result<Option<PackageHash
         ))),
         (None, None) => Ok(None),
     }
-}
-
-/// Error type for creating a constraint source from a locked git URL.
-#[derive(Debug, thiserror::Error)]
-pub enum LockedGitSourceError {
-    #[error("failed to parse locked git URL: {0}")]
-    Parse(String),
-    #[error("failed to parse git OID: {0}")]
-    GitOid(#[from] uv_git_types::OidParseError),
-    #[error("failed to parse git URL: {0}")]
-    GitUrlParse(#[from] uv_git_types::GitUrlParseError),
-}
-
-/// Creates a [`RequirementSource::Git`] from a previously locked git URL.
-///
-/// This creates the GitUrl with DefaultBranch reference (via try_from) and then
-/// adds the precise commit. The cache must be pre-populated with the
-/// (url, reference) -> commit mapping before using this, otherwise uv's redirect
-/// mechanism will panic in debug mode.
-pub(crate) fn locked_git_url_to_requirement_source(
-    location: &Url,
-) -> Result<RequirementSource, LockedGitSourceError> {
-    let git_locked_url = LockedGitUrl::from(location.clone());
-    let pinned_git_spec = git_locked_url
-        .to_pinned_git_spec()
-        .map_err(|e| LockedGitSourceError::Parse(e.to_string()))?;
-
-    let verbatim_url = VerbatimUrl::from(location.clone());
-
-    let display_safe = DisplaySafeUrl::from(pinned_git_spec.git.clone());
-
-    let git_oid = uv_git_types::GitOid::from_str(&pinned_git_spec.source.commit.to_string())?;
-
-    // Use try_from + with_precise. The cache should already have the
-    // (url, DefaultBranch) -> commit mapping from pre-population.
-    let git_url = uv_git_types::GitUrl::try_from(display_safe)?.with_precise(git_oid);
-
-    Ok(RequirementSource::Git {
-        git: git_url,
-        subdirectory: pinned_git_spec
-            .source
-            .subdirectory
-            .map(|s| PathBuf::from(s).into_boxed_path()),
-        url: verbatim_url,
-    })
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -404,7 +360,37 @@ pub async fn resolve_pypi(
         })
         .collect();
 
-    let mut requirements = dependencies
+    // Pre-populate the git resolver with locked git references.
+    // This ensures that when uv resolves git dependencies, it will find the cached commit
+    // and not panic in `url_to_precise` function.
+    for (package_data, _) in locked_pypi_packages {
+        if let Some(location) = package_data.location.as_url()
+            && LockedGitUrl::is_locked_git_url(location)
+        {
+            let locked_url = LockedGitUrl::new(location.clone());
+            if let Ok(pinned_git_spec) = locked_url.to_pinned_git_spec() {
+                // Convert pixi types to uv types and insert into the git resolver
+                // pixi_spec::GitReference -> pixi_git::git::GitReference -> uv_git_types::GitReference
+                let pixi_git_ref = pinned_git_spec.source.reference.clone().into();
+
+                let uv_reference = into_uv_git_reference(pixi_git_ref);
+                let uv_sha = into_uv_git_sha(pinned_git_spec.source.commit);
+
+                let display_safe_url = pinned_git_spec.git.clone().into();
+
+                let repository_url = RepositoryUrl::new(&display_safe_url);
+                let reference = RepositoryReference {
+                    url: repository_url,
+                    reference: uv_reference,
+                };
+
+                tracing::debug!("Pre-populating git resolver: {:?} -> {}", reference, uv_sha);
+                context.shared_state.git().insert(reference, uv_sha);
+            }
+        }
+    }
+
+    let requirements = dependencies
         .into_iter()
         .flat_map(|(name, req)| {
             req.into_iter()
@@ -640,34 +626,6 @@ pub async fn resolve_pypi(
         // Other(miette::ErrReport),
     }
 
-    // Pre-populate the GitResolver cache with locked git commits.
-    // This is necessary because when we enrich requirements with locked precise commits,
-    // uv's redirect mechanism looks up the commit in the GitResolver cache.
-    // Without pre-population, the lookup fails and causes a panic in debug mode.
-    for (package_data, _) in locked_pypi_packages.iter() {
-        if let Some(location) = package_data.location.as_url() {
-            if LockedGitUrl::is_locked_git_url(location) {
-                if let Ok(pinned_git_spec) =
-                    LockedGitUrl::from(location.clone()).to_pinned_git_spec()
-                {
-                    // Create the repository reference that matches what the manifest will use
-                    let display_safe =
-                        uv_redacted::DisplaySafeUrl::from(pinned_git_spec.git.clone());
-                    if let Ok(git_url) = uv_git_types::GitUrl::try_from(display_safe) {
-                        // Parse the commit SHA
-                        if let Ok(git_oid) = uv_git_types::GitOid::from_str(
-                            &pinned_git_spec.source.commit.to_string(),
-                        ) {
-                            // Insert the (url, reference) -> commit mapping into the cache
-                            let repo_ref = uv_git::RepositoryReference::from(&git_url);
-                            context.shared_state.git().insert(repo_ref, git_oid);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     // Create preferences from the locked pypi packages
     // This will ensure minimal lock file updates
     let preferences = locked_pypi_packages
@@ -688,47 +646,26 @@ pub async fn resolve_pypi(
                 origin: None,
             };
 
-            // When iterating over locked packages,
-            // instead of adding git requirements as preferences
-            // we enrich previous defined requirements in the `requirements` list
-            // as they have been pinned to a precise commit
-            // This will help the resolver to pick the commit that we already have locked
-            // instead of updating to a newer commit that also matches the requirement.
-            if let Some(location) = package_data.location.as_url() {
-                // Check if it's a git URL that we can enrich with locked commit
-                if LockedGitUrl::is_locked_git_url(location) {
-                    // Find this requirement in the requirements list
-                    let req_from_dep = requirements.iter_mut().find(|r| r.name == requirement.name);
-                    if let Some(req) = req_from_dep {
-                        // Only enrich git requirements that don't already have a precise commit
-                        if let RequirementSource::Git { git, .. } = &req.source {
-                            if git.precise().is_none() {
-                                // Create the constraint source with precise commit
-                                // The GitResolver cache was pre-populated above, so this won't panic
-                                if let Ok(constraint_source) =
-                                    locked_git_url_to_requirement_source(location)
-                                {
-                                    tracing::debug!(
-                                        "updating requirement source to precise git commit for requirement: {:?}",
-                                        &req
-                                    );
-                                    req.source = constraint_source;
-                                }
-                            }
-                        }
-                    }
-                    return Ok(None);
-                }
-                Ok(None)
-            } else {
-                let named = uv_requirements_txt::RequirementsTxtRequirement::Named(requirement);
-                let entry = uv_requirements_txt::RequirementEntry {
-                    requirement: named,
-                    hashes: Default::default(),
-                };
-
-                Ok(Preference::from_entry(entry)?)
+            // For git packages, we don't add them as preferences.
+            // because they are resolved based on the reference (branch/tag/rev) in the manifest.
+            // This matches how uv handles git dependencies - it doesn't try to pin them via preferences.
+            // The git resolver cache (pre-populated above) ensures the locked commit is preferred.
+            if let Some(location) = package_data.location.as_url()
+                && LockedGitUrl::is_locked_git_url(location)
+            {
+                // Skip git packages - they'll be resolved based on manifest reference
+                // with the cached commit from the git resolver
+                return Ok(None);
             }
+
+            // Create preference for registry and URL packages
+            let named = uv_requirements_txt::RequirementsTxtRequirement::Named(requirement);
+            let entry = uv_requirements_txt::RequirementEntry {
+                requirement: named,
+                hashes: Default::default(),
+            };
+
+            Ok(Preference::from_entry(entry)?)
         })
         .filter_map(|pref| pref.transpose())
         .collect::<Result<Vec<_>, PixiPreferencesError>>()
@@ -1007,6 +944,7 @@ fn get_url_or_path(
 }
 
 /// Create a vector of locked packages from a resolution
+#[allow(clippy::too_many_arguments)]
 async fn lock_pypi_packages(
     conda_python_packages: CondaPythonPackages,
     pixi_build_dispatch: &LazyBuildDispatch<'_>,
@@ -1137,7 +1075,7 @@ async fn lock_pypi_packages(
                         SourceDist::Git(git) => {
                             // Look up the original git reference from the manifest dependencies
                             // to preserve branch/tag info that uv normalizes away
-                            let package_name = uv_normalize::PackageName::from(git.name.clone());
+                            let package_name = git.name.clone();
                             let original_reference =
                                 original_git_references.get(&package_name).cloned();
 

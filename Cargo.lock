@@ -5395,6 +5395,7 @@ dependencies = [
  "url",
  "uv-build-frontend",
  "uv-cache",
+ "uv-cache-key",
  "uv-client",
  "uv-configuration",
  "uv-dispatch",
