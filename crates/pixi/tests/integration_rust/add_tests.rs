@@ -1218,7 +1218,6 @@ boltons = {{ git = "https://github.com/mahmoud/boltons.git" }}
         !url3.contains("branch="),
         "Should not have branch= after removing from manifest, got: {url3}"
     );
-    // The URL may have rev= or just #commit, but should NOT have branch=
 }
 
 #[tokio::test]
