@@ -37,7 +37,7 @@ use pypi_modifiers::{
 };
 use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
 use rattler_lock::{
-    PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
+    PackageHashes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath,
 };
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
@@ -1073,18 +1073,6 @@ async fn lock_pypi_packages(
                             )
                         }
                         SourceDist::Path(path) => {
-                            // Compute the hash of the package based on the source tree.
-                            let hash = if path.install_path.is_dir() {
-                                Some(
-                                    PypiSourceTreeHashable::from_directory(&path.install_path)
-                                        .into_diagnostic()
-                                        .context("failed to compute hash of pypi source tree")?
-                                        .hash(),
-                                )
-                            } else {
-                                None
-                            };
-
                             // process the path or url that we get back from uv
                             let install_path = process_uv_path_url(
                                 &path.url,
@@ -1097,21 +1085,10 @@ async fn lock_pypi_packages(
                             // instead of from the source path to copy the path that was passed in
                             // from the requirement.
                             let url_or_path = UrlOrPath::Path(install_path);
-                            (url_or_path, hash, false)
+                            // Don't store hash in lock file - staleness is detected via metadata comparison
+                            (url_or_path, None, false)
                         }
                         SourceDist::Directory(dir) => {
-                            // Compute the hash of the package based on the source tree.
-                            let hash = if dir.install_path.is_dir() {
-                                Some(
-                                    PypiSourceTreeHashable::from_directory(&dir.install_path)
-                                        .into_diagnostic()
-                                        .context("failed to compute hash of pypi source tree")?
-                                        .hash(),
-                                )
-                            } else {
-                                None
-                            };
-
                             // process the path or url that we get back from uv
                             let install_path =
                                 process_uv_path_url(&dir.url, &dir.install_path, abs_project_root)
@@ -1123,7 +1100,8 @@ async fn lock_pypi_packages(
                             let url_or_path = UrlOrPath::Path(install_path);
                             // Always set editable to false in lock file.
                             // Editability is looked up from manifest at install time.
-                            (url_or_path, hash, false)
+                            // Don't store hash in lock file - staleness is detected via metadata comparison
+                            (url_or_path, None, false)
                         }
                     };
 
