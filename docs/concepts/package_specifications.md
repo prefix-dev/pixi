@@ -273,6 +273,44 @@ For git repositories, you can specify:
 - **rev**: Specific git revision/commit SHA
 - **subdirectory**: Path within the repository
 
+## PyPI package specifications
+
+Pixi also supports installing packages from PyPI using `pixi add --pypi` and in your `pixi.toml` and `pyproject.toml`.
+
+### Command Line Syntax
+
+When using `pixi add --pypi`, you can specify packages similarly to pip:
+
+```shell
+# Simple package
+pixi add --pypi requests
+
+# Specific version
+pixi add --pypi "requests==2.25.1"
+
+# Version range
+pixi add --pypi "requests>=2.20,<3.0"
+
+# Extras
+pixi add --pypi "requests[security]==2.25.1"
+
+# URL
+pixi add --pypi "requests @ https://files.pythonhosted.org/packages/1e/db/4254e3eabe8020b458f1a747140d32277ec7a271daf1d235b70dc0b4e6e3/requests-2.32.5-py3-none-any.whl#sha256=2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6"
+
+# Git repository
+pixi add --pypi "requests @ git+https://github.com/psf/requests.git@v2.25.1"
+pixi add --pypi requests --git https://github.com/psf/requests.git --tag v2.25.1
+pixi add --pypi requests --git https://github.com/psf/requests.git --branch main
+pixi add --pypi requests --git https://github.com/psf/requests.git --rev 70298332899f25826e35e42f8d83425124f755a
+```
+
+### TOML Mapping Syntax
+In your `pixi.toml` or `pyproject.toml` (under `[tool.pixi.pypi-dependencies]`), you can specify PyPI packages like this:
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/package_specifications.toml:pypi-fields"
+```
+
 ## Further Reading
 
 - [Pixi Manifest Reference](../reference/pixi_manifest.md#dependencies) - Complete dependency specification options

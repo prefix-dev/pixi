@@ -62,3 +62,31 @@ tag = "v1.0.0"
 git = "https://github.com/org/repo"
 rev = "abc123def"
 # --8<-- [end:git-fields]
+
+
+# --8<-- [start:pypi-fields]
+[pypi-dependencies]
+# Version specification
+black = "==22.3.0"
+ruff = ">=0.0.241,<1.0.0"
+# Specific index URL
+pytest = { version = "==7.2.0", index = "https://pypi.org/simple" }
+
+
+# Extras
+fastapi = { version = "==0.78.0", extras = ["all"] }
+
+# URL
+uvicorn = { url = "https://files.pythonhosted.org/packages/1e/db/4254e3eabe8020b458f1a747140d32277ec7a271daf1d235b70dc0b4e6e3/requests-2.32.5-py3-none-any.whl#sha256=2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6" }
+
+# Git repository
+requests0 = { git = "https://github.com/psf/requests.git", rev = "70298332899f25826e35e42f8d83425124f755a" }
+requests1 = { git = "https://github.com/psf/requests.git", branch = "main" }
+requests2 = { git = "https://github.com/psf/requests.git", tag = "v2.28.1" }
+requests3 = { git = "https://github.com/psf/requests.git", subdirectory = "requests" }
+
+# Local path
+local_package = { path = "../local_package" }
+local_package2 = { path = "../local_package2", extras = ["extra_feature"] }
+local_package3 = { path = "../local_package3", editable = true }
+# --8<-- [end:pypi-fields]
