@@ -4,6 +4,7 @@ use pixi_core::WorkspaceLocator;
 use pixi_manifest::EnvironmentName;
 use std::path::PathBuf;
 use std::time::Duration;
+use walkdir::WalkDir;
 
 use crate::cli_config::WorkspaceConfig;
 use clap::Parser;
@@ -165,6 +166,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
     Ok(())
 }
+// Helper function for calculating size of cache dirs.
+fn dir_size(paths: Vec<PathBuf>) -> f64 {
+    let size: u64 = paths
+        .iter()
+        .flat_map(|path| WalkDir::new(path).into_iter().filter_map(|e| e.ok()))
+        .filter_map(|e| e.metadata().ok())
+        .filter(|m| m.is_file())
+        .map(|m| m.len())
+        .sum();
+    let size = size as f64 / 1024.0 / 1024.0;
+    (size * 100.0).round() / 100.0
+}
 
 /// Clean the pixi cache folders.
 async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
@@ -214,7 +227,7 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
         eprintln!("{}", console::style("Nothing to remove.").green());
         return Ok(());
     }
-
+    println!("Freeing {} MB.", dir_size(dirs.clone()));
     for dir in dirs {
         remove_folder_with_progress(dir, true).await?;
     }
