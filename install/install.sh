@@ -221,7 +221,8 @@ __wrap__() {
             ;;
 
         fish)
-            LINE="fish_add_path ${PIXI_BIN_DIR}"
+            # Use 'set -gx PATH' for compatibility with Fish < 3.2.0 (which lacks fish_add_path)
+            LINE="set -gx PATH \"${PIXI_BIN_DIR}\" \$PATH"
             update_shell ~/.config/fish/config.fish "$LINE"
             ;;
 
