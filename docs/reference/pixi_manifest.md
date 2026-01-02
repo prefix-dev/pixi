@@ -304,6 +304,15 @@ Both PyPi and conda packages are considered.
 !! note Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
 If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
 
+### `resolve-symlinks` (optional)
+
+Controls how pixi handles symlinked manifest files. When `true` (the default), pixi resolves symlinks to determine the workspace root from the real file's location. When `false`, pixi uses the symlink's location as the workspace root.
+
+```toml
+[workspace]
+resolve-symlinks = false
+```
+
 ### `build-variants` (optional)
 
 !!! warning "Preview Feature"
