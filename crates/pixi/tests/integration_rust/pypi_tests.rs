@@ -1149,3 +1149,83 @@ async fn test_prerelease_mode_disallow() {
         "With prerelease-mode = 'disallow', the stable version should be selected"
     );
 }
+
+/// Test for issue #5205: Specifying a python sub-version (patch) should work correctly
+/// Before the fix, using python 3.10.6 would create a specifier "==3.10.*" which conflicts
+/// with requires-python = "==3.10.6". The fix uses the full version string.
+#[tokio::test]
+async fn test_python_patch_version_requires_python() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Test with different requires-python formats to ensure robustness
+    let test_cases = vec![("==3.10.6", true), (">=3.11", false), ("==3.7.2", true)];
+
+    // Create local conda channel with Python 3.10.6 (with patch version)
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.10.6")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+    let channel_url = channel.url();
+
+    for (requires_python, should_solve) in test_cases {
+        // Create a pyproject.toml with requires-python
+        let pyproject = format!(
+            r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "test-project"
+version = "0.1.0"
+requires-python = "{requires_python}"
+
+[tool.pixi.workspace]
+channels = ["{channel_url}"]
+platforms = ["{platform}"]
+conda-pypi-map = {{}}
+
+[tool.pixi.dependencies]
+python = "==3.10.6"
+
+[tool.pixi.pypi-dependencies]
+test-project = {{ path = "." }}
+"#,
+            channel_url = channel_url,
+            platform = platform,
+            requires_python = requires_python,
+        );
+
+        let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+        let result = pixi.update_lock_file().await;
+
+        assert_eq!(
+            result.is_ok(),
+            should_solve,
+            "Expected solving to be {} for requires-python = '{}'",
+            if should_solve {
+                "successful"
+            } else {
+                "unsuccessful"
+            },
+            requires_python,
+        );
+
+        // Verify that the lock file was created successfully and test-project was resolved
+        if let Ok(lock_file) = result {
+            let test_project_version =
+                lock_file.get_pypi_package_version("default", platform, "test-project");
+            assert!(
+                test_project_version.is_some(),
+                "test-project should be resolved for requires-python = '{}'",
+                requires_python
+            );
+        }
+    }
+}
