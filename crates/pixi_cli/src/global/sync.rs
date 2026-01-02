@@ -12,7 +12,7 @@ pub struct Args {
 /// Sync global manifest with installed environments
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project = pixi_global::Project::discover_or_create()
+    let mut project = pixi_global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
@@ -39,12 +39,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let mut errors = Vec::new();
-    for env_name in project.environments().keys() {
-        match project.sync_environment(env_name, None).await {
-            Ok(state_change) => {
-                if state_change.has_changed() {
+
+    let env_names: Vec<_> = project.environments().keys().cloned().collect();
+
+    for env_name in env_names {
+        match project.sync_environment(&env_name, None).await {
+            Ok(state_changes) => {
+                if state_changes.has_changed() {
                     has_changed = true;
-                    state_change.report();
+                    state_changes.report();
                 }
             }
             Err(err) => errors.push((env_name, err)),
