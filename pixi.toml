@@ -207,6 +207,7 @@ mkdocs-llmstxt = ">=0.4.0,<0.5"
 mkdocs-material = ">=9.6.21,<10"
 mkdocs-redirects = ">=1.2.1,<2"
 pillow = ">=12,<13"
+nushell = ">=0.109.1,<0.110"
 
 [feature.docs.tasks]
 build-docs = { cmd = "mkdocs build --strict", depends-on = ["download-font"] }
@@ -216,9 +217,7 @@ deploy-latest = "mike deploy --push --update-aliases $RELEASE_VERSION latest"
 docs = { cmd = "mkdocs serve", description = "Serve the docs locally", depends-on = [
   "download-font",
 ] }
-download-font = { cmd = "bash docs/layouts/download-font-to-cache.sh", outputs = [
-  ".cache/plugin/social/fonts/Moranga/Medium.ttf",
-] }
+download-font = "nu docs/layouts/download-font-to-cache.nu"
 mike-serve = "mike serve"
 
 [feature.schema.tasks]
