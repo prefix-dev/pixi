@@ -250,7 +250,7 @@ file-name = "pytorch-2.0.0-cuda.tar.bz2"
     Please keep that in mind when you use it for your workspaces.
 
 For these packages to be recognized they need to be understood by Pixi as source packages.
-Look at the [Pixi Manifest Reference](../reference/pixi_manifest.md#source-packages) for more information on how to declare source packages in your `pixi.toml`.
+Look at the [Pixi Manifest Reference](../reference/pixi_manifest.md#the-package-section) for more information on how to declare source packages in your `pixi.toml`.
 
 ### Path-based Source Packages
 ```toml
