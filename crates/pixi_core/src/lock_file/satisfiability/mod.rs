@@ -973,8 +973,11 @@ pub(crate) fn pypi_satifisfies_requirement(
                         // If the spec uses DefaultBranch, we need to check what the lock has:
                         // - If lock has Branch("main") or Tag("v1.0") → NOT satisfiable
                         //   (user removed explicit branch/tag, should re-resolve)
-                        // - If lock has DefaultBranch or Rev (specific commit) → satisfiable
+                        // - If lock has DefaultBranch → satisfiable
+                        // - If lock has Rev with full commit hash → satisfiable
                         //   (specific commit is still valid even without explicit ref)
+                        // - If lock has Rev with non-hash (like "main") → NOT satisfiable
+                        //   (user removed explicit rev, should re-resolve)
                         if *reference == GitReference::DefaultBranch {
                             match &pinned_git_spec.source.reference {
                                 // These are explicit named references - not satisfiable
@@ -988,10 +991,28 @@ pub(crate) fn pypi_satifisfies_requirement(
                                     }
                                     .into());
                                 }
-                                // These are satisfiable - either DefaultBranch or specific commits
-                                pixi_spec::GitReference::DefaultBranch
-                                | pixi_spec::GitReference::Rev(_) => {
+                                // DefaultBranch in lock is satisfiable
+                                pixi_spec::GitReference::DefaultBranch => {
                                     return Ok(());
+                                }
+                                // Rev is only satisfiable if it's a full commit hash.
+                                // If the rev is NOT a full commit hash (like "main"), it's a named
+                                // reference that was explicitly set and should trigger re-resolve
+                                // when the user removes it from the manifest.
+                                pixi_spec::GitReference::Rev(_) => {
+                                    if pinned_git_spec.source.reference.as_full_commit().is_some() {
+                                        return Ok(());
+                                    } else {
+                                        return Err(PlatformUnsat::LockedPyPIGitRefMismatch {
+                                            name: spec.name.clone().to_string(),
+                                            expected_ref: reference.to_string(),
+                                            found_ref: pinned_git_spec
+                                                .source
+                                                .reference
+                                                .to_string(),
+                                        }
+                                        .into());
+                                    }
                                 }
                             }
                         }
