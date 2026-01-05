@@ -1,25 +1,76 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
-use super::{verify_environment_satisfiability, verify_platform_satisfiability};
+use super::{
+    CondaPrefixUpdater, resolve::build_dispatch::LazyBuildDispatchDependencies,
+    verify_environment_satisfiability, verify_platform_satisfiability,
+};
 use crate::{
     Workspace,
     lock_file::satisfiability::{EnvironmentUnsat, verify_solve_group_satisfiability},
     workspace::{Environment, SolveGroup},
 };
+use async_once_cell::OnceCell as AsyncOnceCell;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
+use once_cell::sync::OnceCell;
 use pixi_command_dispatcher::CommandDispatcher;
 use pixi_consts::consts;
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{EnvironmentName, FeaturesExt};
+use pixi_uv_context::UvResolutionContext;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackageRef};
+use uv_client::RegistryClient;
+use uv_configuration::BuildOptions;
+use uv_distribution_types::{DependencyMetadata, IndexLocations};
+use uv_resolver::FlatIndex;
+
+/// Cache for build-related resources that can be shared between
+/// satisfiability checking and PyPI resolution.
+///
+/// Note: We cannot store `LazyBuildDispatch` directly because it holds a reference
+/// to `LazyBuildDispatchDependencies`, creating a self-referential struct issue.
+/// Instead, we store the dependencies and create `LazyBuildDispatch` fresh each time.
+/// The expensive initialization (interpreter, python env, etc.) is cached in the
+/// `OnceCell`s inside `LazyBuildDispatchDependencies`.
+pub struct EnvironmentBuildCache {
+    /// Lazily initialized build dispatch dependencies (interpreter, env, etc.)
+    pub lazy_build_dispatch_deps: LazyBuildDispatchDependencies,
+    /// Optional conda prefix updater (created during satisfiability checking)
+    pub conda_prefix_updater: OnceCell<CondaPrefixUpdater>,
+    /// Cached registry client (with Online connectivity)
+    pub registry_client: OnceCell<Arc<RegistryClient>>,
+    /// Cached index locations
+    pub index_locations: OnceCell<IndexLocations>,
+    /// Cached build options
+    pub build_options: OnceCell<BuildOptions>,
+    /// Cached flat index (populated lazily when needed, async initialization)
+    pub flat_index: AsyncOnceCell<FlatIndex>,
+    /// Cached dependency metadata
+    pub dependency_metadata: OnceCell<DependencyMetadata>,
+}
+
+impl Default for EnvironmentBuildCache {
+    fn default() -> Self {
+        Self {
+            lazy_build_dispatch_deps: LazyBuildDispatchDependencies::default(),
+            conda_prefix_updater: OnceCell::new(),
+            registry_client: OnceCell::new(),
+            index_locations: OnceCell::new(),
+            build_options: OnceCell::new(),
+            flat_index: AsyncOnceCell::new(),
+            dependency_metadata: OnceCell::new(),
+        }
+    }
+}
 
 /// A struct that contains information about specific outdated environments.
 ///
 /// Use the [`OutdatedEnvironments::from_project_and_lock_file`] to create an
 /// instance of this struct by examining the project and lock-file and finding
 /// any mismatches.
-#[derive(Debug)]
 pub struct OutdatedEnvironments<'p> {
     /// The conda environments that are considered out of date with the
     /// lock-file.
@@ -33,6 +84,14 @@ pub struct OutdatedEnvironments<'p> {
     /// discarded. This is the case for instance when the order of the
     /// channels changed.
     pub disregard_locked_content: DisregardLockedContent<'p>,
+
+    /// Lazily initialized UV context for building dynamic metadata.
+    /// This is shared between satisfiability checking and pypi resolution.
+    pub uv_context: OnceCell<UvResolutionContext>,
+
+    /// Per-environment build caches for sharing resources between
+    /// satisfiability checking and PyPI resolution.
+    pub build_caches: HashMap<EnvironmentName, Arc<EnvironmentBuildCache>>,
 }
 
 /// A struct that stores whether the locked content of certain environments
@@ -66,11 +125,15 @@ impl<'p> OutdatedEnvironments<'p> {
         lock_file: &LockFile,
     ) -> Self {
         // Find all targets that are not satisfied by the lock-file
-        let UnsatisfiableTargets {
-            mut outdated_conda,
-            mut outdated_pypi,
-            disregard_locked_content,
-        } = find_unsatisfiable_targets(workspace, command_dispatcher, lock_file).await;
+        let (
+            UnsatisfiableTargets {
+                mut outdated_conda,
+                mut outdated_pypi,
+                disregard_locked_content,
+            },
+            uv_context,
+            build_caches,
+        ) = find_unsatisfiable_targets(workspace, command_dispatcher, lock_file).await;
 
         // Extend the outdated targets to include the solve groups
         let (mut conda_solve_groups_out_of_date, mut pypi_solve_groups_out_of_date) =
@@ -118,6 +181,11 @@ impl<'p> OutdatedEnvironments<'p> {
             conda: outdated_conda,
             pypi: outdated_pypi,
             disregard_locked_content,
+            uv_context,
+            build_caches: build_caches
+                .into_iter()
+                .map(|(k, v)| (k, Arc::new(v)))
+                .collect(),
         }
     }
 
@@ -137,13 +205,30 @@ struct UnsatisfiableTargets<'p> {
 
 /// Find all targets (combination of environment and platform) who's
 /// requirements in the `project` are not satisfied by the `lock_file`.
+///
+/// Returns the unsatisfiable targets, the lazily-initialized UV context
+/// (which may have been initialized during satisfiability checking), and
+/// build caches for each environment.
 async fn find_unsatisfiable_targets<'p>(
     project: &'p Workspace,
     command_dispatcher: CommandDispatcher,
     lock_file: &LockFile,
-) -> UnsatisfiableTargets<'p> {
+) -> (
+    UnsatisfiableTargets<'p>,
+    OnceCell<UvResolutionContext>,
+    HashMap<EnvironmentName, EnvironmentBuildCache>,
+) {
     let mut verified_environments = HashMap::new();
     let mut unsatisfiable_targets = UnsatisfiableTargets::default();
+
+    // Create UV context lazily for building dynamic metadata
+    let uv_context: OnceCell<UvResolutionContext> = OnceCell::new();
+
+    // Create build caches for sharing between satisfiability and resolution
+    let mut build_caches: HashMap<EnvironmentName, EnvironmentBuildCache> = HashMap::new();
+
+    let project_config = project.config();
+
     for environment in project.environments() {
         let platforms = environment.platforms();
 
@@ -233,6 +318,10 @@ async fn find_unsatisfiable_targets<'p>(
                 locked_environment,
                 platform,
                 project.root(),
+                &uv_context,
+                project_config,
+                project.env_vars().clone(),
+                &mut build_caches,
             )
             .await
             {
@@ -317,7 +406,7 @@ async fn find_unsatisfiable_targets<'p>(
             .insert(platform);
     }
 
-    unsatisfiable_targets
+    (unsatisfiable_targets, uv_context, build_caches)
 }
 
 /// Given a mapping of outdated targets, construct a new mapping of all the

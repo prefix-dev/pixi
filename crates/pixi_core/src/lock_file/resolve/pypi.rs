@@ -47,9 +47,9 @@ use uv_client::{
 use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
-    BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy,
-    IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
-    SourceDist, ToUrlError,
+    BuiltDist, ConfigSettings, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
+    IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist, SourceDist,
+    ToUrlError,
 };
 use uv_git_types::GitUrl;
 use uv_pep508::VerbatimUrl;
@@ -68,6 +68,7 @@ use crate::{
     lock_file::{
         CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
         PypiRecord,
+        outdated::EnvironmentBuildCache,
         records_by_name::HasNameVersion,
         resolve::{
             build_dispatch::{
@@ -76,9 +77,11 @@ use crate::{
             resolver_provider::CondaResolverProvider,
         },
     },
-    workspace::{Environment, EnvironmentVars},
+    workspace::{Environment, EnvironmentVars, grouped_environment::GroupedEnvironment},
 };
+use pixi_command_dispatcher::CommandDispatcher;
 use pixi_uv_context::UvResolutionContext;
+use rattler_conda_types::GenericVirtualPackage;
 
 #[derive(Debug, thiserror::Error)]
 #[error("Invalid hash: {0} type: {1}")]
@@ -289,13 +292,14 @@ pub async fn resolve_pypi(
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
     project_root: &Path,
-    prefix_updater: CondaPrefixUpdater,
+    command_dispatcher: CommandDispatcher,
     repodata_building_records: miette::Result<Arc<PixiRecordsByName>>,
     project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
-    environment_name: Environment<'_>,
+    environment: Environment<'_>,
     disallow_install_conda_prefix: bool,
     exclude_newer: Option<DateTime<Utc>>,
     solve_strategy: SolveStrategy,
+    cached_build_cache: Option<Arc<EnvironmentBuildCache>>,
 ) -> miette::Result<(LockedPypiPackages, Option<CondaPrefixUpdated>)> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
@@ -379,13 +383,20 @@ pub async fn resolve_pypi(
     // requires_python specifier is used to determine the python version of the
     // wheel. So make sure the interpreter does not touch the solve parts of
     // this function
-    // A python-3.10.6-xxx.conda package record becomes a "==3.10.6.*" requires python specifier.
-    let python_specifier = uv_pep440::VersionSpecifier::from_version(
-        uv_pep440::Operator::EqualStar,
-        uv_pep440::Version::from_str(&python_record.version().as_str()).into_diagnostic()?,
-    )
+    let interpreter_version = python_record
+        .version()
+        .as_major_minor()
+        .ok_or_else(|| miette::miette!("conda python record missing major.minor version"))?;
+    let pep_version = uv_pep440::Version::from_str(&format!(
+        "{}.{}",
+        interpreter_version.0, interpreter_version.1
+    ))
     .into_diagnostic()
-    .context("error creating version specifier for python version")?;
+    .context("error parsing pep440 version for python interpreter")?;
+    let python_specifier =
+        uv_pep440::VersionSpecifier::from_version(uv_pep440::Operator::EqualStar, pep_version)
+            .into_diagnostic()
+            .context("error creating version specifier for python version")?;
     let requires_python =
         RequiresPython::from_specifiers(&uv_pep440::VersionSpecifiers::from(python_specifier));
     tracing::debug!(
@@ -393,43 +404,64 @@ pub async fn resolve_pypi(
         requires_python
     );
 
-    let index_locations =
-        pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?;
-
-    // TODO: create a cached registry client per index_url set?
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
 
-    // Configure insecure hosts for TLS verification bypass
-    let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
-        context.allow_insecure_host.clone(),
-        context.tls_no_verify,
-        &index_locations,
-    );
+    // Use cached index_locations if available, otherwise create new
+    let index_locations = match cached_build_cache
+        .as_ref()
+        .and_then(|c| c.index_locations.get().cloned())
+    {
+        Some(locs) => locs,
+        None => pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?,
+    };
 
-    let base_client_builder = BaseClientBuilder::default()
-        .allow_insecure_host(allow_insecure_hosts)
-        .markers(&marker_environment)
-        .keyring(context.keyring_provider)
-        .connectivity(Connectivity::Online)
-        .native_tls(context.use_native_tls)
-        .extra_middleware(context.extra_middleware.clone());
+    // Use cached build_options if available, otherwise create new
+    let build_options = match cached_build_cache
+        .as_ref()
+        .and_then(|c| c.build_options.get().cloned())
+    {
+        Some(opts) => opts,
+        None => pypi_options_to_build_options(
+            &pypi_options.no_build.clone().unwrap_or_default(),
+            &pypi_options.no_binary.clone().unwrap_or_default(),
+        )
+        .into_diagnostic()?,
+    };
 
-    let mut uv_client_builder =
-        RegistryClientBuilder::new(base_client_builder, context.cache.clone())
-            .index_locations(index_locations.clone())
-            .index_strategy(index_strategy);
+    // Use cached registry_client if available, otherwise create new
+    let registry_client = match cached_build_cache
+        .as_ref()
+        .and_then(|c| c.registry_client.get().cloned())
+    {
+        Some(client) => client,
+        None => {
+            // Configure insecure hosts for TLS verification bypass
+            let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
+                context.allow_insecure_host.clone(),
+                context.tls_no_verify,
+                &index_locations,
+            );
 
-    for p in &context.proxies {
-        uv_client_builder = uv_client_builder.proxy(p.clone())
-    }
+            let base_client_builder = BaseClientBuilder::default()
+                .allow_insecure_host(allow_insecure_hosts)
+                .markers(&marker_environment)
+                .keyring(context.keyring_provider)
+                .connectivity(Connectivity::Online)
+                .native_tls(context.use_native_tls)
+                .extra_middleware(context.extra_middleware.clone());
 
-    let registry_client = Arc::new(uv_client_builder.build());
+            let mut uv_client_builder =
+                RegistryClientBuilder::new(base_client_builder, context.cache.clone())
+                    .index_locations(index_locations.clone())
+                    .index_strategy(index_strategy);
 
-    let build_options = pypi_options_to_build_options(
-        &pypi_options.no_build.clone().unwrap_or_default(),
-        &pypi_options.no_binary.clone().unwrap_or_default(),
-    )
-    .into_diagnostic()?;
+            for p in &context.proxies {
+                uv_client_builder = uv_client_builder.proxy(p.clone())
+            }
+
+            Arc::new(uv_client_builder.build())
+        }
+    };
     let dependency_overrides =
         pypi_options.dependency_overrides.as_ref().map(|overrides|->Result<Vec<_>, _> {
             overrides
@@ -448,27 +480,36 @@ pub async fn resolve_pypi(
                 .collect::<Result<Vec<_>, _>>()
         }).transpose()?.unwrap_or_default();
 
-    // Resolve the flat indexes from `--find-links`.
-    // In UV 0.7.8, we need to fetch flat index entries from the index locations
-    let flat_index_client = FlatIndexClient::new(
-        registry_client.cached_client(),
-        Connectivity::Online,
-        &context.cache,
-    );
-    let flat_index_urls: Vec<&IndexUrl> = index_locations
-        .flat_indexes()
-        .map(|index| index.url())
-        .collect();
-    let flat_index_entries = flat_index_client
-        .fetch_all(flat_index_urls.into_iter())
-        .await
-        .into_diagnostic()?;
-    let flat_index = FlatIndex::from_entries(
-        flat_index_entries,
-        Some(&tags),
-        &context.hash_strategy,
-        &build_options,
-    );
+    // Use cached flat_index if available, otherwise create new
+    let flat_index = match cached_build_cache
+        .as_ref()
+        .and_then(|c| c.flat_index.get().cloned())
+    {
+        Some(idx) => idx,
+        None => {
+            // Resolve the flat indexes from `--find-links`.
+            // In UV 0.7.8, we need to fetch flat index entries from the index locations
+            let flat_index_client = FlatIndexClient::new(
+                registry_client.cached_client(),
+                Connectivity::Online,
+                &context.cache,
+            );
+            let flat_index_urls: Vec<&IndexUrl> = index_locations
+                .flat_indexes()
+                .map(|index| index.url())
+                .collect();
+            let flat_index_entries = flat_index_client
+                .fetch_all(flat_index_urls.into_iter())
+                .await
+                .into_diagnostic()?;
+            FlatIndex::from_entries(
+                flat_index_entries,
+                Some(&tags),
+                &context.hash_strategy,
+                &build_options,
+            )
+        }
+    };
 
     let resolution_mode = match solve_strategy {
         SolveStrategy::Highest => ResolutionMode::Highest,
@@ -491,8 +532,13 @@ pub async fn resolve_pypi(
         ..Options::default()
     };
 
+    // Use cached dependency_metadata if available, otherwise create new
+    let dependency_metadata = cached_build_cache
+        .as_ref()
+        .and_then(|c| c.dependency_metadata.get().cloned())
+        .unwrap_or_default();
+
     let config_settings = ConfigSettings::default();
-    let dependency_metadata = DependencyMetadata::default();
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &context.cache,
@@ -518,15 +564,48 @@ pub async fn resolve_pypi(
     .with_source_strategy(context.source_strategy)
     .with_concurrency(context.concurrency);
 
-    let lazy_build_dispatch_dependencies = LazyBuildDispatchDependencies::default();
+    // Use cached build dispatch dependencies if available, otherwise create new default
+    let default_deps;
+    let lazy_build_dispatch_deps = if let Some(ref cache) = cached_build_cache {
+        &cache.lazy_build_dispatch_deps
+    } else {
+        default_deps = LazyBuildDispatchDependencies::default();
+        &default_deps
+    };
+
+    // Use cached conda_prefix_updater if available, otherwise create new
+    let conda_prefix_updater = match cached_build_cache
+        .as_ref()
+        .and_then(|c| c.conda_prefix_updater.get().cloned())
+    {
+        Some(updater) => updater,
+        None => {
+            // Create a new conda prefix updater using best_platform (host platform)
+            let prefix_platform = environment.best_platform();
+            let group = GroupedEnvironment::Environment(environment.clone());
+            let virtual_packages = environment.virtual_packages(prefix_platform);
+
+            CondaPrefixUpdater::builder(
+                group,
+                prefix_platform,
+                virtual_packages
+                    .into_iter()
+                    .map(GenericVirtualPackage::from)
+                    .collect(),
+                command_dispatcher,
+            )
+            .finish()?
+        }
+    };
+
     let lazy_build_dispatch = LazyBuildDispatch::new(
         build_params,
-        prefix_updater,
+        conda_prefix_updater,
         project_env_vars,
-        environment_name,
+        environment,
         repodata_building_records.map(|r| r.records.clone()),
         pypi_options.no_build_isolation.clone(),
-        &lazy_build_dispatch_dependencies,
+        lazy_build_dispatch_deps,
         None,
         disallow_install_conda_prefix,
     );
@@ -1073,17 +1152,9 @@ async fn lock_pypi_packages(
                             )
                         }
                         SourceDist::Path(path) => {
-                            // Compute the hash of the package based on the source tree.
-                            let hash = if path.install_path.is_dir() {
-                                Some(
-                                    PypiSourceTreeHashable::from_directory(&path.install_path)
-                                        .into_diagnostic()
-                                        .context("failed to compute hash of pypi source tree")?
-                                        .hash(),
-                                )
-                            } else {
-                                None
-                            };
+                            // No hash for directory-based packages.
+                            // Satisfiability check uses metadata comparison instead.
+                            let hash = None;
 
                             // process the path or url that we get back from uv
                             let install_path = process_uv_path_url(
@@ -1100,14 +1171,13 @@ async fn lock_pypi_packages(
                             (url_or_path, hash, false)
                         }
                         SourceDist::Directory(dir) => {
-                            // Compute the hash of the package based on the source tree.
+                            // Compute hash for directory-based packages.
+                            // This is used as a fallback during satisfiability check
+                            // when metadata is dynamic and can't be compared statically.
                             let hash = if dir.install_path.is_dir() {
-                                Some(
-                                    PypiSourceTreeHashable::from_directory(&dir.install_path)
-                                        .into_diagnostic()
-                                        .context("failed to compute hash of pypi source tree")?
-                                        .hash(),
-                                )
+                                PypiSourceTreeHashable::from_directory(&dir.install_path)
+                                    .ok()
+                                    .map(|h| h.hash())
                             } else {
                                 None
                             };
