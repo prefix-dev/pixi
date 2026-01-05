@@ -59,10 +59,6 @@ pixi add "python [version='3.11.0', build_number='>=1']"
 ```
 
 Both syntaxes are equivalent and can be used interchangeably.
-Choose based on your preference:
-
-- Use **equals syntax** for quick, compact specifications
-- Use **bracket syntax** for better readability and when combining multiple constraints
 
 ### TOML Mapping Syntax
 
