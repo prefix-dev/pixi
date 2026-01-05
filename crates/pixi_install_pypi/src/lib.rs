@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     path::Path,
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 
 use chrono::{DateTime, Utc};
@@ -37,7 +37,7 @@ use rayon::prelude::*;
 use utils::elapsed;
 use uv_auth::store_credentials_from_url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient};
-use uv_configuration::{BuildOptions, Constraints, IndexStrategy};
+use uv_configuration::{BuildOptions, Constraints, IndexStrategy, RAYON_INITIALIZE};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{BuiltWheelIndex, DistributionDatabase, RegistryWheelIndex};
 use uv_distribution_types::{
@@ -147,6 +147,10 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
             dist_dirs.push(entry.path());
         }
     }
+
+    // Initialize the rayon thread pool to ensure it's configured with proper
+    // settings before using parallel iterators.
+    LazyLock::force(&RAYON_INITIALIZE);
 
     let installed = dist_dirs
         .into_par_iter()

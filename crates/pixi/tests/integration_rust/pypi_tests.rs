@@ -372,12 +372,13 @@ setup(version="99.0.0")
         _ => panic!("expected a pypi package"),
     }
 
-    // Write the round-tripped lock file back, then add a new pypi dependency
-    // to force a full re-resolve while the lock file with None version is on disk.
+    // Write the round-tripped lock file back, then add a second pypi
+    // dependency by rewriting the manifest. This forces a full re-resolve
+    // while the lock file with None version is on disk.
     let workspace = pixi.workspace().unwrap();
     lock2.to_path(&workspace.lock_file_path()).unwrap();
 
-    // Create a second source dependency to force the lock file to be stale
+    // Create a second source dependency
     fs_err::create_dir(pixi.workspace_path().join("another-dep")).unwrap();
     fs_err::write(
         pixi.workspace_path().join("another-dep/pyproject.toml"),
@@ -397,12 +398,36 @@ version = "1.0.0"
     )
     .unwrap();
 
-    pixi.add_pypi("another-dep @ ./another-dep").await.unwrap();
+    // Rewrite the manifest to include another-dep (instead of using add_pypi
+    // which requires the conda prefix to be installed for source builds).
+    let pyproject = format!(
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
 
-    match pixi
-        .lock_file()
-        .await
-        .unwrap()
+[project]
+name = "main-package"
+version = "1.0.0"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["{platform_str}"]
+conda-pypi-map = {{}}
+
+[tool.pixi.dependencies]
+python = "==3.11.0"
+
+[tool.pixi.pypi-dependencies]
+dynamic-dep = {{ path = "./dynamic-dep" }}
+another-dep = {{ path = "./another-dep" }}
+"#,
+    );
+    fs_err::write(pixi.workspace_path().join("pyproject.toml"), &pyproject).unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    match lock
         .get_pypi_package("default", platform, "dynamic-dep")
         .expect("dynamic-dep should survive re-resolve")
     {
@@ -421,8 +446,8 @@ version = "1.0.0"
         _ => panic!("expected a pypi package"),
     }
 
-    // Trigger a re-resolve so that update_lock_file writes a new lock file
-    // that includes another-dep. Then verify the lock file can be loaded
+    // Trigger another re-resolve so that update_lock_file writes a new lock
+    // file that includes another-dep. Then verify the lock file can be loaded
     // again — this catches URL mismatches between the environment reference
     // (e.g. "./another-dep") and the packages section (e.g.
     // "file:///tmp/.../another-dep").
