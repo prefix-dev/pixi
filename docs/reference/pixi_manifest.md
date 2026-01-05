@@ -1,6 +1,8 @@
 
 The `pixi.toml` is the workspace manifest, also known as the Pixi workspace configuration file.
-It specifies environments for a workspace, and the package dependency requirements for those environments. It can also specify tasks which can run in those environments, as well as many other configuration options.
+It specifies installation environments for a workspace, and the package dependency requirements for
+those installation environments. It can also specify tasks which can run in those installation
+environments, as well as many other configuration options.
 
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
@@ -251,8 +253,8 @@ solve-strategy = "lowest"
 ```
 
 !!! note
-    When multiple features used in an environment set a specific solve strategy,
-    the one from the left-most feature declared in the environment is used.
+    When multiple features used in an installation environment set a specific solve strategy,
+    the one from the left-most feature declared in the installation environment is used.
     ```toml
     [feature.one]
     solve-strategy = "lowest"
@@ -286,7 +288,7 @@ requires-pixi = ">=0.40,<1.0"
 
 !!! note
     This option should be used to improve the reproducibility of building the workspace. A complicated
-    requirement spec may be an obstacle to setup the building environment.
+    requirement spec may be an obstacle to setup the building installation environment.
 
 
 ### `exclude-newer` (optional)
@@ -394,7 +396,7 @@ Tasks are a way to automate certain custom commands in your workspace.
 For example, a `lint` or `format` step.
 Tasks in a Pixi workspace are essentially cross-platform shell commands, with a unified syntax across platforms.
 For more in-depth information, check the [Advanced tasks documentation](../workspace/advanced_tasks.md).
-Pixi's tasks are run in a Pixi environment using `pixi run` and are executed using the [`deno_task_shell`](../workspace/advanced_tasks.md#our-task-runner-deno_task_shell).
+Pixi's tasks are run in a Pixi installation environment using `pixi run` and are executed using the [`deno_task_shell`](../workspace/advanced_tasks.md#our-task-runner-deno_task_shell).
 
 ```toml
 [tasks]
@@ -445,7 +447,9 @@ More information in the [system requirements documentation](../workspace/system_
 ## The `pypi-options` table
 
 The `pypi-options` table is used to define options that are specific to PyPI registries.
-These options can be specified either at the root level, which will add it to the default options feature, or on feature level, which will create a union of these options when the features are included in the environment.
+These options can be specified either at the root level, which will add it to the default options feature,
+or on feature level, which will create a union of these options when the features are included in the
+installation environment.
 
 The options that can be defined are:
 
@@ -470,10 +474,12 @@ These options are explained in the sections below. Most of these options are tak
 Often you might want to use an alternative or extra index for your workspace. This can be done by adding the `pypi-options` table to your `pixi.toml` file, the following options are available:
 
 - `index-url`: replaces the main index url. If this is not set the default index used is `https://pypi.org/simple`.
-   **Only one** `index-url` can be defined per environment.
-- `extra-index-urls`: adds an extra index url. The urls are used in the order they are defined. And are preferred over the `index-url`. These are merged across features into an environment.
+   **Only one** `index-url` can be defined per installation environment.
+- `extra-index-urls`: adds an extra index url. The urls are used in the order they are defined. And
+   are preferred over the `index-url`. These are merged across features into an installation environment.
 - `find-links`: which can either be a path `{path = './links'}` or a url `{url = 'https://example.com/links'}`.
-   This is similar to the `--find-links` option in `pip`. These are merged across features into an environment.
+   This is similar to the `--find-links` option in `pip`. These are merged across features into an
+   installation environment.
 
 An example:
 
@@ -492,7 +498,7 @@ There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/
 
 ### No Build Isolation
 Even though build isolation is a good default.
-One can choose to **not** isolate the build for a certain package name, this allows the build to access the `pixi` environment.
+One can choose to **not** isolate the build for a certain package name, this allows the build to access the `pixi` installation environment.
 This is convenient if you want to use `torch` or something similar for your build-process.
 
 
@@ -521,9 +527,13 @@ no-build-isolation = true
 ```
 
 !!! tip "Conda dependencies define the build environment"
-    To use `no-build-isolation` effectively, use conda dependencies to define the build environment. These are installed before the PyPI dependencies are resolved, this way these dependencies are available during the build process. In the example above adding `torch` as a PyPI dependency would be ineffective, as it would not yet be installed during the PyPI resolution phase.
+    To use `no-build-isolation` effectively, use conda dependencies to define the build installation environment.
+    These are installed before the PyPI dependencies are resolved, this way these dependencies are
+    available during the build process. In the example above adding `torch` as a PyPI dependency
+    would be ineffective, as it would not yet be installed during the PyPI resolution phase.
 
 ### No Build
+
 When enabled, resolving will not run arbitrary Python code. The cached wheels of already-built source distributions will be reused, but operations that require building distributions will exit with an error.
 
 Can be either set per package or globally.
@@ -540,7 +550,8 @@ no-build = ["package1", "package2"]
 
 When features are merged, the following priority is adhered:
 `no-build = true` > `no-build = ["package1", "package2"]` > `no-build = false`
-So, to expand: if `no-build = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
+So, to expand: if `no-build = true` is set for *any* feature in the installation environment, this
+will be used as the setting for the installation environment.
 
 
 ### No Binary
@@ -563,7 +574,8 @@ no-binary = ["package1", "package2"]
 
 When features are merged, the following priority is adhered:
 `no-binary = true` > `no-binary = ["package1", "package2"]` > `no-binary = false`
-So, to expand: if `no-binary = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
+So, to expand: if `no-binary = true` is set for *any* feature in the installation environment, this
+will be used as the setting for the environment.
 
 
 ### Index Strategy
@@ -573,7 +585,7 @@ The strategy to use when resolving against multiple index URLs. Description modi
 By default, `uv` and thus `pixi`, will stop at the first index on which a given package is available, and limit resolutions to those present on that first index (first-match). This prevents *dependency confusion* attacks, whereby an attack can upload a malicious package under the same name to a secondary index.
 
 !!! warning "One index strategy per environment"
-    Only one `index-strategy` can be defined per environment or solve-group, otherwise, an error will be shown.
+    Only one `index-strategy` can be defined per installation environment or solve-group, otherwise, an error will be shown.
 
 #### Possible values:
 
@@ -653,7 +665,7 @@ package1 = { version = ">=1.2.3", build="py34_0" }
 
 ### `dependencies`
 
-Add any conda package dependency that you want to install into the environment.
+Add any conda package dependency that you want to install into the installation environment.
 Don't forget to add the channel to the `workspace` table should you use anything different than `conda-forge`.
 Even if the dependency defines a channel that channel should be added to the `workspace.channels` list.
 
@@ -678,7 +690,7 @@ pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 Pixi directly supports depending on PyPI packages, the PyPA calls a distributed package a 'distribution'.
 There are [Source](https://packaging.python.org/en/latest/specifications/source-distribution-format/) and [Binary](https://packaging.python.org/en/latest/specifications/binary-distribution-format/) distributions both
 of which are supported by pixi.
-These distributions are installed into the environment after the conda environment has been resolved and installed.
+These distributions are installed into the installation environment after the conda environment has been resolved and installed.
 PyPI packages are not indexed on [prefix.dev](https://prefix.dev/channels) but can be viewed on [pypi.org](https://pypi.org/).
 
 !!! warning "Important considerations"
@@ -827,22 +839,22 @@ To help built these dependencies we activate the conda environment that includes
 This way when a source distribution depends on `gcc` for example, it's used from the conda environment instead of the system.
 ## The `activation` table
 
-The activation table is used for specialized activation operations that need to be run when the environment is activated.
+The activation table is used for specialized activation operations that need to be run when the installation environment is activated.
 
 There are two types of activation operations a user can modify in the manifest:
 
-- `scripts`: A list of scripts that are run when the environment is activated.
-- `env`: A mapping of environment variables that are set when the environment is activated.
+- `scripts`: A list of scripts that are run when the installation environment is activated.
+- `env`: A mapping of environment variables that are set when the installation environment is activated.
 
 These activation operations will be run before the `pixi run` and `pixi shell` commands.
 
 !!! note
     The script specified in the `scripts` section are not directly sourced in the `pixi shell`, but rather they are called,
     and the environment variables they set are then set in the `pixi shell`, so any defined function or other non-environment variable
-    modification to the environment will be ignored.
+    modification to the installation environment will be ignored.
 
 !!! note
-    The activation operations are run by the system shell interpreter as they run before an environment is available.
+    The activation operations are run by the system shell interpreter as they run before an installation environment is available.
     This means that it runs as `cmd.exe` on windows and `bash` on linux and osx (Unix).
     Only `.sh`, `.bash` and `.bat` files are supported.
 
@@ -928,7 +940,8 @@ clang = ">=16.0.6"
 ## The `feature` and `environments` tables
 
 The `feature` table allows you to define features that can be used to create different `[environments]`.
-The `[environments]` table allows you to define different environments. The design is explained in the [this design document](../workspace/multi_environment.md).
+The `[environments]` table allows you to define different installation environments. The design is
+explained in the [this design document](../workspace/multi_environment.md).
 
 ```toml title="Simplest example"
 [feature.test.dependencies]
@@ -938,7 +951,7 @@ pytest = "*"
 test = ["test"]
 ```
 
-This will create an environment called `test` that has `pytest` installed.
+This will create an installation environment called `test` that has `pytest` installed.
 
 ### The `feature` table
 
@@ -1005,12 +1018,12 @@ The `[environments]` table allows you to define environments that are created us
 The environments table is defined using the following fields:
 
 - `features`: The features that are included in the environment. Unless `no-default-feature` is set to `true`, the default feature is implicitly included in the environment.
-- `solve-group`: The solve group is used to group environments together at the solve stage.
-  This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
-  For instance when testing a production environment with additional test dependencies.
-  These dependencies will then be the same version in all environments that have the same solve group.
-  But the different environments contain different subsets of the solve-groups dependencies set.
-- `no-default-feature`: Whether to include the default feature in that environment. The default is `false`, to include the default feature.
+- `solve-group`: The solve group is used to group installation environments together at the solve stage.
+  This is useful for installation environments that need to have the same dependencies but might extend them with additional dependencies.
+  For instance when testing a production installation environment with additional test dependencies.
+  These dependencies will then be the same version in all installation environments that have the same solve group.
+  But the different installation environments contain different subsets of the solve-groups dependencies set.
+- `no-default-feature`: Whether to include the default feature in that installation environment. The default is `false`, to include the default feature.
 
 ```toml title="Full environments table specification"
 [environments]
@@ -1018,7 +1031,7 @@ test = {features = ["test"], solve-group = "test"}
 prod = {features = ["prod"], solve-group = "test"}
 lint = {features = ["lint"], no-default-feature = true}
 ```
-As shown in the example above, in the simplest of cases, it is possible to define an environment only by listing its features:
+As shown in the example above, in the simplest of cases, it is possible to define an installation environment only by listing its features:
 
 ```toml title="Simplest example"
 [environments]
@@ -1032,13 +1045,24 @@ is equivalent to
 test = {features = ["test"]}
 ```
 
-When an environment comprises several features (including the default feature):
+When an installation environment comprises several features (including the default feature):
 
-- The `activation` and `tasks` of the environment are the union of the `activation` and `tasks` of all its features.
-- The `dependencies` and `pypi-dependencies` of the environment are the union of the `dependencies` and `pypi-dependencies` of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.
-- The `system-requirements` of the environment is the union of the `system-requirements` of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.
-- The `channels` of the environment is the union of the `channels` of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
-- The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at workspace level (unless overridden in the feature). This means that it is usually a good idea to set the workspace `platforms` to all platforms it can support across its environments.
+- The `activation` and `tasks` of the installation environment are the union of the `activation` and `tasks` of all its features.
+- The `dependencies` and `pypi-dependencies` of the installation environment are the union of the
+  `dependencies` and `pypi-dependencies` of all its features. This means that if several features
+  define a requirement for the same package, both requirements will be combined. Beware of conflicting
+  requirements across features added to the same installation environment.
+- The `system-requirements` of the installation environment is the union of the `system-requirements`
+  of all its features. If multiple features specify a requirement for the same system package, the
+  highest version is chosen.
+- The `channels` of the installation environment is the union of the `channels` of all its features.
+  Channel priorities can be specified in each feature, to ensure channels are considered in the right
+  order in the installation environment.
+- The `platforms` of the installation environment is the intersection of the `platforms` of all its features.
+  Be aware that the platforms supported by a feature (including the default feature) will be considered
+  as the `platforms` defined at workspace level (unless overridden in the feature). This means that
+  it is usually a good idea to set the workspace `platforms` to all platforms it can support across
+  its installation environments.
 
 ## Global configuration
 
@@ -1177,7 +1201,8 @@ Each of these tables has a different purpose and is used to define the dependenc
 
 
 ### `build-dependencies`
-Build dependencies are required in the build environment and contain all tools that are not needed on the host of the package.
+
+Build dependencies are required in the build installation environment and contain all tools that are not needed on the host of the package.
 
 Following packages are examples of typical build dependencies:
 
@@ -1214,7 +1239,8 @@ Following packages are typical examples for host dependencies:
 ```
 
 ### `run-dependencies`
-The `run-dependencies` are the packages that will be installed in the environment when the package is run.
+
+The `run-dependencies` are the packages that will be installed in the installation environment when the package is run.
 
 - Libraries
 - Extra data file packages

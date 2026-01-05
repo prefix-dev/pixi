@@ -1,8 +1,10 @@
 !!!warning "Only on Unix-like systems"
     The following approach only works on Unix-like systems (i.e. Linux and macOS) since Windows does not support shebang lines.
 
-For simple scripts, you can use [`pixi exec`](../reference/cli/pixi/exec.md) to run them directly without needing to take care of installing dependencies or setting up an environment.
-This can be done by adding a [shebang line](https://en.wikipedia.org/wiki/Shebang_(Unix)) at the top of the script, which tells the system how to execute the script.
+For simple scripts, you can use [`pixi exec`](../reference/cli/pixi/exec.md) to run them directly
+without needing to take care of installing dependencies or setting up an installation environment.
+This can be done by adding a [shebang line](https://en.wikipedia.org/wiki/Shebang_(Unix)) at the top
+of the script, which tells the system how to execute the script.
 Usually, a shebang line starts with `#!/usr/bin/env` followed by the name of the interpreter to use.
 
 Instead of adding an interpreter, you can also just add `pixi exec` at the beginning of the script.
@@ -22,12 +24,12 @@ bat my-file.json
 
     The `/usr/bin/env` is used to find `pixi` in the system's `PATH`.
     The `-S` option tells `/usr/bin/env` to use the first argument as the interpreter and the rest as arguments to the interpreter.
-    `pixi exec --spec bat` creates a temporary environment containing only [`bat`](https://github.com/sharkdp/bat).
-    `bash -e` (separated with `--`) is the command that is executed in this environment.
+    `pixi exec --spec bat` creates a temporary installation environment containing only [`bat`](https://github.com/sharkdp/bat).
+    `bash -e` (separated with `--`) is the command that is executed in this installation environment.
     So in total, `pixi exec --spec bat -- bash -e use-bat.sh` is being executed when you run `./use-bat.sh`.
 
 You can also write self-contained python files that ship with their dependencies.
-This example shows a very simple CLI that installs a Pixi environment to an arbitrary prefix using [`py-rattler`](https://conda.github.io/rattler/py-rattler) and [`typer`](https://typer.tiangolo.com).
+This example shows a very simple CLI that installs a pixi installation environment to an arbitrary prefix using [`py-rattler`](https://conda.github.io/rattler/py-rattler) and [`typer`](https://typer.tiangolo.com).
 
 ```python title="install-pixi-environment-to-prefix.py"
 #!/usr/bin/env -S pixi exec --spec py-rattler>=0.10.0,<0.11 --spec typer>=0.15.0,<0.16 -- python

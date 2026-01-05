@@ -1,6 +1,6 @@
 # The Global Manifest
 
-This global manifest contains the list of environments that are installed globally, their dependencies and exposed binaries.
+This global manifest contains the list of installation environments that are installed globally, their dependencies and exposed binaries.
 It can be edited, synced, checked in to a version control system, and shared with others.
 
 Running the commands from the section before results in the following manifest:
@@ -23,7 +23,7 @@ dependencies = { python = "3.12.*" } # (1)!
 exposed = { py3 = "python" } # (2)!
 ```
 
-1. Dependencies are the packages that will be installed in the environment. You can specify the version or use a wildcard.
+1. Dependencies are the packages that will be installed into the installation environment. You can specify the version or use a wildcard.
 2. The exposed binaries are the ones that will be available in the system path. In this case, `python` is exposed under the name `py3`.
 
 ## Manifest locations
@@ -85,7 +85,7 @@ More information on channels can be found [here](../advanced/channel_logic.md).
 
 ## Dependencies
 
-Dependencies are the Conda packages that will be installed into your environment. For example, running:
+Dependencies are the Conda packages that will be installed into your installation environment. For example, running:
 ```
 pixi global install "python<3.12"
 ```
@@ -97,7 +97,7 @@ dependencies = { python = "<3.12" }
 # ...
 ```
 Typically, you'd specify just the tool you're installing, but you can add more packages if needed.
-Defining the environment to install into will allow you to add multiple dependencies at once.
+Defining the installation environment to install into will allow you to add multiple dependencies at once.
 For example, running:
 ```shell
 pixi global install --environment my-env git vim python
@@ -111,12 +111,12 @@ dependencies = { git = "*", vim = "*", python = "*" }
 # ...
 ```
 
-You can [`add`](../reference/cli/pixi/global/add.md) dependencies to an existing environment by running:
+You can [`add`](../reference/cli/pixi/global/add.md) dependencies to an existing installation environment by running:
 ```shell
 pixi global add --environment my-env package-a package-b
 ```
 
-They will be added as dependencies to the `my-env` environment but won't auto expose the binaries from the new packages.
+They will be added as dependencies to the `my-env` installation environment but won't auto expose the binaries from the new packages.
 
 You can [`remove`](../reference/cli/pixi/global/remove.md) dependencies by running:
 
@@ -146,7 +146,7 @@ This means that executable `bat` will be exposed under the name `bird`.
 
 ### Automatically Exposed Executables
 
-There is some added automatic behavior, if you install a package with the same name as the environment, it will be exposed with the same name.
+There is some added automatic behavior, if you install a package with the same name as the installation environment, it will be exposed with the same name.
 Even if the binary name is only exposed through dependencies of the package
 For example, running:
 ```

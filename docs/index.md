@@ -19,7 +19,7 @@ More installation options can be found [here](installation.md).
 ## Highlights
 
 - [🔄 **Reproducibility**](workspace/lockfile.md)  
-  Isolated, easily recreated environments with lockfiles built-in
+  Isolated, easily recreated installation environments with lockfiles built-in
 
 - [🛠️ **Tasks**](workspace/advanced_tasks.md)  
   Manage complex pipelines effortlessly.
@@ -27,8 +27,8 @@ More installation options can be found [here](installation.md).
 - [🌐 **Multi Platform**](workspace/multi_platform_configuration.md)  
   Works on Linux, macOS, Windows, and more.
 
-- [🧩 **Multi Environment**](workspace/multi_environment.md)  
-  Compose multiple environments in one manifest.
+- [🧩 **Multiple Installation Environments**](workspace/multi_environment.md)  
+  Compose multiple installation environments in one manifest.
 
 - [🐍 **Python**](python/tutorial.md)  
   Support for `pyproject.toml` and PyPI through uv.
@@ -128,7 +128,7 @@ To install `pixi`, run:
     pixi init hello-world
     cd hello-world
     ```
-    2. **Add dependencies:**
+    2. **Add dependencies into the default installation environment:**
         ```
         pixi add cowpy python
         ```
@@ -155,7 +155,7 @@ To install `pixi`, run:
                     ||----w |
                     ||     ||
         ```
-    7. **Entry the environment shell:**
+    7. **Enter the shell into the installation environment:**
         ```
         pixi shell
         python hello.py

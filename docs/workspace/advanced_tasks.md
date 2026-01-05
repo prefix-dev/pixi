@@ -105,24 +105,27 @@ Now you can run both tools with one command.
 pixi run style
 ```
 
-### Environment specification for task dependencies
+### Installation environment specification for task dependencies
 
-You can specify the environment to use for a dependent task:
+You can specify the installation environment to use for a dependent task:
 
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_tomls/tasks_depends_on.toml:tasks"
 ```
 
-This allows you to run tasks in different environments as part of a single pipeline.
-When you run the main task, Pixi ensures each dependent task uses its specified environment:
+This allows you to run tasks in different installation environments as part of a single pipeline.
+When you run the main task, Pixi ensures each dependent task uses its specified installation environment:
 
 ```shell
 pixi run test-all
 ```
 
-The environment specified for a task dependency takes precedence over the environment specified via the CLI `--environment` flag. This means even if you run `pixi run test-all --environment py312`, the first dependency will still run in the `py311` environment as specified in the TOML file.
+The installation environment specified for a task dependency takes precedence over the installation
+environment specified via the CLI `--environment` flag. This means even if you run `pixi run test-all --environment py312`,
+the first dependency will still run in the `py311` installation environment as specified in the TOML file.
 
-In the example above, the `test-all` task runs the `test` task in both Python 3.11 and 3.12 environments, allowing you to verify compatibility across different Python versions with a single command.
+In the example above, the `test-all` task runs the `test` task in both Python 3.11 and 3.12 installation
+environments, allowing you to verify compatibility across different Python versions with a single command.
 
 ## Working directory
 
@@ -274,8 +277,8 @@ In addition to task arguments, Pixi automatically provides a `pixi` object in th
 
 | Variable | Description | Example Value |
 |----------|-------------|---------------|
-| `pixi.platform` | The platform name for the environment in which the task will run | `linux-64`, `osx-arm64`, `win-64` |
-| `pixi.environment.name` | The name of the current environment (when available) | `default`, `prod`, `test` |
+| `pixi.platform` | The platform name for the installation environment in which the task will run | `linux-64`, `osx-arm64`, `win-64` |
+| `pixi.environment.name` | The name of the current installation environment (when available) | `default`, `prod`, `test` |
 | `pixi.manifest_path` | Absolute path to the manifest file | `/path/to/project/pixi.toml` |
 | `pixi.version` | The version of pixi being used | `0.59.0` |
 | `pixi.is_win` | Boolean flag indicating if the platform is Windows | `true` or `false` |
@@ -311,7 +314,7 @@ deploy = {
 }
 ```
 
-When running tasks with typed arguments, the platform will automatically reflect the best platform for the environment where the task executes.
+When running tasks with typed arguments, the platform will automatically reflect the best platform for the installation environment where the task executes.
 
 For more information about available filters and template syntax, see the [MiniJinja documentation](https://docs.rs/minijinja/latest/minijinja/filters/index.html).
 
@@ -335,7 +338,7 @@ When you specify `inputs` and/or `outputs` to a task, Pixi will reuse the result
 
 For the cache, Pixi checks that the following are true:
 
-- No package in the environment has changed.
+- No package in the installation environment has changed.
 - The selected inputs and outputs are the same as the last time the task was
   run. We compute fingerprints of all the files selected by the globs and
   compare them to the last time the task was run.
@@ -390,7 +393,7 @@ Notes on environment variables in tasks:
     If you previously relied on a certain priority which no longer applies, you may need to change your
     task definitions.
 
-    For the specific case of overriding `task.env` with outside environment variables, this behaviour can
+    For the specific case of overriding `task.env` with outside environment variables, this behavior can
     now be recreated using [task arguments](#task-arguments). For example, if you were previously using
     a setup like:
 
@@ -405,7 +408,7 @@ Notes on environment variables in tasks:
     world
     ```
 
-    you can now recreate this behaviour like:
+    you can now recreate this behavior like:
 
     ```toml title="pixi.toml"
     [tasks]
@@ -418,10 +421,11 @@ Notes on environment variables in tasks:
     world
     ```
 
-## Clean environment
-You can make sure the environment of a task is "Pixi only".
+## Clean installation environment
+
+You can make sure the installation environment of a task is "Pixi only".
 Here Pixi will only include the minimal required environment variables for your platform to run the command in.
-The environment will contain all variables set by the conda environment like `"CONDA_PREFIX"`.
+The installation environment will contain all variables set by the conda environment like `"CONDA_PREFIX"`.
 It will however include some default values from the shell, like:
 `"DISPLAY"`, `"LC_ALL"`, `"LC_TIME"`, `"LC_NUMERIC"`, `"LC_MEASUREMENT"`, `"SHELL"`, `"USER"`, `"USERNAME"`, `"LOGNAME"`, `"HOME"`, `"HOSTNAME"`,`"TMPDIR"`, `"XPC_SERVICE_NAME"`, `"XPC_FLAGS"`
 

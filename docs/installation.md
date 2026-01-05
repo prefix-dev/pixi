@@ -121,16 +121,16 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 
     The installation script has several options that can be manipulated through environment variables.
 
-    | Variable             | Description                                                                        | Default Value         |
-    |----------------------|------------------------------------------------------------------------------------|-----------------------|
-    | `PIXI_VERSION`       | The version of Pixi getting installed, can be used to up- or down-grade.           | `latest`              |
-    | `PIXI_HOME`          | The location of the pixi home folder containing global environments and configs.   | `$HOME/.pixi`         |
-    | `PIXI_BIN_DIR`       | The location where the standalone pixi binary should be installed.                 | `$PIXI_HOME/bin`      |
-    | `PIXI_ARCH`          | The architecture the Pixi version was built for.                                   | `uname -m`            |
-    | `PIXI_NO_PATH_UPDATE`| If set the `$PATH` will not be updated to add `pixi` to it.                        |                       |
-    | `PIXI_DOWNLOAD_URL`  | Overrides the download URL for the Pixi binary (useful for mirrors or custom builds). | GitHub releases, e.g. [linux-64](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-unknown-linux-musl.tar.gz)       |
-    | `NETRC`              | Path to a custom `.netrc` file for authentication with private repositories.       |                       |
-    | `TMP_DIR`            | The temporary directory the script uses to download to and unpack the binary from. | `/tmp`                |
+    | Variable             | Description                                                                                     | Default Value         |
+    |----------------------|-------------------------------------------------------------------------------------------------|-----------------------|
+    | `PIXI_VERSION`       | The version of Pixi getting installed, can be used to up- or down-grade.                        | `latest`              |
+    | `PIXI_HOME`          | The location of the pixi home folder containing global installation environments and configs.   | `$HOME/.pixi`         |
+    | `PIXI_BIN_DIR`       | The location where the standalone pixi binary should be installed.                              | `$PIXI_HOME/bin`      |
+    | `PIXI_ARCH`          | The architecture the Pixi version was built for.                                                | `uname -m`            |
+    | `PIXI_NO_PATH_UPDATE`| If set the `$PATH` will not be updated to add `pixi` to it.                                     |                       |
+    | `PIXI_DOWNLOAD_URL`  | Overrides the download URL for the Pixi binary (useful for mirrors or custom builds).           | GitHub releases, e.g. [linux-64](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-unknown-linux-musl.tar.gz)       |
+    | `NETRC`              | Path to a custom `.netrc` file for authentication with private repositories.                    |                       |
+    | `TMP_DIR`            | The temporary directory the script uses to download to and unpack the binary from.              | `/tmp`                |
 
     For example, on Apple Silicon, you can force the installation of the x86 version:
     ```shell
@@ -259,11 +259,11 @@ Before un-installation you might want to delete any previous files pixi has inst
     ```shell
     pixi clean cache
     ```
-2. Remove the environments from your pixi workspaces:
+2. Remove the installation environments from your pixi workspaces:
     ```shell
     cd path/to/workspace && pixi clean
     ```
-3. Remove the `pixi` and its global environments
+3. Remove the `pixi` and its global installation environments
     ```shell
     rm -r ~/.pixi
     ```

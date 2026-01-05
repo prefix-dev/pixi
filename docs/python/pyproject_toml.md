@@ -108,9 +108,12 @@ As Pixi takes the conda dependencies over the pypi dependencies.
 
 ## Optional dependencies
 
-If your python project includes groups of optional dependencies, Pixi will automatically interpret them as [Pixi features](../reference/pixi_manifest.md#the-feature-table) of the same name with the associated `pypi-dependencies`.
+If your python project includes groups of optional dependencies, Pixi will automatically interpret
+them as [Pixi features](../reference/pixi_manifest.md#the-feature-table) of the same name with the associated `pypi-dependencies`.
 
-You can add them to Pixi environments manually, or use `pixi init` to setup the workspace, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.
+You can add them to Pixi installation environments manually, or use `pixi init` to setup the workspace,
+which will create one installation environment per feature. Self-references to other groups of optional
+dependencies are also handled.
 
 For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
 
@@ -145,19 +148,21 @@ test = {features = ["test"], solve-group = "default"}
 all = {features = ["all"], solve-group = "default"}
 ```
 
-In this example, three environments will be created by pixi:
+In this example, three installation environments will be created by pixi:
 
 - **default** with 'package1' as pypi dependency
 - **test** with 'package1' and 'pytest' as pypi dependencies
 - **all** with 'package1', 'package2' and 'pytest' as pypi dependencies
 
-All environments will be solved together, as indicated by the common `solve-group`, and added to the lock file. You can edit the `[tool.pixi.environments]` section manually to adapt it to your use case (e.g. if you do not need a particular environment).
+All installation environments will be solved together, as indicated by the common `solve-group`, and
+added to the lock file. You can edit the `[tool.pixi.environments]` section manually to adapt it to
+your use case (e.g. if you do not need a particular installation environment).
 
 ## Dependency groups
 
 If your python project includes dependency groups, Pixi will automatically interpret them as [Pixi features](../reference/pixi_manifest.md#the-feature-table) of the same name with the associated `pypi-dependencies`.
 
-You can add them to Pixi environments manually, or use `pixi init` to setup the workspace, which will create one environment per dependency group.
+You can add them to Pixi installation environments manually, or use `pixi init` to setup the workspace, which will create one installation environment per dependency group.
 
 For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
 

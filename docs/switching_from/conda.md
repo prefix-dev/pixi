@@ -1,10 +1,10 @@
 Welcome to the guide designed to ease your transition from `conda` or `mamba` to `pixi`.
-This document compares key commands and concepts between these tools, highlighting `pixi`'s unique approach to managing environments and packages.
+This document compares key commands and concepts between these tools, highlighting `pixi`'s unique approach to managing installation environments and packages.
 With `pixi`, you'll experience a workspace-based workflow, enhancing your development process, and allowing for easy sharing of your work.
 
 ## Why Pixi?
 
-`Pixi` builds upon the foundation of the conda ecosystem, introducing a workspace-centric approach rather than focusing solely on environments.
+`Pixi` builds upon the foundation of the conda ecosystem, introducing a workspace-centric approach rather than focusing solely on installation environments.
 This shift towards workspaces offers a more organized and efficient way to manage dependencies and run code, tailored to modern development practices.
 
 ## Key Differences at a Glance
@@ -22,12 +22,12 @@ This shift towards workspaces offers a more organized and efficient way to manag
 
 !!! warn "No `base` environment"
     Conda has a base environment, which is the default environment when you start a new shell.
-    **Pixi does not have a base environment**. And requires you to install the tools you need in the workspace or globally.
-    Using `pixi global install bat` will install `bat` in a global environment, which is not the same as the `base` environment in conda.
+    **Pixi does not have a base installation environment**. And requires you to install the tools you need in the workspace or globally.
+    Using `pixi global install bat` will install `bat` in a global installation environment, which is not the same as the `base` environment in conda.
 
-??? tip "Activating Pixi environment in the current shell"
-    For some advanced use-cases, you can activate the environment in the current shell.
-    This uses the `pixi shell-hook` which prints the activation script, which can be used to activate the environment in the current shell without `pixi` itself.
+??? tip "Activating Pixi installation environment in the current shell"
+    For some advanced use-cases, you can activate the installation environment in the current shell.
+    This uses the `pixi shell-hook` which prints the activation script, which can be used without `pixi` itself.
     ```shell
     ~/myenv > eval "$(pixi shell-hook)"
     ```
@@ -35,32 +35,35 @@ This shift towards workspaces offers a more organized and efficient way to manag
 ## Environment vs Workspace
 
 `Conda` and `mamba` focus on managing environments, while `pixi` emphasizes workspaces.
-In `pixi`, a workspace is a folder containing a [manifest](../reference/pixi_manifest.md)(`pixi.toml`/`pyproject.toml`) file that describes the workspace, a `pixi.lock` lock-file that describes the exact dependencies, and a `.pixi` folder that contains the environment.
+In `pixi`, a workspace is a folder containing a [manifest](../reference/pixi_manifest.md)(`pixi.toml`/`pyproject.toml`) file that describes the workspace, a `pixi.lock` lock-file that describes the exact dependencies, and a `.pixi` folder that contains the installation environment.
 
-This workspace-centric approach allows for easy sharing and collaboration, as the workspace folder contains all the necessary information to recreate the environment.
-It manages more than one environment for more than one platform in a single workspace, and allows for easy switching between them. (See [multiple environments](../workspace/multi_environment.md))
+This workspace-centric approach allows for easy sharing and collaboration, as the workspace folder contains all the necessary information to recreate the installation environment.
+It manages more than one installation environment for more than one platform in a single workspace, and allows for easy switching between them. (See [multiple installation environments](../workspace/multi_environment.md))
 
-## Global environments
+## Global installation environments
 
 `conda` installs all environments in one global location.
 When this is important to you for filesystem reasons, you can use the [detached-environments](../reference/pixi_configuration.md#detached-environments) feature of pixi.
+
 ```shell
 pixi config set detached-environments true
 # or a specific location
 pixi config set detached-environments /path/to/envs
 ```
+
 This will make the installation of the environments go to the same folder.
 
 `pixi` does have the `pixi global` command to install tools on your machine. (See [global](../reference/cli/pixi/global.md))
 This is not a replacement for `conda` but works the same as [`pipx`](https://pipx.pypa.io/stable/) and [`condax`](https://mariusvniekerk.github.io/condax/).
-It creates a single isolated environment for the given requirement and installs the binaries into the global path.
+It creates a single isolated installation environment for the given requirement and installs the binaries into the global path.
+
 ```shell
 pixi global install bat
 bat pixi.toml
 ```
 
 !!! warn "Never install `pip` with `pixi global`"
-    Installations with `pixi global` get their own isolated environment.
+    Installations with `pixi global` get their own isolated installation environment.
     Installing `pip` with `pixi global` will create a new isolated environment with its own `pip` binary.
     Using that `pip` binary will install packages in the `pip` environment, making it unreachable from anywhere as you can't activate it.
 
@@ -83,6 +86,7 @@ Encountering issues? Here are solutions to some common problems when being used 
 - Dependency `is excluded due to strict channel priority not using this option from: 'https://conda.anaconda.org/conda-forge/'`
   This error occurs when the package is in multiple channels. `pixi` uses a strict channel priority. See [channel priority](../advanced/channel_logic.md) for more information.
 - `pixi global install pip`, pip doesn't work.
-  `pip` is installed in the global isolated environment. Use `pixi add pip` in a workspace to install `pip` in the workspace environment and use that workspace.
+  `pip` is installed in the global isolated environment. Use `pixi add pip` in a workspace to install `pip` in the workspace installation environment and use that workspace.
 - `pixi global install <Any Library>` -> `import <Any Library>` -> `ModuleNotFoundError: No module named '<Any Library>'`
-   The library is installed in the global isolated environment. Use `pixi add <Any Library>` in a workspace to install the library in the workspace environment and use that workspace.
+   The library is installed in the global isolated installation environment. Use `pixi add <Any Library>` in a workspace
+   to install the library in the workspace installation environment and use that workspace.

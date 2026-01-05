@@ -57,7 +57,7 @@ We do that in `workspace.build-variants`:
 ```
 
 If we'd run `pixi install` now, we'd leave it up to Pixi whether to use Python 3.11 or 3.12.
-In practice, you'll want to create multiple environments specifying a different dependency version.
+In practice, you'll want to create multiple installation environments specifying a different dependency version.
 In our case this allows us to test our setup against both Python 3.11 and 3.12.
 
 
@@ -65,7 +65,7 @@ In our case this allows us to test our setup against both Python 3.11 and 3.12.
 --8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace_variants/pixi.toml:environments"
 ```
 
-By running `pixi list` we can see the Python version used in each environment.
+By running `pixi list` we can see the Python version used in each installation environment.
 You can also see that the `Build` string of `cpp_math` differ between `py311` and `py312`.
 That means that a different package has been built for each variant.
 Since `python_rich` only contains Python source code, a single build can be used for multiple Python versions.

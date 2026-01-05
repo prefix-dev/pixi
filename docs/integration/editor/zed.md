@@ -5,7 +5,7 @@ By installing extensions more languages can be supported.
 ## Python
 
 Zed supports Pixi and Python out of the box.
-If Zed hasn't done so already, select a suitable Pixi environment in the environment selector and you are good to go!
+If Zed hasn't done so already, select a suitable Pixi installation environment in the environment selector and you are good to go!
 
 ![Zed Python Environment Selector](../../assets/zed-python-env-selector.png)
 

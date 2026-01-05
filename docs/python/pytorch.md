@@ -52,18 +52,18 @@ This ensures that the correct version of the `cudatoolkit` package is installed 
     ```
 
 With `conda-forge` you can also install the `cpu` version of PyTorch.
-A common use-case is having two environments, one for CUDA machines and one for non-CUDA machines.
+A common use-case is having two installation environments, one for CUDA machines and one for non-CUDA machines.
 
 === "`pixi.toml`"
-    ```toml title="Adding a cpu environment"
+    ```toml title="Adding a cpu installation environment"
     --8<-- "docs/source_files/pixi_tomls/pytorch-conda-forge-envs.toml:use-envs"
     ```
 === "`pyproject.toml`"
-    ```toml title="Split into environments and add a CPU environment"
+    ```toml title="Split into installation environments and add a CPU installation environment"
     --8<-- "docs/source_files/pyproject_tomls/pytorch-conda-forge-envs.toml:use-envs"
     ```
 
-Running these environments then can be done with the `pixi run` command.
+Running these installation environments then can be done with the `pixi run` command.
 ```shell
 pixi run --environment cpu python -c "import torch; print(torch.cuda.is_available())"
 pixi run -e gpu python -c "import torch; print(torch.cuda.is_available())"
@@ -110,29 +110,30 @@ Best to do this per dependency to force the index to be used.
     --8<-- "docs/source_files/pyproject_tomls/pytorch-pypi.toml:minimal"
     ```
 
-You can tell Pixi to use multiple environment for the multiple versions of PyTorch, either `cpu` or `gpu`.
+You can tell Pixi to use multiple installation environments for the multiple versions of PyTorch, either `cpu` or `gpu`.
 
 === "`pixi.toml`"
-    ```toml title="Use multiple environments for the pypi pytorch installation"
+    ```toml title="Use multiple installation environments for the pypi pytorch installation"
     --8<-- "docs/source_files/pixi_tomls/pytorch-pypi-envs.toml:multi-env"
     ```
 === "`pyproject.toml`"
-    ```toml title="Use multiple environments for the pypi pytorch installation"
+    ```toml title="Use multiple installation environments for the pypi pytorch installation"
     --8<-- "docs/source_files/pyproject_tomls/pytorch-pypi-envs.toml:multi-env"
     ```
 
-Running these environments then can be done with the `pixi run` command.
+Running these installation environments then can be done with the `pixi run` command.
 ```shell
 pixi run --environment cpu python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
 pixi run -e gpu python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
 ```
 
 ### Mixing MacOS and CUDA with `pypi-dependencies`
-When using pypi-dependencies, Pixi creates a “solve” environment to resolve the PyPI dependencies.
-This process involves installing the Conda dependencies first and then resolving the PyPI packages within that environment.
+
+When using pypi-dependencies, Pixi creates a “solve” installation environment to resolve the PyPI dependencies.
+This process involves installing the Conda dependencies first and then resolving the PyPI packages within that installation environment.
 
 This can become problematic if you’re on a macOS machine and trying to resolve the CUDA version of PyTorch for Linux or Windows.
-Since macOS doesn’t support those environments, the Conda dependencies for CUDA will fail to install, preventing proper resolution.
+Since macOS doesn’t support these operating systems, the Conda dependencies for CUDA will fail to install, preventing proper resolution.
 
 **Current Status:**
 The Pixi maintainers are aware of this limitation and are actively working on a solution to enable cross-platform dependency resolution for such cases.
@@ -184,18 +185,20 @@ If `__cuda` is missing, you can verify your system’s CUDA version using NVIDIA
 nvidia-smi
 ```
 
-To check the version of the CUDA toolkit installed in your environment:
+To check the version of the CUDA toolkit installed in your installation environment:
+
 ```shell
 pixi run nvcc --version
 ```
 
 #### Reasons for broken installations
+
 Broken installations often result from mixing incompatible channels or package sources:
 
 1. **Mixing Conda Channels**
 
     Using both `conda-forge` and the legacy `pytorch` channel can cause conflicts.
-    Choose one channel and stick with it to avoid issues in the installed environment.
+    Choose one channel and stick with it to avoid issues in the installation environment.
 
 2. **Mixing Conda and PyPI Packages**
 
@@ -215,8 +218,10 @@ To summarize:
 2. Using [PyPI](#installing-from-pypi)
    - Use the appropriate PyPI index to fetch the correct CUDA-enabled wheels.
 
-#### Environment Resolution Failures
+#### Resolution Failures
+
 If you see an error like this:
+
 **ABI tag mismatch**
 ```
 ├─▶ failed to resolve pypi dependencies
