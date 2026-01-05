@@ -189,6 +189,7 @@ uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-cache-info = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-cache-key = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
