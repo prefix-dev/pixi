@@ -885,6 +885,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-material-extensions-1.3.1-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-redirects-1.2.1-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/ncurses-6.5-h2d0b736_3.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/nushell-0.109.1-h25c72ac_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/openjpeg-2.5.4-h55fea9a_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/openssl-3.6.0-h26f9b46_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/packaging-25.0-pyh29332c3_1.conda
@@ -1015,6 +1016,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-material-extensions-1.3.1-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-redirects-1.2.1-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/ncurses-6.5-ha32ae93_3.conda
+      - conda: https://prefix.dev/conda-forge/linux-aarch64/nushell-0.109.1-ha2bec05_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/openjpeg-2.5.4-h5da879a_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/openssl-3.6.0-h8e36d6e_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/packaging-25.0-pyh29332c3_1.conda
@@ -1139,6 +1141,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-material-extensions-1.3.1-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-redirects-1.2.1-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/osx-64/ncurses-6.5-h0622a9a_3.conda
+      - conda: https://prefix.dev/conda-forge/osx-64/nushell-0.109.1-hd6c8b4f_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/openjpeg-2.5.4-h87e8dc5_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/openssl-3.6.0-h230baf5_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/packaging-25.0-pyh29332c3_1.conda
@@ -1258,6 +1261,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-material-extensions-1.3.1-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-redirects-1.2.1-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/ncurses-6.5-h5e97a16_3.conda
+      - conda: https://prefix.dev/conda-forge/osx-arm64/nushell-0.109.1-hf35feb8_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/openjpeg-2.5.4-hbfb3c88_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/openssl-3.6.0-h5503f6c_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/packaging-25.0-pyh29332c3_1.conda
@@ -1379,6 +1383,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-material-9.7.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-material-extensions-1.3.1-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-redirects-1.2.1-pyhd8ed1ab_1.conda
+      - conda: https://prefix.dev/conda-forge/win-64/nushell-0.109.1-he61bdd1_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/openjpeg-2.5.4-h24db6dd_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/openssl-3.6.0-h725018a_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/packaging-25.0-pyh29332c3_1.conda
@@ -9975,6 +9980,76 @@ packages:
   license_family: MIT
   size: 12364
   timestamp: 1763482415069
+- conda: https://prefix.dev/conda-forge/linux-64/nushell-0.109.1-h25c72ac_0.conda
+  sha256: 2832d8b0e75d5f7d286ae07503bbd3df6ec5e3f6d970478f441dd3cf9af311c1
+  md5: f639034ed45ab71f2c182ebb004b8120
+  depends:
+  - libgcc >=14
+  - libstdcxx >=14
+  - __glibc >=2.17,<3.0.a0
+  - openssl >=3.5.4,<4.0a0
+  - libzlib >=1.3.1,<2.0a0
+  constrains:
+  - __glibc >=2.17
+  license: MIT
+  license_family: MIT
+  size: 11008770
+  timestamp: 1764717117661
+- conda: https://prefix.dev/conda-forge/linux-aarch64/nushell-0.109.1-ha2bec05_0.conda
+  sha256: dbebe080d84a7c466a412e4a98ceacba90c4958e0bf9fcdca0bd438793a43c58
+  md5: 21055e96d3b7c245768a3e2e1c049e61
+  depends:
+  - libstdcxx >=14
+  - libgcc >=14
+  - libzlib >=1.3.1,<2.0a0
+  - openssl >=3.5.4,<4.0a0
+  constrains:
+  - __glibc >=2.17
+  license: MIT
+  license_family: MIT
+  size: 10847195
+  timestamp: 1764717141097
+- conda: https://prefix.dev/conda-forge/osx-64/nushell-0.109.1-hd6c8b4f_0.conda
+  sha256: 6d4ddfb13e4df6c366403e22ab8fbf6bab771c808f4fa5c7dd65b0c0931ead71
+  md5: 2ba720fb7bdaae63b4c2676622b2f94d
+  depends:
+  - __osx >=10.14
+  - libcxx >=19
+  - libzlib >=1.3.1,<2.0a0
+  - openssl >=3.5.4,<4.0a0
+  constrains:
+  - __osx >=10.13
+  license: MIT
+  license_family: MIT
+  size: 11424263
+  timestamp: 1764717121372
+- conda: https://prefix.dev/conda-forge/osx-arm64/nushell-0.109.1-hf35feb8_0.conda
+  sha256: b8e8d5eda407ec0ecdcac63df5971cfae608fb6b10a7803fab3beb084086b667
+  md5: a2a7fa36f1e114170044ba19a15660a6
+  depends:
+  - __osx >=11.0
+  - libcxx >=19
+  - libzlib >=1.3.1,<2.0a0
+  - openssl >=3.5.4,<4.0a0
+  constrains:
+  - __osx >=11.0
+  license: MIT
+  license_family: MIT
+  size: 11001699
+  timestamp: 1764717113022
+- conda: https://prefix.dev/conda-forge/win-64/nushell-0.109.1-he61bdd1_0.conda
+  sha256: 65fe47bdbf84b7389a8d107d736420f91fbda9bd7b333aa22faa6ded32781166
+  md5: 47625d5af70a163b3b4d53f6f3401350
+  depends:
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  - openssl >=3.5.4,<4.0a0
+  - libzlib >=1.3.1,<2.0a0
+  license: MIT
+  license_family: MIT
+  size: 10565726
+  timestamp: 1764717149580
 - conda: https://prefix.dev/conda-forge/linux-64/openjpeg-2.5.4-h55fea9a_0.conda
   sha256: 3900f9f2dbbf4129cf3ad6acf4e4b6f7101390b53843591c53b00f034343bc4d
   md5: 11b3379b191f63139e29c0d19dee24cd
