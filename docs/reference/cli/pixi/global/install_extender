@@ -31,7 +31,7 @@ pixi global install --expose "py39=python3.9" "python=3.9.*"
 
 --8<-- [start:description]
 
-!!! tip "Need to specify build strings?"
+!!! tip "Need to specify build strings or hardware-specific packages?"
     For advanced package specifications including build strings, see the [Package Specifications](../../../../concepts/package_specifications.md) guide.
 
     Examples (both syntaxes work):
