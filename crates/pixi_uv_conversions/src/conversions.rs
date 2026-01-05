@@ -438,6 +438,22 @@ pub fn to_requirements<'req>(
     requirements
 }
 
+/// Strip UV-specific index annotation from a requirement string.
+///
+/// UV extends PEP 508 format with `(index: URL)` annotations to specify custom
+/// package indexes. These annotations are not valid PEP 508 syntax and must be
+/// stripped before parsing with standard PEP 508 parsers.
+///
+/// Example: `mujoco>=3.3.7 (index: https://py.mujoco.org/)` -> `mujoco>=3.3.7`
+pub fn strip_uv_index_annotation(requirement: &str) -> &str {
+    // Look for the pattern " (index:" which marks the start of UV's index annotation
+    if let Some(pos) = requirement.find(" (index:") {
+        requirement[..pos].trim_end()
+    } else {
+        requirement
+    }
+}
+
 /// Convert back to PEP508 without the VerbatimParsedUrl
 /// We need this function because we need to convert to the introduced
 /// `VerbatimParsedUrl` back to crates.io `VerbatimUrl`, for the locking
@@ -448,7 +464,9 @@ pub fn convert_uv_requirements_to_pep508<'req>(
     let requirements: Result<Vec<pep508_rs::Requirement>, _> = requires_dist
         .map(|r| {
             let requirement = r.to_string();
-            pep508_rs::Requirement::from_str(&requirement).map_err(crate::Pep508Error::Pep508Error)
+            // Strip UV-specific index annotation before parsing
+            let requirement = strip_uv_index_annotation(&requirement);
+            pep508_rs::Requirement::from_str(requirement).map_err(crate::Pep508Error::Pep508Error)
         })
         .collect();
 
@@ -732,5 +750,43 @@ mod tests {
 
         let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
         assert!(host_names.contains(&"packages.example.org".to_string()));
+    }
+
+    #[test]
+    fn test_strip_uv_index_annotation() {
+        // Test basic index annotation stripping
+        assert_eq!(
+            strip_uv_index_annotation("mujoco>=3.3.7 (index: https://py.mujoco.org/)"),
+            "mujoco>=3.3.7"
+        );
+
+        // Test with no annotation
+        assert_eq!(strip_uv_index_annotation("numpy>=1.21.0"), "numpy>=1.21.0");
+
+        // Test with version specifier and extras
+        assert_eq!(
+            strip_uv_index_annotation("package[extra]>=1.0 (index: https://example.com/)"),
+            "package[extra]>=1.0"
+        );
+
+        // Test with complex version specifiers
+        assert_eq!(
+            strip_uv_index_annotation("package>=1.0,<2.0 (index: https://example.com/simple/)"),
+            "package>=1.0,<2.0"
+        );
+
+        // Test with markers before index annotation
+        assert_eq!(
+            strip_uv_index_annotation(
+                "package>=1.0; python_version >= \"3.8\" (index: https://example.com/)"
+            ),
+            "package>=1.0; python_version >= \"3.8\""
+        );
+
+        // Test empty string
+        assert_eq!(strip_uv_index_annotation(""), "");
+
+        // Test just package name
+        assert_eq!(strip_uv_index_annotation("package"), "package");
     }
 }

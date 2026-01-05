@@ -19,6 +19,22 @@ use toml_span::{
 
 use crate::pyproject::{PyProjectManifest, Tool, ToolPoetry};
 
+/// Strip UV-specific index annotation from a requirement string.
+///
+/// UV extends PEP 508 format with `(index: URL)` annotations to specify custom
+/// package indexes. These annotations are not valid PEP 508 syntax and must be
+/// stripped before parsing with standard PEP 508 parsers.
+///
+/// Example: `mujoco>=3.3.7 (index: https://py.mujoco.org/)` -> `mujoco>=3.3.7`
+fn strip_uv_index_annotation(requirement: &str) -> &str {
+    // Look for the pattern " (index:" which marks the start of UV's index annotation
+    if let Some(pos) = requirement.find(" (index:") {
+        requirement[..pos].trim_end()
+    } else {
+        requirement
+    }
+}
+
 #[derive(Debug)]
 pub struct PyProjectToml {
     pub project: Option<TomlProject>,
@@ -482,15 +498,19 @@ impl TomlDependencyGroupSpecifier {
 impl<'de> toml_span::Deserialize<'de> for TomlDependencyGroupSpecifier {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         match value.take() {
-            ValueInner::String(str) => Ok(Self(DependencyGroupSpecifier::String(
-                Requirement::from_str(&str).map_err(|e| {
-                    DeserError::from(Error {
-                        kind: ErrorKind::Custom(e.message.to_string().into()),
-                        span: value.span,
-                        line_info: None,
-                    })
-                })?,
-            ))),
+            ValueInner::String(str) => {
+                // Strip UV-specific index annotation before parsing
+                let stripped = strip_uv_index_annotation(&str);
+                Ok(Self(DependencyGroupSpecifier::String(
+                    Requirement::from_str(stripped).map_err(|e| {
+                        DeserError::from(Error {
+                            kind: ErrorKind::Custom(e.message.to_string().into()),
+                            span: value.span,
+                            line_info: None,
+                        })
+                    })?,
+                )))
+            }
             ValueInner::Table(table) => {
                 let mut th = TableHelper::from((table, value.span));
                 let include_group = th.required("include-group")?;
@@ -540,5 +560,50 @@ impl<'de> Deserialize<'de> for Tool {
         th.finalize(Some(value))?;
 
         Ok(Self { poetry, pixi })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_strip_uv_index_annotation() {
+        // Test basic index annotation stripping
+        assert_eq!(
+            strip_uv_index_annotation("mujoco>=3.3.7 (index: https://py.mujoco.org/)"),
+            "mujoco>=3.3.7"
+        );
+
+        // Test with no annotation
+        assert_eq!(strip_uv_index_annotation("numpy>=1.21.0"), "numpy>=1.21.0");
+
+        // Test with version specifier and extras
+        assert_eq!(
+            strip_uv_index_annotation("package[extra]>=1.0 (index: https://example.com/)"),
+            "package[extra]>=1.0"
+        );
+
+        // Test with complex version specifiers
+        assert_eq!(
+            strip_uv_index_annotation("package>=1.0,<2.0 (index: https://example.com/simple/)"),
+            "package>=1.0,<2.0"
+        );
+
+        // Test empty string
+        assert_eq!(strip_uv_index_annotation(""), "");
+
+        // Test just package name
+        assert_eq!(strip_uv_index_annotation("package"), "package");
+    }
+
+    #[test]
+    fn test_parse_dependency_with_uv_index_annotation() {
+        // Verify that stripping the annotation produces a valid PEP 508 requirement
+        let input = "mujoco>=3.3.7 (index: https://py.mujoco.org/)";
+        let stripped = strip_uv_index_annotation(input);
+        let parsed: Result<Requirement, _> = Requirement::from_str(stripped);
+        assert!(parsed.is_ok(), "Failed to parse: {stripped}");
+        assert_eq!(parsed.unwrap().name.as_ref(), "mujoco");
     }
 }
