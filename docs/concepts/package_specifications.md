@@ -20,8 +20,6 @@ Here are common use cases:
     --8<-- "docs/source_files/shell/package_specifications.sh:quick-exec-examples"
     ```
 
-These examples were written for `pixi add` but the same syntax is used for `pixi global install`, `pixi upgrade` and `pixi exec`.
-
 ## Basic Version Specifications
 Pixi uses the **conda MatchSpec** format for specifying package requirements.
 A MatchSpec allows you to precisely define which package version, build, and channel you want.
