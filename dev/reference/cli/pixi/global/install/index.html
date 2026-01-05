@@ -1113,6 +1113,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../../../concepts/package_specifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Package Specifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../../../concepts/conda_pypi/" class="md-nav__link">
         
   
@@ -1151,10 +1179,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_9" >
         
           
-          <label class="md-nav__link" for="__nav_4_8" id="__nav_4_8_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_9" id="__nav_4_9_label" tabindex="0">
             
   
   
@@ -1172,8 +1200,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_8">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3285,18 +3313,32 @@
 <h1 id="pixi-global-install"><a href="../../">pixi</a> <a href="../">global</a> install<a class="headerlink" href="#pixi-global-install" title="Permanent link">#</a></h1>
 <p>Installs the defined packages in a globally accessible location and exposes their command line applications.</p>
 <div class="admonition tip">
-<p class="admonition-title">Tip</p>
-</div>
-<p>Running <code>osx-64</code> on Apple Silicon will install the Intel binary but run it using <a href="https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment">Rosetta</a>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi global install --platform osx-64 ruff
+<p class="admonition-title">Need to specify build strings or hardware-specific packages?</p>
+<p>For advanced package specifications including build strings, see the <a href="../../../../../concepts/package_specifications/">Package Specifications</a> guide.</p>
+<p>Examples (both syntaxes work):
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Equals syntax (compact)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;pytorch=*=*cuda*&quot;</span><span class="w"> </span>--channel<span class="w"> </span>pytorch
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;jax=*=*cuda*&quot;</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># Bracket syntax (explicit)</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;pytorch [build=&#39;*cuda*&#39;]&quot;</span><span class="w"> </span>--channel<span class="w"> </span>pytorch
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;jax [build=&#39;*cuda*&#39;]&quot;</span>
 </span></code></pre></div></p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>Running <code>osx-64</code> on Apple Silicon will install the Intel binary but run it using <a href="https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment">Rosetta</a>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi global install --platform osx-64 ruff
+</span></code></pre></div></p>
+</div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
+<p>When you pass <code>--path</code> with a local <code>.conda</code> archive, Pixi copies the file into <code>PIXI_HOME/conda-files</code> and installs from that managed copy.
+Supplying any other kind of path keeps the original location unchanged.</p>
 </div>
-<p>When you pass <code>--path</code> with a local <code>.conda</code> archive, Pixi copies the file into <code>PIXI_HOME/conda-files</code> and installs from that managed copy. Supplying any other kind of path keeps the original location unchanged.</p>
 <p>After using global install, you can use the package you installed anywhere on your system.</p>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">#</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi global install [OPTIONS] [PACKAGE]...
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi global install [OPTIONS] [PACKAGE]...
 </span></code></pre></div>
 <h2 id="arguments">Arguments<a class="headerlink" href="#arguments" title="Permanent link">#</a></h2>
 <ul>
@@ -3465,31 +3507,29 @@
 <li><code>pixi global install --environment science --expose jupyter --expose ipython jupyter ipython polars</code></li>
 </ul>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">#</a></h2>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>ruff
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># Multiple packages can be installed at once</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>starship<span class="w"> </span>rattler-build
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Specify the channel(s)</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda<span class="w"> </span>trackplot
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># Or in a more concise form</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># Support full conda matchspec</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9.*
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build_number=1]&quot;</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build=he550d4f_1_cpython]&quot;</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.11.0<span class="o">=</span>h10a6764_1_cpython
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># Install for a specific platform, only useful on osx-arm64</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>ruff
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="c1"># Install a package with all its executables exposed, together with additional packages that don&#39;t expose anything</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>ipython<span class="w"> </span>--with<span class="w"> </span>numpy<span class="w"> </span>--with<span class="w"> </span>scipy
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="c1"># Install into a specific environment name and expose all executables</span>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span>data-science<span class="w"> </span>ipython<span class="w"> </span>jupyterlab<span class="w"> </span>numpy<span class="w"> </span>matplotlib
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="c1"># Expose the binary under a different name</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--expose<span class="w"> </span><span class="s2">&quot;py39=python3.9&quot;</span><span class="w"> </span><span class="s2">&quot;python=3.9.*&quot;</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>ruff
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># Multiple packages can be installed at once</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>starship<span class="w"> </span>rattler-build
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Specify the channel(s)</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda<span class="w"> </span>trackplot
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Support full conda matchspec</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9.*
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build_number=1]&quot;</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build=he550d4f_1_cpython]&quot;</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.11.0<span class="o">=</span>h10a6764_1_cpython
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="c1"># Install for a specific platform, only useful on osx-arm64</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>ruff
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># Install a package with all its executables exposed, together with additional packages that don&#39;t expose anything</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>ipython<span class="w"> </span>--with<span class="w"> </span>numpy<span class="w"> </span>--with<span class="w"> </span>scipy
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="c1"># Install into a specific environment name and expose all executables</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span>data-science<span class="w"> </span>ipython<span class="w"> </span>jupyterlab<span class="w"> </span>numpy<span class="w"> </span>matplotlib
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="c1"># Expose the binary under a different name</span>
+</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--expose<span class="w"> </span><span class="s2">&quot;py39=python3.9&quot;</span><span class="w"> </span><span class="s2">&quot;python=3.9.*&quot;</span>
 </span></code></pre></div>
 
 

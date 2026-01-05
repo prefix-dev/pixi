@@ -46,6 +46,8 @@ for further details on how to use the software.
 - [Multi Environment](https://prefix-dev.github.io/pixi/dev/workspace/multi_environment/index.md)
 - [Multi Platform](https://prefix-dev.github.io/pixi/dev/workspace/multi_platform_configuration/index.md)
 - [System Requirements](https://prefix-dev.github.io/pixi/dev/workspace/system_requirements/index.md)
+- [Conda & PyPI](https://prefix-dev.github.io/pixi/dev/concepts/conda_pypi/index.md)
+- [Package Specifications](https://prefix-dev.github.io/pixi/dev/concepts/package_specifications/index.md)
 - [Manifest](https://prefix-dev.github.io/pixi/dev/global_tools/manifest/index.md)
 - [Trampolines](https://prefix-dev.github.io/pixi/dev/global_tools/trampolines/index.md)
 

@@ -2,6 +2,22 @@
 
 Installs the defined packages in a globally accessible location and exposes their command line applications.
 
+Need to specify build strings or hardware-specific packages?
+
+For advanced package specifications including build strings, see the [Package Specifications](../../../../../concepts/package_specifications/) guide.
+
+Examples (both syntaxes work):
+
+```shell
+# Equals syntax (compact)
+pixi global install "pytorch=*=*cuda*" --channel pytorch
+pixi global install "jax=*=*cuda*"
+
+# Bracket syntax (explicit)
+pixi global install "pytorch [build='*cuda*']" --channel pytorch
+pixi global install "jax [build='*cuda*']"
+```
+
 Tip
 
 Running `osx-64` on Apple Silicon will install the Intel binary but run it using [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment)
@@ -119,8 +135,6 @@ pixi global install ruff
 pixi global install starship rattler-build
 # Specify the channel(s)
 pixi global install --channel conda-forge --channel bioconda trackplot
-# Or in a more concise form
-pixi global install -c conda-forge -c bioconda trackplot
 
 # Support full conda matchspec
 pixi global install python=3.9.*

@@ -1117,6 +1117,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../concepts/package_specifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Package Specifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../concepts/conda_pypi/" class="md-nav__link">
         
   
@@ -1155,10 +1183,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_9" >
         
           
-          <label class="md-nav__link" for="__nav_4_8" id="__nav_4_8_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_9" id="__nav_4_9_label" tabindex="0">
             
   
   
@@ -1176,8 +1204,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_8">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4872,6 +4900,10 @@ So, to expand: if <code>no-binary = true</code> is set for <em>any</em> feature 
 The default is <code>[dependencies]</code>, which are dependencies that are shared across platforms.</p>
 <p>Dependencies are defined using a <a href="https://docs.rs/rattler_conda_types/latest/rattler_conda_types/version_spec/enum.VersionSpec.html">VersionSpec</a>.
 A <code>VersionSpec</code> combines a <a href="https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html">Version</a> with an optional operator.</p>
+<div class="admonition tip">
+<p class="admonition-title">Need to specify build strings or more specific packages?</p>
+<p>For detailed information on specifying build strings and advanced package specifications, see the <a href="../../concepts/package_specifications/">Package Specifications</a> guide.</p>
+</div>
 <p>Some examples are:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="c1"># Use this exact package version</span>
 </span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="n">package0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==1.2.3&quot;</span>
@@ -4882,7 +4914,7 @@ A <code>VersionSpec</code> combines a <a href="https://docs.rs/rattler_conda_typ
 </span><span id="__span-42-7"><a id="__codelineno-42-7" name="__codelineno-42-7" href="#__codelineno-42-7"></a><span class="c1"># Bigger or equal than 1.2.3 or lower not including 1.0.0</span>
 </span><span id="__span-42-8"><a id="__codelineno-42-8" name="__codelineno-42-8" href="#__codelineno-42-8"></a><span class="n">package3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=1.2.3|&lt;1.0.0&quot;</span>
 </span></code></pre></div>
-<p>Dependencies can also be defined as a mapping where it is using a <a href="https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.NamelessMatchSpec.html">matchspec</a>:</p>
+<p>Dependencies can also be defined as a mapping where it is using a matchspec</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="n">package0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;=1.2.3&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">channel</span><span class="p">=</span><span class="s2">&quot;conda-forge&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="n">package1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;=1.2.3&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">build</span><span class="p">=</span><span class="s2">&quot;py34_0&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
@@ -4925,7 +4957,7 @@ PyPI packages are not indexed on <a href="https://prefix.dev/channels">prefix.de
 </ul>
 </div>
 <h4 id="version-specification">Version specification:<a class="headerlink" href="#version-specification" title="Permanent link">#</a></h4>
-<p>These dependencies don't follow the conda matchspec specification.
+<p>These dependencies don't follow the <a href="https://rattler.prefix.dev/py-rattler/match_spec#matchspec">conda MatchSpec</a>  specification.
 The <code>version</code> is a string specification of the version according to <a href="https://packaging.python.org/en/latest/specifications/version-specifiers/">PEP404/PyPA</a>.
 Additionally, a list of extra's can be included, which are essentially optional dependencies.
 Note that this <code>version</code> is distinct from the conda MatchSpec type.

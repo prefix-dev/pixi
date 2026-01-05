@@ -195,6 +195,22 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pyp
 1. This will add the `boltons` package with the given `git` url and `v0.1.0` tag as `pypi` dependency.
 1. This will add the `boltons` package with the given `git` url, `v0.1.0` tag and the `boltons` folder in the repository as `pypi` dependency.
 
+Need to specify build strings or hardware-specific packages?
+
+For advanced package specifications including build strings, see the [Package Specifications](../../../../concepts/package_specifications/) guide.
+
+Examples (both syntaxes work):
+
+```shell
+# Equals syntax (compact)
+pixi add "pytorch=*=*cuda*"
+pixi add "numpy=*=py311*"
+
+# Bracket syntax (explicit)
+pixi add "pytorch [build='*cuda*']"
+pixi add "numpy [build='py311*']"
+```
+
 Tip
 
 If you want to use a non default pinning strategy, you can set it using [pixi's configuration](../../../pixi_configuration/#pinning-strategy).
