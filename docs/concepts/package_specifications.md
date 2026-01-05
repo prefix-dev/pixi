@@ -2,6 +2,8 @@
 
 When adding packages to your Pixi workspace or global environment, you can use various specifications to control exactly which package version and build you want.
 This is particularly important when packages have multiple builds for different hardware configurations (like CPU vs GPU).
+For the conda packages Pixi uses the [MatchSpec](https://rattler.prefix.dev/py-rattler/match_spec#matchspec) format to specify package requirements.
+For PyPI packages, Pixi uses the standard [PEP440 version specifiers](https://peps.python.org/pep-0440/).
 
 ## Quick Examples
 
@@ -21,7 +23,7 @@ Here are common use cases:
     ```
 
 ## Basic Version Specifications
-Pixi uses the **conda MatchSpec** format for specifying package requirements.
+Pixi uses the [**conda MatchSpec**](https://rattler.prefix.dev/py-rattler/match_spec#matchspec) format for specifying package requirements.
 A MatchSpec allows you to precisely define which package version, build, and channel you want.
 
 The simplest way to specify a package is by name and [optional version operators](#version-operators):
@@ -32,7 +34,7 @@ The simplest way to specify a package is by name and [optional version operators
 
 ## Full MatchSpec Syntax
 
-Beyond simple version specifications, you can use the full MatchSpec syntax to precisely control which package variant you want.
+Beyond simple version specifications, you can use the full [MatchSpec](https://rattler.prefix.dev/py-rattler/match_spec#matchspec) syntax to precisely control which package variant you want.
 
 ### Command Line Syntax
 
@@ -274,6 +276,7 @@ For git repositories, you can specify:
 ## PyPI package specifications
 
 Pixi also supports installing packages from PyPI using `pixi add --pypi` and in your `pixi.toml` and `pyproject.toml`.
+Pixi implements the standard [PEP440 version specifiers](https://peps.python.org/pep-0440/) for specifying package versions.
 
 ### Command Line Syntax
 
