@@ -69,9 +69,9 @@ rev = "abc123def"
 # Version specification
 black = "==22.3.0"
 ruff = ">=0.0.241,<1.0.0"
+
 # Specific index URL
 pytest = { version = "==7.2.0", index = "https://pypi.org/simple" }
-
 
 # Extras
 fastapi = { version = "==0.78.0", extras = ["all"] }

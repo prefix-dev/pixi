@@ -271,12 +271,12 @@ For git repositories, you can specify:
 
 ## PyPI package specifications
 
-Pixi also supports installing packages from PyPI using `pixi add --pypi` and in your `pixi.toml` and `pyproject.toml`.
+Pixi also supports installing package dependencies from PyPI using `pixi add --pypi` and in your `pixi.toml` and `pyproject.toml`.
 Pixi implements the standard [PEP440 version specifiers](https://peps.python.org/pep-0440/) for specifying package versions.
 
 ### Command Line Syntax
 
-When using `pixi add --pypi`, you can specify packages similarly to pip:
+When using `pixi add --pypi`, you can [specify packages similarly to `pip`](https://pip.pypa.io/en/stable/user_guide/#installing-packages):
 
 ```shell
 # Simple package
