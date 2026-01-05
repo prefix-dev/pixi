@@ -1,10 +1,10 @@
 Welcome to the guide designed to ease your transition from `poetry` to `pixi`.
-This document compares key commands and concepts between these tools, highlighting `pixi`'s unique approach to managing installation environments and packages.
+This document compares key commands and concepts between these tools, highlighting `pixi`'s unique approach to managing environments and packages.
 With `pixi`, you'll experience a workspace-based workflow similar to `poetry` while including the `conda` ecosystem and allowing for easy sharing of your work.
 
 ## Why Pixi?
 Poetry is most-likely the closest tool to Pixi in terms of workspace management, in the python ecosystem.
-On top of the PyPI ecosystem, `pixi` adds the power of the conda ecosystem, allowing for a more flexible and powerful installation environment management.
+On top of the PyPI ecosystem, `pixi` adds the power of the conda ecosystem, allowing for a more flexible and powerful environment management.
 
 ## Quick look at the differences
 | Task                       | Poetry                                                            | Pixi                                                                                                                                              |

@@ -9,7 +9,7 @@ You might also want to check out the [documentation](https://prefix-dev.github.i
 
 ## Why is This Useful?
 
-Pixi builds upon the conda ecosystem, which allows you to create a Python installation environment with all the dependencies you need.
+Pixi builds upon the conda ecosystem, which allows you to create a Python environment with all the dependencies you need.
 Unlike PyPI, the conda ecosystem is cross-language and also offers packages written in Rust, R, C, C++ and many other languages.
 
 By building a Python package with pixi, you can:
@@ -49,7 +49,7 @@ The metadata of the Python package is defined in `pyproject.toml`.
 ```
 
 1. We use the `rich` package to print the table in the terminal.
-2. By specifying a script, the executable `rich-example-main` will be available in the installation environment. When being called it will in return call the `main` function of the `python_rich` module.
+2. By specifying a script, the executable `rich-example-main` will be available in the environment. When being called it will in return call the `main` function of the `python_rich` module.
 3. One can choose multiple backends to build a Python package, we choose `hatchling` which works well without additional configuration.
 
 
@@ -58,7 +58,7 @@ The metadata of the Python package is defined in `pyproject.toml`.
 What we have in the moment, constitutes a full Python package.
 It could be uploaded to [PyPI](https://pypi.org/) as-is.
 
-However, we still need a tool to manage our installation environments and if we want other Pixi projects to depend on our tool, we need to include more information.
+However, we still need a tool to manage our environments and if we want other Pixi projects to depend on our tool, we need to include more information.
 We will do exactly that by creating a `pixi.toml`.
 
 !!! note

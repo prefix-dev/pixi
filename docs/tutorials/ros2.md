@@ -66,7 +66,7 @@ Now run the `turtlesim` example.
 pixi run ros2 run turtlesim turtlesim_node
 ```
 
-**Or** use the `shell` command to start a shell in the activated installation environment in your terminal.
+**Or** use the `shell` command to start a shell in the activated environment in your terminal.
 
 ```shell
 pixi shell
@@ -222,8 +222,8 @@ Let's inspire the community together!
 
 ### What happens with `rosdep`?
 
-Currently, we don't support `rosdep` in a Pixi installation environment, so you'll
-have to add the packages using `pixi add`. `rosdep` will call `conda install` which isn't supported in a Pixi installation environment.
+Currently, we don't support `rosdep` in a Pixi environment, so you'll
+have to add the packages using `pixi add`. `rosdep` will call `conda install` which isn't supported in a Pixi environment.
 
 ### Where can I find more documentation on the `robostack-*` channels?
 

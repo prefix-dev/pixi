@@ -31,7 +31,7 @@ This will override the version of `numpy` used by all dependencies in the `dev` 
 
 ### Interact with other overrides
 
-For a specific installation environment, all the `dependency-overrides` defined in different features will be combined in the order they were defined.
+For a specific environment, all the `dependency-overrides` defined in different features will be combined in the order they were defined.
 
 If the same dependency is overridden multiple times, we'll use the override from the **prior** feature in that environment.
 
@@ -64,6 +64,6 @@ outdated: `numpy == 1.21.0`
 conflict_a: `numpy == 1.21.0` (from `outdated`)
 conflict_b: `numpy == 2.0.0` (from `dev`)
 
-This may contrast with the intuition that all overrides are applied and combined to a result, but it
-is done this way to avoid conflicts and confusion. Since users are granted fully control over the
-overrides, it is up to ourselves to choose the right overrides for the installation environment.
+This may contrast with the intuition that all overrides are applied and combined to a result. It
+is done this way to avoid conflicts and confusion: Since users are granted fully control over the
+overrides, it is up to them to choose the right overrides for an environment.

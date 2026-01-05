@@ -1,12 +1,12 @@
-> A lock file is the protector of the installation environments, and Pixi is the key to unlock it.
+> A lock file is the protector of the environments, and Pixi is the key to unlock it.
 
 ## What is a lock file?
 
-A lock file locks the installation environment in a specific state.
-Within Pixi a lock file is a description of the packages in an installation environment.
+A lock file locks the environment in a specific state.
+Within Pixi a lock file is a description of the packages in an environment.
 The lock file contains two definitions:
 
-- The installation environments that are used in the workspace with their complete set of packages. e.g.:
+- The environments that are used in the workspace with their complete set of packages. e.g.:
 
   ```yaml
   environments:
@@ -58,11 +58,11 @@ The lock file contains two definitions:
 
 Pixi uses the lock file for the following reasons:
 
-- To save a working installation state, without copying the entire installation environment's data.
-- To ensure the workspace configuration is aligned with the installation environment.
-- To give the user a file that contains all the information about the installation environment.
+- To save a working installation state, without copying the entire environment's data.
+- To ensure the workspace configuration is aligned with the environment.
+- To give the user a file that contains all the information about the environment.
 
-This gives you (and your collaborators) a way to really reproduce installation environment they are working in.
+This gives you (and your collaborators) a way to really reproduce environment they are working in.
 Using tools such as docker suddenly becomes much less necessary.
 
 ## When is a lock file generated?
@@ -84,9 +84,9 @@ graph TD
 !!! Warning "Do not edit the lock file"
     A lock file is a machine only file, and should not be edited by hand.
 
-That said, the `pixi.lock` is human-readable, so it's easy to track the changes in the installation environment.
+That said, the `pixi.lock` is human-readable, so it's easy to track the changes in the environment.
 We recommend you track the lock file in `git` or other version control systems.
-This will ensure that the installation environment is always reproducible and that you can always revert back to a working state, in case something goes wrong.
+This will ensure that the environment is always reproducible and that you can always revert back to a working state, in case something goes wrong.
 The `pixi.lock` and the manifest file `pixi.toml`/`pyproject.toml` should always be in sync.
 
 Running the following commands will check and automatically update the lock file if you changed any dependencies:
@@ -102,7 +102,7 @@ Running the following commands will check and automatically update the lock file
 
 All the commands that support the interaction with the lock file also include some lock file usage options:
 
-- `--frozen`: install the installation environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](../reference/pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](../reference/pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](../reference/pixi_manifest.md). It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 
 !!! Note "Syncing the lock file with the manifest file"
@@ -110,13 +110,13 @@ All the commands that support the interaction with the lock file also include so
     This means that if you change the manifest file, the lock file will be updated.
     ```mermaid
     flowchart TD
-        C[manifest] --> A[lock file] --> B[installation environment]
+        C[manifest] --> A[lock file] --> B[environment]
     ```
 
 ## Lock file satisfiability
 
-The lock file is a description of the installation environment, and it should always be satisfiable.
-Satisfiable means that the given manifest file and the created installation environment are in sync with the lock file.
+The lock file is a description of the environment, and it should always be satisfiable.
+Satisfiable means that the given manifest file and the created environment are in sync with the lock file.
 If the lock file is not satisfiable, Pixi will generate a new lock file automatically.
 
 Steps to check if the lock file is satisfiable:
@@ -153,13 +153,13 @@ This is because the lock file contains all the information about the packages.
 
 ## You don't need a lock file because...
 
-If you can not think of a case where you would benefit from a fast reproducible installation environment, then you don't need a lock file.
+If you can not think of a case where you would benefit from a fast reproducible environment, then you don't need a lock file.
 
 But take note of the following:
 
-- A lock file allows you to run the same installation environment on different machines, think CI systems.
+- A lock file allows you to run the same environment on different machines, think CI systems.
 - It also allows you to go back to a working state if you have made a mistake.
-- It helps other users onboard to your workspace as they don't have to figure out the installation environment setup or solve dependency issues.
+- It helps other users onboard to your workspace as they don't have to figure out the environment setup or solve dependency issues.
 
 ## Removing the lock file
 
@@ -172,4 +172,4 @@ rm pixi.lock
 This will remove the lock file, and the next time you run a command that requires the lock file, it will be generated again.
 
 !!! Warning "Note"
-    This does remove the locked state of the installation environment, which will be updated to the latest version of all packages.
+    This does remove the locked state of the environment, which will be updated to the latest version of all packages.

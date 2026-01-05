@@ -1,8 +1,8 @@
 <!-- Keep in sync with https://github.com/quantco/pixi-pack/blob/main/README.md -->
 
-[`pixi-pack`](https://github.com/quantco/pixi-pack) is a simple tool that takes an installation environment
+[`pixi-pack`](https://github.com/quantco/pixi-pack) is a simple tool that takes an environment
 and packs it into a compressed archive that can be shipped to the target machine. The corresponding
-`pixi-unpack` tool can be used to unpack the archive and install the installation environment.
+`pixi-unpack` tool can be used to unpack the archive and recreate an environment.
 
 Both tools can be installed via
 
@@ -12,7 +12,7 @@ pixi global install pixi-pack pixi-unpack
 
 Or by downloading our pre-built binaries from the [releases page](https://github.com/Quantco/pixi-pack/releases).
 
-Instead of installing `pixi-pack` and `pixi-unpack` globally, you can also use `pixi exec` to run `pixi-pack` in a temporary installation environment:
+Instead of installing `pixi-pack` and `pixi-unpack` globally, you can also use `pixi exec` to run `pixi-pack` in a temporary environment:
 
 ```bash
 pixi exec pixi-pack
@@ -25,13 +25,13 @@ pixi exec pixi-unpack environment.tar
 ![pixi-pack demo](https://raw.githubusercontent.com/quantco/pixi-pack/refs/heads/main/.github/assets/demo/demo-light.gif#only-light)
 ![pixi-pack demo](https://raw.githubusercontent.com/quantco/pixi-pack/refs/heads/main/.github/assets/demo/demo-dark.gif#only-dark)
 
-You can pack an installation environment with
+You can pack an environment with
 
 ```bash
 pixi-pack --environment prod --platform linux-64 pixi.toml
 ```
 
-This will create an `environment.tar` file that contains all conda packages required to create the installation environment.
+This will create an `environment.tar` file that contains all conda packages required to create the environment.
 
 ```plain
 # environment.tar
@@ -48,9 +48,9 @@ This will create an `environment.tar` file that contains all conda packages requ
 |         └── repodata.json
 ```
 
-### `pixi-unpack`: Unpacking an installation environment
+### `pixi-unpack`: Unpacking an environment
 
-With `pixi-unpack environment.tar`, you can unpack the installation environment on your target system.
+With `pixi-unpack environment.tar`, you can unpack the environment on your target system.
 This will create a new conda environment in `./env` that contains all packages specified in your `pixi.toml`.
 It also creates an `activate.sh` (or `activate.bat` on Windows) file that lets you activate the environment
 without needing to have `conda` or `micromamba` installed.
@@ -80,7 +80,7 @@ pixi-pack --platform win-64
 
 ### Self-Extracting Binaries
 
-You can create a self-extracting binary that contains the packed installation environment and a script that unpacks the environment.
+You can create a self-extracting binary that contains the packed environment and a script that unpacks the environment.
 This can be useful if you want to distribute the environment to users that don't have `pixi-unpack` installed.
 
 === "Linux & macOS"
@@ -132,22 +132,22 @@ pixi-pack --create-executable --pixi-unpack-source ./pixi-unpack-x86_64-unknown-
 
 !!! note
 
-    The produced executable is a simple shell script that contains both the `pixi-unpack` binary as well as the packed installation environment.
+    The produced executable is a simple shell script that contains both the `pixi-unpack` binary as well as the packed environment.
 
 ### Inject Additional Packages
 
-You can inject additional packages into the installation environment that are not specified in `pixi.lock` by using the `--inject` flag:
+You can inject additional packages into the environment that are not specified in `pixi.lock` by using the `--inject` flag:
 
 ```bash
 pixi-pack --inject local-package-1.0.0-hbefa133_0.conda pixi.toml
 ```
 
 This can be particularly useful if you build the package itself and want to include the built package
-in the installation environment but still want to use `pixi.lock` from the workspace.
+in the environment but still want to use `pixi.lock` from the workspace.
 
 ### PyPi support
 
-You can also pack PyPi wheel packages into your installation environment.
+You can also pack PyPi wheel packages into your environment.
 `pixi-pack` only supports wheel packages and not source distributions.
 If you happen to use source distributions, you can ignore them by using the `--ignore-pypi-non-wheel` flag.
 This will skip the bundling of PyPi packages that are source distributions.

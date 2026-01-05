@@ -1,5 +1,5 @@
 
-Next to managing workflows and installation environments, Pixi can also build packages.
+Next to managing workflows and environments, Pixi can also build packages.
 This is useful for the following reasons:
 
 - Building and uploading a package to a conda channel

@@ -1,18 +1,18 @@
-Pixi is a tool to manage installation environments.
-This document explains what an installation environment looks like and how to use it.
+Pixi is a tool to manage environments.
+This document explains what an environment looks like and how to use it.
 
 ## Activation
 
-An installation environment is nothing more than a set of files that are installed into a certain location, that somewhat mimics a global system install.
-You need to activate the installation environment to use it.
-In the most simple sense that mean adding the `bin` directory of the installation environment to the `PATH` variable.
+An environment is nothing more than a set of files that are installed into a certain location, that somewhat mimics a global system install.
+You need to activate the environment to use it.
+In the most simple sense that mean adding the `bin` directory of the environment to the `PATH` variable.
 But there is more to it in a conda environment, as it also sets some environment variables.
 
 To do the activation we have multiple options:
 
-- `pixi shell`: start a shell with the installation environment activated.
-- `pixi shell-hook`: print the command to activate the installation environment in your current shell.
-- `pixi run` run a command or [task](./advanced_tasks.md) in the default installation environment.
+- `pixi shell`: start a shell with the environment activated.
+- `pixi shell-hook`: print the command to activate the environment in your current shell.
+- `pixi run` run a command or [task](./advanced_tasks.md) in the default environment.
 
 Where the `run` command is special as it runs its own cross-platform shell and has the ability to run tasks.
 More information about tasks can be found in the [tasks documentation](./advanced_tasks.md).
@@ -59,11 +59,11 @@ Find the reference for the `activation` table [here](../reference/pixi_manifest.
 
 ## Structure
 
-All Pixi installation environments are by default located in the `.pixi/envs` directory of the workspace.
+All Pixi environments are by default located in the `.pixi/envs` directory of the workspace.
 This keeps your machine and your workspace clean and isolated from each other, and makes it easy to clean up after a workspace is done.
-While this structure is generally recommended, installation environments can also be stored outside of workspace directories by enabling [detached installation environments](../reference/pixi_configuration.md#detached-environments).
+While this structure is generally recommended, environments can also be stored outside of workspace directories by enabling [detached environments](../reference/pixi_configuration.md#detached-environments).
 
-If you look at the `.pixi/envs` directory, you will see a directory for each installation environment, the `default` being the one that is normally used, if you specify a custom installation environment the name you specified will be used.
+If you look at the `.pixi/envs` directory, you will see a directory for each environment, the `default` being the one that is normally used, if you specify a custom environment the name you specified will be used.
 
 ```shell
 .pixi
@@ -85,18 +85,18 @@ If you look at the `.pixi/envs` directory, you will see a directory for each ins
 ```
 
 These directories are conda environments, and you can use them as such, but you cannot manually edit them, this should always go through the `pixi.toml`.
-Pixi will always make sure the installation environment is in sync with the `pixi.lock` file.
-If this is not the case then all the commands that use the installation environment will automatically it, e.g. `pixi run`, `pixi shell`.
+Pixi will always make sure the environment is in sync with the `pixi.lock` file.
+If this is not the case then all the commands that use the environment will automatically it, e.g. `pixi run`, `pixi shell`.
 
-### Installation Environment Metadata
-On installation environment creation, Pixi will add a small file containing some metadata.
-This file is called `pixi` and is located in the `conda-meta` folder of the installation environment.
+### Environment Metadata
+On environment creation, Pixi will add a small file containing some metadata.
+This file is called `pixi` and is located in the `conda-meta` folder of the environment.
 This file contains the following information:
 
 - `manifest_path`: The path to the manifest file that describes the workspace used to create this environment
-- `environment_name`: The name of the installation environment
-- `pixi_version`: The version of Pixi that was used to create this installation environment
-- `environment_lock_file_hash`: The hash of the `pixi.lock` file that was used to create this installation environment
+- `environment_name`: The name of the environment
+- `pixi_version`: The version of Pixi that was used to create this environment
+- `environment_lock_file_hash`: The hash of the `pixi.lock` file that was used to create this environment
 
 ```json
 {
@@ -107,37 +107,37 @@ This file contains the following information:
 }
 ```
 
-The `environment_lock_file_hash` is used to check if the installation environment is in sync with the `pixi.lock` file.
-If the hash of the `pixi.lock` file is different from the hash in the `pixi` file, Pixi will update the installation environment.
+The `environment_lock_file_hash` is used to check if the environment is in sync with the `pixi.lock` file.
+If the hash of the `pixi.lock` file is different from the hash in the `pixi` file, Pixi will update the environment.
 
 This is used to speedup activation, in order to trigger a full revalidation and installation use `pixi install` or `pixi reinstall`.
-A broken installation environment would typically not be found with a hash comparison, but a revalidation would reinstall the installation environment.
+A broken environment would typically not be found with a hash comparison, but a revalidation would reinstall the environment.
 By default, all lock file modifying commands will always trigger a revalidation, as does `pixi install`.
 
 ### Cleaning up
 
-If you want to clean up the installation environments, you can simply delete the `.pixi/envs` directory, and Pixi will recreate the installation environments when needed.
+If you want to clean up the environments, you can simply delete the `.pixi/envs` directory, and Pixi will recreate the environments when needed.
 
 ```shell
 pixi clean
 # or manually:
 rm -rf .pixi/envs
 
-# or per installation environment:
+# or per environment:
 pixi clean --environment cuda
 # or manually:
 rm -rf .pixi/envs/default
 rm -rf .pixi/envs/cuda
 ```
 
-## Solving installation environments
+## Solving environments
 
-When you run a command that uses the installation environment, Pixi will check if it is in sync with the `pixi.lock` file.
-If it is not, Pixi will solve the installation environment and update it.
+When you run a command that uses the environment, Pixi will check if it is in sync with the `pixi.lock` file.
+If it is not, Pixi will solve the environment and update it.
 This means that Pixi will retrieve the best set of packages for the dependency requirements that you
 specified in the `pixi.toml` and will put the output of the solve step into the `pixi.lock` file.
 Solving is a mathematical problem and can take some time, but we take pride in the way we solve
-installation environments, and we are confident that we can solve yours in a reasonable time.
+environments, and we are confident that we can solve yours in a reasonable time.
 If you want to learn more about the solving process, you can read these:
 
 - [Rattler(conda) resolver blog](https://prefix.dev/blog/the_new_rattler_resolver)
@@ -145,7 +145,7 @@ If you want to learn more about the solving process, you can read these:
 
 Pixi solves both the `conda` and `PyPI` dependencies, where the `PyPI` dependencies use the conda packages as a base, so you can be sure that the packages are compatible with each other.
 These solvers are split between the [`rattler`](https://github.com/conda/rattler) and [`uv`](https://github.com/astral-sh/uv) library, these control the heavy lifting of the solving process, which is executed by our custom SAT solver: [`resolvo`](https://github.com/mamba-org/resolvo).
-`resolvo` is able to solve multiple ecosystem like `conda` and `PyPI`. It implements the lazy solving process for `PyPI` packages, which means that it only downloads the metadata of the packages that are needed to solve the installation environment.
+`resolvo` is able to solve multiple ecosystem like `conda` and `PyPI`. It implements the lazy solving process for `PyPI` packages, which means that it only downloads the metadata of the packages that are needed to solve the environment.
 It also supports the `conda` way of solving, which means that it downloads the metadata of all the packages at once and then solves in one go.
 
 For the `[pypi-dependencies]`, `uv` implements `sdist` building to retrieve the metadata of the packages, and `wheel` building to install the packages.

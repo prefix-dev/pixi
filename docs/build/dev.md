@@ -1,8 +1,8 @@
-The source packages in the `[dev]` table are not built or installed into the pixi installation environment.
-The `build-dependencies`, `host-dependencies` and `run-dependencies` of those packages are installed into the pixi installation environment.
+The source packages in the `[dev]` table are not built or installed into the pixi environment.
+The `build-dependencies`, `host-dependencies` and `run-dependencies` of those packages are installed into the pixi environment.
 
-Source dependencies in the `[dependencies]` section are build in an isolated directory and then installed into the actual installation environment.
-This means that the `build-` and `host-dependencies` will not be in the pixi installation environment.
+Source dependencies in the `[dependencies]` section are build in an isolated directory and then installed into the workspace.
+This means that the `build-` and `host-dependencies` will not be in the pixi environment.
 
 This document explains how you can use the `[dev]` table to depend on the development dependencies of a package.
 
@@ -29,7 +29,7 @@ To change that you can add a `[dev]` table to the manifest file:
 --8<-- "docs/source_files/pixi_workspaces/pixi_build/dev/pixi.toml:dev"
 ```
 
-Now when you run `pixi install` the development dependencies will be installed into the installation environment.
+Now when you run `pixi install` the development dependencies will be installed into the Pixi environment.
 This means that you can now use `cargo` in `pixi run`:
 
 ```bash

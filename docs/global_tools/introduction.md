@@ -9,7 +9,7 @@
 
 
 With `pixi global`, users can manage globally installed tools in a way that makes them available from any directory.
-This means that the Pixi installation environment will be placed in a global location, and the tools will be exposed to the system `PATH`, allowing you to run them from the command line.
+This means that the Pixi environment will be placed in a global location, and the tools will be exposed to the system `PATH`, allowing you to run them from the command line.
 Some packages, especially those with graphical user interfaces, will also add start menu entries.
 
 
@@ -21,11 +21,11 @@ Running the following command installs [`rattler-build`](https://prefix-dev.gith
 pixi global install rattler-build
 ```
 
-What's great about `pixi global` is that, by default, it isolates each package in its own installation environment, exposing only the necessary entry points.
+What's great about `pixi global` is that, by default, it isolates each package in its own environment, exposing only the necessary entry points.
 This means you don't have to worry about removing a package and accidentally breaking seemingly unrelated packages.
 This behavior is quite similar to that of [`pipx`](https://pipx.pypa.io/latest/installation/).
 
-However, there are times when you may want multiple dependencies in the same installation environment.
+However, there are times when you may want multiple dependencies in the same environment.
 For instance, while `ipython` is really useful on its own, it becomes much more useful when `numpy` and `matplotlib` are available when using it.
 
 Let's execute the following command:
@@ -198,11 +198,11 @@ dependencies = { rattler-build = "*" }
 exposed = { rattler-build = "rattler-build" }
 ```
 
-Creating two separate non-interfering installation environments, while exposing only the minimum required binaries.
+Creating two separate non-interfering environments, while exposing only the minimum required binaries.
 
 ## Creating a Data Science Sandbox Environment
 
-You can create an installation environment with multiple tools using the following command:
+You can create an environment with multiple tools using the following command:
 
 ```shell
 pixi global install --environment data-science --expose jupyter --expose ipython jupyter numpy pandas matplotlib ipython
@@ -217,7 +217,7 @@ dependencies = { jupyter = "*", ipython = "*" }
 exposed = { jupyter = "jupyter", ipython = "ipython" }
 ```
 
-In this setup, both `jupyter` and `ipython` are exposed from the `data-science` installation environment, allowing you to run:
+In this setup, both `jupyter` and `ipython` are exposed from the `data-science` environment, allowing you to run:
 
 ```shell
 > ipython
@@ -225,7 +225,7 @@ In this setup, both `jupyter` and `ipython` are exposed from the `data-science` 
 > jupyter lab
 ```
 
-These commands will be available globally, making it easy to access your preferred tools without switching installation environments.
+These commands will be available globally, making it easy to access your preferred tools without switching environments.
 
 ## Install Packages For a Different Platform
 
@@ -248,10 +248,10 @@ dependencies = { python = "*" }
 
 ### Opt Out of `CONDA_PREFIX`
 
-Pixi activates the target installation environment before running a globally exposed executable, which usually sets `CONDA_PREFIX` to that installation environment's path.
+Pixi activates the target environment before running a globally exposed executable, which usually sets `CONDA_PREFIX` to that environment's path.
 Some tools inspect `CONDA_PREFIX` and expect it to point to a standard Conda installation, which can lead to confusing behavior when the tool runs from a Pixi-managed prefix.
 
-Package authors can opt out of exporting `CONDA_PREFIX` by shipping a marker file at `etc/pixi/<executable>/global-ignore-conda-prefix` inside the installation environment (for example `etc/pixi/borg/global-ignore-conda-prefix` for an executable named `borg`).
+Package authors can opt out of exporting `CONDA_PREFIX` by shipping a marker file at `etc/pixi/<executable>/global-ignore-conda-prefix` inside the environment (for example `etc/pixi/borg/global-ignore-conda-prefix` for an executable named `borg`).
 When this file is present for the exposed executable, Pixi removes `CONDA_PREFIX` from the environment variables,
 letting the tool behave as if no Conda environment is active.
 

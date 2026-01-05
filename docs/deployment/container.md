@@ -39,7 +39,7 @@ COPY . .
 # install dependencies to `/app/.pixi/envs/prod`
 # use `--locked` to ensure the lockfile is up to date with pixi.toml
 RUN pixi install --locked -e prod
-# create the shell-hook bash script to activate the installation environment
+# create the shell-hook bash script to activate the environment
 RUN pixi shell-hook -e prod -s bash > /shell-hook
 RUN echo "#!/bin/bash" > /app/entrypoint.sh
 RUN cat /shell-hook >> /app/entrypoint.sh
@@ -48,7 +48,7 @@ RUN echo 'exec "$@"' >> /app/entrypoint.sh
 
 FROM ubuntu:24.04 AS production
 WORKDIR /app
-# only copy the production installation environment into prod container
+# only copy the production environment into prod container
 # please note that the "prefix" (path) needs to stay the same as in the build container
 COPY --from=build /app/.pixi/envs/prod /app/.pixi/envs/prod
 COPY --from=build --chmod=0755 /app/entrypoint.sh /app/entrypoint.sh

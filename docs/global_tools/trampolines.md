@@ -7,10 +7,10 @@ the execution of activation scripts that have a significant performance impact.
 When you execute a globally installed executable, a trampoline performs the following sequence of steps:
 
 * Each trampoline first reads a configuration file named after the binary being executed. This configuration file,
-  in JSON format (e.g., `python.json`), contains key information about how the installation environment should be set up.
+  in JSON format (e.g., `python.json`), contains key information about how the environment should be set up.
   The configuration file is stored in [`$PIXI_HOME`](../reference/environment_variables.md)`/bin/trampoline_configuration`.
-* Once the configuration is loaded and the installation environment is set, the trampoline executes the original
-  binary with the correct installation environment settings.
+* Once the configuration is loaded and the environment is set, the trampoline executes the original
+  binary with the correct environment settings.
 * When installing a new binary, a new trampoline is placed in the [`$PIXI_HOME`](../reference/environment_variables.md)`/bin`
   directory and is hard-linked to the [`$PIXI_HOME`](../reference/environment_variables.md)`/bin/trampoline_configuration/trampoline_bin`.
   This optimizes storage space and avoids duplication of the same trampoline.

@@ -3,7 +3,7 @@ We will show some of the features that Pixi provides, that are currently not a p
 
 ## Why is this useful?
 
-Pixi builds upon the conda ecosystem, which allows you to create a Python installation environment with all the dependencies you need.
+Pixi builds upon the conda ecosystem, which allows you to create a Python environment with all the dependencies you need.
 This is especially useful when you are working with multiple Python interpreters and bindings to C and C++ libraries.
 For example, GDAL from PyPI does not have binary C dependencies, but the conda package does.
 On the other hand, some packages are only available through PyPI, which `pixi` can also install for you.
@@ -78,7 +78,7 @@ The keyword `platforms` determines which platforms the workspace supports.
 
 The `pixi_py` package itself is added as an `editable` dependency.
 This means that the package is installed in editable mode, so you can make changes to the package and
-see the changes reflected in the installation environment, without having to re-install it.
+see the changes reflected in the environment, without having to re-install it.
 
 ```toml
 # Editable installs
@@ -87,7 +87,7 @@ pixi-py = { path = ".", editable = true }
 ```
 
 In pixi, unlike other package managers, this is explicitly stated in the `pyproject.toml` file.
-The main reason being so that you can choose which installation environment this package should be included in.
+The main reason being so that you can choose which environment this package should be included in.
 
 ### Managing both Conda and PyPI dependencies
 
@@ -154,7 +154,7 @@ dependencies = ["black", "flask[async]==3.1.0"]
 
 ### Installation: `pixi install`
 
-Pixi always ensures the installation environment is up-to-date with the `pyproject.toml` file before running something in it.
+Pixi always ensures the environment is up-to-date with the `pyproject.toml` file before running something in it.
 If you want to do it manually anyway, you can run:
 
 ```shell
@@ -162,14 +162,14 @@ pixi install
 ```
 
 We now have a new directory called `.pixi` in the workspace root.
-The installation environment is a Conda environment with all the Conda and PyPI dependencies installed into it.
+The environment is a Conda environment with all the Conda and PyPI dependencies installed into it.
 
-The installation environment is always a result of the `pixi.lock` file, which is generated from the `pyproject.toml` file.
-This file contains the exact versions of the dependencies that were installed into the installation environment across platforms.
+The environment is always a result of the `pixi.lock` file, which is generated from the `pyproject.toml` file.
+This file contains the exact versions of the dependencies that were installed into the environment across platforms.
 
-## What's in the installation environment?
+## What's in the environment?
 
-Using `pixi list`, you can see what's in the installation environment, this is essentially a nicer view on the lock file (`pixi.lock`):
+Using `pixi list`, you can see what's in the environment, this is essentially a nicer view on the lock file (`pixi.lock`):
 
 ```shell
 Package          Version     Build               Size       Kind   Source
@@ -205,13 +205,13 @@ werkzeug         3.1.3                           743 KiB    pypi   werkzeug-3.1.
 ```
 Here, you can see the different conda and Pypi packages listed.
 As you can see, the `pixi-py` package that we are working on is installed in editable mode.
-Every installation environment in Pixi is isolated but reuses files that are hard-linked from a central cache directory.
-This means that you can have multiple installation environments with the same packages but only have the individual files stored once on disk.
+Every environment in Pixi is isolated but reuses files that are hard-linked from a central cache directory.
+This means that you can have multiple environments with the same packages but only have the individual files stored once on disk.
 
-??? question "Why does the installation environment have a Python interpreter?"
-    The Python interpreter is also installed into the installation environment.
+??? question "Why does the environment have a Python interpreter?"
+    The Python interpreter is also installed into the environment.
     This is because the Python interpreter version is read from the `requires-python` field in the `pyproject.toml` file.
-    This is used to determine the Python version to install into the installation environment.
+    This is used to determine the Python version to install into the environment.
     This way, Pixi automatically manages/bootstraps the Python interpreter for you, so no more `brew`, `apt` or other system install steps.
 
 ??? question "How to use the Free-threaded interpreter?"
@@ -219,12 +219,12 @@ This means that you can have multiple installation environments with the same pa
     ```
     pixi add python-freethreading
     ```
-    This ensures that a free-threaded version of Python is installed into the installation environment.
+    This ensures that a free-threaded version of Python is installed into the environment.
     This might not work with other packages that are not thread-safe yet.
     You can read more about free-threaded Python [here](https://docs.python.org/3/howto/free-threading-python.html).
 
-### Multiple installation environments
-Pixi can also create multiple installation environments, this works well together with the `dependency-groups` feature in the `pyproject.toml` file.
+### Multiple environments
+Pixi can also create multiple environments, this works well together with the `dependency-groups` feature in the `pyproject.toml` file.
 
 Let's add a dependency-group, which Pixi calls a `feature`, named `test`.
 And add the `pytest` package to this group.
@@ -258,12 +258,12 @@ test = { features = ["test"], solve-group = "default" }
 
 ??? note "Solve Groups"
     Solve groups are a way to group dependencies together.
-    This is useful when you have multiple installation environments that share the same dependencies.
-    For example, maybe `pytest` is a dependency that influences the dependencies of the `default` installation environment.
+    This is useful when you have multiple environments that share the same dependencies.
+    For example, maybe `pytest` is a dependency that influences the dependencies of the `default` environment.
     By putting these in the same solve group, you ensure that the versions in `test` and `default` are exactly the same.
 
-Without specifying the installation environment name, Pixi will default to the `default` installation environment.
-If you want to install or run the `test` installation environment, you add `--environment test` to the command.
+Without specifying the environment name, Pixi will default to the `default` environment.
+If you want to install or run the `test` environment, you add `--environment test` to the command.
 
 ```shell
 pixi install --environment test
@@ -365,25 +365,25 @@ test_me.py .                                                                    
 ================================================================================================== 1 passed in 0.00s =================================================================================================
 ```
 
-??? question "Why didn't I have to specify the installation environment?"
+??? question "Why didn't I have to specify the environment?"
     The `test` task was added to the `test` feature/environment.
-    When you run the `test` task, Pixi automatically switches to the `test` installation environment,
+    When you run the `test` task, Pixi automatically switches to the `test` environment,
     because that is the only one associated with the `test` feature.
 
 Neat! It seems to be working!
 
-### Test vs Default installation environment
+### Test vs Default environment
 
-Let's compare the output of the test and default installation environments.
-We add the `--explicit` flag to show the explicit dependencies in the installation environment.
+Let's compare the output of the test and default environments.
+We add the `--explicit` flag to show the explicit dependencies in the environment.
 
 ```shell
 pixi list --explicit --environment test
-# vs. default installation environment
+# vs. default environment
 pixi list --explicit
 ```
 
-We see that the `test` installation environment has:
+We see that the `test` environment has:
 
 ```shell
 package          version       build               size       kind   source
@@ -392,11 +392,11 @@ pytest           8.1.1                             1.1 mib    pypi   pytest-8.1.
 ...
 ```
 
-However, the default installation environment is missing the `pytest` package.
-This way, you can finetune your installation environments to only have the packages that are needed.
-E.g. you could also have a `dev` installation environment that has `pytest` and `ruff` installed, but
-you could omit these from the `prod` installation environment. There is a [docker](https://github.com/prefix-dev/pixi/tree/main/examples/docker)
-example that shows how to set up a minimal `prod` installation environment and copy from there.
+However, the default environment is missing the `pytest` package.
+This way, you can finetune your environments to only have the packages that are needed.
+E.g. you could also have a `dev` environment that has `pytest` and `ruff` installed, but
+you could omit these from the `prod` environment. There is a [docker](https://github.com/prefix-dev/pixi/tree/main/examples/docker)
+example that shows how to set up a minimal `prod` environment and copy from there.
 
 ## Replacing PyPI packages with conda packages
 
@@ -451,7 +451,7 @@ And it still works!
 
 ## Conclusion
 
-In this tutorial, you've seen how easy it is to use a `pyproject.toml` to manage your Pixi dependencies and installation environments.
+In this tutorial, you've seen how easy it is to use a `pyproject.toml` to manage your Pixi dependencies and environments.
 We have also explored how to use PyPI and conda dependencies seamlessly together in the same workspace and install optional dependencies to manage Python packages.
 
 Hopefully, this provides a flexible and powerful way to manage your Python projects and a fertile base for further exploration with Pixi.

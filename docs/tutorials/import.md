@@ -1,12 +1,12 @@
-In this tutorial we will show you how to import existing installation environments into a Pixi workspace.
+In this tutorial we will show you how to import existing environments into a Pixi workspace.
 In case some words used in the tutorial don't make sense to you, you may get value from first
 reading some of our other tutorials, like [our first workspace walthrough](../first_workspace.md) and
-[our guide to multi-installation environment workspaces](./multi_environment.md).
+[our guide to multi-environment workspaces](./multi_environment.md).
 
 ## `pixi import`
 
 Within any Pixi workspace, you can use [`pixi import`](https://pixi.sh/latest/reference/cli/pixi/import/)
-to import an installation environment from a given file. At the time of writing, we support two import
+to import an environment from a given file. At the time of writing, we support two import
 file formats: `conda-env` and `pypi-txt`. Running `pixi import` without providing a `format` will try
 each format in turn until one succeeds, or return an error if all formats fail.
 
@@ -16,7 +16,7 @@ If you don't already have a Pixi workspace, you can create one with [`pixi init`
 
 The `conda-env` format is for files in the conda ecosystem (typically called `environment.yml`) following
 [the syntax specified in the conda docs](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#create-env-file-manually).
-Suppose our installation environment to import is specified in this file:
+Suppose our environment to import is specified in this file:
 
 ```yaml title="environment.yml"
 name: simple-env
@@ -27,7 +27,7 @@ dependencies:
   - httpx
 ```
 
-We can then run `pixi import --format=conda-env environment.yml` to import the installation environment
+We can then run `pixi import --format=conda-env environment.yml` to import the environment
 into our workspace. By default, since our `environment.yml` has a `name` field, this creates a `feature`
 of the same name (or uses the feature of that name if it already exists), and creates an `environment`
 containing that feature (with [`no-default-feature`](https://pixi.sh/latest/reference/pixi_manifest/#the-environments-table) set):
@@ -46,13 +46,13 @@ httpx = "*"
 simple-env = { features = ["simple-env"], no-default-feature = true }
 ```
 
-It is then possible to define tasks for the imported installation environment, run commands in that
-installation environment, and launch a [`pixi shell`](https://pixi.sh/latest/reference/cli/pixi/shell)
-in that installation environment — see the [getting started guide](../getting_started.md) for links to start learning about these topics!
+It is then possible to define tasks for the imported environment, run commands in that
+environment, and launch a [`pixi shell`](https://pixi.sh/latest/reference/cli/pixi/shell)
+in that environment — see the [getting started guide](../getting_started.md) for links to start learning about these topics!
 
 For files without a `name` field, or to override the default behavior, you can specify custom
 `--feature` and `--environment` names. This also allows importing into existing features and
-installation environments (including the `default` feature and installation environment). For example,
+environments (including the `default` feature and environment). For example,
 given this other environment file to import:
 
 ```yaml title="env2.yml"
@@ -62,8 +62,8 @@ dependencies:
 ```
 
 Running `pixi import --format=conda-env --feature=numpy --environment=simple-env env2.yml` will import
-the installation environment into a new feature called "numpy", and include that feature in the existing
-`simple-env` installation environment (effectively merging the environments from our two input files):
+the environment into a new feature called "numpy", and include that feature in the existing
+`simple-env` environment (effectively merging the environments from our two input files):
 
 ```toml title="pixi.toml"
 [feature.simple-env]
@@ -108,7 +108,7 @@ unix = { features = ["unix"], no-default-feature = true }
 
 The `pypi-txt` format is for files in the PyPI ecosystem following [the requirements file format specification in the `pip` docs](https://pip.pypa.io/en/stable/reference/requirements-file-format/).
 
-Suppose our installation environment to import is specified in this file:
+Suppose our environment to import is specified in this file:
 
 ```yaml title="requirements.txt"
 cowpy
@@ -116,7 +116,7 @@ array-api-extra>=0.8
 ```
 
 We can then run `pixi import --format=pypi-txt --feature=my-feature1 requirements.txt` to import the
-installation environment into our workspace. It is necessary to specify a `feature` or `environment`
+environment into our workspace. It is necessary to specify a `feature` or `environment`
 name (or both) via the arguments of the same names. If only one of these names is provided, a matching
 name is used for the other field. Hence, the following lines are added to our workspace manifest:
 
@@ -130,16 +130,15 @@ my-feature1 = { features = ["my-feature1"], no-default-feature = true }
 ```
 
 Any dependencies listed in the file are added as [`pypi-dependencies`](https://pixi.sh/latest/reference/pixi_manifest/#pypi-dependencies).
-An installation environment will be created with [`no-default-feature`](https://pixi.sh/latest/reference/pixi_manifest/#the-environments-table)
-set if the given installation environment name does not already exist.
+An environment will be created with [`no-default-feature`](https://pixi.sh/latest/reference/pixi_manifest/#the-environments-table)
+set if the given environment name does not already exist.
 
-It is then possible to define tasks for that installation environment, run commands in that installation
+It is then possible to define tasks for that environment, run commands in that
 environment, and launch a [`pixi shell`](https://pixi.sh/latest/reference/cli/pixi/shell) in that
-installation environment — see the [getting started guide](../getting_started.md) for links to start learning about these topics!
+environment — see the [getting started guide](../getting_started.md) for links to start learning about these topics!
 
-Just like the `conda-env` format, it is possible to import into existing features/installation
-environments (including the `default` feature/installation environment), and set specific platforms
-for the feature. See the previous section for details.
+Just like the `conda-env` format, it is possible to import into existing features/environments
+(including the `default` feature/environment), and set specific platforms for the feature. See the previous section for details.
 
 ## `pixi init --import`
 
@@ -165,7 +164,7 @@ python = "*"
 httpx = "*"
 ```
 
-Unlike `pixi import`, this by default uses the `default` feature and installation environment. Thus,
+Unlike `pixi import`, this by default uses the `default` feature and environment. Thus,
 it achieves a very similar workspace to that obtained by running `pixi init ` and `pixi import --feature=default environment.yml`.
 
 One difference is that `pixi init --import` will by default inherit its name from the given import file (if the file specifies the `name` field), rather than from its working directory.

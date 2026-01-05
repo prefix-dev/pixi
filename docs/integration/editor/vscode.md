@@ -3,21 +3,21 @@
 ## Python Extension
 
 First, install the Python extension from the [marketplace](https://marketplace.visualstudio.com/items?itemName=ms-python.python).
-Typically, the extension will detect and select the Pixi default installation environment automatically as soon as you open a Python file.
-In case it doesn't or you want to select a different installation environment, you can open the environment selector to select the installation environment of your choice.
+Typically, the extension will detect and select the Pixi default environment automatically as soon as you open a Python file.
+In case it doesn't or you want to select a different environment, you can open the environment selector to select the environment of your choice.
 
 ![VSCode Python Environment Selector](../../assets/vscode-python-env-selector.png)
 
 ## Direnv Extension
 
-Direnv provides a language agnostic way of running VSCode in a Pixi installation environment.
+Direnv provides a language agnostic way of running VSCode in a Pixi environment.
 First, install the Direnv extension from the [marketplace](https://marketplace.visualstudio.com/items?itemName=mkhl.direnv).
 Then follow the instructions in our [Direnv doc page](../third_party/direnv.md).
 
 
 ## Devcontainer Extension
 
-[VSCode Devcontainers](https://code.visualstudio.com/docs/devcontainers/containers) are a popular tool to develop on a workspace with a consistent installation environment.
+[VSCode Devcontainers](https://code.visualstudio.com/docs/devcontainers/containers) are a popular tool to develop on a workspace with a consistent environment.
 They are also used in [GitHub Codespaces](https://github.com/features/codespaces) which makes it a great way to develop on a workspace without having to install anything on your local machine.
 
 To use pixi inside of a devcontainer, follow these steps:

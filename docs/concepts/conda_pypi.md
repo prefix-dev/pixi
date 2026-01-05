@@ -1,6 +1,6 @@
 Pixi is built on top of both the conda and PyPI ecosystems.
 
-**Conda** is a cross-platform, cross-language package ecosystem that allows users to install packages and manage installation environments.
+**Conda** is a cross-platform, cross-language package ecosystem that allows users to install packages and manage environments.
 It is widely used in the data science and machine learning community, but it is also used in other fields.
 Its power comes from the fact that it always installs binary packages, meaning that it doesn’t need to compile anything.
 This makes the ecosystem very fast and easy to use.
