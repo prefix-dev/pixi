@@ -16,6 +16,15 @@ pixi add "pytorch [build='cuda*']"
 
 # Specify both version and build using bracket syntax
 pixi add "pytorch [version='2.9.*', build='cuda*']"
+
+# Simple PyPI package
+pixi add --pypi requests
+
+# PyPI package version range
+pixi add --pypi "requests>=2.20,<3.0"
+
+# PyPI package with extras
+pixi add --pypi "requests[security]==2.25.1"
 # --8<-- [end:quick-add-examples]
 
 # --8<-- [start:quick-global-examples]
