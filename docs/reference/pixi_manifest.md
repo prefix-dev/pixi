@@ -620,6 +620,9 @@ The default is `[dependencies]`, which are dependencies that are shared across p
 Dependencies are defined using a [VersionSpec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/version_spec/enum.VersionSpec.html).
 A `VersionSpec` combines a [Version](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html) with an optional operator.
 
+!!! tip "Need to specify build strings or more specific packages?"
+    For detailed information on specifying build strings and advanced package specifications, see the [Package Specifications](../concepts/package_specifications.md) guide.
+
 
 Some examples are:
 
@@ -634,7 +637,7 @@ package2 = ">1.2,<=1.4"
 package3 = ">=1.2.3|<1.0.0"
 ```
 
-Dependencies can also be defined as a mapping where it is using a [matchspec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.NamelessMatchSpec.html):
+Dependencies can also be defined as a mapping where it is using a matchspec
 
 ```toml
 package0 = { version = ">=1.2.3", channel="conda-forge" }
@@ -683,7 +686,7 @@ PyPI packages are not indexed on [prefix.dev](https://prefix.dev/channels) but c
 
 #### Version specification:
 
-These dependencies don't follow the conda matchspec specification.
+These dependencies don't follow the [conda MatchSpec](https://rattler.prefix.dev/py-rattler/match_spec#matchspec)  specification.
 The `version` is a string specification of the version according to [PEP404/PyPA](https://packaging.python.org/en/latest/specifications/version-specifiers/).
 Additionally, a list of extra's can be included, which are essentially optional dependencies.
 Note that this `version` is distinct from the conda MatchSpec type.
