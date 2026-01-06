@@ -106,7 +106,7 @@ pub fn read_static_metadata(directory: &Path) -> Result<LocalPackageMetadata, Me
         return Err(MetadataReadError::NoPyprojectToml);
     }
 
-    let contents = std::fs::read_to_string(&pyproject_path)?;
+    let contents = fs_err::read_to_string(&pyproject_path)?;
 
     // Use uv's parser which handles PEP 621 pyproject.toml files
     let pyproject_toml = uv_pypi_types::PyProjectToml::from_toml(&contents)?;
@@ -215,13 +215,13 @@ pub fn compare_metadata(
     let locked_deps: BTreeSet<String> = locked
         .requires_dist
         .iter()
-        .map(|r| normalize_requirement(r))
+        .map(normalize_requirement)
         .collect();
 
     let current_deps: BTreeSet<String> = current
         .requires_dist
         .iter()
-        .map(|r| normalize_requirement(r))
+        .map(normalize_requirement)
         .collect();
 
     if locked_deps != current_deps {
