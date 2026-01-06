@@ -49,9 +49,9 @@ use uv_client::{
 use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
-    BuiltDist, ConfigSettings, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
-    IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist, SourceDist,
-    ToUrlError,
+    BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy,
+    IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
+    SourceDist, ToUrlError,
 };
 use uv_git::RepositoryReference;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
@@ -70,9 +70,7 @@ use crate::{
         outdated::EnvironmentBuildCache,
         records_by_name::HasNameVersion,
         resolve::{
-            build_dispatch::{
-                LazyBuildDispatch, LazyBuildDispatchDependencies, UvBuildDispatchParams,
-            },
+            build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
             resolver_provider::CondaResolverProvider,
         },
     },
@@ -302,7 +300,7 @@ pub async fn resolve_pypi(
     disallow_install_conda_prefix: bool,
     exclude_newer: Option<DateTime<Utc>>,
     solve_strategy: SolveStrategy,
-    cached_build_cache: Option<Arc<EnvironmentBuildCache>>,
+    build_cache: Arc<EnvironmentBuildCache>,
 ) -> miette::Result<(LockedPypiRecords, Option<CondaPrefixUpdated>)> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
@@ -454,34 +452,29 @@ pub async fn resolve_pypi(
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
 
     // Use cached index_locations if available, otherwise create new
-    let index_locations = match cached_build_cache
-        .as_ref()
-        .and_then(|c| c.index_locations.get().cloned())
-    {
-        Some(locs) => locs,
-        None => pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?,
-    };
+    let index_locations = build_cache
+        .index_locations
+        .get_or_try_init(|| {
+            pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()
+        })?
+        .clone();
 
     // Use cached build_options if available, otherwise create new
-    let build_options = match cached_build_cache
-        .as_ref()
-        .and_then(|c| c.build_options.get().cloned())
-    {
-        Some(opts) => opts,
-        None => pypi_options_to_build_options(
-            &pypi_options.no_build.clone().unwrap_or_default(),
-            &pypi_options.no_binary.clone().unwrap_or_default(),
-        )
-        .into_diagnostic()?,
-    };
+    let build_options = build_cache
+        .build_options
+        .get_or_try_init(|| {
+            pypi_options_to_build_options(
+                &pypi_options.no_build.clone().unwrap_or_default(),
+                &pypi_options.no_binary.clone().unwrap_or_default(),
+            )
+            .into_diagnostic()
+        })?
+        .clone();
 
     // Use cached registry_client if available, otherwise create new
-    let registry_client = match cached_build_cache
-        .as_ref()
-        .and_then(|c| c.registry_client.get().cloned())
-    {
-        Some(client) => client,
-        None => {
+    let registry_client = build_cache
+        .registry_client
+        .get_or_init(|| {
             // Configure insecure hosts for TLS verification bypass
             let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
                 context.allow_insecure_host.clone(),
@@ -507,8 +500,8 @@ pub async fn resolve_pypi(
             }
 
             Arc::new(uv_client_builder.build())
-        }
-    };
+        })
+        .clone();
     let dependency_overrides =
         pypi_options.dependency_overrides.as_ref().map(|overrides|->Result<Vec<_>, _> {
             overrides
@@ -528,12 +521,9 @@ pub async fn resolve_pypi(
         }).transpose()?.unwrap_or_default();
 
     // Use cached flat_index if available, otherwise create new
-    let flat_index = match cached_build_cache
-        .as_ref()
-        .and_then(|c| c.flat_index.get().cloned())
-    {
-        Some(idx) => idx,
-        None => {
+    let flat_index = build_cache
+        .flat_index
+        .get_or_try_init(async {
             // Resolve the flat indexes from `--find-links`.
             // In UV 0.7.8, we need to fetch flat index entries from the index locations
             let flat_index_client = FlatIndexClient::new(
@@ -549,14 +539,15 @@ pub async fn resolve_pypi(
                 .fetch_all(flat_index_urls.into_iter())
                 .await
                 .into_diagnostic()?;
-            FlatIndex::from_entries(
+            Ok::<_, miette::Report>(FlatIndex::from_entries(
                 flat_index_entries,
                 Some(&tags),
                 &context.hash_strategy,
                 &build_options,
-            )
-        }
-    };
+            ))
+        })
+        .await?
+        .clone();
 
     let resolution_mode = match solve_strategy {
         SolveStrategy::Highest => ResolutionMode::Highest,
@@ -580,10 +571,10 @@ pub async fn resolve_pypi(
     };
 
     // Use cached dependency_metadata if available, otherwise create new
-    let dependency_metadata = cached_build_cache
-        .as_ref()
-        .and_then(|c| c.dependency_metadata.get().cloned())
-        .unwrap_or_default();
+    let dependency_metadata = build_cache
+        .dependency_metadata
+        .get_or_init(DependencyMetadata::default)
+        .clone();
 
     let config_settings = ConfigSettings::default();
     let build_params = UvBuildDispatchParams::new(
@@ -611,24 +602,15 @@ pub async fn resolve_pypi(
     .with_source_strategy(context.source_strategy)
     .with_concurrency(context.concurrency);
 
-    // Use cached build dispatch dependencies if available, otherwise create new default
-    let default_deps;
-    let lazy_build_dispatch_deps = if let Some(ref cache) = cached_build_cache {
-        &cache.lazy_build_dispatch_deps
-    } else {
-        default_deps = LazyBuildDispatchDependencies::default();
-        &default_deps
-    };
+    // Use cached build dispatch dependencies
+    let lazy_build_dispatch_deps = &build_cache.lazy_build_dispatch_deps;
 
     let last_error = Arc::new(OnceCell::new());
 
     // Use cached conda_prefix_updater if available, otherwise create new
-    let conda_prefix_updater = match cached_build_cache
-        .as_ref()
-        .and_then(|c| c.conda_prefix_updater.get().cloned())
-    {
-        Some(updater) => updater,
-        None => {
+    let conda_prefix_updater = build_cache
+        .conda_prefix_updater
+        .get_or_try_init(|| {
             // Create a new conda prefix updater using best_platform (host platform)
             let prefix_platform = environment.best_platform();
             let group = GroupedEnvironment::Environment(environment.clone());
@@ -643,9 +625,9 @@ pub async fn resolve_pypi(
                     .collect(),
                 command_dispatcher,
             )
-            .finish()?
-        }
-    };
+            .finish()
+        })?
+        .clone();
 
     let lazy_build_dispatch = LazyBuildDispatch::new(
         build_params,
