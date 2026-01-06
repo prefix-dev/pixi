@@ -151,6 +151,64 @@ test = {{features = ["test"]}}
 }
 
 #[tokio::test]
+async fn pyproject_environment_markers_resolved() {
+    setup_tracing();
+
+    let simple = PyPIDatabase::new()
+        .with(PyPIPackage::new("numpy", "1.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let platform = Platform::current();
+    let platform_str = platform.to_string();
+
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.11.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+    let channel_url = channel.url();
+    let index_url = simple.index_url();
+
+    let pyproject = format!(
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "environment-markers"
+dependencies = [
+    "numpy; sys_platform == 'linux'"
+]
+
+[tool.pixi.workspace]
+channels = ["{channel_url}"]
+platforms = ["{platform_str}"]
+conda-pypi-map = {{}}
+
+[tool.pixi.dependencies]
+python = "==3.11.0"
+
+[tool.pixi.pypi-options]
+index-url = "{index_url}"
+"#,
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    let numpy_req = Requirement::from_str("numpy; sys_platform == 'linux'").unwrap();
+    assert!(
+        lock.contains_pep508_requirement("default", platform, numpy_req.clone()),
+        "default environment should include numpy"
+    );
+}
+
+#[tokio::test]
 async fn test_flat_links_based_index_returns_path() {
     setup_tracing();
 
