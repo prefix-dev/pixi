@@ -9,7 +9,10 @@ use ordermap::OrderMap;
 use pixi_build_type_conversions::{to_project_model_v1, to_target_selector_v1};
 use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
 use pixi_config::Config;
-use pixi_consts::consts::{RATTLER_BUILD_DIRS, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES};
+use pixi_consts::consts::{
+    KNOWN_MANIFEST_FILES, MOJOPROJECT_MANIFEST, PYPROJECT_MANIFEST, RATTLER_BUILD_DIRS,
+    RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES, WORKSPACE_MANIFEST,
+};
 use pixi_manifest::{
     DiscoveryStart, ExplicitManifestError, PackageManifest, PrioritizedChannel, WithProvenance,
     WorkspaceDiscoverer, WorkspaceDiscoveryError, WorkspaceManifest,
@@ -113,11 +116,9 @@ pub enum DiscoveryError {
     #[diagnostic(help("This is often caused by an internal error. Please report this issue."))]
     SpecConversionError(pixi_spec::SpecConversionError),
 
-    #[error("the source directory '{0}', does not contain a supported manifest")]
-    #[diagnostic(help(
-        "Ensure that the source directory contains a valid pixi.toml, pyproject.toml, recipe.yaml, package.xml or mojoproject.toml file."
-    ))]
-    FailedToDiscover(String),
+    #[error("the source directory '{path}', does not contain a supported manifest")]
+    #[diagnostic(help("{help}"))]
+    FailedToDiscover { path: String, help: String },
 
     #[error("the manifest path '{0}', does not have a parent directory")]
     NoParentDir(PathBuf),
@@ -182,9 +183,10 @@ impl DiscoveredBackend {
             return Ok(pixi);
         }
 
-        Err(DiscoveryError::FailedToDiscover(
-            source_path.to_string_lossy().to_string(),
-        ))
+        Err(DiscoveryError::FailedToDiscover {
+            path: source_path.to_string_lossy().to_string(),
+            help: generate_discovery_help(&source_path),
+        })
     }
 
     /// Construct a new instance based on a specific `recipe.yaml` file in the
@@ -382,6 +384,43 @@ impl DiscoveredBackend {
                 target_configuration: None,
             },
         })
+    }
+}
+
+/// Generate helpful suggestions for the FailedToDiscover error by scanning the directory.
+/// Returns a help message with suggestions based on what files are found.
+pub fn generate_discovery_help(source_path: &Path) -> String {
+    // Determine the directory to scan
+    let general_help = format!(
+        "Ensure the source contains `{}`, `{}`, or specify the manifest explicitly(e.g. {}).",
+        KNOWN_MANIFEST_FILES.join("`, `"),
+        RATTLER_BUILD_FILE_NAMES.join("`, `"),
+        ROS_BACKEND_FILE_NAMES.join("`, `")
+    );
+
+    let scan_dir = if source_path.is_dir() {
+        source_path
+    } else if let Some(parent) = source_path.parent() {
+        parent
+    } else {
+        return general_help;
+    };
+
+    // Check if package.xml exists
+    let has_package_xml = ROS_BACKEND_FILE_NAMES
+        .iter()
+        .any(|&file| scan_dir.join(file).is_file());
+
+    if has_package_xml {
+        format!(
+            "Found a `package.xml`, please add that to the dependency path, or add one of: `{}`, `{}`, `{}`, `{}` to the directory.",
+            WORKSPACE_MANIFEST,
+            PYPROJECT_MANIFEST,
+            MOJOPROJECT_MANIFEST,
+            RATTLER_BUILD_FILE_NAMES.join("`, `")
+        )
+    } else {
+        general_help
     }
 }
 
