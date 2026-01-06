@@ -3459,6 +3459,12 @@ mod tests {
         lock_file: &LockFile,
         backend_override: Option<BackendOverride>,
     ) -> Result<(), LockfileUnsat> {
+        // Ensure the rayon thread pool is initialized before any code path
+        // that might trigger implicit rayon initialization (e.g. uv's
+        // DistributionDatabase). Without this, concurrent tests can race
+        // and trigger a GlobalPoolAlreadyInitialized panic.
+        std::sync::LazyLock::force(&uv_configuration::RAYON_INITIALIZE);
+
         let mut individual_verified_envs = HashMap::new();
 
         let temp_pixi_dir = tempfile::tempdir().unwrap();
