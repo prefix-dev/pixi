@@ -802,6 +802,18 @@ fn verify_pypi_indexes(
     Ok(())
 }
 
+/// Context for verifying platform satisfiability.
+pub struct VerifySatisfiabilityContext<'a> {
+    pub environment: &'a Environment<'a>,
+    pub command_dispatcher: CommandDispatcher,
+    pub platform: Platform,
+    pub project_root: &'a Path,
+    pub uv_context: &'a OnceCell<UvResolutionContext>,
+    pub config: &'a Config,
+    pub project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
+    pub build_caches: &'a mut HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>>,
+}
+
 /// Verifies that the package requirements of the specified `environment` can be
 /// satisfied with the packages present in the lock-file.
 ///
@@ -815,25 +827,22 @@ fn verify_pypi_indexes(
 /// the user and developer to figure out what went wrong.
 ///
 pub async fn verify_platform_satisfiability(
-    environment: &Environment<'_>,
-    command_dispatcher: CommandDispatcher,
+    ctx: &mut VerifySatisfiabilityContext<'_>,
     locked_environment: rattler_lock::Environment<'_>,
-    platform: Platform,
-    project_root: &Path,
-    uv_context: &OnceCell<UvResolutionContext>,
-    project_config: &Config,
-    project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
-    build_caches: &mut HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>>,
 ) -> Result<VerifiedIndividualEnvironment, Box<PlatformUnsat>> {
     // Convert the lock file into a list of conda and pypi packages
     let mut pixi_records: Vec<PixiRecord> = Vec::new();
     let mut pypi_packages: Vec<PypiRecord> = Vec::new();
-    for package in locked_environment.packages(platform).into_iter().flatten() {
+    for package in locked_environment
+        .packages(ctx.platform)
+        .into_iter()
+        .flatten()
+    {
         match package {
             LockedPackageRef::Conda(conda) => {
                 let url = conda.location().clone();
                 pixi_records.push(
-                    PixiRecord::from_conda_package_data(conda.clone(), project_root)
+                    PixiRecord::from_conda_package_data(conda.clone(), ctx.project_root)
                         .map_err(|e| PlatformUnsat::CorruptedEntry(url.to_string(), e))?,
                 );
             }
@@ -846,7 +855,7 @@ pub async fn verify_platform_satisfiability(
     // to reflect new purls for pypi packages
     // we need to invalidate the locked environment
     // if all conda packages have empty purls
-    if environment.has_pypi_dependencies()
+    if ctx.environment.has_pypi_dependencies()
         && pypi_packages.is_empty()
         && pixi_records
             .iter()
@@ -881,8 +890,8 @@ pub async fn verify_platform_satisfiability(
     };
 
     // Get host platform records for building (we can only run Python on the host platform)
-    let best_platform = environment.best_platform();
-    let building_pixi_records = if platform == best_platform {
+    let best_platform = ctx.environment.best_platform();
+    let building_pixi_records = if ctx.platform == best_platform {
         // Same platform, reuse the records
         Ok(pixi_records_by_name.clone())
     } else {
@@ -896,7 +905,7 @@ pub async fn verify_platform_satisfiability(
             if let LockedPackageRef::Conda(conda) = package {
                 let url = conda.location().clone();
                 host_pixi_records.push(
-                    PixiRecord::from_conda_package_data(conda.clone(), project_root)
+                    PixiRecord::from_conda_package_data(conda.clone(), ctx.project_root)
                         .map_err(|e| PlatformUnsat::CorruptedEntry(url.to_string(), e))?,
                 );
             }
@@ -909,16 +918,9 @@ pub async fn verify_platform_satisfiability(
     // Run satisfiability check - for local packages with dynamic metadata,
     // we use UV infrastructure to build metadata if available.
     verify_package_platform_satisfiability(
-        environment,
-        command_dispatcher,
+        ctx,
         &pixi_records_by_name,
         &pypi_records_by_name,
-        platform,
-        project_root,
-        uv_context,
-        project_config,
-        project_env_vars,
-        build_caches,
         building_pixi_records,
     )
     .await
@@ -1588,40 +1590,36 @@ async fn resolve_single_dev_dependency(
 }
 
 pub(crate) async fn verify_package_platform_satisfiability(
-    environment: &Environment<'_>,
-    command_dispatcher: CommandDispatcher,
+    ctx: &mut VerifySatisfiabilityContext<'_>,
     locked_pixi_records: &PixiRecordsByName,
     locked_pypi_environment: &PypiRecordsByName,
-    platform: Platform,
-    project_root: &Path,
-    uv_context: &OnceCell<UvResolutionContext>,
-    config: &Config,
-    project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
-    build_caches: &mut HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>>,
     building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
 ) -> Result<VerifiedIndividualEnvironment, Box<PlatformUnsat>> {
     // Determine the dependencies requested by the environment
-    let environment_dependencies = environment
-        .combined_dependencies(Some(platform))
+    let environment_dependencies = ctx
+        .environment
+        .combined_dependencies(Some(ctx.platform))
         .into_specs()
         .map(|(package_name, spec)| Dependency::Input(package_name, spec, "<environment>".into()))
         .collect_vec();
 
     // Get the dev dependencies for this platform
-    let dev_dependencies = environment
-        .combined_dev_dependencies(Some(platform))
+    let dev_dependencies = ctx
+        .environment
+        .combined_dev_dependencies(Some(ctx.platform))
         .into_specs()
         .collect_vec();
 
     // retrieve dependency-overrides
     // map it to (name => requirement) for later matching
-    let dependency_overrides = environment
+    let dependency_overrides = ctx
+        .environment
         .pypi_options()
         .dependency_overrides
         .unwrap_or_default()
         .into_iter()
         .map(|(name, req)| -> Result<_, Box<PlatformUnsat>> {
-            let uv_req = as_uv_req(&req, name.as_source(), project_root).map_err(|e| {
+            let uv_req = as_uv_req(&req, name.as_source(), ctx.project_root).map_err(|e| {
                 Box::new(PlatformUnsat::AsPep508Error(
                     name.as_normalized().clone(),
                     e,
@@ -1632,8 +1630,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
 
     // Transform from PyPiPackage name into UV Requirement type
-    let pypi_requirements = environment
-        .pypi_dependencies(Some(platform))
+    let project_root = ctx.project_root;
+    let pypi_requirements = ctx
+        .environment
+        .pypi_dependencies(Some(ctx.platform))
         .iter()
         .flat_map(|(name, reqs)| {
             reqs.iter().map(move |req| {
@@ -1657,18 +1657,24 @@ pub(crate) async fn verify_package_platform_satisfiability(
     }
 
     // Create a list of virtual packages by name
-    let virtual_packages = environment
-        .virtual_packages(platform)
+    let virtual_packages = ctx
+        .environment
+        .virtual_packages(ctx.platform)
         .into_iter()
         .map(GenericVirtualPackage::from)
         .map(|vpkg| (vpkg.name.clone(), vpkg))
         .collect::<HashMap<_, _>>();
 
     // The list of channels and platforms we need for this task
-    let channels = environment.channels().into_iter().cloned().collect_vec();
+    let channels = ctx
+        .environment
+        .channels()
+        .into_iter()
+        .cloned()
+        .collect_vec();
 
     // Get the channel configuration
-    let channel_config = environment.workspace().channel_config();
+    let channel_config = ctx.environment.workspace().channel_config();
 
     // Resolve the channel URLs for the channels we need.
     let channels = channels
@@ -1681,13 +1687,14 @@ pub(crate) async fn verify_package_platform_satisfiability(
     let VariantConfig {
         variant_configuration,
         variant_files,
-    } = environment
+    } = ctx
+        .environment
         .workspace()
-        .variants(platform)
+        .variants(ctx.platform)
         .map_err(|e| Box::new(PlatformUnsat::Variants(e)))?;
 
     let build_environment =
-        BuildEnvironment::simple(platform, virtual_packages.values().cloned().collect());
+        BuildEnvironment::simple(ctx.platform, virtual_packages.values().cloned().collect());
 
     // Get all source records from the lock file for metadata verification
     let source_records: Vec<_> = locked_pixi_records
@@ -1699,7 +1706,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
     // Resolve dev dependencies and verify source metadata in parallel
     let dev_deps_future = resolve_dev_dependencies(
         dev_dependencies,
-        &command_dispatcher,
+        &ctx.command_dispatcher,
         &channel_config,
         &channels,
         &build_environment,
@@ -1709,13 +1716,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
     let source_metadata_future = verify_source_metadata(
         source_records,
-        command_dispatcher.clone(),
+        ctx.command_dispatcher.clone(),
         channel_config.clone(),
         channels.clone(),
         variant_configuration.clone(),
         variant_files.clone(),
         virtual_packages.values().cloned().collect(),
-        platform,
+        ctx.platform,
     );
 
     let (resolved_dev_dependencies, source_metadata_result) =
@@ -1738,7 +1745,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
     // Determine the marker environment from the python interpreter package.
     let marker_environment = python_interpreter_record
-        .map(|interpreter| determine_marker_environment(platform, &interpreter.package_record))
+        .map(|interpreter| determine_marker_environment(ctx.platform, &interpreter.package_record))
         .transpose()
         .map_err(|err| {
             Box::new(PlatformUnsat::FailedToDetermineMarkerEnvironment(
@@ -1929,9 +1936,11 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                 .unwrap_or(requirement);
 
                             if requirement.is_editable() {
-                                if let Err(err) =
-                                    pypi_satifisfies_editable(&requirement, &record.0, project_root)
-                                {
+                                if let Err(err) = pypi_satifisfies_editable(
+                                    &requirement,
+                                    &record.0,
+                                    ctx.project_root,
+                                ) {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
 
@@ -1940,7 +1949,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                 if let Err(err) = pypi_satifisfies_requirement(
                                     &requirement,
                                     &record.0,
-                                    project_root,
+                                    ctx.project_root,
                                 ) {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
@@ -2042,7 +2051,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         let absolute_path = if path.is_absolute() {
                             Cow::Borrowed(Path::new(path.as_str()))
                         } else {
-                            Cow::Owned(project_root.join(Path::new(path.as_str())))
+                            Cow::Owned(ctx.project_root.join(Path::new(path.as_str())))
                         };
 
                         if absolute_path.is_dir() {
@@ -2086,13 +2095,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                     // Metadata is dynamic - we cannot verify it statically.
                                     // Try to build metadata using UV if we're on the host platform.
                                     // For non-host platforms, we can't run binaries, so fall back to hash comparison.
-                                    let best_platform = environment.best_platform();
-                                    if platform != best_platform {
+                                    let best_platform = ctx.environment.best_platform();
+                                    if ctx.platform != best_platform {
                                         tracing::debug!(
                                             "Package {} has dynamic {} - skipping build (platform {} != host {}), falling back to hash comparison",
                                             record.0.name,
                                             field,
-                                            platform,
+                                            ctx.platform,
                                             best_platform
                                         );
                                         if let Some(mismatch) =
@@ -2108,9 +2117,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                             field
                                         );
 
-                                        let ctx = uv_context
+                                        let uv_ctx = ctx
+                                            .uv_context
                                             .get_or_try_init(|| {
-                                                UvResolutionContext::from_config(config)
+                                                UvResolutionContext::from_config(ctx.config)
                                             })
                                             .map_err(|e| {
                                                 Box::new(PlatformUnsat::FailedToReadLocalMetadata(
@@ -2120,19 +2130,22 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                             })?;
 
                                         // Build metadata using UV
+                                        let mut build_ctx = BuildMetadataContext {
+                                            environment: ctx.environment,
+                                            locked_pixi_records,
+                                            platform: ctx.platform,
+                                            project_root: ctx.project_root,
+                                            uv_context: uv_ctx,
+                                            project_env_vars: &ctx.project_env_vars,
+                                            command_dispatcher: ctx.command_dispatcher.clone(),
+                                            build_caches: ctx.build_caches,
+                                            building_pixi_records: &building_pixi_records,
+                                        };
                                         match build_dynamic_metadata(
                                             &absolute_path,
                                             &record.0.name,
                                             record.0.editable,
-                                            environment,
-                                            locked_pixi_records,
-                                            platform,
-                                            project_root,
-                                            ctx,
-                                            &project_env_vars,
-                                            command_dispatcher.clone(),
-                                            build_caches,
-                                            &building_pixi_records,
+                                            &mut build_ctx,
                                         )
                                         .await
                                         {
@@ -2179,9 +2192,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                         record.0.name
                                     );
 
-                                    let ctx = uv_context
+                                    let uv_ctx = ctx
+                                        .uv_context
                                         .get_or_try_init(|| {
-                                            UvResolutionContext::from_config(config)
+                                            UvResolutionContext::from_config(ctx.config)
                                         })
                                         .map_err(|e| {
                                             Box::new(PlatformUnsat::FailedToReadLocalMetadata(
@@ -2191,19 +2205,22 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                         })?;
 
                                     // Build metadata using UV
+                                    let mut build_ctx = BuildMetadataContext {
+                                        environment: ctx.environment,
+                                        locked_pixi_records,
+                                        platform: ctx.platform,
+                                        project_root: ctx.project_root,
+                                        uv_context: uv_ctx,
+                                        project_env_vars: &ctx.project_env_vars,
+                                        command_dispatcher: ctx.command_dispatcher.clone(),
+                                        build_caches: ctx.build_caches,
+                                        building_pixi_records: &building_pixi_records,
+                                    };
                                     match build_dynamic_metadata(
                                         &absolute_path,
                                         &record.0.name,
                                         record.0.editable,
-                                        environment,
-                                        locked_pixi_records,
-                                        platform,
-                                        project_root,
-                                        ctx,
-                                        &project_env_vars,
-                                        command_dispatcher.clone(),
-                                        build_caches,
-                                        &building_pixi_records,
+                                        &mut build_ctx,
                                     )
                                     .await
                                     {
@@ -2366,7 +2383,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
     // the same path-based package.
 
     // Verify the pixi build package's package_build_source matches the manifest.
-    verify_build_source_matches_manifest(environment, locked_pixi_records)?;
+    verify_build_source_matches_manifest(ctx.environment, locked_pixi_records)?;
 
     Ok(VerifiedIndividualEnvironment {
         expected_conda_packages,
@@ -2439,6 +2456,19 @@ fn compare_source_tree_hash(
     }
 }
 
+/// Context for building dynamic metadata for local packages.
+struct BuildMetadataContext<'a> {
+    environment: &'a Environment<'a>,
+    locked_pixi_records: &'a PixiRecordsByName,
+    platform: Platform,
+    project_root: &'a Path,
+    uv_context: &'a UvResolutionContext,
+    project_env_vars: &'a HashMap<EnvironmentName, EnvironmentVars>,
+    command_dispatcher: CommandDispatcher,
+    build_caches: &'a mut HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>>,
+    building_pixi_records: &'a Result<PixiRecordsByName, PlatformUnsat>,
+}
+
 /// Build metadata for a directory source distribution using UV.
 ///
 /// This creates the necessary UV infrastructure (RegistryClient, LazyBuildDispatch,
@@ -2447,20 +2477,13 @@ async fn build_dynamic_metadata(
     directory: &Path,
     package_name: &pep508_rs::PackageName,
     editable: bool,
-    environment: &Environment<'_>,
-    locked_pixi_records: &PixiRecordsByName,
-    platform: Platform,
-    project_root: &Path,
-    uv_context: &UvResolutionContext,
-    project_env_vars: &HashMap<EnvironmentName, EnvironmentVars>,
-    command_dispatcher: CommandDispatcher,
-    build_caches: &mut HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>>,
-    building_pixi_records: &Result<PixiRecordsByName, PlatformUnsat>,
+    ctx: &mut BuildMetadataContext<'_>,
 ) -> Result<pypi_metadata::LocalPackageMetadata, PlatformUnsat> {
-    let pypi_options = environment.pypi_options();
+    let pypi_options = ctx.environment.pypi_options();
 
     // Find the Python interpreter from locked records
-    let python_record = locked_pixi_records
+    let python_record = ctx
+        .locked_pixi_records
         .records
         .iter()
         .find(|r| is_python_record(r))
@@ -2472,7 +2495,7 @@ async fn build_dynamic_metadata(
         })?;
 
     // Create marker environment for the target platform
-    let marker_environment = determine_marker_environment(platform, python_record.as_ref())
+    let marker_environment = determine_marker_environment(ctx.platform, python_record.as_ref())
         .map_err(|e| {
             PlatformUnsat::FailedToReadLocalMetadata(
                 package_name.clone(),
@@ -2484,15 +2507,15 @@ async fn build_dynamic_metadata(
 
     // Get or create cache entry for this environment and host platform
     // We use best_platform() since the build prefix is shared across all target platforms
-    let best_platform = environment.best_platform();
-    let cache_key = BuildCacheKey::new(environment.name().clone(), best_platform);
-    let cache = build_caches.entry(cache_key).or_default();
+    let best_platform = ctx.environment.best_platform();
+    let cache_key = BuildCacheKey::new(ctx.environment.name().clone(), best_platform);
+    let cache = ctx.build_caches.entry(cache_key).or_default();
 
     // Get or create index locations from cache
     let index_locations = cache
         .index_locations
         .get_or_try_init(|| {
-            pypi_options_to_index_locations(&pypi_options, project_root).map_err(|e| {
+            pypi_options_to_index_locations(&pypi_options, ctx.project_root).map_err(|e| {
                 PlatformUnsat::FailedToReadLocalMetadata(
                     package_name.clone(),
                     format!("Failed to setup index locations: {e}"),
@@ -2526,8 +2549,8 @@ async fn build_dynamic_metadata(
 
     // Configure insecure hosts
     let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
-        uv_context.allow_insecure_host.clone(),
-        uv_context.tls_no_verify,
+        ctx.uv_context.allow_insecure_host.clone(),
+        ctx.uv_context.tls_no_verify,
         &index_locations,
     );
 
@@ -2538,17 +2561,17 @@ async fn build_dynamic_metadata(
             let base_client_builder = BaseClientBuilder::default()
                 .allow_insecure_host(allow_insecure_hosts.clone())
                 .markers(&marker_environment)
-                .keyring(uv_context.keyring_provider)
+                .keyring(ctx.uv_context.keyring_provider)
                 .connectivity(Connectivity::Online)
-                .native_tls(uv_context.use_native_tls)
-                .extra_middleware(uv_context.extra_middleware.clone());
+                .native_tls(ctx.uv_context.use_native_tls)
+                .extra_middleware(ctx.uv_context.extra_middleware.clone());
 
             let mut uv_client_builder =
-                RegistryClientBuilder::new(base_client_builder, uv_context.cache.clone())
+                RegistryClientBuilder::new(base_client_builder, ctx.uv_context.cache.clone())
                     .index_locations(index_locations.clone())
                     .index_strategy(index_strategy);
 
-            for p in &uv_context.proxies {
+            for p in &ctx.uv_context.proxies {
                 uv_client_builder = uv_client_builder.proxy(p.clone())
             }
 
@@ -2557,9 +2580,9 @@ async fn build_dynamic_metadata(
         .clone();
 
     // Get tags for this platform (needed for FlatIndex)
-    let system_requirements = environment.system_requirements();
+    let system_requirements = ctx.environment.system_requirements();
     let tags =
-        get_pypi_tags(platform, &system_requirements, python_record.as_ref()).map_err(|e| {
+        get_pypi_tags(ctx.platform, &system_requirements, python_record.as_ref()).map_err(|e| {
             PlatformUnsat::FailedToReadLocalMetadata(
                 package_name.clone(),
                 format!("Failed to determine pypi tags: {e}"),
@@ -2574,7 +2597,7 @@ async fn build_dynamic_metadata(
             let flat_index_client = FlatIndexClient::new(
                 registry_client.cached_client(),
                 Connectivity::Online,
-                &uv_context.cache,
+                &ctx.uv_context.cache,
             );
             let flat_index_urls: Vec<&IndexUrl> = index_locations
                 .flat_indexes()
@@ -2592,7 +2615,7 @@ async fn build_dynamic_metadata(
             Ok::<_, PlatformUnsat>(FlatIndex::from_entries(
                 flat_index_entries,
                 Some(&tags),
-                &uv_context.hash_strategy,
+                &ctx.uv_context.hash_strategy,
                 &build_options,
             ))
         })
@@ -2603,28 +2626,28 @@ async fn build_dynamic_metadata(
     let config_settings = ConfigSettings::default();
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
-        &uv_context.cache,
+        &ctx.uv_context.cache,
         &index_locations,
         &flat_index,
         &dependency_metadata,
         &config_settings,
         &build_options,
-        &uv_context.hash_strategy,
+        &ctx.uv_context.hash_strategy,
     )
     .with_index_strategy(index_strategy)
-    .with_workspace_cache(uv_context.workspace_cache.clone())
-    .with_shared_state(uv_context.shared_state.fork())
-    .with_source_strategy(uv_context.source_strategy)
-    .with_concurrency(uv_context.concurrency);
+    .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
+    .with_shared_state(ctx.uv_context.shared_state.fork())
+    .with_source_strategy(ctx.uv_context.source_strategy)
+    .with_concurrency(ctx.uv_context.concurrency);
 
     // Get or create conda prefix updater for the environment
     // Use best_platform() because we can only install/run Python on the host platform
     let conda_prefix_updater = cache
         .conda_prefix_updater
         .get_or_try_init(|| {
-            let prefix_platform = environment.best_platform();
-            let group = GroupedEnvironment::Environment(environment.clone());
-            let virtual_packages = environment.virtual_packages(prefix_platform);
+            let prefix_platform = ctx.environment.best_platform();
+            let group = GroupedEnvironment::Environment(ctx.environment.clone());
+            let virtual_packages = ctx.environment.virtual_packages(prefix_platform);
 
             CondaPrefixUpdater::builder(
                 group,
@@ -2633,7 +2656,7 @@ async fn build_dynamic_metadata(
                     .into_iter()
                     .map(GenericVirtualPackage::from)
                     .collect(),
-                command_dispatcher.clone(),
+                ctx.command_dispatcher.clone(),
             )
             .finish()
             .map_err(|e| {
@@ -2648,15 +2671,16 @@ async fn build_dynamic_metadata(
     // Use cached lazy build dispatch dependencies
     // Use building_pixi_records (host platform) for installing Python and building,
     // since we can only run binaries on the host platform
-    let building_records: miette::Result<Vec<PixiRecord>> = building_pixi_records
+    let building_records: miette::Result<Vec<PixiRecord>> = ctx
+        .building_pixi_records
         .as_ref()
         .map(|r| r.records.clone())
         .map_err(|e| miette::miette!("{}", e));
     let lazy_build_dispatch = LazyBuildDispatch::new(
         build_params,
         conda_prefix_updater,
-        project_env_vars.clone(),
-        environment.clone(),
+        ctx.project_env_vars.clone(),
+        ctx.environment.clone(),
         building_records,
         pypi_options.no_build_isolation.clone(),
         &cache.lazy_build_dispatch_deps,
@@ -2668,7 +2692,7 @@ async fn build_dynamic_metadata(
     let database = DistributionDatabase::new(
         &registry_client,
         &lazy_build_dispatch,
-        uv_context.concurrency.downloads,
+        ctx.uv_context.concurrency.downloads,
     );
 
     // Create the directory source dist
@@ -3036,19 +3060,21 @@ mod tests {
                 .map_err(|e| LockfileUnsat::Environment(env.name().to_string(), e))?;
 
             for platform in env.platforms() {
-                let verified_env = verify_platform_satisfiability(
-                    &env,
-                    command_dispatcher.clone(),
-                    locked_env,
+                let mut ctx = VerifySatisfiabilityContext {
+                    environment: &env,
+                    command_dispatcher: command_dispatcher.clone(),
                     platform,
-                    project.root(),
-                    &uv_context,
-                    project.config(),
-                    project.env_vars().clone(),
-                    &mut build_caches,
-                )
-                .await
-                .map_err(|e| LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e))?;
+                    project_root: project.root(),
+                    uv_context: &uv_context,
+                    config: project.config(),
+                    project_env_vars: project.env_vars().clone(),
+                    build_caches: &mut build_caches,
+                };
+                let verified_env = verify_platform_satisfiability(&mut ctx, locked_env)
+                    .await
+                    .map_err(|e| {
+                        LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e)
+                    })?;
 
                 individual_verified_envs.insert((env.name(), platform), verified_env);
             }

@@ -5,7 +5,8 @@ use std::{
 
 use super::{
     CondaPrefixUpdater, resolve::build_dispatch::LazyBuildDispatchDependencies,
-    verify_environment_satisfiability, verify_platform_satisfiability,
+    satisfiability::VerifySatisfiabilityContext, verify_environment_satisfiability,
+    verify_platform_satisfiability,
 };
 use crate::{
     Workspace,
@@ -322,19 +323,17 @@ async fn find_unsatisfiable_targets<'p>(
 
         // Verify each individual platform
         for platform in platforms {
-            match verify_platform_satisfiability(
-                &environment,
-                command_dispatcher.clone(),
-                locked_environment,
+            let mut ctx = VerifySatisfiabilityContext {
+                environment: &environment,
+                command_dispatcher: command_dispatcher.clone(),
                 platform,
-                project.root(),
-                &uv_context,
-                project_config,
-                project.env_vars().clone(),
-                &mut build_caches,
-            )
-            .await
-            {
+                project_root: project.root(),
+                uv_context: &uv_context,
+                config: project_config,
+                project_env_vars: project.env_vars().clone(),
+                build_caches: &mut build_caches,
+            };
+            match verify_platform_satisfiability(&mut ctx, locked_environment).await {
                 Ok(verified_env) => {
                     verified_environments.insert((environment.clone(), platform), verified_env);
                 }
