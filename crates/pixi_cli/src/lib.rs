@@ -15,8 +15,6 @@ use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_core::environment::LockFileUsage;
 use pixi_progress::global_multi_progress;
-use std::sync::LazyLock;
-use uv_configuration::RAYON_INITIALIZE;
 
 use std::{env, io::IsTerminal};
 use tracing::level_filters::LevelFilter;
@@ -236,7 +234,7 @@ pub async fn execute() -> miette::Result<()> {
     // rayon's parallel iterators. This prevents issues where libraries like
     // rattler_cache use par_iter() which would implicitly create a default pool,
     // causing UV's later initialization to fail with "GlobalPoolAlreadyInitialized".
-    LazyLock::force(&RAYON_INITIALIZE);
+    // LazyLock::force(&RAYON_INITIALIZE);
 
     let args = Args::parse();
 

@@ -3,10 +3,6 @@
 //! This module provides functionality to:
 //! 1. Read metadata from local pyproject.toml files
 //! 2. Compare locked metadata against current source tree metadata
-//!
-//! This replaces the previous hash-based approach with semantic metadata comparison,
-//! following UV's approach.
-
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::str::FromStr;

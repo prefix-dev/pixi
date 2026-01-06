@@ -39,7 +39,7 @@ use pypi_modifiers::{
     pypi_tags::{get_pypi_tags, is_python_record},
 };
 use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
-use rattler_lock::{PackageHashes, PypiPackageData, PypiSourceTreeHashable, UrlOrPath, Verbatim};
+use rattler_lock::{PackageHashes, PypiPackageData, UrlOrPath, Verbatim};
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
@@ -442,6 +442,7 @@ pub async fn resolve_pypi(
     )
     .into_diagnostic()
     .context("error creating version specifier for python version")?;
+
     let requires_python =
         RequiresPython::from_specifiers(&uv_pep440::VersionSpecifiers::from(python_specifier));
     tracing::debug!(
@@ -1181,16 +1182,7 @@ async fn lock_pypi_packages(
                             (Verbatim::new(url_or_path), hash, None)
                         }
                         SourceDist::Directory(dir) => {
-                            // Compute hash for directory-based packages.
-                            // This is used as a fallback during satisfiability check
-                            // when metadata is dynamic and can't be compared statically.
-                            let hash = if dir.install_path.is_dir() {
-                                PypiSourceTreeHashable::from_directory(&dir.install_path)
-                                    .ok()
-                                    .map(|h| h.hash())
-                            } else {
-                                None
-                            };
+                            let hash = None;
 
                             // process the path or url that we get back from uv
                             let install_path =

@@ -30,9 +30,6 @@ use uv_resolver::FlatIndex;
 
 /// Cache for build-related resources that can be shared between
 /// satisfiability checking and PyPI resolution.
-///
-/// The expensive initialization (interpreter, python env, etc.) is cached in the
-/// `OnceCell`s inside `LazyBuildDispatchDependencies`.
 pub struct EnvironmentBuildCache {
     /// Lazily initialized build dispatch dependencies (interpreter, env, etc.)
     pub lazy_build_dispatch_deps: LazyBuildDispatchDependencies,
