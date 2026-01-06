@@ -178,9 +178,9 @@ fn apply_pin_bound(
     increment: bool,
 ) -> Result<Version, PinCompatibleError> {
     match bound {
-        PinBound::Expression(expr_string) => {
+        PinBound::Expression(pin_expr) => {
             // Parse and validate the expression string
-            let expr = PinExpression::from_str(expr_string)?;
+            let expr = PinExpression::from_str(&pin_expr.0)?;
 
             if increment {
                 // Increment version (like rattler_build's increment function)
@@ -412,8 +412,12 @@ mod tests {
         // Test: pin_compatible("python", lower_bound="x.x", upper_bound="x.x")
         // Expected: >=3.11,<3.12.0a0
         let spec = PinCompatibleSpec {
-            lower_bound: Some(PinBound::Expression("x.x".to_string())),
-            upper_bound: Some(PinBound::Expression("x.x".to_string())),
+            lower_bound: Some(PinBound::Expression(pixi_build_types::PinExpression(
+                "x.x".to_string(),
+            ))),
+            upper_bound: Some(PinBound::Expression(pixi_build_types::PinExpression(
+                "x.x".to_string(),
+            ))),
             exact: false,
             build: None,
         };
@@ -439,8 +443,12 @@ mod tests {
         // Test: pin_compatible("numpy", lower_bound="x.x.x", upper_bound="x.x.x")
         // Expected: >=1.23.4,<1.23.5.0a0
         let spec = PinCompatibleSpec {
-            lower_bound: Some(PinBound::Expression("x.x.x".to_string())),
-            upper_bound: Some(PinBound::Expression("x.x.x".to_string())),
+            lower_bound: Some(PinBound::Expression(pixi_build_types::PinExpression(
+                "x.x.x".to_string(),
+            ))),
+            upper_bound: Some(PinBound::Expression(pixi_build_types::PinExpression(
+                "x.x.x".to_string(),
+            ))),
             exact: false,
             build: None,
         };
@@ -465,8 +473,12 @@ mod tests {
         // Test: pin_compatible("python", lower_bound="x", upper_bound="x")
         // Expected: >=3,<4.0a0
         let spec = PinCompatibleSpec {
-            lower_bound: Some(PinBound::Expression("x".to_string())),
-            upper_bound: Some(PinBound::Expression("x".to_string())),
+            lower_bound: Some(PinBound::Expression(pixi_build_types::PinExpression(
+                "x".to_string(),
+            ))),
+            upper_bound: Some(PinBound::Expression(pixi_build_types::PinExpression(
+                "x".to_string(),
+            ))),
             exact: false,
             build: None,
         };
@@ -491,7 +503,9 @@ mod tests {
         // Test: pin_compatible("openssl", lower_bound="x.x.x", upper_bound=None)
         // Expected: >=1.1.1
         let spec = PinCompatibleSpec {
-            lower_bound: Some(PinBound::Expression("x.x.x".to_string())),
+            lower_bound: Some(PinBound::Expression(pixi_build_types::PinExpression(
+                "x.x.x".to_string(),
+            ))),
             upper_bound: None,
             exact: false,
             build: None,
@@ -518,7 +532,9 @@ mod tests {
         // Expected: <1.2.0a0
         let spec = PinCompatibleSpec {
             lower_bound: None,
-            upper_bound: Some(PinBound::Expression("x.x".to_string())),
+            upper_bound: Some(PinBound::Expression(pixi_build_types::PinExpression(
+                "x.x".to_string(),
+            ))),
             exact: false,
             build: None,
         };
@@ -570,8 +586,12 @@ mod tests {
         // Test: pin_compatible("python", lower_bound="x.x", upper_bound="x.x", build="h*")
         // Expected: >=3.11,<3.12.0a0 h*
         let spec = PinCompatibleSpec {
-            lower_bound: Some(PinBound::Expression("x.x".to_string())),
-            upper_bound: Some(PinBound::Expression("x.x".to_string())),
+            lower_bound: Some(PinBound::Expression(pixi_build_types::PinExpression(
+                "x.x".to_string(),
+            ))),
+            upper_bound: Some(PinBound::Expression(pixi_build_types::PinExpression(
+                "x.x".to_string(),
+            ))),
             exact: false,
             build: Some("h*".to_string()),
         };
@@ -648,8 +668,12 @@ mod tests {
         let map = PinCompatibilityMap::new();
 
         let spec = PinCompatibleSpec {
-            lower_bound: Some(PinBound::Expression("x.x".to_string())),
-            upper_bound: Some(PinBound::Expression("x.x".to_string())),
+            lower_bound: Some(PinBound::Expression(pixi_build_types::PinExpression(
+                "x.x".to_string(),
+            ))),
+            upper_bound: Some(PinBound::Expression(pixi_build_types::PinExpression(
+                "x.x".to_string(),
+            ))),
             exact: false,
             build: None,
         };
@@ -691,7 +715,9 @@ mod tests {
 
         // Test: invalid expression
         let spec = PinCompatibleSpec {
-            lower_bound: Some(PinBound::Expression("x.y.z".to_string())),
+            lower_bound: Some(PinBound::Expression(pixi_build_types::PinExpression(
+                "x.y.z".to_string(),
+            ))),
             upper_bound: None,
             exact: false,
             build: None,
@@ -712,8 +738,12 @@ mod tests {
 
         // Test: invalid build string (use a pattern that glob parsing will reject)
         let spec = PinCompatibleSpec {
-            lower_bound: Some(PinBound::Expression("x.x".to_string())),
-            upper_bound: Some(PinBound::Expression("x.x".to_string())),
+            lower_bound: Some(PinBound::Expression(pixi_build_types::PinExpression(
+                "x.x".to_string(),
+            ))),
+            upper_bound: Some(PinBound::Expression(pixi_build_types::PinExpression(
+                "x.x".to_string(),
+            ))),
             exact: false,
             build: Some("**[".to_string()), // Invalid glob - unterminated character class
         };

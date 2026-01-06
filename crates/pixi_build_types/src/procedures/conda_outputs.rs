@@ -16,7 +16,7 @@ use rattler_conda_types::{ChannelUrl, NoArchType, PackageName, Platform, Version
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{BinaryPackageSpec, PackageSpec, VariantValue, project_model::NamedSpec};
+use crate::{ConstraintSpec, PackageSpec, VariantValue, project_model::NamedSpec};
 
 pub const METHOD_NAME: &str = "conda/outputs";
 
@@ -167,7 +167,7 @@ pub struct CondaOutputDependencies {
 
     /// Additional constraints that apply to the environment in which the
     /// dependencies are solved. Constraints are represented as matchspecs.
-    pub constraints: Vec<NamedSpec<BinaryPackageSpec>>,
+    pub constraints: Vec<NamedSpec<ConstraintSpec>>,
 }
 
 /// Describes which run-exports should be ignored for a particular output.
@@ -199,11 +199,11 @@ pub struct CondaOutputRunExports {
     pub noarch: Vec<NamedSpec<PackageSpec>>,
 
     /// weak constrains apply a constrain dependency from host to run
-    pub weak_constrains: Vec<NamedSpec<BinaryPackageSpec>>,
+    pub weak_constrains: Vec<NamedSpec<ConstraintSpec>>,
 
     /// strong constrains apply a constrain dependency from build to host and
     /// run
-    pub strong_constrains: Vec<NamedSpec<BinaryPackageSpec>>,
+    pub strong_constrains: Vec<NamedSpec<ConstraintSpec>>,
 }
 
 // TODO: Multi-output caching is not yet supported.

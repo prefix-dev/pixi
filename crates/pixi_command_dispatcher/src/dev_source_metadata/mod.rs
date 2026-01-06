@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_build_types::PackageSpec;
+use pixi_build_types::{ConstraintSpec, PackageSpec};
 use pixi_record::{DevSourceRecord, PinnedSourceSpec};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec};
 use pixi_spec_containers::DependencyMap;
@@ -10,6 +10,7 @@ use rattler_conda_types::PackageName;
 use thiserror::Error;
 use tracing::instrument;
 
+use crate::build::conversion;
 use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt,
@@ -237,8 +238,14 @@ impl DevSourceMetadataSpec {
                     // Process constraints
                     for constraint in &deps.constraints {
                         let name = PackageName::new_unchecked(&constraint.name);
-                        let spec =
-                            crate::build::conversion::from_binary_spec_v1(constraint.spec.clone());
+
+                        // Match on ConstraintSpec enum
+                        let spec = match &constraint.spec {
+                            ConstraintSpec::Binary(binary) => {
+                                conversion::from_binary_spec_v1(binary.clone())
+                            }
+                        };
+
                         constraints.insert(name, spec);
                     }
                 }

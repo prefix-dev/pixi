@@ -212,6 +212,16 @@ pub enum PackageSpec {
     PinCompatible(PinCompatibleSpec),
 }
 
+/// A package spec that can be used for constraints.
+/// Constraints don't support source packages but may support pin_compatible in the future.
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum ConstraintSpec {
+    /// A binary package constraint (version spec)
+    Binary(BinaryPackageSpec),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
@@ -232,11 +242,22 @@ pub struct PinCompatibleSpec {
     pub build: Option<String>,
 }
 
+/// A pin expression string like "x", "x.x", "x.x.x", etc.
+///
+/// This represents the number of version segments to pin.
+/// For example, "x.x" means pin the major and minor version.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(transparent)]
+pub struct PinExpression(
+    #[cfg_attr(feature = "schemars", schemars(regex(pattern = r"^x(\.x)*$")))] pub String,
+);
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum PinBound {
-    Expression(String),
+    Expression(PinExpression),
     Version(#[cfg_attr(feature = "schemars", schemars(with = "String"))] Version),
 }
 
@@ -609,6 +630,19 @@ impl Hash for PackageSpec {
             }
             PackageSpec::PinCompatible(spec) => {
                 2u8.hash(state);
+                spec.hash(state);
+            }
+        }
+    }
+}
+
+impl Hash for ConstraintSpec {
+    /// Custom hash implementation that uses discriminant values to keep the
+    /// hash as stable as possible when adding new enum variants.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Binary(spec) => {
+                0u8.hash(state);
                 spec.hash(state);
             }
         }

@@ -298,6 +298,19 @@
           "required": [
             "source"
           ]
+        },
+        {
+          "description": "Pin to a version that is compatible with a version from the \"previous\" environment",
+          "type": "object",
+          "properties": {
+            "pinCompatible": {
+              "$ref": "#/$defs/PinCompatibleSpec"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "pinCompatible"
+          ]
         }
       ]
     },
@@ -313,6 +326,76 @@
       "required": [
         "path"
       ]
+    },
+    "PinBound": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "expression": {
+              "$ref": "#/$defs/PinExpression"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "expression"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "version"
+          ]
+        }
+      ]
+    },
+    "PinCompatibleSpec": {
+      "type": "object",
+      "properties": {
+        "build": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exact": {
+          "description": "If an exact pin is given, we pin the exact version & hash",
+          "type": "boolean"
+        },
+        "lowerBound": {
+          "description": "A minimum pin to a version, using `x.x.x...` as syntax",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PinBound"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "upperBound": {
+          "description": "A pin to a version, using `x.x.x...` as syntax",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PinBound"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "PinExpression": {
+      "description": "A pin expression string like \"x\", \"x.x\", \"x.x.x\", etc.\n\nThis represents the number of version segments to pin.\nFor example, \"x.x\" means pin the major and minor version.",
+      "type": "string",
+      "pattern": "^x(\\.x)*$"
     },
     "SourcePackageSpec": {
       "type": "object",

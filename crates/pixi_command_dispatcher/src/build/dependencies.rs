@@ -6,7 +6,7 @@ use crate::build::pin_compatible::{
 };
 use pixi_build_types as pbt;
 use pixi_build_types::{
-    BinaryPackageSpec, NamedSpec, PackageSpec,
+    NamedSpec, PackageSpec,
     procedures::conda_outputs::{
         CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputRunExports,
     },
@@ -124,10 +124,14 @@ impl Dependencies {
 
         for constraint in &output.constraints {
             let name = rattler_conda_types::PackageName::from_str(&constraint.name)?;
-            constraints.insert(
-                name,
-                conversion::from_binary_spec_v1(constraint.spec.clone()).into(),
-            );
+
+            // Match on ConstraintSpec enum
+            match &constraint.spec {
+                pbt::ConstraintSpec::Binary(binary) => {
+                    constraints
+                        .insert(name, conversion::from_binary_spec_v1(binary.clone()).into());
+                }
+            }
         }
 
         Ok(Self {
@@ -412,15 +416,22 @@ impl PixiRunExports {
                 .collect()
         }
 
-        fn convert_binary_spec(
-            specs: &[NamedSpec<BinaryPackageSpec>],
+        fn convert_constraint_spec(
+            specs: &[NamedSpec<pbt::ConstraintSpec>],
         ) -> Result<DependencyMap<PackageName, BinarySpec>, DependenciesError> {
             specs
                 .iter()
                 .cloned()
                 .map(|named_spec| {
-                    let spec = conversion::from_binary_spec_v1(named_spec.spec);
                     let name = PackageName::from_str(&named_spec.name)?;
+
+                    // Match on ConstraintSpec enum
+                    let spec = match named_spec.spec {
+                        pbt::ConstraintSpec::Binary(binary) => {
+                            conversion::from_binary_spec_v1(binary)
+                        }
+                    };
+
                     Ok((name, spec))
                 })
                 .collect()
@@ -430,8 +441,8 @@ impl PixiRunExports {
             weak: convert_package_spec(&output.weak, compatibility_map)?,
             strong: convert_package_spec(&output.strong, compatibility_map)?,
             noarch: convert_package_spec(&output.noarch, compatibility_map)?,
-            weak_constrains: convert_binary_spec(&output.weak_constrains)?,
-            strong_constrains: convert_binary_spec(&output.strong_constrains)?,
+            weak_constrains: convert_constraint_spec(&output.weak_constrains)?,
+            strong_constrains: convert_constraint_spec(&output.strong_constrains)?,
         })
     }
 }
