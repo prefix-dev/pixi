@@ -10,8 +10,7 @@ use pixi_build_type_conversions::{to_project_model_v1, to_target_selector_v1};
 use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
 use pixi_config::Config;
 use pixi_consts::consts::{
-    KNOWN_MANIFEST_FILES, MOJOPROJECT_MANIFEST, PYPROJECT_MANIFEST, RATTLER_BUILD_DIRS,
-    RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES, WORKSPACE_MANIFEST,
+    KNOWN_MANIFEST_FILES, RATTLER_BUILD_DIRS, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES,
 };
 use pixi_manifest::{
     DiscoveryStart, ExplicitManifestError, PackageManifest, PrioritizedChannel, WithProvenance,
@@ -413,10 +412,8 @@ pub fn generate_discovery_help(source_path: &Path) -> String {
 
     if has_package_xml {
         format!(
-            "Found a `package.xml`, please add that to the dependency path, or add one of: `{}`, `{}`, `{}`, `{}` to the directory.",
-            WORKSPACE_MANIFEST,
-            PYPROJECT_MANIFEST,
-            MOJOPROJECT_MANIFEST,
+            "Found a `package.xml`, please add that to the dependency path, or add one of: `{}`, `{}` to the directory.",
+            KNOWN_MANIFEST_FILES.join("`, `"),
             RATTLER_BUILD_FILE_NAMES.join("`, `")
         )
     } else {
