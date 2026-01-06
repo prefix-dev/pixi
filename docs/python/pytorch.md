@@ -133,7 +133,7 @@ When using pypi-dependencies, Pixi creates a “solve” environment to resolve 
 This process involves installing the Conda dependencies first and then resolving the PyPI packages within that environment.
 
 This can become problematic if you’re on a macOS machine and trying to resolve the CUDA version of PyTorch for Linux or Windows.
-Since macOS doesn’t support these operating systems, the Conda dependencies for CUDA will fail to install, preventing proper resolution.
+Since macOS doesn’t support the Conda dependencies for CUDA, it can't install the solve environment, preventing proper resolution.
 
 **Current Status:**
 The Pixi maintainers are aware of this limitation and are actively working on a solution to enable cross-platform dependency resolution for such cases.
