@@ -36,9 +36,7 @@ use pypi_modifiers::{
     pypi_tags::{get_pypi_tags, is_python_record},
 };
 use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
-use rattler_lock::{
-    PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
-};
+use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_client::{
@@ -381,20 +379,14 @@ pub async fn resolve_pypi(
     // requires_python specifier is used to determine the python version of the
     // wheel. So make sure the interpreter does not touch the solve parts of
     // this function
-    let interpreter_version = python_record
-        .version()
-        .as_major_minor()
-        .ok_or_else(|| miette::miette!("conda python record missing major.minor version"))?;
-    let pep_version = uv_pep440::Version::from_str(&format!(
-        "{}.{}",
-        interpreter_version.0, interpreter_version.1
-    ))
+    // A python-3.10.6-xxx.conda package record becomes a "==3.10.6.*" requires python specifier.
+    let python_specifier = uv_pep440::VersionSpecifier::from_version(
+        uv_pep440::Operator::EqualStar,
+        uv_pep440::Version::from_str(&python_record.version().as_str()).into_diagnostic()?,
+    )
     .into_diagnostic()
-    .context("error parsing pep440 version for python interpreter")?;
-    let python_specifier =
-        uv_pep440::VersionSpecifier::from_version(uv_pep440::Operator::EqualStar, pep_version)
-            .into_diagnostic()
-            .context("error creating version specifier for python version")?;
+    .context("error creating version specifier for python version")?;
+
     let requires_python =
         RequiresPython::from_specifiers(&uv_pep440::VersionSpecifiers::from(python_specifier));
     tracing::debug!(
@@ -1153,16 +1145,7 @@ async fn lock_pypi_packages(
                             (url_or_path, hash, false)
                         }
                         SourceDist::Directory(dir) => {
-                            // Compute hash for directory-based packages.
-                            // This is used as a fallback during satisfiability check
-                            // when metadata is dynamic and can't be compared statically.
-                            let hash = if dir.install_path.is_dir() {
-                                PypiSourceTreeHashable::from_directory(&dir.install_path)
-                                    .ok()
-                                    .map(|h| h.hash())
-                            } else {
-                                None
-                            };
+                            let hash = None;
 
                             // process the path or url that we get back from uv
                             let install_path =

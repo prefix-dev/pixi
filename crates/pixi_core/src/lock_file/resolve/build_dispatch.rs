@@ -441,9 +441,8 @@ impl BuildContext for LazyBuildDispatch<'_> {
             Ok(dispatch) => dispatch.interpreter().await,
             Err(e) => {
                 // Store the error for later retrieval
-                let err_msg = format!("could not initialize build dispatch correctly {:?}", e);
                 let _ = self.lazy_deps.last_error.set(e);
-                panic!("{}", err_msg);
+                panic!("could not initialize build dispatch correctly")
             }
         }
     }

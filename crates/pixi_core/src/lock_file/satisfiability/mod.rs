@@ -41,10 +41,7 @@ use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, PackageName,
     PackageRecord, ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
 };
-use rattler_lock::{
-    LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable,
-    UrlOrPath,
-};
+use rattler_lock::{LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData, UrlOrPath};
 use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
@@ -2093,100 +2090,74 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                 }
                                 Err(pypi_metadata::MetadataReadError::DynamicMetadata(field)) => {
                                     // Metadata is dynamic - we cannot verify it statically.
-                                    // Try to build metadata using UV if we're on the host platform.
-                                    // For non-host platforms, we can't run binaries, so fall back to hash comparison.
-                                    let best_platform = ctx.environment.best_platform();
-                                    if ctx.platform != best_platform {
-                                        tracing::debug!(
-                                            "Package {} has dynamic {} - skipping build (platform {} != host {}), falling back to hash comparison",
-                                            record.0.name,
-                                            field,
-                                            ctx.platform,
-                                            best_platform
-                                        );
-                                        if let Some(mismatch) =
-                                            compare_source_tree_hash(&absolute_path, &record.0)
-                                        {
-                                            delayed_pypi_error
-                                                .get_or_insert_with(|| Box::new(mismatch));
-                                        }
-                                    } else {
-                                        tracing::debug!(
-                                            "Package {} has dynamic {} - building metadata with UV",
-                                            record.0.name,
-                                            field
-                                        );
+                                    tracing::debug!(
+                                        "Package {} has dynamic {} - building metadata with UV",
+                                        record.0.name,
+                                        field
+                                    );
 
-                                        let uv_ctx = ctx
-                                            .uv_context
-                                            .get_or_try_init(|| {
-                                                UvResolutionContext::from_config(ctx.config)
-                                            })
-                                            .map_err(|e| {
-                                                Box::new(PlatformUnsat::FailedToReadLocalMetadata(
-                                                    record.0.name.clone(),
-                                                    format!("failed to initialize UV context: {e}"),
-                                                ))
-                                            })?;
+                                    let uv_ctx = ctx
+                                        .uv_context
+                                        .get_or_try_init(|| {
+                                            UvResolutionContext::from_config(ctx.config)
+                                        })
+                                        .map_err(|e| {
+                                            Box::new(PlatformUnsat::FailedToReadLocalMetadata(
+                                                record.0.name.clone(),
+                                                format!("failed to initialize UV context: {e}"),
+                                            ))
+                                        })?;
 
-                                        // Build metadata using UV
-                                        let mut build_ctx = BuildMetadataContext {
-                                            environment: ctx.environment,
-                                            locked_pixi_records,
-                                            platform: ctx.platform,
-                                            project_root: ctx.project_root,
-                                            uv_context: uv_ctx,
-                                            project_env_vars: &ctx.project_env_vars,
-                                            command_dispatcher: ctx.command_dispatcher.clone(),
-                                            build_caches: ctx.build_caches,
-                                            building_pixi_records: &building_pixi_records,
-                                        };
-                                        match build_dynamic_metadata(
-                                            &absolute_path,
-                                            &record.0.name,
-                                            record.0.editable,
-                                            &mut build_ctx,
-                                        )
-                                        .await
-                                        {
-                                            Ok(built_metadata) => {
-                                                // Compare built metadata with locked metadata
-                                                if let Some(mismatch) =
-                                                    pypi_metadata::compare_metadata(
-                                                        &record.0,
-                                                        &built_metadata,
-                                                    )
-                                                {
-                                                    delayed_pypi_error.get_or_insert_with(|| {
-                                                        Box::new(
+                                    // Build metadata using UV
+                                    let mut build_ctx = BuildMetadataContext {
+                                        environment: ctx.environment,
+                                        locked_pixi_records,
+                                        platform: ctx.platform,
+                                        project_root: ctx.project_root,
+                                        uv_context: uv_ctx,
+                                        project_env_vars: &ctx.project_env_vars,
+                                        command_dispatcher: ctx.command_dispatcher.clone(),
+                                        build_caches: ctx.build_caches,
+                                        building_pixi_records: &building_pixi_records,
+                                    };
+                                    match build_dynamic_metadata(
+                                        &absolute_path,
+                                        &record.0.name,
+                                        record.0.editable,
+                                        &mut build_ctx,
+                                    )
+                                    .await
+                                    {
+                                        Ok(built_metadata) => {
+                                            // Compare built metadata with locked metadata
+                                            if let Some(mismatch) = pypi_metadata::compare_metadata(
+                                                &record.0,
+                                                &built_metadata,
+                                            ) {
+                                                delayed_pypi_error.get_or_insert_with(|| {
+                                                    Box::new(
                                                         PlatformUnsat::LocalPackageMetadataMismatch(
                                                             record.0.name.clone(),
                                                             mismatch.into(),
                                                         ),
                                                     )
-                                                    });
-                                                }
-                                            }
-                                            Err(e) => {
-                                                // Building failed - report as error
-                                                delayed_pypi_error.get_or_insert_with(|| {
-                                                    Box::new(
-                                                        PlatformUnsat::FailedToReadLocalMetadata(
-                                                            record.0.name.clone(),
-                                                            format!(
-                                                                "failed to build metadata: {e}"
-                                                            ),
-                                                        ),
-                                                    )
                                                 });
                                             }
+                                        }
+                                        Err(e) => {
+                                            // Building failed - report as error
+                                            delayed_pypi_error.get_or_insert_with(|| {
+                                                Box::new(PlatformUnsat::FailedToReadLocalMetadata(
+                                                    record.0.name.clone(),
+                                                    format!("failed to build metadata: {e}"),
+                                                ))
+                                            });
                                         }
                                     }
                                 }
                                 Err(pypi_metadata::MetadataReadError::NoPyprojectToml) => {
                                     // No pyproject.toml - we cannot verify metadata statically.
-                                    // Try to build metadata using UV if we're on the host platform.
-                                    // For non-host platforms, we can't run binaries, so fall back to hash comparison.
+                                    // Build metadata using UV
                                     tracing::debug!(
                                         "Package {} has no pyproject.toml - building metadata with UV",
                                         record.0.name
@@ -2405,56 +2376,6 @@ pub struct CondaPackageIdx(usize);
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 #[repr(transparent)]
 pub struct PypiPackageIdx(usize);
-
-/// Compare source tree hash for a local package with dynamic metadata.
-///
-/// This is used as a fallback when we cannot read metadata statically
-/// (e.g., when metadata is dynamic or there's no pyproject.toml).
-/// The hash was computed during resolution and stored in the lock file.
-fn compare_source_tree_hash(
-    directory: &Path,
-    locked_data: &PypiPackageData,
-) -> Option<PlatformUnsat> {
-    // Compute the current source tree hash
-    let computed_hash = match PypiSourceTreeHashable::from_directory(directory) {
-        Ok(hashable) => hashable.hash(),
-        Err(err) => {
-            return Some(PlatformUnsat::FailedToDetermineSourceTreeHash(
-                locked_data.name.clone(),
-                err,
-            ));
-        }
-    };
-
-    // Compare with locked hash
-    match &locked_data.hash {
-        Some(locked_hash) => {
-            if &computed_hash != locked_hash {
-                Some(PlatformUnsat::SourceTreeHashMismatch(
-                    locked_data.name.clone(),
-                    SourceTreeHashMismatch {
-                        computed: computed_hash,
-                        locked: Some(locked_hash.clone()),
-                    },
-                ))
-            } else {
-                None // Hashes match
-            }
-        }
-        None => {
-            // No hash in lock file - this shouldn't happen for dynamic packages
-            // that were resolved after this change, but might happen for older lock files.
-            // In this case, trigger re-resolution.
-            Some(PlatformUnsat::SourceTreeHashMismatch(
-                locked_data.name.clone(),
-                SourceTreeHashMismatch {
-                    computed: computed_hash,
-                    locked: None,
-                },
-            ))
-        }
-    }
-}
 
 /// Context for building dynamic metadata for local packages.
 struct BuildMetadataContext<'a> {
@@ -3138,7 +3059,7 @@ mod tests {
         .into_diagnostic()
         {
             Ok(()) => {}
-            Err(e) => std::panic!("{e:?}"),
+            Err(e) => panic!("{e:?}"),
         }
     }
 
@@ -3173,7 +3094,7 @@ mod tests {
             .into_diagnostic()
         {
             Ok(()) => {}
-            Err(e) => std::panic!("{e:?}"),
+            Err(e) => panic!("{e:?}"),
         }
     }
 
