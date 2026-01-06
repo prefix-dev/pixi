@@ -129,6 +129,7 @@ nav:
       - Multi Environment: workspace/multi_environment.md
       - Lock File: workspace/lockfile.md
       - System Requirements: workspace/system_requirements.md
+      - Package Specifications: concepts/package_specifications.md
       - Conda & PyPI: concepts/conda_pypi.md
       - Global Tools:
           - Manifest: global_tools/manifest.md
@@ -145,6 +146,7 @@ nav:
       - Dependency Types: build/dependency_types.md
       - Build Backends: build/backends.md
       - Package Source: build/package_source.md
+      - Dev Packages: build/dev.md
   - Distributing:
       - Pixi Pack: deployment/pixi_pack.md
       - Authentication: deployment/authentication.md
@@ -297,6 +299,7 @@ plugins:
           - global_tools/introduction.md
         Concepts documentation:
           - workspace/*.md
+          - concepts/*.md
           - global_tools/manifest.md
           - global_tools/trampolines.md
         Building documentation:
@@ -314,6 +317,4 @@ plugins:
           - misc/*.md
 
 watch:
-  - docs/layouts
-  - docs/stylesheets
-  - mkdocs.yml
+  - docs/

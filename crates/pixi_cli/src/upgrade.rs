@@ -14,7 +14,7 @@ use pixi_core::{
 };
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 use pixi_manifest::{FeatureName, SpecType};
-use pixi_pypi_spec::PixiPypiSpec;
+use pixi_pypi_spec::PixiPypiSource;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, Platform, StringMatcher};
 
@@ -466,25 +466,14 @@ pub fn parse_specs_for_platform(
             Some(packages) if packages.contains(&name.as_normalized().to_string()) => true,
             _ => false,
         })
-        // Only upgrade version specs
-        .filter_map(|(name, req)| match &req {
-            PixiPypiSpec::Version { extras, .. } => Some((
+        // Only upgrade version specs (Registry sources)
+        .filter_map(|(name, req)| match &req.source {
+            PixiPypiSource::Registry { .. } => Some((
                 name.clone(),
                 Requirement {
                     name: name.as_normalized().clone(),
-                    extras: extras.clone(),
+                    extras: req.extras.clone(),
                     // TODO: Add marker support here to avoid overwriting existing markers
-                    marker: MarkerTree::default(),
-                    origin: None,
-                    version_or_url: None,
-                },
-                req,
-            )),
-            PixiPypiSpec::RawVersion(_) => Some((
-                name.clone(),
-                Requirement {
-                    name: name.as_normalized().clone(),
-                    extras: Vec::default(),
                     marker: MarkerTree::default(),
                     origin: None,
                     version_or_url: None,

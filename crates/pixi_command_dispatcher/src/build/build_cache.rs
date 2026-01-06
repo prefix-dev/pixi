@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, BinaryHeap},
+    collections::{BTreeMap, BTreeSet, BinaryHeap},
     hash::{Hash, Hasher},
     io::SeekFrom,
     path::PathBuf,
@@ -12,7 +12,7 @@ use ordermap::OrderMap;
 use pixi_build_discovery::{BackendInitializationParams, DiscoveredBackend};
 use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
 use pixi_path::{AbsPathBuf, AbsPresumedDirPath, AbsPresumedDirPathBuf, AbsPresumedFilePathBuf};
-use pixi_record::PinnedSourceSpec;
+use pixi_record::{PinnedSourceSpec, VariantValue};
 use pixi_stable_hash::{StableHashBuilder, json::StableJson, map::StableMap};
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
 use serde::{Deserialize, Serialize};
@@ -60,6 +60,10 @@ pub struct BuildInput {
 
     /// The virtual packages used to build the package
     pub build_virtual_packages: Vec<GenericVirtualPackage>,
+
+    /// The specific variant values for this build. Different variants result
+    /// in different cache keys to ensure they are cached separately.
+    pub variants: Option<BTreeMap<String, VariantValue>>,
 }
 
 impl BuildInput {
@@ -76,6 +80,7 @@ impl BuildInput {
             host_platform,
             host_virtual_packages,
             build_virtual_packages,
+            variants,
         } = self;
 
         // Hash some of the keys
@@ -91,6 +96,11 @@ impl BuildInput {
         let mut sorted_build_virtual_packages = build_virtual_packages.clone();
         sorted_build_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));
         sorted_build_virtual_packages.hash(&mut hasher);
+
+        // Include variants in the hash to ensure different variant values
+        // get different cache keys. BTreeMap is already sorted by key, so we
+        // can hash it directly for deterministic results.
+        variants.hash(&mut hasher);
 
         let hash = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
 
@@ -132,6 +142,7 @@ impl BuildCache {
             channel_urls = ?input.channel_urls,
             host_virtual_packages = ?input.host_virtual_packages,
             build_virtual_packages = ?input.build_virtual_packages,
+            variants = ?input.variants,
             "opening source build cache entry",
         );
 

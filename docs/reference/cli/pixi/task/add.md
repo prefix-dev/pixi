@@ -35,6 +35,8 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
 - <a id="arg---env" href="#arg---env">`--env <ENV>`</a>
 :  The environment variable to set, use --env key=value multiple times for more than one variable
 <br>May be provided more than once.
+- <a id="arg---default-environment" href="#arg---default-environment">`--default-environment <DEFAULT_ENVIRONMENT>`</a>
+:  Add a default environment for the task
 - <a id="arg---description" href="#arg---description">`--description <DESCRIPTION>`</a>
 :  A description of the task to be added
 - <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>

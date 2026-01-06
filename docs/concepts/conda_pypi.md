@@ -99,3 +99,69 @@ In this example, Pixi will first resolve the conda dependencies and install the 
 Then, since `numpy` is not specified as a conda dependency, Pixi will resolve the PyPI dependencies and install the `numpy` PyPI package.
 
 To override or change the mapping of conda packages to PyPI packages, you can use the [`conda-pypi-map`](../reference/pixi_manifest.md#conda-pypi-map-optional) field in the `pixi.toml` file.
+
+### Pinned package conflicts
+
+When trying to install conda and PyPI dependencies,
+such as with the following `pixi.toml` manifest:
+
+```toml title="pixi.toml"
+[dependencies]
+typing_extensions = "*"
+
+[pypi-dependencies]
+typing_extensions = "==4.14"
+```
+
+you might encounter the following error message:
+
+```
+Error:   × failed to solve the pypi requirements of environment 'default' for platform 'osx-arm64'
+  ├─▶ failed to resolve pypi dependencies
+  ╰─▶ Because you require typing-extensions==4.14 and typing-extensions==4.15.0, we can conclude that your requirements are unsatisfiable.
+  help: The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:
+        typing-extensions==4.15.0
+```
+
+This is due to the (current) two-stage solve.
+First, the conda dependencies are resolved.
+As any version (`*`) of `typing_extensions` is valid,
+it resolves to the latest available (`4.15.0` in this case).
+Then, the PyPI dependencies are resolved (`typing_extensions == 4.14`),
+with the constraints of the already resolved conda dependencies (`typing_extensions == 4.15.0`).
+These two dependencies are incompatible and the solve fails.
+
+While this might be a trivial case,
+it is less obvious when the packages are not explicit dependencies:
+
+```toml title="pixi.toml"
+[dependencies]
+some-conda-package = "*"  #  depends on any typing-extensions
+
+[pypi-dependencies]
+some-pypi-package = "==0.1.0"  # depends on typing-extensions<4.14
+```
+
+which produces the following solve error:
+
+```
+Error:   × failed to solve the pypi requirements of environment 'default' for platform 'osx-arm64'
+  ├─▶ failed to resolve pypi dependencies
+  ╰─▶ Because some-pypi-dependency==0.1.0 depends on typing-extensions<4.15 and typing-extensions==4.15.0, we can conclude that some-pypi-dependency==0.1.0
+      cannot be used.
+      And because only some-pypi-dependency==0.1.0 is available and you require some-pypi-dependency, we can conclude that your requirements are unsatisfiable.
+  help: The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:
+        typing-extensions==4.15.0
+```
+
+A solution in this case would be to add to the conda dependencies `typing-extensions < 4.15`,
+that is, the same constraint imposed by the PyPI package(s):
+
+```toml title="pixi.toml"
+[dependencies]
+some-conda-package = "*"  #  depends on any typing-extensions
+typing_extensions = "<4.15"
+
+[pypi-dependencies]
+some-pypi-package = "==0.1.0"  # depends on typing-extensions<4.14
+```

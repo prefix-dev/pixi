@@ -10,9 +10,10 @@ environments:
 packages:
   - conda: build-config
     name: out-of-tree-package
-    version: 0.0.1
+    version: 0.1.0
     build: ""
     subdir: noarch
+    noarch: false
     variants:
       target_platform: noarch
     package_build_source:

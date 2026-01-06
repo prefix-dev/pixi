@@ -12,8 +12,9 @@ environments:
 packages:
   - conda: child-package
     name: child-package
-    version: 0.0.1
+    version: 0.1.0
     build: ""
     subdir: noarch
+    noarch: false
     variants:
       target_platform: noarch

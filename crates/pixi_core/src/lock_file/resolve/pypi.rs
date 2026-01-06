@@ -263,7 +263,8 @@ fn create_solve_error(
                 None
             } else {
                 Some(format!(
-                    "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\n{}",
+                    "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\n{}
+See https://pixi.sh/latest/concepts/conda_pypi/#pinned-package-conflicts for more information.",
                     conflicting_packages.join("\n")
                 ))
             };
@@ -359,10 +360,7 @@ pub async fn resolve_pypi(
     // packages.
     let python_record = locked_pixi_records
         .iter()
-        .find(|r| match r {
-            PixiRecord::Binary(r) => is_python_record(r),
-            _ => false,
-        })
+        .find(|r| is_python_record(r))
         .ok_or_else(|| {
             miette::miette!(
                 help = format!("Try: {}", consts::TASK_STYLE.apply_to("pixi add python")),
@@ -381,20 +379,13 @@ pub async fn resolve_pypi(
     // requires_python specifier is used to determine the python version of the
     // wheel. So make sure the interpreter does not touch the solve parts of
     // this function
-    let interpreter_version = python_record
-        .version()
-        .as_major_minor()
-        .ok_or_else(|| miette::miette!("conda python record missing major.minor version"))?;
-    let pep_version = uv_pep440::Version::from_str(&format!(
-        "{}.{}",
-        interpreter_version.0, interpreter_version.1
-    ))
+    // A python-3.10.6-xxx.conda package record becomes a "==3.10.6.*" requires python specifier.
+    let python_specifier = uv_pep440::VersionSpecifier::from_version(
+        uv_pep440::Operator::EqualStar,
+        uv_pep440::Version::from_str(&python_record.version().as_str()).into_diagnostic()?,
+    )
     .into_diagnostic()
-    .context("error parsing pep440 version for python interpreter")?;
-    let python_specifier =
-        uv_pep440::VersionSpecifier::from_version(uv_pep440::Operator::EqualStar, pep_version)
-            .into_diagnostic()
-            .context("error creating version specifier for python version")?;
+    .context("error creating version specifier for python version")?;
     let requires_python =
         RequiresPython::from_specifiers(&uv_pep440::VersionSpecifiers::from(python_specifier));
     tracing::debug!(
