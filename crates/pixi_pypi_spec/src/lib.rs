@@ -281,6 +281,11 @@ impl PixiPypiSpec {
         &self.extras
     }
 
+    /// Returns the environment markers for this spec.
+    pub fn env_markers(&self) -> &MarkerTree {
+        &self.env_markers
+    }
+
     /// Returns the editability setting from the manifest.
     /// Only `Path` specs can be editable. Returns `None` for non-path specs
     /// or if editability is not explicitly specified.
@@ -402,12 +407,37 @@ mod tests {
         );
         assert_eq!(spec.extras(), std::slice::from_ref(&extra));
 
-        // Spec without extras
+        // Spec without extras and markers
         let spec = PixiPypiSpec::new(PixiPypiSource::Registry {
             version: VersionOrStar::Star,
             index: None,
         });
         assert!(spec.extras().is_empty());
+    }
+
+    #[test]
+    fn test_env_markers_accessor() {
+        let markers = MarkerTree::from_str("python_version >= '3.12'").unwrap();
+        // Spec with markers
+        let spec = PixiPypiSpec::with_extras_and_markers(
+            PixiPypiSource::Git {
+                git: GitSpec {
+                    git: Url::parse("https://github.com/example/repo").unwrap(),
+                    rev: None,
+                    subdirectory: None,
+                },
+            },
+            vec![],
+            markers.clone(),
+        );
+        assert_eq!(spec.env_markers(), &markers);
+
+        // Spec without extras and markers
+        let spec = PixiPypiSpec::new(PixiPypiSource::Registry {
+            version: VersionOrStar::Star,
+            index: None,
+        });
+        assert!(spec.env_markers().is_true());
     }
 
     #[test]
@@ -478,12 +508,14 @@ mod tests {
         let spec: PixiPypiSpec = source.clone().into();
         assert_eq!(spec.source, source);
         assert!(spec.extras.is_empty());
+        assert!(spec.env_markers.is_true());
     }
 
     #[test]
     fn test_default_spec() {
         let spec = PixiPypiSpec::default();
         assert!(spec.extras.is_empty());
+        assert!(spec.env_markers.is_true());
         assert!(matches!(
             spec.source,
             PixiPypiSource::Registry {
@@ -500,7 +532,7 @@ mod tests {
         let pypi = PixiPypiSpec::try_from(req).unwrap();
         assert_eq!(
             pypi.to_string(),
-            "{ version = \"==1.0.0\", extras = [\"testing\"] }"
+            "{ version = \"==1.0.0\", extras = [\"testing\"], env-markers = \"os_name == 'posix'\" }"
         );
 
         let req = pep508_rs::Requirement::from_str("numpy").unwrap();

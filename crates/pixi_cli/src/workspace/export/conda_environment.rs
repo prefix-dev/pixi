@@ -50,8 +50,9 @@ fn format_pip_extras(extras: &[ExtraName]) -> String {
 
 fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> String {
     let extras = &requirement.extras;
+    let markers = &requirement.env_markers;
 
-    match &requirement.source {
+    let mut dependency = match &requirement.source {
         PixiPypiSource::Git { git: git_url } => {
             let mut git_string = format!(
                 "{name}{extras} @ git+{url}",
@@ -115,7 +116,14 @@ fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> 
                 extras = format_pip_extras(extras)
             ),
         },
+    };
+
+    let marker_str = markers.try_to_string();
+    if let Some(marker_str) = marker_str {
+        dependency.push_str(&format!("; {}", marker_str));
     }
+
+    dependency
 }
 
 fn build_env_yaml(

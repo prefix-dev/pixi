@@ -276,6 +276,18 @@ impl From<PixiPypiSpec> for toml_edit::Value {
             }
         }
 
+        fn insert_markers(table: &mut toml_edit::InlineTable, markers: &MarkerTree) {
+            if !markers.is_true() {
+                table.insert(
+                    "env-markers",
+                    toml_edit::Value::String(toml_edit::Formatted::new(format!(
+                        "{}",
+                        markers.contents().unwrap()
+                    ))),
+                );
+            }
+        }
+
         fn insert_index(table: &mut toml_edit::InlineTable, index: &Option<Url>) {
             if let Some(index) = index {
                 table.insert(
@@ -286,10 +298,13 @@ impl From<PixiPypiSpec> for toml_edit::Value {
         }
 
         let extras = &val.extras;
+        let markers = &val.env_markers;
 
         match &val.source {
             // Simple version string (no extras, no index)
-            PixiPypiSource::Registry { version, index } if extras.is_empty() && index.is_none() => {
+            PixiPypiSource::Registry { version, index }
+                if extras.is_empty() && index.is_none() && markers.is_true() =>
+            {
                 toml_edit::Value::from(version.to_string())
             }
             // Registry with extras or index
@@ -301,6 +316,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                 );
                 insert_extras(&mut table, extras);
                 insert_index(&mut table, index);
+                insert_markers(&mut table, markers);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
             PixiPypiSource::Git {
@@ -350,6 +366,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                     );
                 }
                 insert_extras(&mut table, extras);
+                insert_markers(&mut table, markers);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
             PixiPypiSource::Path { path, editable } => {
@@ -367,6 +384,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                     );
                 }
                 insert_extras(&mut table, extras);
+                insert_markers(&mut table, markers);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
             PixiPypiSource::Url { url, subdirectory } => {
@@ -384,6 +402,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                     );
                 }
                 insert_extras(&mut table, extras);
+                insert_markers(&mut table, markers);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
         }

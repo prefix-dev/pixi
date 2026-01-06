@@ -220,7 +220,7 @@ pub fn as_uv_req(
             .iter()
             .map(|e| uv_normalize::ExtraName::from_str(e.as_ref()).expect("conversion failed"))
             .collect(),
-        marker: Default::default(),
+        marker: to_uv_marker_tree(&req.env_markers().clone()).expect("marker conversion failed"),
         groups: Default::default(),
         source,
         origin: None,
