@@ -30,9 +30,6 @@ use uv_resolver::FlatIndex;
 /// Cache for build-related resources that can be shared between
 /// satisfiability checking and PyPI resolution.
 ///
-/// Note: We cannot store `LazyBuildDispatch` directly because it holds a reference
-/// to `LazyBuildDispatchDependencies`, creating a self-referential struct issue.
-/// Instead, we store the dependencies and create `LazyBuildDispatch` fresh each time.
 /// The expensive initialization (interpreter, python env, etc.) is cached in the
 /// `OnceCell`s inside `LazyBuildDispatchDependencies`.
 pub struct EnvironmentBuildCache {
@@ -66,6 +63,22 @@ impl Default for EnvironmentBuildCache {
     }
 }
 
+/// Key for the build cache, combining environment name and platform.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BuildCacheKey {
+    pub environment: EnvironmentName,
+    pub platform: Platform,
+}
+
+impl BuildCacheKey {
+    pub fn new(environment: EnvironmentName, platform: Platform) -> Self {
+        Self {
+            environment,
+            platform,
+        }
+    }
+}
+
 /// A struct that contains information about specific outdated environments.
 ///
 /// Use the [`OutdatedEnvironments::from_project_and_lock_file`] to create an
@@ -89,9 +102,9 @@ pub struct OutdatedEnvironments<'p> {
     /// This is shared between satisfiability checking and pypi resolution.
     pub uv_context: OnceCell<UvResolutionContext>,
 
-    /// Per-environment build caches for sharing resources between
+    /// Per-environment-platform build caches for sharing resources between
     /// satisfiability checking and PyPI resolution.
-    pub build_caches: HashMap<EnvironmentName, Arc<EnvironmentBuildCache>>,
+    pub build_caches: HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>>,
 }
 
 /// A struct that stores whether the locked content of certain environments
@@ -182,10 +195,7 @@ impl<'p> OutdatedEnvironments<'p> {
             pypi: outdated_pypi,
             disregard_locked_content,
             uv_context,
-            build_caches: build_caches
-                .into_iter()
-                .map(|(k, v)| (k, Arc::new(v)))
-                .collect(),
+            build_caches,
         }
     }
 
@@ -216,7 +226,7 @@ async fn find_unsatisfiable_targets<'p>(
 ) -> (
     UnsatisfiableTargets<'p>,
     OnceCell<UvResolutionContext>,
-    HashMap<EnvironmentName, EnvironmentBuildCache>,
+    HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>>,
 ) {
     let mut verified_environments = HashMap::new();
     let mut unsatisfiable_targets = UnsatisfiableTargets::default();
@@ -225,7 +235,7 @@ async fn find_unsatisfiable_targets<'p>(
     let uv_context: OnceCell<UvResolutionContext> = OnceCell::new();
 
     // Create build caches for sharing between satisfiability and resolution
-    let mut build_caches: HashMap<EnvironmentName, EnvironmentBuildCache> = HashMap::new();
+    let mut build_caches: HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>> = HashMap::new();
 
     let project_config = project.config();
 

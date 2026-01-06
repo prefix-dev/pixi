@@ -489,8 +489,11 @@ pub struct LockFileDerivedData<'p> {
     /// An object that caches input hashes
     pub glob_hash_cache: GlobHashCache,
 
-    /// Per-environment build caches for sharing resources (CondaPrefixUpdater, etc.)
-    pub build_caches: HashMap<EnvironmentName, Arc<lock_file::outdated::EnvironmentBuildCache>>,
+    /// Per-environment-platform build caches for sharing resources (CondaPrefixUpdater, etc.)
+    pub build_caches: HashMap<
+        lock_file::outdated::BuildCacheKey,
+        Arc<lock_file::outdated::EnvironmentBuildCache>,
+    >,
 }
 
 /// The mode to use when updating a prefix.
@@ -854,17 +857,20 @@ impl<'p> LockFileDerivedData<'p> {
             .clone();
         prefix_once_cell
             .get_or_try_init(async {
+                // Create object to update the prefix
+                let group = GroupedEnvironment::Environment(environment.clone());
+                let platform = environment.best_platform();
+
                 // Use cached conda_prefix_updater if available, otherwise create new
+                let cache_key =
+                    lock_file::outdated::BuildCacheKey::new(environment.name().clone(), platform);
                 let conda_prefix_updater = match self
                     .build_caches
-                    .get(environment.name())
+                    .get(&cache_key)
                     .and_then(|c| c.conda_prefix_updater.get().cloned())
                 {
                     Some(updater) => updater,
                     None => {
-                        // Create object to update the prefix
-                        let group = GroupedEnvironment::Environment(environment.clone());
-                        let platform = environment.best_platform();
                         let virtual_packages = environment.virtual_packages(platform);
 
                         CondaPrefixUpdater::builder(
@@ -879,8 +885,6 @@ impl<'p> LockFileDerivedData<'p> {
                         .finish()?
                     }
                 };
-
-                let platform = environment.best_platform();
 
                 // Get the locked environment from the lock-file.
                 let locked_env = self.locked_env(environment)?;
@@ -1741,6 +1745,16 @@ impl<'p> UpdateContext<'p> {
                 .unwrap_or_default();
 
             // Spawn a task to solve the pypi environment
+            let cache_key =
+                lock_file::outdated::BuildCacheKey::new(environment.name().clone(), platform);
+
+            let build_cache = self
+                .outdated_envs
+                .build_caches
+                .get(&cache_key)
+                .cloned()
+                .unwrap_or_default();
+
             let pypi_solve_future = spawn_solve_pypi_task(
                 uv_context,
                 group.clone(),
@@ -1754,10 +1768,7 @@ impl<'p> UpdateContext<'p> {
                 project.root().to_path_buf(),
                 locked_group_records,
                 self.no_install,
-                self.outdated_envs
-                    .build_caches
-                    .get(environment.name())
-                    .cloned(),
+                build_cache,
             );
 
             pending_futures.push(pypi_solve_future.boxed_local());
@@ -2537,7 +2548,7 @@ async fn spawn_solve_pypi_task<'p>(
     project_root: PathBuf,
     locked_pypi_packages: Arc<PypiRecordsByName>,
     disallow_install_conda_prefix: bool,
-    cached_build_cache: Option<Arc<lock_file::outdated::EnvironmentBuildCache>>,
+    build_cache: Arc<lock_file::outdated::EnvironmentBuildCache>,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = grouped_environment.pypi_dependencies(Some(platform));
@@ -2615,7 +2626,7 @@ async fn spawn_solve_pypi_task<'p>(
             disallow_install_conda_prefix,
             exclude_newer,
             solve_strategy,
-            cached_build_cache,
+            build_cache,
         )
         .await
         .with_context(|| {
