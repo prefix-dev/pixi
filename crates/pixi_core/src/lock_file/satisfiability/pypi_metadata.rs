@@ -339,7 +339,7 @@ mod tests {
             version: Version::from_str("1.0.0").unwrap(),
             requires_dist: vec!["numpy>=1.0".parse().unwrap()],
             requires_python: Some(VersionSpecifiers::from_str(">=3.8").unwrap()),
-            location: rattler_lock::UrlOrPath::Url(url::Url::parse("file:///test").unwrap().into()),
+            location: rattler_lock::UrlOrPath::Url(url::Url::parse("file:///test").unwrap()),
             hash: None,
             editable: false,
         };
@@ -361,7 +361,7 @@ mod tests {
             version: Version::from_str("1.0.0").unwrap(),
             requires_dist: vec!["numpy>=1.0".parse().unwrap()],
             requires_python: None,
-            location: rattler_lock::UrlOrPath::Url(url::Url::parse("file:///test").unwrap().into()),
+            location: rattler_lock::UrlOrPath::Url(url::Url::parse("file:///test").unwrap()),
             hash: None,
             editable: false,
         };
