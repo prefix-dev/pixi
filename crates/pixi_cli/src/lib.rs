@@ -229,13 +229,6 @@ impl LockFileUsageConfig {
 }
 
 pub async fn execute() -> miette::Result<()> {
-    // Initialize the rayon thread pool early to ensure it's configured with the
-    // proper settings (stack size, thread count) before any code path that uses
-    // rayon's parallel iterators. This prevents issues where libraries like
-    // rattler_cache use par_iter() which would implicitly create a default pool,
-    // causing UV's later initialization to fail with "GlobalPoolAlreadyInitialized".
-    // LazyLock::force(&RAYON_INITIALIZE);
-
     let args = Args::parse();
 
     // Extract values we need before moving args
