@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_manifest/src/toml/platform.rs
+assertion_line: 97
 expression: "TomlPlatform::VARIANTS"
 ---
 [
@@ -13,6 +14,7 @@ expression: "TomlPlatform::VARIANTS"
     "linux-s390x",
     "linux-riscv32",
     "linux-riscv64",
+    "linux-loongarch64",
     "osx-64",
     "osx-arm64",
     "win-32",

@@ -58,6 +58,7 @@ class Platform(str, Enum):
     linux_riscv32 = "linux-riscv32"
     linux_riscv64 = "linux-riscv64"
     linux_s390x = "linux-s390x"
+    linux_loongarch64 = "linux-loongarch64"
     noarch = "noarch"
     osx_64 = "osx-64"
     osx_arm64 = "osx-arm64"

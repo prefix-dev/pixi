@@ -28,6 +28,9 @@ pub enum TomlPlatform {
     LinuxRiscv32,
     LinuxRiscv64,
 
+    #[strum(serialize = "linux-loongarch64")]
+    LinuxLoongArch64,
+
     #[strum(serialize = "osx-64")]
     Osx64,
     OsxArm64,
@@ -57,6 +60,7 @@ impl From<TomlPlatform> for Platform {
             TomlPlatform::LinuxS390X => Platform::LinuxS390X,
             TomlPlatform::LinuxRiscv32 => Platform::LinuxRiscv32,
             TomlPlatform::LinuxRiscv64 => Platform::LinuxRiscv64,
+            TomlPlatform::LinuxLoongArch64 => Platform::LinuxLoongArch64,
             TomlPlatform::Osx64 => Platform::Osx64,
             TomlPlatform::OsxArm64 => Platform::OsxArm64,
             TomlPlatform::Win32 => Platform::Win32,
