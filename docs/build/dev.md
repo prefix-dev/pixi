@@ -1,7 +1,7 @@
 The source packages in the `[dev]` table are not built or installed into the pixi environment.
 The `build-dependencies`, `host-dependencies` and `run-dependencies` of those packages are installed into the pixi environment.
 
-Source dependencies in the `[dependencies]` section are build in an isolated directory and then installed into the workspace.
+Source dependencies in the `[dependencies]` section are build in their own isolated environment located at`.pixi/build` and the resulting conda package is then installed into the default environment.
 This means that the `build-` and `host-dependencies` will not be in the pixi environment.
 
 This document explains how you can use the `[dev]` table to depend on the development dependencies of a package.
