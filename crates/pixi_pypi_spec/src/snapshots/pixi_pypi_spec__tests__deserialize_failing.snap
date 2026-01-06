@@ -3,7 +3,7 @@ source: crates/pixi_pypi_spec/src/lib.rs
 expression: "snapshot.into_iter().map(|Snapshot { input, result }|\nformat!(\"input: {input}\\nresult: {} \",\nresult.as_object().unwrap().get(\"error\").unwrap().as_str().unwrap())).join(\"\\n\")"
 ---
 input: pkg = { ver = "1.2.3" }
-result:   × Unexpected keys, expected only 'version', 'extras', 'path', 'editable', 'git', 'branch', 'tag', 'rev', 'url', 'subdirectory', 'index'
+result:   × Unexpected keys, expected only 'version', 'extras', 'path', 'editable', 'git', 'branch', 'tag', 'rev', 'url', 'subdirectory', 'index', 'env-markers'
    ╭─[pixi.toml:1:9]
  1 │ pkg = { ver = "1.2.3" }
    ·         ─┬─
@@ -96,4 +96,12 @@ result:   × it seems you're trying to add a git dependency, please specify as a
    ╭─[pixi.toml:1:8]
  1 │ pkg = "https://github.com/conda-forge/21cmfast-feedstock"
    ·        ─────────────────────────────────────────────────
+   ╰──── 
+input: pkg = { version = "*", "env-markers" = "potato == 'potato'" }
+result:   × Expected a quoted string or a valid marker name, found `potato`
+  │ potato == 'potato'
+  │ ^^^^^^
+   ╭─[pixi.toml:1:41]
+ 1 │ pkg = { version = "*", "env-markers" = "potato == 'potato'" }
+   ·                                         ──────────────────
    ╰────

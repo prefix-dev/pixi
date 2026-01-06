@@ -10,7 +10,7 @@ use std::{
 };
 
 use pep440_rs::VersionSpecifiers;
-use pep508_rs::ExtraName;
+use pep508_rs::{ExtraName, MarkerTree};
 use pixi_spec::GitSpec;
 use serde::Serialize;
 use thiserror::Error;
@@ -119,6 +119,16 @@ impl Default for PixiPypiSource {
     }
 }
 
+/// Serialize a `pep508_rs::MarkerTree` into a string representation
+fn serialize_markertree<S>(value: &MarkerTree, s: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    // `.unwrap()` succeeds because we don't serialize when
+    // `value.is_true()`.
+    value.contents().unwrap().serialize(s)
+}
+
 /// A complete PyPI dependency specification.
 ///
 /// This is the main type used throughout pixi for PyPI dependencies. It combines
@@ -131,6 +141,14 @@ pub struct PixiPypiSpec {
     /// Optional package extras to install.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extras: Vec<ExtraName>,
+    /// The environment markers that decide if/when this package gets installed
+    #[serde(
+        default,
+        // Needed because `pep508::MarkerTree` doesn't implement `serde::Serialize`
+        serialize_with = "serialize_markertree",
+        skip_serializing_if = "MarkerTree::is_true"
+    )]
+    pub env_markers: MarkerTree,
     /// The source for this package.
     #[serde(flatten)]
     pub source: PixiPypiSource,
@@ -181,6 +199,7 @@ impl From<PixiPypiSource> for PixiPypiSpec {
         PixiPypiSpec {
             extras: Vec::new(),
             source,
+            env_markers: MarkerTree::default(),
         }
     }
 }
@@ -191,12 +210,21 @@ impl PixiPypiSpec {
         PixiPypiSpec {
             extras: Vec::new(),
             source,
+            env_markers: MarkerTree::default(),
         }
     }
 
     /// Creates a new spec with the given source and extras.
-    pub fn with_extras(source: PixiPypiSource, extras: Vec<ExtraName>) -> Self {
-        PixiPypiSpec { extras, source }
+    pub fn with_extras_and_markers(
+        source: PixiPypiSource,
+        extras: Vec<ExtraName>,
+        env_markers: MarkerTree,
+    ) -> Self {
+        PixiPypiSpec {
+            extras,
+            source,
+            env_markers,
+        }
     }
 
     /// Returns a reference to the source.
@@ -293,6 +321,8 @@ impl PixiPypiSpec {
             updated.extras = self.extras.clone();
         }
 
+        updated.env_markers.or(requirement.marker.clone());
+
         Ok(updated)
     }
 }
@@ -359,7 +389,7 @@ mod tests {
         let extra = ExtraName::new("test".to_string()).unwrap();
 
         // Spec with extras
-        let spec = PixiPypiSpec::with_extras(
+        let spec = PixiPypiSpec::with_extras_and_markers(
             PixiPypiSource::Git {
                 git: GitSpec {
                     git: Url::parse("https://github.com/example/repo").unwrap(),
@@ -368,6 +398,7 @@ mod tests {
                 },
             },
             vec![extra.clone()],
+            MarkerTree::default(),
         );
         assert_eq!(spec.extras(), std::slice::from_ref(&extra));
 
@@ -525,7 +556,11 @@ mod tests {
 
         let pypi: Requirement = "boltons[nichita] @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl".parse().unwrap();
         let as_pypi_req: PixiPypiSpec = pypi.try_into().unwrap();
-        assert_eq!(as_pypi_req, PixiPypiSpec::with_extras(PixiPypiSource::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), subdirectory: None }, vec![ExtraName::new("nichita".to_string()).unwrap()]));
+        assert_eq!(as_pypi_req, PixiPypiSpec::with_extras_and_markers(PixiPypiSource::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), subdirectory: None }, vec![ExtraName::new("nichita".to_string()).unwrap()], MarkerTree::default()));
+
+        let pypi: Requirement = "potato[habbasi]; sys_platform == 'linux'".parse().unwrap();
+        let as_pypi_req: PixiPypiSpec = pypi.try_into().unwrap();
+        assert_snapshot!(as_pypi_req);
 
         #[cfg(target_os = "windows")]
         let pypi: Requirement = "boltons @ file:///C:/path/to/boltons".parse().unwrap();
@@ -601,6 +636,8 @@ mod tests {
             r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "rev" = "123456" }"#,
             r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "subdirectory" = "pyrattler" }"#,
             r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "extras" = ["test"] }"#,
+            r#"pkg = { version = "*", "env-markers" = "sys_platform == 'win32'" }"#,
+            r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "extras" = ["test"], "env-markers" = "sys_platform == 'linux'" }"#,
         ];
 
         #[derive(Serialize)]
@@ -639,6 +676,7 @@ mod tests {
             r#"pkg = "~/path/style""#,
             r#"pkg = "https://example.com""#,
             r#"pkg = "https://github.com/conda-forge/21cmfast-feedstock""#,
+            r#"pkg = { version = "*", "env-markers" = "potato == 'potato'" }"#,
         ];
 
         struct Snapshot {
