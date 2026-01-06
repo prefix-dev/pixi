@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -31,6 +31,7 @@ use crate::{
     InstantiateBackendError, InstantiateBackendSpec, PixiEnvironmentSpec,
     SolvePixiEnvironmentError, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec,
     SourceCheckoutError,
+    build::pin_compatible::PinCompatibleError,
     build::{
         BuildCacheError, BuildHostEnvironment, BuildHostPackage, CachedBuild,
         CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, PackageBuildInputHash,
@@ -607,10 +608,11 @@ impl SourceBuildSpec {
         let directories = Directories::new(&work_directory, host_platform);
 
         // Solve the build environment.
+        let mut compatibility_map = HashMap::new();
         let build_dependencies = output
             .build_dependencies
             .as_ref()
-            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone())))
+            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone()), &compatibility_map))
             .transpose()
             .map_err(SourceBuildError::from)
             .map_err(CommandDispatcherError::Failed)?
@@ -638,11 +640,17 @@ impl SourceBuildSpec {
             .map_err(|err| SourceBuildError::RunExportsExtraction(String::from("build"), err))
             .map_err(CommandDispatcherError::Failed)?;
 
+        compatibility_map.extend(
+            build_records
+                .iter()
+                .map(|record| (record.package_record().name.clone(), record)),
+        );
+
         // Solve the host environment for the output.
         let host_dependencies = output
             .host_dependencies
             .as_ref()
-            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone())))
+            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone()), &compatibility_map))
             .transpose()
             .map_err(SourceBuildError::from)
             .map_err(CommandDispatcherError::Failed)?
@@ -734,8 +742,14 @@ impl SourceBuildSpec {
             CommandDispatcherError::Failed(SourceBuildError::CreateWorkDirectory(err))
         })?;
 
+        compatibility_map.extend(
+            host_records
+                .iter()
+                .map(|record| (record.package_record().name.clone(), record)),
+        );
+
         // Gather the dependencies for the output.
-        let dependencies = Dependencies::new(&output.run_dependencies, None)
+        let dependencies = Dependencies::new(&output.run_dependencies, None, &compatibility_map)
             .map_err(SourceBuildError::from)
             .map_err(CommandDispatcherError::Failed)?
             .extend_with_run_exports_from_build_and_host(
@@ -745,9 +759,10 @@ impl SourceBuildSpec {
             );
 
         // Convert the run exports
-        let run_exports = PixiRunExports::try_from_protocol(&output.run_exports)
-            .map_err(SourceBuildError::from)
-            .map_err(CommandDispatcherError::Failed)?;
+        let run_exports =
+            PixiRunExports::try_from_protocol(&output.run_exports, &compatibility_map)
+                .map_err(SourceBuildError::from)
+                .map_err(CommandDispatcherError::Failed)?;
 
         // Extract the repodata records from the build and host environments.
         let build_records = Self::extract_prefix_repodata(build_records, build_prefix);
@@ -963,8 +978,11 @@ pub enum SourceBuildError {
     )]
     MissingOutputFile(PathBuf),
 
-    #[error("backend returned a dependency on an invalid package name: {0}")]
-    InvalidPackageName(String, #[source] InvalidPackageNameError),
+    #[error("backend returned a dependency on an invalid package name")]
+    InvalidPackageName(#[from] InvalidPackageNameError),
+
+    #[error(transparent)]
+    PinCompatibleError(#[from] PinCompatibleError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -995,8 +1013,11 @@ pub enum SourceBuildError {
 impl From<DependenciesError> for SourceBuildError {
     fn from(value: DependenciesError) -> Self {
         match value {
-            DependenciesError::InvalidPackageName(name, error) => {
-                SourceBuildError::InvalidPackageName(name, error)
+            DependenciesError::InvalidPackageName(error) => {
+                SourceBuildError::InvalidPackageName(error)
+            }
+            DependenciesError::PinCompatibleError(error) => {
+                SourceBuildError::PinCompatibleError(error)
             }
         }
     }

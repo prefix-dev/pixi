@@ -1,6 +1,4 @@
-use pixi_build_types::{
-    BinaryPackageSpec, PackageSpec, SourcePackageLocationSpec, SourcePackageSpec,
-};
+use pixi_build_types::{BinaryPackageSpec, SourcePackageLocationSpec, SourcePackageSpec};
 use pixi_spec::{BinarySpec, DetailedSpec, UrlBinarySpec};
 use rattler_conda_types::NamedChannelOrUrl;
 
@@ -113,13 +111,5 @@ pub fn from_binary_spec_v1(spec: BinaryPackageSpec) -> pixi_spec::BinarySpec {
             md5,
             sha256,
         })),
-    }
-}
-
-/// Converts a [`PackageSpec`] to a [`pixi_spec::PixiSpec`].
-pub fn from_package_spec_v1(source: PackageSpec) -> pixi_spec::PixiSpec {
-    match source {
-        PackageSpec::Source(source) => from_source_spec_v1(source).into(),
-        PackageSpec::Binary(binary) => from_binary_spec_v1(binary).into(),
     }
 }

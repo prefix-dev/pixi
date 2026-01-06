@@ -8,14 +8,14 @@
 //! and backwards compatibility. The idea for **backwards compatibility** is
 //! that we try not to break this in pixi as much as possible. So as long as
 //! older pixi TOMLs keep loading, we can send them to the backend.
-use std::{convert::Infallible, fmt::Display, hash::Hash, path::PathBuf, str::FromStr};
-use std::hash::Hasher;
 use ordermap::OrderMap;
 use pixi_stable_hash::{IsDefault, StableHashBuilder};
 use rattler_conda_types::{BuildNumber, BuildNumberSpec, StringMatcher, Version, VersionSpec};
 use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay, serde_as};
+use std::hash::Hasher;
+use std::{convert::Infallible, fmt::Display, hash::Hash, path::PathBuf, str::FromStr};
 use url::Url;
 
 /// The source package name of a package. Not normalized per se.
@@ -237,10 +237,7 @@ pub struct PinCompatibleSpec {
 #[serde(rename_all = "camelCase")]
 pub enum PinBound {
     Expression(String),
-    Version(
-        #[cfg_attr(feature = "schemars", schemars(with = "String"))]
-        Version,
-    ),
+    Version(#[cfg_attr(feature = "schemars", schemars(with = "String"))] Version),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
@@ -620,7 +617,12 @@ impl Hash for PackageSpec {
 
 impl Hash for PinCompatibleSpec {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let PinCompatibleSpec { lower_bound, upper_bound, exact, build } = self;
+        let PinCompatibleSpec {
+            lower_bound,
+            upper_bound,
+            exact,
+            build,
+        } = self;
 
         StableHashBuilder::<H>::new()
             .field("lower_bound", lower_bound)

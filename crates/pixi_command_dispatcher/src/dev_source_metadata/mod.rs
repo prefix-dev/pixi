@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use itertools::Itertools;
 use miette::Diagnostic;
+use pixi_build_types::PackageSpec;
 use pixi_record::{DevSourceRecord, PinnedSourceSpec};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec};
 use pixi_spec_containers::DependencyMap;
@@ -210,15 +211,25 @@ impl DevSourceMetadataSpec {
                     // Process depends
                     for depend in &deps.depends {
                         let name = PackageName::new_unchecked(&depend.name);
-                        let spec =
-                            crate::build::conversion::from_package_spec_v1(depend.spec.clone());
 
-                        // Resolve relative paths for source dependencies
-                        let resolved_spec = match spec.into_source_or_binary() {
-                            itertools::Either::Left(source_spec) => {
-                                PixiSpec::from(source_spec.resolve(source_anchor))
+                        // Match directly on PackageSpec
+                        let resolved_spec = match &depend.spec {
+                            PackageSpec::Binary(binary) => {
+                                let spec =
+                                    crate::build::conversion::from_binary_spec_v1(binary.clone());
+                                PixiSpec::from(spec)
                             }
-                            itertools::Either::Right(binary_spec) => PixiSpec::from(binary_spec),
+                            PackageSpec::Source(source) => {
+                                let spec =
+                                    crate::build::conversion::from_source_spec_v1(source.clone());
+                                PixiSpec::from(spec.resolve(source_anchor))
+                            }
+                            PackageSpec::PinCompatible(_) => {
+                                // Just ignore the pin compatible dependency. Since we are also adding
+                                // the dependencies for build and host directly the pin_compatible
+                                // wouldnt have any effect anyway.
+                                continue;
+                            }
                         };
                         dependencies.insert(name, resolved_spec);
                     }
