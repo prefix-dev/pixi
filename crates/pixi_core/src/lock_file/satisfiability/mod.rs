@@ -1604,22 +1604,56 @@ pub(crate) async fn verify_package_platform_satisfiability(
         })
         .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
 
+    // Find the python interpreter from the list of conda packages. Note that this
+    // refers to the locked python interpreter, it might not match the specs
+    // from the environment. That is ok because we will find that out when we
+    // check all the records.
+    let python_interpreter_record = locked_pixi_records.python_interpreter_record();
+
+    // Determine the marker environment from the python interpreter package.
+    let marker_environment = python_interpreter_record
+        .map(|interpreter| determine_marker_environment(platform, &interpreter.package_record))
+        .transpose()
+        .map_err(|err| {
+            Box::new(PlatformUnsat::FailedToDetermineMarkerEnvironment(
+                err.into(),
+            ))
+        });
+
+    let pypi_dependencies = environment.pypi_dependencies(Some(platform));
+
+    // We cannot determine the marker environment, for example if installing
+    // `wasm32` dependencies. However, it also doesn't really matter if we don't
+    // have any pypi requirements.
+    let marker_environment = match marker_environment {
+        Err(err) => {
+            if !pypi_dependencies.is_empty() {
+                return Err(err);
+            } else {
+                None
+            }
+        }
+        Ok(marker_environment) => marker_environment,
+    };
+
     // Transform from PyPiPackage name into UV Requirement type
-    let pypi_requirements = environment
-        .pypi_dependencies(Some(platform))
+    let pypi_requirements = pypi_dependencies
         .iter()
         .flat_map(|(name, reqs)| {
-            reqs.iter().map(move |req| {
-                Ok::<Dependency, Box<PlatformUnsat>>(Dependency::PyPi(
-                    as_uv_req(req, name.as_source(), project_root).map_err(|e| {
-                        Box::new(PlatformUnsat::AsPep508Error(
-                            name.as_normalized().clone(),
-                            e,
-                        ))
-                    })?,
-                    "<environment>".into(),
-                ))
-            })
+            reqs.iter()
+                .map(|req| as_uv_req(req, name.as_source(), project_root))
+                .filter_ok(|req| req.evaluate_markers(marker_environment.as_ref(), &req.extras))
+                .map(move |req| {
+                    Ok::<Dependency, Box<PlatformUnsat>>(Dependency::PyPi(
+                        req.map_err(|e| {
+                            Box::new(PlatformUnsat::AsPep508Error(
+                                name.as_normalized().clone(),
+                                e,
+                            ))
+                        })?,
+                        "<environment>".into(),
+                    ))
+                })
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -1702,36 +1736,6 @@ pub(crate) async fn verify_package_platform_satisfiability(
     {
         return Err(Box::new(PlatformUnsat::TooManyCondaPackages(Vec::new())));
     }
-
-    // Find the python interpreter from the list of conda packages. Note that this
-    // refers to the locked python interpreter, it might not match the specs
-    // from the environment. That is ok because we will find that out when we
-    // check all the records.
-    let python_interpreter_record = locked_pixi_records.python_interpreter_record();
-
-    // Determine the marker environment from the python interpreter package.
-    let marker_environment = python_interpreter_record
-        .map(|interpreter| determine_marker_environment(platform, &interpreter.package_record))
-        .transpose()
-        .map_err(|err| {
-            Box::new(PlatformUnsat::FailedToDetermineMarkerEnvironment(
-                err.into(),
-            ))
-        });
-
-    // We cannot determine the marker environment, for example if installing
-    // `wasm32` dependencies. However, it also doesn't really matter if we don't
-    // have any pypi requirements.
-    let marker_environment = match marker_environment {
-        Err(err) => {
-            if !pypi_requirements.is_empty() {
-                return Err(err);
-            } else {
-                None
-            }
-        }
-        Ok(marker_environment) => marker_environment,
-    };
 
     // Determine the pypi packages provided by the locked conda packages.
     let locked_conda_pypi_packages = locked_pixi_records
