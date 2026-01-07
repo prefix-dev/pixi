@@ -1,10 +1,12 @@
 # Making a Pixi workspace
 
 Pixi's biggest strength is its ability to create reproducible, powerful, and flexible workspaces.
-A workspace lives in a directory on your system, and is a collection of Pixi environments that can be used to develop one or many projects in that directory.
-Let's go over the common steps to create a simple Pixi workspace.
+A workspace lives in a directory on your system, and is a collection of environments
+that can be used to develop one or many projects in that directory. Let's go over the common steps
+to create a simple Pixi workspace.
 
 ## Creating a Pixi workspace
+
 To create a new Pixi workspace, you can use the `pixi init` command:
 
 ```shell
@@ -44,10 +46,13 @@ version = "0.1.0"
     Or use the integrated schema support in PyCharm.
 
 ## Managing dependencies
+
 After creating the workspace, you can start adding dependencies.
 Pixi uses the `pixi add` command to add dependencies to a workspace.
-This command will, by default, add the [**conda**](https://prefix.dev/blog/what-is-a-conda-package) dependency to the `pixi.toml`, solve the dependencies, write the [lock file](./workspace/lockfile.md), and install the package in the environment.
-For example, let's add `numpy` and `pytest` to the workspace.
+This command will, by default, add the [**conda**](https://prefix.dev/blog/what-is-a-conda-package)
+dependency to the `pixi.toml`, solve the dependencies, write the [lock file](./workspace/lockfile.md),
+and install the package into an environment. For example, let's add `numpy` and `pytest`
+to the workspace.
 
 ```shell
 pixi add numpy pytest
@@ -85,6 +90,7 @@ httpx = ">=0.28.1,<0.29"
 To learn more about the differences between `conda` and PyPI, see [our Conda & PyPI concept documentation](./concepts/conda_pypi.md).
 
 ## Lock file
+
 Pixi will always create a lock file when the dependencies are solved.
 This file will contain all the exact versions of the workspace's dependencies (and their dependencies).
 This results in a reproducible environment, which you can share with others, and use for testing and deployment.
@@ -118,6 +124,7 @@ packages:
 ```
 
 ## Managing tasks
+
 Pixi has a built-in cross-platform task runner which allows you to define tasks in the manifest.
 Think of tasks as commands (or chains of commands) which you may want to repeat many times over the course of developing a project (for example, running the tests).
 
@@ -140,6 +147,7 @@ You can then run the task using the `pixi run` command:
 ```shell
 pixi run hello
 ```
+
 This will execute the command `echo Hello, World!` in the workspace's default environment.
 
 ??? tip "Do you want to use more powerful features?"
@@ -169,13 +177,18 @@ This will execute the command `echo Hello, World!` in the workspace's default en
     More information about tasks can be found in the [Tasks](./workspace/advanced_tasks.md) section of the documentation.
 
 ## Environments
+
 Pixi always creates an environment for your workspace (the "default" environment),
 which contains your `dependencies` and in which your tasks are run.
 You can also include [multiple environments](./workspace/multi_environment.md) in one workspace.
-These environments are [located](./reference/pixi_configuration.md#detached-environments "Find out how to move this location if required") in the `.pixi/envs` directory in the root of your workspace.
+These environments are [located](./reference/pixi_configuration.md#detached-environments "Find out how to move this location if required")
+in the `.pixi/envs` directory in the root of your workspace.
 
 Using these environments is as simple as running the `pixi run` or `pixi shell` command.
-`pixi run` will execute the remaining input as a command (or a task if the input matches the name of a defined task) in the environment, while `pixi shell` will spawn a new shell session in the environment. Both commands "activate" the environment — learn more at [our environment activation documentation](./workspace/environment.md#activation).
+`pixi run` will execute the remaining input as a command (or a task if the input matches the name of a defined task)
+in the environment, while `pixi shell` will spawn a new shell session in the environment.
+Both commands "activate" the environment — learn more at
+[our environment activation documentation](./workspace/environment.md#activation).
 
 ```shell
 pixi run python -VV

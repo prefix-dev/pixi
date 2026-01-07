@@ -1,6 +1,8 @@
 <!-- Keep in sync with https://github.com/quantco/pixi-pack/blob/main/README.md -->
 
-[`pixi-pack`](https://github.com/quantco/pixi-pack) is a simple tool that takes a Pixi environment and packs it into a compressed archive that can be shipped to the target machine. The corresponding `pixi-unpack` tool can be used to unpack the archive and install the environment.
+[`pixi-pack`](https://github.com/quantco/pixi-pack) is a simple tool that takes an environment
+and packs it into a compressed archive that can be shipped to the target machine. The corresponding
+`pixi-unpack` tool can be used to unpack the archive and recreate an environment.
 
 Both tools can be installed via
 
@@ -140,7 +142,8 @@ You can inject additional packages into the environment that are not specified i
 pixi-pack --inject local-package-1.0.0-hbefa133_0.conda pixi.toml
 ```
 
-This can be particularly useful if you build the package itself and want to include the built package in the environment but still want to use `pixi.lock` from the workspace.
+This can be particularly useful if you build the package itself and want to include the built package
+in the environment but still want to use `pixi.lock` from the workspace.
 
 ### PyPi support
 
@@ -202,7 +205,7 @@ Using a cache is particularly useful when:
 
 - Creating multiple packs with overlapping dependencies
 - Working with large packages that take time to download
-- Operating in environments with limited bandwidth
+- Operating on machines with limited bandwidth
 - Running CI/CD pipelines where package caching can significantly improve build times
 
 ### Unpacking Without pixi-pack
