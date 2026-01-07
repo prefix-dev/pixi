@@ -13,7 +13,6 @@ use crate::{
     lock_file::satisfiability::{EnvironmentUnsat, verify_solve_group_satisfiability},
     workspace::{Environment, SolveGroup},
 };
-use async_once_cell::OnceCell as AsyncOnceCell;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
@@ -23,42 +22,24 @@ use pixi_manifest::{EnvironmentName, FeaturesExt};
 use pixi_uv_context::UvResolutionContext;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackageRef};
-use uv_client::RegistryClient;
-use uv_configuration::BuildOptions;
-use uv_distribution_types::{DependencyMetadata, IndexLocations};
-use uv_resolver::FlatIndex;
 
 /// Cache for build-related resources that can be shared between
 /// satisfiability checking and PyPI resolution.
+///
+/// Only resources that are truly expensive to recreate are cached here:
+/// - `lazy_build_dispatch_deps`: Caches Python interpreter, environment, and constraints
+///   that require querying the conda prefix.
+/// - `conda_prefix_updater`: Has internal `AsyncOnceCell` that prevents duplicate prefix updates.
+///
+/// Other resources (registry_client, index_locations, build_options, flat_index,
+/// dependency_metadata) are cheap to recreate or have disk caching, so they're
+/// created locally where needed.
+#[derive(Default)]
 pub struct EnvironmentBuildCache {
     /// Lazily initialized build dispatch dependencies (interpreter, env, etc.)
     pub lazy_build_dispatch_deps: LazyBuildDispatchDependencies,
     /// Optional conda prefix updater (created during satisfiability checking)
     pub conda_prefix_updater: OnceCell<CondaPrefixUpdater>,
-    /// Cached registry client (with Online connectivity)
-    pub registry_client: OnceCell<Arc<RegistryClient>>,
-    /// Cached index locations
-    pub index_locations: OnceCell<IndexLocations>,
-    /// Cached build options
-    pub build_options: OnceCell<BuildOptions>,
-    /// Cached flat index (populated lazily when needed, async initialization)
-    pub flat_index: AsyncOnceCell<FlatIndex>,
-    /// Cached dependency metadata
-    pub dependency_metadata: OnceCell<DependencyMetadata>,
-}
-
-impl Default for EnvironmentBuildCache {
-    fn default() -> Self {
-        Self {
-            lazy_build_dispatch_deps: LazyBuildDispatchDependencies::default(),
-            conda_prefix_updater: OnceCell::new(),
-            registry_client: OnceCell::new(),
-            index_locations: OnceCell::new(),
-            build_options: OnceCell::new(),
-            flat_index: AsyncOnceCell::new(),
-            dependency_metadata: OnceCell::new(),
-        }
-    }
 }
 
 /// Key for the build cache, combining environment name and platform.

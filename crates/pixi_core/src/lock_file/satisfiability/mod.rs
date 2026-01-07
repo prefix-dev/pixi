@@ -2434,41 +2434,29 @@ async fn build_dynamic_metadata(
     let cache_key = BuildCacheKey::new(ctx.environment.name().clone(), best_platform);
     let cache = ctx.build_caches.entry(cache_key).or_default();
 
-    // Get or create index locations from cache
-    let index_locations = cache
-        .index_locations
-        .get_or_try_init(|| {
-            pypi_options_to_index_locations(&pypi_options, ctx.project_root).map_err(|e| {
-                PlatformUnsat::FailedToReadLocalMetadata(
-                    package_name.clone(),
-                    format!("Failed to setup index locations: {e}"),
-                )
-            })
-        })?
-        .clone();
-
-    // Get or create build options from cache
-    let build_options = cache
-        .build_options
-        .get_or_try_init(|| {
-            pypi_options_to_build_options(
-                &pypi_options.no_build.clone().unwrap_or_default(),
-                &pypi_options.no_binary.clone().unwrap_or_default(),
+    // Create index locations (cheap - just URL parsing)
+    let index_locations = pypi_options_to_index_locations(&pypi_options, ctx.project_root)
+        .map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Failed to setup index locations: {e}"),
             )
-            .map_err(|e| {
-                PlatformUnsat::FailedToReadLocalMetadata(
-                    package_name.clone(),
-                    format!("Failed to create build options: {e}"),
-                )
-            })
-        })?
-        .clone();
+        })?;
 
-    // Get or create dependency metadata from cache
-    let dependency_metadata = cache
-        .dependency_metadata
-        .get_or_init(DependencyMetadata::default)
-        .clone();
+    // Create build options (cheap - just config conversion)
+    let build_options = pypi_options_to_build_options(
+        &pypi_options.no_build.clone().unwrap_or_default(),
+        &pypi_options.no_binary.clone().unwrap_or_default(),
+    )
+    .map_err(|e| {
+        PlatformUnsat::FailedToReadLocalMetadata(
+            package_name.clone(),
+            format!("Failed to create build options: {e}"),
+        )
+    })?;
+
+    // Create dependency metadata (cheap - just default)
+    let dependency_metadata = DependencyMetadata::default();
 
     // Configure insecure hosts
     let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
@@ -2477,30 +2465,27 @@ async fn build_dynamic_metadata(
         &index_locations,
     );
 
-    // Get or create registry client from cache (using Online connectivity for reuse in resolution)
-    let registry_client = cache
-        .registry_client
-        .get_or_init(|| {
-            let base_client_builder = BaseClientBuilder::default()
-                .allow_insecure_host(allow_insecure_hosts.clone())
-                .markers(&marker_environment)
-                .keyring(ctx.uv_context.keyring_provider)
-                .connectivity(Connectivity::Online)
-                .native_tls(ctx.uv_context.use_native_tls)
-                .extra_middleware(ctx.uv_context.extra_middleware.clone());
+    // Create registry client (disk-cached HTTP responses, cheap to construct)
+    let registry_client = {
+        let base_client_builder = BaseClientBuilder::default()
+            .allow_insecure_host(allow_insecure_hosts.clone())
+            .markers(&marker_environment)
+            .keyring(ctx.uv_context.keyring_provider)
+            .connectivity(Connectivity::Online)
+            .native_tls(ctx.uv_context.use_native_tls)
+            .extra_middleware(ctx.uv_context.extra_middleware.clone());
 
-            let mut uv_client_builder =
-                RegistryClientBuilder::new(base_client_builder, ctx.uv_context.cache.clone())
-                    .index_locations(index_locations.clone())
-                    .index_strategy(index_strategy);
+        let mut uv_client_builder =
+            RegistryClientBuilder::new(base_client_builder, ctx.uv_context.cache.clone())
+                .index_locations(index_locations.clone())
+                .index_strategy(index_strategy);
 
-            for p in &ctx.uv_context.proxies {
-                uv_client_builder = uv_client_builder.proxy(p.clone())
-            }
+        for p in &ctx.uv_context.proxies {
+            uv_client_builder = uv_client_builder.proxy(p.clone())
+        }
 
-            Arc::new(uv_client_builder.build())
-        })
-        .clone();
+        Arc::new(uv_client_builder.build())
+    };
 
     // Get tags for this platform (needed for FlatIndex)
     let system_requirements = ctx.environment.system_requirements();
@@ -2512,38 +2497,33 @@ async fn build_dynamic_metadata(
             )
         })?;
 
-    // Get or create flat index from cache (fetch entries like pypi.rs does)
-    let flat_index = cache
-        .flat_index
-        .get_or_try_init(async {
-            // Create FlatIndexClient and fetch entries
-            let flat_index_client = FlatIndexClient::new(
-                registry_client.cached_client(),
-                Connectivity::Online,
-                &ctx.uv_context.cache,
-            );
-            let flat_index_urls: Vec<&IndexUrl> = index_locations
-                .flat_indexes()
-                .map(|index| index.url())
-                .collect();
-            let flat_index_entries = flat_index_client
-                .fetch_all(flat_index_urls.into_iter())
-                .await
-                .map_err(|e| {
-                    PlatformUnsat::FailedToReadLocalMetadata(
-                        package_name.clone(),
-                        format!("Failed to fetch flat index entries: {e}"),
-                    )
-                })?;
-            Ok::<_, PlatformUnsat>(FlatIndex::from_entries(
-                flat_index_entries,
-                Some(&tags),
-                &ctx.uv_context.hash_strategy,
-                &build_options,
-            ))
-        })
-        .await?
-        .clone();
+    // Create flat index (network requests are disk-cached by FlatIndexClient)
+    let flat_index = {
+        let flat_index_client = FlatIndexClient::new(
+            registry_client.cached_client(),
+            Connectivity::Online,
+            &ctx.uv_context.cache,
+        );
+        let flat_index_urls: Vec<&IndexUrl> = index_locations
+            .flat_indexes()
+            .map(|index| index.url())
+            .collect();
+        let flat_index_entries = flat_index_client
+            .fetch_all(flat_index_urls.into_iter())
+            .await
+            .map_err(|e| {
+                PlatformUnsat::FailedToReadLocalMetadata(
+                    package_name.clone(),
+                    format!("Failed to fetch flat index entries: {e}"),
+                )
+            })?;
+        FlatIndex::from_entries(
+            flat_index_entries,
+            Some(&tags),
+            &ctx.uv_context.hash_strategy,
+            &build_options,
+        )
+    };
 
     // Create build dispatch parameters
     let config_settings = ConfigSettings::default();

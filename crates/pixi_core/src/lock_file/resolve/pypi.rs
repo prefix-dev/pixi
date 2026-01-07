@@ -396,57 +396,45 @@ pub async fn resolve_pypi(
 
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
 
-    // Use cached index_locations if available, otherwise create new
-    let index_locations = build_cache
-        .index_locations
-        .get_or_try_init(|| {
-            pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()
-        })?
-        .clone();
+    // Create index locations (cheap - just URL parsing)
+    let index_locations =
+        pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?;
 
-    // Use cached build_options if available, otherwise create new
-    let build_options = build_cache
-        .build_options
-        .get_or_try_init(|| {
-            pypi_options_to_build_options(
-                &pypi_options.no_build.clone().unwrap_or_default(),
-                &pypi_options.no_binary.clone().unwrap_or_default(),
-            )
-            .into_diagnostic()
-        })?
-        .clone();
+    // Create build options (cheap - just config conversion)
+    let build_options = pypi_options_to_build_options(
+        &pypi_options.no_build.clone().unwrap_or_default(),
+        &pypi_options.no_binary.clone().unwrap_or_default(),
+    )
+    .into_diagnostic()?;
 
-    // Use cached registry_client if available, otherwise create new
-    let registry_client = build_cache
-        .registry_client
-        .get_or_init(|| {
-            // Configure insecure hosts for TLS verification bypass
-            let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
-                context.allow_insecure_host.clone(),
-                context.tls_no_verify,
-                &index_locations,
-            );
+    // Configure insecure hosts for TLS verification bypass
+    let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
+        context.allow_insecure_host.clone(),
+        context.tls_no_verify,
+        &index_locations,
+    );
 
-            let base_client_builder = BaseClientBuilder::default()
-                .allow_insecure_host(allow_insecure_hosts)
-                .markers(&marker_environment)
-                .keyring(context.keyring_provider)
-                .connectivity(Connectivity::Online)
-                .native_tls(context.use_native_tls)
-                .extra_middleware(context.extra_middleware.clone());
+    // Create registry client (disk-cached HTTP responses, cheap to construct)
+    let registry_client = {
+        let base_client_builder = BaseClientBuilder::default()
+            .allow_insecure_host(allow_insecure_hosts)
+            .markers(&marker_environment)
+            .keyring(context.keyring_provider)
+            .connectivity(Connectivity::Online)
+            .native_tls(context.use_native_tls)
+            .extra_middleware(context.extra_middleware.clone());
 
-            let mut uv_client_builder =
-                RegistryClientBuilder::new(base_client_builder, context.cache.clone())
-                    .index_locations(index_locations.clone())
-                    .index_strategy(index_strategy);
+        let mut uv_client_builder =
+            RegistryClientBuilder::new(base_client_builder, context.cache.clone())
+                .index_locations(index_locations.clone())
+                .index_strategy(index_strategy);
 
-            for p in &context.proxies {
-                uv_client_builder = uv_client_builder.proxy(p.clone())
-            }
+        for p in &context.proxies {
+            uv_client_builder = uv_client_builder.proxy(p.clone())
+        }
 
-            Arc::new(uv_client_builder.build())
-        })
-        .clone();
+        Arc::new(uv_client_builder.build())
+    };
     let dependency_overrides =
         pypi_options.dependency_overrides.as_ref().map(|overrides|->Result<Vec<_>, _> {
             overrides
@@ -465,34 +453,28 @@ pub async fn resolve_pypi(
                 .collect::<Result<Vec<_>, _>>()
         }).transpose()?.unwrap_or_default();
 
-    // Use cached flat_index if available, otherwise create new
-    let flat_index = build_cache
-        .flat_index
-        .get_or_try_init(async {
-            // Resolve the flat indexes from `--find-links`.
-            // In UV 0.7.8, we need to fetch flat index entries from the index locations
-            let flat_index_client = FlatIndexClient::new(
-                registry_client.cached_client(),
-                Connectivity::Online,
-                &context.cache,
-            );
-            let flat_index_urls: Vec<&IndexUrl> = index_locations
-                .flat_indexes()
-                .map(|index| index.url())
-                .collect();
-            let flat_index_entries = flat_index_client
-                .fetch_all(flat_index_urls.into_iter())
-                .await
-                .into_diagnostic()?;
-            Ok::<_, miette::Report>(FlatIndex::from_entries(
-                flat_index_entries,
-                Some(&tags),
-                &context.hash_strategy,
-                &build_options,
-            ))
-        })
-        .await?
-        .clone();
+    // Create flat index (network requests are disk-cached by FlatIndexClient)
+    let flat_index = {
+        let flat_index_client = FlatIndexClient::new(
+            registry_client.cached_client(),
+            Connectivity::Online,
+            &context.cache,
+        );
+        let flat_index_urls: Vec<&IndexUrl> = index_locations
+            .flat_indexes()
+            .map(|index| index.url())
+            .collect();
+        let flat_index_entries = flat_index_client
+            .fetch_all(flat_index_urls.into_iter())
+            .await
+            .into_diagnostic()?;
+        FlatIndex::from_entries(
+            flat_index_entries,
+            Some(&tags),
+            &context.hash_strategy,
+            &build_options,
+        )
+    };
 
     let resolution_mode = match solve_strategy {
         SolveStrategy::Highest => ResolutionMode::Highest,
@@ -515,11 +497,8 @@ pub async fn resolve_pypi(
         ..Options::default()
     };
 
-    // Use cached dependency_metadata if available, otherwise create new
-    let dependency_metadata = build_cache
-        .dependency_metadata
-        .get_or_init(DependencyMetadata::default)
-        .clone();
+    // Create dependency metadata (cheap - just default)
+    let dependency_metadata = DependencyMetadata::default();
 
     let config_settings = ConfigSettings::default();
     let build_params = UvBuildDispatchParams::new(
