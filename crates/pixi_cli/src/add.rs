@@ -5,6 +5,7 @@ use pixi_api::{
 };
 use pixi_config::ConfigCli;
 use pixi_core::{DependencyType, WorkspaceLocator};
+use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::{
     cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
@@ -92,6 +93,10 @@ pub struct Args {
     /// Whether the pypi requirement should be editable
     #[arg(long, requires = "pypi")]
     pub editable: bool,
+
+    // Specify channel
+    #[arg(long)]
+    pub channel: Option<Vec<NamedChannelOrUrl>>,
 }
 
 impl TryFrom<&Args> for DependencyOptions {
@@ -154,6 +159,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     spec_type,
                     (&args).try_into()?,
                     git_options,
+                    args.channel,
                 )
                 .await?
         }

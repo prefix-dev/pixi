@@ -277,6 +277,7 @@ impl<I: Interface> WorkspaceContext<I> {
         spec_type: SpecType,
         dep_options: DependencyOptions,
         git_options: GitOptions,
+        channel: Option<Vec<NamedChannelOrUrl>>,
     ) -> miette::Result<Option<UpdateDeps>> {
         Box::pin(crate::workspace::add::add_conda_dep(
             self.workspace_mut()?,
@@ -284,6 +285,7 @@ impl<I: Interface> WorkspaceContext<I> {
             spec_type,
             dep_options,
             git_options,
+            channel,
         ))
         .await
     }
