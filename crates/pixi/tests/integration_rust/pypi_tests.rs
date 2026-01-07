@@ -1,4 +1,11 @@
-use std::{fs::File, io::Write, str::FromStr};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::Write,
+    path::{Path, PathBuf},
+    str::FromStr,
+    time::SystemTime,
+};
 
 use pep508_rs::Requirement;
 use rattler_conda_types::Platform;
@@ -1148,6 +1155,271 @@ async fn test_prerelease_mode_disallow() {
         "1.0.0",
         "With prerelease-mode = 'disallow', the stable version should be selected"
     );
+}
+
+/// Test that PyPI sdist with static metadata (all in pyproject.toml) can be resolved.
+/// This tests the satisfiability check extracts metadata without running setup.py.
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
+async fn test_pypi_sdist_static_metadata_extraction() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create a pyproject.toml with all static metadata (hatchling build backend)
+    let pyproject = format!(
+        r#"
+[project]
+name = "test-static-pkg"
+version = "1.2.3"
+description = "Test package with static metadata"
+requires-python = ">=3.10"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["src"]
+targets.wheel.strict-naming = false
+targets.wheel.packages = ["src/test_static_pkg"]
+targets.sdist.strict-naming = false
+targets.sdist.packages = ["src/test_static_pkg"]
+
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["{platform}"]
+
+[tool.pixi.dependencies]
+python = "~=3.12.0"
+
+[tool.pixi.pypi-dependencies]
+test-static-pkg = {{ path = ".", editable = true }}
+"#,
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+    // Create the package source files
+    let src_dir = pixi.workspace_path().join("src").join("test_static_pkg");
+    fs_err::create_dir_all(&src_dir).unwrap();
+    fs_err::write(src_dir.join("__init__.py"), "__version__ = '1.2.3'\n").unwrap();
+
+    // Resolve the lock file
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // Verify the package is in the lock file with correct version
+    let locked_version = lock_file
+        .get_pypi_package_version("default", platform, "test-static-pkg")
+        .expect("test-static-pkg should be in lock file");
+
+    assert_eq!(
+        locked_version.to_string(),
+        "1.2.3",
+        "Static metadata version should be correctly extracted"
+    );
+}
+
+/// Test that PyPI sdist with dynamic metadata (version from setup.py) can be resolved.
+/// This tests the satisfiability check runs the build backend to extract metadata.
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
+async fn test_pypi_sdist_dynamic_metadata_extraction() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create a pyproject.toml with dynamic version (setuptools)
+    let pyproject = format!(
+        r#"
+[project]
+name = "test-dynamic-pkg"
+dynamic = ["version"]
+requires-python = ">=3.10"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+version = {{attr = "test_dynamic_pkg.__version__"}}
+
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["{platform}"]
+
+[tool.pixi.dependencies]
+python = "~=3.12.0"
+
+[tool.pixi.pypi-dependencies]
+test-dynamic-pkg = {{ path = ".", editable = true }}
+"#,
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+    // Create the package source files with version defined in __init__.py
+    let pkg_dir = pixi.workspace_path().join("test_dynamic_pkg");
+    fs_err::create_dir_all(&pkg_dir).unwrap();
+    fs_err::write(pkg_dir.join("__init__.py"), "__version__ = '2.5.0'\n").unwrap();
+
+    // Resolve the lock file
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // Verify the package is in the lock file with dynamically extracted version
+    let locked_version = lock_file
+        .get_pypi_package_version("default", platform, "test-dynamic-pkg")
+        .expect("test-dynamic-pkg should be in lock file");
+
+    assert_eq!(
+        locked_version.to_string(),
+        "2.5.0",
+        "Dynamic metadata version should be correctly extracted"
+    );
+}
+
+/// Find all sdist cache directories under uv-cache/sdists-v*/path/
+fn find_sdist_cache_dirs(cache_dir: &Path) -> Vec<PathBuf> {
+    let mut result = Vec::new();
+    let uv_cache = cache_dir.join("uv-cache");
+    if !uv_cache.exists() {
+        return result;
+    }
+
+    // Look for sdists-v* directories (e.g., sdists-v9)
+    if let Ok(entries) = fs_err::read_dir(&uv_cache) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if name.starts_with("sdists-v") {
+                    let path_dir = path.join("path");
+                    if path_dir.exists()
+                        && let Ok(hash_dirs) = fs_err::read_dir(&path_dir)
+                    {
+                        for hash_entry in hash_dirs.filter_map(|e| e.ok()) {
+                            let hash_path = hash_entry.path();
+                            if hash_path.is_dir() {
+                                result.push(hash_path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    result
+}
+
+/// Test that PyPI sdist builds are cached and reused on subsequent installs.
+/// Uses file modification time verification to check no rebuild occurred.
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
+async fn test_pypi_sdist_cache_reuse() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    let pyproject = format!(
+        r#"
+[project]
+name = "test-cache-pkg"
+version = "1.0.0"
+requires-python = ">=3.10"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["src"]
+targets.wheel.strict-naming = false
+targets.wheel.packages = ["src/test_cache_pkg"]
+targets.sdist.strict-naming = false
+targets.sdist.packages = ["src/test_cache_pkg"]
+
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["{platform}"]
+
+[tool.pixi.dependencies]
+python = "~=3.12.0"
+
+[tool.pixi.pypi-dependencies]
+test-cache-pkg = {{ path = "." }}
+"#,
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+    // Create the package source files
+    let src_dir = pixi.workspace_path().join("src").join("test_cache_pkg");
+    fs_err::create_dir_all(&src_dir).unwrap();
+    fs_err::write(src_dir.join("__init__.py"), "__version__ = '1.0.0'\n").unwrap();
+
+    // First install - builds and caches the wheel
+    let tmp_dir = tempdir().unwrap();
+    let cache_dir = tmp_dir.path().to_path_buf();
+
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(tmp_dir.path().to_str().unwrap()))],
+        async {
+            pixi.install().await.unwrap();
+        },
+    )
+    .await;
+
+    // Find the sdist cache directory for our package
+    let sdist_dirs = find_sdist_cache_dirs(&cache_dir);
+    assert!(
+        !sdist_dirs.is_empty(),
+        "Expected sdist cache directory to exist after first install"
+    );
+
+    // Record mtimes of all sdist cache directories
+    let mtimes_first: HashMap<PathBuf, SystemTime> = sdist_dirs
+        .iter()
+        .filter_map(|p| {
+            fs_err::metadata(p)
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .map(|t| (p.clone(), t))
+        })
+        .collect();
+
+    // Second install - should reuse cache without rebuilding
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(tmp_dir.path().to_str().unwrap()))],
+        async {
+            pixi.install().await.unwrap();
+        },
+    )
+    .await;
+
+    // Verify sdist cache directories were not modified (no rebuild occurred)
+    for (path, mtime_first) in &mtimes_first {
+        let mtime_second = fs_err::metadata(path)
+            .and_then(|m| m.modified())
+            .unwrap_or_else(|_| panic!("Cache directory disappeared: {}", path.display()));
+        assert_eq!(
+            *mtime_first,
+            mtime_second,
+            "Sdist cache was modified (rebuilt): {}",
+            path.display()
+        );
+    }
 }
 
 /// Test for issue #5205: Specifying a python sub-version (patch) should work correctly

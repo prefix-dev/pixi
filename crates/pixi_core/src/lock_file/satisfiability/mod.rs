@@ -7,6 +7,7 @@ use std::{
     hash::Hash,
     path::{Path, PathBuf},
     str::FromStr,
+    sync::LazyLock,
 };
 
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -45,6 +46,7 @@ use rattler_lock::{LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData
 use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
+use uv_configuration::RAYON_INITIALIZE;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
 use uv_distribution_types::{RequirementSource, RequiresPython};
 use uv_git_types::GitReference;
@@ -2569,6 +2571,10 @@ async fn build_dynamic_metadata(
             let prefix_platform = ctx.environment.best_platform();
             let group = GroupedEnvironment::Environment(ctx.environment.clone());
             let virtual_packages = ctx.environment.virtual_packages(prefix_platform);
+
+            // Force the initialization of the rayon thread pool to avoid implicit creation
+            // by the uv.
+            LazyLock::force(&RAYON_INITIALIZE);
 
             CondaPrefixUpdater::builder(
                 group,

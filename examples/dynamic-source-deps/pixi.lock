@@ -543,7 +543,6 @@ packages:
 - pypi: ./minimal-project
   name: minimal-project
   version: '0.1'
-  sha256: 590cda021c427ceaff15b4aa13245e6fd493b6ffb759c0a017f5d1b485b75c57
 - conda: https://conda.anaconda.org/conda-forge/linux-64/ncurses-6.5-h2d0b736_3.conda
   sha256: 3fde293232fa3fca98635e1167de6b7c7fda83caf24b9d6c91ec9eefb4f4d586
   md5: 47e340acb35de30501a76c7c799c41d7
@@ -769,8 +768,7 @@ packages:
   timestamp: 1765813902568
 - pypi: ./setup-project
   name: setup-project
-  version: 0.5.0
-  sha256: a5157840f5d8858d61816c9adb05cd1917b4c11dfd2c8660ae36aaca0c289b22
+  version: 0.6.0
 - conda: https://conda.anaconda.org/conda-forge/linux-64/tk-8.6.13-noxft_ha0e22de_103.conda
   sha256: 1544760538a40bcd8ace2b1d8ebe3eb5807ac268641f8acdc18c69c5ebfeaf64
   md5: 86bc20552bf46075e3d92b67f089172d
