@@ -6,13 +6,20 @@ That also means that, instead of `conda deactivate`, it's enough to just exit th
 pixi shell
 ```
 
-On Unix systems the shell command works by creating a "fake" PTY session that will start the shell, and then send a string like `source /tmp/activation-env-12345.sh` to the `stdin` in order to activate the environment. If you would peek under the hood of the the `shell` command, then you would see that this is the first thing executed in the new shell session.
+On Unix systems the shell command works by creating a "fake" PTY session that will start the shell,
+and then send a string like `source /tmp/activation-env-12345.sh` to the `stdin` in order to activate
+the environment. If you would peek under the hood of the the `shell` command, then you
+would see that this is the first thing executed in the new shell session.
 
-The temporary script that we generate ends with `echo "PIXI_ENV_ACTIVATED"` which is used to detect if the environment was activated successfully. If we do not receive this string after three seconds, we will issue a warning to the user.
+The temporary script that we generate ends with `echo "PIXI_ENV_ACTIVATED"` which is used to detect
+if the environment was activated successfully. If we do not receive this string after
+three seconds, we will issue a warning to the user.
 
 ## Issues With Pixi Shell
 
-As explained, `pixi shell` only works well if we execute the activation script _after_ launching shell. Certain commands that are run in the `~/.bashrc` might swallow the activation command, and the environment won't be activated.
+As explained, `pixi shell` only works well if we execute the activation script _after_ launching shell.
+Certain commands that are run in the `~/.bashrc` might swallow the activation command, and the
+environment won't be activated.
 
 For example, if your `~/.bashrc` contains code like the following, `pixi shell` has little chance to succeed:
 
