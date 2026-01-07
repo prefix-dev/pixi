@@ -155,12 +155,15 @@ async fn pyproject_environment_markers_resolved() {
     setup_tracing();
 
     let simple = PyPIDatabase::new()
-        .with(PyPIPackage::new("numpy", "1.0.0"))
+        .with(PyPIPackage::new("numpy", "1.0.0").with_tag("cp311", "cp311", "manylinux1_x86_64"))
         .into_simple_index()
         .unwrap();
 
     let platform = Platform::current();
-    let platform_str = platform.to_string();
+    let platform_str = match platform {
+        Platform::Linux64 => "\"linux-64\"".into(),
+        _ => format!("\"linux-64\", \"{}\"", Platform::current().as_str()),
+    };
 
     let mut package_db = MockRepoData::default();
     package_db.add_package(
@@ -168,6 +171,13 @@ async fn pyproject_environment_markers_resolved() {
             .with_subdir(platform)
             .finish(),
     );
+    if platform != Platform::Linux64 {
+        package_db.add_package(
+            Package::build("python", "3.11.0")
+                .with_subdir(Platform::Linux64)
+                .finish(),
+        );
+    }
     let channel = package_db.into_channel().await.unwrap();
     let channel_url = channel.url();
     let index_url = simple.index_url();
@@ -186,7 +196,7 @@ dependencies = [
 
 [tool.pixi.workspace]
 channels = ["{channel_url}"]
-platforms = ["{platform_str}"]
+platforms = [{platform_str}]
 conda-pypi-map = {{}}
 
 [tool.pixi.dependencies]
