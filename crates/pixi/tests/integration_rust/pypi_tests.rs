@@ -154,6 +154,7 @@ test = {{features = ["test"]}}
 async fn pyproject_environment_markers_resolved() {
     setup_tracing();
 
+    // Add a dependency that's present only on linux-64
     let simple = PyPIDatabase::new()
         .with(PyPIPackage::new("nvidia-nccl-cu12", "1.0.0").with_tag(
             "cp311",
@@ -163,6 +164,7 @@ async fn pyproject_environment_markers_resolved() {
         .into_simple_index()
         .unwrap();
 
+    // Create a TOML with two platforms
     let platform1 = Platform::Linux64;
     let platform2 = Platform::OsxArm64;
     let platform_str = format!("\"{}\", \"{}\"", platform1, platform2);
@@ -182,6 +184,7 @@ async fn pyproject_environment_markers_resolved() {
     let channel_url = channel.url();
     let index_url = simple.index_url();
 
+    // Make sure that the TOML contains an env marker to allow linux-64.
     let pyproject = format!(
         r#"
 [build-system]
@@ -212,10 +215,12 @@ index-url = "{index_url}"
     let lock = pixi.update_lock_file().await.unwrap();
 
     let nccl_req = Requirement::from_str("nvidia-nccl-cu12; sys_platform == 'linux'").unwrap();
+    // Check that the requirement is present in the lockfile for linux-64
     assert!(
         lock.contains_pep508_requirement("default", platform1, nccl_req.clone()),
         "default environment should include nccl for linux-64"
     );
+    // But not for osx-arm64
     assert!(
         !lock.contains_pep508_requirement("default", platform2, nccl_req.clone()),
         "default environment shouldn't include nccl for osx-64"
