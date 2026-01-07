@@ -159,19 +159,31 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // If interactive mode is requested and no packages were explicitly
     // specified, prompt the user to choose which packages to update.
     if args.interactive && specs.packages.is_none() {
-        // Collect unique package names from the lock-file.
-        let package_names: Vec<String> = loaded_lock_file
+        // Collect unique package names and current versions from the lock-file.
+        let packages: Vec<(String, String)> = loaded_lock_file
             .environments()
             .flat_map(|(_, env)| {
                 env.packages_by_platform()
-                    .flat_map(|(_p, packages)| packages.into_iter().map(|p| p.name().to_string()))
+                    .flat_map(|(_, packages)| {
+                        packages.into_iter().map(|p| match p {
+                            LockedPackageRef::Conda(ver) => {
+                                (p.name().to_string(), ver.record().version.to_string())
+                            }
+                            LockedPackageRef::Pypi(ver, _) => {
+                                (p.name().to_string(), ver.version.to_string())
+                            }
+                        })
+                    })
                     .collect::<Vec<_>>()
             })
             .unique()
             .sorted()
             .collect();
-
-        if !package_names.is_empty() {
+        let package_items: Vec<String> = packages
+            .iter()
+            .map(|(name, version)| format!("{name}  ({version})"))
+            .collect();
+        if !packages.is_empty() {
             let theme = ColorfulTheme {
                 active_item_style: console::Style::new().for_stderr().magenta(),
                 ..ColorfulTheme::default()
@@ -180,14 +192,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let prompt = "Select packages to update (space to select, enter to confirm):";
             let selections = MultiSelect::with_theme(&theme)
                 .with_prompt(prompt)
-                .items(&package_names)
+                .items(&package_items)
                 .interact()
                 .expect("Failed to load packages.");
 
             if !selections.is_empty() {
                 let selected: HashSet<String> = selections
                     .into_iter()
-                    .map(|i| package_names[i].clone())
+                    .map(|i| packages[i].0.clone())
                     .collect();
                 specs.packages = Some(selected);
             }
