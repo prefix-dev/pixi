@@ -207,11 +207,7 @@ impl From<PixiPypiSource> for PixiPypiSpec {
 impl PixiPypiSpec {
     /// Creates a new spec with the given source and no extras.
     pub fn new(source: PixiPypiSource) -> Self {
-        PixiPypiSpec {
-            extras: Vec::new(),
-            source,
-            env_markers: MarkerTree::default(),
-        }
+        source.into()
     }
 
     /// Creates a new spec with the given source and extras.

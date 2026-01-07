@@ -5,7 +5,7 @@ use fancy_display::FancyDisplay;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{IntoDiagnostic, MietteDiagnostic, WrapErr};
-use pep508_rs::{MarkerTree, Requirement};
+use pep508_rs::Requirement;
 use pixi_config::ConfigCli;
 use pixi_core::{
     WorkspaceLocator,
@@ -473,8 +473,7 @@ pub fn parse_specs_for_platform(
                 Requirement {
                     name: name.as_normalized().clone(),
                     extras: req.extras.clone(),
-                    // TODO: Add marker support here to avoid overwriting existing markers
-                    marker: MarkerTree::default(),
+                    marker: req.env_markers.clone(),
                     origin: None,
                     version_or_url: None,
                 },
