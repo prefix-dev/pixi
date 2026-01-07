@@ -277,13 +277,11 @@ impl From<PixiPypiSpec> for toml_edit::Value {
         }
 
         fn insert_markers(table: &mut toml_edit::InlineTable, markers: &MarkerTree) {
-            if !markers.is_true() {
+            let markers_str = markers.try_to_string();
+            if let Some(markers_str) = markers_str {
                 table.insert(
                     "env-markers",
-                    toml_edit::Value::String(toml_edit::Formatted::new(format!(
-                        "{}",
-                        markers.contents().unwrap()
-                    ))),
+                    toml_edit::Value::String(toml_edit::Formatted::new(markers_str)),
                 );
             }
         }

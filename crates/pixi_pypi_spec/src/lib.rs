@@ -144,7 +144,7 @@ pub struct PixiPypiSpec {
     /// The environment markers that decide if/when this package gets installed
     #[serde(
         default,
-        // Needed because `pep508::MarkerTree` doesn't implement `serde::Serialize`
+        // Needed because `pep508_rs::MarkerTree` doesn't implement `serde::Serialize`
         serialize_with = "serialize_markertree",
         skip_serializing_if = "MarkerTree::is_true"
     )]
