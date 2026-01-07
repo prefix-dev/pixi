@@ -39,11 +39,11 @@ const EXPERIMENTAL: &str = "experimental";
 #[serde(rename_all = "lowercase")]
 pub enum TlsRootCerts {
     /// Use bundled Mozilla root certificates
-    #[default]
     Webpki,
     /// Use the system's native certificate store
     Native,
     /// Use both webpki and native certificates
+    #[default]
     All,
 }
 
