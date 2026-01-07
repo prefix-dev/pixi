@@ -811,6 +811,9 @@ pub struct VerifySatisfiabilityContext<'a> {
     pub config: &'a Config,
     pub project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     pub build_caches: &'a mut HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>>,
+    /// Cache for static metadata reads, keyed by absolute path.
+    /// This avoids re-reading and re-parsing pyproject.toml for each platform.
+    pub static_metadata_cache: &'a mut HashMap<PathBuf, pypi_metadata::CachedMetadataResult>,
 }
 
 /// Verifies that the package requirements of the specified `environment` can be
@@ -2054,15 +2057,24 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         };
 
                         if absolute_path.is_dir() {
-                            // Use metadata comparison
+                            // Use metadata comparison with caching
                             // This compares requires_dist, version, and requires_python
                             // from the pyproject.toml against the locked values.
-                            match pypi_metadata::read_static_metadata(&absolute_path) {
+                            // The cache avoids re-reading pyproject.toml for each platform.
+                            let cache_key = absolute_path.to_path_buf();
+                            let cached_result = ctx
+                                .static_metadata_cache
+                                .entry(cache_key)
+                                .or_insert_with(|| {
+                                    pypi_metadata::read_static_metadata(&absolute_path)
+                                        .map_err(pypi_metadata::CachedMetadataError::from)
+                                });
+
+                            match cached_result {
                                 Ok(current_metadata) => {
-                                    if let Some(mismatch) = pypi_metadata::compare_metadata(
-                                        &record.0,
-                                        &current_metadata,
-                                    ) {
+                                    if let Some(mismatch) =
+                                        pypi_metadata::compare_metadata(&record.0, current_metadata)
+                                    {
                                         let local_mismatch = match mismatch {
                                             pypi_metadata::MetadataMismatch::RequiresDist(diff) => {
                                                 LocalMetadataMismatch::RequiresDist {
@@ -2090,7 +2102,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                         });
                                     }
                                 }
-                                Err(pypi_metadata::MetadataReadError::DynamicMetadata(field)) => {
+                                Err(pypi_metadata::CachedMetadataError::DynamicMetadata(field)) => {
                                     // Metadata is dynamic - we cannot verify it statically.
                                     tracing::debug!(
                                         "Package {} has dynamic {} - building metadata with UV",
@@ -2157,7 +2169,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                         }
                                     }
                                 }
-                                Err(pypi_metadata::MetadataReadError::NoPyprojectToml) => {
+                                Err(pypi_metadata::CachedMetadataError::NoPyprojectToml) => {
                                     // No pyproject.toml - we cannot verify metadata statically.
                                     // Build metadata using UV
                                     tracing::debug!(
@@ -2223,11 +2235,11 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                         }
                                     }
                                 }
-                                Err(err) => {
+                                Err(pypi_metadata::CachedMetadataError::OtherError(err)) => {
                                     delayed_pypi_error.get_or_insert_with(|| {
                                         Box::new(PlatformUnsat::FailedToReadLocalMetadata(
                                             record.0.name.clone(),
-                                            err.to_string(),
+                                            err.clone(),
                                         ))
                                     });
                                 }
@@ -2958,6 +2970,11 @@ mod tests {
         // Create build caches for sharing between satisfiability and resolution
         let mut build_caches: HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>> = HashMap::new();
 
+        // Create static metadata cache for sharing across platforms
+        // This avoids re-reading pyproject.toml files for each platform
+        let mut static_metadata_cache: HashMap<PathBuf, pypi_metadata::CachedMetadataResult> =
+            HashMap::new();
+
         // Verify individual environment satisfiability
         for env in project.environments() {
             let locked_env = lock_file
@@ -2976,6 +2993,7 @@ mod tests {
                     config: project.config(),
                     project_env_vars: project.env_vars().clone(),
                     build_caches: &mut build_caches,
+                    static_metadata_cache: &mut static_metadata_cache,
                 };
                 let verified_env = verify_platform_satisfiability(&mut ctx, locked_env)
                     .await

@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -216,6 +217,12 @@ async fn find_unsatisfiable_targets<'p>(
     // Create build caches for sharing between satisfiability and resolution
     let mut build_caches: HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>> = HashMap::new();
 
+    // Create static metadata cache for sharing across platforms
+    let mut static_metadata_cache: HashMap<
+        PathBuf,
+        crate::lock_file::satisfiability::pypi_metadata::CachedMetadataResult,
+    > = HashMap::new();
+
     let project_config = project.config();
 
     for environment in project.environments() {
@@ -310,6 +317,7 @@ async fn find_unsatisfiable_targets<'p>(
                 config: project_config,
                 project_env_vars: project.env_vars().clone(),
                 build_caches: &mut build_caches,
+                static_metadata_cache: &mut static_metadata_cache,
             };
             match verify_platform_satisfiability(&mut ctx, locked_environment).await {
                 Ok(verified_env) => {
