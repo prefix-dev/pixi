@@ -622,7 +622,7 @@ fn extract_dependencies<F: Fn(&Target) -> Option<&OrderMap<SourcePackageName, Pa
 fn resolve_run_export_spec(
     run_export_str: &str,
     variant: &BTreeMap<String, VariantValue>,
-) -> Option<NamedSpecV1<PackageSpecV1>> {
+) -> Option<NamedSpec<PackageSpec>> {
     // Parse the run_export string as a MatchSpec
     let match_spec = rattler_conda_types::MatchSpec::from_str(
         run_export_str,
@@ -659,12 +659,12 @@ fn resolve_run_export_spec(
         match_spec.version.clone()
     };
 
-    Some(NamedSpecV1 {
+    Some(NamedSpec {
         name: SourcePackageName::from(name),
-        spec: PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1 {
+        spec: PackageSpec::Binary(BinaryPackageSpec {
             version: version_spec,
             ..Default::default()
-        })),
+        }),
     })
 }
 
