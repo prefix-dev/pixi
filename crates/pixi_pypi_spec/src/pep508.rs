@@ -107,7 +107,7 @@ impl TryFrom<pep508_rs::Requirement> for PixiPypiSpec {
                     }
                 }
             }
-        } else if !req.extras.is_empty() {
+        } else if !req.extras.is_empty() || !req.marker.is_true() {
             PixiPypiSpec::with_extras_and_markers(
                 PixiPypiSource::Registry {
                     version: VersionOrStar::Star,
