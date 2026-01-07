@@ -20,6 +20,8 @@ init-params:
   manifest-path: "file://<ROOT>/inherit/nested/pixi.toml"
   project-model:
     name: simple
+    buildString: ~
+    buildNumber: ~
     version: 0.1.0
     description: ~
     authors: ~

@@ -4,6 +4,8 @@ expression: project_model
 ---
 {
   "name": "sdl_example",
+  "buildString": null,
+  "buildNumber": null,
   "version": "0.1.0",
   "description": null,
   "authors": null,
