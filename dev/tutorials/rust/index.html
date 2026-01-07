@@ -3502,9 +3502,9 @@ Which includes the <code>rust</code> toolchain, and <code>cargo</code>.</p>
 <p>Now that you have rust installed, you can create a <code>cargo</code> project in your <code>pixi</code> workspace.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>cargo<span class="w"> </span>init
 </span></code></pre></div></p>
-<p><code>pixi run</code> is pixi's way to run commands in the <code>pixi</code> environment, it will make sure that the environment is set up correctly for the command to run.
+<p><code>pixi run</code> is pixi's way to run commands in an environment. It will make sure that the environment is activated for the command to run.
 It runs its own cross-platform shell, if you want more information checkout the <a href="../../workspace/advanced_tasks/"><code>tasks</code> documentation</a>.
-You can also activate the environment in your own shell by running <code>pixi shell</code>, after that you don't need <code>pixi run ...</code> anymore.</p>
+You can also activate the environment in a shell by running <code>pixi shell</code>, after that you don't need <code>pixi run ...</code> anymore.</p>
 <p>Now we can build a <code>cargo</code> project using <code>pixi</code>.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>cargo<span class="w"> </span>build
 </span></code></pre></div>

@@ -1,6 +1,6 @@
 # Making a Pixi workspace
 
-Pixi's biggest strength is its ability to create reproducible, powerful, and flexible workspaces. A workspace lives in a directory on your system, and is a collection of Pixi environments that can be used to develop one or many projects in that directory. Let's go over the common steps to create a simple Pixi workspace.
+Pixi's biggest strength is its ability to create reproducible, powerful, and flexible workspaces. A workspace lives in a directory on your system, and is a collection of environments that can be used to develop one or many projects in that directory. Let's go over the common steps to create a simple Pixi workspace.
 
 ## Creating a Pixi workspace
 
@@ -44,7 +44,7 @@ As `pixi.toml` has a JSON schema, it is possible to use IDEs like VSCode to edit
 
 ## Managing dependencies
 
-After creating the workspace, you can start adding dependencies. Pixi uses the `pixi add` command to add dependencies to a workspace. This command will, by default, add the [**conda**](https://prefix.dev/blog/what-is-a-conda-package) dependency to the `pixi.toml`, solve the dependencies, write the [lock file](../workspace/lockfile/), and install the package in the environment. For example, let's add `numpy` and `pytest` to the workspace.
+After creating the workspace, you can start adding dependencies. Pixi uses the `pixi add` command to add dependencies to a workspace. This command will, by default, add the [**conda**](https://prefix.dev/blog/what-is-a-conda-package) dependency to the `pixi.toml`, solve the dependencies, write the [lock file](../workspace/lockfile/), and install the package into an environment. For example, let's add `numpy` and `pytest` to the workspace.
 
 ```shell
 pixi add numpy pytest

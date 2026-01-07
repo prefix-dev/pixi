@@ -3800,8 +3800,11 @@ In that package we have some tasks that depend on each other, so we can assure t
 When you run the main task, Pixi ensures each dependent task uses its specified environment:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>test-all
 </span></code></pre></div>
-<p>The environment specified for a task dependency takes precedence over the environment specified via the CLI <code>--environment</code> flag. This means even if you run <code>pixi run test-all --environment py312</code>, the first dependency will still run in the <code>py311</code> environment as specified in the TOML file.</p>
-<p>In the example above, the <code>test-all</code> task runs the <code>test</code> task in both Python 3.11 and 3.12 environments, allowing you to verify compatibility across different Python versions with a single command.</p>
+<p>The environment specified for a task dependency takes precedence over the environment specified via
+the CLI <code>--environment</code> flag. This means even if you run <code>pixi run test-all --environment py312</code>,
+the first dependency will still run in the <code>py311</code> environment as specified in the TOML file.</p>
+<p>In the example above, the <code>test-all</code> task runs the <code>test</code> task in both Python 3.11 and 3.12 environments,
+allowing you to verify compatibility across different Python versions with a single command.</p>
 <h2 id="working-directory">Working directory<a class="headerlink" href="#working-directory" title="Permanent link">#</a></h2>
 <p>Pixi tasks support the definition of a working directory.</p>
 <p><code>cwd</code> stands for Current Working Directory.
@@ -4151,7 +4154,7 @@ deviations from the current priority which exist in some older versions:</p>
 </ul>
 <p>If you previously relied on a certain priority which no longer applies, you may need to change your
 task definitions.</p>
-<p>For the specific case of overriding <code>task.env</code> with outside environment variables, this behaviour can
+<p>For the specific case of overriding <code>task.env</code> with outside environment variables, this behavior can
 now be recreated using <a href="#task-arguments">task arguments</a>. For example, if you were previously using
 a setup like:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="k">[tasks]</span>
@@ -4161,7 +4164,7 @@ a setup like:</p>
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>✨<span class="w"> </span>Pixi<span class="w"> </span>task<span class="w"> </span><span class="o">(</span><span class="nb">echo</span><span class="w"> </span><span class="k">in</span><span class="w"> </span>default<span class="o">)</span>:<span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="nv">$ARGUMENT</span>
 </span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>world
 </span></code></pre></div>
-<p>you can now recreate this behaviour like:</p>
+<p>you can now recreate this behavior like:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="k">[tasks]</span>
 </span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="n">echo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;echo {{ ARGUMENT }}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[{</span><span class="s2">&quot;arg&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ARGUMENT&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="w"> </span><span class="p">}]</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>

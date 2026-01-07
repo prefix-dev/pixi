@@ -2,16 +2,6 @@
 
 Pixi is a **fast, modern, and reproducible** package management tool for developers of all backgrounds.
 
-```shell
-curl -fsSL https://pixi.sh/install.sh | sh
-```
-
-```powershell
-powershell -ExecutionPolicy Bypass -c "irm -useb https://pixi.sh/install.ps1 | iex"
-```
-
-More installation options can be found [here](installation/).
-
 ## Highlights
 
 - [🔄 **Reproducibility**](workspace/lockfile/)\
@@ -23,7 +13,7 @@ More installation options can be found [here](installation/).
 - [🌐 **Multi Platform**](workspace/multi_platform_configuration/)\
   Works on Linux, macOS, Windows, and more.
 
-- [🧩 **Multi Environment**](workspace/multi_environment/)\
+- [🧩 **Multiple Environments**](workspace/multi_environment/)\
   Compose multiple environments in one manifest.
 
 - [🐍 **Python**](python/tutorial/)\
@@ -117,7 +107,7 @@ ______________________________________________________________________
    cd hello-world
    ```
 
-1. **Add dependencies:**
+1. **Add dependencies into the default environment:**
 
    ```text
    pixi add cowpy python
@@ -158,7 +148,7 @@ ______________________________________________________________________
                ||     ||
    ```
 
-1. **Entry the environment shell:**
+1. **Enter the shell into the environment:**
 
    ```text
    pixi shell

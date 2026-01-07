@@ -209,7 +209,7 @@ torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cpu" }
 ```
 
-You can tell Pixi to use multiple environment for the multiple versions of PyTorch, either `cpu` or `gpu`.
+You can tell Pixi to use multiple environments for the multiple versions of PyTorch, either `cpu` or `gpu`.
 
 Use multiple environments for the pypi pytorch installation
 
@@ -279,7 +279,7 @@ pixi run -e gpu python -c "import torch; print(torch.__version__); print(torch.c
 
 When using pypi-dependencies, Pixi creates a “solve” environment to resolve the PyPI dependencies. This process involves installing the Conda dependencies first and then resolving the PyPI packages within that environment.
 
-This can become problematic if you’re on a macOS machine and trying to resolve the CUDA version of PyTorch for Linux or Windows. Since macOS doesn’t support those environments, the Conda dependencies for CUDA will fail to install, preventing proper resolution.
+This can become problematic if you’re on a macOS machine and trying to resolve the CUDA version of PyTorch for Linux or Windows. Since macOS doesn’t support the Conda dependencies for CUDA, it can't install the solve environment, preventing proper resolution.
 
 **Current Status:** The Pixi maintainers are aware of this limitation and are actively working on a solution to enable cross-platform dependency resolution for such cases.
 
@@ -385,7 +385,7 @@ Broken installations often result from mixing incompatible channels or package s
 
 1. **Mixing Conda Channels**
 
-   Using both `conda-forge` and the legacy `pytorch` channel can cause conflicts. Choose one channel and stick with it to avoid issues in the installed environment.
+   Using both `conda-forge` and the legacy `pytorch` channel can cause conflicts. Choose one channel and stick with it to avoid issues in the environment.
 
 1. **Mixing Conda and PyPI Packages**
 
@@ -404,9 +404,11 @@ To summarize:
 1. Using [PyPI](#installing-from-pypi)
    - Use the appropriate PyPI index to fetch the correct CUDA-enabled wheels.
 
-#### Environment Resolution Failures
+#### Resolution Failures
 
-If you see an error like this: **ABI tag mismatch**
+If you see an error like this:
+
+**ABI tag mismatch**
 
 ```text
 ├─▶ failed to resolve pypi dependencies

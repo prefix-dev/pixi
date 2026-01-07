@@ -555,7 +555,7 @@ In older versions of Pixi, this priority was not well-defined, and there are a n
 
 If you previously relied on a certain priority which no longer applies, you may need to change your task definitions.
 
-For the specific case of overriding `task.env` with outside environment variables, this behaviour can now be recreated using [task arguments](#task-arguments). For example, if you were previously using a setup like:
+For the specific case of overriding `task.env` with outside environment variables, this behavior can now be recreated using [task arguments](#task-arguments). For example, if you were previously using a setup like:
 
 pixi.toml
 
@@ -570,7 +570,7 @@ ARGUMENT=world pixi run echo
 world
 ```
 
-you can now recreate this behaviour like:
+you can now recreate this behavior like:
 
 pixi.toml
 

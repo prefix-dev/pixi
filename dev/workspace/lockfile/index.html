@@ -3540,10 +3540,10 @@ The lock file contains two definitions:</p>
 <p>Pixi uses the lock file for the following reasons:</p>
 <ul>
 <li>To save a working installation state, without copying the entire environment's data.</li>
-<li>To ensure the workspace configuration is aligned with the installed environment.</li>
+<li>To ensure the workspace configuration is aligned with the environment.</li>
 <li>To give the user a file that contains all the information about the environment.</li>
 </ul>
-<p>This gives you (and your collaborators) a way to really reproduce the environment they are working in.
+<p>This gives you (and your collaborators) a way to really reproduce environment they are working in.
 Using tools such as docker suddenly becomes much less necessary.</p>
 <h2 id="when-is-a-lock-file-generated">When is a lock file generated?<a class="headerlink" href="#when-is-a-lock-file-generated" title="Permanent link">#</a></h2>
 <p>A lock file is generated when you install a package.
@@ -3632,7 +3632,7 @@ This is because the lock file contains all the information about the packages.</
 <p>This will remove the lock file, and the next time you run a command that requires the lock file, it will be generated again.</p>
 <div class="admonition warning">
 <p class="admonition-title">Note</p>
-<p>This does remove the locked state of the environment, and the environment will be updated to the latest version of the packages.</p>
+<p>This does remove the locked state of the environment, which will be updated to the latest version of all packages.</p>
 </div>
 
 

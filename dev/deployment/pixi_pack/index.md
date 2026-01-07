@@ -1,4 +1,4 @@
-[`pixi-pack`](https://github.com/quantco/pixi-pack) is a simple tool that takes a Pixi environment and packs it into a compressed archive that can be shipped to the target machine. The corresponding `pixi-unpack` tool can be used to unpack the archive and install the environment.
+[`pixi-pack`](https://github.com/quantco/pixi-pack) is a simple tool that takes an environment and packs it into a compressed archive that can be shipped to the target machine. The corresponding `pixi-unpack` tool can be used to unpack the archive and recreate an environment.
 
 Both tools can be installed via
 
@@ -190,7 +190,7 @@ Using a cache is particularly useful when:
 
 - Creating multiple packs with overlapping dependencies
 - Working with large packages that take time to download
-- Operating in environments with limited bandwidth
+- Operating on machines with limited bandwidth
 - Running CI/CD pipelines where package caching can significantly improve build times
 
 ### Unpacking Without pixi-pack

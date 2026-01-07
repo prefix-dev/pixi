@@ -507,7 +507,7 @@
   <a href="#multiple-environments" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Multiple environments
+        Multiple Environments
       
     </span>
   </a>
@@ -3385,7 +3385,7 @@
   <a href="#multiple-environments" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Multiple environments
+        Multiple Environments
       
     </span>
   </a>
@@ -3480,16 +3480,16 @@ Let's go through the basic usage of Pixi.</p>
 <li><a href="../reference/cli/pixi/clean/"><code>pixi clean</code></a> - remove the environment from your machine</li>
 </ul>
 <h2 id="managing-global-installations">Managing global installations<a class="headerlink" href="#managing-global-installations" title="Permanent link">#</a></h2>
-<p>Pixi can manage global installations of tools and environments.
+<p>Pixi can manage global installations of tools in global environments.
 It installs the environments in a central location, so you can use them from anywhere.</p>
 <ul>
 <li><a href="../reference/cli/pixi/global/install/"><code>pixi global install</code></a> - install a package into it's own environment in the global space.</li>
 <li><a href="../reference/cli/pixi/global/uninstall/"><code>pixi global uninstall</code></a> - uninstall an environment from the global space.</li>
-<li><a href="../reference/cli/pixi/global/add/"><code>pixi global add</code></a> - add a package to an existing globally installed environment.</li>
+<li><a href="../reference/cli/pixi/global/add/"><code>pixi global add</code></a> - add a package to an existing global environment.</li>
 <li><a href="../reference/cli/pixi/global/sync/"><code>pixi global sync</code></a> - sync the globally installed environments with the global manifest, describing all the environments you want to install.</li>
 <li><a href="../reference/cli/pixi/global/edit/"><code>pixi global edit</code></a> - edit the global manifest.</li>
 <li><a href="../reference/cli/pixi/global/update/"><code>pixi global update</code></a> - update the global environments</li>
-<li><a href="../reference/cli/pixi/global/list/"><code>pixi global list</code></a> - list all the installed environments</li>
+<li><a href="../reference/cli/pixi/global/list/"><code>pixi global list</code></a> - list all the global environments</li>
 </ul>
 <p>More information: <a href="../global_tools/introduction/">Global Tools</a></p>
 <h2 id="running-one-off-commands">Running one-off commands<a class="headerlink" href="#running-one-off-commands" title="Permanent link">#</a></h2>
@@ -3504,9 +3504,8 @@ It installs the environments in a central location, so you can use them from any
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>&gt;<span class="w"> </span>pixi<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>--spec<span class="w"> </span><span class="s2">&quot;python=3.12&quot;</span><span class="w"> </span>python<span class="w"> </span>-VV
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>Python<span class="w"> </span><span class="m">3</span>.12.11<span class="w"> </span><span class="p">|</span><span class="w"> </span>packaged<span class="w"> </span>by<span class="w"> </span>conda-forge<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="o">(</span>main,<span class="w"> </span>Jun<span class="w">  </span><span class="m">4</span><span class="w"> </span><span class="m">2025</span>,<span class="w"> </span><span class="m">14</span>:38:53<span class="o">)</span><span class="w"> </span><span class="o">[</span>Clang<span class="w"> </span><span class="m">18</span>.1.8<span class="w"> </span><span class="o">]</span>
 </span></code></pre></div>
-<h2 id="multiple-environments">Multiple environments<a class="headerlink" href="#multiple-environments" title="Permanent link">#</a></h2>
-<p>Pixi workspaces allow you to manage multiple environments.
-An environment is build out of one or multiple features.</p>
+<h2 id="multiple-environments">Multiple Environments<a class="headerlink" href="#multiple-environments" title="Permanent link">#</a></h2>
+<p>Pixi workspaces allow you to manage multiple environments. An environment is build out of one or multiple features.</p>
 <ul>
 <li><a href="../reference/cli/pixi/add/#arg---feature"><code>pixi add --feature</code></a> - add a package to a feature</li>
 <li><a href="../reference/cli/pixi/task/add/#arg---feature"><code>pixi task add --feature</code></a> - add a task to a specific feature</li>
@@ -3515,7 +3514,7 @@ An environment is build out of one or multiple features.</p>
 <li><a href="../reference/cli/pixi/shell/#arg---environment"><code>pixi shell --environment</code></a> - activate a specific environment</li>
 <li><a href="../reference/cli/pixi/list/#arg---environment"><code>pixi list --environment</code></a> - list the dependencies in a specific environment</li>
 </ul>
-<p>More information: <a href="../workspace/multi_environment/">Multiple environments</a></p>
+<p>More information: <a href="../workspace/multi_environment/">Multiple Environments</a></p>
 <h2 id="tasks">Tasks<a class="headerlink" href="#tasks" title="Permanent link">#</a></h2>
 <p>Pixi can run cross-platform tasks using it's built-in task runner.
 This can be a predefined task or any normal executable.</p>
@@ -3524,7 +3523,7 @@ This can be a predefined task or any normal executable.</p>
 <li><a href="../reference/cli/pixi/task/add/"><code>pixi task add</code></a> - Add a new task to the manifest</li>
 </ul>
 <p>Tasks can have other tasks as dependencies.
-Here is an example of a more complex task use case
+Here is an example of a more complex task use case</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[tasks]</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;make build&quot;</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># using the toml table view</span>
@@ -3532,7 +3531,7 @@ Here is an example of a more complex task use case
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">cmd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pytest&quot;</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">depends-on</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;build&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-More information: <a href="../workspace/advanced_tasks/">Tasks</a></p>
+<p>More information: <a href="../workspace/advanced_tasks/">Tasks</a></p>
 <h2 id="multi-platform-support">Multi platform support<a class="headerlink" href="#multi-platform-support" title="Permanent link">#</a></h2>
 <p>Pixi supports multiple platforms out of the box.
 You can specify which platforms your workspace supports and Pixi will ensure that the dependencies are compatible with those platforms.</p>

@@ -3477,7 +3477,7 @@ Using <code>pixi global install bat</code> will install <code>bat</code> in a gl
 <details class="tip">
 <summary>Activating Pixi environment in the current shell</summary>
 <p>For some advanced use-cases, you can activate the environment in the current shell.
-This uses the <code>pixi shell-hook</code> which prints the activation script, which can be used to activate the environment in the current shell without <code>pixi</code> itself.
+This uses the <code>pixi shell-hook</code> which prints the activation script, which can be used without <code>pixi</code> itself.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>~/myenv<span class="w"> </span>&gt;<span class="w"> </span><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span>
 </span></code></pre></div></p>
 </details>
@@ -3488,18 +3488,18 @@ In <code>pixi</code>, a workspace is a folder containing a <a href="../../refere
 It manages more than one environment for more than one platform in a single workspace, and allows for easy switching between them. (See <a href="../../workspace/multi_environment/">multiple environments</a>)</p>
 <h2 id="global-environments">Global environments<a class="headerlink" href="#global-environments" title="Permanent link">#</a></h2>
 <p><code>conda</code> installs all environments in one global location.
-When this is important to you for filesystem reasons, you can use the <a href="../../reference/pixi_configuration/#detached-environments">detached-environments</a> feature of pixi.
+When this is important to you for filesystem reasons, you can use the <a href="../../reference/pixi_configuration/#detached-environments">detached-environments</a> feature of pixi.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>detached-environments<span class="w"> </span><span class="nb">true</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># or a specific location</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>detached-environments<span class="w"> </span>/path/to/envs
 </span></code></pre></div>
-This will make the installation of the environments go to the same folder.</p>
+<p>This will make the installation of the environments go to the same folder.</p>
 <p><code>pixi</code> does have the <code>pixi global</code> command to install tools on your machine. (See <a href="../../reference/cli/pixi/global/">global</a>)
 This is not a replacement for <code>conda</code> but works the same as <a href="https://pipx.pypa.io/stable/"><code>pipx</code></a> and <a href="https://mariusvniekerk.github.io/condax/"><code>condax</code></a>.
-It creates a single isolated environment for the given requirement and installs the binaries into the global path.
+It creates a single isolated environment for the given requirement and installs the binaries into the global path.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>bat
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>bat<span class="w"> </span>pixi.toml
-</span></code></pre></div></p>
+</span></code></pre></div>
 <div class="admonition warn">
 <p class="admonition-title">Never install <code>pip</code> with <code>pixi global</code></p>
 <p>Installations with <code>pixi global</code> get their own isolated environment.
@@ -3523,7 +3523,8 @@ Additionally you can export a <a href="../../reference/cli/pixi/workspace/export
 <li><code>pixi global install pip</code>, pip doesn't work.
   <code>pip</code> is installed in the global isolated environment. Use <code>pixi add pip</code> in a workspace to install <code>pip</code> in the workspace environment and use that workspace.</li>
 <li><code>pixi global install &lt;Any Library&gt;</code> -&gt; <code>import &lt;Any Library&gt;</code> -&gt; <code>ModuleNotFoundError: No module named '&lt;Any Library&gt;'</code>
-   The library is installed in the global isolated environment. Use <code>pixi add &lt;Any Library&gt;</code> in a workspace to install the library in the workspace environment and use that workspace.</li>
+   The library is installed in the global isolated environment. Use <code>pixi add &lt;Any Library&gt;</code> in a workspace
+   to install the library in the workspace environment and use that workspace.</li>
 </ul>
 
 

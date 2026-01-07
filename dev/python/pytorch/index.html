@@ -3675,7 +3675,7 @@ Best to do this per dependency to force the index to be used.</p>
 </div>
 </div>
 </div>
-<p>You can tell Pixi to use multiple environment for the multiple versions of PyTorch, either <code>cpu</code> or <code>gpu</code>.</p>
+<p>You can tell Pixi to use multiple environments for the multiple versions of PyTorch, either <code>cpu</code> or <code>gpu</code>.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1"><code>pixi.toml</code></label><label for="__tabbed_5_2"><code>pyproject.toml</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -3741,7 +3741,7 @@ Best to do this per dependency to force the index to be used.</p>
 <p>When using pypi-dependencies, Pixi creates a “solve” environment to resolve the PyPI dependencies.
 This process involves installing the Conda dependencies first and then resolving the PyPI packages within that environment.</p>
 <p>This can become problematic if you’re on a macOS machine and trying to resolve the CUDA version of PyTorch for Linux or Windows.
-Since macOS doesn’t support those environments, the Conda dependencies for CUDA will fail to install, preventing proper resolution.</p>
+Since macOS doesn’t support the Conda dependencies for CUDA, it can't install the solve environment, preventing proper resolution.</p>
 <p><strong>Current Status:</strong>
 The Pixi maintainers are aware of this limitation and are actively working on a solution to enable cross-platform dependency resolution for such cases.</p>
 <p>In the meantime, you may need to run the resolution process on a machine that supports CUDA, such as a Linux or Windows host.</p>
@@ -3799,13 +3799,13 @@ The Pixi maintainers are aware of this limitation and are actively working on a 
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">#</a></h2>
 <p>When you had trouble figuring out why your PyTorch installation is not working, please share your solution or tips with the community by creating a <strong>PR</strong> to this documentation.</p>
 <h4 id="testing-the-pytorch-installation">Testing the <code>pytorch</code> installation<a class="headerlink" href="#testing-the-pytorch-installation" title="Permanent link">#</a></h4>
-<p>You can verify your PyTorch installation with this command:
+<p>You can verify your PyTorch installation with this command:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import torch; print(torch.__version__); print(torch.cuda.is_available())&quot;</span>
-</span></code></pre></div></p>
+</span></code></pre></div>
 <h4 id="checking-the-cuda-version-of-your-machine">Checking the CUDA version of your machine<a class="headerlink" href="#checking-the-cuda-version-of-your-machine" title="Permanent link">#</a></h4>
-<p>To check which CUDA version Pixi detects on your machine, run:
+<p>To check which CUDA version Pixi detects on your machine, run:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi info
-</span></code></pre></div></p>
+</span></code></pre></div>
 <p>Example output:
 <div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>...
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>Virtual packages: __unix=0=0
@@ -3816,16 +3816,16 @@ The Pixi maintainers are aware of this limitation and are actively working on a 
 <p>If <code>__cuda</code> is missing, you can verify your system’s CUDA version using NVIDIA tools:
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>nvidia-smi
 </span></code></pre></div></p>
-<p>To check the version of the CUDA toolkit installed in your environment:
+<p>To check the version of the CUDA toolkit installed in your environment:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>nvcc<span class="w"> </span>--version
-</span></code></pre></div></p>
+</span></code></pre></div>
 <h4 id="reasons-for-broken-installations">Reasons for broken installations<a class="headerlink" href="#reasons-for-broken-installations" title="Permanent link">#</a></h4>
 <p>Broken installations often result from mixing incompatible channels or package sources:</p>
 <ol>
 <li>
 <p><strong>Mixing Conda Channels</strong></p>
 <p>Using both <code>conda-forge</code> and the legacy <code>pytorch</code> channel can cause conflicts.
-  Choose one channel and stick with it to avoid issues in the installed environment.</p>
+  Choose one channel and stick with it to avoid issues in the environment.</p>
 </li>
 <li>
 <p><strong>Mixing Conda and PyPI Packages</strong></p>
@@ -3850,9 +3850,9 @@ The Pixi maintainers are aware of this limitation and are actively working on a 
 </ul>
 </li>
 </ol>
-<h4 id="environment-resolution-failures">Environment Resolution Failures<a class="headerlink" href="#environment-resolution-failures" title="Permanent link">#</a></h4>
-<p>If you see an error like this:
-<strong>ABI tag mismatch</strong>
+<h4 id="resolution-failures">Resolution Failures<a class="headerlink" href="#resolution-failures" title="Permanent link">#</a></h4>
+<p>If you see an error like this:</p>
+<p><strong>ABI tag mismatch</strong>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>├─▶ failed to resolve pypi dependencies
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>╰─▶ Because only the following versions of torch are available:
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>      torch&lt;=2.5.1

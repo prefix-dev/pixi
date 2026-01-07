@@ -23,7 +23,7 @@ dependencies = { python = "3.12.*" } # (1)!
 exposed = { py3 = "python" } # (2)!
 ```
 
-1. Dependencies are the packages that will be installed in the environment. You can specify the version or use a wildcard.
+1. Dependencies are the packages that will be installed into the environment. You can specify the version or use a wildcard.
 1. The exposed binaries are the ones that will be available in the system path. In this case, `python` is exposed under the name `py3`.
 
 ## Manifest locations

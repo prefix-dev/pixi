@@ -3306,12 +3306,19 @@
   <h1>Trampolines</h1>
 
 <h2 id="trampolines">Trampolines<a class="headerlink" href="#trampolines" title="Permanent link">#</a></h2>
-<p>To increase efficiency, <code>pixi</code> uses <em>trampolines</em>—small, specialized binary files that manage configuration and environment setup before executing the main binary. The trampoline approach allows for skipping the execution of activation scripts that have a significant performance impact.</p>
+<p>To increase efficiency, <code>pixi</code> uses <em>trampolines</em>—small, specialized binary files that manage configuration
+and environment setup before executing the main binary. The trampoline approach allows for skipping
+the execution of activation scripts that have a significant performance impact.</p>
 <p>When you execute a globally installed executable, a trampoline performs the following sequence of steps:</p>
 <ul>
-<li>Each trampoline first reads a configuration file named after the binary being executed. This configuration file, in JSON format (e.g., <code>python.json</code>), contains key information about how the environment should be set up. The configuration file is stored in <a href="../../reference/environment_variables/"><code>$PIXI_HOME</code></a><code>/bin/trampoline_configuration</code>.</li>
-<li>Once the configuration is loaded and the environment is set, the trampoline executes the original binary with the correct environment settings.</li>
-<li>When installing a new binary, a new trampoline is placed in the <a href="../../reference/environment_variables/"><code>$PIXI_HOME</code></a><code>/bin</code> directory and is hard-linked to the <a href="../../reference/environment_variables/"><code>$PIXI_HOME</code></a><code>/bin/trampoline_configuration/trampoline_bin</code>. This optimizes storage space and avoids duplication of the same trampoline.</li>
+<li>Each trampoline first reads a configuration file named after the binary being executed. This configuration file,
+  in JSON format (e.g., <code>python.json</code>), contains key information about how the environment should be set up.
+  The configuration file is stored in <a href="../../reference/environment_variables/"><code>$PIXI_HOME</code></a><code>/bin/trampoline_configuration</code>.</li>
+<li>Once the configuration is loaded and the environment is set, the trampoline executes the original
+  binary with the correct environment settings.</li>
+<li>When installing a new binary, a new trampoline is placed in the <a href="../../reference/environment_variables/"><code>$PIXI_HOME</code></a><code>/bin</code>
+  directory and is hard-linked to the <a href="../../reference/environment_variables/"><code>$PIXI_HOME</code></a><code>/bin/trampoline_configuration/trampoline_bin</code>.
+  This optimizes storage space and avoids duplication of the same trampoline.</li>
 </ul>
 <p>The trampoline will take care that the <code>PATH</code> contains the newest changes on your local <code>PATH</code> while avoiding caching temporary <code>PATH</code> changes during installation.
 If you want to control the base <code>PATH</code> pixi considers, you can set <code>export PIXI_BASE_PATH=$PATH</code> in your shell startup script.</p>

@@ -39,9 +39,9 @@ httpx = "*"
 simple-env = { features = ["simple-env"], no-default-feature = true }
 ```
 
-It is then possible to define tasks for that environment, run commands in that environment, and launch a [`pixi shell`](https://pixi.sh/latest/reference/cli/pixi/shell) in that environment — see the [getting started guide](../../getting_started/) for links to start learning about these topics!
+It is then possible to define tasks for the imported environment, run commands in that environment, and launch a [`pixi shell`](https://pixi.sh/latest/reference/cli/pixi/shell) in that environment — see the [getting started guide](../../getting_started/) for links to start learning about these topics!
 
-For files without a `name` field, or to override the default behaviour, you can specify custom `--feature` and `--environment` names. This also allows importing into existing features and environments (including the `default` feature and environment). For example, given this other environment file to import:
+For files without a `name` field, or to override the default behavior, you can specify custom `--feature` and `--environment` names. This also allows importing into existing features and environments (including the `default` feature and environment). For example, given this other environment file to import:
 
 env2.yml
 

@@ -67,7 +67,7 @@ platforms = ["osx-arm64"]
 
 The `channels` and `platforms` are added to the `[tool.pixi.workspace]` section. Channels like `conda-forge` manage packages similar to PyPI but allow for different packages across languages. The keyword `platforms` determines which platforms the workspace supports.
 
-The `pixi_py` package itself is added as an `editable` dependency. This means that the package is installed in editable mode, so you can make changes to the package and see the changes reflected in the environment, without having to re-install the environment.
+The `pixi_py` package itself is added as an `editable` dependency. This means that the package is installed in editable mode, so you can make changes to the package and see the changes reflected in the environment, without having to re-install it.
 
 ```toml
 # Editable installs
@@ -143,7 +143,7 @@ flask = { version = "==3.1.0", extras = ["async"] }
 
 ### Installation: `pixi install`
 
-Pixi always ensures the environment is up-to-date with the `pyproject.toml` file when running the environment. If you want to do it manually, you can run:
+Pixi always ensures the environment is up-to-date with the `pyproject.toml` file before running something in it. If you want to do it manually anyway, you can run:
 
 ```shell
 pixi install
@@ -151,7 +151,7 @@ pixi install
 
 We now have a new directory called `.pixi` in the workspace root. The environment is a Conda environment with all the Conda and PyPI dependencies installed into it.
 
-The environment is always a result of the `pixi.lock` file, which is generated from the `pyproject.toml` file. This file contains the exact versions of the dependencies that were installed in the environment across platforms.
+The environment is always a result of the `pixi.lock` file, which is generated from the `pyproject.toml` file. This file contains the exact versions of the dependencies that were installed into the environment across platforms.
 
 ## What's in the environment?
 
@@ -194,7 +194,7 @@ Here, you can see the different conda and Pypi packages listed. As you can see, 
 
 Why does the environment have a Python interpreter?
 
-The Python interpreter is also installed in the environment. This is because the Python interpreter version is read from the `requires-python` field in the `pyproject.toml` file. This is used to determine the Python version to install in the environment. This way, Pixi automatically manages/bootstraps the Python interpreter for you, so no more `brew`, `apt` or other system install steps.
+The Python interpreter is also installed into the environment. This is because the Python interpreter version is read from the `requires-python` field in the `pyproject.toml` file. This is used to determine the Python version to install into the environment. This way, Pixi automatically manages/bootstraps the Python interpreter for you, so no more `brew`, `apt` or other system install steps.
 
 How to use the Free-threaded interpreter?
 
@@ -204,7 +204,7 @@ If you want to use a free-threaded Python interpreter, you can add the `python-f
 pixi add python-freethreading
 ```
 
-This ensures that a free-threaded version of Python is installed in the environment. This might not work with other packages that are not thread-safe yet. You can read more about free-threaded Python [here](https://docs.python.org/3/howto/free-threading-python.html).
+This ensures that a free-threaded version of Python is installed into the environment. This might not work with other packages that are not thread-safe yet. You can read more about free-threaded Python [here](https://docs.python.org/3/howto/free-threading-python.html).
 
 ### Multiple environments
 
@@ -242,7 +242,7 @@ Solve Groups
 
 Solve groups are a way to group dependencies together. This is useful when you have multiple environments that share the same dependencies. For example, maybe `pytest` is a dependency that influences the dependencies of the `default` environment. By putting these in the same solve group, you ensure that the versions in `test` and `default` are exactly the same.
 
-Without specifying the environment name, Pixi will default to the `default` environment. If you want to install or run the `test` environment, you can specify the environment with the `--environment` flag.
+Without specifying the environment name, Pixi will default to the `default` environment. If you want to install or run the `test` environment, you add `--environment test` to the command.
 
 ```shell
 pixi install --environment test
@@ -343,7 +343,7 @@ test_me.py .                                                                    
 
 Why didn't I have to specify the environment?
 
-The `test` task was added to the `test` feature/environment. When you run the `test` task, Pixi automatically switches to the `test` environment. Because that is the only environment that has the task.
+The `test` task was added to the `test` feature/environment. When you run the `test` task, Pixi automatically switches to the `test` environment, because that is the only one associated with the `test` feature.
 
 Neat! It seems to be working!
 
@@ -366,7 +366,7 @@ pytest           8.1.1                             1.1 mib    pypi   pytest-8.1.
 ...
 ```
 
-However, the default environment is missing the `pytest` package. This way, you can finetune your environments to only have the packages that are needed for that environment. E.g. you could also have a `dev` environment that has `pytest` and `ruff` installed, but you could omit these from the `prod` environment. There is a [docker](https://github.com/prefix-dev/pixi/tree/main/examples/docker) example that shows how to set up a minimal `prod` environment and copy from there.
+However, the default environment is missing the `pytest` package. This way, you can finetune your environments to only have the packages that are needed. E.g. you could also have a `dev` environment that has `pytest` and `ruff` installed, but you could omit these from the `prod` environment. There is a [docker](https://github.com/prefix-dev/pixi/tree/main/examples/docker) example that shows how to set up a minimal `prod` environment and copy from there.
 
 ## Replacing PyPI packages with conda packages
 

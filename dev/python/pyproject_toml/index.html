@@ -3601,8 +3601,11 @@ Pixi understands that field and automatically adds the dependencies to the works
 <p>This would result in the conda dependencies being installed and the pypi dependencies being ignored.
 As Pixi takes the conda dependencies over the pypi dependencies.</p>
 <h2 id="optional-dependencies">Optional dependencies<a class="headerlink" href="#optional-dependencies" title="Permanent link">#</a></h2>
-<p>If your python project includes groups of optional dependencies, Pixi will automatically interpret them as <a href="../../reference/pixi_manifest/#the-feature-table">Pixi features</a> of the same name with the associated <code>pypi-dependencies</code>.</p>
-<p>You can add them to Pixi environments manually, or use <code>pixi init</code> to setup the workspace, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.</p>
+<p>If your python project includes groups of optional dependencies, Pixi will automatically interpret
+them as <a href="../../reference/pixi_manifest/#the-feature-table">Pixi features</a> of the same name with the associated <code>pypi-dependencies</code>.</p>
+<p>You can add them to Pixi environments manually, or use <code>pixi init</code> to setup the workspace,
+which will create one environment per feature. Self-references to other groups of optional
+dependencies are also handled.</p>
 <p>For instance, imagine you have a project folder with a <code>pyproject.toml</code> file similar to:</p>
 <div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[project]</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
@@ -3630,13 +3633,15 @@ As Pixi takes the conda dependencies over the pypi dependencies.</p>
 </span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">solve-group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="p">}</span>
 </span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="n">all</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;all&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">solve-group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="p">}</span>
 </span></code></pre></div>
-<p>In this example, three environments will be created by pixi:</p>
+<p>In this example, three environments will be created by Pixi:</p>
 <ul>
 <li><strong>default</strong> with 'package1' as pypi dependency</li>
 <li><strong>test</strong> with 'package1' and 'pytest' as pypi dependencies</li>
 <li><strong>all</strong> with 'package1', 'package2' and 'pytest' as pypi dependencies</li>
 </ul>
-<p>All environments will be solved together, as indicated by the common <code>solve-group</code>, and added to the lock file. You can edit the <code>[tool.pixi.environments]</code> section manually to adapt it to your use case (e.g. if you do not need a particular environment).</p>
+<p>All environments will be solved together, as indicated by the common <code>solve-group</code>, and
+added to the lock file. You can edit the <code>[tool.pixi.environments]</code> section manually to adapt it to
+your use case (e.g. if you do not need a particular environment).</p>
 <h2 id="dependency-groups">Dependency groups<a class="headerlink" href="#dependency-groups" title="Permanent link">#</a></h2>
 <p>If your python project includes dependency groups, Pixi will automatically interpret them as <a href="../../reference/pixi_manifest/#the-feature-table">Pixi features</a> of the same name with the associated <code>pypi-dependencies</code>.</p>
 <p>You can add them to Pixi environments manually, or use <code>pixi init</code> to setup the workspace, which will create one environment per dependency group.</p>

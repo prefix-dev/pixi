@@ -3661,7 +3661,8 @@ In this tutorial, we will use the <code>pyproject.toml</code> format because it 
 Channels like <code>conda-forge</code> manage packages similar to PyPI but allow for different packages across languages.
 The keyword <code>platforms</code> determines which platforms the workspace supports.</p>
 <p>The <code>pixi_py</code> package itself is added as an <code>editable</code> dependency.
-This means that the package is installed in editable mode, so you can make changes to the package and see the changes reflected in the environment, without having to re-install the environment.</p>
+This means that the package is installed in editable mode, so you can make changes to the package and
+see the changes reflected in the environment, without having to re-install it.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Editable installs</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">[tool.pixi.pypi-dependencies]</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">pixi-py</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">editable</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
@@ -3709,14 +3710,14 @@ For example, <code>flask</code> makes the <code>async</code> dependencies option
 </span></code></pre></div></p>
 </details>
 <h3 id="installation-pixi-install">Installation: <code>pixi install</code><a class="headerlink" href="#installation-pixi-install" title="Permanent link">#</a></h3>
-<p>Pixi always ensures the environment is up-to-date with the <code>pyproject.toml</code> file when running the environment.
-If you want to do it manually, you can run:</p>
+<p>Pixi always ensures the environment is up-to-date with the <code>pyproject.toml</code> file before running something in it.
+If you want to do it manually anyway, you can run:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>install
 </span></code></pre></div>
 <p>We now have a new directory called <code>.pixi</code> in the workspace root.
 The environment is a Conda environment with all the Conda and PyPI dependencies installed into it.</p>
 <p>The environment is always a result of the <code>pixi.lock</code> file, which is generated from the <code>pyproject.toml</code> file.
-This file contains the exact versions of the dependencies that were installed in the environment across platforms.</p>
+This file contains the exact versions of the dependencies that were installed into the environment across platforms.</p>
 <h2 id="whats-in-the-environment">What's in the environment?<a class="headerlink" href="#whats-in-the-environment" title="Permanent link">#</a></h2>
 <p>Using <code>pixi list</code>, you can see what's in the environment, this is essentially a nicer view on the lock file (<code>pixi.lock</code>):</p>
 <p><div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>Package<span class="w">          </span>Version<span class="w">     </span>Build<span class="w">               </span>Size<span class="w">       </span>Kind<span class="w">   </span>Source
@@ -3756,9 +3757,9 @@ Every environment in Pixi is isolated but reuses files that are hard-linked from
 This means that you can have multiple environments with the same packages but only have the individual files stored once on disk.</p>
 <details class="question">
 <summary>Why does the environment have a Python interpreter?</summary>
-<p>The Python interpreter is also installed in the environment.
+<p>The Python interpreter is also installed into the environment.
 This is because the Python interpreter version is read from the <code>requires-python</code> field in the <code>pyproject.toml</code> file.
-This is used to determine the Python version to install in the environment.
+This is used to determine the Python version to install into the environment.
 This way, Pixi automatically manages/bootstraps the Python interpreter for you, so no more <code>brew</code>, <code>apt</code> or other system install steps.</p>
 </details>
 <details class="question">
@@ -3766,7 +3767,7 @@ This way, Pixi automatically manages/bootstraps the Python interpreter for you, 
 <p>If you want to use a free-threaded Python interpreter, you can add the <code>python-freethreading</code> dependency with:
 <div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi add python-freethreading
 </span></code></pre></div>
-This ensures that a free-threaded version of Python is installed in the environment.
+This ensures that a free-threaded version of Python is installed into the environment.
 This might not work with other packages that are not thread-safe yet.
 You can read more about free-threaded Python <a href="https://docs.python.org/3/howto/free-threading-python.html">here</a>.</p>
 </details>
@@ -3797,7 +3798,7 @@ For example, maybe <code>pytest</code> is a dependency that influences the depen
 By putting these in the same solve group, you ensure that the versions in <code>test</code> and <code>default</code> are exactly the same.</p>
 </details>
 <p>Without specifying the environment name, Pixi will default to the <code>default</code> environment.
-If you want to install or run the <code>test</code> environment, you can specify the environment with the <code>--environment</code> flag.</p>
+If you want to install or run the <code>test</code> environment, you add <code>--environment test</code> to the command.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>pixi<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span><span class="nb">test</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>--environment<span class="w"> </span><span class="nb">test</span><span class="w"> </span>pytest
 </span></code></pre></div>
@@ -3874,8 +3875,8 @@ results in the following output:
 <details class="question">
 <summary>Why didn't I have to specify the environment?</summary>
 <p>The <code>test</code> task was added to the <code>test</code> feature/environment.
-When you run the <code>test</code> task, Pixi automatically switches to the <code>test</code> environment.
-Because that is the only environment that has the task.</p>
+When you run the <code>test</code> task, Pixi automatically switches to the <code>test</code> environment,
+because that is the only one associated with the <code>test</code> feature.</p>
 </details>
 <p>Neat! It seems to be working!</p>
 <h3 id="test-vs-default-environment">Test vs Default environment<a class="headerlink" href="#test-vs-default-environment" title="Permanent link">#</a></h3>
@@ -3892,9 +3893,10 @@ We add the <code>--explicit</code> flag to show the explicit dependencies in the
 </span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a>...
 </span></code></pre></div>
 <p>However, the default environment is missing the <code>pytest</code> package.
-This way, you can finetune your environments to only have the packages that are needed for that environment.
-E.g. you could also have a <code>dev</code> environment that has <code>pytest</code> and <code>ruff</code> installed, but you could omit these from the <code>prod</code> environment.
-There is a <a href="https://github.com/prefix-dev/pixi/tree/main/examples/docker">docker</a> example that shows how to set up a minimal <code>prod</code> environment and copy from there.</p>
+This way, you can finetune your environments to only have the packages that are needed.
+E.g. you could also have a <code>dev</code> environment that has <code>pytest</code> and <code>ruff</code> installed, but
+you could omit these from the <code>prod</code> environment. There is a <a href="https://github.com/prefix-dev/pixi/tree/main/examples/docker">docker</a>
+example that shows how to set up a minimal <code>prod</code> environment and copy from there.</p>
 <h2 id="replacing-pypi-packages-with-conda-packages">Replacing PyPI packages with conda packages<a class="headerlink" href="#replacing-pypi-packages-with-conda-packages" title="Permanent link">#</a></h2>
 <p>Last thing, Pixi provides the ability for <code>pypi</code> packages to depend on <code>conda</code> packages.
 Let's confirm this with:

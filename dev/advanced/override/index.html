@@ -3428,7 +3428,7 @@ This is useful if you need a specific version of a library that is not compatibl
 </span></code></pre></div>
 This will override the version of <code>numpy</code> used by all dependencies in the <code>dev</code> feature to be at least <code>2.0.0</code>, regardless of what the dependencies specify when the <code>dev</code> feature is enabled.</p>
 <h3 id="interact-with-other-overrides">Interact with other overrides<a class="headerlink" href="#interact-with-other-overrides" title="Permanent link">#</a></h3>
-<p>For a specific environment, all the <code>dependency-overrides</code> defined in different features will be combined in the order they were when defining the environment.</p>
+<p>For a specific environment, all the <code>dependency-overrides</code> defined in different features will be combined in the order they were defined.</p>
 <p>If the same dependency is overridden multiple times, we'll use the override from the <strong>prior</strong> feature in that environment.</p>
 <p>Also, the default feature will always come, and come last in the list of all overrides.</p>
 <p><div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># pixi.toml</span>
@@ -3456,7 +3456,9 @@ dev: <code>numpy == 2.0.0</code>
 outdated: <code>numpy == 1.21.0</code>
 conflict_a: <code>numpy == 1.21.0</code> (from <code>outdated</code>)
 conflict_b: <code>numpy == 2.0.0</code> (from <code>dev</code>)</p>
-<p>This may contrast with the intuition that all overrides are applied and combined to a result, but it is done this way to avoid conflicts and confusion. Since users are granted fully control over the overrides, it is up to ourselves to choose the right overrides for the environment.</p>
+<p>This may contrast with the intuition that all overrides are applied and combined to a result. It
+is done this way to avoid conflicts and confusion: Since users are granted fully control over the
+overrides, it is up to them to choose the right overrides for an environment.</p>
 
 
 

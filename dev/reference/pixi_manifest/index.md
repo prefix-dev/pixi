@@ -271,7 +271,7 @@ requires-pixi = ">=0.40,<1.0"
 
 Note
 
-This option should be used to improve the reproducibility of building the workspace. A complicated requirement spec may be an obstacle to setup the building environment.
+This option should be used to improve the reproducibility of building the workspace. A complicated requirement spec may be an obstacle to setup the build environment.
 
 ### `exclude-newer` (optional)
 

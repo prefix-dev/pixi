@@ -3405,12 +3405,18 @@
 
 <p>In this tutorial we will show you how to import existing environments into a Pixi workspace.
 In case some words used in the tutorial don't make sense to you, you may get value from first
-reading some of our other tutorials, like <a href="../../first_workspace/">our first workspace walthrough</a> and <a href="../multi_environment/">our guide to multi-environment workspaces</a>.</p>
+reading some of our other tutorials, like <a href="../../first_workspace/">our first workspace walthrough</a> and
+<a href="../multi_environment/">our guide to multi-environment workspaces</a>.</p>
 <h2 id="pixi-import"><code>pixi import</code><a class="headerlink" href="#pixi-import" title="Permanent link">#</a></h2>
-<p>Within any Pixi workspace, you can use <a href="https://pixi.sh/latest/reference/cli/pixi/import/"><code>pixi import</code></a> to import an environment from a given file. At the time of writing, we support two import file formats: <code>conda-env</code> and <code>pypi-txt</code>. Running <code>pixi import</code> without providing a <code>format</code> will try each format in turn until one succeeds, or return an error if all formats fail.</p>
+<p>Within any Pixi workspace, you can use <a href="https://pixi.sh/latest/reference/cli/pixi/import/"><code>pixi import</code></a>
+to import an environment from a given file. At the time of writing, we support two import
+file formats: <code>conda-env</code> and <code>pypi-txt</code>. Running <code>pixi import</code> without providing a <code>format</code> will try
+each format in turn until one succeeds, or return an error if all formats fail.</p>
 <p>If you don't already have a Pixi workspace, you can create one with <a href="https://pixi.sh/latest/reference/cli/pixi/init/"><code>pixi init</code></a>.</p>
 <h3 id="conda-env-format"><code>conda-env</code> format<a class="headerlink" href="#conda-env-format" title="Permanent link">#</a></h3>
-<p>The <code>conda-env</code> format is for files in the conda ecosystem (typically called <code>environment.yml</code>) following <a href="https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#create-env-file-manually">the syntax specified in the conda docs</a>. Suppose our environment to import is specified in this file:</p>
+<p>The <code>conda-env</code> format is for files in the conda ecosystem (typically called <code>environment.yml</code>) following
+<a href="https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#create-env-file-manually">the syntax specified in the conda docs</a>.
+Suppose our environment to import is specified in this file:</p>
 <div class="language-yaml highlight"><span class="filename">environment.yml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">simple-env</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">channels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;conda-forge&quot;</span><span class="p p-Indicator">]</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">dependencies</span><span class="p">:</span>
@@ -3418,7 +3424,10 @@ reading some of our other tutorials, like <a href="../../first_workspace/">our f
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">pip</span><span class="p">:</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">httpx</span>
 </span></code></pre></div>
-<p>We can then run <code>pixi import --format=conda-env environment.yml</code> to import the environment into our workspace. By default, since our <code>environment.yml</code> has a <code>name</code> field, this creates a <code>feature</code> of the same name (or uses the feature of that name if it already exists), and creates an <code>environment</code> containing that feature (with <a href="https://pixi.sh/latest/reference/pixi_manifest/#the-environments-table"><code>no-default-feature</code></a> set):</p>
+<p>We can then run <code>pixi import --format=conda-env environment.yml</code> to import the environment
+into our workspace. By default, since our <code>environment.yml</code> has a <code>name</code> field, this creates a <code>feature</code>
+of the same name (or uses the feature of that name if it already exists), and creates an <code>environment</code>
+containing that feature (with <a href="https://pixi.sh/latest/reference/pixi_manifest/#the-environments-table"><code>no-default-feature</code></a> set):</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[feature.simple-env]</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
@@ -3431,13 +3440,20 @@ reading some of our other tutorials, like <a href="../../first_workspace/">our f
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="k">[environments]</span>
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">simple-env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;simple-env&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">no-default-feature</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<p>It is then possible to define tasks for that environment, run commands in that environment, and launch a <a href="https://pixi.sh/latest/reference/cli/pixi/shell"><code>pixi shell</code></a> in that environment — see the <a href="../../getting_started/">getting started guide</a> for links to start learning about these topics!</p>
-<p>For files without a <code>name</code> field, or to override the default behaviour, you can specify custom <code>--feature</code> and <code>--environment</code> names. This also allows importing into existing features and environments (including the <code>default</code> feature and environment). For example, given this other environment file to import:</p>
+<p>It is then possible to define tasks for the imported environment, run commands in that
+environment, and launch a <a href="https://pixi.sh/latest/reference/cli/pixi/shell"><code>pixi shell</code></a>
+in that environment — see the <a href="../../getting_started/">getting started guide</a> for links to start learning about these topics!</p>
+<p>For files without a <code>name</code> field, or to override the default behavior, you can specify custom
+<code>--feature</code> and <code>--environment</code> names. This also allows importing into existing features and
+environments (including the <code>default</code> feature and environment). For example,
+given this other environment file to import:</p>
 <div class="language-yaml highlight"><span class="filename">env2.yml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">channels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;conda-forge&quot;</span><span class="p p-Indicator">]</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">dependencies</span><span class="p">:</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numpy</span>
 </span></code></pre></div>
-<p>Running <code>pixi import --format=conda-env --feature=numpy --environment=simple-env env2.yml</code> will import the environment into a new feature called "numpy", and include that feature in the existing <code>simple-env</code> environment (effectively merging the environments from our two input files):</p>
+<p>Running <code>pixi import --format=conda-env --feature=numpy --environment=simple-env env2.yml</code> will import
+the environment into a new feature called "numpy", and include that feature in the existing
+<code>simple-env</code> environment (effectively merging the environments from our two input files):</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[feature.simple-env]</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
@@ -3456,7 +3472,9 @@ reading some of our other tutorials, like <a href="../../first_workspace/">our f
 </span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="k">[environments]</span>
 </span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="n">simple-env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;simple-env&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;numpy&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">no-default-feature</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<p>It is also possible to specify platforms for the feature via the <code>--platform</code> argument. For example, <code>pixi import --format=conda-env --feature=unix --platform=linux-64 --platform=osx-arm64 environment.yml</code> adds the following to our workspace manifest:</p>
+<p>It is also possible to specify platforms for the feature via the <code>--platform</code> argument. For example,
+<code>pixi import --format=conda-env --feature=unix --platform=linux-64 --platform=osx-arm64 environment.yml</code>
+adds the following to our workspace manifest:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[feature.unix]</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
@@ -3476,7 +3494,10 @@ reading some of our other tutorials, like <a href="../../first_workspace/">our f
 <div class="language-yaml highlight"><span class="filename">requirements.txt</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="l l-Scalar l-Scalar-Plain">cowpy</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="l l-Scalar l-Scalar-Plain">array-api-extra&gt;=0.8</span>
 </span></code></pre></div>
-<p>We can then run <code>pixi import --format=pypi-txt --feature=my-feature1 requirements.txt</code> to import the environment into our workspace. It is necessary to specify a <code>feature</code> or <code>environment</code> name (or both) via the arguments of the same names. If only one of these names is provided, a matching name is used for the other field. Hence, the following lines are added to our workspace manifest:</p>
+<p>We can then run <code>pixi import --format=pypi-txt --feature=my-feature1 requirements.txt</code> to import the
+environment into our workspace. It is necessary to specify a <code>feature</code> or <code>environment</code>
+name (or both) via the arguments of the same names. If only one of these names is provided, a matching
+name is used for the other field. Hence, the following lines are added to our workspace manifest:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[feature.my-feature1.pypi-dependencies]</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">cowpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">array-api-extra</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=0.8&quot;</span>
@@ -3484,11 +3505,19 @@ reading some of our other tutorials, like <a href="../../first_workspace/">our f
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="k">[environments]</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">my-feature1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;my-feature1&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">no-default-feature</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<p>Any dependencies listed in the file are added as <a href="https://pixi.sh/latest/reference/pixi_manifest/#pypi-dependencies"><code>pypi-dependencies</code></a>. An environment will be created with <a href="https://pixi.sh/latest/reference/pixi_manifest/#the-environments-table"><code>no-default-feature</code></a> set if the given environment name does not already exist.</p>
-<p>It is then possible to define tasks for that environment, run commands in that environment, and launch a <a href="https://pixi.sh/latest/reference/cli/pixi/shell"><code>pixi shell</code></a> in that environment — see the <a href="../../getting_started/">getting started guide</a> for links to start learning about these topics!</p>
-<p>Just like the <code>conda-env</code> format, it is possible to import into existing features/environments (including the <code>default</code> feature/environment), and set specific platforms for the feature. See the previous section for details.</p>
+<p>Any dependencies listed in the file are added as <a href="https://pixi.sh/latest/reference/pixi_manifest/#pypi-dependencies"><code>pypi-dependencies</code></a>.
+An environment will be created with <a href="https://pixi.sh/latest/reference/pixi_manifest/#the-environments-table"><code>no-default-feature</code></a>
+set if the given environment name does not already exist.</p>
+<p>It is then possible to define tasks for that environment, run commands in that
+environment, and launch a <a href="https://pixi.sh/latest/reference/cli/pixi/shell"><code>pixi shell</code></a> in that
+environment — see the <a href="../../getting_started/">getting started guide</a> for links to start learning about these topics!</p>
+<p>Just like the <code>conda-env</code> format, it is possible to import into existing features/environments
+(including the <code>default</code> feature/environment), and set specific platforms for the feature. See the previous section for details.</p>
 <h2 id="pixi-init-import"><code>pixi init --import</code><a class="headerlink" href="#pixi-init-import" title="Permanent link">#</a></h2>
-<p>It is also possible to combine the steps of <code>pixi init</code> and <code>pixi import</code> into one, via <a href="https://pixi.sh/latest/reference/cli/pixi/init/#arg---import"><code>pixi init --import</code></a>. For example, <code>pixi init --import environment.yml</code> (using the same file from our example above) produces a manifest which looks like this:</p>
+<p>It is also possible to combine the steps of <code>pixi init</code> and <code>pixi import</code> into one, via
+<a href="https://pixi.sh/latest/reference/cli/pixi/init/#arg---import"><code>pixi init --import</code></a>. For example,
+<code>pixi init --import environment.yml</code> (using the same file from our example above) produces a manifest
+which looks like this:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Lucas Colley &lt;lucas.colley8@gmail.com&gt;&quot;</span><span class="p">]</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
@@ -3504,7 +3533,8 @@ reading some of our other tutorials, like <a href="../../first_workspace/">our f
 </span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="k">[pypi-dependencies]</span>
 </span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="n">httpx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span></code></pre></div>
-<p>Unlike <code>pixi import</code>, this by default uses the <code>default</code> feature and environment. Thus, it achieves a very similar workspace to that obtained by running <code>pixi init</code> and <code>pixi import --feature=default environment.yml</code>.</p>
+<p>Unlike <code>pixi import</code>, this by default uses the <code>default</code> feature and environment. Thus,
+it achieves a very similar workspace to that obtained by running <code>pixi init</code> and <code>pixi import --feature=default environment.yml</code>.</p>
 <p>One difference is that <code>pixi init --import</code> will by default inherit its name from the given import file (if the file specifies the <code>name</code> field), rather than from its working directory.</p>
 <div class="admonition note">
 <p class="admonition-title">Supported formats</p>

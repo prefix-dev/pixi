@@ -153,7 +153,7 @@ test = {features = ["test"], solve-group = "default"}
 all = {features = ["all"], solve-group = "default"}
 ```
 
-In this example, three environments will be created by pixi:
+In this example, three environments will be created by Pixi:
 
 - **default** with 'package1' as pypi dependency
 - **test** with 'package1' and 'pytest' as pypi dependencies

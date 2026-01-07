@@ -62,7 +62,7 @@ Now run the `turtlesim` example.
 pixi run ros2 run turtlesim turtlesim_node
 ```
 
-**Or** use the `shell` command to start an activated environment in your terminal.
+**Or** use the `shell` command to start a shell in the activated environment in your terminal.
 
 ```shell
 pixi shell

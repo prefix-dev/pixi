@@ -26,7 +26,7 @@ What does this do?
 
 The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `%UserProfile%\.pixi\bin`. The command will also add `%UserProfile%\.pixi\bin` to your `PATH` environment variable, allowing you to invoke `pixi` from anywhere.
 
-Now restart your terminal or shell to make the installation effective.
+Now restart your terminal or shell to make the installation take effect.
 
 Don't trust our link? Check the script!
 
@@ -249,7 +249,7 @@ eval (pixi completion --shell elvish | slurp)
 
 ## Uninstall
 
-Before un-installation you might want to delete any previous files pixi has installed.
+Before un-installation you might want to delete any files pixi managed.
 
 1. Remove any cached data:
 

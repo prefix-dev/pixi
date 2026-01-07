@@ -8,7 +8,7 @@ To do the activation we have multiple options:
 
 - `pixi shell`: start a shell with the environment activated.
 - `pixi shell-hook`: print the command to activate the environment in your current shell.
-- `pixi run` run a command or [task](../advanced_tasks/) in the environment.
+- `pixi run` run a command or [task](../advanced_tasks/) in the default environment.
 
 Where the `run` command is special as it runs its own cross-platform shell and has the ability to run tasks. More information about tasks can be found in the [tasks documentation](../advanced_tasks/).
 
@@ -136,7 +136,7 @@ See our [direnv page](../../integration/third_party/direnv/) on how to leverage 
 
 ## Structure
 
-A Pixi environment is located in the `.pixi/envs` directory of the workspace by default. This keeps your machine and your workspace clean and isolated from each other, and makes it easy to clean up after a workspace is done. While this structure is generally recommended, environments can also be stored outside of workspace directories by enabling [detached environments](../../reference/pixi_configuration/#detached-environments).
+All Pixi environments are by default located in the `.pixi/envs` directory of the workspace. This keeps your machine and your workspace clean and isolated from each other, and makes it easy to clean up after a workspace is done. While this structure is generally recommended, environments can also be stored outside of workspace directories by enabling [detached environments](../../reference/pixi_configuration/#detached-environments).
 
 If you look at the `.pixi/envs` directory, you will see a directory for each environment, the `default` being the one that is normally used, if you specify a custom environment the name you specified will be used.
 
@@ -159,11 +159,11 @@ If you look at the `.pixi/envs` directory, you will see a directory for each env
         ...
 ```
 
-These directories are conda environments, and you can use them as such, but you cannot manually edit them, this should always go through the `pixi.toml`. Pixi will always make sure the environment is in sync with the `pixi.lock` file. If this is not the case then all the commands that use the environment will automatically update the environment, e.g. `pixi run`, `pixi shell`.
+These directories are conda environments, and you can use them as such, but you cannot manually edit them, this should always go through the `pixi.toml`. Pixi will always make sure the environment is in sync with the `pixi.lock` file. If this is not the case then all the commands that use the environment will automatically it, e.g. `pixi run`, `pixi shell`.
 
-### Environment Installation Metadata
+### Environment Metadata
 
-On environment installation, Pixi will write a small file to the environment that contains some metadata about installation. This file is called `pixi` and is located in the `conda-meta` folder of the environment. This file contains the following information:
+On environment creation, Pixi will add a small file containing some metadata. This file is called `pixi` and is located in the `conda-meta` folder of the environment. This file contains the following information:
 
 - `manifest_path`: The path to the manifest file that describes the workspace used to create this environment
 - `environment_name`: The name of the environment
@@ -181,7 +181,7 @@ On environment installation, Pixi will write a small file to the environment tha
 
 The `environment_lock_file_hash` is used to check if the environment is in sync with the `pixi.lock` file. If the hash of the `pixi.lock` file is different from the hash in the `pixi` file, Pixi will update the environment.
 
-This is used to speedup activation, in order to trigger a full revalidation and installation use `pixi install` or `pixi reinstall`. A broken environment would typically not be found with a hash comparison, but a revalidation would reinstall the environment. By default, all lock file modifying commands will always use the revalidation and on `pixi install` it always revalidates.
+This is used to speedup activation, in order to trigger a full revalidation and installation use `pixi install` or `pixi reinstall`. A broken environment would typically not be found with a hash comparison, but a revalidation would reinstall the environment. By default, all lock file modifying commands will always trigger a revalidation, as does `pixi install`.
 
 ### Cleaning up
 
@@ -201,7 +201,7 @@ rm -rf .pixi/envs/cuda
 
 ## Solving environments
 
-When you run a command that uses the environment, Pixi will check if the environment is in sync with the `pixi.lock` file. If it is not, Pixi will solve the environment and update it. This means that Pixi will retrieve the best set of packages for the dependency requirements that you specified in the `pixi.toml` and will put the output of the solve step into the `pixi.lock` file. Solving is a mathematical problem and can take some time, but we take pride in the way we solve environments, and we are confident that we can solve your environment in a reasonable time. If you want to learn more about the solving process, you can read these:
+When you run a command that uses the environment, Pixi will check if it is in sync with the `pixi.lock` file. If it is not, Pixi will solve the environment and update it. This means that Pixi will retrieve the best set of packages for the dependency requirements that you specified in the `pixi.toml` and will put the output of the solve step into the `pixi.lock` file. Solving is a mathematical problem and can take some time, but we take pride in the way we solve environments, and we are confident that we can solve yours in a reasonable time. If you want to learn more about the solving process, you can read these:
 
 - [Rattler(conda) resolver blog](https://prefix.dev/blog/the_new_rattler_resolver)
 - [UV(PyPI) resolver blog](https://astral.sh/blog/uv-unified-python-packaging)

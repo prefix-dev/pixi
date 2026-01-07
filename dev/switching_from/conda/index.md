@@ -22,7 +22,7 @@ Conda has a base environment, which is the default environment when you start a 
 
 Activating Pixi environment in the current shell
 
-For some advanced use-cases, you can activate the environment in the current shell. This uses the `pixi shell-hook` which prints the activation script, which can be used to activate the environment in the current shell without `pixi` itself.
+For some advanced use-cases, you can activate the environment in the current shell. This uses the `pixi shell-hook` which prints the activation script, which can be used without `pixi` itself.
 
 ```shell
 ~/myenv > eval "$(pixi shell-hook)"

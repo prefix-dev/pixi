@@ -1,6 +1,6 @@
 The source packages in the `[dev]` table are not built or installed into the pixi environment. The `build-dependencies`, `host-dependencies` and `run-dependencies` of those packages are installed into the pixi environment.
 
-Source dependencies in the `[dependencies]` section are build in an isolated environment and then installed into the workspace. This means that the `build-` and `host-dependencies` will not be in the pixi environment.
+Source dependencies in the `[dependencies]` section are build in their own isolated environment located at`.pixi/build` and the resulting conda package is then installed into the default environment. This means that the `build-` and `host-dependencies` will not be in the pixi environment.
 
 This document explains how you can use the `[dev]` table to depend on the development dependencies of a package.
 
@@ -27,9 +27,9 @@ Now you can use Pixi to build the package into a conda package:
 pixi build
 ```
 
-But because of the isolated build environments, the development dependencies such as `cargo` are not available in `pixi run`.
+Because of the isolation, the development dependencies such as `cargo` are not available in `pixi run`.
 
-To change that you can add `[dev]` table to the manifest file:
+To change that you can add a `[dev]` table to the manifest file:
 
 pixi.toml
 
@@ -38,7 +38,7 @@ pixi.toml
 dev-package = { path = "." }
 ```
 
-Now when you run `pixi install` the development dependencies will be installed into the pixi environment. This means that you can now use `cargo` in `pixi run`:
+Now when you run `pixi install` the development dependencies will be installed into the Pixi environment. This means that you can now use `cargo` in `pixi run`:
 
 ```bash
 pixi run cargo run

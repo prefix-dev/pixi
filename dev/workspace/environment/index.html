@@ -1041,10 +1041,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#environment-installation-metadata" class="md-nav__link">
+  <a href="#environment-metadata" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Environment Installation Metadata
+        Environment Metadata
       
     </span>
   </a>
@@ -3372,10 +3372,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#environment-installation-metadata" class="md-nav__link">
+  <a href="#environment-metadata" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Environment Installation Metadata
+        Environment Metadata
       
     </span>
   </a>
@@ -3458,7 +3458,7 @@ But there is more to it in a conda environment, as it also sets some environment
 <ul>
 <li><code>pixi shell</code>: start a shell with the environment activated.</li>
 <li><code>pixi shell-hook</code>: print the command to activate the environment in your current shell.</li>
-<li><code>pixi run</code> run a command or <a href="../advanced_tasks/">task</a> in the environment.</li>
+<li><code>pixi run</code> run a command or <a href="../advanced_tasks/">task</a> in the default environment.</li>
 </ul>
 <p>Where the <code>run</code> command is special as it runs its own cross-platform shell and has the ability to run tasks.
 More information about tasks can be found in the <a href="../advanced_tasks/">tasks documentation</a>.</p>
@@ -3565,7 +3565,7 @@ After adding this function to your <code>~/.config/fish/config.fish</code>, you 
 <p>See our <a href="../../integration/third_party/direnv/">direnv page</a> on how to leverage <code>pixi shell-hook</code> to integrate with direnv.</p>
 </details>
 <h2 id="structure">Structure<a class="headerlink" href="#structure" title="Permanent link">#</a></h2>
-<p>A Pixi environment is located in the <code>.pixi/envs</code> directory of the workspace by default.
+<p>All Pixi environments are by default located in the <code>.pixi/envs</code> directory of the workspace.
 This keeps your machine and your workspace clean and isolated from each other, and makes it easy to clean up after a workspace is done.
 While this structure is generally recommended, environments can also be stored outside of workspace directories by enabling <a href="../../reference/pixi_configuration/#detached-environments">detached environments</a>.</p>
 <p>If you look at the <code>.pixi/envs</code> directory, you will see a directory for each environment, the <code>default</code> being the one that is normally used, if you specify a custom environment the name you specified will be used.</p>
@@ -3588,9 +3588,9 @@ While this structure is generally recommended, environments can also be stored o
 </span></code></pre></div>
 <p>These directories are conda environments, and you can use them as such, but you cannot manually edit them, this should always go through the <code>pixi.toml</code>.
 Pixi will always make sure the environment is in sync with the <code>pixi.lock</code> file.
-If this is not the case then all the commands that use the environment will automatically update the environment, e.g. <code>pixi run</code>, <code>pixi shell</code>.</p>
-<h3 id="environment-installation-metadata">Environment Installation Metadata<a class="headerlink" href="#environment-installation-metadata" title="Permanent link">#</a></h3>
-<p>On environment installation, Pixi will write a small file to the environment that contains some metadata about installation.
+If this is not the case then all the commands that use the environment will automatically it, e.g. <code>pixi run</code>, <code>pixi shell</code>.</p>
+<h3 id="environment-metadata">Environment Metadata<a class="headerlink" href="#environment-metadata" title="Permanent link">#</a></h3>
+<p>On environment creation, Pixi will add a small file containing some metadata.
 This file is called <code>pixi</code> and is located in the <code>conda-meta</code> folder of the environment.
 This file contains the following information:</p>
 <ul>
@@ -3610,7 +3610,7 @@ This file contains the following information:</p>
 If the hash of the <code>pixi.lock</code> file is different from the hash in the <code>pixi</code> file, Pixi will update the environment.</p>
 <p>This is used to speedup activation, in order to trigger a full revalidation and installation use <code>pixi install</code> or <code>pixi reinstall</code>.
 A broken environment would typically not be found with a hash comparison, but a revalidation would reinstall the environment.
-By default, all lock file modifying commands will always use the revalidation and on <code>pixi install</code> it always revalidates.</p>
+By default, all lock file modifying commands will always trigger a revalidation, as does <code>pixi install</code>.</p>
 <h3 id="cleaning-up">Cleaning up<a class="headerlink" href="#cleaning-up" title="Permanent link">#</a></h3>
 <p>If you want to clean up the environments, you can simply delete the <code>.pixi/envs</code> directory, and Pixi will recreate the environments when needed.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi<span class="w"> </span>clean
@@ -3624,10 +3624,12 @@ By default, all lock file modifying commands will always use the revalidation an
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>rm<span class="w"> </span>-rf<span class="w"> </span>.pixi/envs/cuda
 </span></code></pre></div>
 <h2 id="solving-environments">Solving environments<a class="headerlink" href="#solving-environments" title="Permanent link">#</a></h2>
-<p>When you run a command that uses the environment, Pixi will check if the environment is in sync with the <code>pixi.lock</code> file.
+<p>When you run a command that uses the environment, Pixi will check if it is in sync with the <code>pixi.lock</code> file.
 If it is not, Pixi will solve the environment and update it.
-This means that Pixi will retrieve the best set of packages for the dependency requirements that you specified in the <code>pixi.toml</code> and will put the output of the solve step into the <code>pixi.lock</code> file.
-Solving is a mathematical problem and can take some time, but we take pride in the way we solve environments, and we are confident that we can solve your environment in a reasonable time.
+This means that Pixi will retrieve the best set of packages for the dependency requirements that you
+specified in the <code>pixi.toml</code> and will put the output of the solve step into the <code>pixi.lock</code> file.
+Solving is a mathematical problem and can take some time, but we take pride in the way we solve
+environments, and we are confident that we can solve yours in a reasonable time.
 If you want to learn more about the solving process, you can read these:</p>
 <ul>
 <li><a href="https://prefix.dev/blog/the_new_rattler_resolver">Rattler(conda) resolver blog</a></li>

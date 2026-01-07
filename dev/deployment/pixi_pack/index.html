@@ -3625,7 +3625,9 @@
 
 <!-- Keep in sync with https://github.com/quantco/pixi-pack/blob/main/README.md -->
 
-<p><a href="https://github.com/quantco/pixi-pack"><code>pixi-pack</code></a> is a simple tool that takes a Pixi environment and packs it into a compressed archive that can be shipped to the target machine. The corresponding <code>pixi-unpack</code> tool can be used to unpack the archive and install the environment.</p>
+<p><a href="https://github.com/quantco/pixi-pack"><code>pixi-pack</code></a> is a simple tool that takes an environment
+and packs it into a compressed archive that can be shipped to the target machine. The corresponding
+<code>pixi-unpack</code> tool can be used to unpack the archive and recreate an environment.</p>
 <p>Both tools can be installed via</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>pixi-pack<span class="w"> </span>pixi-unpack
 </span></code></pre></div>
@@ -3730,7 +3732,8 @@ This can be useful if you want to distribute the environment to users that don't
 <p>You can inject additional packages into the environment that are not specified in <code>pixi.lock</code> by using the <code>--inject</code> flag:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi-pack<span class="w"> </span>--inject<span class="w"> </span>local-package-1.0.0-hbefa133_0.conda<span class="w"> </span>pixi.toml
 </span></code></pre></div>
-<p>This can be particularly useful if you build the package itself and want to include the built package in the environment but still want to use <code>pixi.lock</code> from the workspace.</p>
+<p>This can be particularly useful if you build the package itself and want to include the built package
+in the environment but still want to use <code>pixi.lock</code> from the workspace.</p>
 <h3 id="pypi-support">PyPi support<a class="headerlink" href="#pypi-support" title="Permanent link">#</a></h3>
 <p>You can also pack PyPi wheel packages into your environment.
 <code>pixi-pack</code> only supports wheel packages and not source distributions.
@@ -3770,7 +3773,7 @@ See <a href="../../reference/pixi_configuration/#concurrency">pixi docs</a> for 
 <ul>
 <li>Creating multiple packs with overlapping dependencies</li>
 <li>Working with large packages that take time to download</li>
-<li>Operating in environments with limited bandwidth</li>
+<li>Operating on machines with limited bandwidth</li>
 <li>Running CI/CD pipelines where package caching can significantly improve build times</li>
 </ul>
 <h3 id="unpacking-without-pixi-pack">Unpacking Without pixi-pack<a class="headerlink" href="#unpacking-without-pixi-pack" title="Permanent link">#</a></h3>

@@ -3330,10 +3330,17 @@ Instead of requiring a change to your <code>~/.bashrc</code> or other files, it 
 That also means that, instead of <code>conda deactivate</code>, it's enough to just exit the current shell, e.g. by pressing <code>Ctrl+D</code>.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>shell
 </span></code></pre></div>
-<p>On Unix systems the shell command works by creating a "fake" PTY session that will start the shell, and then send a string like <code>source /tmp/activation-env-12345.sh</code> to the <code>stdin</code> in order to activate the environment. If you would peek under the hood of the the <code>shell</code> command, then you would see that this is the first thing executed in the new shell session.</p>
-<p>The temporary script that we generate ends with <code>echo "PIXI_ENV_ACTIVATED"</code> which is used to detect if the environment was activated successfully. If we do not receive this string after three seconds, we will issue a warning to the user.</p>
+<p>On Unix systems the shell command works by creating a "fake" PTY session that will start the shell,
+and then send a string like <code>source /tmp/activation-env-12345.sh</code> to the <code>stdin</code> in order to activate
+the environment. If you would peek under the hood of the the <code>shell</code> command, then you
+would see that this is the first thing executed in the new shell session.</p>
+<p>The temporary script that we generate ends with <code>echo "PIXI_ENV_ACTIVATED"</code> which is used to detect
+if the environment was activated successfully. If we do not receive this string after
+three seconds, we will issue a warning to the user.</p>
 <h2 id="issues-with-pixi-shell">Issues With Pixi Shell<a class="headerlink" href="#issues-with-pixi-shell" title="Permanent link">#</a></h2>
-<p>As explained, <code>pixi shell</code> only works well if we execute the activation script <em>after</em> launching shell. Certain commands that are run in the <code>~/.bashrc</code> might swallow the activation command, and the environment won't be activated.</p>
+<p>As explained, <code>pixi shell</code> only works well if we execute the activation script <em>after</em> launching shell.
+Certain commands that are run in the <code>~/.bashrc</code> might swallow the activation command, and the
+environment won't be activated.</p>
 <p>For example, if your <code>~/.bashrc</code> contains code like the following, <code>pixi shell</code> has little chance to succeed:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># on WSL - the `wsl.exe` somehow takes over `stdin` and prevents `pixi shell` from succeeding</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>wsl.exe<span class="w"> </span>-d<span class="w"> </span>wsl-vpnkit<span class="w"> </span>--cd<span class="w"> </span>/app<span class="w"> </span>service<span class="w"> </span>wsl-vpnkit<span class="w"> </span>start

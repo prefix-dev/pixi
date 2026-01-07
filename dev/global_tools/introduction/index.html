@@ -3598,10 +3598,10 @@ At the moment, only Linux and macOS are supported.</p>
 <p>Completions of packages are installed as long as their binaries are exposed under the same name: e.g. <code>exposed = { git = "git" }</code>.</p>
 </div>
 <h2 id="adding-a-series-of-tools-at-once">Adding a Series of Tools at Once<a class="headerlink" href="#adding-a-series-of-tools-at-once" title="Permanent link">#</a></h2>
-<p>Without specifying an environment, you can add multiple tools at once:
+<p>Without specifying an inastallation environment, you can add multiple tools at once:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>pixi-pack<span class="w"> </span>rattler-build
 </span></code></pre></div>
-This command generates the following entry in the manifest:
+<p>This command generates the following entry in the manifest:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[envs.pixi-pack]</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">dependencies</span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">pixi-pack</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
@@ -3612,23 +3612,23 @@ This command generates the following entry in the manifest:
 </span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">rattler-build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">rattler-build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;rattler-build&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-Creating two separate non-interfering environments, while exposing only the minimum required binaries.</p>
+<p>Creating two separate non-interfering environments, while exposing only the minimum required binaries.</p>
 <h2 id="creating-a-data-science-sandbox-environment">Creating a Data Science Sandbox Environment<a class="headerlink" href="#creating-a-data-science-sandbox-environment" title="Permanent link">#</a></h2>
-<p>You can create an environment with multiple tools using the following command:
+<p>You can create an environment with multiple tools using the following command:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span>data-science<span class="w"> </span>--expose<span class="w"> </span>jupyter<span class="w"> </span>--expose<span class="w"> </span>ipython<span class="w"> </span>jupyter<span class="w"> </span>numpy<span class="w"> </span>pandas<span class="w"> </span>matplotlib<span class="w"> </span>ipython
 </span></code></pre></div>
-This command generates the following entry in the manifest:
+<p>This command generates the following entry in the manifest:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">[envs.data-science]</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">jupyter</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">ipython</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">jupyter</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;jupyter&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">ipython</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ipython&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-In this setup, both <code>jupyter</code> and <code>ipython</code> are exposed from the <code>data-science</code> environment, allowing you to run:
+<p>In this setup, both <code>jupyter</code> and <code>ipython</code> are exposed from the <code>data-science</code> environment, allowing you to run:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>&gt;<span class="w"> </span>ipython
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># Or</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>&gt;<span class="w"> </span>jupyter<span class="w"> </span>lab
 </span></code></pre></div>
-These commands will be available globally, making it easy to access your preferred tools without switching environments.</p>
+<p>These commands will be available globally, making it easy to access your preferred tools without switching environments.</p>
 <h2 id="install-packages-for-a-different-platform">Install Packages For a Different Platform<a class="headerlink" href="#install-packages-for-a-different-platform" title="Permanent link">#</a></h2>
 <p>You can install packages for a different platform using the <code>--platform</code> flag.
 This is useful when you want to install packages for a different platform, such as <code>osx-64</code> packages on <code>osx-arm64</code>.

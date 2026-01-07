@@ -19,15 +19,15 @@ Pixi can do a lot of things, but it is designed to be simple to use. Let's go th
 
 ## Managing global installations
 
-Pixi can manage global installations of tools and environments. It installs the environments in a central location, so you can use them from anywhere.
+Pixi can manage global installations of tools in global environments. It installs the environments in a central location, so you can use them from anywhere.
 
 - [`pixi global install`](../reference/cli/pixi/global/install/) - install a package into it's own environment in the global space.
 - [`pixi global uninstall`](../reference/cli/pixi/global/uninstall/) - uninstall an environment from the global space.
-- [`pixi global add`](../reference/cli/pixi/global/add/) - add a package to an existing globally installed environment.
+- [`pixi global add`](../reference/cli/pixi/global/add/) - add a package to an existing global environment.
 - [`pixi global sync`](../reference/cli/pixi/global/sync/) - sync the globally installed environments with the global manifest, describing all the environments you want to install.
 - [`pixi global edit`](../reference/cli/pixi/global/edit/) - edit the global manifest.
 - [`pixi global update`](../reference/cli/pixi/global/update/) - update the global environments
-- [`pixi global list`](../reference/cli/pixi/global/list/) - list all the installed environments
+- [`pixi global list`](../reference/cli/pixi/global/list/) - list all the global environments
 
 More information: [Global Tools](../global_tools/introduction/)
 
@@ -47,7 +47,7 @@ Python 3.13.5 | packaged by conda-forge | (main, Jun 16 2025, 08:24:05) [Clang 1
 Python 3.12.11 | packaged by conda-forge | (main, Jun  4 2025, 14:38:53) [Clang 18.1.8 ]
 ```
 
-## Multiple environments
+## Multiple Environments
 
 Pixi workspaces allow you to manage multiple environments. An environment is build out of one or multiple features.
 
@@ -58,7 +58,7 @@ Pixi workspaces allow you to manage multiple environments. An environment is bui
 - [`pixi shell --environment`](../reference/cli/pixi/shell/#arg---environment) - activate a specific environment
 - [`pixi list --environment`](../reference/cli/pixi/list/#arg---environment) - list the dependencies in a specific environment
 
-More information: [Multiple environments](../workspace/multi_environment/)
+More information: [Multiple Environments](../workspace/multi_environment/)
 
 ## Tasks
 

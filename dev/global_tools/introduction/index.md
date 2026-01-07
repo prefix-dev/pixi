@@ -171,7 +171,7 @@ Completions of packages are installed as long as their binaries are exposed unde
 
 ## Adding a Series of Tools at Once
 
-Without specifying an environment, you can add multiple tools at once:
+Without specifying an inastallation environment, you can add multiple tools at once:
 
 ```shell
 pixi global install pixi-pack rattler-build
