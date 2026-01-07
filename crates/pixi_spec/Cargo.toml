@@ -13,6 +13,7 @@ version = "0.1.0"
 dirs = { workspace = true }
 file_url = { workspace = true }
 itertools = { workspace = true }
+pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true, features = ["serde"] }

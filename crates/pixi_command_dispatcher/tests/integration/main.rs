@@ -645,6 +645,7 @@ async fn source_build_cache_status_clear_works() {
         build_environment: build_env,
         channel_config: default_channel_config(),
         enabled_protocols: Default::default(),
+        variants: None,
     };
 
     let first = dispatcher
@@ -1788,5 +1789,108 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
     assert_eq!(
         metadata_requests, 1,
         "Metadata should be re-fetched after source file modification"
+    );
+}
+
+/// Tests that cache status check works correctly when the source path points to a file
+/// (like `package.xml` or `pixi.toml`) rather than a directory.
+#[tokio::test]
+pub async fn test_source_build_cache_status_with_file_source() {
+    // Use the workspaces directory as root, with file-source as a subdirectory
+    let root_dir = workspaces_dir().join("host-dependency");
+
+    let (reporter, events) = EventReporter::new();
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+            .with_reporter(reporter.clone())
+    };
+
+    // First pass: build and install the package
+    let dispatcher = build_command_dispatcher().finish();
+
+    let records = dispatcher
+        .solve_pixi_environment(PixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package-a".parse().unwrap(),
+                PathSpec::new("package-a/pixi.toml").into(),
+            )]),
+            build_environment: build_env.clone(),
+            ..PixiEnvironmentSpec::default()
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("solve should succeed");
+
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("install should succeed");
+
+    // Verify first pass triggered actual builds (BackendSourceBuildStarted indicates real build work)
+    let first_pass_builds: usize = events
+        .take()
+        .iter()
+        .filter(|event| {
+            matches!(
+                event,
+                event_reporter::Event::BackendSourceBuildStarted { .. }
+            )
+        })
+        .count();
+
+    assert_eq!(
+        first_pass_builds, 2,
+        "First pass should trigger builds for package-a and package-b"
+    );
+
+    // Drop dispatcher to flush caches (simulating program restart)
+    drop(dispatcher);
+
+    // Second pass: Check the cache status with a path pointing to the pixi.toml FILE
+    // (not the directory). This is the scenario from issue #5201 where
+    // paths like `package.xml` are used as the source.
+    let dispatcher = build_command_dispatcher().finish();
+
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("install should succeed");
+
+    // Verify second pass did NOT trigger actual rebuilds (cache hit)
+    let second_pass_builds: usize = events
+        .take()
+        .iter()
+        .filter(|event| {
+            matches!(
+                event,
+                event_reporter::Event::BackendSourceBuildStarted { .. }
+            )
+        })
+        .count();
+
+    assert_eq!(
+        second_pass_builds, 0,
+        "Second pass should not rebuild - cache should be valid"
     );
 }

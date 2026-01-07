@@ -642,9 +642,9 @@ impl PixiControl {
         InstallBuilder {
             args: Args {
                 environment: None,
-                project_config: WorkspaceConfig {
+                workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
+                    backend_override: self.backend_override.clone(),
                 },
                 lock_file_usage: LockFileUsageConfig {
                     frozen: false,
@@ -713,7 +713,7 @@ impl PixiControl {
             args: lock::Args {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
+                    backend_override: self.backend_override.clone(),
                 },
                 no_install_config: NoInstallConfig { no_install: false },
                 check: false,
@@ -767,6 +767,7 @@ impl TasksControl<'_> {
                 platform,
                 feature: feature_name.non_default().map(str::to_owned),
                 cwd: None,
+                default_environment: None,
                 env: Default::default(),
                 description: None,
                 clean_env: false,

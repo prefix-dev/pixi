@@ -61,6 +61,7 @@ impl CommandDispatcherProcessor {
                     dev_source_metadata_id,
                     task.spec,
                     task.cancellation_token,
+                    task.parent,
                 );
             }
         }
@@ -72,10 +73,18 @@ impl CommandDispatcherProcessor {
         dev_source_metadata_id: DevSourceMetadataId,
         spec: DevSourceMetadataSpec,
         cancellation_token: CancellationToken,
+        parent: Option<CommandDispatcherContext>,
     ) {
-        let dispatcher = self.create_task_command_dispatcher(
-            CommandDispatcherContext::DevSourceMetadata(dev_source_metadata_id),
-        );
+        let dispatcher_context =
+            CommandDispatcherContext::DevSourceMetadata(dev_source_metadata_id);
+        let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
+
+        // Create a child cancellation token linked to parent's token (if any).
+        let cancellation_token = self.get_child_cancellation_token(parent, cancellation_token);
+
+        // Store the cancellation token for this context so child tasks can link to it.
+        self.store_cancellation_token(dispatcher_context, cancellation_token.clone());
+
         self.pending_futures.push(
             cancellation_token
                 .run_until_cancelled_owned(spec.request(dispatcher))
@@ -98,7 +107,10 @@ impl CommandDispatcherProcessor {
         id: DevSourceMetadataId,
         result: Result<DevSourceMetadata, CommandDispatcherError<DevSourceMetadataError>>,
     ) {
-        self.parent_contexts.remove(&id.into());
+        let context = CommandDispatcherContext::DevSourceMetadata(id);
+        self.parent_contexts.remove(&context);
+        self.remove_cancellation_token(context);
+
         self.dev_source_metadata
             .get_mut(&id)
             .expect("cannot find pending task")

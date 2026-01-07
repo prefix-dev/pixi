@@ -85,6 +85,7 @@ impl CommandDispatcherProcessor {
                     task.spec,
                     task.cancellation_token,
                     log_sink,
+                    task.parent,
                 );
             }
         }
@@ -97,10 +98,17 @@ impl CommandDispatcherProcessor {
         spec: BuildBackendMetadataSpec,
         cancellation_token: CancellationToken,
         log_sink: UnboundedSender<String>,
+        parent: Option<CommandDispatcherContext>,
     ) {
-        let dispatcher = self.create_task_command_dispatcher(
-            CommandDispatcherContext::BuildBackendMetadata(build_backend_metadata_id),
-        );
+        let dispatcher_context =
+            CommandDispatcherContext::BuildBackendMetadata(build_backend_metadata_id);
+        let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
+
+        // Create a child cancellation token linked to parent's token (if any).
+        let cancellation_token = self.get_child_cancellation_token(parent, cancellation_token);
+
+        // Store the cancellation token for this context so child tasks can link to it.
+        self.store_cancellation_token(dispatcher_context, cancellation_token.clone());
 
         // Open a channel to receive build output.
         self.pending_futures.push(
@@ -133,7 +141,10 @@ impl CommandDispatcherProcessor {
             CommandDispatcherError<BuildBackendMetadataError>,
         >,
     ) {
-        self.parent_contexts.remove(&id.into());
+        let context = CommandDispatcherContext::BuildBackendMetadata(id);
+        self.parent_contexts.remove(&context);
+        self.remove_cancellation_token(context);
+
         if let Some((reporter, reporter_id)) = self
             .reporter
             .as_deref_mut()

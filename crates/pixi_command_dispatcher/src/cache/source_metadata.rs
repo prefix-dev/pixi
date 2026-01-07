@@ -100,6 +100,7 @@ impl CacheKey for SourceMetadataCacheShard {
         host_virtual_packages.hash(&mut hasher);
 
         self.enabled_protocols.hash(&mut hasher);
+
         let source_dir = source_checkout_cache_key(&self.pinned_source);
         format!(
             "{source_dir}/{}/{}-{}",

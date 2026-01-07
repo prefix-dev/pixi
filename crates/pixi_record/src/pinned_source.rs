@@ -446,7 +446,7 @@ pub struct PinnedGitCheckout {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
     /// The reference of the git checkout.
-    #[serde(skip_serializing_if = "GitReference::is_default")]
+    #[serde(default, skip_serializing_if = "GitReference::is_default")]
     pub reference: GitReference,
 }
 
