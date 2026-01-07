@@ -3,15 +3,19 @@
   "title": "ProjectModel",
   "type": "object",
   "properties": {
-    "authors": {
-      "description": "Optional authors",
+    "name": {
+      "description": "The name of the project",
       "type": [
-        "array",
+        "string",
         "null"
-      ],
-      "items": {
-        "type": "string"
-      }
+      ]
+    },
+    "buildString": {
+      "description": "A build string configured by the user.",
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "buildNumber": {
       "description": "The build number configured by the user.",
@@ -22,8 +26,8 @@
       "format": "uint64",
       "minimum": 0
     },
-    "buildString": {
-      "description": "A build string configured by the user.",
+    "version": {
+      "description": "The version of the project",
       "type": [
         "string",
         "null"
@@ -36,21 +40,15 @@
         "null"
       ]
     },
-    "documentation": {
-      "description": "URL of the project documentation",
+    "authors": {
+      "description": "Optional authors",
       "type": [
-        "string",
+        "array",
         "null"
       ],
-      "format": "uri"
-    },
-    "homepage": {
-      "description": "URL of the project homepage",
-      "type": [
-        "string",
-        "null"
-      ],
-      "format": "uri"
+      "items": {
+        "type": "string"
+      }
     },
     "license": {
       "description": "The license as a valid SPDX string (e.g. MIT AND Apache-2.0)",
@@ -66,13 +64,6 @@
         "null"
       ]
     },
-    "name": {
-      "description": "The name of the project",
-      "type": [
-        "string",
-        "null"
-      ]
-    },
     "readme": {
       "description": "Path to the README file of the project (relative to the project root)",
       "type": [
@@ -80,8 +71,24 @@
         "null"
       ]
     },
+    "homepage": {
+      "description": "URL of the project homepage",
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri"
+    },
     "repository": {
       "description": "URL of the project source repository",
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri"
+    },
+    "documentation": {
+      "description": "URL of the project documentation",
       "type": [
         "string",
         "null"
@@ -98,20 +105,125 @@
           "type": "null"
         }
       ]
-    },
-    "version": {
-      "description": "The version of the project",
-      "type": [
-        "string",
-        "null"
-      ]
     }
   },
   "$defs": {
+    "Targets": {
+      "description": "A collect of targets including a default target.",
+      "type": "object",
+      "properties": {
+        "defaultTarget": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Target"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "targets": {
+          "description": "We use an [`OrderMap`] to preserve the order in which the items where\ndefined in the manifest.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Target"
+          }
+        }
+      }
+    },
+    "Target": {
+      "type": "object",
+      "properties": {
+        "hostDependencies": {
+          "description": "Host dependencies of the project",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/PackageSpec"
+          }
+        },
+        "buildDependencies": {
+          "description": "Build dependencies of the project",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/PackageSpec"
+          }
+        },
+        "runDependencies": {
+          "description": "Run dependencies of the project",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/PackageSpec"
+          }
+        }
+      }
+    },
+    "PackageSpec": {
+      "oneOf": [
+        {
+          "description": "This is a binary dependency",
+          "type": "object",
+          "properties": {
+            "binary": {
+              "$ref": "#/$defs/BinaryPackageSpec"
+            }
+          },
+          "required": [
+            "binary"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "This is a dependency on a source package",
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/SourcePackageSpec"
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Pin to a version that is compatible with a version from the \"previous\" environment",
+          "type": "object",
+          "properties": {
+            "pinCompatible": {
+              "$ref": "#/$defs/PinCompatibleSpec"
+            }
+          },
+          "required": [
+            "pinCompatible"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
     "BinaryPackageSpec": {
       "description": "Similar to a [`rattler_conda_types::NamelessMatchSpec`]",
       "type": "object",
       "properties": {
+        "version": {
+          "description": "The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "build": {
           "description": "The build string of the package (e.g. `py37_0`, `py37h6de7cb9_0`, `py*`)",
           "type": [
@@ -127,6 +239,13 @@
             "null"
           ]
         },
+        "fileName": {
+          "description": "Match the specific filename of the package",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "channel": {
           "description": "The channel of the package",
           "type": [
@@ -135,15 +254,8 @@
           ],
           "format": "uri"
         },
-        "fileName": {
-          "description": "Match the specific filename of the package",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "license": {
-          "description": "The license of the package",
+        "subdir": {
+          "description": "The subdir of the channel",
           "type": [
             "string",
             "null"
@@ -165,13 +277,6 @@
           ],
           "default": null
         },
-        "subdir": {
-          "description": "The subdir of the channel",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "url": {
           "description": "The URL of the package, if it is available",
           "type": [
@@ -180,6 +285,18 @@
           ],
           "format": "uri"
         },
+        "license": {
+          "description": "The license of the package",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "SourcePackageSpec": {
+      "type": "object",
+      "properties": {
         "version": {
           "description": "The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)",
           "type": [
@@ -187,219 +304,7 @@
             "null"
           ],
           "default": null
-        }
-      }
-    },
-    "GitReference": {
-      "description": "A reference to a specific commit in a git repository.",
-      "oneOf": [
-        {
-          "description": "The HEAD commit of a branch.",
-          "type": "object",
-          "properties": {
-            "branch": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "branch"
-          ]
         },
-        {
-          "description": "A specific tag.",
-          "type": "object",
-          "properties": {
-            "tag": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "tag"
-          ]
-        },
-        {
-          "description": "A specific commit.",
-          "type": "object",
-          "properties": {
-            "rev": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "rev"
-          ]
-        },
-        {
-          "description": "A default branch.",
-          "type": "string",
-          "const": "defaultBranch"
-        }
-      ]
-    },
-    "GitSpec": {
-      "description": "A specification of a package from a git repository.",
-      "type": "object",
-      "properties": {
-        "git": {
-          "description": "The git url of the package which can contain git+ prefixes.",
-          "type": "string",
-          "format": "uri"
-        },
-        "rev": {
-          "description": "The git revision of the package",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/GitReference"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "subdirectory": {
-          "description": "The git subdirectory of the package",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "git"
-      ]
-    },
-    "PackageSpec": {
-      "oneOf": [
-        {
-          "description": "This is a binary dependency",
-          "type": "object",
-          "properties": {
-            "binary": {
-              "$ref": "#/$defs/BinaryPackageSpec"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "binary"
-          ]
-        },
-        {
-          "description": "This is a dependency on a source package",
-          "type": "object",
-          "properties": {
-            "source": {
-              "$ref": "#/$defs/SourcePackageSpec"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "source"
-          ]
-        },
-        {
-          "description": "Pin to a version that is compatible with a version from the \"previous\" environment",
-          "type": "object",
-          "properties": {
-            "pinCompatible": {
-              "$ref": "#/$defs/PinCompatibleSpec"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "pinCompatible"
-          ]
-        }
-      ]
-    },
-    "PathSpec": {
-      "description": "A specification of a package from a path",
-      "type": "object",
-      "properties": {
-        "path": {
-          "description": "The path to the package",
-          "type": "string"
-        }
-      },
-      "required": [
-        "path"
-      ]
-    },
-    "PinBound": {
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "expression": {
-              "$ref": "#/$defs/PinExpression"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "expression"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "version": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "version"
-          ]
-        }
-      ]
-    },
-    "PinCompatibleSpec": {
-      "type": "object",
-      "properties": {
-        "build": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "exact": {
-          "description": "If an exact pin is given, we pin the exact version & hash",
-          "type": "boolean"
-        },
-        "lowerBound": {
-          "description": "A minimum pin to a version, using `x.x.x...` as syntax",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PinBound"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "upperBound": {
-          "description": "A pin to a version, using `x.x.x...` as syntax",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PinBound"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      }
-    },
-    "PinExpression": {
-      "description": "A pin expression string like \"x\", \"x.x\", \"x.x.x\", etc.\n\nThis represents the number of version segments to pin.\nFor example, \"x.x\" means pin the major and minor version.",
-      "type": "string",
-      "pattern": "^x(\\.x)*$"
-    },
-    "SourcePackageSpec": {
-      "type": "object",
-      "properties": {
         "build": {
           "description": "The build string of the package (e.g. `py37_0`, `py37h6de7cb9_0`, `py*`)",
           "type": [
@@ -415,13 +320,6 @@
             "null"
           ]
         },
-        "license": {
-          "description": "The md5 hash of the package\nThe license of the package",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "subdir": {
           "description": "The subdir of the channel",
           "type": [
@@ -429,13 +327,12 @@
             "null"
           ]
         },
-        "version": {
-          "description": "The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)",
+        "license": {
+          "description": "The md5 hash of the package\nThe license of the package",
           "type": [
             "string",
             "null"
-          ],
-          "default": null
+          ]
         }
       },
       "oneOf": [
@@ -477,70 +374,14 @@
         }
       ]
     },
-    "Target": {
-      "type": "object",
-      "properties": {
-        "buildDependencies": {
-          "description": "Build dependencies of the project",
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/$defs/PackageSpec"
-          }
-        },
-        "hostDependencies": {
-          "description": "Host dependencies of the project",
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/$defs/PackageSpec"
-          }
-        },
-        "runDependencies": {
-          "description": "Run dependencies of the project",
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/$defs/PackageSpec"
-          }
-        }
-      }
-    },
-    "Targets": {
-      "description": "A collect of targets including a default target.",
-      "type": "object",
-      "properties": {
-        "defaultTarget": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Target"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "targets": {
-          "description": "We use an [`OrderMap`] to preserve the order in which the items where\ndefined in the manifest.",
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/$defs/Target"
-          }
-        }
-      }
-    },
     "UrlSpec": {
       "type": "object",
       "properties": {
+        "url": {
+          "description": "The URL of the package",
+          "type": "string",
+          "format": "uri"
+        },
         "md5": {
           "description": "The md5 hash of the package",
           "type": [
@@ -563,16 +404,175 @@
             "string",
             "null"
           ]
-        },
-        "url": {
-          "description": "The URL of the package",
-          "type": "string",
-          "format": "uri"
         }
       },
       "required": [
         "url"
       ]
+    },
+    "GitSpec": {
+      "description": "A specification of a package from a git repository.",
+      "type": "object",
+      "properties": {
+        "git": {
+          "description": "The git url of the package which can contain git+ prefixes.",
+          "type": "string",
+          "format": "uri"
+        },
+        "rev": {
+          "description": "The git revision of the package",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GitReference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subdirectory": {
+          "description": "The git subdirectory of the package",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "git"
+      ]
+    },
+    "GitReference": {
+      "description": "A reference to a specific commit in a git repository.",
+      "oneOf": [
+        {
+          "description": "The HEAD commit of a branch.",
+          "type": "object",
+          "properties": {
+            "branch": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "branch"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "A specific tag.",
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tag"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "A specific commit.",
+          "type": "object",
+          "properties": {
+            "rev": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "rev"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "A default branch.",
+          "type": "string",
+          "const": "defaultBranch"
+        }
+      ]
+    },
+    "PathSpec": {
+      "description": "A specification of a package from a path",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "The path to the package",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "PinCompatibleSpec": {
+      "type": "object",
+      "properties": {
+        "lowerBound": {
+          "description": "A minimum pin to a version, using `x.x.x...` as syntax",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PinBound"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "upperBound": {
+          "description": "A pin to a version, using `x.x.x...` as syntax",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PinBound"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exact": {
+          "description": "If an exact pin is given, we pin the exact version & hash",
+          "type": "boolean"
+        },
+        "build": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "PinBound": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "expression": {
+              "$ref": "#/$defs/PinExpression"
+            }
+          },
+          "required": [
+            "expression"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "version"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PinExpression": {
+      "description": "A pin expression string like \"x\", \"x.x\", \"x.x.x\", etc.\n\nThis represents the number of version segments to pin.\nFor example, \"x.x\" means pin the major and minor version.",
+      "type": "string",
+      "pattern": "^x(\\.x)*$"
     }
   }
 }

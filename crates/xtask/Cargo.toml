@@ -8,7 +8,7 @@ publish = false
 clap = { workspace = true, features = ["derive", "std"] }
 fs-err = { workspace = true }
 pixi_build_types = { workspace = true, features = ["schemars"] }
-schemars = { workspace = true }
+schemars = { workspace = true, features = ["preserve_order"] }
 serde_json = { workspace = true }
 
 [dev-dependencies]
