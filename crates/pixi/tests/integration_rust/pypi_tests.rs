@@ -155,7 +155,11 @@ async fn pyproject_environment_markers_resolved() {
     setup_tracing();
 
     let simple = PyPIDatabase::new()
-        .with(PyPIPackage::new("numpy", "1.0.0").with_tag("cp311", "cp311", "manylinux1_x86_64"))
+        .with(PyPIPackage::new("nvidia-nccl-cu12", "1.0.0").with_tag(
+            "cp311",
+            "cp311",
+            "manylinux1_x86_64",
+        ))
         .into_simple_index()
         .unwrap();
 
@@ -191,7 +195,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "environment-markers"
 dependencies = [
-    "numpy; sys_platform == 'linux'"
+    "nvidia-nccl-cu12; sys_platform == 'linux'"
 ]
 
 [tool.pixi.workspace]
@@ -211,7 +215,7 @@ index-url = "{index_url}"
 
     let lock = pixi.update_lock_file().await.unwrap();
 
-    let numpy_req = Requirement::from_str("numpy; sys_platform == 'linux'").unwrap();
+    let numpy_req = Requirement::from_str("nvidia-nccl-cu12; sys_platform == 'linux'").unwrap();
     assert!(
         lock.contains_pep508_requirement("default", platform, numpy_req.clone()),
         "default environment should include numpy"
@@ -223,7 +227,11 @@ async fn pyproject_environment_markers_considered() {
     setup_tracing();
 
     let simple = PyPIDatabase::new()
-        .with(PyPIPackage::new("numpy", "1.0.0").with_tag("cp311", "cp311", "manylinux1_x86_64"))
+        .with(PyPIPackage::new("nvidia-nccl-cu12", "1.0.0").with_tag(
+            "cp311",
+            "cp311",
+            "manylinux1_x86_64",
+        ))
         .into_simple_index()
         .unwrap();
 
@@ -249,7 +257,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "environment-markers"
 dependencies = [
-    "numpy; sys_platform == 'linux'"
+    "nvidia-nccl-cu12; sys_platform == 'linux'"
 ]
 
 [tool.pixi.workspace]
@@ -269,7 +277,7 @@ index-url = "{index_url}"
 
     let lock = pixi.update_lock_file().await.unwrap();
 
-    let numpy_req = Requirement::from_str("numpy; sys_platform == 'linux'").unwrap();
+    let numpy_req = Requirement::from_str("nvidia-nccl-cu12; sys_platform == 'linux'").unwrap();
     assert!(
         !lock.contains_pep508_requirement("default", platform, numpy_req.clone()),
         "default environment should include numpy"
