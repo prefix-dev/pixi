@@ -163,25 +163,21 @@ async fn pyproject_environment_markers_resolved() {
         .into_simple_index()
         .unwrap();
 
-    let platform = Platform::current();
-    let platform_str = match platform {
-        Platform::Linux64 => "\"linux-64\"".into(),
-        _ => format!("\"linux-64\", \"{}\"", Platform::current().as_str()),
-    };
+    let platform1 = Platform::Linux64;
+    let platform2 = Platform::OsxArm64;
+    let platform_str = format!("\"{}\", \"{}\"", platform1, platform2);
 
     let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.11.0")
-            .with_subdir(platform)
+            .with_subdir(platform1)
             .finish(),
     );
-    if platform != Platform::Linux64 {
-        package_db.add_package(
-            Package::build("python", "3.11.0")
-                .with_subdir(Platform::Linux64)
-                .finish(),
-        );
-    }
+    package_db.add_package(
+        Package::build("python", "3.11.0")
+            .with_subdir(platform2)
+            .finish(),
+    );
     let channel = package_db.into_channel().await.unwrap();
     let channel_url = channel.url();
     let index_url = simple.index_url();
@@ -215,72 +211,14 @@ index-url = "{index_url}"
 
     let lock = pixi.update_lock_file().await.unwrap();
 
-    let numpy_req = Requirement::from_str("nvidia-nccl-cu12; sys_platform == 'linux'").unwrap();
+    let nccl_req = Requirement::from_str("nvidia-nccl-cu12; sys_platform == 'linux'").unwrap();
     assert!(
-        lock.contains_pep508_requirement("default", platform, numpy_req.clone()),
-        "default environment should include numpy"
+        lock.contains_pep508_requirement("default", platform1, nccl_req.clone()),
+        "default environment should include nccl for linux-64"
     );
-}
-
-#[tokio::test]
-async fn pyproject_environment_markers_considered() {
-    setup_tracing();
-
-    let simple = PyPIDatabase::new()
-        .with(PyPIPackage::new("nvidia-nccl-cu12", "1.0.0").with_tag(
-            "cp311",
-            "cp311",
-            "manylinux1_x86_64",
-        ))
-        .into_simple_index()
-        .unwrap();
-
-    let platform = Platform::OsxArm64;
-    let platform_str = platform.as_str();
-
-    let mut package_db = MockRepoData::default();
-    package_db.add_package(
-        Package::build("python", "3.11.0")
-            .with_subdir(platform)
-            .finish(),
-    );
-    let channel = package_db.into_channel().await.unwrap();
-    let channel_url = channel.url();
-    let index_url = simple.index_url();
-
-    let pyproject = format!(
-        r#"
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "environment-markers"
-dependencies = [
-    "nvidia-nccl-cu12; sys_platform == 'linux'"
-]
-
-[tool.pixi.workspace]
-channels = ["{channel_url}"]
-platforms = ["{platform_str}"]
-conda-pypi-map = {{}}
-
-[tool.pixi.dependencies]
-python = "==3.11.0"
-
-[tool.pixi.pypi-options]
-index-url = "{index_url}"
-"#,
-    );
-
-    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
-
-    let lock = pixi.update_lock_file().await.unwrap();
-
-    let numpy_req = Requirement::from_str("nvidia-nccl-cu12; sys_platform == 'linux'").unwrap();
     assert!(
-        !lock.contains_pep508_requirement("default", platform, numpy_req.clone()),
-        "default environment should include numpy"
+        !lock.contains_pep508_requirement("default", platform2, nccl_req.clone()),
+        "default environment shouldn't include nccl for osx-64"
     );
 }
 
