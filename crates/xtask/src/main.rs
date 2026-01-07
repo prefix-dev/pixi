@@ -67,8 +67,8 @@ mod tests {
         // Compare the schemas using similar-asserts
         // Note: We need to trim the committed schema to account for trailing newline
         similar_asserts::assert_eq!(
-            committed_schema_json.trim(),
-            generated_schema_json,
+            committed_schema_json.trim().replace("\r\n", "\n"),
+            generated_schema_json.trim().replace("\r\n", "\n"),
             "The committed schema does not match the generated schema.\nPlease run `cargo xtask generate-schema` to update the schema file."
         );
     }
