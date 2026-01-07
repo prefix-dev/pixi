@@ -29,7 +29,7 @@ To install `pixi` you can run the following command in your terminal:
         The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `%UserProfile%\.pixi\bin`.
         The command will also add `%UserProfile%\.pixi\bin` to your `PATH` environment variable, allowing you to invoke `pixi` from anywhere.
 
-Now restart your terminal or shell to make the installation effective.
+Now restart your terminal or shell to make the installation take effect.
 
 ??? question "Don't trust our link? Check the script!"
     You can check the installation `sh` script: [download](https://pixi.sh/install.sh) and the `ps1`: [download](https://pixi.sh/install.ps1).
@@ -121,16 +121,16 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 
     The installation script has several options that can be manipulated through environment variables.
 
-    | Variable             | Description                                                                        | Default Value         |
-    |----------------------|------------------------------------------------------------------------------------|-----------------------|
-    | `PIXI_VERSION`       | The version of Pixi getting installed, can be used to up- or down-grade.           | `latest`              |
-    | `PIXI_HOME`          | The location of the pixi home folder containing global environments and configs.   | `$HOME/.pixi`         |
-    | `PIXI_BIN_DIR`       | The location where the standalone pixi binary should be installed.                 | `$PIXI_HOME/bin`      |
-    | `PIXI_ARCH`          | The architecture the Pixi version was built for.                                   | `uname -m`            |
-    | `PIXI_NO_PATH_UPDATE`| If set the `$PATH` will not be updated to add `pixi` to it.                        |                       |
+    | Variable             | Description                                                                           | Default Value         |
+    |----------------------|---------------------------------------------------------------------------------------|-----------------------|
+    | `PIXI_VERSION`       | The version of Pixi getting installed, can be used to up- or down-grade.              | `latest`              |
+    | `PIXI_HOME`          | The location of the pixi home folder containing global environments and configs.      | `$HOME/.pixi`         |
+    | `PIXI_BIN_DIR`       | The location where the standalone pixi binary should be installed.                    | `$PIXI_HOME/bin`      |
+    | `PIXI_ARCH`          | The architecture the Pixi version was built for.                                      | `uname -m`            |
+    | `PIXI_NO_PATH_UPDATE`| If set the `$PATH` will not be updated to add `pixi` to it.                           |                       |
     | `PIXI_DOWNLOAD_URL`  | Overrides the download URL for the Pixi binary (useful for mirrors or custom builds). | GitHub releases, e.g. [linux-64](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-unknown-linux-musl.tar.gz)       |
-    | `NETRC`              | Path to a custom `.netrc` file for authentication with private repositories.       |                       |
-    | `TMP_DIR`            | The temporary directory the script uses to download to and unpack the binary from. | `/tmp`                |
+    | `NETRC`              | Path to a custom `.netrc` file for authentication with private repositories.          |                       |
+    | `TMP_DIR`            | The temporary directory the script uses to download to and unpack the binary from.    | `/tmp`                |
 
     For example, on Apple Silicon, you can force the installation of the x86 version:
     ```shell
@@ -253,7 +253,7 @@ Afterwards, restart the shell or source the shell config file.
     ```
 
 ## Uninstall
-Before un-installation you might want to delete any previous files pixi has installed.
+Before un-installation you might want to delete any files pixi managed.
 
 1. Remove any cached data:
     ```shell

@@ -1,7 +1,7 @@
 The source packages in the `[dev]` table are not built or installed into the pixi environment.
 The `build-dependencies`, `host-dependencies` and `run-dependencies` of those packages are installed into the pixi environment.
 
-Source dependencies in the `[dependencies]` section are build in an isolated environment and then installed into the workspace.
+Source dependencies in the `[dependencies]` section are build in their own isolated environment located at`.pixi/build` and the resulting conda package is then installed into the default environment.
 This means that the `build-` and `host-dependencies` will not be in the pixi environment.
 
 This document explains how you can use the `[dev]` table to depend on the development dependencies of a package.
@@ -10,24 +10,26 @@ This document explains how you can use the `[dev]` table to depend on the develo
 
 Assume a Rust package that you want to develop using Pixi.
 Then we add a `pixi.toml` manifest file:
+
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/pixi_build/dev/pixi.toml:minimal"
 ```
+
 Now you can use Pixi to build the package into a conda package:
 
 ```bash
 pixi build
 ```
 
-But because of the isolated build environments, the development dependencies such as `cargo` are not available in `pixi run`.
+Because of the isolation, the development dependencies such as `cargo` are not available in `pixi run`.
 
-To change that you can add `[dev]` table to the manifest file:
+To change that you can add a `[dev]` table to the manifest file:
 
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/pixi_build/dev/pixi.toml:dev"
 ```
 
-Now when you run `pixi install` the development dependencies will be installed into the pixi environment.
+Now when you run `pixi install` the development dependencies will be installed into the Pixi environment.
 This means that you can now use `cargo` in `pixi run`:
 
 ```bash
@@ -39,6 +41,7 @@ Thus, you can use them during development.
 
 ## Extended example
 This is a full `pixi.toml` example using the `[dev]` table:
+
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/pixi_build/dev/pixi.toml"
 ```

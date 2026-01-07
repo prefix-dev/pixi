@@ -38,6 +38,7 @@ indicatif = { workspace = true }
 is_executable = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
+miette-arborium = { version = "2.5.0", features = ["lang-toml"] }
 pathdiff = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_api = { workspace = true }

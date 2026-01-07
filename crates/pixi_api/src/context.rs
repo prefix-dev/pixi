@@ -100,18 +100,39 @@ impl<I: Interface> WorkspaceContext<I> {
         crate::workspace::workspace::channel::list(&self.workspace).await
     }
 
-    pub async fn add_channel(&self, options: ChannelOptions) -> miette::Result<()> {
-        crate::workspace::workspace::channel::add(&self.interface, self.workspace_mut()?, options)
-            .await
+    pub async fn add_channel(
+        &self,
+        options: ChannelOptions,
+        priority: Option<i32>,
+        prepend: bool,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::channel::add(
+            &self.interface,
+            self.workspace_mut()?,
+            options,
+            priority,
+            prepend,
+        )
+        .await
     }
 
-    pub async fn remove_channel(&self, options: ChannelOptions) -> miette::Result<()> {
+    pub async fn remove_channel(
+        &self,
+        options: ChannelOptions,
+        priority: Option<i32>,
+    ) -> miette::Result<()> {
         crate::workspace::workspace::channel::remove(
             &self.interface,
             self.workspace_mut()?,
             options,
+            priority,
         )
         .await
+    }
+
+    pub async fn set_channels(&self, options: ChannelOptions) -> miette::Result<()> {
+        crate::workspace::workspace::channel::set(&self.interface, self.workspace_mut()?, options)
+            .await
     }
 
     pub async fn list_platforms(&self) -> HashMap<EnvironmentName, Vec<Platform>> {
