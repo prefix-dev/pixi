@@ -159,7 +159,7 @@ impl DiscoveredBackend {
                 }
                 let source_dir = source_path
                     .parent()
-                    .expect("the recipe must live somewhere");
+                    .expect("the package.xml must live somewhere");
                 return Self::from_ros_package(
                     source_dir.to_path_buf(),
                     source_path,
@@ -182,9 +182,26 @@ impl DiscoveredBackend {
             return Ok(pixi);
         }
 
+        // Test whether we can discover as a ROS package.
+        let help_msg = if enabled_protocols.enable_pixi
+            && ROS_BACKEND_FILE_NAMES
+                .iter()
+                .any(|&f| source_path.join(f).is_file())
+        {
+            format!(
+                "ROS packages require you to specify the 'package.xml' file path directly, due to supporting more backends in the future. Or ensure that the source directory contains a valid manifest file: {}.",
+                KNOWN_MANIFEST_FILES.join(", ")
+            )
+        } else {
+            format!(
+                "Ensure that the source directory contains a valid manifest file: {}.",
+                KNOWN_MANIFEST_FILES.join(", ")
+            )
+        };
+
         Err(DiscoveryError::FailedToDiscover {
             path: source_path.to_string_lossy().to_string(),
-            help: generate_discovery_help(&source_path),
+            help: help_msg,
         })
     }
 
@@ -351,6 +368,11 @@ impl DiscoveredBackend {
                 )?));
             }
         }
+        tracing::trace!(
+            "No rattler-build manifests ({}) found in '{}'",
+            RATTLER_BUILD_FILE_NAMES.join(", "),
+            source_dir.display()
+        );
         Ok(None)
     }
 
@@ -383,41 +405,6 @@ impl DiscoveredBackend {
                 target_configuration: None,
             },
         })
-    }
-}
-
-/// Generate helpful suggestions for the FailedToDiscover error by scanning the directory.
-/// Returns a help message with suggestions based on what files are found.
-pub fn generate_discovery_help(source_path: &Path) -> String {
-    // Determine the directory to scan
-    let general_help = format!(
-        "Ensure the source contains `{}`, `{}`, or specify the manifest explicitly(e.g. {}).",
-        KNOWN_MANIFEST_FILES.join("`, `"),
-        RATTLER_BUILD_FILE_NAMES.join("`, `"),
-        ROS_BACKEND_FILE_NAMES.join("`, `")
-    );
-
-    let scan_dir = if source_path.is_dir() {
-        source_path
-    } else if let Some(parent) = source_path.parent() {
-        parent
-    } else {
-        return general_help;
-    };
-
-    // Check if package.xml exists
-    let has_package_xml = ROS_BACKEND_FILE_NAMES
-        .iter()
-        .any(|&file| scan_dir.join(file).is_file());
-
-    if has_package_xml {
-        format!(
-            "Found a `package.xml`, please add that to the dependency path, or add one of: `{}`, `{}` to the directory.",
-            KNOWN_MANIFEST_FILES.join("`, `"),
-            RATTLER_BUILD_FILE_NAMES.join("`, `")
-        )
-    } else {
-        general_help
     }
 }
 

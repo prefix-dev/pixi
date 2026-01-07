@@ -1,4 +1,4 @@
-use pixi_consts::consts::{KNOWN_MANIFEST_FILES, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES};
+use pixi_consts::consts::KNOWN_MANIFEST_FILES;
 use typed_path::{
     Utf8Component, Utf8Encoding, Utf8Path, Utf8PathBuf, Utf8TypedPath, Utf8TypedPathBuf,
 };
@@ -108,11 +108,7 @@ impl SourceAnchor {
 /// to the workspace root.
 fn is_known_manifest_file(path: Utf8TypedPath<'_>) -> bool {
     path.file_name()
-        .map(|name| {
-            KNOWN_MANIFEST_FILES.contains(&name)
-                || RATTLER_BUILD_FILE_NAMES.contains(&name)
-                || ROS_BACKEND_FILE_NAMES.contains(&name)
-        })
+        .map(|name| KNOWN_MANIFEST_FILES.contains(&name))
         .unwrap_or(false)
 }
 
