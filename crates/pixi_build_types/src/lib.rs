@@ -90,6 +90,9 @@ impl PixiBuildApiVersion {
             3 => BackendCapabilities {
                 ..Self(2).expected_backend_capabilities()
             },
+            4 => BackendCapabilities {
+                ..Self(3).expected_backend_capabilities()
+            },
             _ => BackendCapabilities::default(),
         }
     }
