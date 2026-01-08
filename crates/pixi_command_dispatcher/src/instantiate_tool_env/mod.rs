@@ -233,7 +233,7 @@ impl InstantiateToolEnvironmentSpec {
         else {
             return Err(CommandDispatcherError::Failed(
                 InstantiateToolEnvironmentError::NoMatchingBackends {
-                    build_backend: self.requirement,
+                    build_backend: Box::new(self.requirement),
                 },
             ));
         };
@@ -330,6 +330,6 @@ pub enum InstantiateToolEnvironmentError {
         "Modify the requirements on `{}` or contact the maintainers to ensure a dependency on `{}` is added.", .build_backend.0.as_normalized(), PIXI_BUILD_API_VERSION_NAME.as_normalized()
     ))]
     NoMatchingBackends {
-        build_backend: (PackageName, PixiSpec),
+        build_backend: Box<(PackageName, PixiSpec)>,
     },
 }

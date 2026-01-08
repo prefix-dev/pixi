@@ -1,0 +1,15 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+
+[dependencies]
+clap = { workspace = true, features = ["derive", "std"] }
+fs-err = { workspace = true }
+pixi_build_types = { workspace = true, features = ["schemars"] }
+schemars = { workspace = true, features = ["preserve_order"] }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+similar-asserts = "1.6"

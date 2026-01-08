@@ -1150,6 +1150,7 @@ pub async fn pin_and_checkout_url_reuses_cached_checkout() {
         url: "https://example.com/archive.tar.gz".parse().unwrap(),
         md5: None,
         sha256: Some(sha),
+        subdirectory: None,
     };
 
     let checkout = dispatcher
@@ -1183,11 +1184,13 @@ pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request()
         url: url.clone(),
         md5: None,
         sha256: None,
+        subdirectory: None,
     };
     let bad_spec = UrlSpec {
         url,
         md5: None,
         sha256: Some(Sha256::digest(b"pixi-url-bad-sha")),
+        subdirectory: None,
     };
 
     let (good, bad) = tokio::join!(
@@ -1220,6 +1223,7 @@ pub async fn pin_and_checkout_url_validates_cached_results() {
         url: url.clone(),
         md5: None,
         sha256: None,
+        subdirectory: None,
     };
 
     dispatcher
@@ -1231,6 +1235,7 @@ pub async fn pin_and_checkout_url_validates_cached_results() {
         url: url.clone(),
         md5: None,
         sha256: Some(Sha256::digest(b"pixi-url-bad-cache")),
+        subdirectory: None,
     };
 
     let err = dispatcher.checkout_url(bad_spec).await.unwrap_err();

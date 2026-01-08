@@ -6,7 +6,7 @@ use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_glob::GlobSet;
 use pixi_record::{PinnedSourceSpec, VariantValue};
-use pixi_spec::{SourceAnchor, SourceSpec};
+use pixi_spec::{SourceAnchor, SourceLocationSpec};
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use std::time::SystemTime;
 use std::{
@@ -56,9 +56,9 @@ pub struct BuildBackendMetadataSpec {
     /// The optional pinned location of the source code. If not provided, the
     /// location in the manifest is resolved.
     ///
-    /// This is passed as a hint. If the [`SourceSpec`] in the discovered
-    /// manifest does not match with the pinned source provided here, the one
-    /// in the manifest takes precedence and it is reresolved.
+    /// This is passed as a hint. If the [`pixi_spec::SourceSpec`] in the
+    /// discovered manifest does not match with the pinned source provided
+    /// here, the one in the manifest takes precedence and it is reresolved.
     ///
     /// See [`PinnedSourceSpec::matches_source_spec`] how the matching is done.
     pub preferred_build_source: Option<PinnedSourceSpec>,
@@ -134,27 +134,22 @@ impl BuildBackendMetadataSpec {
 
         // Determine the location of the source to build from.
         let manifest_source_anchor =
-            SourceAnchor::from(SourceSpec::from(self.manifest_source.clone()));
+            SourceAnchor::from(SourceLocationSpec::from(self.manifest_source.clone()));
         // `build_source` is still relative to the `manifest_source`
         let build_source_checkout = match &discovered_backend.init_params.build_source {
             None => None,
             Some(build_source) => {
                 // An out of tree source is provided. Resolve it against the manifest source.
                 let resolved_location = manifest_source_anchor.resolve(build_source.clone());
-                let resolved_source_build_spec = SourceSpec {
-                    location: resolved_location.clone(),
-                };
 
                 // Check if we have a preferred build source that matches this same location
                 match &self.preferred_build_source {
-                    Some(pinned) if pinned.matches_source_spec(&resolved_source_build_spec) => {
-                        Some(
-                            command_dispatcher
-                                .checkout_pinned_source(pinned.clone())
-                                .await
-                                .map_err_with(BuildBackendMetadataError::SourceCheckout)?,
-                        )
-                    }
+                    Some(pinned) if pinned.matches_source_spec(&resolved_location) => Some(
+                        command_dispatcher
+                            .checkout_pinned_source(pinned.clone())
+                            .await
+                            .map_err_with(BuildBackendMetadataError::SourceCheckout)?,
+                    ),
                     _ => Some(
                         command_dispatcher
                             .pin_and_checkout(resolved_location)
