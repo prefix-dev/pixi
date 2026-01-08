@@ -1435,7 +1435,7 @@ packages:
 - pypi: ./ribasim-test
   name: ribasim-test
   version: 2026.1.0rc1
-  sha256: 1a59af45e06e62d614c20c80fbff9194349c29d544b34399040491b5f8a4493a
+  sha256: 14ea5910b169a746b813fdd6b4cc9aadbbb69b8380b778262bf574c49e83f891
   requires_dist:
   - pandas>=2.2
   - tomli>=2.0
@@ -1443,10 +1443,10 @@ packages:
   - pytest ; extra == 'tests'
   - pytest-xdist ; extra == 'tests'
   - pytest-cov ; extra == 'tests'
-  - jinja2 ; extra == 'delwaq'
-  - networkx ; extra == 'delwaq'
   - ribasim-test[tests] ; extra == 'all'
   - ribasim-test[delwaq] ; extra == 'all'
+  - jinja2 ; extra == 'delwaq'
+  - networkx ; extra == 'delwaq'
   requires_python: '>=3.12'
 - pypi: ./setup-project
   name: setup-project
