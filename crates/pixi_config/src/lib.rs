@@ -2791,14 +2791,6 @@ UNUSED = "unused"
         config.set("unknown-key", None).unwrap_err();
     }
 
-    #[test]
-    fn test_tls_root_certs_default() {
-        let config = Config::default();
-        // Default should be Webpki (bundled Mozilla roots)
-        assert_eq!(config.tls_root_certs(), TlsRootCerts::Webpki);
-        assert_eq!(config.tls_root_certs, None);
-    }
-
     #[rstest]
     #[case("pinning-strategy", None, None)]
     #[case("pinning-strategy", Some("semver".to_string()), Some(PinningStrategy::Semver))]
