@@ -4,14 +4,12 @@
 //! 1. Read metadata from local pyproject.toml files
 //! 2. Compare locked metadata against current source tree metadata
 use std::collections::BTreeSet;
-use std::path::Path;
 use std::str::FromStr;
 
 use pep440_rs::{Version, VersionSpecifiers};
 use pep508_rs::Requirement;
 use rattler_lock::PypiPackageData;
 use thiserror::Error;
-use uv_pypi_types::MetadataError;
 
 /// Metadata extracted from a local package source tree.
 #[derive(Debug, Clone)]
@@ -29,68 +27,9 @@ pub struct LocalPackageMetadata {
 /// Error that can occur when reading metadata from a source tree.
 #[derive(Debug, Error)]
 pub enum MetadataReadError {
-    /// No pyproject.toml file found in the directory.
-    #[error("no pyproject.toml found")]
-    NoPyprojectToml,
-
-    /// The metadata contains dynamic fields that require a build.
-    #[error("metadata is dynamic: {0}")]
-    DynamicMetadata(&'static str),
-
     /// Failed to parse the pyproject.toml file.
     #[error("failed to parse pyproject.toml: {0}")]
     ParseError(String),
-
-    /// IO error reading files.
-    #[error("failed to read pyproject.toml: {0}")]
-    IoError(#[from] std::io::Error),
-}
-
-/// A clone-friendly version of MetadataReadError for caching.
-///
-/// This converts IoError to a string representation so the result can be cached
-/// and shared across platforms without requiring Arc<Mutex<...>>.
-#[derive(Debug, Clone)]
-pub enum CachedMetadataError {
-    /// No pyproject.toml file found in the directory.
-    NoPyprojectToml,
-    /// The metadata contains dynamic fields that require a build.
-    DynamicMetadata(&'static str),
-    /// Failed to parse or read the pyproject.toml file.
-    OtherError(String),
-}
-
-impl From<MetadataReadError> for CachedMetadataError {
-    fn from(err: MetadataReadError) -> Self {
-        match err {
-            MetadataReadError::NoPyprojectToml => CachedMetadataError::NoPyprojectToml,
-            MetadataReadError::DynamicMetadata(field) => {
-                CachedMetadataError::DynamicMetadata(field)
-            }
-            MetadataReadError::ParseError(msg) => CachedMetadataError::OtherError(msg),
-            MetadataReadError::IoError(e) => {
-                CachedMetadataError::OtherError(format!("IO error: {e}"))
-            }
-        }
-    }
-}
-
-/// Cached result of reading static metadata from a local package.
-pub type CachedMetadataResult = Result<LocalPackageMetadata, CachedMetadataError>;
-
-impl From<MetadataError> for MetadataReadError {
-    fn from(err: MetadataError) -> Self {
-        match err {
-            MetadataError::DynamicField(field) => MetadataReadError::DynamicMetadata(field),
-            MetadataError::FieldNotFound(field) => {
-                MetadataReadError::ParseError(format!("missing field: {field}"))
-            }
-            MetadataError::PoetrySyntax => MetadataReadError::ParseError(
-                "poetry syntax detected without project.dependencies".to_string(),
-            ),
-            other => MetadataReadError::ParseError(other.to_string()),
-        }
-    }
 }
 
 /// The result of comparing locked metadata against current metadata.
@@ -114,102 +53,6 @@ pub struct RequiresDistDiff {
     pub added: Vec<Requirement>,
     /// Dependencies that were removed.
     pub removed: Vec<Requirement>,
-}
-
-/// Fast path: Try to read metadata directly from pyproject.toml.
-///
-/// This reads the pyproject.toml file and extracts:
-/// - `project.dependencies` (requires_dist)
-/// - `project.version`
-/// - `project.requires-python`
-///
-/// Returns an error if:
-/// - No pyproject.toml exists
-/// - The dependencies or optional-dependencies are marked as dynamic
-/// - The file cannot be parsed
-pub fn read_static_metadata(directory: &Path) -> Result<LocalPackageMetadata, MetadataReadError> {
-    let pyproject_path = directory.join("pyproject.toml");
-
-    if !pyproject_path.exists() {
-        return Err(MetadataReadError::NoPyprojectToml);
-    }
-
-    let contents = fs_err::read_to_string(&pyproject_path)?;
-
-    // Parse TOML once for version and requires-python extraction
-    let toml: toml_edit::DocumentMut = contents
-        .parse()
-        .map_err(|e| MetadataReadError::ParseError(format!("invalid TOML: {e}")))?;
-
-    // Extract version and requires-python from the already-parsed TOML
-    let (version, requires_python) = extract_version_and_requires_python(&toml)?;
-
-    // Use uv's parser which handles PEP 621 pyproject.toml files for dependencies
-    // This does its own internal parsing but handles complex PEP 621 cases
-    let pyproject_toml = uv_pypi_types::PyProjectToml::from_toml(&contents)?;
-    let requires_dist = uv_pypi_types::RequiresDist::from_pyproject_toml(pyproject_toml)?;
-
-    // Convert uv requirements to pep508_rs requirements
-    let requires_dist_converted: Vec<Requirement> = requires_dist
-        .requires_dist
-        .iter()
-        .map(|req| {
-            // Convert uv_pep508::Requirement to pep508_rs::Requirement
-            // We need to convert via string representation
-            let req_str = req.to_string();
-            req_str
-                .parse::<Requirement>()
-                .map_err(|e| MetadataReadError::ParseError(format!("invalid requirement: {e}")))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(LocalPackageMetadata {
-        version,
-        requires_dist: requires_dist_converted,
-        requires_python,
-        is_version_dynamic: requires_dist.dynamic,
-    })
-}
-
-/// Extract version and requires-python from an already-parsed pyproject.toml.
-///
-/// This avoids re-parsing the TOML file multiple times.
-fn extract_version_and_requires_python(
-    toml: &toml_edit::DocumentMut,
-) -> Result<(Option<Version>, Option<VersionSpecifiers>), MetadataReadError> {
-    // Check if version is dynamic
-    let version_is_dynamic = toml
-        .get("project")
-        .and_then(|p| p.get("dynamic"))
-        .and_then(|d| d.as_array())
-        .is_some_and(|arr| arr.iter().any(|item| item.as_str() == Some("version")));
-
-    // Extract version (if not dynamic)
-    let version = if version_is_dynamic {
-        None
-    } else {
-        toml.get("project")
-            .and_then(|p| p.get("version"))
-            .and_then(|v| v.as_str())
-            .map(|v| {
-                v.parse::<Version>()
-                    .map_err(|e| MetadataReadError::ParseError(format!("invalid version: {e}")))
-            })
-            .transpose()?
-    };
-
-    // Extract requires-python
-    let requires_python = toml
-        .get("project")
-        .and_then(|p| p.get("requires-python"))
-        .and_then(|v| v.as_str())
-        .map(|rp| {
-            rp.parse::<VersionSpecifiers>()
-                .map_err(|e| MetadataReadError::ParseError(format!("invalid requires-python: {e}")))
-        })
-        .transpose()?;
-
-    Ok((version, requires_python))
 }
 
 /// Compare locked metadata against current metadata from the source tree.

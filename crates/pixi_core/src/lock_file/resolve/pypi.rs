@@ -396,7 +396,6 @@ pub async fn resolve_pypi(
 
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
 
-    // Create index locations (cheap - just URL parsing)
     let index_locations =
         pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?;
 
@@ -414,7 +413,6 @@ pub async fn resolve_pypi(
         &index_locations,
     );
 
-    // Create registry client (disk-cached HTTP responses, cheap to construct)
     let registry_client = {
         let base_client_builder = BaseClientBuilder::default()
             .allow_insecure_host(allow_insecure_hosts)
@@ -453,7 +451,6 @@ pub async fn resolve_pypi(
                 .collect::<Result<Vec<_>, _>>()
         }).transpose()?.unwrap_or_default();
 
-    // Create flat index (network requests are disk-cached by FlatIndexClient)
     let flat_index = {
         let flat_index_client = FlatIndexClient::new(
             registry_client.cached_client(),
@@ -497,7 +494,6 @@ pub async fn resolve_pypi(
         ..Options::default()
     };
 
-    // Create dependency metadata (cheap - just default)
     let dependency_metadata = DependencyMetadata::default();
 
     let config_settings = ConfigSettings::default();

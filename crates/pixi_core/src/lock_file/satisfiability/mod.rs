@@ -50,7 +50,7 @@ use uv_configuration::RAYON_INITIALIZE;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
 use uv_distribution_types::{RequirementSource, RequiresPython};
 use uv_git_types::GitReference;
-use uv_pypi_types::ParsedUrlError;
+use uv_pypi_types::{ParsedUrlError, PyProjectToml};
 
 use super::{
     CondaPrefixUpdater, PixiRecordsByName, PypiRecord, PypiRecordsByName,
@@ -247,7 +247,7 @@ impl Display for SourceTreeHashMismatch {
 /// Describes what metadata changed for a local package.
 #[derive(Debug, Error)]
 pub enum LocalMetadataMismatch {
-    #[error("dependencies changed")]
+    #[error("dependencies changed - added: {added:?}, removed: {removed:?}")]
     RequiresDist {
         added: Vec<pep508_rs::Requirement>,
         removed: Vec<pep508_rs::Requirement>,
@@ -811,9 +811,6 @@ pub struct VerifySatisfiabilityContext<'a> {
     pub config: &'a Config,
     pub project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     pub build_caches: &'a mut HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>>,
-    /// Cache for static metadata reads, keyed by absolute path.
-    /// This avoids re-reading and re-parsing pyproject.toml for each platform.
-    pub static_metadata_cache: &'a mut HashMap<PathBuf, pypi_metadata::CachedMetadataResult>,
 }
 
 /// Verifies that the package requirements of the specified `environment` can be
@@ -2057,24 +2054,45 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         };
 
                         if absolute_path.is_dir() {
-                            // Use metadata comparison with caching
-                            // This compares requires_dist, version, and requires_python
-                            // from the pyproject.toml against the locked values.
-                            // The cache avoids re-reading pyproject.toml for each platform.
-                            let cache_key = absolute_path.to_path_buf();
-                            let cached_result = ctx
-                                .static_metadata_cache
-                                .entry(cache_key)
-                                .or_insert_with(|| {
-                                    pypi_metadata::read_static_metadata(&absolute_path)
-                                        .map_err(pypi_metadata::CachedMetadataError::from)
-                                });
+                            // Read metadata using UV's DistributionDatabase.
+                            // This first tries database.requires_dist() for static extraction,
+                            // then falls back to building the wheel if needed.
+                            let uv_ctx = ctx
+                                .uv_context
+                                .get_or_try_init(|| UvResolutionContext::from_config(ctx.config))
+                                .map_err(|e| {
+                                    Box::new(PlatformUnsat::FailedToReadLocalMetadata(
+                                        record.0.name.clone(),
+                                        format!("failed to initialize UV context: {e}"),
+                                    ))
+                                })?;
 
-                            match cached_result {
+                            let mut build_ctx = BuildMetadataContext {
+                                environment: ctx.environment,
+                                locked_pixi_records,
+                                platform: ctx.platform,
+                                project_root: ctx.project_root,
+                                uv_context: uv_ctx,
+                                project_env_vars: &ctx.project_env_vars,
+                                command_dispatcher: ctx.command_dispatcher.clone(),
+                                build_caches: ctx.build_caches,
+                                building_pixi_records: &building_pixi_records,
+                            };
+
+                            match read_local_package_metadata(
+                                &absolute_path,
+                                &record.0.name,
+                                record.0.editable,
+                                &mut build_ctx,
+                            )
+                            .await
+                            {
                                 Ok(current_metadata) => {
-                                    if let Some(mismatch) =
-                                        pypi_metadata::compare_metadata(&record.0, current_metadata)
-                                    {
+                                    // Compare metadata with locked metadata
+                                    if let Some(mismatch) = pypi_metadata::compare_metadata(
+                                        &record.0,
+                                        &current_metadata,
+                                    ) {
                                         let local_mismatch = match mismatch {
                                             pypi_metadata::MetadataMismatch::RequiresDist(diff) => {
                                                 LocalMetadataMismatch::RequiresDist {
@@ -2102,144 +2120,11 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                         });
                                     }
                                 }
-                                Err(pypi_metadata::CachedMetadataError::DynamicMetadata(field)) => {
-                                    // Metadata is dynamic - we cannot verify it statically.
-                                    tracing::debug!(
-                                        "Package {} has dynamic {} - building metadata with UV",
-                                        record.0.name,
-                                        field
-                                    );
-
-                                    let uv_ctx = ctx
-                                        .uv_context
-                                        .get_or_try_init(|| {
-                                            UvResolutionContext::from_config(ctx.config)
-                                        })
-                                        .map_err(|e| {
-                                            Box::new(PlatformUnsat::FailedToReadLocalMetadata(
-                                                record.0.name.clone(),
-                                                format!("failed to initialize UV context: {e}"),
-                                            ))
-                                        })?;
-
-                                    // Build metadata using UV
-                                    let mut build_ctx = BuildMetadataContext {
-                                        environment: ctx.environment,
-                                        locked_pixi_records,
-                                        platform: ctx.platform,
-                                        project_root: ctx.project_root,
-                                        uv_context: uv_ctx,
-                                        project_env_vars: &ctx.project_env_vars,
-                                        command_dispatcher: ctx.command_dispatcher.clone(),
-                                        build_caches: ctx.build_caches,
-                                        building_pixi_records: &building_pixi_records,
-                                    };
-                                    match build_dynamic_metadata(
-                                        &absolute_path,
-                                        &record.0.name,
-                                        record.0.editable,
-                                        &mut build_ctx,
-                                    )
-                                    .await
-                                    {
-                                        Ok(built_metadata) => {
-                                            // Compare built metadata with locked metadata
-                                            if let Some(mismatch) = pypi_metadata::compare_metadata(
-                                                &record.0,
-                                                &built_metadata,
-                                            ) {
-                                                delayed_pypi_error.get_or_insert_with(|| {
-                                                    Box::new(
-                                                        PlatformUnsat::LocalPackageMetadataMismatch(
-                                                            record.0.name.clone(),
-                                                            mismatch.into(),
-                                                        ),
-                                                    )
-                                                });
-                                            }
-                                        }
-                                        Err(e) => {
-                                            // Building failed - report as error
-                                            delayed_pypi_error.get_or_insert_with(|| {
-                                                Box::new(PlatformUnsat::FailedToReadLocalMetadata(
-                                                    record.0.name.clone(),
-                                                    format!("failed to build metadata: {e}"),
-                                                ))
-                                            });
-                                        }
-                                    }
-                                }
-                                Err(pypi_metadata::CachedMetadataError::NoPyprojectToml) => {
-                                    // No pyproject.toml - we cannot verify metadata statically.
-                                    // Build metadata using UV
-                                    tracing::debug!(
-                                        "Package {} has no pyproject.toml - building metadata with UV",
-                                        record.0.name
-                                    );
-
-                                    let uv_ctx = ctx
-                                        .uv_context
-                                        .get_or_try_init(|| {
-                                            UvResolutionContext::from_config(ctx.config)
-                                        })
-                                        .map_err(|e| {
-                                            Box::new(PlatformUnsat::FailedToReadLocalMetadata(
-                                                record.0.name.clone(),
-                                                format!("failed to initialize UV context: {e}"),
-                                            ))
-                                        })?;
-
-                                    // Build metadata using UV
-                                    let mut build_ctx = BuildMetadataContext {
-                                        environment: ctx.environment,
-                                        locked_pixi_records,
-                                        platform: ctx.platform,
-                                        project_root: ctx.project_root,
-                                        uv_context: uv_ctx,
-                                        project_env_vars: &ctx.project_env_vars,
-                                        command_dispatcher: ctx.command_dispatcher.clone(),
-                                        build_caches: ctx.build_caches,
-                                        building_pixi_records: &building_pixi_records,
-                                    };
-                                    match build_dynamic_metadata(
-                                        &absolute_path,
-                                        &record.0.name,
-                                        record.0.editable,
-                                        &mut build_ctx,
-                                    )
-                                    .await
-                                    {
-                                        Ok(built_metadata) => {
-                                            // Compare built metadata with locked metadata
-                                            if let Some(mismatch) = pypi_metadata::compare_metadata(
-                                                &record.0,
-                                                &built_metadata,
-                                            ) {
-                                                delayed_pypi_error.get_or_insert_with(|| {
-                                                    Box::new(
-                                                        PlatformUnsat::LocalPackageMetadataMismatch(
-                                                            record.0.name.clone(),
-                                                            mismatch.into(),
-                                                        ),
-                                                    )
-                                                });
-                                            }
-                                        }
-                                        Err(e) => {
-                                            delayed_pypi_error.get_or_insert_with(|| {
-                                                Box::new(PlatformUnsat::FailedToBuildLocalMetadata(
-                                                    record.0.name.clone(),
-                                                    e.to_string(),
-                                                ))
-                                            });
-                                        }
-                                    }
-                                }
-                                Err(pypi_metadata::CachedMetadataError::OtherError(err)) => {
+                                Err(e) => {
                                     delayed_pypi_error.get_or_insert_with(|| {
                                         Box::new(PlatformUnsat::FailedToReadLocalMetadata(
                                             record.0.name.clone(),
-                                            err.clone(),
+                                            format!("failed to read metadata: {e}"),
                                         ))
                                     });
                                 }
@@ -2404,11 +2289,12 @@ struct BuildMetadataContext<'a> {
     building_pixi_records: &'a Result<PixiRecordsByName, PlatformUnsat>,
 }
 
-/// Build metadata for a directory source distribution using UV.
+/// Read metadata for a local directory package using UV's DistributionDatabase.
 ///
-/// This creates the necessary UV infrastructure (RegistryClient, LazyBuildDispatch,
-/// DistributionDatabase) and builds the wheel metadata for the given directory.
-async fn build_dynamic_metadata(
+/// This first tries to extract metadata statically via `database.requires_dist()`,
+/// which parses the pyproject.toml without building. If static extraction fails
+/// (e.g., dynamic dependencies), it falls back to building the wheel metadata.
+async fn read_local_package_metadata(
     directory: &Path,
     package_name: &pep508_rs::PackageName,
     editable: bool,
@@ -2446,7 +2332,6 @@ async fn build_dynamic_metadata(
     let cache_key = BuildCacheKey::new(ctx.environment.name().clone(), best_platform);
     let cache = ctx.build_caches.entry(cache_key).or_default();
 
-    // Create index locations (cheap - just URL parsing)
     let index_locations = pypi_options_to_index_locations(&pypi_options, ctx.project_root)
         .map_err(|e| {
             PlatformUnsat::FailedToReadLocalMetadata(
@@ -2455,7 +2340,6 @@ async fn build_dynamic_metadata(
             )
         })?;
 
-    // Create build options (cheap - just config conversion)
     let build_options = pypi_options_to_build_options(
         &pypi_options.no_build.clone().unwrap_or_default(),
         &pypi_options.no_binary.clone().unwrap_or_default(),
@@ -2467,7 +2351,6 @@ async fn build_dynamic_metadata(
         )
     })?;
 
-    // Create dependency metadata (cheap - just default)
     let dependency_metadata = DependencyMetadata::default();
 
     // Configure insecure hosts
@@ -2477,7 +2360,6 @@ async fn build_dynamic_metadata(
         &index_locations,
     );
 
-    // Create registry client (disk-cached HTTP responses, cheap to construct)
     let registry_client = {
         let base_client_builder = BaseClientBuilder::default()
             .allow_insecure_host(allow_insecure_hosts.clone())
@@ -2509,7 +2391,6 @@ async fn build_dynamic_metadata(
             )
         })?;
 
-    // Create flat index (network requests are disk-cached by FlatIndexClient)
     let flat_index = {
         let flat_index_client = FlatIndexClient::new(
             registry_client.cached_client(),
@@ -2612,6 +2493,92 @@ async fn build_dynamic_metadata(
         &registry_client,
         &lazy_build_dispatch,
         ctx.uv_context.concurrency.downloads,
+    );
+
+    // Try to read pyproject.toml and use requires_dist() first
+    let pyproject_path = directory.join("pyproject.toml");
+    if let Ok(contents) = fs_err::read_to_string(&pyproject_path) {
+        // Parse with toml_edit for version/requires_python
+        if let Ok(toml) = contents.parse::<toml_edit::DocumentMut>() {
+            // Extract version and requires_python
+            let version_is_dynamic = toml
+                .get("project")
+                .and_then(|p| p.get("dynamic"))
+                .and_then(|d| d.as_array())
+                .is_some_and(|arr| arr.iter().any(|item| item.as_str() == Some("version")));
+
+            let version = if version_is_dynamic {
+                None
+            } else {
+                toml.get("project")
+                    .and_then(|p| p.get("version"))
+                    .and_then(|v| v.as_str())
+                    .and_then(|v| v.parse::<pep440_rs::Version>().ok())
+            };
+
+            let requires_python = toml
+                .get("project")
+                .and_then(|p| p.get("requires-python"))
+                .and_then(|v| v.as_str())
+                .and_then(|rp| rp.parse::<VersionSpecifiers>().ok());
+
+            // Parse pyproject.toml with UV's parser for requires_dist
+            if let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents) {
+                // Try to extract requires_dist statically using UV's database
+                match database.requires_dist(directory, &pyproject_toml).await {
+                    Ok(Some(requires_dist)) => {
+                        tracing::debug!(
+                            "Package {} - extracted requires_dist using database.requires_dist()",
+                            package_name
+                        );
+
+                        // Convert uv requirements to pep508_rs requirements
+                        let requires_dist_converted: Result<Vec<pep508_rs::Requirement>, _> =
+                            requires_dist
+                                .requires_dist
+                                .iter()
+                                .map(|req| {
+                                    let req_str = req.to_string();
+                                    req_str.parse::<pep508_rs::Requirement>().map_err(|e| {
+                                        PlatformUnsat::FailedToReadLocalMetadata(
+                                            package_name.clone(),
+                                            format!("Invalid requirement: {e}"),
+                                        )
+                                    })
+                                })
+                                .collect();
+
+                        if let Ok(requires_dist_vec) = requires_dist_converted {
+                            return Ok(pypi_metadata::LocalPackageMetadata {
+                                version,
+                                requires_dist: requires_dist_vec,
+                                requires_python,
+                                is_version_dynamic: requires_dist.dynamic,
+                            });
+                        }
+                    }
+                    Ok(None) => {
+                        tracing::debug!(
+                            "Package {} - requires_dist() returned None, falling back to build",
+                            package_name
+                        );
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            "Package {} - requires_dist() failed: {}, falling back to build",
+                            package_name,
+                            e
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // Fall back to building the wheel metadata
+    tracing::debug!(
+        "Package {} - building wheel metadata with get_or_build_wheel_metadata()",
+        package_name
     );
 
     // Create the directory source dist
@@ -2970,11 +2937,6 @@ mod tests {
         // Create build caches for sharing between satisfiability and resolution
         let mut build_caches: HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>> = HashMap::new();
 
-        // Create static metadata cache for sharing across platforms
-        // This avoids re-reading pyproject.toml files for each platform
-        let mut static_metadata_cache: HashMap<PathBuf, pypi_metadata::CachedMetadataResult> =
-            HashMap::new();
-
         // Verify individual environment satisfiability
         for env in project.environments() {
             let locked_env = lock_file
@@ -2993,7 +2955,6 @@ mod tests {
                     config: project.config(),
                     project_env_vars: project.env_vars().clone(),
                     build_caches: &mut build_caches,
-                    static_metadata_cache: &mut static_metadata_cache,
                 };
                 let verified_env = verify_platform_satisfiability(&mut ctx, locked_env)
                     .await

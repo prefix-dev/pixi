@@ -15,5 +15,6 @@ test = "pytest ."
 python = "*"
 
 [pypi-dependencies]
-minimal-project = { path = "./minimal-project" }
-setup-project = { path = "./setup-project" }
+# minimal-project = { path = "./minimal-project" }
+# setup-project = { path = "./setup-project" }
+ribasim-test = { path = "./ribasim-test", extras = ["all"] }
