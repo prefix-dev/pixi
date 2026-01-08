@@ -28,13 +28,17 @@ use pixi_pypi_spec::PypiPackageName;
 #[derive(Parser, Debug, Default, Clone)]
 pub struct WorkspaceConfig {
     /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
-    #[arg(long, short, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    #[arg(long, short, global = true, conflicts_with = "name", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub manifest_path: Option<PathBuf>,
 
     /// Backend override for testing purposes. This field is ignored by clap
     /// and should only be set programmatically in tests.
     #[clap(skip)]
     pub backend_override: Option<BackendOverride>,
+
+    /// Name of the workspace
+    #[arg(long, short, global = true, conflicts_with = "manifest_path", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    pub name: Option<String>,
 }
 
 impl WorkspaceConfig {
