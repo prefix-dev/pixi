@@ -811,6 +811,9 @@ pub struct VerifySatisfiabilityContext<'a> {
     pub config: &'a Config,
     pub project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     pub build_caches: &'a mut HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>>,
+    /// Cache for static metadata extracted from pyproject.toml files.
+    /// This is shared across platforms since static metadata is platform-independent.
+    pub static_metadata_cache: &'a mut HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
 }
 
 /// Verifies that the package requirements of the specified `environment` can be
@@ -2077,6 +2080,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                 command_dispatcher: ctx.command_dispatcher.clone(),
                                 build_caches: ctx.build_caches,
                                 building_pixi_records: &building_pixi_records,
+                                static_metadata_cache: ctx.static_metadata_cache,
                             };
 
                             match read_local_package_metadata(
@@ -2287,6 +2291,7 @@ struct BuildMetadataContext<'a> {
     command_dispatcher: CommandDispatcher,
     build_caches: &'a mut HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>>,
     building_pixi_records: &'a Result<PixiRecordsByName, PlatformUnsat>,
+    static_metadata_cache: &'a mut HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
 }
 
 /// Read metadata for a local directory package using UV's DistributionDatabase.
@@ -2294,12 +2299,20 @@ struct BuildMetadataContext<'a> {
 /// This first tries to extract metadata statically via `database.requires_dist()`,
 /// which parses the pyproject.toml without building. If static extraction fails
 /// (e.g., dynamic dependencies), it falls back to building the wheel metadata.
+///
+/// Static metadata is cached across platforms since it doesn't depend on the platform.
 async fn read_local_package_metadata(
     directory: &Path,
     package_name: &pep508_rs::PackageName,
     editable: bool,
     ctx: &mut BuildMetadataContext<'_>,
 ) -> Result<pypi_metadata::LocalPackageMetadata, PlatformUnsat> {
+    // Check if we already have static metadata cached for this directory
+    if let Some(cached_metadata) = ctx.static_metadata_cache.get(directory) {
+        tracing::debug!("Package {} - using cached static metadata", package_name);
+        return Ok(cached_metadata.clone());
+    }
+
     let pypi_options = ctx.environment.pypi_options();
 
     // Find the Python interpreter from locked records
@@ -2549,12 +2562,16 @@ async fn read_local_package_metadata(
                                 .collect();
 
                         if let Ok(requires_dist_vec) = requires_dist_converted {
-                            return Ok(pypi_metadata::LocalPackageMetadata {
+                            let metadata = pypi_metadata::LocalPackageMetadata {
                                 version,
                                 requires_dist: requires_dist_vec,
                                 requires_python,
                                 is_version_dynamic: requires_dist.dynamic,
-                            });
+                            };
+                            // Cache the static metadata for reuse on other platforms
+                            ctx.static_metadata_cache
+                                .insert(directory.to_path_buf(), metadata.clone());
+                            return Ok(metadata);
                         }
                     }
                     Ok(None) => {
@@ -2937,6 +2954,10 @@ mod tests {
         // Create build caches for sharing between satisfiability and resolution
         let mut build_caches: HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>> = HashMap::new();
 
+        // Create static metadata cache for sharing across platforms
+        let mut static_metadata_cache: HashMap<PathBuf, pypi_metadata::LocalPackageMetadata> =
+            HashMap::new();
+
         // Verify individual environment satisfiability
         for env in project.environments() {
             let locked_env = lock_file
@@ -2955,6 +2976,7 @@ mod tests {
                     config: project.config(),
                     project_env_vars: project.env_vars().clone(),
                     build_caches: &mut build_caches,
+                    static_metadata_cache: &mut static_metadata_cache,
                 };
                 let verified_env = verify_platform_satisfiability(&mut ctx, locked_env)
                     .await
