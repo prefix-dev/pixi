@@ -1,0 +1,39 @@
+[project]
+dependencies = [
+  # "datacompy >=0.16",
+  # "geopandas >=1.0",
+  # "matplotlib >=3.9",
+  # "netCDF4 >=1.7.1",
+  # "numpy >=2.0",
+  # "packaging >=23.0",
+  "pandas >=2.2",
+  # "pandera >=0.25",
+  # "pyarrow >=17.0",
+  # "pydantic >=2.0",
+  # "pyogrio >=0.8",
+  # "shapely >=2.0",
+  "tomli >=2.0",
+  "tomli-w >=1.0",
+  # "xarray >=2023.11",
+]
+description = "Test project for optional dependency flattening"
+name = "ribasim-test"
+requires-python = ">=3.12"
+version = "2026.1.0-rc1"
+# dynamic = ["version"]
+
+[project.optional-dependencies]
+tests = [
+  "pytest",
+  "pytest-xdist",
+  "pytest-cov",
+  # "ribasim_testmodels",
+  # "teamcity-messages",
+]
+# netcdf = ["xugrid"]
+all = ["ribasim-test[tests]", "ribasim-test[delwaq]"]
+delwaq = ["jinja2", "networkx"]
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
