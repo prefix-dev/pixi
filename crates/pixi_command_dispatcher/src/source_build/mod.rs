@@ -10,7 +10,7 @@ use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_path::AbsPath;
-use pixi_record::{PinnedSourceSpec, PixiRecord, VariantValue};
+use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec, PixiRecord, VariantValue};
 use pixi_spec::{SourceAnchor, SourceLocationSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageRecord,
@@ -255,7 +255,7 @@ impl SourceBuildSpec {
         // manifest so we check out the correct directory.
         let mut build_source = self.source.build_source().cloned();
         if let (Some(PinnedSourceSpec::Git(pinned_git)), Some(SourceLocationSpec::Git(git_spec))) = (
-            build_source.as_mut(),
+            build_source.as_mut().map(PinnedBuildSourceSpec::pinned_mut),
             discovered_backend.init_params.build_source.clone(),
         ) && pinned_git.source.subdirectory.is_empty()
         {
@@ -268,7 +268,7 @@ impl SourceBuildSpec {
         // 3. Manifest source. Just assume that source is located at the same directory as the manifest.
         let build_source_checkout = if let Some(pinned_build_source) = build_source {
             &command_dispatcher
-                .checkout_pinned_source(pinned_build_source)
+                .checkout_pinned_source(pinned_build_source.into_pinned())
                 .await
                 .map_err_with(SourceBuildError::SourceCheckout)?
         } else if let Some(manifest_build_source) =

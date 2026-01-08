@@ -8,6 +8,7 @@ use std::{
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
+use typed_path::Utf8UnixPath;
 
 /// A validated subdirectory path.
 ///
@@ -116,6 +117,16 @@ impl Subdirectory {
         } else {
             Some(self.0.to_string_lossy().into_owned())
         }
+    }
+
+    /// Joins this subdirectory with another path, the result can never escape the root.
+    pub fn join(&self, other: &str) -> Self {
+        Self(PathBuf::from(
+            Utf8UnixPath::new(&self.0.to_string_lossy())
+                .join(other)
+                .normalize()
+                .to_string(),
+        ))
     }
 }
 

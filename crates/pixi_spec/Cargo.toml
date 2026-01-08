@@ -28,6 +28,7 @@ typed-path = { workspace = true }
 url = { workspace = true }
 
 pixi_toml = { workspace = true }
+pixi_path = { workspace = true }
 toml-span = { workspace = true }
 
 [dev-dependencies]
