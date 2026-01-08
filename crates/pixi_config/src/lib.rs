@@ -2794,8 +2794,8 @@ UNUSED = "unused"
     #[test]
     fn test_tls_root_certs_default() {
         let config = Config::default();
-        // Default should be Webpki (bundled Mozilla roots)
-        assert_eq!(config.tls_root_certs(), TlsRootCerts::Webpki);
+        // Default should be All (both bundled Mozilla roots and native certificates)
+        assert_eq!(config.tls_root_certs(), TlsRootCerts::All);
         assert_eq!(config.tls_root_certs, None);
     }
 
