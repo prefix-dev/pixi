@@ -2539,10 +2539,11 @@ async fn read_local_package_metadata(
             if let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents) {
                 // Try to extract requires_dist statically using UV's database
                 match database.requires_dist(directory, &pyproject_toml).await {
-                    Ok(Some(requires_dist)) => {
+                    Ok(Some(requires_dist)) if !requires_dist.dynamic => {
                         tracing::debug!(
-                            "Package {} - extracted requires_dist using database.requires_dist()",
-                            package_name
+                            "Package {} - extracted requires_dist using database.requires_dist(). Dynamic: {}",
+                            package_name,
+                            requires_dist.dynamic
                         );
 
                         // Convert uv requirements to pep508_rs requirements
@@ -2573,6 +2574,14 @@ async fn read_local_package_metadata(
                                 .insert(directory.to_path_buf(), metadata.clone());
                             return Ok(metadata);
                         }
+                    }
+                    Ok(Some(requires_dist)) => {
+                        // Dynamic dependencies - need to build wheel for accurate metadata
+                        tracing::debug!(
+                            "Package {} - requires_dist is dynamic (dynamic={}), falling back to wheel build",
+                            package_name,
+                            requires_dist.dynamic
+                        );
                     }
                     Ok(None) => {
                         tracing::debug!(
