@@ -18,7 +18,7 @@ fn has_editable_pth_file(prefix: &Path, package_name: &str) -> bool {
     } else {
         // Find the python version directory
         let lib_dir = prefix.join("lib");
-        if let Ok(entries) = std::fs::read_dir(&lib_dir) {
+        if let Ok(entries) = fs_err::read_dir(&lib_dir) {
             entries
                 .filter_map(|e| e.ok())
                 .find(|e| e.file_name().to_string_lossy().starts_with("python"))
@@ -33,7 +33,7 @@ fn has_editable_pth_file(prefix: &Path, package_name: &str) -> bool {
     // - hatchling: _{package_name}.pth (e.g., _editable_test.pth)
     // - setuptools: __editable__.{package_name}-{version}.pth
     let normalized_name = package_name.replace('-', "_");
-    if let Ok(entries) = std::fs::read_dir(&site_packages) {
+    if let Ok(entries) = fs_err::read_dir(&site_packages) {
         for entry in entries.flatten() {
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
