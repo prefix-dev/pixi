@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ribasim-test"
+version = "2026.1.0rc1"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=2.2",
+    "tomli>=2.0",
+    "tomli-w>=1.0",
+]
+
+[project.optional-dependencies]
+tests = ["pytest", "pytest-xdist", "pytest-cov"]
+delwaq = ["jinja2", "networkx"]
+all = ["ribasim-test[tests]", "ribasim-test[delwaq]"]
