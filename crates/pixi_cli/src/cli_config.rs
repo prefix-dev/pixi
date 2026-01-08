@@ -44,9 +44,12 @@ pub struct WorkspaceConfig {
 impl WorkspaceConfig {
     /// Returns the start location when trying to discover a workspace.
     pub fn workspace_locator_start(&self) -> DiscoveryStart {
-        match &self.manifest_path {
-            Some(path) => DiscoveryStart::ExplicitManifest(path.clone()),
-            None => DiscoveryStart::CurrentDir,
+        if let Some(manifest_path) = &self.manifest_path {
+            DiscoveryStart::ExplicitManifest(manifest_path.clone())
+        } else if let Some(name) = &self.name {
+            DiscoveryStart::Named(name.clone())
+        } else {
+            DiscoveryStart::CurrentDir
         }
     }
 }
