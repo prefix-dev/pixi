@@ -14,8 +14,7 @@ use jsonrpsee::{
 use miette::Diagnostic;
 use ordermap::OrderMap;
 use pixi_build_types::{
-    BackendCapabilities, FrontendCapabilities, ProjectModelV1, TargetSelectorV1,
-    VersionedProjectModel,
+    BackendCapabilities, FrontendCapabilities, ProjectModel, TargetSelector,
     procedures::{
         self,
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
@@ -146,9 +145,9 @@ impl JsonRpcBackend {
         source_dir: PathBuf,
         manifest_path: PathBuf,
         workspace_root: PathBuf,
-        package_manifest: Option<ProjectModelV1>,
+        package_manifest: Option<ProjectModel>,
         configuration: Option<serde_json::Value>,
-        target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
+        target_configuration: Option<OrderMap<TargetSelector, serde_json::Value>>,
         cache_dir: Option<PathBuf>,
         tool: Tool,
     ) -> Result<Self, InitializeError> {
@@ -215,9 +214,9 @@ impl JsonRpcBackend {
         source_dir: PathBuf,
         manifest_path: PathBuf,
         workspace_root: PathBuf,
-        project_model: Option<ProjectModelV1>,
+        project_model: Option<ProjectModel>,
         configuration: Option<serde_json::Value>,
-        target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
+        target_configuration: Option<OrderMap<TargetSelector, serde_json::Value>>,
         cache_dir: Option<PathBuf>,
         sender: impl TransportSenderT + Send,
         receiver: impl TransportReceiverT + Send,
@@ -252,12 +251,12 @@ impl JsonRpcBackend {
             .request(
                 procedures::initialize::METHOD_NAME,
                 RpcParams::from(InitializeParams {
-                    project_model: project_model.map(VersionedProjectModel::V1),
+                    project_model,
                     configuration,
                     target_configuration,
                     manifest_path: manifest_path.clone(),
-                    source_dir: Some(source_dir),
-                    workspace_root: Some(workspace_root),
+                    source_directory: Some(source_dir),
+                    workspace_directory: Some(workspace_root),
                     cache_directory: cache_dir,
                 }),
             )

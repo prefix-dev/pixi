@@ -2,13 +2,15 @@ use std::fmt::Display;
 
 use itertools::Itertools;
 use miette::Diagnostic;
+use pixi_build_types::{ConstraintSpec, PackageSpec};
 use pixi_record::{DevSourceRecord, PinnedSourceSpec};
-use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec};
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::PackageName;
 use thiserror::Error;
 use tracing::instrument;
 
+use crate::build::conversion;
 use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt,
@@ -145,7 +147,7 @@ impl DevSourceMetadataSpec {
             .map_err_with(DevSourceMetadataError::BuildBackendMetadata)?;
 
         // Create a SourceAnchor for resolving relative paths in dependencies
-        let source_anchor = SourceAnchor::from(pixi_spec::SourceSpec::from(
+        let source_anchor = SourceAnchor::from(SourceLocationSpec::from(
             build_backend_metadata.source.manifest_source().clone(),
         ));
 
@@ -210,15 +212,25 @@ impl DevSourceMetadataSpec {
                     // Process depends
                     for depend in &deps.depends {
                         let name = PackageName::new_unchecked(&depend.name);
-                        let spec =
-                            crate::build::conversion::from_package_spec_v1(depend.spec.clone());
 
-                        // Resolve relative paths for source dependencies
-                        let resolved_spec = match spec.into_source_or_binary() {
-                            itertools::Either::Left(source_spec) => PixiSpec::from(SourceSpec {
-                                location: source_anchor.resolve(source_spec.location),
-                            }),
-                            itertools::Either::Right(binary_spec) => PixiSpec::from(binary_spec),
+                        // Match directly on PackageSpec
+                        let resolved_spec = match &depend.spec {
+                            PackageSpec::Binary(binary) => {
+                                let spec =
+                                    crate::build::conversion::from_binary_spec_v1(binary.clone());
+                                PixiSpec::from(spec)
+                            }
+                            PackageSpec::Source(source) => {
+                                let spec =
+                                    crate::build::conversion::from_source_spec_v1(source.clone());
+                                PixiSpec::from(spec.resolve(source_anchor))
+                            }
+                            PackageSpec::PinCompatible(_) => {
+                                // Just ignore the pin compatible dependency. Since we are also adding
+                                // the dependencies for build and host directly the pin_compatible
+                                // wouldnt have any effect anyway.
+                                continue;
+                            }
                         };
                         dependencies.insert(name, resolved_spec);
                     }
@@ -226,8 +238,14 @@ impl DevSourceMetadataSpec {
                     // Process constraints
                     for constraint in &deps.constraints {
                         let name = PackageName::new_unchecked(&constraint.name);
-                        let spec =
-                            crate::build::conversion::from_binary_spec_v1(constraint.spec.clone());
+
+                        // Match on ConstraintSpec enum
+                        let spec = match &constraint.spec {
+                            ConstraintSpec::Binary(binary) => {
+                                conversion::from_binary_spec_v1(binary.clone())
+                            }
+                        };
+
                         constraints.insert(name, spec);
                     }
                 }

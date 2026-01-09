@@ -650,6 +650,7 @@ impl CommandDispatcher {
                     url: url.url,
                     md5: url.md5,
                     sha256: url.sha256,
+                    subdirectory: url.subdirectory,
                 })
                 .await
             }
