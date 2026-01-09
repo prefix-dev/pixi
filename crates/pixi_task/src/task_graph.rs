@@ -189,11 +189,17 @@ impl<'p> TaskGraph<'p> {
     }
 
     /// Constructs a new [`TaskGraph`] from a list of command line arguments.
+    ///
+    /// When `prefer_executable` is true, the first argument will not be
+    /// resolved as a Pixi task even if a task with that name exists. Instead,
+    /// the arguments are treated as a custom command to execute within the
+    /// environment, allowing running executables that collide with task names.
     pub fn from_cmd_args<D: TaskDisambiguation<'p>>(
         project: &'p Workspace,
         search_envs: &SearchEnvironments<'p, D>,
         args: Vec<String>,
         skip_deps: bool,
+        prefer_executable: bool,
     ) -> Result<Self, TaskGraphError> {
         // Split 'args' into arguments if it's a single string, supporting commands
         // like: `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or
@@ -208,7 +214,7 @@ impl<'p> TaskGraph<'p> {
             (args, true)
         };
 
-        if let Some(name) = args.first() {
+        if !prefer_executable && let Some(name) = args.first() {
             match search_envs.find_task(TaskName::from(name.clone()), FindTaskSource::CmdArgs, None)
             {
                 Err(FindTaskError::MissingTask(_)) => {}
@@ -633,6 +639,7 @@ mod test {
             &search_envs,
             run_args.iter().map(|arg| arg.to_string()).collect(),
             skip_deps,
+            false,
         )
         .unwrap();
 

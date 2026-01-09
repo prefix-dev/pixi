@@ -50,6 +50,11 @@ pub struct Args {
     /// environment, which can be an executable in the environment's PATH.
     pub task: Vec<String>,
 
+    /// Prefer running the command as an executable instead of a Pixi task
+    /// when both share the same name. Short: -x
+    #[arg(long = "executable", short = 'x')]
+    pub executable: bool,
+
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
@@ -179,7 +184,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .with_disambiguate_fn(disambiguate_task_interactive);
 
     let task_graph =
-        TaskGraph::from_cmd_args(&workspace, &search_environment, args.task, args.skip_deps)?;
+        TaskGraph::from_cmd_args(&workspace, &search_environment, args.task, args.skip_deps, args.executable)?;
 
     tracing::debug!("Task graph: {}", task_graph);
 
