@@ -161,6 +161,14 @@ pub fn build_reqwest_middleware_stack(
 ) -> miette::Result<Box<[Arc<dyn Middleware>]>> {
     let mut result: Vec<Arc<dyn Middleware>> = Vec::new();
 
+    // Retry middleware must come before mirror middleware so that when a mirror
+    // returns a server error (e.g. 500), the retry will go through the mirror
+    // middleware again, which will then select a different mirror due to the
+    // recorded failure.
+    result.push(Arc::new(RetryTransientMiddleware::new_with_policy(
+        default_retry_policy(),
+    )));
+
     if !config.mirror_map().is_empty() {
         result.push(Arc::new(mirror_middleware(config)));
         result.push(Arc::new(oci_middleware()));
@@ -180,10 +188,6 @@ pub fn build_reqwest_middleware_stack(
     result.push(Arc::new(
         get_auth_middleware(config).expect("could not create auth middleware"),
     ));
-
-    result.push(Arc::new(RetryTransientMiddleware::new_with_policy(
-        default_retry_policy(),
-    )));
 
     Ok(result.into_boxed_slice())
 }
