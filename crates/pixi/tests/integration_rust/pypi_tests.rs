@@ -11,7 +11,8 @@ use crate::setup_tracing;
 use pixi_test_utils::{MockRepoData, Package};
 
 /// Helper to check if a pypi package is installed as editable by looking for a .pth file.
-/// Editable installs create a .pth file in site-packages that points to the source directory.
+/// Editable installations create a .pth file in site-packages that points to the source directory.
+/// For most backends, make sure to use the old style editables when using this function
 fn has_editable_pth_file(prefix: &Path, package_name: &str) -> bool {
     let site_packages = if cfg!(target_os = "windows") {
         prefix.join("Lib").join("site-packages")
@@ -21,10 +22,13 @@ fn has_editable_pth_file(prefix: &Path, package_name: &str) -> bool {
         if let Ok(entries) = fs_err::read_dir(&lib_dir) {
             entries
                 .filter_map(|e| e.ok())
+                // Find the directory that starts with "python"
                 .find(|e| e.file_name().to_string_lossy().starts_with("python"))
+                // N
                 .map(|e| e.path().join("site-packages"))
                 .unwrap_or_else(|| lib_dir.join("python3.12").join("site-packages"))
         } else {
+            // Use some default path
             lib_dir.join("python3.12").join("site-packages")
         }
     };
