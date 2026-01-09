@@ -1,7 +1,7 @@
 [workspace]
 channels = [
-  "https://prefix.dev/conda-forge",
   "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
 ]
 name = "recursive-run-deps"
 platforms = ["win-64", "osx-arm64", "linux-64"]
