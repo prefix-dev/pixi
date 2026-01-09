@@ -44,7 +44,7 @@ use rattler_lock::{
 use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
-use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
+use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
 use uv_distribution_types::{RequirementSource, RequiresPython};
 use uv_git_types::GitReference;
 use uv_pypi_types::ParsedUrlError;
@@ -106,6 +106,10 @@ pub enum EnvironmentUnsat {
         locked_mode: PrereleaseMode,
         expected_mode: PrereleaseMode,
     },
+    #[error(
+        "the lock-file was solved with system requirements incompatible with the tags on wheel ({wheel})"
+    )]
+    PypiWheelTagsMismatch { wheel: String },
 
     #[error(transparent)]
     ExcludeNewerMismatch(#[from] ExcludeNewerMismatch),
@@ -527,6 +531,32 @@ pub fn verify_environment_satisfiability(
         ));
     }
 
+    let platform_wheel_tags = {
+        let system_requirements = environment.system_requirements();
+        locked_environment
+            .packages_by_platform()
+            .flat_map(|(platform, packages)| packages.map(move |package| (platform, package)))
+            .filter_map(|(platform, package)| match package {
+                LockedPackageRef::Conda(rattler_lock::CondaPackageData::Binary(package)) => {
+                    Some((platform, package))
+                }
+                _ => None,
+            })
+            .filter(move |(_, package)| {
+                pypi_modifiers::pypi_tags::is_python_record(&package.package_record)
+            })
+            .filter_map(|(platform, package)| {
+                pypi_modifiers::pypi_tags::get_pypi_tags(
+                    platform,
+                    &system_requirements,
+                    &package.package_record,
+                )
+                .ok()
+                .map(|tags| (platform, tags))
+            })
+            .collect::<HashMap<_, _>>()
+    };
+
     // Do some more checks if we have pypi dependencies
     // 1. Check if the PyPI indexes are present and match
     // 2. Check if we have a no-build option set, that we only have binary packages,
@@ -542,6 +572,27 @@ pub fn verify_environment_satisfiability(
         // or that the package that we disallow are not built from source
         if let Some(no_build) = group_pypi_options.no_build.as_ref() {
             verify_pypi_no_build(no_build, locked_environment)?;
+        }
+
+        // Check that all wheels still match with the system requirements
+        for (platform, package) in locked_environment
+            .pypi_packages_by_platform()
+            .flat_map(|(platform, it)| it.map(move |package| (platform, package)))
+        {
+            let Some(package_file_name) = package.0.location.file_name() else {
+                continue;
+            };
+            let Some(platform_tags) = platform_wheel_tags.get(&platform) else {
+                continue;
+            };
+            let Ok(wheel) = WheelFilename::from_str(package_file_name) else {
+                continue;
+            };
+            if !wheel.is_compatible(platform_tags) {
+                return Err(EnvironmentUnsat::PypiWheelTagsMismatch {
+                    wheel: wheel.name.to_string(),
+                });
+            }
         }
     }
 
