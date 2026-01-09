@@ -811,6 +811,11 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_platform: Option<Platform>,
 
+    /// Mapping of a named workspaces to the path of their manifest file.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub named_workspaces: HashMap<String, PathBuf>,
+
     //////////////////////
     // Deprecated fields //
     //////////////////////
@@ -846,6 +851,7 @@ impl Default for Config {
             proxy_config: ProxyConfig::default(),
             build: BuildConfig::default(),
             tool_platform: None,
+            named_workspaces: HashMap::new(),
 
             // Deprecated fields
             change_ps1: None,
@@ -1380,6 +1386,7 @@ impl Config {
             "experimental",
             "experimental.use-environment-activation-cache",
             "mirrors",
+            "named-workspaces",
             "pinning-strategy",
             "proxy-config",
             "proxy-config.http",
@@ -1456,6 +1463,7 @@ impl Config {
             proxy_config: self.proxy_config.merge(other.proxy_config),
             build: self.build.merge(other.build),
             tool_platform: self.tool_platform.or(other.tool_platform),
+            named_workspaces: self.named_workspaces.into_iter().merge(other.named_workspaces).collect(),
 
             // Deprecated fields that we can ignore as we handle them inside `shell.` field
             change_ps1: None,
@@ -1579,6 +1587,19 @@ impl Config {
         Ok(result)
     }
 
+    /// Retrieve the value for the named-workspaces field.
+    pub fn named_workspaces_map(&self) -> &std::collections::HashMap<String, PathBuf> {
+        &self.named_workspaces
+    }
+
+    /// Retrieve the path to the manifest file for a named workspaces.
+    pub fn named_workspace(&self, name: String) -> miette::Result<&Path> {
+        match self.named_workspaces.get(&name) {
+            Some(path) => Ok(path.as_path()),
+            None => Err(miette::miette!("Named workspace '{}' not found", name)),
+        }
+    }
+
     /// Modify this config with the given key and value
     ///
     /// # Note
@@ -1653,6 +1674,13 @@ impl Config {
                     .map(Platform::from_str)
                     .transpose()
                     .into_diagnostic()?;
+            }
+            "named-workspaces" => {
+                self.named_workspaces = value
+                    .map(|v| serde_json::de::from_str(&v))
+                    .transpose()
+                    .into_diagnostic()?
+                    .unwrap_or_default();
             }
             key if key.starts_with("repodata-config") => {
                 if key == "repodata-config" {
