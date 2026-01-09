@@ -1593,9 +1593,9 @@ impl Config {
     }
 
     /// Retrieve the path to the manifest file for a named workspaces.
-    pub fn named_workspace(&self, name: String) -> miette::Result<&Path> {
-        match self.named_workspaces.get(&name) {
-            Some(path) => Ok(path.as_path()),
+    pub fn named_workspace(&self, name: &String) -> miette::Result<PathBuf> {
+        match self.named_workspaces.get(name) {
+            Some(path) => Ok(path.clone()),
             None => Err(miette::miette!("Named workspace '{}' not found", name)),
         }
     }
