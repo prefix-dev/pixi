@@ -314,6 +314,7 @@ impl<T: Clone, E> PendingDeduplicatingTask<T, E> {
                 for tx in pending.drain(..) {
                     match tx.send(Err(err)) {
                         Ok(_) => return,
+                        Ok(_) => break,
                         Err(Err(failed_to_send)) => err = failed_to_send,
                         Err(Ok(_)) => unreachable!(),
                     }
