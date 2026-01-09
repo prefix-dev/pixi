@@ -214,19 +214,17 @@ pub enum DiscoveryStart {
     /// in that it is also possible to specify a manifest that is not the
     /// default preferred format (e.g. `pyproject.toml`).
     ExplicitManifest(PathBuf),
-
-    /// Use the manifest file given from the name of the workspace recorded in the 
-    /// global registry.
-    Named(String),
 }
 
 impl DiscoveryStart {
     /// Returns the path of the directory or file to start the search from.
+    ///
+    /// For `Named` discovery starts, this resolves the workspace name from the
+    /// global config.
     pub fn root(&self) -> &Path {
         match self {
             DiscoveryStart::SearchRoot(root) => root.as_path(),
             DiscoveryStart::ExplicitManifest(manifest) => manifest.as_path(),
-            DiscoveryStart::Named(name) => todo!("pixi_manifest: Resolve workspace name from registry for {}", name),
         }
     }
 }
@@ -278,7 +276,6 @@ impl WorkspaceDiscoverer {
                 dunce::canonicalize(manifest_path)
                     .map_err(|e| WorkspaceDiscoveryError::Canonicalize(e, manifest_path.clone()))?,
             )),
-            DiscoveryStart::Named(_name) => todo!(),
         };
         while let Some(search_path) = next_search_path {
             let (next, provenance) = match search_path {

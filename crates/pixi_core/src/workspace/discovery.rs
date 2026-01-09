@@ -31,9 +31,6 @@ pub enum DiscoveryStart {
     /// If no manifest is found at the given path the search will abort.
     ExplicitManifest(PathBuf),
 
-    /// Use the manifest file given from the name of the workspace recorded in the
-    /// global registry.
-    Named(String),
 }
 
 impl DiscoveryStart {
@@ -43,7 +40,6 @@ impl DiscoveryStart {
             DiscoveryStart::CurrentDir => std::env::current_dir(),
             DiscoveryStart::SearchRoot(path) => Ok(path.clone()),
             DiscoveryStart::ExplicitManifest(path) => Ok(path.clone()),
-            DiscoveryStart::Named(name) => todo!("pixi_core: Resolve workspace name from registry for {}", name),
         }
     }
 }
@@ -165,9 +161,6 @@ impl WorkspaceLocator {
                 std::env::current_dir().map_err(WorkspaceLocatorError::CurrentDir)?,
             ),
             DiscoveryStart::SearchRoot(path) => pixi_manifest::DiscoveryStart::SearchRoot(path),
-            DiscoveryStart::Named(name) => {
-                pixi_manifest::DiscoveryStart::Named(name)
-            }
         };
 
         let discovery_source = discovery_start.root().to_path_buf();
