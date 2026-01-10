@@ -13,7 +13,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-2_gnu.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/bzip2-1.0.8-hda65f42_8.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.1.4-hbd8a1cb_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/icu-78.1-h33c6efd_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/icu-78.2-h33c6efd_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.45-default_hbd61a6d_105.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libexpat-2.7.3-hecca717_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libffi-3.5.2-h9ec8514_0.conda
@@ -39,7 +39,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/41/3c/a36c2450754618e62008bf7435ccb0f88053e07592e6028a34776213d877/markupsafe-3.0.3-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/9e/c9/b2622292ea83fbb4ec318f5b9ab867d0a28ab43c5717bb85b0a5f6b3b0a4/networkx-3.6.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/03/75/d4c43b61de473912496317a854dac54f1efec3eeb158438da6884b70bb90/numpy-2.4.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/eb/c0/3ed5083d94e7ffd7c404e54619c088e11f2e1939a9544f5397f4adb1b8ba/numpy-2.4.1-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/20/12/38679034af332785aac8774540895e234f4d07f7545804097de4b666afd8/packaging-25.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/15/b2/0e62f78c0c5ba7e3d2c5945a82456f4fac76c480940f805e0b97fcbc2f65/pandas-2.3.3-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl
@@ -59,7 +59,7 @@ environments:
       osx-64:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/bzip2-1.0.8-h500dc9f_8.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.1.4-hbd8a1cb_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-64/icu-78.1-h14c5de8_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/icu-78.2-h14c5de8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/libexpat-2.7.3-heffb93a_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/libffi-3.5.2-h750e83c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/liblzma-5.8.1-hd471939_2.conda
@@ -80,7 +80,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/33/8a/8e42d4838cd89b7dde187011e97fe6c3af66d8c044997d2183fbd6d31352/markupsafe-3.0.3-cp314-cp314-macosx_10_13_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/9e/c9/b2622292ea83fbb4ec318f5b9ab867d0a28ab43c5717bb85b0a5f6b3b0a4/networkx-3.6.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ab/ed/52eac27de39d5e5a6c9aadabe672bc06f55e24a3d9010cd1183948055d76/numpy-2.4.0-cp314-cp314-macosx_10_15_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/1b/a7/ef08d25698e0e4b4efbad8d55251d20fe2a15f6d9aa7c9b30cd03c165e6f/numpy-2.4.1-cp314-cp314-macosx_10_15_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/20/12/38679034af332785aac8774540895e234f4d07f7545804097de4b666afd8/packaging-25.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/04/fd/74903979833db8390b73b3a8a7d30d146d710bd32703724dd9083950386f/pandas-2.3.3-cp314-cp314-macosx_10_13_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl
@@ -120,7 +120,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b5/64/7660f8a4a8e53c924d0fa05dc3a55c9cee10bbd82b11c5afb27d44b096ce/markupsafe-3.0.3-cp314-cp314-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/9e/c9/b2622292ea83fbb4ec318f5b9ab867d0a28ab43c5717bb85b0a5f6b3b0a4/networkx-3.6.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/77/c0/990ce1b7fcd4e09aeaa574e2a0a839589e4b08b2ca68070f1acb1fea6736/numpy-2.4.0-cp314-cp314-macosx_11_0_arm64.whl
+      - pypi: https://files.pythonhosted.org/packages/8f/39/e378b3e3ca13477e5ac70293ec027c438d1927f18637e396fe90b1addd72/numpy-2.4.1-cp314-cp314-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/20/12/38679034af332785aac8774540895e234f4d07f7545804097de4b666afd8/packaging-25.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/21/00/266d6b357ad5e6d3ad55093a7e8efc7dd245f5a842b584db9f30b0f0a287/pandas-2.3.3-cp314-cp314-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl
@@ -163,7 +163,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/28/52/182836104b33b444e400b14f797212f720cbc9ed6ba34c800639d154e821/markupsafe-3.0.3-cp314-cp314-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/9e/c9/b2622292ea83fbb4ec318f5b9ab867d0a28ab43c5717bb85b0a5f6b3b0a4/networkx-3.6.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/5f/4a/5cb94c787a3ed1ac65e1271b968686521169a7b3ec0b6544bb3ca32960b0/numpy-2.4.0-cp314-cp314-win_amd64.whl
+      - pypi: https://files.pythonhosted.org/packages/7e/bb/c6513edcce5a831810e2dddc0d3452ce84d208af92405a0c2e58fd8e7881/numpy-2.4.1-cp314-cp314-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/20/12/38679034af332785aac8774540895e234f4d07f7545804097de4b666afd8/packaging-25.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a6/3d/124ac75fcd0ecc09b8fdccb0246ef65e35b012030defb0e0eba2cbbbe948/pandas-2.3.3-cp314-cp314-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl
@@ -306,28 +306,26 @@ packages:
   - pytest ; extra == 'testing'
   - tox ; extra == 'testing'
   requires_python: '>=3.8'
-- conda: https://conda.anaconda.org/conda-forge/linux-64/icu-78.1-h33c6efd_0.conda
-  sha256: 7d6463d0be5092b2ae8f2fad34dc84de83eab8bd44cc0d4be8931881c973c48f
-  md5: 518e9bbbc3e3486d6a4519192ba690f8
+- conda: https://conda.anaconda.org/conda-forge/linux-64/icu-78.2-h33c6efd_0.conda
+  sha256: 142a722072fa96cf16ff98eaaf641f54ab84744af81754c292cb81e0881c0329
+  md5: 186a18e3ba246eccfc7cff00cd19a870
   depends:
   - __glibc >=2.17,<3.0.a0
   - libgcc >=14
   - libstdcxx >=14
   license: MIT
-  license_family: MIT
   purls: []
-  size: 12722920
-  timestamp: 1766299101259
-- conda: https://conda.anaconda.org/conda-forge/osx-64/icu-78.1-h14c5de8_0.conda
-  sha256: 256df2229f930d7c83d8e2d36fdfce1f78980272558095ce741a9fccc5ed8998
-  md5: 1e648e0c6657a29dc44102d6e3b10ebc
+  size: 12728445
+  timestamp: 1767969922681
+- conda: https://conda.anaconda.org/conda-forge/osx-64/icu-78.2-h14c5de8_0.conda
+  sha256: f3066beae7fe3002f09c8a412cdf1819f49a2c9a485f720ec11664330cf9f1fe
+  md5: 30334add4de016489b731c6662511684
   depends:
   - __osx >=10.13
   license: MIT
-  license_family: MIT
   purls: []
-  size: 12273114
-  timestamp: 1766299263503
+  size: 12263724
+  timestamp: 1767970604977
 - pypi: https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl
   name: iniconfig
   version: 2.3.0
@@ -775,25 +773,25 @@ packages:
   - pytest-mpl ; extra == 'test-extras'
   - pytest-randomly ; extra == 'test-extras'
   requires_python: '>=3.11,!=3.14.1'
-- pypi: https://files.pythonhosted.org/packages/03/75/d4c43b61de473912496317a854dac54f1efec3eeb158438da6884b70bb90/numpy-2.4.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/1b/a7/ef08d25698e0e4b4efbad8d55251d20fe2a15f6d9aa7c9b30cd03c165e6f/numpy-2.4.1-cp314-cp314-macosx_10_15_x86_64.whl
   name: numpy
-  version: 2.4.0
-  sha256: 9a818668b674047fd88c4cddada7ab8f1c298812783e8328e956b78dc4807f9f
+  version: 2.4.1
+  sha256: 3869ea1ee1a1edc16c29bbe3a2f2a4e515cc3a44d43903ad41e0cacdbaf733dc
   requires_python: '>=3.11'
-- pypi: https://files.pythonhosted.org/packages/5f/4a/5cb94c787a3ed1ac65e1271b968686521169a7b3ec0b6544bb3ca32960b0/numpy-2.4.0-cp314-cp314-win_amd64.whl
+- pypi: https://files.pythonhosted.org/packages/7e/bb/c6513edcce5a831810e2dddc0d3452ce84d208af92405a0c2e58fd8e7881/numpy-2.4.1-cp314-cp314-win_amd64.whl
   name: numpy
-  version: 2.4.0
-  sha256: 3d857f55e7fdf7c38ab96c4558c95b97d1c685be6b05c249f5fdafcbd6f9899e
+  version: 2.4.1
+  sha256: 7d5d7999df434a038d75a748275cd6c0094b0ecdb0837342b332a82defc4dc4d
   requires_python: '>=3.11'
-- pypi: https://files.pythonhosted.org/packages/77/c0/990ce1b7fcd4e09aeaa574e2a0a839589e4b08b2ca68070f1acb1fea6736/numpy-2.4.0-cp314-cp314-macosx_11_0_arm64.whl
+- pypi: https://files.pythonhosted.org/packages/8f/39/e378b3e3ca13477e5ac70293ec027c438d1927f18637e396fe90b1addd72/numpy-2.4.1-cp314-cp314-macosx_11_0_arm64.whl
   name: numpy
-  version: 2.4.0
-  sha256: 65167da969cd1ec3a1df31cb221ca3a19a8aaa25370ecb17d428415e93c1935e
+  version: 2.4.1
+  sha256: e867df947d427cdd7a60e3e271729090b0f0df80f5f10ab7dd436f40811699c3
   requires_python: '>=3.11'
-- pypi: https://files.pythonhosted.org/packages/ab/ed/52eac27de39d5e5a6c9aadabe672bc06f55e24a3d9010cd1183948055d76/numpy-2.4.0-cp314-cp314-macosx_10_15_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/eb/c0/3ed5083d94e7ffd7c404e54619c088e11f2e1939a9544f5397f4adb1b8ba/numpy-2.4.1-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
   name: numpy
-  version: 2.4.0
-  sha256: c95eb6db2884917d86cde0b4d4cf31adf485c8ec36bf8696dd66fa70de96f36b
+  version: 2.4.1
+  sha256: 2f44de05659b67d20499cbc96d49f2650769afcb398b79b324bb6e297bfe3844
   requires_python: '>=3.11'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.6.0-h26f9b46_0.conda
   sha256: a47271202f4518a484956968335b2521409c8173e123ab381e775c358c67fe6d
@@ -1448,7 +1446,7 @@ packages:
   requires_python: '>=3.12'
 - pypi: ./setup-project
   name: setup-project
-  version: 0.6.0
+  version: 0.7.0
 - pypi: https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl
   name: six
   version: 1.17.0
