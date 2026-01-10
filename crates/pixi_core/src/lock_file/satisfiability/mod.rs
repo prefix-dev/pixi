@@ -54,7 +54,7 @@ use uv_pypi_types::{ParsedUrlError, PyProjectToml};
 
 use super::{
     CondaPrefixUpdater, PixiRecordsByName, PypiRecord, PypiRecordsByName,
-    outdated::{BuildCacheKey, EnvironmentBuildCache},
+    outdated::{BuildCacheKey, PypiEnvironmentBuildCache},
     package_identifier::ConversionError,
     resolve::build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
 };
@@ -816,7 +816,7 @@ pub struct VerifySatisfiabilityContext<'a> {
     pub uv_context: &'a OnceCell<UvResolutionContext>,
     pub config: &'a Config,
     pub project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
-    pub build_caches: &'a mut HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>>,
+    pub build_caches: &'a mut HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
     /// Cache for static metadata extracted from pyproject.toml files.
     /// This is shared across platforms since static metadata is platform-independent.
     pub static_metadata_cache: &'a mut HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
@@ -2303,7 +2303,7 @@ struct BuildMetadataContext<'a> {
     uv_context: &'a UvResolutionContext,
     project_env_vars: &'a HashMap<EnvironmentName, EnvironmentVars>,
     command_dispatcher: CommandDispatcher,
-    build_caches: &'a mut HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>>,
+    build_caches: &'a mut HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
     building_pixi_records: &'a Result<PixiRecordsByName, PlatformUnsat>,
     static_metadata_cache: &'a mut HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
 }
@@ -2527,21 +2527,18 @@ async fn read_local_package_metadata(
     if let Ok(contents) = fs_err::read_to_string(&pyproject_path) {
         // Parse with toml_edit for version/requires_python
         if let Ok(toml) = contents.parse::<toml_edit::DocumentMut>() {
-            // Extract version and requires_python
-            let version_is_dynamic = toml
-                .get("project")
-                .and_then(|p| p.get("dynamic"))
-                .and_then(|d| d.as_array())
-                .is_some_and(|arr| arr.iter().any(|item| item.as_str() == Some("version")));
+            // // Extract version and requires_python
+            // let version_is_dynamic = toml
+            //     .get("project")
+            //     .and_then(|p| p.get("dynamic"))
+            //     .and_then(|d| d.as_array())
+            //     .is_some_and(|arr| arr.iter().any(|item| item.as_str() == Some("version")));
 
-            let version = if version_is_dynamic {
-                None
-            } else {
-                toml.get("project")
-                    .and_then(|p| p.get("version"))
-                    .and_then(|v| v.as_str())
-                    .and_then(|v| v.parse::<pep440_rs::Version>().ok())
-            };
+            let version = toml
+                .get("project")
+                .and_then(|p| p.get("version"))
+                .and_then(|v| v.as_str())
+                .and_then(|v| v.parse::<pep440_rs::Version>().ok());
 
             let requires_python = toml
                 .get("project")
@@ -2553,7 +2550,9 @@ async fn read_local_package_metadata(
             if let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents) {
                 // Try to extract requires_dist statically using UV's database
                 match database.requires_dist(directory, &pyproject_toml).await {
-                    Ok(Some(requires_dist)) if !requires_dist.dynamic => {
+                    Ok(Some(requires_dist)) if !requires_dist.dynamic && version.is_some() => {
+                        let version = version.expect("we already check that version is some");
+
                         tracing::debug!(
                             "Package {} - extracted requires_dist using database.requires_dist(). Dynamic: {}",
                             package_name,
@@ -2581,7 +2580,6 @@ async fn read_local_package_metadata(
                                 version,
                                 requires_dist: requires_dist_vec,
                                 requires_python,
-                                is_version_dynamic: requires_dist.dynamic,
                             };
                             // Cache the static metadata for reuse on other platforms
                             ctx.static_metadata_cache
@@ -2590,11 +2588,11 @@ async fn read_local_package_metadata(
                         }
                     }
                     Ok(Some(requires_dist)) => {
-                        // Dynamic dependencies - need to build wheel for accurate metadata
+                        // Dynamic dependencies or missing/dynamic version - need to build wheel for accurate metadata
                         tracing::debug!(
-                            "Package {} - requires_dist is dynamic (dynamic={}), falling back to wheel build",
+                            "Package {} - requires_dist is dynamic (dynamic={}) or version is missing/dynamic, falling back to wheel build",
                             package_name,
-                            requires_dist.dynamic
+                            requires_dist.dynamic,
                         );
                     }
                     Ok(None) => {
@@ -2975,7 +2973,8 @@ mod tests {
         let uv_context: OnceCell<UvResolutionContext> = OnceCell::new();
 
         // Create build caches for sharing between satisfiability and resolution
-        let mut build_caches: HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>> = HashMap::new();
+        let mut build_caches: HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>> =
+            HashMap::new();
 
         // Create static metadata cache for sharing across platforms
         let mut static_metadata_cache: HashMap<PathBuf, pypi_metadata::LocalPackageMetadata> =

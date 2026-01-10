@@ -492,7 +492,7 @@ pub struct LockFileDerivedData<'p> {
     /// Per-environment-platform build caches for sharing resources (CondaPrefixUpdater, etc.)
     pub build_caches: HashMap<
         lock_file::outdated::BuildCacheKey,
-        Arc<lock_file::outdated::EnvironmentBuildCache>,
+        Arc<lock_file::outdated::PypiEnvironmentBuildCache>,
     >,
 }
 
@@ -2548,7 +2548,7 @@ async fn spawn_solve_pypi_task<'p>(
     project_root: PathBuf,
     locked_pypi_packages: Arc<PypiRecordsByName>,
     disallow_install_conda_prefix: bool,
-    build_cache: Arc<lock_file::outdated::EnvironmentBuildCache>,
+    build_cache: Arc<lock_file::outdated::PypiEnvironmentBuildCache>,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = grouped_environment.pypi_dependencies(Some(platform));

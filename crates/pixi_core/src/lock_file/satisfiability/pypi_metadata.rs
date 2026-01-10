@@ -14,14 +14,12 @@ use thiserror::Error;
 /// Metadata extracted from a local package source tree.
 #[derive(Debug, Clone)]
 pub struct LocalPackageMetadata {
-    /// The version of the package (if not dynamic).
-    pub version: Option<Version>,
+    /// The version of the package.
+    pub version: Version,
     /// The package dependencies.
     pub requires_dist: Vec<Requirement>,
     /// The Python version requirement.
     pub requires_python: Option<VersionSpecifiers>,
-    /// Whether the version is marked as dynamic.
-    pub is_version_dynamic: bool,
 }
 
 /// Error that can occur when reading metadata from a source tree.
@@ -98,14 +96,11 @@ pub fn compare_metadata(
         }));
     }
 
-    // Compare version (only if current version is not dynamic)
-    if !current.is_version_dynamic
-        && let Some(current_version) = &current.version
-        && &locked.version != current_version
-    {
+    // Compare version
+    if locked.version != current.version {
         return Some(MetadataMismatch::Version {
             locked: locked.version.clone(),
-            current: current_version.clone(),
+            current: current.version.clone(),
         });
     }
 
@@ -164,10 +159,9 @@ pub fn from_uv_metadata(
         .transpose()?;
 
     Ok(LocalPackageMetadata {
-        version: Some(version),
+        version,
         requires_dist,
         requires_python,
-        is_version_dynamic: false, // Built metadata always has concrete values
     })
 }
 
@@ -199,10 +193,9 @@ mod tests {
         };
 
         let current = LocalPackageMetadata {
-            version: Some(Version::from_str("1.0.0").unwrap()),
+            version: Version::from_str("1.0.0").unwrap(),
             requires_dist: vec!["numpy>=1.0".parse().unwrap()],
             requires_python: Some(VersionSpecifiers::from_str(">=3.8").unwrap()),
-            is_version_dynamic: false,
         };
 
         assert!(compare_metadata(&locked, &current).is_none());
@@ -221,13 +214,12 @@ mod tests {
         };
 
         let current = LocalPackageMetadata {
-            version: Some(Version::from_str("1.0.0").unwrap()),
+            version: Version::from_str("1.0.0").unwrap(),
             requires_dist: vec![
                 "numpy>=1.0".parse().unwrap(),
                 "pandas>=2.0".parse().unwrap(), // Added
             ],
             requires_python: None,
-            is_version_dynamic: false,
         };
 
         let mismatch = compare_metadata(&locked, &current);

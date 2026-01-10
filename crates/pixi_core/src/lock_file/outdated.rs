@@ -28,7 +28,7 @@ use rattler_lock::{LockFile, LockedPackageRef};
 /// Cache for build-related resources that can be shared between
 /// satisfiability checking and PyPI resolution.
 #[derive(Default)]
-pub struct EnvironmentBuildCache {
+pub struct PypiEnvironmentBuildCache {
     /// Lazily initialized build dispatch dependencies (interpreter, env, etc.)
     pub lazy_build_dispatch_deps: LazyBuildDispatchDependencies,
     /// Optional conda prefix updater (created during satisfiability checking)
@@ -76,7 +76,7 @@ pub struct OutdatedEnvironments<'p> {
 
     /// Per-environment-platform build caches for sharing resources between
     /// satisfiability checking and PyPI resolution.
-    pub build_caches: HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>>,
+    pub build_caches: HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
 
     /// Cache for static metadata extracted from pyproject.toml files.
     /// This is shared across platforms since static metadata is platform-independent.
@@ -204,7 +204,7 @@ async fn find_unsatisfiable_targets<'p>(
 ) -> (
     UnsatisfiableTargets<'p>,
     OnceCell<UvResolutionContext>,
-    HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>>,
+    HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
     HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
 ) {
     let mut verified_environments = HashMap::new();
@@ -214,7 +214,7 @@ async fn find_unsatisfiable_targets<'p>(
     let uv_context: OnceCell<UvResolutionContext> = OnceCell::new();
 
     // Create build caches for sharing between satisfiability and resolution
-    let mut build_caches: HashMap<BuildCacheKey, Arc<EnvironmentBuildCache>> = HashMap::new();
+    let mut build_caches: HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>> = HashMap::new();
 
     // Create static metadata cache for sharing across platforms
     let mut static_metadata_cache: HashMap<PathBuf, pypi_metadata::LocalPackageMetadata> =

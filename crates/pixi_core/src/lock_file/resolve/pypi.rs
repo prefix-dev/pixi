@@ -66,7 +66,7 @@ use crate::{
     lock_file::{
         CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
         PypiRecord,
-        outdated::EnvironmentBuildCache,
+        outdated::PypiEnvironmentBuildCache,
         records_by_name::HasNameVersion,
         resolve::{
             build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
@@ -295,7 +295,7 @@ pub async fn resolve_pypi(
     disallow_install_conda_prefix: bool,
     exclude_newer: Option<DateTime<Utc>>,
     solve_strategy: SolveStrategy,
-    build_cache: Arc<EnvironmentBuildCache>,
+    build_cache: Arc<PypiEnvironmentBuildCache>,
 ) -> miette::Result<(LockedPypiPackages, Option<CondaPrefixUpdated>)> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
