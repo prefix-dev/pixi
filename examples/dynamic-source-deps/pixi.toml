@@ -18,3 +18,4 @@ python = "*"
 minimal-project = { path = "./minimal-project" }
 ribasim-test = { path = "./ribasim-test", extras = ["all"] }
 setup-project = { path = "./setup-project" }
+# boltons = "*"
