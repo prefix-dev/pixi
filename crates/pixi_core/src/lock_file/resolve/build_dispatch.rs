@@ -231,7 +231,7 @@ pub struct LazyBuildDispatch<'a> {
 /// The `last_error` field is for panic recovery during build dispatch initialization.
 #[derive(Default)]
 pub struct LazyBuildDispatchDependencies {
-    /// The initialized python interpreter (expensive - disk I/O query)
+    /// The initialized python interpreter
     interpreter: OnceCell<Interpreter>,
     /// The non isolated packages
     non_isolated_packages: OnceCell<BuildIsolation>,

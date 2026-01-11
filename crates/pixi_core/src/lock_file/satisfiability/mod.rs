@@ -247,7 +247,9 @@ impl Display for SourceTreeHashMismatch {
 /// Describes what metadata changed for a local package.
 #[derive(Debug, Error)]
 pub enum LocalMetadataMismatch {
-    #[error("dependencies changed - added: {added:?}, removed: {removed:?}")]
+    #[error("dependencies changed - added: [{added}], removed: [{removed}]",
+        added = format_requirements(added),
+        removed = format_requirements(removed))]
     RequiresDist {
         added: Vec<pep508_rs::Requirement>,
         removed: Vec<pep508_rs::Requirement>,
@@ -262,6 +264,22 @@ pub enum LocalMetadataMismatch {
         locked: Option<VersionSpecifiers>,
         current: Option<VersionSpecifiers>,
     },
+}
+
+/// Formats a list of requirements, showing only the first 3 names.
+fn format_requirements(reqs: &[pep508_rs::Requirement]) -> String {
+    const MAX_DISPLAY: usize = 3;
+    let names: Vec<_> = reqs
+        .iter()
+        .take(MAX_DISPLAY)
+        .map(|r| r.name.to_string())
+        .collect();
+    let formatted = names.join(", ");
+    if reqs.len() > MAX_DISPLAY {
+        format!("{}, ... and {} more", formatted, reqs.len() - MAX_DISPLAY)
+    } else {
+        formatted
+    }
 }
 
 impl From<pypi_metadata::MetadataMismatch> for LocalMetadataMismatch {
@@ -2527,13 +2545,6 @@ async fn read_local_package_metadata(
     if let Ok(contents) = fs_err::read_to_string(&pyproject_path) {
         // Parse with toml_edit for version/requires_python
         if let Ok(toml) = contents.parse::<toml_edit::DocumentMut>() {
-            // // Extract version and requires_python
-            // let version_is_dynamic = toml
-            //     .get("project")
-            //     .and_then(|p| p.get("dynamic"))
-            //     .and_then(|d| d.as_array())
-            //     .is_some_and(|arr| arr.iter().any(|item| item.as_str() == Some("version")));
-
             let version = toml
                 .get("project")
                 .and_then(|p| p.get("version"))
@@ -2549,10 +2560,11 @@ async fn read_local_package_metadata(
             // Parse pyproject.toml with UV's parser for requires_dist
             if let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents) {
                 // Try to extract requires_dist statically using UV's database
-                match database.requires_dist(directory, &pyproject_toml).await {
-                    Ok(Some(requires_dist)) if !requires_dist.dynamic && version.is_some() => {
-                        let version = version.expect("we already check that version is some");
-
+                match (
+                    database.requires_dist(directory, &pyproject_toml).await,
+                    version,
+                ) {
+                    (Ok(Some(requires_dist)), Some(version)) if !requires_dist.dynamic => {
                         tracing::debug!(
                             "Package {} - extracted requires_dist using database.requires_dist(). Dynamic: {}",
                             package_name,
@@ -2587,7 +2599,7 @@ async fn read_local_package_metadata(
                             return Ok(metadata);
                         }
                     }
-                    Ok(Some(requires_dist)) => {
+                    (Ok(Some(requires_dist)), _) => {
                         // Dynamic dependencies or missing/dynamic version - need to build wheel for accurate metadata
                         tracing::debug!(
                             "Package {} - requires_dist is dynamic (dynamic={}) or version is missing/dynamic, falling back to wheel build",
@@ -2595,13 +2607,13 @@ async fn read_local_package_metadata(
                             requires_dist.dynamic,
                         );
                     }
-                    Ok(None) => {
+                    (Ok(None), _) => {
                         tracing::debug!(
                             "Package {} - requires_dist() returned None, falling back to build",
                             package_name
                         );
                     }
-                    Err(e) => {
+                    (Err(e), _) => {
                         tracing::debug!(
                             "Package {} - requires_dist() failed: {}, falling back to build",
                             package_name,

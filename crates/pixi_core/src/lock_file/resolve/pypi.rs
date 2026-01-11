@@ -399,7 +399,7 @@ pub async fn resolve_pypi(
     let index_locations =
         pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?;
 
-    // Create build options (cheap - just config conversion)
+    // Create build options
     let build_options = pypi_options_to_build_options(
         &pypi_options.no_build.clone().unwrap_or_default(),
         &pypi_options.no_binary.clone().unwrap_or_default(),
