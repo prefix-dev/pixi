@@ -1,8 +1,0 @@
-[project]
-description = "just says hello TIM TIM"
-name = "minimal_project"
-version = "0.1"
-
-[build-system]
-build-backend = "hatchling.build"
-requires = ["hatchling"]
