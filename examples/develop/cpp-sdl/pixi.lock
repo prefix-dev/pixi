@@ -3,6 +3,8 @@ environments:
   default:
     channels:
     - url: https://prefix.dev/conda-forge/
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://prefix.dev/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
@@ -227,7 +229,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/vc-14.3-h2b53caa_32.conda
       - conda: https://prefix.dev/conda-forge/win-64/vc14_runtime-14.44.35208-h818238b_32.conda
       - conda: https://prefix.dev/conda-forge/win-64/vcomp14-14.44.35208-h818238b_32.conda
-      - conda: https://prefix.dev/conda-forge/win-64/vs2019_win-64-19.29.30139-h7dcff83_32.conda
+      - conda: https://prefix.dev/conda-forge/win-64/vs2022_win-64-19.44.35207-ha74f236_34.conda
       - conda: https://prefix.dev/conda-forge/noarch/vswhere-3.1.7-h40126e0_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-hbeecb71_2.conda
 packages:
@@ -2588,19 +2590,19 @@ packages:
   license_family: Proprietary
   size: 114846
   timestamp: 1760418593847
-- conda: https://prefix.dev/conda-forge/win-64/vs2019_win-64-19.29.30139-h7dcff83_32.conda
-  sha256: 7cd9ddbc77a3cb4d8503bb015f84253acf4987ae0cc45232b190168ea74693f9
-  md5: 62782ef9d0794a7ec90fa04a4fcac0a0
+- conda: https://prefix.dev/conda-forge/win-64/vs2022_win-64-19.44.35207-ha74f236_34.conda
+  sha256: 05bc657625b58159bcea039a35cc89d1f8baf54bf4060019c2b559a03ba4a45e
+  md5: 1d699ffd41c140b98e199ddd9787e1e1
   depends:
   - vswhere
   constrains:
-  - vs_win-64 2019.11
+  - vs_win-64 2022.14
   track_features:
   - vc14
   license: BSD-3-Clause
   license_family: BSD
-  size: 22215
-  timestamp: 1760418700482
+  size: 23060
+  timestamp: 1767320175868
 - conda: https://prefix.dev/conda-forge/noarch/vswhere-3.1.7-h40126e0_1.conda
   sha256: b72270395326dc56de9bd6ca82f63791b3c8c9e2b98e25242a9869a4ca821895
   md5: f622897afff347b715d046178ad745a5
