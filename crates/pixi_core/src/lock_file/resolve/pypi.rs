@@ -615,8 +615,6 @@ pub async fn resolve_pypi(
 
         #[error(transparent)]
         GitUrlParse(#[from] uv_git_types::GitUrlParseError),
-        // #[error("{0}")]
-        // Other(miette::ErrReport),
     }
 
     // Create preferences from the locked pypi packages
