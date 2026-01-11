@@ -10,7 +10,7 @@ use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use ordermap::OrderMap;
 use pixi_build_discovery::{BackendInitializationParams, DiscoveredBackend};
-use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
+use pixi_build_types::{ProjectModel, TargetSelector};
 use pixi_path::{AbsPathBuf, AbsPresumedDirPath, AbsPresumedDirPathBuf, AbsPresumedFilePathBuf};
 use pixi_record::{PinnedSourceSpec, VariantValue};
 use pixi_stable_hash::{StableHashBuilder, json::StableJson, map::StableMap};
@@ -344,13 +344,13 @@ impl BuildCacheEntry {
 /// warranted.
 pub struct PackageBuildInputHashBuilder<'a> {
     /// The project model itself. Contains dependencies and more.
-    pub project_model: Option<&'a ProjectModelV1>,
+    pub project_model: Option<&'a ProjectModel>,
 
     /// The backend specific configuration
     pub configuration: Option<&'a serde_json::Value>,
 
     /// Target specific backend configuration
-    pub target_configuration: Option<&'a OrderMap<TargetSelectorV1, serde_json::Value>>,
+    pub target_configuration: Option<&'a OrderMap<TargetSelector, serde_json::Value>>,
 }
 
 impl PackageBuildInputHashBuilder<'_> {

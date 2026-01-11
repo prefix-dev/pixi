@@ -79,7 +79,7 @@ impl TomlTarget {
                     .map(|(name, toml_loc)| {
                         toml_loc
                             .into_source_location_spec()
-                            .map(|location| (name, SourceSpec { location }))
+                            .map(|location| (name, SourceSpec::from(location)))
                     })
                     .collect::<Result<IndexMap<_, _>, _>>()
             })

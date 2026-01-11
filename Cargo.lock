@@ -5178,6 +5178,7 @@ dependencies = [
  "pixi_build_discovery",
  "pixi_build_types",
  "rattler_conda_types",
+ "schemars 1.1.0",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
@@ -5208,6 +5209,7 @@ dependencies = [
  "pixi_stable_hash",
  "rattler_conda_types",
  "rattler_digest",
+ "schemars 1.1.0",
  "serde",
  "serde_json",
  "serde_with",
@@ -8412,6 +8414,20 @@ name = "similar"
 version = "2.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
+dependencies = [
+ "bstr",
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "similar-asserts"
+version = "1.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5b441962c817e33508847a22bd82f03a30cff43642dc2fae8b050566121eb9a"
+dependencies = [
+ "console 0.15.11",
+ "similar",
+]
 
 [[package]]
 name = "simple_spawn_blocking"
@@ -11544,6 +11560,18 @@ name = "xmlparser"
 version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
+
+[[package]]
+name = "xtask"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "fs-err",
+ "pixi_build_types",
+ "schemars 1.1.0",
+ "serde_json",
+ "similar-asserts",
+]
 
 [[package]]
 name = "xxhash-rust"

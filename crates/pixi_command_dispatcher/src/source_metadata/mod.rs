@@ -11,7 +11,7 @@ use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_record::{PixiRecord, SourceRecord};
-use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, PackageRecord,
@@ -215,14 +215,15 @@ impl SourceMetadataSpec {
     ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
         let manifest_source = source.manifest_source().clone();
         let build_source = source.build_source().cloned();
-        let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
+        let source_anchor = SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
 
         // Solve the build environment for the output.
+        let mut compatibility_map = HashMap::new();
         let build_dependencies = output
             .build_dependencies
             .as_ref()
             // TODO(tim): we need to check if this works for out-of-tree builds with source dependencies in the out-of-tree, this might be incorrectly anchored
-            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone())))
+            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone()), &compatibility_map))
             .transpose()
             .map_err(SourceMetadataError::from)
             .map_err(CommandDispatcherError::Failed)?
@@ -251,11 +252,17 @@ impl SourceMetadataSpec {
             .map_err(|err| SourceMetadataError::RunExportsExtraction(String::from("build"), err))
             .map_err(CommandDispatcherError::Failed)?;
 
+        compatibility_map.extend(
+            build_records
+                .iter()
+                .map(|record| (record.package_record().name.clone(), record)),
+        );
+
         // Solve the host environment for the output.
         let host_dependencies = output
             .host_dependencies
             .as_ref()
-            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone())))
+            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone()), &compatibility_map))
             .transpose()
             .map_err(SourceMetadataError::from)
             .map_err(CommandDispatcherError::Failed)?
@@ -282,15 +289,22 @@ impl SourceMetadataSpec {
             .map_err(|err| SourceMetadataError::RunExportsExtraction(String::from("host"), err))
             .map_err(CommandDispatcherError::Failed)?;
 
+        compatibility_map.extend(
+            host_records
+                .iter()
+                .map(|record| (record.package_record().name.clone(), record)),
+        );
+
         // Gather the dependencies for the output.
-        let run_dependencies = Dependencies::new(&output.run_dependencies, None)
-            .map_err(SourceMetadataError::from)
-            .map_err(CommandDispatcherError::Failed)?
-            .extend_with_run_exports_from_build_and_host(
-                host_run_exports,
-                build_run_exports,
-                output.metadata.subdir,
-            );
+        let run_dependencies =
+            Dependencies::new(&output.run_dependencies, None, &compatibility_map)
+                .map_err(SourceMetadataError::from)
+                .map_err(CommandDispatcherError::Failed)?
+                .extend_with_run_exports_from_build_and_host(
+                    host_run_exports,
+                    build_run_exports,
+                    output.metadata.subdir,
+                );
 
         let PackageRecordDependencies {
             depends,
@@ -301,29 +315,32 @@ impl SourceMetadataSpec {
             .map_err(CommandDispatcherError::Failed)?;
 
         // Convert the run exports
-        let run_exports = PixiRunExports::try_from_protocol(&output.run_exports)
-            .map_err(SourceMetadataError::from)
-            .map_err(CommandDispatcherError::Failed)?;
+        let run_exports =
+            PixiRunExports::try_from_protocol(&output.run_exports, &compatibility_map)
+                .map_err(SourceMetadataError::from)
+                .map_err(CommandDispatcherError::Failed)?;
 
         let pixi_spec_to_match_spec = |name: &PackageName,
                                        spec: &PixiSpec,
-                                       sources: &mut HashMap<PackageName, SourceSpec>|
+                                       sources: &mut HashMap<PackageName, SourceLocationSpec>|
          -> Result<MatchSpec, SourceMetadataError> {
             match spec.clone().into_source_or_binary() {
                 Either::Left(source) => {
-                    let source = match sources.entry(name.clone()) {
+                    match sources.entry(name.clone()) {
                         std::collections::hash_map::Entry::Occupied(entry) => {
                             // If the entry already exists, check if it points to the same source.
-                            if entry.get() == &source {
+                            if entry.get() == &source.location {
                                 return Err(SourceMetadataError::DuplicateSourceDependency {
                                     package: name.clone(),
                                     source1: Box::new(entry.get().clone()),
-                                    source2: Box::new(source.clone()),
+                                    source2: Box::new(source.location.clone()),
                                 });
                             }
                             entry.into_mut()
                         }
-                        std::collections::hash_map::Entry::Vacant(entry) => entry.insert(source),
+                        std::collections::hash_map::Entry::Vacant(entry) => {
+                            entry.insert(source.location.clone())
+                        }
                     };
                     Ok(MatchSpec::from_nameless(
                         source.to_nameless_match_spec(),
@@ -340,7 +357,7 @@ impl SourceMetadataSpec {
         };
 
         let pixi_specs_to_match_spec = |specs: DependencyMap<PackageName, PixiSpec>,
-                                        sources: &mut HashMap<PackageName, SourceSpec>|
+                                        sources: &mut HashMap<PackageName, SourceLocationSpec>|
          -> Result<
             Vec<String>,
             CommandDispatcherError<SourceMetadataError>,
@@ -520,7 +537,7 @@ impl SourceMetadataSpec {
 struct PackageRecordDependencies {
     pub depends: Vec<String>,
     pub constrains: Vec<String>,
-    pub sources: HashMap<rattler_conda_types::PackageName, SourceSpec>,
+    pub sources: HashMap<rattler_conda_types::PackageName, SourceLocationSpec>,
 }
 
 impl PackageRecordDependencies {
@@ -544,14 +561,12 @@ impl PackageRecordDependencies {
         for (name, spec) in dependencies.dependencies.into_specs() {
             match spec.value.into_source_or_binary() {
                 Either::Left(source) => {
-                    depends.push(
-                        MatchSpec {
-                            name: Some(name.clone().into()),
-                            ..MatchSpec::default()
-                        }
-                        .to_string(),
+                    let spec = MatchSpec::from_nameless(
+                        source.to_nameless_match_spec(),
+                        Some(name.clone().into()),
                     );
-                    sources.insert(name, source);
+                    depends.push(spec.to_string());
+                    sources.insert(name, source.location);
                 }
                 Either::Right(binary) => {
                     if let Ok(spec) = binary.try_into_nameless_match_spec(channel_config) {
@@ -594,15 +609,18 @@ pub enum SourceMetadataError {
     #[error(transparent)]
     SpecConversionError(#[from] SpecConversionError),
 
-    #[error("backend returned a dependency on an invalid package name: {0}")]
-    InvalidPackageName(String, #[source] InvalidPackageNameError),
+    #[error(transparent)]
+    InvalidPackageName(#[from] InvalidPackageNameError),
+
+    #[error(transparent)]
+    PinCompatibleError(#[from] crate::build::pin_compatible::PinCompatibleError),
 
     #[error("found two source dependencies for {} but for different sources ({source1} and {source2})", package.as_source()
     )]
     DuplicateSourceDependency {
         package: PackageName,
-        source1: Box<SourceSpec>,
-        source2: Box<SourceSpec>,
+        source1: Box<SourceLocationSpec>,
+        source2: Box<SourceLocationSpec>,
     },
 
     #[error("the dependencies of some packages in the environment form a cycle")]
@@ -619,8 +637,11 @@ pub enum SourceMetadataError {
 impl From<DependenciesError> for SourceMetadataError {
     fn from(value: DependenciesError) -> Self {
         match value {
-            DependenciesError::InvalidPackageName(name, error) => {
-                SourceMetadataError::InvalidPackageName(name, error)
+            DependenciesError::InvalidPackageName(error) => {
+                SourceMetadataError::InvalidPackageName(error)
+            }
+            DependenciesError::PinCompatibleError(error) => {
+                SourceMetadataError::PinCompatibleError(error)
             }
         }
     }

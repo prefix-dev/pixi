@@ -282,6 +282,7 @@ impl TomlSpec {
                     url,
                     md5: loc.md5,
                     sha256: loc.sha256,
+                    subdirectory: loc.subdirectory,
                 }),
                 (None, Some(path), None) => PixiSpec::Path(PathSpec { path: path.into() }),
                 (None, None, Some(git)) => {
@@ -369,6 +370,7 @@ impl TomlSpec {
                         url,
                         md5: loc.md5,
                         sha256: loc.sha256,
+                        subdirectory: loc.subdirectory,
                     };
                     if let Either::Right(binary) = url_spec.into_source_or_binary() {
                         BinarySpec::Url(binary)
@@ -490,6 +492,7 @@ impl TomlLocationSpec {
                 url,
                 md5: self.md5,
                 sha256: self.sha256,
+                subdirectory: self.subdirectory,
             }),
             (None, Some(path), None) => {
                 SourceLocationSpec::Path(PathSourceSpec { path: path.into() })
