@@ -5,6 +5,7 @@ mod build_environment;
 pub mod conversion;
 mod dependencies;
 mod move_file;
+pub mod pin_compatible;
 mod work_dir_key;
 
 use std::hash::{DefaultHasher, Hash, Hasher};

@@ -3,5 +3,9 @@ channels = ["https://prefix.dev/conda-forge"]
 preview = ["pixi-build"]
 
 [package.build.backend]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
 name = "pixi-build-rattler-build"
 version = "*"

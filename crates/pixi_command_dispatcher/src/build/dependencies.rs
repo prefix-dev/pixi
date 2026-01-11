@@ -1,14 +1,18 @@
 use std::{fmt::Display, hash::Hash, str::FromStr, sync::Arc};
 
-use itertools::Either;
+use super::conversion;
+use crate::build::pin_compatible::{
+    PinCompatibilityMap, PinCompatibleError, resolve_pin_compatible,
+};
+use pixi_build_types as pbt;
 use pixi_build_types::{
-    BinaryPackageSpecV1, NamedSpecV1, PackageSpecV1,
+    NamedSpec, PackageSpec,
     procedures::conda_outputs::{
         CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputRunExports,
     },
 };
 use pixi_record::PixiRecord;
-use pixi_spec::{BinarySpec, DetailedSpec, PixiSpec, SourceAnchor, SourceSpec, UrlBinarySpec};
+use pixi_spec::{BinarySpec, DetailedSpec, PixiSpec, SourceAnchor, UrlBinarySpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     InvalidPackageNameError, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName,
@@ -17,11 +21,13 @@ use rattler_conda_types::{
 use rattler_repodata_gateway::{Gateway, RunExportExtractorError, RunExportsReporter};
 use serde::Serialize;
 
-use super::conversion;
-
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum DependenciesError {
-    InvalidPackageName(String, InvalidPackageNameError),
+    #[error(transparent)]
+    InvalidPackageName(#[from] InvalidPackageNameError),
+
+    #[error(transparent)]
+    PinCompatibleError(#[from] PinCompatibleError),
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -82,41 +88,50 @@ impl<T> WithSource<T> {
 }
 
 impl Dependencies {
-    pub fn new(
+    pub fn new<'a>(
         output: &CondaOutputDependencies,
         source_anchor: Option<SourceAnchor>,
+        compatibility_map: &PinCompatibilityMap<'a>,
     ) -> Result<Self, DependenciesError> {
         let mut dependencies = DependencyMap::default();
         let mut constraints = DependencyMap::default();
 
         for depend in &output.depends {
-            let name = rattler_conda_types::PackageName::from_str(&depend.name).map_err(|err| {
-                DependenciesError::InvalidPackageName(depend.name.to_owned(), err)
-            })?;
-            match conversion::from_package_spec_v1(depend.spec.clone()).into_source_or_binary() {
-                Either::Left(source) => {
-                    let location = if let Some(anchor) = &source_anchor {
-                        anchor.resolve(source.location)
-                    } else {
-                        source.location
-                    };
-                    dependencies.insert(name, PixiSpec::from(SourceSpec { location }).into());
+            let name = rattler_conda_types::PackageName::from_str(&depend.name)?;
+
+            // Match directly on PackageSpec
+            match &depend.spec {
+                pbt::PackageSpec::Binary(binary) => {
+                    let spec = conversion::from_binary_spec_v1(binary.clone());
+                    dependencies.insert(name, PixiSpec::from(spec).into());
                 }
-                Either::Right(binary) => {
-                    dependencies.insert(name, PixiSpec::from(binary).into());
+                pbt::PackageSpec::Source(source) => {
+                    let spec = conversion::from_source_spec_v1(source.clone());
+                    let resolved = if let Some(anchor) = &source_anchor {
+                        spec.resolve(anchor)
+                    } else {
+                        spec
+                    };
+                    dependencies.insert(name, PixiSpec::from(resolved).into());
+                }
+                pbt::PackageSpec::PinCompatible(pin) => {
+                    // Resolve immediately with O(1) HashMap lookup
+                    let resolved = resolve_pin_compatible(&name, pin, compatibility_map)?;
+                    dependencies.insert(name, resolved.into());
                 }
             }
         }
 
         for constraint in &output.constraints {
-            let name =
-                rattler_conda_types::PackageName::from_str(&constraint.name).map_err(|err| {
-                    DependenciesError::InvalidPackageName(constraint.name.to_owned(), err)
-                })?;
-            constraints.insert(
-                name,
-                conversion::from_binary_spec_v1(constraint.spec.clone()).into(),
-            );
+            let name = rattler_conda_types::PackageName::from_str(&constraint.name)?;
+
+            // Match on ConstraintSpec enum
+            match &constraint.spec {
+                pbt::ConstraintSpec::Binary(binary) => {
+                    constraints
+                        .insert(name, conversion::from_binary_spec_v1(binary.clone()).into());
+                }
+            }
         }
 
         Ok(Self {
@@ -370,45 +385,64 @@ pub struct PixiRunExports {
 
 impl PixiRunExports {
     /// Converts a [`CondaOutputRunExports`] to a [`PixiRunExports`].
-    pub fn try_from_protocol(output: &CondaOutputRunExports) -> Result<Self, DependenciesError> {
-        fn convert_package_spec(
-            specs: &[NamedSpecV1<PackageSpecV1>],
+    pub fn try_from_protocol<'a>(
+        output: &CondaOutputRunExports,
+        compatibility_map: &PinCompatibilityMap<'a>,
+    ) -> Result<Self, DependenciesError> {
+        fn convert_package_spec<'a>(
+            specs: &[NamedSpec<PackageSpec>],
+            compatibility_map: &PinCompatibilityMap<'a>,
         ) -> Result<DependencyMap<PackageName, PixiSpec>, DependenciesError> {
             specs
                 .iter()
                 .cloned()
                 .map(|named_spec| {
-                    let spec = conversion::from_package_spec_v1(named_spec.spec);
-                    let name = PackageName::from_str(&named_spec.name).map_err(|err| {
-                        DependenciesError::InvalidPackageName(named_spec.name.to_owned(), err)
-                    })?;
+                    let name = PackageName::from_str(&named_spec.name)?;
+
+                    let spec = match named_spec.spec {
+                        pbt::PackageSpec::Binary(binary) => {
+                            conversion::from_binary_spec_v1(binary).into()
+                        }
+                        pbt::PackageSpec::Source(source) => {
+                            conversion::from_source_spec_v1(source).into()
+                        }
+                        pbt::PackageSpec::PinCompatible(pin) => {
+                            resolve_pin_compatible(&name, &pin, compatibility_map)?
+                        }
+                    };
+
                     Ok((name, spec))
                 })
                 .collect()
         }
 
-        fn convert_binary_spec(
-            specs: &[NamedSpecV1<BinaryPackageSpecV1>],
+        fn convert_constraint_spec(
+            specs: &[NamedSpec<pbt::ConstraintSpec>],
         ) -> Result<DependencyMap<PackageName, BinarySpec>, DependenciesError> {
             specs
                 .iter()
                 .cloned()
                 .map(|named_spec| {
-                    let spec = conversion::from_binary_spec_v1(named_spec.spec);
-                    let name = PackageName::from_str(&named_spec.name).map_err(|err| {
-                        DependenciesError::InvalidPackageName(named_spec.name.to_owned(), err)
-                    })?;
+                    let name = PackageName::from_str(&named_spec.name)?;
+
+                    // Match on ConstraintSpec enum
+                    let spec = match named_spec.spec {
+                        pbt::ConstraintSpec::Binary(binary) => {
+                            conversion::from_binary_spec_v1(binary)
+                        }
+                    };
+
                     Ok((name, spec))
                 })
                 .collect()
         }
 
         Ok(PixiRunExports {
-            weak: convert_package_spec(&output.weak)?,
-            strong: convert_package_spec(&output.strong)?,
-            noarch: convert_package_spec(&output.noarch)?,
-            weak_constrains: convert_binary_spec(&output.weak_constrains)?,
-            strong_constrains: convert_binary_spec(&output.strong_constrains)?,
+            weak: convert_package_spec(&output.weak, compatibility_map)?,
+            strong: convert_package_spec(&output.strong, compatibility_map)?,
+            noarch: convert_package_spec(&output.noarch, compatibility_map)?,
+            weak_constrains: convert_constraint_spec(&output.weak_constrains)?,
+            strong_constrains: convert_constraint_spec(&output.strong_constrains)?,
         })
     }
 }

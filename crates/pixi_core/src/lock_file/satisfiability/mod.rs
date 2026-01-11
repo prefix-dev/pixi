@@ -815,7 +815,7 @@ pub async fn verify_platform_satisfiability(
 pub enum Dependency {
     Input(PackageName, PixiSpec, Cow<'static, str>),
     Conda(MatchSpec, Cow<'static, str>),
-    CondaSource(PackageName, MatchSpec, SourceSpec, Cow<'static, str>),
+    CondaSource(PackageName, SourceSpec, Cow<'static, str>),
     PyPi(uv_distribution_types::Requirement, Cow<'static, str>),
 }
 
@@ -826,7 +826,7 @@ impl Dependency {
         match self {
             Dependency::Input(name, _, _) => Some(name.clone()),
             Dependency::Conda(spec, _) => spec.name.as_ref().and_then(|m| m.as_exact().cloned()),
-            Dependency::CondaSource(name, _, _, _) => Some(name.clone()),
+            Dependency::CondaSource(name, _, _) => Some(name.clone()),
             Dependency::PyPi(_, _) => None,
         }
     }
@@ -1443,19 +1443,13 @@ async fn resolve_single_dev_dependency(
 
     // Process source dependencies
     for (dev_name, dep) in dev_source.into_specs() {
-        let anchored_source = SourceAnchor::Workspace.resolve(dep.clone().location);
-
-        let spec = MatchSpec::from_str(dev_name.as_source(), Lenient).map_err(|e| {
-            PlatformUnsat::FailedToParseMatchSpec(dev_name.as_source().to_string(), e)
-        })?;
+        let string = dep.to_string();
+        let anchored_source = dep.resolve(&SourceAnchor::Workspace);
 
         dependencies.push(Dependency::CondaSource(
             dev_name.clone(),
-            spec,
-            SourceSpec {
-                location: anchored_source,
-            },
-            Cow::Owned(format!("{} @ {}", dev_name.as_source(), dep)),
+            anchored_source,
+            Cow::Owned(format!("{} @ {}", dev_name.as_source(), string)),
         ));
     }
 
@@ -1703,7 +1697,6 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             name,
                             source_spec,
                             source,
-                            None,
                         )?
                     }
                     Either::Right(binary_spec) => {
@@ -1757,14 +1750,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     None => continue,
                 }
             }
-            Dependency::CondaSource(name, spec, source_spec, source) => {
+            Dependency::CondaSource(name, source_spec, source) => {
                 expected_conda_source_dependencies.insert(name.clone());
                 FoundPackage::Conda(find_matching_source_package(
                     locked_pixi_records,
                     name,
                     source_spec,
                     source,
-                    Some(spec),
                 )?)
             }
             Dependency::PyPi(requirement, source) => {
@@ -1884,6 +1876,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 for depends in &record.package_record().depends {
                     let spec = MatchSpec::from_str(depends.as_str(), Lenient)
                         .map_err(|e| PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e))?;
+                    let (name, spec) = spec.into_nameless();
 
                     let (origin, anchor) = match record {
                         PixiRecord::Binary(record) => (
@@ -1896,13 +1889,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                 record.package_record.name.as_source(),
                                 &record.manifest_source
                             )),
-                            SourceSpec::from(record.manifest_source.clone()).into(),
+                            SourceLocationSpec::from(record.manifest_source.clone()).into(),
                         ),
                     };
 
                     if let Some((source, package_name)) = record
                         .as_source()
-                        .and_then(|record| Some((record, spec.name.as_ref()?)))
+                        .and_then(|record| Some((record, name.as_ref()?)))
                         .and_then(|(record, package_name_matcher)| {
                             let package_name = package_name_matcher
                                 .as_exact()
@@ -1913,18 +1906,18 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             ))
                         })
                     {
-                        let anchored_location = anchor.resolve(source.location.clone());
-                        let anchored_source = SourceSpec {
-                            location: anchored_location,
-                        };
+                        let anchored_location = anchor.resolve(source.clone());
+                        let source_spec = SourceSpec::new(anchored_location, spec);
                         conda_queue.push(Dependency::CondaSource(
                             package_name.clone(),
-                            spec,
-                            anchored_source,
+                            source_spec,
                             origin,
                         ));
                     } else {
-                        conda_queue.push(Dependency::Conda(spec, origin));
+                        conda_queue.push(Dependency::Conda(
+                            MatchSpec::from_nameless(spec, name),
+                            origin,
+                        ));
                     }
                 }
             }
@@ -2195,7 +2188,6 @@ fn find_matching_source_package(
     name: PackageName,
     source_spec: SourceSpec,
     source: Cow<str>,
-    match_spec: Option<MatchSpec>,
 ) -> Result<CondaPackageIdx, Box<PlatformUnsat>> {
     // Find the package that matches the source spec.
     let Some((idx, package)) = locked_pixi_records
@@ -2219,14 +2211,13 @@ fn find_matching_source_package(
 
     source_package
         .manifest_source
-        .satisfies(&source_spec)
+        .satisfies(&source_spec.location)
         .map_err(|e| PlatformUnsat::SourcePackageMismatch(name.as_source().to_string(), e))?;
 
-    if let Some(match_spec) = match_spec
-        && !match_spec.matches(package)
-    {
+    let match_spec = source_spec.to_nameless_match_spec();
+    if !match_spec.matches(package) {
         return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-            Box::new(match_spec),
+            Box::new(MatchSpec::from_nameless(match_spec, Some(name.into()))),
             source.into_owned(),
         )));
     }
