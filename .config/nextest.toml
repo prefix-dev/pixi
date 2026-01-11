@@ -1,0 +1,9 @@
+# Nextest configuration
+# https://nexte.st/book/configuration.html
+
+[test-groups]
+serial-integration = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = "package(pixi_command_dispatcher)"
+test-group = "serial-integration"
