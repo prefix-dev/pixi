@@ -19,6 +19,8 @@ pixi run [OPTIONS] [TASK]...
 <br>May be provided more than once.
 
 ## Options
+- <a id="arg---executable" href="#arg---executable">`--executable (-x)`</a>
+:  Prefer running the command as an executable instead of a Pixi task when both share the same name. Short: -x
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to run the task in
 - <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>
