@@ -970,17 +970,16 @@ pub(crate) fn pypi_satifisfies_requirement(
                             }
                             .into());
                         }
-                        // If the spec uses DefaultBranch, we need to check what the lock has:
-                        // - If lock has Branch("main") or Tag("v1.0") → NOT satisfiable
-                        //   (user removed explicit branch/tag, should re-resolve)
-                        // - If lock has DefaultBranch or Rev (specific commit) → satisfiable
-                        //   (specific commit is still valid even without explicit ref)
+                        // If the spec uses DefaultBranch, we need to check what the lock has
+                        // DefaultBranch in it
+                        // otherwise any explicit ref in lock is not satisfiable
                         if *reference == GitReference::DefaultBranch {
                             match &pinned_git_spec.source.reference {
-                                // These are explicit named references - not satisfiable
+                                // Any explicit reference in lock is not satisfiable
                                 // when manifest has DefaultBranch (user removed the explicit ref)
                                 pixi_spec::GitReference::Branch(_)
-                                | pixi_spec::GitReference::Tag(_) => {
+                                | pixi_spec::GitReference::Tag(_)
+                                | pixi_spec::GitReference::Rev(_) => {
                                     return Err(PlatformUnsat::LockedPyPIGitRefMismatch {
                                         name: spec.name.clone().to_string(),
                                         expected_ref: reference.to_string(),
@@ -988,9 +987,8 @@ pub(crate) fn pypi_satifisfies_requirement(
                                     }
                                     .into());
                                 }
-                                // These are satisfiable - either DefaultBranch or specific commits
-                                pixi_spec::GitReference::DefaultBranch
-                                | pixi_spec::GitReference::Rev(_) => {
+                                // Only DefaultBranch in lock is satisfiable
+                                pixi_spec::GitReference::DefaultBranch => {
                                     return Ok(());
                                 }
                             }
@@ -2619,12 +2617,35 @@ mod tests {
         .unwrap();
         // This should not
         pypi_satifisfies_requirement(&non_matching_spec, &locked_data, &project_root).unwrap_err();
-        // Removing the rev from the Requirement should satisfy any revision
-        let spec = pep508_requirement_to_uv_requirement(
+
+        // Removing the rev from the Requirement should NOT satisfy when lock has explicit Rev.
+        // This ensures that when a user removes an explicit ref from the manifest,
+        // the lock file gets re-resolved.
+        let spec_without_rev = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap(),
         )
         .unwrap();
-        pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap();
+        pypi_satifisfies_requirement(&spec_without_rev, &locked_data, &project_root).unwrap_err();
+
+        // When lock has DefaultBranch (no explicit ref), removing rev from manifest should satisfy
+        let locked_data_default_branch = PypiPackageData {
+            name: "mypkg".parse().unwrap(),
+            version: Version::from_str("0.1.0").unwrap(),
+            // No ?rev= query param, only the fragment with commit hash
+            location: "git+https://github.com/mypkg.git#29932f3915935d773dc8d52c292cadd81c81071d"
+                .parse()
+                .expect("failed to parse url"),
+            hash: None,
+            requires_dist: vec![],
+            requires_python: None,
+            editable: false,
+        };
+        pypi_satifisfies_requirement(
+            &spec_without_rev,
+            &locked_data_default_branch,
+            &project_root,
+        )
+        .unwrap();
     }
 
     // Currently this test is missing from `good_satisfiability`, so we test the

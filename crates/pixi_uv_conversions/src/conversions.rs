@@ -318,10 +318,10 @@ pub fn into_pinned_git_spec(
     .expect("we expect it to be a valid sha");
 
     // Use the original reference from the manifest if provided.
-    // If no explicit reference was specified (DefaultBranch), store the resolved
-    // commit as Rev(commit). This avoids DefaultBranch which requires cache lookups
-    // and can cause panics when re-resolving.
-    let reference = original_reference.unwrap_or_else(|| PixiReference::Rev(git_sha.to_string()));
+    // If no explicit reference was specified, use DefaultBranch.
+    // The precise commit is already captured in the fragment (`#commit`),
+    // so we don't need to duplicate it in the query string as `?rev=commit`.
+    let reference = original_reference.unwrap_or(PixiReference::DefaultBranch);
 
     let pinned_checkout = PinnedGitCheckout::new(
         git_sha,
