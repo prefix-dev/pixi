@@ -1019,7 +1019,19 @@ impl Display for PinnedGitSpec {
         if let Some(subdir) = &self.source.subdirectory {
             write!(f, " (subdir: {})", subdir)?;
         }
-        write!(f, " (ref: {})", self.source.reference)
+        // Only show reference if it provides additional information
+        match &self.source.reference {
+            GitReference::Rev(rev) if rev == &self.source.commit.to_string() => {
+                // Skip redundant reference that matches commit
+            }
+            GitReference::DefaultBranch => {
+                // Skip default branch as it's implicit
+            }
+            _ => {
+                write!(f, " (ref: {})", self.source.reference)?;
+            }
+        }
+        Ok(())
     }
 }
 
