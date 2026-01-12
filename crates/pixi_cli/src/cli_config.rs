@@ -28,7 +28,7 @@ use pixi_pypi_spec::PypiPackageName;
 #[derive(Parser, Debug, Default, Clone)]
 pub struct WorkspaceConfig {
     /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
-    #[arg(long, short, global = true, conflicts_with = "name", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    #[arg(long, short, global = true, conflicts_with = "workspace_name", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub manifest_path: Option<PathBuf>,
 
     /// Backend override for testing purposes. This field is ignored by clap
@@ -37,8 +37,8 @@ pub struct WorkspaceConfig {
     pub backend_override: Option<BackendOverride>,
 
     /// Name of the workspace
-    #[arg(long, global = true, conflicts_with = "manifest_path", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
-    pub name: Option<String>,
+    #[arg(long, short = 'b', global = true, conflicts_with = "manifest_path", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    pub workspace_name: Option<String>,
 }
 
 impl WorkspaceConfig {
@@ -46,9 +46,9 @@ impl WorkspaceConfig {
     pub fn workspace_locator_start(&self) -> DiscoveryStart {
         if let Some(manifest_path) = &self.manifest_path {
             DiscoveryStart::ExplicitManifest(manifest_path.clone())
-        } else if let Some(name) = &self.name {
+        } else if let Some(workspace_name) = &self.workspace_name {
             let config = Config::load_global();
-            let path = config.named_workspace(&name.to_string()).unwrap();
+            let path = config.named_workspace(&workspace_name.to_string()).unwrap();
             DiscoveryStart::ExplicitManifest(path.clone())
         } else {
             DiscoveryStart::CurrentDir
