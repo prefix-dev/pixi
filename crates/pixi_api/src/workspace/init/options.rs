@@ -25,6 +25,10 @@ pub struct InitOptions {
 
     /// The conda-pypi-mapping
     pub conda_pypi_mapping: Option<HashMap<NamedChannelOrUrl, String>>,
+
+    /// Name of the workspace to create. If provided, the workspace will be registered in the
+    /// global workspace registry.
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

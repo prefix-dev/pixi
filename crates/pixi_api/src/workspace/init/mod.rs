@@ -288,6 +288,29 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
         }
     };
 
+    // add workspace to global registry if a name is provided
+    if let Some(name) = &options.name {
+        let mut registry_config = Config::load_global();
+        let mut workspaces = registry_config.named_workspaces.clone();
+        if workspaces.contains_key(name) {
+            interface
+                .warning(&format!(
+                    "Workspace with name '{}' is already registered in the global registry. Not registering this environment. Please run `pixi registry add <name> .` with a unique name to register this environment.",
+                    name
+                ))
+                .await;
+        } else {
+            workspaces.insert(name.clone(), workspace.workspace.provenance.path.clone());
+            registry_config.named_workspaces = workspaces;
+            let global_config_path = pixi_config::config_path_global();
+            let write_path = global_config_path
+                .last()
+                .ok_or_else(|| miette::miette!("Could not determine global config path."))?;
+            registry_config
+                .save(write_path)?;
+        }
+    };
+
     // create a .gitignore if one is missing
     if let Err(e) =
         create_or_append_file(&gitignore_path, template::GITIGNORE_TEMPLATE.trim_start())
