@@ -32,7 +32,7 @@ use pixi_uv_conversions::{
     AsPep508Error, as_uv_req, into_pixi_reference, pep508_requirement_to_uv_requirement,
     to_normalize, to_uv_specifiers, to_uv_version,
 };
-use pypi_modifiers::pypi_marker_env::determine_marker_environment;
+use pypi_modifiers::{Tags, pypi_marker_env::determine_marker_environment};
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, PackageName,
     PackageRecord, ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
@@ -531,36 +531,11 @@ pub fn verify_environment_satisfiability(
         ));
     }
 
-    let platform_wheel_tags = {
-        let system_requirements = environment.system_requirements();
-        locked_environment
-            .packages_by_platform()
-            .flat_map(|(platform, packages)| packages.map(move |package| (platform, package)))
-            .filter_map(|(platform, package)| match package {
-                LockedPackageRef::Conda(rattler_lock::CondaPackageData::Binary(package)) => {
-                    Some((platform, package))
-                }
-                _ => None,
-            })
-            .filter(move |(_, package)| {
-                pypi_modifiers::pypi_tags::is_python_record(&package.package_record)
-            })
-            .filter_map(|(platform, package)| {
-                pypi_modifiers::pypi_tags::get_pypi_tags(
-                    platform,
-                    &system_requirements,
-                    &package.package_record,
-                )
-                .ok()
-                .map(|tags| (platform, tags))
-            })
-            .collect::<HashMap<_, _>>()
-    };
-
     // Do some more checks if we have pypi dependencies
     // 1. Check if the PyPI indexes are present and match
     // 2. Check if we have a no-build option set, that we only have binary packages,
     //    or an editable source
+    // 3. Check that wheel tags still are possible with current system requirements
     if !environment.pypi_dependencies(None).is_empty() {
         let group_pypi_options = grouped_env.pypi_options();
         let indexes = rattler_lock::PypiIndexes::from(group_pypi_options.clone());
@@ -568,30 +543,14 @@ pub fn verify_environment_satisfiability(
         // Check if the indexes in the lock file match our current configuration.
         verify_pypi_indexes(locked_environment, indexes)?;
 
-        // Check that if `no-build` is set, we only have binary packages
-        // or that the package that we disallow are not built from source
-        if let Some(no_build) = group_pypi_options.no_build.as_ref() {
-            verify_pypi_no_build(no_build, locked_environment)?;
-        }
+        let no_build_check = PypiNoBuildCheck::new(group_pypi_options.no_build.as_ref());
+        let pypi_wheel_tags_check = PypiWheelTagsCheck::new(environment, &locked_environment);
 
-        // Check that all wheels still match with the system requirements
-        for (platform, package) in locked_environment
-            .pypi_packages_by_platform()
-            .flat_map(|(platform, it)| it.map(move |package| (platform, package)))
-        {
-            let Some(package_file_name) = package.0.location.file_name() else {
-                continue;
-            };
-            let Some(platform_tags) = platform_wheel_tags.get(&platform) else {
-                continue;
-            };
-            let Ok(wheel) = WheelFilename::from_str(package_file_name) else {
-                continue;
-            };
-            if !wheel.is_compatible(platform_tags) {
-                return Err(EnvironmentUnsat::PypiWheelTagsMismatch {
-                    wheel: wheel.name.to_string(),
-                });
+        // Actually check all pypi packages in one iteration
+        for (platform, package_it) in locked_environment.pypi_packages_by_platform() {
+            for (package_data, _) in package_it {
+                no_build_check.check(package_data)?;
+                pypi_wheel_tags_check.check(platform, package_data)?;
             }
         }
     }
@@ -647,99 +606,169 @@ pub fn verify_environment_satisfiability(
     Ok(())
 }
 
-fn verify_pypi_no_build(
-    no_build: &NoBuild,
-    locked_environment: rattler_lock::Environment<'_>,
-) -> Result<(), EnvironmentUnsat> {
-    // Check if we are disallowing all source packages or only a subset
-    #[derive(Eq, PartialEq)]
-    enum Check {
-        All,
-        Packages(HashSet<pep508_rs::PackageName>),
-    }
+struct PypiWheelTagsCheck {
+    platform_wheel_tags: HashMap<Platform, Tags>,
+}
 
-    let check = match no_build {
-        // Ok, so we are allowed to build any source package
-        NoBuild::None => return Ok(()),
-        // We are not allowed to build any source package
-        NoBuild::All => Check::All,
-        // We are not allowed to build a subset of source packages
-        NoBuild::Packages(hash_set) => {
-            let packages = hash_set
-                .iter()
-                .filter_map(|name| pep508_rs::PackageName::new(name.to_string()).ok())
-                .collect();
-            Check::Packages(packages)
+impl PypiWheelTagsCheck {
+    pub fn new(
+        environment: &Environment,
+        locked_environment: &rattler_lock::Environment<'_>,
+    ) -> Self {
+        let platform_wheel_tags = {
+            let system_requirements = environment.system_requirements();
+            locked_environment
+                .packages_by_platform()
+                .flat_map(|(platform, packages)| packages.map(move |package| (platform, package)))
+                .filter_map(|(platform, package)| match package {
+                    LockedPackageRef::Conda(rattler_lock::CondaPackageData::Binary(package)) => {
+                        Some((platform, package))
+                    }
+                    _ => None,
+                })
+                .filter(move |(_, package)| {
+                    pypi_modifiers::pypi_tags::is_python_record(&package.package_record)
+                })
+                .filter_map(|(platform, package)| {
+                    pypi_modifiers::pypi_tags::get_pypi_tags(
+                        platform,
+                        &system_requirements,
+                        &package.package_record,
+                    )
+                    .ok()
+                    .map(|tags| (platform, tags))
+                })
+                .collect::<HashMap<_, _>>()
+        };
+
+        PypiWheelTagsCheck {
+            platform_wheel_tags,
         }
-    };
-
-    // Small helper function to get the dist extension from a url
-    fn pypi_dist_extension_from_url(url: &Url) -> Result<DistExtension, ExtensionError> {
-        // Take the file name from the url
-        let path = url
-            .path_segments()
-            .and_then(|mut s| s.next_back())
-            .unwrap_or_default();
-        // Convert the path to a dist extension
-        DistExtension::from_path(Path::new(path))
     }
 
-    // Determine if we do not accept non-wheels for all packages or only for a
-    // subset Check all the currently locked packages if we are making any
-    // violations
-    for (_, packages) in locked_environment.pypi_packages_by_platform() {
-        for (package, _) in packages {
-            let extension = match &package.location {
-                // Get the extension from the url
-                UrlOrPath::Url(url) => {
-                    if url.scheme().starts_with("git+") {
-                        // Just choose some source extension, does not really matter, cause it is
-                        // actually a directory, this is just for the check
-                        Ok(DistExtension::Source(SourceDistExtension::TarGz))
-                    } else {
-                        pypi_dist_extension_from_url(url)
-                    }
-                }
-                UrlOrPath::Path(path) => {
-                    let path = Path::new(path.as_str());
-                    if path.is_dir() {
-                        // Editables are allowed with no-build
-                        if package.editable {
-                            continue;
-                        } else {
-                            // Non-editable source packages might not be allowed
-                            Ok(DistExtension::Source(SourceDistExtension::TarGz))
-                        }
-                    } else {
-                        // Could be a reference to a wheel or sdist
-                        DistExtension::from_path(path)
-                    }
-                }
-            }?;
+    pub fn check(
+        &self,
+        platform: Platform,
+        package_data: &PypiPackageData,
+    ) -> Result<(), EnvironmentUnsat> {
+        let Some(package_file_name) = package_data.location.file_name() else {
+            return Ok(());
+        };
+        let Some(platform_tags) = self.platform_wheel_tags.get(&platform) else {
+            return Ok(());
+        };
+        let Ok(wheel) = WheelFilename::from_str(package_file_name) else {
+            return Ok(());
+        };
+        if !wheel.is_compatible(platform_tags) {
+            Err(EnvironmentUnsat::PypiWheelTagsMismatch {
+                wheel: wheel.name.to_string(),
+            })
+        } else {
+            Ok(())
+        }
+    }
+}
 
-            match extension {
-                // Wheels are fine
-                DistExtension::Wheel => continue,
-                // Check if we have a source package that we are not allowed to build
-                // it could be that we are only disallowing for certain source packages
-                DistExtension::Source(_) => match check {
-                    Check::All => {
-                        return Err(EnvironmentUnsat::NoBuildWithNonBinaryPackages(
-                            package.name.to_string(),
-                        ));
-                    }
-                    Check::Packages(ref hash_set) => {
-                        if hash_set.contains(&package.name) {
-                            return Err(EnvironmentUnsat::NoBuildWithNonBinaryPackages(
-                                package.name.to_string(),
-                            ));
-                        }
-                    }
-                },
+// Check if we are disallowing all source packages or only a subset
+#[derive(Eq, PartialEq)]
+enum Check {
+    All,
+    Packages(HashSet<pep508_rs::PackageName>),
+}
+
+pub struct PypiNoBuildCheck {
+    check: Option<Check>,
+}
+
+impl PypiNoBuildCheck {
+    pub fn new(no_build: Option<&NoBuild>) -> Self {
+        let check = match no_build {
+            // Ok, so we are allowed to build any source package
+            Some(NoBuild::None) | None => None,
+            // We are not allowed to build any source package
+            Some(NoBuild::All) => Some(Check::All),
+            // We are not allowed to build a subset of source packages
+            Some(NoBuild::Packages(hash_set)) => {
+                let packages = hash_set
+                    .iter()
+                    .filter_map(|name| pep508_rs::PackageName::new(name.to_string()).ok())
+                    .collect();
+                Some(Check::Packages(packages))
             }
+        };
+
+        Self { check }
+    }
+
+    pub fn check(&self, package_data: &PypiPackageData) -> Result<(), EnvironmentUnsat> {
+        let Some(check) = &self.check else {
+            return Ok(());
+        };
+
+        // Determine if we do not accept non-wheels for all packages or only for a
+        // subset Check all the currently locked packages if we are making any
+        // violations
+        // Small helper function to get the dist extension from a url
+        fn pypi_dist_extension_from_url(url: &Url) -> Result<DistExtension, ExtensionError> {
+            // Take the file name from the url
+            let path = url
+                .path_segments()
+                .and_then(|mut s| s.next_back())
+                .unwrap_or_default();
+            // Convert the path to a dist extension
+            DistExtension::from_path(Path::new(path))
+        }
+
+        let extension = match &package_data.location {
+            // Get the extension from the url
+            UrlOrPath::Url(url) => {
+                if url.scheme().starts_with("git+") {
+                    // Just choose some source extension, does not really matter, cause it is
+                    // actually a directory, this is just for the check
+                    Ok(DistExtension::Source(SourceDistExtension::TarGz))
+                } else {
+                    pypi_dist_extension_from_url(url)
+                }
+            }
+            UrlOrPath::Path(path) => {
+                let path = Path::new(path.as_str());
+                if path.is_dir() {
+                    // Editables are allowed with no-build
+                    if package_data.editable {
+                        return Ok(());
+                    } else {
+                        // Non-editable source packages might not be allowed
+                        Ok(DistExtension::Source(SourceDistExtension::TarGz))
+                    }
+                } else {
+                    // Could be a reference to a wheel or sdist
+                    DistExtension::from_path(path)
+                }
+            }
+        }?;
+
+        match extension {
+            // Wheels are fine
+            DistExtension::Wheel => Ok(()),
+            // Check if we have a source package that we are not allowed to build
+            // it could be that we are only disallowing for certain source packages
+            DistExtension::Source(_) => match check {
+                Check::All => Err(EnvironmentUnsat::NoBuildWithNonBinaryPackages(
+                    package_data.name.to_string(),
+                )),
+                Check::Packages(hash_set) => {
+                    if hash_set.contains(&package_data.name) {
+                        Err(EnvironmentUnsat::NoBuildWithNonBinaryPackages(
+                            package_data.name.to_string(),
+                        ))
+                    } else {
+                        Ok(())
+                    }
+                }
+            },
         }
     }
-    Ok(())
 }
 
 fn verify_pypi_indexes(
