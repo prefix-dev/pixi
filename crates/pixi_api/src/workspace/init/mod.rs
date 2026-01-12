@@ -306,8 +306,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
             let write_path = global_config_path
                 .last()
                 .ok_or_else(|| miette::miette!("Could not determine global config path."))?;
-            registry_config
-                .save(write_path)?;
+            registry_config.save(write_path)?;
         }
     };
 

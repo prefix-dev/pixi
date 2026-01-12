@@ -30,7 +30,6 @@ pub enum DiscoveryStart {
     ///
     /// If no manifest is found at the given path the search will abort.
     ExplicitManifest(PathBuf),
-
 }
 
 impl DiscoveryStart {
