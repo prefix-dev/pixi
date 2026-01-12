@@ -2353,6 +2353,7 @@ UNUSED = "unused"
             proxy_config: ProxyConfig::default(),
             build: BuildConfig::default(),
             tool_platform: None,
+            named_workspaces: HashMap::new(),
             // Deprecated keys
             change_ps1: None,
             force_activate: None,
