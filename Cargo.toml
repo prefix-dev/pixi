@@ -4,6 +4,12 @@ exclude = [
   # Only pulled in when enabling certain features. We do not want to include
   # these crates when running workspace wide commands.
   "crates/pixi_allocator",
+  # Standalone projects that should not be part of the workspace
+  "docs",
+  "examples",
+  "pixi-build-backends",
+  "tests/data",
+  "trampoline",
 ]
 members = ["crates/*"]
 resolver = "3"

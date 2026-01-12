@@ -62,10 +62,6 @@ lto = false
 opt-level = 0
 strip = false
 
-# Prevent package from thinking it's in the workspace
-[workspace]
-
-
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
 reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
