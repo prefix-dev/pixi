@@ -37,6 +37,7 @@ pub mod install;
 pub mod list;
 pub mod lock;
 pub(crate) mod match_spec_or_path;
+pub mod registry;
 pub mod reinstall;
 pub mod remove;
 pub mod run;
@@ -171,6 +172,7 @@ pub enum Command {
     #[clap(visible_alias = "ls")]
     List(list::Args),
     Lock(lock::Args),
+    Registry(registry::Args),
     Reinstall(reinstall::Args),
     #[clap(visible_alias = "rm")]
     Remove(remove::Args),
@@ -383,6 +385,7 @@ pub async fn execute_command(
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
         Command::External(args) => command_info::execute_external_command(args),
+        Command::Registry(args) => registry::execute(args).await,
     }
 }
 
