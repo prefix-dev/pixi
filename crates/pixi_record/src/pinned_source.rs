@@ -994,9 +994,9 @@ impl PinnedSourceSpec {
 impl Display for PinnedSourceSpec {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            PinnedSourceSpec::Path(spec) => write!(f, "{}", spec),
-            PinnedSourceSpec::Url(spec) => write!(f, "{}", spec),
-            PinnedSourceSpec::Git(spec) => write!(f, "{}", spec),
+            PinnedSourceSpec::Path(spec) => write!(f, "{spec}"),
+            PinnedSourceSpec::Url(spec) => write!(f, "{spec}"),
+            PinnedSourceSpec::Git(spec) => write!(f, "{spec}"),
         }
     }
 }
