@@ -1159,6 +1159,12 @@ async fn verify_source_metadata(
                 };
 
                 // Check if the build source location changed
+                tracing::debug!(
+                    "Comparing build sources for '{}' - locked: {:?}, current: {:?}",
+                    source_record.package_record.name.as_source(),
+                    source_record.build_source,
+                    current_record.build_source
+                );
                 if current_record.build_source != source_record.build_source {
                     return Err(Box::new(PlatformUnsat::SourceBuildLocationChanged(
                         source_record.package_record.name.as_source().to_string(),

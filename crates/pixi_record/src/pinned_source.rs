@@ -994,9 +994,9 @@ impl PinnedSourceSpec {
 impl Display for PinnedSourceSpec {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            PinnedSourceSpec::Path(spec) => write!(f, "{}", spec.path),
-            PinnedSourceSpec::Url(spec) => write!(f, "{}", spec.url),
-            PinnedSourceSpec::Git(spec) => write!(f, "{}@{}", spec.git, spec.source.commit),
+            PinnedSourceSpec::Path(spec) => write!(f, "{}", spec),
+            PinnedSourceSpec::Url(spec) => write!(f, "{}", spec),
+            PinnedSourceSpec::Git(spec) => write!(f, "{}", spec),
         }
     }
 }
@@ -1015,7 +1015,11 @@ impl Display for PinnedPathSpec {
 
 impl Display for PinnedGitSpec {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}@{}", self.git, self.source.commit)
+        write!(f, "{}@{}", self.git, self.source.commit)?;
+        if let Some(subdir) = &self.source.subdirectory {
+            write!(f, " (subdir: {})", subdir)?;
+        }
+        write!(f, " (ref: {})", self.source.reference)
     }
 }
 

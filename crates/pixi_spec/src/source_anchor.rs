@@ -90,10 +90,17 @@ impl SourceAnchor {
                         .join(path)
                         .to_path(),
                 );
+                // Normalize empty subdirectory to None
+                let subdir_str = relative_subdir.to_string();
+                let subdirectory = if subdir_str.is_empty() {
+                    None
+                } else {
+                    Some(subdir_str)
+                };
                 SourceLocationSpec::Git(GitSpec {
                     git: git.clone(),
                     rev: rev.clone(),
-                    subdirectory: Some(relative_subdir.to_string()),
+                    subdirectory,
                 })
             }
         }
