@@ -1,8 +1,0 @@
-pin_run_as_build: null
-zip_keys: null
-boltons:
-- ==2.0.0
-build_platform:
-- linux-64
-target_platform:
-- linux-64

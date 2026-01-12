@@ -72,6 +72,9 @@ target/
 *.orig
 **/*.rs.bk
 
+# Backend build debug output
+crates/pixi-build-*/debug/
+
 # IDE and editor files
 .idea/
 .vscode/
