@@ -88,6 +88,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             workspaces.insert(add_args.name, add_args.manifest_path);
             config.named_workspaces = workspaces;
             config.save(&to)?;
+            eprintln!(
+                "{} {}",
+                console::style(console::Emoji("✔ ", "")).green(),
+                console::style("Workspace registered successfully.").bold()
+            );
         }
         Command::List(args) => {
             let workspaces = config.named_workspaces;
@@ -111,6 +116,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 workspaces.remove(&remove_args.name);
                 config.named_workspaces = workspaces;
                 config.save(&to)?;
+                eprintln!(
+                    "{} {}",
+                    console::style(console::Emoji("✔ ", "")).green(),
+                    format!(
+                        "Workspace '{}' has been removed from the registry successfully.",
+                        &remove_args.name
+                    )
+                );
             } else {
                 return Err(
                     miette::diagnostic!("Workspace '{}' is not found.", remove_args.name,).into(),
