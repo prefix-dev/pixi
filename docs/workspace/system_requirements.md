@@ -1,8 +1,8 @@
-**System requirements** tell Pixi the system specifications needed to install and run your workspace’s environment.
+**System requirements** tell Pixi the system specifications needed to install and run your environment.
 They ensure that the dependencies match the operating system and hardware of your machine.
 
 !!! note "Think of it like this:"
-    You’re defining what “kind of machines” your workspace can run on.
+    You're defining what "kind of machines" your environment can run on.
     ```toml
     [system-requirements]
     linux  = "4.18"
@@ -10,7 +10,7 @@ They ensure that the dependencies match the operating system and hardware of you
     cuda   = "12"
     macos  = "13.0"
     ```
-    This results in a workspace that can run on:
+    This results in an environment that can run on:
 
     - Linux with kernel version `4.18`
     - GNU C Library (glibc) version `2.28`
@@ -21,7 +21,10 @@ They ensure that the dependencies match the operating system and hardware of you
 When resolving dependencies, Pixi combines:
 
 - The default requirements for the `platforms`.
-- Any custom requirements you’ve added for your workspace through the `[system-requirements]`.
+- Any custom requirements you've added through the `[system-requirements]` table.
+
+The root-level `[system-requirements]` table applies to the [default feature](./multi_environment.md).
+This means it affects all environments that include the default feature (which is the default behavior unless `no-default-feature = true` is set).
 
 This way, Pixi guarantees your environment is consistent and compatible with your machine.
 
@@ -82,7 +85,7 @@ The following configurations outline the default system requirements for differe
 
 ## Customizing System Requirements
 
-You only need to define system requirements if your workspace necessitates a different set from the defaults.
+You only need to define system requirements if your environment necessitates a different set from the defaults.
 This is common when installing environments on older or newer versions of operating systems.
 
 ### Adjusting for Older Systems
@@ -92,8 +95,8 @@ If you're encountering an error like:
 × The current system has a mismatching virtual package. The workspace requires '__linux' to be at least version '4.18' but the system has version '4.12.14'
 ```
 
-This indicates that the workspace's system requirements are higher than your current system's specifications.
-To resolve this, you can lower the system requirements in your workspace's configuration:
+This indicates that the environment's system requirements are higher than your current system's specifications.
+To resolve this, you can lower the system requirements in your configuration:
 
 ```toml
 [system-requirements]
@@ -104,7 +107,7 @@ This adjustment informs the dependency resolver to accommodate the older system 
 
 ### Using CUDA in pixi
 
-To utilize CUDA in your workspace, you must specify the desired CUDA version in the system-requirements table.
+To utilize CUDA in your environment, you must specify the desired CUDA version in the system-requirements table.
 This ensures that CUDA is recognized and appropriately locked into the lock file if necessary.
 
 Example Configuration
@@ -131,7 +134,7 @@ cuda = ["cuda"]
 
 ### Available Override Options
 In certain scenarios, you might need to override the system requirements detected on your machine.
-This can be particularly useful when working on systems that do not meet the workspace's default requirements.
+This can be particularly useful when working on systems that do not meet the environment's default requirements.
 
 You can override virtual packages by setting the following environment variables:
 
