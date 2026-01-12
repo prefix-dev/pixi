@@ -1,0 +1,46 @@
+name: Backends - ROS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - crates/pixi-build-backend/**
+      - Cargo.*
+      - pixi-build-backends/py-pixi-build-backend/**
+      - pixi-build-backends/backends/pixi-build-ros/**
+      - .github/workflows/backends-ros.yml
+  pull_request:
+    paths:
+      - crates/pixi-build-backend/**
+      - Cargo.*
+      - pixi-build-backends/py-pixi-build-backend/**
+      - pixi-build-backends/backends/pixi-build-ros/**
+      - .github/workflows/backends-ros.yml
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test the pixi-build-ros package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: prefix-dev/setup-pixi@main
+        with:
+          manifest-path: pixi-build-backends/backends/pixi-build-ros/pixi.toml
+      - name: Run mypy
+        run: |
+          cd pixi-build-backends/backends/pixi-build-ros
+          pixi run lint
+      - name: Run tests
+        run: |
+          cd pixi-build-backends/backends/pixi-build-ros
+          pixi run test --color=yes

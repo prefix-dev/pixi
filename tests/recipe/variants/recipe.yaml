@@ -1,0 +1,9 @@
+package:
+  name: foobar
+  version: 1.0.0
+
+requirements:
+  host:
+    - python
+  run:
+    - python

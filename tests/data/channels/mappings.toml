@@ -19,3 +19,4 @@
 "virtual_packages/cuda.yaml" = "virtual_packages"
 "virtual_packages/no-deps.yaml" = "virtual_packages"
 "virtual_packages/noarch_package.yaml" = "virtual_packages"
+"target_specific_channel_1.yaml" = "target_specific_channel_1"

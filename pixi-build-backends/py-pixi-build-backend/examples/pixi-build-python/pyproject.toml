@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pixi-build-python"
+description = "Python bindings for pixi-build-backends"
+requires-python = ">=3.8"
+license = { text = "MIT OR Apache-2.0" }
+authors = [{ name = "pixi contributors" }]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Rust",
+  "Topic :: Software Development :: Build Tools",
+]
+keywords = ["build", "conda", "package", "python", "rust"]
+version = "0.0.1"
+dependencies = [
+  "py-rattler",
+  "asyncio",
+  "toml",
+  # "py-pixi-build-backend @ file:../../"
+]
+
+[project.scripts]
+pixi-build-python = "pixi_build_python.main:main"
+
+
+[project.urls]
+Homepage = "https://github.com/prefix-dev/pixi-build-backends"
+Repository = "https://github.com/prefix-dev/pixi-build-backends"
+"Bug Tracker" = "https://github.com/prefix-dev/pixi-build-backends/issues"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+preview = ["pixi-build"]
+
+[tool.pixi.package.build]
+backend = { name = "pixi-build-python", version = "*" }
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+
+[tool.pixi.package.host-dependencies]
+hatchling = "*"

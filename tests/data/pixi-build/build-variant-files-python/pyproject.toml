@@ -1,0 +1,12 @@
+[project]
+description = "Variant files test package built with pixi-build-python."
+name = "variant-files-python"
+requires-python = ">=3.11"
+version = "1.0.0"
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["variant_files_python"]

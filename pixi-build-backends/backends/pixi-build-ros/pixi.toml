@@ -1,0 +1,84 @@
+[workspace]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+platforms = ["osx-arm64", "win-64", "linux-64", "linux-aarch64"]
+preview = ["pixi-build"]
+
+[activation.env]
+CARGO_TARGET_DIR = "target/pixi"
+
+[tasks]
+lint.depends-on = ["fmt", "lint-ruff", "lint-mypy"]
+
+[target.linux-64.dependencies]
+clang = ">=21.1,<21.2"
+mold = ">=2.33.0,<3.0"
+patchelf = "==0.18.0"
+
+[target.linux-64.activation]
+scripts = ["../../scripts/activate.sh"]
+
+[dependencies]
+pydantic = ">=2.8.2,<3"
+py_rattler = ">=0.20,<0.21"
+py-pixi-build-backend = "*"
+
+[pypi-dependencies]
+pixi-build-ros = { path = ".", editable = true }
+
+[environments]
+default = { features = ["test", "lint"], solve-group = "default" }
+test = { features = ["test"], solve-group = "default" }
+lint = { features = ["lint"], no-default-feature = true }
+
+[feature.test.tasks]
+test = "pytest tests"
+lint-mypy = "mypy"
+
+[feature.test.dependencies]
+pixi-pycharm = ">=0.0.8,<0.1"
+pytest = "*"
+mypy = ">=1.18.2,<2"
+syrupy = ">=5,<6"
+types-pyyaml = "*"
+# You can skip this as it's a long build, uncomment this when developing only in this package
+#py-pixi-build-backend = "*"
+py-pixi-build-backend = { path = "../../py-pixi-build-backend" }
+
+[feature.lint.dependencies]
+ruff = "*"
+pyupgrade = ">=3.20.0,<4"
+
+[feature.lint.tasks]
+lint-ruff = "ruff check ."
+fmt-pyupgrade = "pyupgrade --py310-plus **/**/*.py"
+fmt-ruff = "ruff format src tests"
+fmt = { depends-on = ["fmt-pyupgrade", "fmt-ruff"] }
+
+## Package section
+[package.build.backend]
+name = "pixi-build-python"
+version = "*"
+
+[package.build.config]
+extra-input-globs = ["!tests/**"]
+
+[package.host-dependencies]
+hatchling = "*"
+python = ">=3.10"
+
+[package.run-dependencies]
+python = ">=3.10"
+rosdistro = "*"
+pydantic = ">=2.8.2,<3"
+py_rattler = ">=0.15.0,<0.16"
+catkin_pkg = "*"
+pyyaml = "*"
+pixi-build-api-version = ">=4,<5"
+# should be added to `py-pixi-build-backend`
+typing-extensions = "*"
+# this depends has to match the test dependency, so switch comments if needed
+#py-pixi-build-backend = "*"
+py-pixi-build-backend = { path = "../../py-pixi-build-backend" }

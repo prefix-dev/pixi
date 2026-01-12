@@ -1,0 +1,81 @@
+[workspace]
+authors = ["Nichita Morcotilo <nichita@prefix.dev>"]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+license = "BSD-3-Clause"
+preview = ["pixi-build"]
+
+[package]
+version = "0.4.0"
+
+[package.build.backend]
+name = "pixi-build-python"
+version = "*"
+
+[package.build.config]
+compilers = ["rust"]
+
+[package.build-dependencies]
+rust = ">=1.90.0,<1.91"
+
+[package.host-dependencies]
+maturin = "*"
+
+[package.run-dependencies]
+typing-extensions = "*"
+pixi-build-api-version = ">=4,<5"
+
+[activation.env]
+PIP_REQUIRE_VIRTUALENV = "false"
+
+[feature.build.dependencies]
+python = "*"
+maturin = "~=1.10.2"
+pip = "~=25.3.0"
+rust = ">=1.90.0,<1.91"
+
+[feature.build.target.linux-64.dependencies]
+patchelf = "~=0.18.0"
+
+[dependencies]
+# Skipping self as it's a long build, and it's not yet reused in the tests
+#py-pixi-build-backend = { path = "." }
+
+# Testing and type checking
+mypy = "*"
+pytest = "*"
+syrupy = "*"
+toml = "*"
+types-toml = "*"
+
+# Formatting and linting
+ruff = ">=0.14,<0.15"
+
+[feature.dev.dependencies]
+# Development tools (IDE support)
+rust-src = ">=1.90.0,<1.91"
+
+[tasks]
+build = "maturin develop"
+build-release = "maturin develop --release"
+
+test = { cmd = "pytest --doctest-modules", depends-on = ["build"] }
+test-fast = "pytest --doctest-modules"
+
+fmt = { depends-on = ["fmt-python", "fmt-rust"] }
+fmt-python = "ruff format pixi_build_backend examples tests"
+fmt-rust = "cargo fmt --all"
+
+lint = { depends-on = ["lint-python", "lint-rust"] }
+lint-python = "ruff check ."
+lint-rust = "cargo clippy --all -- -D warnings"
+
+[environments]
+# Development environment with all tools (including rust-src for IDE support)
+default = { features = ["build", "dev"], solve-group = "main" }
+
+# Minimal CI environment for automated testing and checks
+ci = { features = ["build"], solve-group = "main" }

@@ -1,0 +1,54 @@
+on:
+  push:
+    branches:
+      - "main"
+    paths:
+      - crates/pixi-build-*/**
+      - crates/recipe-stage0/**
+      - .github/workflows/backends-rust.yml
+  pull_request:
+    paths:
+      - crates/pixi-build-*/**
+      - crates/recipe-stage0/**
+      - .github/workflows/backends-rust.yml
+
+name: Backends - Rust
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_LOG: info
+  RUST_BACKTRACE: 1
+  RUSTFLAGS: "-D warnings"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test Backend Crates
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@main
+        with:
+          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target/pixi"
+          key: ${{ hashFiles('pixi.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Run backend crate tests
+        run: |
+          pixi run cargo test -p pixi-build-backend
+          pixi run cargo test -p pixi-build-python
+          pixi run cargo test -p pixi-build-cmake
+          pixi run cargo test -p pixi-build-rust
+          pixi run cargo test -p pixi-build-mojo
+          pixi run cargo test -p pixi-build-rattler-build
+          pixi run cargo test -p recipe-stage0

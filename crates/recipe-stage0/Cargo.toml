@@ -1,0 +1,18 @@
+[package]
+name = "recipe-stage0"
+version = "0.1.1"
+edition.workspace = true
+
+[dependencies]
+itertools = { workspace = true }
+hashlink = { workspace = true }
+marked-yaml = { workspace = true }
+rattler_conda_types = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_yaml = { workspace = true }
+rattler-build = { workspace = true }
+indexmap = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true, features = ["yaml", "redactions", "filters"] }

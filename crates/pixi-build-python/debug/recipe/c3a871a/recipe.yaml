@@ -1,0 +1,36 @@
+context: {}
+package:
+  name: foobar
+  version: 0.1.0
+source: []
+build:
+  number: null
+  script:
+    content: |-
+      "$PYTHON" -m pip install --ignore-installed -vv \
+              --no-deps \
+              --no-build-isolation \
+               \
+              /tmp/.tmpvnqpYq
+    env: {}
+    secrets: []
+  noarch: python
+requirements:
+  build:
+  - boltons
+  host:
+  - pip
+  - python
+  run:
+  - python
+  run_constraints: []
+tests: []
+about:
+  homepage: null
+  license: null
+  license_file: null
+  summary: null
+  description: null
+  documentation: null
+  repository: null
+extra: null

@@ -1,0 +1,27 @@
+[workspace]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+  "https://prefix.dev/robostack-humble",
+]
+platforms = ["osx-arm64", "linux-64", "win-64", "linux-aarch64"]
+preview = ["pixi-build"]
+
+[tasks]
+navigator = "ros2 run navigator navigator"
+navigator_py = "ros2 run navigator_py navigator"
+
+[dependencies]
+ros-humble-navigator = { path = "src/navigator" }
+ros-humble-navigator-py = { path = "src/navigator_py" }
+
+[feature.distro-less]
+channels = [
+  "https://prefix.dev/robostack-jazzy",
+  "https://prefix.dev/conda-forge",
+]
+dependencies = { ros-jazzy-distro-less-package = { path = "src/distro_less_package" } }
+tasks = { distro-less-task = "ros2 run distro_less_package distro_less_package" }
+
+[environments]
+distro-less = { features = ["distro-less"], no-default-feature = true }

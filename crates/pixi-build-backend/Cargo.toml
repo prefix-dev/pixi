@@ -1,0 +1,53 @@
+[package]
+name = "pixi-build-backend"
+version = "0.1.5"
+edition.workspace = true
+
+[features]
+default = ["rustls-tls"]
+# Use rustls for TLS (pure Rust implementation)
+rustls-tls = ["rattler-build/rustls-tls"]
+# Use native-tls/OpenSSL for TLS
+native-tls = ["rattler-build/native-tls"]
+
+[dependencies]
+async-trait = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
+clap-verbosity-flag = { workspace = true }
+fs-err = { workspace = true }
+indexmap = { workspace = true }
+ordermap = { workspace = true }
+itertools = { workspace = true }
+miette = { workspace = true }
+minijinja = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_virtual_packages = { workspace = true }
+rattler-build = { workspace = true }
+rattler_digest = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_yaml = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+tracing-subscriber = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+pathdiff = { workspace = true }
+thiserror = { workspace = true }
+
+pixi_build_types = { workspace = true }
+
+jsonrpc-stdio-server = { workspace = true }
+jsonrpc-http-server = { workspace = true }
+jsonrpc-core = { workspace = true }
+recipe-stage0 = { workspace = true }
+
+
+[dev-dependencies]
+insta = { version = "1.42.1", features = ["yaml", "redactions", "filters"] }
+toml_edit = { version = "0.24.0" }
+toml = { version = "0.9.0" }
+
+[package.metadata.cargo-shear]
+ignored = ["async-trait"]

@@ -98,6 +98,13 @@ test-specific-test-debug = { cmd = "pytest --pixi-build=debug -k '{{ test_substr
 update-test-channel = { cmd = "python update-channels.py {{ channel }}", args = [
   "channel",
 ], cwd = "tests/data/channels" }
+# Run pixi-build integration tests (requires backends channel to be built)
+test-pixi-build = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=300 tests/integration_python/pixi_build/", depends-on = [
+  "build-release",
+], description = "Run pixi-build integration tests" }
+test-pixi-build-debug = { cmd = "pytest --pixi-build=debug --numprocesses=auto --durations=0 --timeout=300 tests/integration_python/pixi_build/", depends-on = [
+  "build-debug",
+], description = "Run pixi-build integration tests with debug build" }
 
 [feature.dev.dependencies]
 # Needed for the citation

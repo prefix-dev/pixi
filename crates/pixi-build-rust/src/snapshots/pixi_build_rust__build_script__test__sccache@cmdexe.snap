@@ -1,0 +1,10 @@
+---
+source: crates/pixi-build-rust/src/build_script.rs
+expression: script
+---
+SET RUSTC_WRAPPER=sccache
+
+cargo install --locked --root "%PREFIX%" --path my-prefix-dir --target-dir target --no-track  --force
+if errorlevel 1 exit 1
+
+sccache --show-stats

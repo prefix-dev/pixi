@@ -1,0 +1,81 @@
+[package]
+name = "py-pixi-build-backend"
+version = "0.4.1"
+edition = "2024"
+
+[lib]
+name = "pixi_build_backend"
+crate-type = ["cdylib"]
+
+[features]
+default = ["rustls-tls"]
+rustls-tls = ["pixi-build-backend/rustls-tls", "rattler-build/rustls-tls"]
+native-tls = ["pixi-build-backend/native-tls", "rattler-build/native-tls"]
+
+[dependencies]
+# PyO3 for Python bindings
+pyo3 = { version = "0.26", features = [
+  "extension-module",
+  "abi3-py38",
+  "serde",
+  "py-clone",
+  "experimental-async",
+] }
+pyo3-async-runtimes = { version = "0.26.0", features = ["tokio-runtime"] }
+
+# Core pixi-build dependencies (local crates)
+pixi-build-backend = { path = "../crates/pixi-build-backend" }
+recipe-stage0 = { path = "../crates/recipe-stage0" }
+
+# Pixi types
+pixi_build_types = { git = "https://github.com/prefix-dev/pixi", branch = "main" }
+
+# Async support
+async-trait = "0.1"
+
+# Core serialization and async support
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "rt"] }
+rattler_conda_types = { version = "0.42.0", default-features = false }
+
+# Rattler-build
+rattler-build = { git = "https://github.com/prefix-dev/rattler-build", branch = "main", default-features = false }
+
+# Error handling
+miette = "7.5.0"
+thiserror = "2.0.12"
+
+# Utilities
+indexmap = "2.7.1"
+pythonize = "0.26"
+paste = "1.0.15"
+
+[build-dependencies]
+pyo3-build-config = "0.26"
+
+[profile.ci]
+codegen-units = 16
+inherits = "release"
+lto = false
+opt-level = 0
+strip = false
+
+# Prevent package from thinking it's in the workspace
+[workspace]
+
+
+[patch.crates-io]
+# This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
+reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
+
+[patch."https://github.com/prefix-dev/pixi"]
+#pixi_build_types = { git = "https://github.com/prefix-dev/pixi", branch = "main" }
+
+# Local path overrides for development
+#pixi_build_types = { path = "../../pixi_build_types/crates/pixi_build_types" }
+#pixi_consts = { path = "../../pixi/crates/pixi_consts" }
+#pixi_manifest = { path = "../../pixi/crates/pixi_manifest" }
+#pixi_spec = { path = "../../pixi/crates/pixi_spec" }
+#pixi_build_type_conversions = { path = "../../pixi/crates/pixi_build_type_conversions" }

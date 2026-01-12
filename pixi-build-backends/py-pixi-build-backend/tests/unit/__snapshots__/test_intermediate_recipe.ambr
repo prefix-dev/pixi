@@ -1,0 +1,43 @@
+# serializer version: 1
+# name: test_from_yaml
+  '''
+  context:
+    version: 23.0.0
+  package:
+    name: boltons-with-extra
+    version: ${{ version }}
+  source:
+  - url: https://github.com/mahmoud/boltons/archive/refs/tags/${{ version }}.tar.gz
+    sha256: 9b2998cd9525ed472079c7dd90fbd216a887202e8729d5969d4f33878f0ff668
+  build:
+    number: null
+    script:
+      content: python -m pip install . --no-deps -vv
+      env: {}
+      secrets: []
+    noarch: python
+  requirements:
+    build: []
+    host:
+    - python
+    - pip
+    - setuptools
+    run:
+    - pip
+    run_constraints: []
+  tests: []
+  about:
+    homepage: null
+    license: BSD-3-Clause
+    license_file: LICENSE
+    summary: null
+    description: null
+    documentation: null
+    repository: null
+  extra: null
+  
+  '''
+# ---
+# name: test_intermediate_str
+  '{ context: {version: 23.0.0, }, package: boltons-with-extra-${{ version }}, source: [url: https://github.com/mahmoud/boltons/archive/refs/tags/${{ version }}.tar.gz, sha256: 9b2998cd9525ed472079c7dd90fbd216a887202e8729d5969d4f33878f0ff668, ], build: { number: None, script: { content: python -m pip install . --no-deps -vv, env: {}, secrets: [] }, noarch: python, python:  }, requirements: { build: [] }{ host: [python, pip, setuptools, ] }{ run: [pip, ] }{ run_constraints: [] }, tests: [], about: { About { homepage: , license: BSD-3-Clause, license_file: LICENSE, summary: , description: , documentation: , repository:  } }, extra: None }'
+# ---

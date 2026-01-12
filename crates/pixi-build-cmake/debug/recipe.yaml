@@ -1,0 +1,47 @@
+context: {}
+package:
+  name: foobar
+  version: 0.1.0
+source: []
+build:
+  number: null
+  script:
+    content: |-
+      ninja --version
+      cmake --version
+
+      mkdir -p build
+      pushd build
+
+      if [ ! -f "build.ninja" ]; then
+          cmake $CMAKE_ARGS \
+              -GNinja \
+              -S "/tmp/.tmp6eLIS9" \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=$PREFIX \
+              -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+              -DBUILD_SHARED_LIBS=ON
+      fi
+
+      cmake --build . --target install
+    env: {}
+    secrets: []
+requirements:
+  build:
+  - boltons
+  - ${{ compiler('cxx') }}
+  - cmake
+  - ninja
+  host: []
+  run: []
+  run_constraints: []
+tests: []
+about:
+  homepage: null
+  license: null
+  license_file: null
+  summary: null
+  description: null
+  documentation: null
+  repository: null
+extra: null

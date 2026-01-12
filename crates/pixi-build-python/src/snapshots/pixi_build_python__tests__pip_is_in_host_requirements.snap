@@ -1,0 +1,32 @@
+---
+source: crates/pixi-build-python/src/main.rs
+expression: generated_recipe.recipe
+---
+context: {}
+package:
+  name: foobar
+  version: 0.1.0
+source: []
+build:
+  number: ~
+  script: "[ ... script ... ]"
+  noarch: python
+requirements:
+  build: []
+  host:
+    - pip
+    - python
+  run:
+    - boltons
+    - python
+  run_constraints: []
+tests: []
+about:
+  homepage: ~
+  license: ~
+  license_file: ~
+  summary: ~
+  description: ~
+  documentation: ~
+  repository: ~
+extra: ~
