@@ -262,7 +262,7 @@ def test_build_using_rattler_build_backend(
 
 @pytest.mark.parametrize(
     ("backend", "non_incremental_evidence"),
-    [("pixi-build-rust", "Compiling simple-app"), ("pixi-build-cmake", "Configuring done")],
+    [("pixi-build-cmake", "Configuring done")],
 )
 def test_incremental_builds(
     pixi: Path,

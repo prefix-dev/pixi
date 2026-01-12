@@ -96,6 +96,11 @@ def multiple_versions_channel_1(channels: Path) -> str:
 
 
 @pytest.fixture
+def target_specific_channel_1(channels: Path) -> str:
+    return channels.joinpath("target_specific_channel_1").as_uri()
+
+
+@pytest.fixture
 def non_self_expose_channel_1(channels: Path) -> str:
     return channels.joinpath("non_self_expose_channel_1").as_uri()
 

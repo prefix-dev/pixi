@@ -320,26 +320,26 @@ def test_upgrade_keep_info(
     assert "ab*" in parsed_manifest["dependencies"]["package3"]["build"]
     assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
 
-    # Upgrade all, it should now be at 0.2.0, with the build intact
+    # Upgrade all, it should now be at 0.3.0, with the build intact
     verify_cli_command(
         [pixi, "upgrade", "--manifest-path", manifest_path],
-        stderr_contains=["package3", "0.1.0", "0.2.0"],
+        stderr_contains=["package3", "0.1.0", "0.3.0"],
     )
     parsed_manifest = tomllib.loads(manifest_path.read_text())
     # Update version
-    assert parsed_manifest["dependencies"]["package3"]["version"] == ">=0.2.0,<0.3"
+    assert parsed_manifest["dependencies"]["package3"]["version"] == ">=0.3.0,<0.4"
     # Keep build
     assert "ab*" in parsed_manifest["dependencies"]["package3"]["build"]
     # Keep channel
     assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
 
-    # Upgrade package3, it should now be at 0.2.0, with the build intact because it has a wildcard
+    # Upgrade package3, it should stay at 0.3.0, with the build intact because it has a wildcard
     verify_cli_command(
         [pixi, "upgrade", "--manifest-path", manifest_path, "package3"],
     )
     parsed_manifest = tomllib.loads(manifest_path.read_text())
     # Update version
-    assert parsed_manifest["dependencies"]["package3"]["version"] == ">=0.2.0,<0.3"
+    assert parsed_manifest["dependencies"]["package3"]["version"] == ">=0.3.0,<0.4"
     # Keep build
     assert "ab*" in parsed_manifest["dependencies"]["package3"]["build"]
     # Keep channel
@@ -369,13 +369,13 @@ def test_upgrade_remove_info(
     assert "abc" in parsed_manifest["dependencies"]["package3"]["build"]
     assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
 
-    # Upgrade package3, it should now be at 0.2.0, without the build but with the channel
+    # Upgrade package3, it should now be at 0.3.0, without the build but with the channel
     verify_cli_command(
         [pixi, "upgrade", "--manifest-path", manifest_path, "package3"],
     )
     parsed_manifest = tomllib.loads(manifest_path.read_text())
     # Update version
-    assert parsed_manifest["dependencies"]["package3"]["version"] == ">=0.2.0,<0.3"
+    assert parsed_manifest["dependencies"]["package3"]["version"] == ">=0.3.0,<0.4"
     # Keep channel
     assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
     # Remove build
@@ -482,13 +482,13 @@ def test_upgrade_features(
     verify_cli_command(
         [pixi, "upgrade", "--manifest-path", manifest_path, "--feature=foo"],
         stderr_excludes=["package2"],
-        stderr_contains=["package3", "0.1.0", "0.2.0"],
+        stderr_contains=["package3", "0.1.0", "0.3.0"],
     )
     parsed_manifest = tomllib.loads(manifest_path.read_text())
     package3 = parsed_manifest["feature"]["foo"]["dependencies"]["package3"]
     package2 = parsed_manifest["feature"]["bar"]["dependencies"]["package2"]
     assert package2["version"] == "==0.1.0"
-    assert package3["version"] == ">=0.2.0,<0.3"
+    assert package3["version"] == ">=0.3.0,<0.4"
 
     # Upgrading with no specified feature should upgrade all features (hence "package2" in feature "bar")
     verify_cli_command(

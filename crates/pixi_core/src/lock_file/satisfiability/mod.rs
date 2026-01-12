@@ -2476,6 +2476,7 @@ mod tests {
         }
     }
 
+    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     #[rstest]
     #[tokio::test]
     #[traced_test]
