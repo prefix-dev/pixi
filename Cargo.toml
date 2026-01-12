@@ -10,6 +10,7 @@ exclude = [
   "pixi-build-backends",
   "tests/data",
   "trampoline",
+  "pytest-temp"
 ]
 members = ["crates/*"]
 resolver = "3"
