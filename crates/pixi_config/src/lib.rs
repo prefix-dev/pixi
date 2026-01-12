@@ -1463,7 +1463,11 @@ impl Config {
             proxy_config: self.proxy_config.merge(other.proxy_config),
             build: self.build.merge(other.build),
             tool_platform: self.tool_platform.or(other.tool_platform),
-            named_workspaces: self.named_workspaces.into_iter().merge(other.named_workspaces).collect(),
+            named_workspaces: self
+                .named_workspaces
+                .into_iter()
+                .merge(other.named_workspaces)
+                .collect(),
 
             // Deprecated fields that we can ignore as we handle them inside `shell.` field
             change_ps1: None,
@@ -1596,7 +1600,7 @@ impl Config {
     pub fn named_workspace(&self, name: &String) -> miette::Result<PathBuf> {
         match self.named_workspaces.get(name) {
             Some(path) => Ok(path.clone()),
-            None => Err(miette::miette!("Named workspace '{}' not found", name)),
+            None => Err(miette::diagnostic!("Named workspace '{}' not found", name).into()),
         }
     }
 
