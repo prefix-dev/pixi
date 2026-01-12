@@ -44,7 +44,7 @@ version = "0.1.0"
 # We are using `pixi-build-python` in order to build a Python package
 [package.build.backend]
 name = "pixi-build-python"
-version = "==0.4.0"
+version = "0.4.*"
 
 
 # The Python package `python_rich` uses `hatchling` as Python build backend
@@ -82,7 +82,7 @@ Pixi backends describe how to build a conda package, for a certain language or b
 ```toml
 [package.build.backend]
 name = "pixi-build-python"
-version = "==0.4.0"
+version = "0.4.*"
 ```
 
 We need to add our package `python_rich` as source dependency to the workspace.
