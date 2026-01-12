@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -262,7 +263,7 @@ def test_build_using_rattler_build_backend(
 
 @pytest.mark.parametrize(
     ("backend", "non_incremental_evidence"),
-    [("pixi-build-cmake", "Configuring done")],
+    [("pixi-build-rust", "Compiling simple-app"), ("pixi-build-cmake", "Configuring done")],
 )
 def test_incremental_builds(
     pixi: Path,
@@ -275,10 +276,14 @@ def test_incremental_builds(
     copytree_with_local_backend(test_workspace, tmp_pixi_workspace, dirs_exist_ok=True)
     manifest_path = tmp_pixi_workspace / "pixi.toml"
 
+    # Clear CARGO_TARGET_* settings from parent environment to avoid cross-compiler issues
+    env = {key: "" for key in os.environ if key.startswith("CARGO_TARGET_")}
+
     verify_cli_command(
         [pixi, "build", "-v", "--path", manifest_path, "--output-dir", tmp_pixi_workspace],
         stderr_contains=non_incremental_evidence,
         strip_ansi=True,
+        env=env,
     )
 
     # immediately repeating the build should give evidence of incremental compilation
@@ -286,6 +291,7 @@ def test_incremental_builds(
         [pixi, "build", "-v", "--path", manifest_path, "--output-dir", tmp_pixi_workspace],
         stderr_excludes=non_incremental_evidence,
         strip_ansi=True,
+        env=env,
     )
 
 
