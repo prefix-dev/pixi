@@ -402,6 +402,7 @@ impl PixiControl {
                 pyproject_toml: false,
                 scm: Some(GitAttributes::Github),
                 conda_pypi_map: None,
+                name: None,
             },
         }
     }
@@ -421,6 +422,7 @@ impl PixiControl {
                 pyproject_toml: false,
                 scm: Some(GitAttributes::Github),
                 conda_pypi_map: None,
+                name: None,
             },
         }
     }
@@ -445,6 +447,7 @@ impl PixiControl {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     backend_override: self.backend_override.clone(),
+                    name: None,
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
                 no_install_config: NoInstallConfig { no_install: true },
@@ -645,6 +648,7 @@ impl PixiControl {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     backend_override: self.backend_override.clone(),
+                    name: None,
                 },
                 lock_file_usage: LockFileUsageConfig {
                     frozen: false,
@@ -714,6 +718,7 @@ impl PixiControl {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     backend_override: self.backend_override.clone(),
+                    name: None,
                 },
                 no_install_config: NoInstallConfig { no_install: false },
                 check: false,

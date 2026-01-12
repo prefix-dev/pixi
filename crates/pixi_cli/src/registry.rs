@@ -21,18 +21,18 @@ pub struct Args {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct AddArgs {
     /// Name of the workspace to register.
-    #[clap(required = true, num_args=1..)]
+    #[clap(required = true)]
     pub name: String,
 
     /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
-    #[clap(required = true, num_args=1..)]
+    #[clap(required = true)]
     pub manifest_path: PathBuf,
 }
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct RemoveArgs {
     /// Name of the workspace to unregister.
-    #[clap(required = true, num_args=1..)]
+    #[clap(required = true)]
     pub name: String,
 }
 

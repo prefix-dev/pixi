@@ -37,7 +37,7 @@ pub struct WorkspaceConfig {
     pub backend_override: Option<BackendOverride>,
 
     /// Name of the workspace
-    #[arg(long, short, global = true, conflicts_with = "manifest_path", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    #[arg(long, global = true, conflicts_with = "manifest_path", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub name: Option<String>,
 }
 
