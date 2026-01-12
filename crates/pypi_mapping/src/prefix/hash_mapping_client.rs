@@ -1,6 +1,11 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, Weak},
+    error::Error,
+    sync::{
+        Arc, Weak,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
 };
 
 use dashmap::{DashMap, Entry};
@@ -16,6 +21,9 @@ use crate::{CacheMetrics, DerivePurls, MappingError, PurlSource};
 
 const STORAGE_URL: &str = "https://conda-mapping.prefix.dev";
 const HASH_DIR: &str = "hash-v0";
+
+/// Timeout for individual mapping requests (in seconds).
+const REQUEST_TIMEOUT_SECS: u64 = 30;
 
 /// Information about the pypi package a specific conda package is mapped to.
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -33,6 +41,8 @@ pub enum HashMappingClientError {
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Reqwest(#[from] reqwest_middleware::Error),
+    #[error("request timed out while connecting to {}", STORAGE_URL)]
+    Timeout,
 }
 
 impl From<reqwest::Error> for HashMappingClientError {
@@ -49,6 +59,13 @@ impl From<HashMappingClientError> for MappingError {
                 path: std::path::PathBuf::new(),
             },
             HashMappingClientError::Reqwest(err) => MappingError::Reqwest(err),
+            HashMappingClientError::Timeout => MappingError::IoError {
+                source: std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    format!("request timed out while connecting to {}", STORAGE_URL),
+                ),
+                path: std::path::PathBuf::new(),
+            },
         }
     }
 }
@@ -71,6 +88,9 @@ struct HashMappingClientInner {
     client: LazyClient,
     entries: DashMap<Sha256Hash, PendingOrFetched<Option<PackagePypiMapping>>>,
     limit: Option<Arc<Semaphore>>,
+    /// Flag to track whether the connectivity warning has already been shown.
+    /// This prevents showing the warning multiple times.
+    connectivity_warning_shown: AtomicBool,
 }
 
 /// An entry that is either pending or has been fetched.
@@ -110,6 +130,7 @@ impl HashMappingClientBuilder {
                 client: self.client,
                 entries: DashMap::new(),
                 limit: self.limit,
+                connectivity_warning_shown: AtomicBool::new(false),
             }),
         }
     }
@@ -209,9 +230,9 @@ impl HashMappingClientInner {
         // other tasks will find a pending entry and will wait for the records
         // to become available.
         //
-        // Let's start by fetching the record. If an error occurs we immediately return
-        // the error. This will drop the sender and all other waiting tasks will
-        // receive an error.
+        // Let's start by fetching the record. If an error occurs we check if it's
+        // a connectivity error (timeout, connection refused, etc.) and show a
+        // warning, then return None to allow fallback to compressed mapping.
         let mapping = {
             let _permit = match self.limit.as_ref() {
                 Some(limit) => Some(
@@ -223,7 +244,27 @@ impl HashMappingClientInner {
                 ),
                 None => None,
             };
-            try_fetch_mapping(&self.client, &sha256, cache_metrics).await?
+            match try_fetch_mapping(&self.client, &sha256, cache_metrics).await {
+                Ok(mapping) => mapping,
+                Err(err) => {
+                    if is_connectivity_error(&err) {
+                        // Only show the warning once per client instance
+                        if !self.connectivity_warning_shown.swap(true, Ordering::SeqCst) {
+                            print_connectivity_warning();
+                        }
+                        tracing::debug!(
+                            "Connectivity issue with {}: {}. Falling back to compressed mapping.",
+                            STORAGE_URL,
+                            err
+                        );
+                        // Return None to allow fallback to compressed mapping
+                        None
+                    } else {
+                        // Propagate non-connectivity errors
+                        return Err(err);
+                    }
+                }
+            }
         };
 
         // Store the fetched files in the entry.
@@ -246,8 +287,15 @@ async fn try_fetch_mapping(
     let hash_str = format!("{sha256:x}");
     let url = format!("{STORAGE_URL}/{HASH_DIR}/{hash_str}");
 
-    // Fetch the mapping from the server
-    let response = client.client().get(&url).send().await?;
+    // Fetch the mapping from the server with a timeout
+    let response = tokio::time::timeout(
+        Duration::from_secs(REQUEST_TIMEOUT_SECS),
+        client.client().get(&url).send(),
+    )
+    .await
+    .map_err(|_| HashMappingClientError::Timeout)?;
+
+    let response = response?;
 
     cache_metrics.record_request_response(&response);
 
@@ -260,6 +308,82 @@ async fn try_fetch_mapping(
     let package = response.json().await?;
 
     Ok(Some(package))
+}
+
+/// Checks if an error indicates a connectivity issue (timeout, connection refused, etc.)
+fn is_connectivity_error(err: &HashMappingClientError) -> bool {
+    match err {
+        HashMappingClientError::Timeout => true,
+        HashMappingClientError::Reqwest(e) => {
+            // Check for connection-related errors
+            if e.is_connect() || e.is_timeout() {
+                return true;
+            }
+            // Check for specific error kinds in the source chain
+            if let Some(source) = e.source() {
+                let source_str = source.to_string().to_lowercase();
+                return source_str.contains("timeout")
+                    || source_str.contains("timed out")
+                    || source_str.contains("connection refused")
+                    || source_str.contains("connection reset")
+                    || source_str.contains("network unreachable")
+                    || source_str.contains("host unreachable")
+                    || source_str.contains("name resolution")
+                    || source_str.contains("dns");
+            }
+            false
+        }
+        HashMappingClientError::Io(_) => false,
+    }
+}
+
+/// Prints a warning message about connectivity issues to the mapping server.
+fn print_connectivity_warning() {
+    eprintln!(
+        "\n{}",
+        console::style("Warning: Unable to reach conda-mapping.prefix.dev")
+            .yellow()
+            .bold()
+    );
+    eprintln!(
+        "{}",
+        console::style(
+            "The PyPI name mapping service may be blocked or unavailable on your network."
+        )
+        .yellow()
+    );
+    eprintln!(
+        "{}",
+        console::style("This can cause package installation to be slow or fail.").yellow()
+    );
+    eprintln!();
+    eprintln!(
+        "{}",
+        console::style("Workarounds:").cyan().bold()
+    );
+    eprintln!(
+        "  {} Add a custom mapping to your pixi.toml:",
+        console::style("1.").cyan()
+    );
+    eprintln!(
+        "     {}",
+        console::style("conda-pypi-map = { conda-forge = \"your-mapping.json\" }").dim()
+    );
+    eprintln!(
+        "  {} Or use an empty mapping to disable external lookups:",
+        console::style("2.").cyan()
+    );
+    eprintln!(
+        "     {}",
+        console::style("conda-pypi-map = { conda-forge = \"map.json\" }  # with empty {{}} in map.json").dim()
+    );
+    eprintln!();
+    eprintln!(
+        "{} {}",
+        console::style("Documentation:").cyan().bold(),
+        console::style("https://pixi.sh/latest/reference/pixi_manifest/#conda-pypi-map-optional").underlined()
+    );
+    eprintln!();
 }
 
 impl DerivePurls for HashMappingClient {
