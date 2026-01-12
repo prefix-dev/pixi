@@ -28,7 +28,9 @@ This means it affects all environments that include the default feature (which i
 
 This way, Pixi guarantees your environment is consistent and compatible with your machine.
 
-System specifications are closely related to [virtual packages](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html), allowing for flexible and accurate dependency management.
+System requirements are added as [virtual packages](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html).
+Virtual packages are special packages (like `__linux`, `__cuda`, `__glibc`) that don't contain any files.
+They simply declare what features are available on the system, and the solver uses them to filter out incompatible packages.
 
 !!! note "Need to support multiple types of systems that don't share the same specifications?"
     You can define `system-requirements` for different `features` in your workspace.
