@@ -40,6 +40,7 @@ pub fn determine_marker_environment(
         Platform::LinuxS390X => "s390x",
         Platform::LinuxRiscv32 => "riscv32",
         Platform::LinuxRiscv64 => "riscv64",
+        Platform::LinuxLoongArch64 => "loongarch64",
         Platform::Osx64 => "x86_64",
         Platform::OsxArm64 => "arm64",
         Platform::Win32 => "x86",

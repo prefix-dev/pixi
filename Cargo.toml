@@ -223,6 +223,26 @@ zstd = { version = "0.13.3", default-features = false }
 reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
 reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
+# Patch rattler for LoongArch64 support until official release
+# Need to patch all rattler crates for version consistency
+coalesced_map = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+file_url = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+path_resolver = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+simple_spawn_blocking = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+rattler = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+rattler_cache = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+rattler_conda_types = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+rattler_digest = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+rattler_lock = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+rattler_menuinst = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+rattler_networking = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+rattler_package_streaming = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+rattler_redaction = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+rattler_repodata_gateway = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+rattler_shell = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+rattler_solve = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+rattler_upload = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
+rattler_virtual_packages = { git = "https://github.com/conda/rattler", rev = "ab42cbeb63dbe08d28218007168236f32e088092" }
 
 [profile.ci]
 codegen-units = 16
