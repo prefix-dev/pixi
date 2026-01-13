@@ -21,7 +21,7 @@ use url::Url;
 
 use crate::{
     BinarySpec, DetailedSpec, GitReference, GitSpec, PathSourceSpec, PathSpec, PixiSpec,
-    SourceLocationSpec, UrlSourceSpec, UrlSpec,
+    SourceLocationSpec, Subdirectory, UrlSourceSpec, UrlSpec,
 };
 
 /// A TOML representation of a package specification.
@@ -282,7 +282,10 @@ impl TomlSpec {
                     url,
                     md5: loc.md5,
                     sha256: loc.sha256,
-                    subdirectory: loc.subdirectory,
+                    subdirectory: loc
+                        .subdirectory
+                        .and_then(|s| Subdirectory::try_from(s).ok())
+                        .unwrap_or_default(),
                 }),
                 (None, Some(path), None) => PixiSpec::Path(PathSpec { path: path.into() }),
                 (None, None, Some(git)) => {
@@ -295,7 +298,10 @@ impl TomlSpec {
                             return Err(SpecError::MultipleGitRefs);
                         }
                     };
-                    let subdirectory = loc.subdirectory;
+                    let subdirectory = loc
+                        .subdirectory
+                        .and_then(|s| Subdirectory::try_from(s).ok())
+                        .unwrap_or_default();
                     PixiSpec::Git(GitSpec {
                         git,
                         rev,
@@ -370,7 +376,10 @@ impl TomlSpec {
                         url,
                         md5: loc.md5,
                         sha256: loc.sha256,
-                        subdirectory: loc.subdirectory,
+                        subdirectory: loc
+                            .subdirectory
+                            .and_then(|s| Subdirectory::try_from(s).ok())
+                            .unwrap_or_default(),
                     };
                     if let Either::Right(binary) = url_spec.into_source_or_binary() {
                         BinarySpec::Url(binary)
@@ -492,7 +501,10 @@ impl TomlLocationSpec {
                 url,
                 md5: self.md5,
                 sha256: self.sha256,
-                subdirectory: self.subdirectory,
+                subdirectory: self
+                    .subdirectory
+                    .and_then(|s| Subdirectory::try_from(s).ok())
+                    .unwrap_or_default(),
             }),
             (None, Some(path), None) => {
                 SourceLocationSpec::Path(PathSourceSpec { path: path.into() })
@@ -507,7 +519,10 @@ impl TomlLocationSpec {
                         return Err(SourceLocationSpecError::MultipleGitRefs);
                     }
                 };
-                let subdirectory = self.subdirectory;
+                let subdirectory = self
+                    .subdirectory
+                    .and_then(|s| Subdirectory::try_from(s).ok())
+                    .unwrap_or_default();
                 SourceLocationSpec::Git(GitSpec {
                     git,
                     rev,

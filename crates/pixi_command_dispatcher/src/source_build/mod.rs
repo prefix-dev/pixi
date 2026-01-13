@@ -257,7 +257,7 @@ impl SourceBuildSpec {
         if let (Some(PinnedSourceSpec::Git(pinned_git)), Some(SourceLocationSpec::Git(git_spec))) = (
             build_source.as_mut(),
             discovered_backend.init_params.build_source.clone(),
-        ) && pinned_git.source.subdirectory.is_none()
+        ) && pinned_git.source.subdirectory.is_empty()
         {
             pinned_git.source.subdirectory = git_spec.subdirectory.clone();
         }

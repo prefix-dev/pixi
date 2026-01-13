@@ -307,7 +307,9 @@ pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
 
     let pinned_checkout = PinnedGitCheckout::new(
         git_sha,
-        dist.subdirectory.map(|sd| sd.to_string_lossy().to_string()),
+        dist.subdirectory
+            .and_then(|sd| pixi_spec::Subdirectory::try_from(sd.to_path_buf()).ok())
+            .unwrap_or_default(),
         reference,
     );
 
@@ -344,9 +346,17 @@ pub fn to_parsed_git_url(
             Some(into_uv_git_sha(git_source.commit)),
         )
         .into_diagnostic()?,
-        git_source
-            .subdirectory
-            .map(|s| PathBuf::from(s.as_str()).into_boxed_path()),
+        if git_source.subdirectory.is_empty() {
+            None
+        } else {
+            Some(
+                git_source
+                    .subdirectory
+                    .as_path()
+                    .to_path_buf()
+                    .into_boxed_path(),
+            )
+        },
     );
 
     Ok(parsed_git_url)

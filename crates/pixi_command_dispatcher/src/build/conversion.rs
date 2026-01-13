@@ -35,7 +35,10 @@ pub fn from_source_package_location_spec(
                 url: url.url,
                 md5: url.md5,
                 sha256: url.sha256,
-                subdirectory: url.subdirectory,
+                subdirectory: url
+                    .subdirectory
+                    .and_then(|s| pixi_spec::Subdirectory::try_from(s).ok())
+                    .unwrap_or_default(),
             })
         }
 
@@ -56,7 +59,10 @@ pub fn from_source_package_location_spec(
                         pixi_spec::GitReference::DefaultBranch
                     }
                 }),
-                subdirectory: git.subdirectory,
+                subdirectory: git
+                    .subdirectory
+                    .and_then(|s| pixi_spec::Subdirectory::try_from(s).ok())
+                    .unwrap_or_default(),
             })
         }
 

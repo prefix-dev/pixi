@@ -8,7 +8,7 @@ use url::Url;
 use pixi_config::pixi_home;
 use pixi_consts::consts;
 use pixi_global::project::FromMatchSpecError;
-use pixi_spec::PixiSpec;
+use pixi_spec::{PixiSpec, Subdirectory};
 use rattler_conda_types::{ChannelConfig, MatchSpec, ParseMatchSpecError, ParseStrictness};
 use typed_path::Utf8NativePathBuf;
 
@@ -94,7 +94,11 @@ impl GlobalSpecs {
             let git_spec = pixi_spec::GitSpec {
                 git: git_url.clone(),
                 rev: self.rev.clone().map(Into::into),
-                subdirectory: self.subdir.clone(),
+                subdirectory: self
+                    .subdir
+                    .clone()
+                    .and_then(|s| Subdirectory::try_from(s).ok())
+                    .unwrap_or_default(),
             };
             Some(PixiSpec::Git(git_spec))
         } else if let Some(path) = &self.path {

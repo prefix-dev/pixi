@@ -976,22 +976,16 @@ pub(crate) fn pypi_satifisfies_requirement(
                             return Ok(());
                         }
 
-                        if pinned_git_spec.source.subdirectory
-                            != subdirectory
-                                .as_ref()
-                                .map(|s| s.to_string_lossy().to_string())
-                        {
+                        let spec_subdir_str = subdirectory
+                            .as_ref()
+                            .map(|s| s.to_string_lossy().to_string());
+                        let lock_subdir_str =
+                            pinned_git_spec.source.subdirectory.to_option_string();
+                        if lock_subdir_str != spec_subdir_str {
                             return Err(PlatformUnsat::LockedPyPIGitSubdirectoryMismatch {
                                 name: spec.name.clone().to_string(),
-                                spec_subdirectory: subdirectory
-                                    .as_ref()
-                                    .map_or_else(String::default, |s| {
-                                        s.to_string_lossy().to_string()
-                                    }),
-                                lock_subdirectory: pinned_git_spec
-                                    .source
-                                    .subdirectory
-                                    .unwrap_or_default(),
+                                spec_subdirectory: spec_subdir_str.unwrap_or_default(),
+                                lock_subdirectory: lock_subdir_str.unwrap_or_default(),
                             }
                             .into());
                         }
@@ -2309,8 +2303,8 @@ fn verify_build_source_matches_manifest(
         ) => {
             // Ignore subdirectory for comparison, they should not
             // trigger lockfile invalidation.
-            mgit_spec.subdirectory = None;
-            lgit_spec.source.subdirectory = None;
+            mgit_spec.subdirectory = Default::default();
+            lgit_spec.source.subdirectory = Default::default();
 
             // Ensure that we always compare references.
             if mgit_spec.rev.is_none() {

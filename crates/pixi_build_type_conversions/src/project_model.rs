@@ -53,7 +53,7 @@ fn to_pixi_spec_v1(
                         url,
                         md5,
                         sha256,
-                        subdirectory,
+                        subdirectory: subdirectory.to_option_string(),
                     })
                 }
                 pixi_spec::SourceLocationSpec::Git(git_spec) => {
@@ -70,7 +70,7 @@ fn to_pixi_spec_v1(
                             GitReference::Rev(rev) => pbt::GitReference::Rev(rev),
                             GitReference::DefaultBranch => pbt::GitReference::DefaultBranch,
                         }),
-                        subdirectory,
+                        subdirectory: subdirectory.to_option_string(),
                     })
                 }
                 pixi_spec::SourceLocationSpec::Path(path_source_spec) => {

@@ -114,7 +114,10 @@ impl RawPyPiRequirement {
             (Some(url), None, None, None) => PixiPypiSpec::with_extras(
                 PixiPypiSource::Url {
                     url,
-                    subdirectory: self.subdirectory,
+                    subdirectory: self
+                        .subdirectory
+                        .and_then(|s| pixi_spec::Subdirectory::try_from(s).ok())
+                        .unwrap_or_default(),
                 },
                 self.extras,
             ),
@@ -140,7 +143,10 @@ impl RawPyPiRequirement {
                         git: GitSpec {
                             git,
                             rev,
-                            subdirectory: self.subdirectory,
+                            subdirectory: self
+                                .subdirectory
+                                .and_then(|s| pixi_spec::Subdirectory::try_from(s).ok())
+                                .unwrap_or_default(),
                         },
                     },
                     self.extras,
@@ -329,7 +335,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                     }
                 };
 
-                if let Some(subdirectory) = subdirectory {
+                if !subdirectory.is_empty() {
                     table.insert(
                         "subdirectory",
                         toml_edit::Value::String(toml_edit::Formatted::new(
@@ -363,7 +369,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                     "url",
                     toml_edit::Value::String(toml_edit::Formatted::new(url.to_string())),
                 );
-                if let Some(subdirectory) = subdirectory {
+                if !subdirectory.is_empty() {
                     table.insert(
                         "subdirectory",
                         toml_edit::Value::String(toml_edit::Formatted::new(
@@ -609,7 +615,7 @@ mod test {
             requirement.first().unwrap().1,
             &PixiPypiSpec::new(PixiPypiSource::Url {
                 url: Url::parse("https://test.url.com").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
             })
         );
     }
@@ -627,7 +633,7 @@ mod test {
                 git: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
                     rev: None,
-                    subdirectory: None,
+                    subdirectory: Default::default(),
                 },
             })
         );
@@ -646,7 +652,7 @@ mod test {
                 git: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
                     rev: Some(GitReference::Branch("main".to_string())),
-                    subdirectory: None,
+                    subdirectory: Default::default(),
                 },
             })
         );
@@ -665,7 +671,7 @@ mod test {
                 git: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
                     rev: Some(GitReference::Tag("v.1.2.3".to_string())),
-                    subdirectory: None,
+                    subdirectory: Default::default(),
                 },
             })
         );
@@ -684,7 +690,7 @@ mod test {
                 git: GitSpec {
                     git: Url::parse("https://github.com/pallets/flask.git").unwrap(),
                     rev: Some(GitReference::Tag("3.0.0".to_string())),
-                    subdirectory: None,
+                    subdirectory: Default::default(),
                 },
             }),
         );
@@ -703,7 +709,7 @@ mod test {
                 git: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
                     rev: Some(GitReference::Rev("123456".to_string())),
-                    subdirectory: None,
+                    subdirectory: Default::default(),
                 },
             })
         );

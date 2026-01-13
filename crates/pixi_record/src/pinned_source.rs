@@ -11,7 +11,9 @@ use pixi_git::{
     sha::GitSha,
     url::{RepositoryUrl, redact_credentials},
 };
-use pixi_spec::{GitReference, GitSpec, PathSourceSpec, SourceLocationSpec, UrlSourceSpec};
+use pixi_spec::{
+    GitReference, GitSpec, PathSourceSpec, SourceLocationSpec, Subdirectory, UrlSourceSpec,
+};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use rattler_lock::UrlOrPath;
 use serde::{Deserialize, Serialize};
@@ -159,7 +161,7 @@ impl PinnedSourceSpec {
     ///     git: Url::parse("https://github.com/user/repo")?,
     ///     source: PinnedGitCheckout {
     ///         commit: GitSha::from_str("abc123def456")?,
-    ///         subdirectory: None,
+    ///         subdirectory: Default::default(),
     ///         reference: GitReference::DefaultBranch,
     ///     },
     /// });
@@ -168,7 +170,7 @@ impl PinnedSourceSpec {
     ///     location: SourceLocationSpec::Git(GitSpec {
     ///         git: Url::parse("https://github.com/user/repo.git")?,
     ///         rev: None,
-    ///         subdirectory: None,
+    ///         subdirectory: Default::default(),
     ///     }),
     /// };
     ///
@@ -196,11 +198,10 @@ impl PinnedSourceSpec {
                 }
 
                 // If source spec specifies a subdirectory, it must match
-                match (&source_git.subdirectory, &pinned_git.source.subdirectory) {
-                    (Some(source_subdir), Some(pinned_subdir)) => source_subdir == pinned_subdir,
-                    (Some(_), None) => false, /* Source expects subdirectory, but pinned doesn't
-                    * have one */
-                    (None, _) => true, // Source doesn't care about subdirectory
+                if source_git.subdirectory.is_empty() {
+                    true // Source doesn't care about subdirectory
+                } else {
+                    source_git.subdirectory == pinned_git.source.subdirectory
                 }
             }
 
@@ -276,8 +277,7 @@ impl PinnedSourceSpec {
             // Git-to-Git: If same repository, convert relative path to subdirectory
             PinnedSourceSpec::Git(base_git) => {
                 // Base subdirectory
-                let base_subdir = base_git.source.subdirectory.as_deref().unwrap_or("");
-                let base_path = Path::new(base_subdir);
+                let base_path = base_git.source.subdirectory.as_path();
 
                 let relative_std_path = Path::new(build_source_path.as_str());
 
@@ -288,13 +288,8 @@ impl PinnedSourceSpec {
                 // Normalize the path, join does not do this per-se
                 let normalized = crate::path_utils::normalize_path(&target_subdir);
 
-                // Convert to string for subdirectory
-                let subdir_str = normalized.to_string_lossy();
-                let subdirectory = if subdir_str.is_empty() {
-                    None
-                } else {
-                    Some(subdir_str.into_owned())
-                };
+                // Convert to Subdirectory
+                let subdirectory = Subdirectory::try_from(normalized).unwrap_or_default();
 
                 Some(PinnedSourceSpec::Git(PinnedGitSpec {
                     git: base_git.git.clone(),
@@ -357,12 +352,8 @@ impl PinnedSourceSpec {
 
                 // Same repository and commit - compute relative path between subdirectories
                 // Both subdirectories are relative to the repository root
-                let base_subdir = base_git.source.subdirectory.as_deref().unwrap_or("");
-                let this_subdir = this_git.source.subdirectory.as_deref().unwrap_or("");
-
-                // Compute the relative path from base to this
-                let base_path = std::path::Path::new(base_subdir);
-                let this_path = std::path::Path::new(this_subdir);
+                let base_path = base_git.source.subdirectory.as_path();
+                let this_path = this_git.source.subdirectory.as_path();
 
                 let relative = pathdiff::diff_paths(this_path, base_path)?;
                 // Same here: ensure lock only contains `/` even when diff runs on Windows
@@ -416,8 +407,8 @@ pub struct PinnedUrlSpec {
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Md5>>")]
     pub md5: Option<Md5Hash>,
     /// The subdirectory of the package inside the archive
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub subdirectory: Option<String>,
+    #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
+    pub subdirectory: Subdirectory,
 }
 
 impl PinnedUrlSpec {
@@ -443,8 +434,8 @@ pub struct PinnedGitCheckout {
     /// The commit hash of the git checkout.
     pub commit: GitSha,
     /// The subdirectory of the git checkout.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub subdirectory: Option<String>,
+    #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
+    pub subdirectory: Subdirectory,
     /// The reference of the git checkout.
     #[serde(default, skip_serializing_if = "GitReference::is_default")]
     pub reference: GitReference,
@@ -452,7 +443,7 @@ pub struct PinnedGitCheckout {
 
 impl PinnedGitCheckout {
     /// Creates a new pinned git checkout.
-    pub fn new(commit: GitSha, subdirectory: Option<String>, reference: GitReference) -> Self {
+    pub fn new(commit: GitSha, subdirectory: Subdirectory, reference: GitReference) -> Self {
         Self {
             commit,
             subdirectory,
@@ -515,7 +506,9 @@ impl PinnedGitCheckout {
 
         Ok(PinnedGitCheckout {
             commit,
-            subdirectory,
+            subdirectory: subdirectory
+                .and_then(|s| Subdirectory::try_from(s).ok())
+                .unwrap_or_default(),
             reference: reference.expect("reference should be set"),
         })
     }
@@ -558,9 +551,9 @@ impl PinnedGitSpec {
         url.set_query(None);
 
         // Put the subdirectory in the query.
-        if let Some(subdirectory) = self.source.subdirectory.as_deref() {
+        if !self.source.subdirectory.is_empty() {
             url.query_pairs_mut()
-                .append_pair("subdirectory", subdirectory);
+                .append_pair("subdirectory", &self.source.subdirectory.to_string());
         }
 
         // Put the requested reference in the query.
@@ -845,16 +838,16 @@ pub enum SourceMismatchError {
     },
 
     #[error(
-        "the locked git subdirectory '{locked:?}' for '{git}' does not match the requested git subdirectory '{requested:?}'"
+        "the locked git subdirectory '{locked}' for '{git}' does not match the requested git subdirectory '{requested}'"
     )]
     /// The locked git rev does not match the requested git rev.
     GitSubdirectoryMismatch {
         /// The git url.
         git: Url,
         /// The locked git subdirectory.
-        locked: Option<String>,
+        locked: Subdirectory,
         /// The requested git subdirectory.
-        requested: Option<String>,
+        requested: Subdirectory,
     },
 
     #[error(
@@ -925,8 +918,16 @@ impl PinnedUrlSpec {
         if spec.subdirectory != self.subdirectory {
             return Err(SourceMismatchError::UrlSubdirectoryMismatch {
                 url: self.url.clone(),
-                locked: self.subdirectory.as_deref().unwrap_or("None").to_string(),
-                requested: spec.subdirectory.as_deref().unwrap_or("None").to_string(),
+                locked: if self.subdirectory.is_empty() {
+                    "None".to_string()
+                } else {
+                    self.subdirectory.to_string()
+                },
+                requested: if spec.subdirectory.is_empty() {
+                    "None".to_string()
+                } else {
+                    spec.subdirectory.to_string()
+                },
             });
         }
         Ok(())
@@ -1016,8 +1017,8 @@ impl Display for PinnedPathSpec {
 impl Display for PinnedGitSpec {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}@{}", self.git, self.source.commit)?;
-        if let Some(subdir) = &self.source.subdirectory {
-            write!(f, " (subdir: {})", subdir)?;
+        if !self.source.subdirectory.is_empty() {
+            write!(f, " (subdir: {})", self.source.subdirectory)?;
         }
         // Only show reference if it provides additional information
         match &self.source.reference {
@@ -1078,7 +1079,7 @@ mod tests {
     use std::{path::Path, str::FromStr};
 
     use pixi_git::sha::GitSha;
-    use pixi_spec::{GitReference, GitSpec};
+    use pixi_spec::{GitReference, GitSpec, Subdirectory};
     use url::Url;
 
     use crate::{
@@ -1092,14 +1093,14 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: pixi_spec::GitReference::Rev("9de9e1b".to_string()),
             },
         };
 
         let requested_git_spec = GitSpec {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
-            subdirectory: None,
+            subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
         };
 
@@ -1111,14 +1112,14 @@ mod tests {
             git: Url::parse("https://github.com/example/repo").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: pixi_spec::GitReference::Rev("9de9e1b".to_string()),
             },
         };
 
         let requested_git_spec = GitSpec {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
-            subdirectory: None,
+            subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
         };
 
@@ -1130,14 +1131,14 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: pixi_spec::GitReference::Rev("9de9e1b".to_string()),
             },
         };
 
         let requested_git_spec_without_suffix = GitSpec {
             git: Url::parse("https://github.com/example/repo").unwrap(),
-            subdirectory: None,
+            subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
         };
 
@@ -1149,14 +1150,14 @@ mod tests {
             git: Url::parse("https://username:password@github.com/example/repo").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: pixi_spec::GitReference::Rev("9de9e1b".to_string()),
             },
         };
 
         let requested_git_spec = GitSpec {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
-            subdirectory: None,
+            subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
         };
 
@@ -1168,14 +1169,14 @@ mod tests {
             git: Url::parse("https://username:password@github.com/example/repo").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: pixi_spec::GitReference::Rev("9de9e1b".to_string()),
             },
         };
 
         let requested_git_spec_with_prefix = GitSpec {
             git: Url::parse("git+https://github.com/example/repo.git").unwrap(),
-            subdirectory: None,
+            subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
         };
 
@@ -1192,14 +1193,14 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: pixi_spec::GitReference::Rev("9de9e1b".to_string()),
             },
         };
 
         let requested_git_spec = GitSpec {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
-            subdirectory: None,
+            subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("d2e32".to_string())),
         };
 
@@ -1213,14 +1214,14 @@ mod tests {
             git: Url::parse("https://github.com/another-example/repo.git").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: pixi_spec::GitReference::Rev("9de9e1b".to_string()),
             },
         };
 
         let requested_git_spec = GitSpec {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
-            subdirectory: None,
+            subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
         };
 
@@ -1234,14 +1235,14 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: GitReference::DefaultBranch,
             },
         };
 
         let requested_git_spec = GitSpec {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
-            subdirectory: None,
+            subdirectory: Default::default(),
             // we are not specifying the rev
             // and request the default branch
             rev: None,
@@ -1257,14 +1258,14 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
-                subdirectory: Some("some-subdir".to_string()),
+                subdirectory: Subdirectory::try_from("some-subdir").unwrap(),
                 reference: GitReference::DefaultBranch,
             },
         };
 
         let requested_git_spec = GitSpec {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
-            subdirectory: None,
+            subdirectory: Default::default(),
             // we are not specifying the rev
             // and request the default branch
             rev: None,
@@ -1281,14 +1282,14 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: GitReference::DefaultBranch,
             },
         };
 
         let requested_git_spec = GitSpec {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
-            subdirectory: Some("some-subdir".to_string()),
+            subdirectory: Subdirectory::try_from("some-subdir").unwrap(),
             // we are not specifying the rev
             // and request the default branch
             rev: None,
@@ -1336,7 +1337,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: GitReference::DefaultBranch,
             },
         });
@@ -1344,7 +1345,7 @@ mod tests {
         let spec = SourceLocationSpec::Git(GitSpec {
             git: Url::parse("https://github.com/user/repo.git").unwrap(),
             rev: None,
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
 
         // Should match despite .git suffix difference
@@ -1357,7 +1358,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo.git").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: GitReference::DefaultBranch,
             },
         });
@@ -1365,7 +1366,7 @@ mod tests {
         let spec = SourceLocationSpec::Git(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
 
         // Should match despite .git suffix difference
@@ -1378,7 +1379,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo1").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: GitReference::DefaultBranch,
             },
         });
@@ -1386,7 +1387,7 @@ mod tests {
         let spec = SourceLocationSpec::Git(GitSpec {
             git: Url::parse("https://github.com/user/repo2").unwrap(),
             rev: None,
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1398,7 +1399,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
-                subdirectory: Some("subdir".to_string()),
+                subdirectory: Subdirectory::try_from("subdir").unwrap(),
                 reference: GitReference::DefaultBranch,
             },
         });
@@ -1406,7 +1407,7 @@ mod tests {
         let spec = SourceLocationSpec::Git(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
 
         // Should match - spec doesn't care about subdirectory
@@ -1419,7 +1420,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
-                subdirectory: Some("subdir".to_string()),
+                subdirectory: Subdirectory::try_from("subdir").unwrap(),
                 reference: GitReference::DefaultBranch,
             },
         });
@@ -1427,7 +1428,7 @@ mod tests {
         let spec = SourceLocationSpec::Git(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
-            subdirectory: Some("subdir".to_string()),
+            subdirectory: Subdirectory::try_from("subdir").unwrap(),
         });
 
         assert!(pinned.matches_source_spec(&spec));
@@ -1439,7 +1440,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
-                subdirectory: Some("subdir1".to_string()),
+                subdirectory: Subdirectory::try_from("subdir1").unwrap(),
                 reference: GitReference::DefaultBranch,
             },
         });
@@ -1447,7 +1448,7 @@ mod tests {
         let spec = SourceLocationSpec::Git(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
-            subdirectory: Some("subdir2".to_string()),
+            subdirectory: Subdirectory::try_from("subdir2").unwrap(),
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1459,7 +1460,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: GitReference::DefaultBranch,
             },
         });
@@ -1467,7 +1468,7 @@ mod tests {
         let spec = SourceLocationSpec::Git(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
-            subdirectory: Some("subdir".to_string()),
+            subdirectory: Subdirectory::try_from("subdir").unwrap(),
         });
 
         // Should not match - spec requires a subdirectory that pinned doesn't have
@@ -1483,14 +1484,14 @@ mod tests {
             )
             .unwrap(),
             md5: None,
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
 
         let spec = SourceLocationSpec::Url(UrlSourceSpec {
             url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
             sha256: None,
             md5: None,
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
 
         assert!(pinned.matches_source_spec(&spec));
@@ -1505,14 +1506,14 @@ mod tests {
             )
             .unwrap(),
             md5: None,
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
 
         let spec = SourceLocationSpec::Url(UrlSourceSpec {
             url: Url::parse("https://example.com/different.tar.gz").unwrap(),
             sha256: None,
             md5: None,
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1527,7 +1528,7 @@ mod tests {
         let spec = SourceLocationSpec::Git(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1539,7 +1540,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: GitReference::DefaultBranch,
             },
         });
@@ -1548,7 +1549,7 @@ mod tests {
             url: Url::parse("https://example.com/archive.tar.gz").unwrap(),
             sha256: None,
             md5: None,
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1563,7 +1564,7 @@ mod tests {
             )
             .unwrap(),
             md5: None,
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
 
         let spec = SourceLocationSpec::Path(PathSourceSpec {
@@ -1579,7 +1580,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: GitReference::Rev("v1.0.0".to_string()),
             },
         });
@@ -1587,7 +1588,7 @@ mod tests {
         let spec = SourceLocationSpec::Git(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: Some(GitReference::Rev("v2.0.0".to_string())),
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
 
         // Should match - we only compare repository and subdirectory, not the
@@ -1601,7 +1602,7 @@ mod tests {
             git: Url::parse("https://github.com/User/Repo").unwrap(),
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
-                subdirectory: None,
+                subdirectory: Default::default(),
                 reference: GitReference::DefaultBranch,
             },
         });
@@ -1609,7 +1610,7 @@ mod tests {
         let spec = SourceLocationSpec::Git(GitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
 
         // Should match - GitHub URLs are case-insensitive
