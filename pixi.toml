@@ -238,6 +238,8 @@ test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema
 jsonschema = ">=3.2.0,<4"
 pydantic = ">=2.11.10,<3"
 pyyaml = ">=6.0.3,<7"
+pytest = ">=9.0.2,<10"
+
 
 [feature.pypi-gen.dependencies]
 hatchling = ">=1.27.0,<2"
