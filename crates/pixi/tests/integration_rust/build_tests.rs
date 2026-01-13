@@ -790,4 +790,147 @@ my-package = {{ path = "./my-package" }}
          Error: {:?}",
         install_result.err()
     );
+
+    // Step 3: Additional check - run lock again and verify lockfile is stable
+    let lockfile_content_1 = fs::read_to_string(pixi.workspace_path().join(consts::PROJECT_LOCK_FILE)).unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lockfile_content_2 = fs::read_to_string(pixi.workspace_path().join(consts::PROJECT_LOCK_FILE)).unwrap();
+
+    assert_eq!(
+        lockfile_content_1, lockfile_content_2,
+        "Lock file should be stable across multiple lock operations"
+    );
+
+    // Step 4: Run install --locked again to ensure it still works
+    let install_result_2 = pixi.install().with_locked().await;
+    assert!(
+        install_result_2.is_ok(),
+        "pixi install --locked should still succeed after second lock. Error: {:?}",
+        install_result_2.err()
+    );
+}
+
+/// Extended regression test for issue #5256 with more environments
+/// This test mimics the numba-cuda configuration more closely with
+/// multiple variant axes and more environments
+#[tokio::test]
+async fn test_lock_file_stability_with_many_environments() {
+    setup_tracing();
+
+    // Create a package database with Python and compiler dependencies
+    let python_run_exports = RunExportsJson {
+        weak: vec!["python *".to_string()],
+        ..Default::default()
+    };
+
+    let mut package_database = MockRepoData::default();
+
+    // Add multiple Python versions
+    for version in ["3.10.0", "3.11.0", "3.12.0", "3.13.0"] {
+        package_database.add_package(
+            Package::build("python", version)
+                .with_materialize(true)
+                .with_run_exports(python_run_exports.clone())
+                .finish(),
+        );
+    }
+
+    // Add some common packages that might be in a real project
+    package_database.add_package(Package::build("numpy", "1.0.0").finish());
+    package_database.add_package(Package::build("setuptools", "70.0.0").finish());
+
+    let channel = package_database.into_channel().await.unwrap();
+
+    let passthrough = PassthroughBackend::instantiator()
+        .with_run_exports("python", python_run_exports.clone());
+    let backend_override = BackendOverride::from_memory(passthrough);
+
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create source package
+    let source_dir = pixi.workspace_path().join("test-pkg");
+    fs::create_dir_all(&source_dir).unwrap();
+    fs::write(
+        source_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "test-pkg"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.host-dependencies]
+python = "*"
+"#,
+    )
+    .unwrap();
+
+    // Create a manifest with many environments (similar to numba-cuda)
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = ["{}"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[workspace.build-variants]
+python = ["3.10.*", "3.11.*", "3.12.*", "3.13.*"]
+
+# Python version features
+[feature.py310.dependencies]
+python = "3.10.*"
+
+[feature.py311.dependencies]
+python = "3.11.*"
+
+[feature.py312.dependencies]
+python = "3.12.*"
+
+[feature.py313.dependencies]
+python = "3.13.*"
+
+# Simulating cuda-like features with different configurations
+[feature.config-a.dependencies]
+numpy = "*"
+
+[feature.config-b.dependencies]
+setuptools = "*"
+
+# Many environments with solve-groups (mimicking numba-cuda's 16 envs)
+[environments]
+py310-a = {{ features = ["py310", "config-a"], solve-group = "py310" }}
+py310-b = {{ features = ["py310", "config-b"], solve-group = "py310" }}
+py311-a = {{ features = ["py311", "config-a"], solve-group = "py311" }}
+py311-b = {{ features = ["py311", "config-b"], solve-group = "py311" }}
+py312-a = {{ features = ["py312", "config-a"], solve-group = "py312" }}
+py312-b = {{ features = ["py312", "config-b"], solve-group = "py312" }}
+py313-a = {{ features = ["py313", "config-a"], solve-group = "py313" }}
+py313-b = {{ features = ["py313", "config-b"], solve-group = "py313" }}
+
+[dependencies]
+test-pkg = {{ path = "./test-pkg" }}
+"#,
+        channel.url(),
+        Platform::current(),
+    );
+
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // Run lock multiple times to check for non-determinism
+    for i in 1..=3 {
+        pixi.lock().await.unwrap();
+
+        let install_result = pixi.install().with_locked().await;
+        assert!(
+            install_result.is_ok(),
+            "Iteration {}: pixi install --locked should succeed. Error: {:?}",
+            i,
+            install_result.err()
+        );
+    }
 }
