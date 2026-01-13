@@ -1050,10 +1050,28 @@ pub(crate) fn pypi_satisfies_requirement(
                             }
                             .into());
                         }
-                        // If the spec does not specify a revision than any will do
-                        // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
+                        // If the spec uses DefaultBranch, we need to check what the lock has
+                        // DefaultBranch in it
+                        // otherwise any explicit ref in lock is not satisfiable
                         if *reference == GitReference::DefaultBranch {
-                            return Ok(());
+                            match &pinned_git_spec.source.reference {
+                                // Any explicit reference in lock is not satisfiable
+                                // when manifest has DefaultBranch (user removed the explicit ref)
+                                pixi_spec::GitReference::Branch(_)
+                                | pixi_spec::GitReference::Tag(_)
+                                | pixi_spec::GitReference::Rev(_) => {
+                                    return Err(PlatformUnsat::LockedPyPIGitRefMismatch {
+                                        name: spec.name.clone().to_string(),
+                                        expected_ref: reference.to_string(),
+                                        found_ref: pinned_git_spec.source.reference.to_string(),
+                                    }
+                                    .into());
+                                }
+                                // Only DefaultBranch in lock is satisfiable
+                                pixi_spec::GitReference::DefaultBranch => {
+                                    return Ok(());
+                                }
+                            }
                         }
 
                         if pinned_git_spec.source.subdirectory
@@ -2677,14 +2695,36 @@ mod tests {
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd").unwrap(),
         )
         .unwrap();
-        // This should not
         pypi_satisfies_requirement(&non_matching_spec, &locked_data, &project_root).unwrap_err();
-        // Removing the rev from the Requirement should satisfy any revision
-        let spec = pep508_requirement_to_uv_requirement(
+
+        // Removing the rev from the Requirement should NOT satisfy when lock has explicit Rev.
+        // This ensures that when a user removes an explicit ref from the manifest,
+        // the lock file gets re-resolved.
+        let spec_without_rev = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap(),
         )
         .unwrap();
-        pypi_satisfies_requirement(&spec, &locked_data, &project_root).unwrap();
+        pypi_satisfies_requirement(&spec_without_rev, &locked_data, &project_root).unwrap_err();
+
+        // When lock has DefaultBranch (no explicit ref), removing rev from manifest should satisfy
+        let locked_data_default_branch = PypiPackageData {
+            name: "mypkg".parse().unwrap(),
+            version: Version::from_str("0.1.0").unwrap(),
+            // No ?rev= query param, only the fragment with commit hash
+            location: "git+https://github.com/mypkg.git#29932f3915935d773dc8d52c292cadd81c81071d"
+                .parse()
+                .expect("failed to parse url"),
+            hash: None,
+            requires_dist: vec![],
+            requires_python: None,
+            editable: false,
+        };
+        pypi_satisfies_requirement(
+            &spec_without_rev,
+            &locked_data_default_branch,
+            &project_root,
+        )
+        .unwrap();
     }
 
     // Currently this test is missing from `good_satisfiability`, so we test the
