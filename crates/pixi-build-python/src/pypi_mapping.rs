@@ -502,7 +502,7 @@ pub fn filter_mapped_pypi_deps(
 /// Extract the channel name from a channel URL.
 ///
 /// Returns the last path segment (e.g., "conda-forge" from
-/// "https://prefix.dev/conda-forge").
+/// "<https://prefix.dev/conda-forge>").
 pub fn extract_channel_name(channel: &ChannelUrl) -> Option<&str> {
     channel.as_str().trim_end_matches('/').rsplit('/').next()
 }

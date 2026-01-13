@@ -436,7 +436,7 @@ impl MojoPkgConfig {
     }
 }
 
-/// Clean the package name for use in [`MojoPkgConfig`] and [`MojoBinconfig`].
+/// Clean the package name for use in [`MojoPkgConfig`] and [`MojoBinConfig`].
 ///
 /// This just entails converting - to _.
 pub fn clean_project_name(s: &str) -> String {
