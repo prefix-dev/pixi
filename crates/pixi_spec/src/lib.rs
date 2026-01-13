@@ -736,7 +736,7 @@ impl From<GitSpec> for rattler_lock::source::GitSourceLocation {
                 Some(GitReference::Rev(rev)) => Some(rattler_lock::source::GitReference::Rev(rev)),
                 Some(GitReference::DefaultBranch) | None => None,
             },
-            subdirectory: value.subdirectory.to_option_string().map(Into::into),
+            subdirectory: value.subdirectory.to_option_string(),
         }
     }
 }

@@ -42,8 +42,10 @@ impl Subdirectory {
 
     /// Validates a path for use as a subdirectory.
     fn validate(path: &Path) -> Result<(), SubdirectoryError> {
-        // Check if path is absolute
-        if path.is_absolute() {
+        // Check if path is absolute.
+        // On Windows, `is_absolute()` only returns true for paths like `C:\...`,
+        // so we also need to check for Unix-style absolute paths starting with `/`.
+        if path.is_absolute() || path.to_string_lossy().starts_with('/') {
             return Err(SubdirectoryError::AbsolutePath(
                 path.to_string_lossy().into_owned(),
             ));
