@@ -220,7 +220,7 @@ pub fn as_uv_req(
             .iter()
             .map(|e| uv_normalize::ExtraName::from_str(e.as_ref()).expect("conversion failed"))
             .collect(),
-        marker: Default::default(),
+        marker: to_uv_marker_tree(req.env_markers()).expect("marker conversion failed"),
         groups: Default::default(),
         source,
         origin: None,
@@ -309,9 +309,46 @@ pub fn pep508_requirement_to_uv_requirement(
 
 #[cfg(test)]
 mod tests {
+    use pep508_rs::MarkerTree;
     use uv_redacted::DisplaySafeUrl;
 
     use super::*;
+
+    #[test]
+    fn test_markers() {
+        let pypi_req = PixiPypiSpec::with_extras_and_markers(
+            PixiPypiSource::Registry {
+                version: VersionOrStar::Star,
+                index: None,
+            },
+            vec![],
+            MarkerTree::from_str("sys_platform == 'linux'").unwrap(),
+        );
+        let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
+
+        let expected_uv_source = RequirementSource::Registry {
+            specifier: VersionSpecifiers::empty(),
+            index: None,
+            conflict: None,
+        };
+
+        assert_eq!(
+            uv_req.source, expected_uv_source,
+            "Expected {} but got {}",
+            expected_uv_source, uv_req.source
+        );
+
+        let expected_uv_markers =
+            uv_pep508::MarkerTree::from_str("sys_platform == 'linux'").unwrap();
+
+        assert_eq!(
+            uv_req.marker,
+            expected_uv_markers,
+            "Expected {:?} but got {:?}",
+            expected_uv_markers.try_to_string(),
+            uv_req.marker.try_to_string(),
+        );
+    }
 
     #[test]
     fn test_git_url() {

@@ -201,20 +201,11 @@ async fn find_unsatisfiable_targets<'p>(
                 }
 
                 EnvironmentUnsat::IndexesMismatch(_)
+                | EnvironmentUnsat::InvalidDistExtensionInNoBuild(_)
+                | EnvironmentUnsat::NoBuildWithNonBinaryPackages(_)
+                | EnvironmentUnsat::PypiWheelTagsMismatch { .. }
                 | EnvironmentUnsat::PypiPrereleaseModeMismatch { .. } => {
-                    // If the indexes mismatched we cannot trust any of the locked content.
-                    unsatisfiable_targets
-                        .disregard_locked_content
-                        .pypi
-                        .insert(environment.clone());
-                }
-                EnvironmentUnsat::InvalidDistExtensionInNoBuild(_) => {
-                    unsatisfiable_targets
-                        .disregard_locked_content
-                        .pypi
-                        .insert(environment.clone());
-                }
-                EnvironmentUnsat::NoBuildWithNonBinaryPackages(_) => {
+                    // We cannot trust the python part of the locked contents.
                     unsatisfiable_targets
                         .disregard_locked_content
                         .pypi
