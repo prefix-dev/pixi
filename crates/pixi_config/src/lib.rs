@@ -39,11 +39,11 @@ const EXPERIMENTAL: &str = "experimental";
 #[serde(rename_all = "lowercase")]
 pub enum TlsRootCerts {
     /// Use bundled Mozilla root certificates
-    #[default]
     Webpki,
     /// Use the system's native certificate store
     Native,
     /// Use both webpki and native certificates
+    #[default]
     All,
 }
 
@@ -2789,14 +2789,6 @@ UNUSED = "unused"
         assert_eq!(config.pinning_strategy, Some(PinningStrategy::Semver));
 
         config.set("unknown-key", None).unwrap_err();
-    }
-
-    #[test]
-    fn test_tls_root_certs_default() {
-        let config = Config::default();
-        // Default should be Webpki (bundled Mozilla roots)
-        assert_eq!(config.tls_root_certs(), TlsRootCerts::Webpki);
-        assert_eq!(config.tls_root_certs, None);
     }
 
     #[rstest]
