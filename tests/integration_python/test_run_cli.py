@@ -1681,7 +1681,9 @@ def test_signal_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
     env = {k: v for k, v in os.environ.items() if not k.startswith("PIXI_")}
 
     # install the dependencies
-    subprocess.check_call([pixi, "install", "--manifest-path", manifest], cwd=tmp_data_path, env=env)
+    subprocess.check_call(
+        [pixi, "install", "--manifest-path", manifest], cwd=tmp_data_path, env=env
+    )
     # run the `start` task in the background and send some signals to it
     process = subprocess.Popen(
         [pixi, "run", "--manifest-path", manifest, "start"], cwd=tmp_data_path, env=env
