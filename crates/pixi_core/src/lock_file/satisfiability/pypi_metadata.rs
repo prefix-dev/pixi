@@ -102,13 +102,13 @@ pub fn compare_metadata(
     // Compare version — only when both sides have one. `None` means the
     // version is dynamic or not tracked (local path deps never store a
     // version in the lock file).
-    if let (Some(locked_version), Some(current_version)) = (&locked.version, &current.version) {
-        if locked_version != current_version {
-            return Some(MetadataMismatch::Version {
-                locked: locked_version.clone(),
-                current: current_version.clone(),
-            });
-        }
+    if let (Some(locked_version), Some(current_version)) = (&locked.version, &current.version)
+        && locked_version != current_version
+    {
+        return Some(MetadataMismatch::Version {
+            locked: locked_version.clone(),
+            current: current_version.clone(),
+        });
     }
 
     // Compare requires_python
