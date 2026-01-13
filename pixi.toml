@@ -22,7 +22,6 @@ python = ">=3.13.5,<3.15"
 
 [tasks]
 bump = "tbump --only-patch $RELEASE_VERSION"
-generate-cli-docs = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml"
 insta = "cargo insta"
 install = { cmd = "cargo install --path crates/pixi --locked", description = "Install pixi itself locally using cargo" }
 install-as = { cmd = "python scripts/install.py", depends-on = [
@@ -206,6 +205,7 @@ env.CARGO_TARGET_DIR = "target/pixi"
 [feature.build.tasks]
 build-debug = "cargo build"
 build-release = "cargo build --release"
+generate-cli-docs = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml"
 
 [feature.docs.dependencies]
 cairosvg = ">=2.8.2,<3"
