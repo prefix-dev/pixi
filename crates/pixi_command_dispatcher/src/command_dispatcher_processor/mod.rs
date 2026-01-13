@@ -222,8 +222,11 @@ enum PendingGitCheckout {
     /// The repository was checked out and the result is available.
     CheckedOut(Fetch),
 
-    /// A previous attempt failed
-    Errored,
+    /// A previous attempt failed, error is stored for future requests.
+    Errored(GitError),
+
+    /// The checkout was cancelled.
+    Cancelled,
 }
 
 // We store spec here to double-check that hashes are correct.
@@ -239,8 +242,11 @@ enum PendingUrlCheckout {
     /// The URL was checked out and the result is available.
     CheckedOut(UrlCheckout),
 
-    /// A previous attempt failed
-    Errored,
+    /// A previous attempt failed, error is stored for future requests.
+    Errored(UrlError),
+
+    /// The checkout was cancelled.
+    Cancelled,
 }
 
 /// Information about a pending conda environment solve. This is used by the
