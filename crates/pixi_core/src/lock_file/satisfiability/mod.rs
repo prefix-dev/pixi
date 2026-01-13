@@ -2457,16 +2457,18 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
                             if requirement.is_editable() {
                                 if let Err(err) =
-                                    pypi_satisfies_editable(&requirement, record, project_root)
+                                    pypi_satisfies_editable(&requirement, record, ctx.project_root)
                                 {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
 
                                 FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras.to_vec())
                             } else {
-                                if let Err(err) =
-                                    pypi_satisfies_requirement(&requirement, record, project_root)
-                                {
+                                if let Err(err) = pypi_satisfies_requirement(
+                                    &requirement,
+                                    record,
+                                    ctx.project_root,
+                                ) {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
 
@@ -3074,11 +3076,13 @@ async fn read_local_package_metadata(
             // Parse pyproject.toml with UV's parser for requires_dist
             if let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents) {
                 // Try to extract requires_dist statically using UV's database
-                match (
-                    database.requires_dist(directory, &pyproject_toml).await,
-                    version,
-                ) {
-                    (Ok(Some(requires_dist)), Some(version)) if !requires_dist.dynamic => {
+                // The `dynamic` flag on `RequiresDist` is true when any
+                // field is listed in `[project.dynamic]`, not just
+                // dependencies. Since we handle version separately (and
+                // skip comparison when it's `None`), we accept the
+                // statically extracted deps regardless of the flag.
+                match database.requires_dist(directory, &pyproject_toml).await {
+                    Ok(Some(requires_dist)) => {
                         tracing::debug!(
                             "Package {} - extracted requires_dist using database.requires_dist(). Dynamic: {}",
                             package_name,
@@ -3113,21 +3117,13 @@ async fn read_local_package_metadata(
                             return Ok(metadata);
                         }
                     }
-                    (Ok(Some(requires_dist)), _) => {
-                        // Dynamic dependencies or missing/dynamic version - need to build wheel for accurate metadata
-                        tracing::debug!(
-                            "Package {} - requires_dist is dynamic (dynamic={}) or version is missing/dynamic, falling back to wheel build",
-                            package_name,
-                            requires_dist.dynamic,
-                        );
-                    }
-                    (Ok(None), _) => {
+                    Ok(None) => {
                         tracing::debug!(
                             "Package {} - requires_dist() returned None, falling back to build",
                             package_name
                         );
                     }
-                    (Err(e), _) => {
+                    Err(e) => {
                         tracing::debug!(
                             "Package {} - requires_dist() failed: {}, falling back to build",
                             package_name,

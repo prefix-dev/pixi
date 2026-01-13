@@ -14,8 +14,9 @@ use thiserror::Error;
 /// Metadata extracted from a local package source tree.
 #[derive(Debug, Clone)]
 pub struct LocalPackageMetadata {
-    /// The version of the package.
-    pub version: Version,
+    /// The version of the package, if statically known.
+    /// `None` for packages with dynamic versions.
+    pub version: Option<Version>,
     /// The package dependencies.
     pub requires_dist: Vec<Requirement>,
     /// The Python version requirement.
@@ -98,21 +99,16 @@ pub fn compare_metadata(
         }));
     }
 
-    // Compare version
-    match &locked.version {
-        Some(locked_version) if locked_version != &current.version => {
+    // Compare version — only when both sides have one. `None` means the
+    // version is dynamic or not tracked (local path deps never store a
+    // version in the lock file).
+    if let (Some(locked_version), Some(current_version)) = (&locked.version, &current.version) {
+        if locked_version != current_version {
             return Some(MetadataMismatch::Version {
                 locked: locked_version.clone(),
-                current: current.version.clone(),
+                current: current_version.clone(),
             });
         }
-        None => {
-            return Some(MetadataMismatch::Version {
-                locked: pep440_rs::Version::new([0]),
-                current: current.version.clone(),
-            });
-        }
-        _ => {}
     }
 
     // Compare requires_python
@@ -170,7 +166,7 @@ pub fn from_uv_metadata(
         .transpose()?;
 
     Ok(LocalPackageMetadata {
-        version,
+        version: Some(version),
         requires_dist,
         requires_python,
     })
@@ -207,7 +203,7 @@ mod tests {
         .into();
 
         let current = LocalPackageMetadata {
-            version: Version::from_str("1.0.0").unwrap(),
+            version: Some(Version::from_str("1.0.0").unwrap()),
             requires_dist: vec!["numpy>=1.0".parse().unwrap()],
             requires_python: Some(VersionSpecifiers::from_str(">=3.8").unwrap()),
         };
@@ -229,7 +225,7 @@ mod tests {
         .into();
 
         let current = LocalPackageMetadata {
-            version: Version::from_str("1.0.0").unwrap(),
+            version: Some(Version::from_str("1.0.0").unwrap()),
             requires_dist: vec![
                 "numpy>=1.0".parse().unwrap(),
                 "pandas>=2.0".parse().unwrap(), // Added
