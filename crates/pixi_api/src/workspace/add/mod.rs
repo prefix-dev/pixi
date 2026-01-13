@@ -52,17 +52,20 @@ pub async fn add_conda_dep(
             ));
         }
 
+        let subdirectory = git_options
+            .subdir
+            .clone()
+            .map(Subdirectory::try_from)
+            .transpose()
+            .into_diagnostic()?
+            .unwrap_or_default();
         source_specs = passed_specs
             .iter()
             .map(|(name, (_spec, spec_type))| {
                 let git_spec = GitSpec {
                     git: git.clone(),
                     rev: Some(git_options.reference.clone()),
-                    subdirectory: git_options
-                        .subdir
-                        .clone()
-                        .and_then(|s| Subdirectory::try_from(s).ok())
-                        .unwrap_or_default(),
+                    subdirectory: subdirectory.clone(),
                 };
                 (
                     name.clone(),

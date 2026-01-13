@@ -1,7 +1,7 @@
 use crate::{PixiPypiSource, PixiPypiSpec, VersionOrStar};
 use itertools::Itertools;
 use pep508_rs::ExtraName;
-use pixi_spec::{GitReference, GitSpec};
+use pixi_spec::{GitReference, GitSpec, SubdirectoryError};
 use pixi_toml::{TomlFromStr, TomlWith};
 use std::fmt::Display;
 use std::path::PathBuf;
@@ -21,6 +21,8 @@ pub enum SpecConversion {
     VersionWithNonDetailedKeys { non_detailed_keys: String },
     #[error("Exactly one of `url`, `path`, `git`, or `version` must be specified")]
     MultipleVersionSpecifiers,
+    #[error(transparent)]
+    InvalidSubdirectory(#[from] SubdirectoryError),
 }
 
 /// Returns a more helpful message when a version requirement is used
@@ -116,7 +118,8 @@ impl RawPyPiRequirement {
                     url,
                     subdirectory: self
                         .subdirectory
-                        .and_then(|s| pixi_spec::Subdirectory::try_from(s).ok())
+                        .map(pixi_spec::Subdirectory::try_from)
+                        .transpose()?
                         .unwrap_or_default(),
                 },
                 self.extras,
@@ -145,7 +148,8 @@ impl RawPyPiRequirement {
                             rev,
                             subdirectory: self
                                 .subdirectory
-                                .and_then(|s| pixi_spec::Subdirectory::try_from(s).ok())
+                                .map(pixi_spec::Subdirectory::try_from)
+                                .transpose()?
                                 .unwrap_or_default(),
                         },
                     },

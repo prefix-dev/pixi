@@ -8,7 +8,7 @@ use url::Url;
 use pixi_config::pixi_home;
 use pixi_consts::consts;
 use pixi_global::project::FromMatchSpecError;
-use pixi_spec::{PixiSpec, Subdirectory};
+use pixi_spec::{PixiSpec, Subdirectory, SubdirectoryError};
 use rattler_conda_types::{ChannelConfig, MatchSpec, ParseMatchSpecError, ParseStrictness};
 use typed_path::Utf8NativePathBuf;
 
@@ -80,6 +80,8 @@ pub enum GlobalSpecsConversionError {
     PackageNameInference(#[from] pixi_global::project::InferPackageNameError),
     #[error("Input {0} looks like a path: please pass `--path`.")]
     MissingPathArg(String),
+    #[error(transparent)]
+    InvalidSubdirectory(#[from] SubdirectoryError),
 }
 
 impl GlobalSpecs {
@@ -97,7 +99,8 @@ impl GlobalSpecs {
                 subdirectory: self
                     .subdir
                     .clone()
-                    .and_then(|s| Subdirectory::try_from(s).ok())
+                    .map(Subdirectory::try_from)
+                    .transpose()?
                     .unwrap_or_default(),
             };
             Some(PixiSpec::Git(git_spec))
