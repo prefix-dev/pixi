@@ -266,7 +266,7 @@ pub async fn instantiate_backend_without_compatible_api_version_cancels_duplicat
         dispatcher.instantiate_tool_environment(spec),
     );
 
-    // Exactly one result should be a failure and the other should be cancelled.
+    // Both results should be failures since errors are now cloned and sent to all channels.
     let is_cancelled = |r: &Result<
         _,
         CommandDispatcherError<pixi_command_dispatcher::InstantiateToolEnvironmentError>,
@@ -280,10 +280,13 @@ pub async fn instantiate_backend_without_compatible_api_version_cancels_duplicat
     let failed_count = usize::from(is_failed(&r1)) + usize::from(is_failed(&r2));
 
     assert_eq!(
-        cancelled_count, 1,
-        "expected exactly one request to be cancelled"
+        cancelled_count, 0,
+        "no requests should be cancelled - errors are cloned to all channels"
     );
-    assert_eq!(failed_count, 1, "expected exactly one request to fail");
+    assert_eq!(
+        failed_count, 2,
+        "both requests should fail with the same error"
+    );
 }
 
 /// Dropping the returned future should cancel the background task promptly.

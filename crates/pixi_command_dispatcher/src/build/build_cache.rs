@@ -3,6 +3,7 @@ use std::{
     hash::{Hash, Hasher},
     io::SeekFrom,
     path::PathBuf,
+    sync::Arc,
 };
 
 use crate::build::{SourceCodeLocation, source_checkout_cache_key};
@@ -27,11 +28,11 @@ pub struct BuildCache {
     pub(crate) root: AbsPresumedDirPathBuf,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum BuildCacheError {
     /// An I/O error occurred while reading or writing the cache.
     #[error("an IO error occurred while {0} {1}")]
-    IoError(String, AbsPathBuf, #[source] std::io::Error),
+    IoError(String, AbsPathBuf, #[source] Arc<std::io::Error>),
 }
 
 /// Defines additional input besides the source files that are used to compute
@@ -157,7 +158,7 @@ impl BuildCache {
                 BuildCacheError::IoError(
                     "creating cache directory".to_string(),
                     cache_dir.clone(),
-                    e,
+                    Arc::new(e),
                 )
             })?
             .to_path_buf();
@@ -175,7 +176,7 @@ impl BuildCache {
                 BuildCacheError::IoError(
                     "opening cache file".to_string(),
                     cache_file_path.clone().into(),
-                    e,
+                    Arc::new(e),
                 )
             })?;
 
@@ -183,7 +184,7 @@ impl BuildCache {
             BuildCacheError::IoError(
                 "locking cache file".to_string(),
                 cache_file_path.clone().into(),
-                e.error,
+                Arc::new(e.error),
             )
         })?;
 
@@ -196,7 +197,7 @@ impl BuildCache {
                 BuildCacheError::IoError(
                     "reading cache file".to_string(),
                     cache_file_path.clone().into(),
-                    e,
+                    Arc::new(e),
                 )
             })?;
 
@@ -304,7 +305,7 @@ impl BuildCacheEntry {
             BuildCacheError::IoError(
                 "seeking to start of cache file".to_string(),
                 self.cache_file_path.clone().into(),
-                e,
+                Arc::new(e),
             )
         })?;
         let bytes = serde_json::to_vec(&metadata).expect("serialization to JSON should not fail");
@@ -312,7 +313,7 @@ impl BuildCacheEntry {
             BuildCacheError::IoError(
                 "writing metadata to cache file".to_string(),
                 self.cache_file_path.clone().into(),
-                e,
+                Arc::new(e),
             )
         })?;
         self.file
@@ -323,7 +324,7 @@ impl BuildCacheEntry {
                 BuildCacheError::IoError(
                     "setting length of cache file".to_string(),
                     self.cache_file_path.clone().into(),
-                    e,
+                    Arc::new(e),
                 )
             })?;
 

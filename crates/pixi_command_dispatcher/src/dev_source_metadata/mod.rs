@@ -40,7 +40,7 @@ pub struct DevSourceMetadata {
 }
 
 /// An error that can occur while retrieving dev source metadata.
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Clone, Error, Diagnostic)]
 pub enum DevSourceMetadataError {
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -60,7 +60,7 @@ pub enum DevSourceMetadataError {
 }
 
 /// Error for when a package is not provided by the source.
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub struct PackageNotProvidedError {
     /// The name of the package that was requested
     pub name: PackageName,
