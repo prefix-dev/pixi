@@ -544,7 +544,8 @@ index-url = "{index_url}"
                         source: PixiPypiSource::Registry {
                             version: VersionOrStar::from_str("==24.8.0").unwrap(),
                             index: None,
-                        }
+                        },
+                        env_markers: pep508_rs::MarkerTree::default(),
                     }
                 );
             }

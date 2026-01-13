@@ -390,15 +390,6 @@ pub async fn resolve_pypi(
         }
     }
 
-    let requirements = dependencies
-        .into_iter()
-        .flat_map(|(name, req)| {
-            req.into_iter()
-                .map(move |r| as_uv_req(&r, name.as_ref(), project_root))
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
-
     // Determine the python interpreter that is installed as part of the conda
     // packages.
     let python_record = locked_pixi_records
@@ -413,6 +404,16 @@ pub async fn resolve_pypi(
 
     // Construct the marker environment for the target platform
     let marker_environment = determine_marker_environment(platform, python_record.as_ref())?;
+
+    let requirements = dependencies
+        .into_iter()
+        .flat_map(|(name, req)| {
+            req.into_iter()
+                .map(move |r| as_uv_req(&r, name.as_ref(), project_root))
+        })
+        .filter_ok(|uv_req| uv_req.evaluate_markers(Some(&marker_environment), &uv_req.extras))
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
 
     // Determine the tags for this particular solve.
     let tags = get_pypi_tags(platform, &system_requirements, python_record.as_ref())?;
