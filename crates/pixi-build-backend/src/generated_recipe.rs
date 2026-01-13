@@ -30,7 +30,7 @@ pub struct PythonParams {
 /// options.
 ///
 ///
-/// An instance of this trait is used by the [`IntermediateBackend`]
+/// An instance of this trait is used by the [`crate::intermediate_backend::IntermediateBackend`]
 /// in order to generate the recipe.
 #[async_trait::async_trait]
 pub trait GenerateRecipe {
