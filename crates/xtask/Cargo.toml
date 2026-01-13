@@ -1,8 +1,8 @@
 [package]
-name = "xtask"
-version = "0.1.0"
 edition.workspace = true
+name = "xtask"
 publish = false
+version = "0.1.0"
 
 [dependencies]
 clap = { workspace = true, features = ["derive", "std"] }

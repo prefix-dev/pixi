@@ -1,6 +1,6 @@
 use crate::{PixiPypiSource, PixiPypiSpec, VersionOrStar};
 use itertools::Itertools;
-use pep508_rs::ExtraName;
+use pep508_rs::{ExtraName, MarkerTree};
 use pixi_spec::{GitReference, GitSpec, SubdirectoryError};
 use pixi_toml::{TomlFromStr, TomlWith};
 use std::fmt::Display;
@@ -60,6 +60,8 @@ struct RawPyPiRequirement {
 
     extras: Vec<ExtraName>,
 
+    marker: MarkerTree,
+
     // Path Only
     pub path: Option<PathBuf>,
     pub editable: Option<bool>,
@@ -113,7 +115,7 @@ impl RawPyPiRequirement {
         }
 
         let req = match (self.url, self.path, self.git, self.index) {
-            (Some(url), None, None, None) => PixiPypiSpec::with_extras(
+            (Some(url), None, None, None) => PixiPypiSpec::with_extras_and_markers(
                 PixiPypiSource::Url {
                     url,
                     subdirectory: self
@@ -123,13 +125,15 @@ impl RawPyPiRequirement {
                         .unwrap_or_default(),
                 },
                 self.extras,
+                self.marker,
             ),
-            (None, Some(path), None, None) => PixiPypiSpec::with_extras(
+            (None, Some(path), None, None) => PixiPypiSpec::with_extras_and_markers(
                 PixiPypiSource::Path {
                     path,
                     editable: self.editable,
                 },
                 self.extras,
+                self.marker,
             ),
             (None, None, Some(git), None) => {
                 let rev = match (self.branch, self.rev, self.tag) {
@@ -141,7 +145,7 @@ impl RawPyPiRequirement {
                         return Err(SpecConversion::MultipleGitSpecifiers);
                     }
                 };
-                PixiPypiSpec::with_extras(
+                PixiPypiSpec::with_extras_and_markers(
                     PixiPypiSource::Git {
                         git: GitSpec {
                             git,
@@ -154,14 +158,16 @@ impl RawPyPiRequirement {
                         },
                     },
                     self.extras,
+                    self.marker,
                 )
             }
-            (None, None, None, index) => PixiPypiSpec::with_extras(
+            (None, None, None, index) => PixiPypiSpec::with_extras_and_markers(
                 PixiPypiSource::Registry {
                     version: self.version.unwrap_or(VersionOrStar::Star),
                     index,
                 },
                 self.extras,
+                self.marker,
             ),
             _ => {
                 return Err(SpecConversion::MultipleVersionSpecifiers);
@@ -206,6 +212,11 @@ impl<'de> toml_span::Deserialize<'de> for RawPyPiRequirement {
             .optional::<TomlFromStr<_>>("index")
             .map(TomlFromStr::into_inner);
 
+        let marker = th
+            .optional::<TomlFromStr<_>>("env-markers")
+            .map(TomlFromStr::into_inner)
+            .unwrap_or_default();
+
         th.finalize(None)?;
 
         Ok(RawPyPiRequirement {
@@ -220,6 +231,7 @@ impl<'de> toml_span::Deserialize<'de> for RawPyPiRequirement {
             url,
             subdirectory,
             index,
+            marker,
         })
     }
 }
@@ -274,6 +286,16 @@ impl From<PixiPypiSpec> for toml_edit::Value {
             }
         }
 
+        fn insert_markers(table: &mut toml_edit::InlineTable, markers: &MarkerTree) {
+            let markers_str = markers.try_to_string();
+            if let Some(markers_str) = markers_str {
+                table.insert(
+                    "env-markers",
+                    toml_edit::Value::String(toml_edit::Formatted::new(markers_str)),
+                );
+            }
+        }
+
         fn insert_index(table: &mut toml_edit::InlineTable, index: &Option<Url>) {
             if let Some(index) = index {
                 table.insert(
@@ -284,10 +306,13 @@ impl From<PixiPypiSpec> for toml_edit::Value {
         }
 
         let extras = &val.extras;
+        let markers = &val.env_markers;
 
         match &val.source {
             // Simple version string (no extras, no index)
-            PixiPypiSource::Registry { version, index } if extras.is_empty() && index.is_none() => {
+            PixiPypiSource::Registry { version, index }
+                if extras.is_empty() && index.is_none() && markers.is_true() =>
+            {
                 toml_edit::Value::from(version.to_string())
             }
             // Registry with extras or index
@@ -299,6 +324,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                 );
                 insert_extras(&mut table, extras);
                 insert_index(&mut table, index);
+                insert_markers(&mut table, markers);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
             PixiPypiSource::Git {
@@ -348,6 +374,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                     );
                 }
                 insert_extras(&mut table, extras);
+                insert_markers(&mut table, markers);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
             PixiPypiSource::Path { path, editable } => {
@@ -365,6 +392,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                     );
                 }
                 insert_extras(&mut table, extras);
+                insert_markers(&mut table, markers);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
             PixiPypiSource::Url { url, subdirectory } => {
@@ -382,6 +410,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                     );
                 }
                 insert_extras(&mut table, extras);
+                insert_markers(&mut table, markers);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
         }
@@ -482,12 +511,13 @@ mod test {
         );
         assert_eq!(
             requirement.first().unwrap().1,
-            &PixiPypiSpec::with_extras(
+            &PixiPypiSpec::with_extras_and_markers(
                 PixiPypiSource::Registry {
                     version: ">=3.12".parse().unwrap(),
                     index: None,
                 },
                 vec![ExtraName::from_str("bar").unwrap()],
+                pep508_rs::MarkerTree::default(),
             )
         );
 
@@ -502,7 +532,7 @@ mod test {
         );
         assert_eq!(
             requirement.first().unwrap().1,
-            &PixiPypiSpec::with_extras(
+            &PixiPypiSpec::with_extras_and_markers(
                 PixiPypiSource::Registry {
                     version: ">=3.12,<3.13.0".parse().unwrap(),
                     index: None,
@@ -511,6 +541,7 @@ mod test {
                     ExtraName::from_str("bar").unwrap(),
                     ExtraName::from_str("foo").unwrap(),
                 ],
+                pep508_rs::MarkerTree::default(),
             )
         );
     }
@@ -521,13 +552,14 @@ mod test {
             r#"
         version = "==1.2.3"
         extras = ["feature1", "feature2"]
+        env-markers = "python_version >= '3.11'"
         "#,
         )
         .unwrap();
 
         assert_eq!(
             pypi_requirement,
-            PixiPypiSpec::with_extras(
+            PixiPypiSpec::with_extras_and_markers(
                 PixiPypiSource::Registry {
                     version: "==1.2.3".parse().unwrap(),
                     index: None,
@@ -536,6 +568,7 @@ mod test {
                     ExtraName::from_str("feature1").unwrap(),
                     ExtraName::from_str("feature2").unwrap()
                 ],
+                pep508_rs::MarkerTree::from_str("python_version >= '3.11'").unwrap(),
             )
         );
     }
@@ -597,14 +630,14 @@ mod test {
     #[test]
     fn test_deserialize_fail_on_unknown() {
         let input = r#"foo = { borked = "bork"}"#;
-        assert_snapshot!(format_parse_error(input, from_toml_str::<TomlIndexMap::<pep508_rs::PackageName, PixiPypiSpec>>(input).unwrap_err()), @r###"
-         × Unexpected keys, expected only 'version', 'extras', 'path', 'editable', 'git', 'branch', 'tag', 'rev', 'url', 'subdirectory', 'index'
+        assert_snapshot!(format_parse_error(input, from_toml_str::<TomlIndexMap::<pep508_rs::PackageName, PixiPypiSpec>>(input).unwrap_err()), @r#"
+         × Unexpected keys, expected only 'version', 'extras', 'path', 'editable', 'git', 'branch', 'tag', 'rev', 'url', 'subdirectory', 'index', 'env-markers'
           ╭─[pixi.toml:1:9]
         1 │ foo = { borked = "bork"}
           ·         ───┬──
           ·            ╰── 'borked' was not expected here
           ╰────
-        "###);
+        "#);
     }
 
     #[test]
