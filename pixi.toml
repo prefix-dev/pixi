@@ -21,8 +21,6 @@ git = ">=2.51.0,<3"
 python = ">=3.13.5,<3.15"
 
 [tasks]
-build-debug = "cargo build"
-build-release = "cargo build --release"
 bump = "tbump --only-patch $RELEASE_VERSION"
 generate-cli-docs = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml"
 insta = "cargo insta"
@@ -205,6 +203,10 @@ scripts = ["scripts/activate.sh"]
 [feature.build.activation]
 env.CARGO_TARGET_DIR = "target/pixi"
 
+[feature.build.tasks]
+build-debug = "cargo build"
+build-release = "cargo build --release"
+
 [feature.docs.dependencies]
 cairosvg = ">=2.8.2,<3"
 git-cliff = ">=2.11.0,<3"
@@ -288,12 +290,12 @@ test-native-certs = { cmd = "python scripts/test_native_certs.py --pixi-bin $CAR
 
 [environments]
 default = { features = [
-  "build",
   "dev",
   "schema",
   "pytest",
   "rust",
 ], solve-group = "default" }
+build = { features = ["build", "rust"], solve-group = "default" }
 dist = { features = ["dist"], no-default-feature = true }
 docs = { features = [
   "docs",
@@ -302,7 +304,6 @@ lint = { features = [
   "lint",
   "rust",
   "pytest",
-  "build",
   "schema",
   "pypi-gen",
 ], no-default-feature = true, solve-group = "default" }
@@ -313,7 +314,7 @@ schema = { features = [
   "pytest",
 ], no-default-feature = true, solve-group = "default" }
 test-export = { features = ["micromamba"], no-default-feature = true }
-test-native-certs = { features = ["native-certs-test", "build"] }
+test-native-certs = { features = ["native-certs-test"] }
 trampoline = { features = ["trampoline"], no-default-feature = true }
 
 
