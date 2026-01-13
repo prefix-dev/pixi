@@ -832,10 +832,10 @@ impl Dependency {
     }
 }
 
-/// Check satatisfiability of a pypi requirement against a locked pypi package
+/// Check satisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url
 /// references
-pub(crate) fn pypi_satifisfies_editable(
+pub(crate) fn pypi_satisfies_editable(
     spec: &uv_distribution_types::Requirement,
     locked_data: &PypiPackageData,
     project_root: &Path,
@@ -855,7 +855,7 @@ pub(crate) fn pypi_satifisfies_editable(
         }
         RequirementSource::Directory { install_path, .. } => match &locked_data.location {
             // If we have an url requirement locked, but the editable is requested, this does not
-            // satifsfy
+            // satisfy
             UrlOrPath::Url(url) => Err(Box::new(PlatformUnsat::EditablePackageIsUrl(
                 spec.name.clone(),
                 url.to_string(),
@@ -868,14 +868,14 @@ pub(crate) fn pypi_satifisfies_editable(
                     Cow::Owned(project_root.join(Path::new(path.as_str())))
                 };
                 // Absolute paths can have symbolic links, so we canonicalize
-                let canocalized_path = dunce::canonicalize(&absolute_path).map_err(|e| {
+                let canonicalized_path = dunce::canonicalize(&absolute_path).map_err(|e| {
                     Box::new(PlatformUnsat::FailedToCanonicalizePath(
                         absolute_path.to_path_buf(),
                         e,
                     ))
                 })?;
 
-                if canocalized_path != install_path.as_ref() {
+                if canonicalized_path != install_path.as_ref() {
                     return Err(Box::new(PlatformUnsat::EditablePackagePathMismatch(
                         spec.name.clone(),
                         absolute_path.into_owned(),
@@ -888,10 +888,10 @@ pub(crate) fn pypi_satifisfies_editable(
     }
 }
 
-/// Check satatisfiability of a pypi requirement against a locked pypi package
+/// Check satisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url
 /// references
-pub(crate) fn pypi_satifisfies_requirement(
+pub(crate) fn pypi_satisfies_requirement(
     spec: &uv_distribution_types::Requirement,
     locked_data: &PypiPackageData,
     project_root: &Path,
@@ -1659,7 +1659,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .map_err(From::from)
         .map_err(Box::new)?;
 
-    // Keep a list of all conda packages that we have already visisted
+    // Keep a list of all conda packages that we have already visited
     let mut conda_packages_visited = HashSet::new();
     let mut pypi_packages_visited = HashSet::new();
     let mut pypi_requirements_visited = pypi_requirements
@@ -1821,14 +1821,14 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
                             if requirement.is_editable() {
                                 if let Err(err) =
-                                    pypi_satifisfies_editable(&requirement, &record.0, project_root)
+                                    pypi_satisfies_editable(&requirement, &record.0, project_root)
                                 {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
 
                                 FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras.to_vec())
                             } else {
-                                if let Err(err) = pypi_satifisfies_requirement(
+                                if let Err(err) = pypi_satisfies_requirement(
                                     &requirement,
                                     &record.0,
                                     project_root,
@@ -2532,7 +2532,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     #[traced_test]
-    async fn test_failing_satisiability(
+    async fn test_failing_satisfiability(
         #[files("../../tests/data/non-satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
@@ -2588,7 +2588,7 @@ mod tests {
         let project_root = PathBuf::from_str("/").unwrap();
         // This will not satisfy because the rev length is different, even being
         // resolved to the same one
-        pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap_err();
+        pypi_satisfies_requirement(&spec, &locked_data, &project_root).unwrap_err();
 
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
@@ -2610,13 +2610,12 @@ mod tests {
         .unwrap();
         let project_root = PathBuf::from_str("/").unwrap();
         // This will satisfy
-        pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap();
+        pypi_satisfies_requirement(&spec, &locked_data, &project_root).unwrap();
         let non_matching_spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd").unwrap(),
         )
         .unwrap();
-        // This should not
-        pypi_satifisfies_requirement(&non_matching_spec, &locked_data, &project_root).unwrap_err();
+        pypi_satisfies_requirement(&non_matching_spec, &locked_data, &project_root).unwrap_err();
 
         // Removing the rev from the Requirement should NOT satisfy when lock has explicit Rev.
         // This ensures that when a user removes an explicit ref from the manifest,
@@ -2625,7 +2624,7 @@ mod tests {
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap(),
         )
         .unwrap();
-        pypi_satifisfies_requirement(&spec_without_rev, &locked_data, &project_root).unwrap_err();
+        pypi_satisfies_requirement(&spec_without_rev, &locked_data, &project_root).unwrap_err();
 
         // When lock has DefaultBranch (no explicit ref), removing rev from manifest should satisfy
         let locked_data_default_branch = PypiPackageData {
@@ -2640,7 +2639,7 @@ mod tests {
             requires_python: None,
             editable: false,
         };
-        pypi_satifisfies_requirement(
+        pypi_satisfies_requirement(
             &spec_without_rev,
             &locked_data_default_branch,
             &project_root,
@@ -2670,7 +2669,7 @@ mod tests {
         let spec = pep508_requirement_to_uv_requirement(spec).unwrap();
 
         // This should satisfy:
-        pypi_satifisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
     }
 
     // Validate uv documentation to avoid breaking change in pixi
