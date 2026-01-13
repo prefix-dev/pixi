@@ -92,10 +92,7 @@ def test_run_in_shell_project(pixi: Path) -> None:
         """
         manifest_2.write_text(toml)
 
-        base_env = dict(os.environ)
-        base_env.pop("PIXI_IN_SHELL", None)
-        base_env.pop("PIXI_PROJECT_MANIFEST", None)
-        extended_env = base_env | {
+        env = {
             "PIXI_IN_SHELL": "true",
             "PIXI_PROJECT_MANIFEST": str(manifest_2),
         }
@@ -104,18 +101,15 @@ def test_run_in_shell_project(pixi: Path) -> None:
         verify_cli_command(
             [pixi, "run", "task"],
             stdout_contains="manifest_2",
-            env=extended_env,
+            env=env,
             cwd=tmp_pixi_workspace,
-            reset_env=True,
         )
 
         # Run with working directory at manifest_1_dir
         verify_cli_command(
             [pixi, "run", "task"],
             stdout_contains="manifest_1",
-            env=base_env,
             cwd=manifest_1_dir,
-            reset_env=True,
         )
 
         # Run task with PIXI_PROJECT_MANIFEST set to manifest_2 and working directory at manifest_1_dir
@@ -125,7 +119,7 @@ def test_run_in_shell_project(pixi: Path) -> None:
             [pixi, "run", "task"],
             stdout_contains="manifest_1",
             stderr_contains="manifest_2",
-            env=extended_env,
+            env=env,
             cwd=manifest_1_dir,
             reset_env=True,
         )
@@ -1683,11 +1677,14 @@ def test_signal_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # Use the manifest from the copied run_signals directory
     manifest = tmp_data_path.joinpath("pixi.toml")
 
+    # Remove all PIXI_ prefixed env vars to avoid interference from the outer environment
+    env = {k: v for k, v in os.environ.items() if not k.startswith("PIXI_")}
+
     # install the dependencies
-    subprocess.check_call([pixi, "install", "--manifest-path", manifest], cwd=tmp_data_path)
+    subprocess.check_call([pixi, "install", "--manifest-path", manifest], cwd=tmp_data_path, env=env)
     # run the `start` task in the background and send some signals to it
     process = subprocess.Popen(
-        [pixi, "run", "--manifest-path", manifest, "start"], cwd=tmp_data_path
+        [pixi, "run", "--manifest-path", manifest, "start"], cwd=tmp_data_path, env=env
     )
 
     time.sleep(1)  # wait for the process to start
