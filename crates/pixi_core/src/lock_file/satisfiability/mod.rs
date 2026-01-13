@@ -47,7 +47,7 @@ use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_configuration::RAYON_INITIALIZE;
-use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
+use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
 use uv_distribution_types::{RequirementSource, RequiresPython};
 use uv_git_types::GitReference;
 use uv_pypi_types::{ParsedUrlError, PyProjectToml};
@@ -415,11 +415,6 @@ pub enum PlatformUnsat {
     #[error("local package '{0}' has dynamic {1} metadata that requires re-resolution")]
     LocalPackageHasDynamicMetadata(pep508_rs::PackageName, &'static str),
 
-    #[error(
-        "path-based package '{0}' has a hash in the lock-file, but hashes are no longer used for path packages"
-    )]
-    PathPackageHasUnexpectedHash(pep508_rs::PackageName),
-
     #[error("the path '{0}, cannot be canonicalized")]
     FailedToCanonicalizePath(PathBuf, #[source] std::io::Error),
 
@@ -577,8 +572,7 @@ impl PlatformUnsat {
                 | PlatformUnsat::PythonVersionMismatch(_, _, _)
                 | PlatformUnsat::SourceTreeHashMismatch(..)
                 | PlatformUnsat::LocalPackageMetadataMismatch(_, _)
-                | PlatformUnsat::FailedToReadLocalMetadata(_, _)
-                | PlatformUnsat::PathPackageHasUnexpectedHash(_),
+                | PlatformUnsat::FailedToReadLocalMetadata(_, _),
         )
     }
 }
@@ -2172,14 +2166,8 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         };
 
                         if absolute_path.is_dir() {
-                            // If a hash is present (from an older lock file), trigger re-resolution to remove it.
-                            if record.0.hash.is_some() {
-                                delayed_pypi_error.get_or_insert_with(|| {
-                                    Box::new(PlatformUnsat::PathPackageHasUnexpectedHash(
-                                        record.0.name.clone(),
-                                    ))
-                                });
-                            }
+                            // Note: We ignore (until lockfile version is bumped) the hash field if present (from older lock files)
+                            // rather than triggering re-resolution.
                             // Read metadata using UV's DistributionDatabase.
                             // This first tries database.requires_dist() for static extraction,
                             // then falls back to building the wheel if needed.
