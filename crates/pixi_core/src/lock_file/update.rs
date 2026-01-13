@@ -698,7 +698,7 @@ impl<'p> LockFileDerivedData<'p> {
                             .get(&data.name)
                             .and_then(|specs| specs.last())
                             .and_then(|spec| spec.editable())
-                            .unwrap_or(data.editable);
+                            .unwrap_or(false);
                         (data, env_data.clone())
                     })
                     .collect::<Vec<_>>();
