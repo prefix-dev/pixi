@@ -8,6 +8,7 @@ import tomllib
 from .common import CURRENT_PLATFORM, copytree_with_local_backend, verify_cli_command
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "workspace_dirname",
     ["build-variant-manifest-rattler-build", "build-variant-manifest-python"],
@@ -51,6 +52,7 @@ def test_inline_variants_produce_multiple_outputs(
         assert package.exists()
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "workspace_dirname",
     ["build-variant-manifest-rattler-build", "build-variant-manifest-python"],
@@ -95,6 +97,7 @@ def test_inline_variants_change_triggers_rebuild(
     )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "workspace_dirname",
     [
@@ -141,6 +144,7 @@ def test_variant_files_produce_multiple_outputs(
         assert len(built_packages) == 2
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "workspace_dirname",
     [

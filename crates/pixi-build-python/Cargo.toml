@@ -7,6 +7,7 @@ version = "0.4.4"
 default = ["rustls-tls"]
 native-tls = ["pixi-build-backend/native-tls"]
 rustls-tls = ["pixi-build-backend/rustls-tls"]
+slow_integration_tests = []
 
 [dependencies]
 async-trait = { workspace = true }

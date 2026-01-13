@@ -125,6 +125,7 @@ def test_run_in_shell_project(pixi: Path) -> None:
         )
 
 
+@pytest.mark.slow
 def test_using_prefix_validation(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
@@ -319,6 +320,7 @@ def test_run_help(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
+@pytest.mark.slow
 def test_run_deno(pixi: Path, tmp_pixi_workspace: Path, deno_channel: str) -> None:
     """Ensure that `pixi run deno` will just be forwarded instead of calling pixi"""
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
@@ -965,6 +967,7 @@ def test_task_args_multiple_inputs(pixi: Path, tmp_pixi_workspace: Path) -> None
     )
 
 
+@pytest.mark.slow
 def test_task_environment(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:
@@ -1015,6 +1018,7 @@ def test_task_environment(
     )
 
 
+@pytest.mark.slow
 def test_task_environment_precedence(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:
@@ -1082,6 +1086,7 @@ def test_task_environment_precedence(
     )
 
 
+@pytest.mark.slow
 def test_multiple_dependencies_with_environments(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:
@@ -1661,6 +1666,7 @@ def test_run_with_environment_variable_priority(
     )
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(
     sys.platform == "win32",
     reason="Signal handling is different on Windows",

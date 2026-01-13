@@ -12,6 +12,7 @@ from .common import (
 )
 
 
+@pytest.mark.slow
 def test_upgrade_package_does_not_exist(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:
@@ -78,6 +79,7 @@ def test_upgrade_conda_package(
     assert "build-number" not in package
 
 
+@pytest.mark.slow
 def test_upgrade_exclude(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:
@@ -132,6 +134,7 @@ def test_upgrade_json_output(
     assert data["environment"]["default"]
 
 
+@pytest.mark.slow
 def test_upgrade_dryrun(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:
@@ -297,6 +300,7 @@ test = ["test"]
     assert "numpy" not in pypi_dependencies
 
 
+@pytest.mark.slow
 def test_upgrade_keep_info(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:
@@ -382,6 +386,7 @@ def test_upgrade_remove_info(
     assert "build" not in parsed_manifest["dependencies"]["package3"]
 
 
+@pytest.mark.slow
 def test_upgrade_features(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:

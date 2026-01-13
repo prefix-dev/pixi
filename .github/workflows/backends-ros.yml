@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - crates/pixi-build-backend/**
+      - crates/pixi/**
       - Cargo.*
       - pixi-build-backends/py-pixi-build-backend/**
       - pixi-build-backends/backends/pixi-build-ros/**
@@ -12,6 +13,7 @@ on:
   pull_request:
     paths:
       - crates/pixi-build-backend/**
+      - crates/pixi/**
       - Cargo.*
       - pixi-build-backends/py-pixi-build-backend/**
       - pixi-build-backends/backends/pixi-build-ros/**
@@ -45,3 +47,52 @@ jobs:
         run: |
           cd pixi-build-backends/backends/pixi-build-ros
           pixi run test --color=yes
+
+  integration-test:
+    name: Integration tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    env:
+      TARGET_RELEASE: target/pixi/release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
+        with:
+          manifest-path: pixi-build-backends/backends/pixi-build-ros/pixi.toml
+
+      - name: Build pixi binary
+        run: pixi run build-release
+
+      - name: Add pixi binary to PATH (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          chmod a+x ${{ github.workspace }}/${{ env.TARGET_RELEASE }}/pixi
+          echo "${{ github.workspace }}/${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
+
+      - name: Add pixi binary to PATH (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          echo "${{ github.workspace }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
+
+      - name: Verify pixi installation
+        run: pixi info
+
+      - name: Build ROS backend channel
+        working-directory: pixi-build-backends/backends/pixi-build-ros
+        run: pixi run --locked create-channel
+
+      - name: Run ROS integration tests
+        working-directory: pixi-build-backends/backends/pixi-build-ros
+        run: pixi run --locked pytest tests/integration -v

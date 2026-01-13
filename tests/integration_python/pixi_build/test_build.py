@@ -42,6 +42,7 @@ def test_build_conda_package(
     assert len(built_packages) == 1
 
 
+@pytest.mark.slow
 def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspace) -> None:
     simple_workspace.write_files()
     verify_cli_command(
@@ -77,6 +78,7 @@ def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspac
     assert simple_workspace.find_debug_file("conda_build_v1_params.json") is None
 
 
+@pytest.mark.slow
 def test_recipe_change_trigger_metadata_invalidation(
     pixi: Path, simple_workspace: Workspace
 ) -> None:
@@ -108,6 +110,7 @@ def test_recipe_change_trigger_metadata_invalidation(
     )
 
 
+@pytest.mark.slow
 def test_project_model_change_trigger_rebuild(
     pixi: Path, simple_workspace: Workspace, dummy_channel_1: Path
 ) -> None:
@@ -260,6 +263,7 @@ def test_build_using_rattler_build_backend(
     )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("backend", "non_incremental_evidence"),
     [("pixi-build-rust", "Compiling simple-app"), ("pixi-build-cmake", "Configuring done")],
@@ -593,6 +597,7 @@ def test_extra_args(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> N
     assert target_dir.joinpath("src", "mybuilddir", "build.ninja").is_file()
 
 
+@pytest.mark.slow
 def test_target_specific_dependency(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path, target_specific_channel_1: str
 ) -> None:

@@ -1,44 +1,52 @@
 """Pytest fixtures for pixi-build integration tests."""
 
+import os
 import shutil
 from pathlib import Path
 
 import pytest
 
-from .common import CURRENT_PLATFORM, Workspace
+from .common import CURRENT_PLATFORM, Workspace, exec_extension, repo_root
 
 
-def get_local_backend_channel() -> str:
-    """Get the local backend channel from the test data directory."""
-    channel_dir = (
-        Path(__file__).parents[2].joinpath("data", "channels", "channels", "pixi_build_backends")
-    )
-    if channel_dir.is_dir() and any(channel_dir.rglob("repodata.json")):
-        return channel_dir.as_uri()
-    raise RuntimeError(
-        f"Local backend channel not found at {channel_dir}. "
-        "Run 'pixi run update-backends-channel' to generate it."
-    )
+@pytest.fixture(scope="session", autouse=True)
+def setup_build_backend_override(request: pytest.FixtureRequest) -> None:
+    """
+    Sets up PIXI_BUILD_BACKEND_OVERRIDE for Rust backends.
 
+    Points to binaries in target/pixi/{build_type}/ based on --pixi-build option.
+    """
+    build_type = request.config.getoption("--pixi-build")
+    backends_bin_dir = repo_root() / "target" / "pixi" / build_type
 
-@pytest.fixture(scope="session")
-def local_backend_channel_dir() -> Path:
-    """Return the path to the local backend channel directory."""
-    channel_dir = (
-        Path(__file__).parents[2].joinpath("data", "channels", "channels", "pixi_build_backends")
-    )
-    if not channel_dir.is_dir() or not any(channel_dir.rglob("repodata.json")):
-        pytest.skip(
-            f"Local backend channel not found at {channel_dir}. "
-            "Run 'pixi run update-backends-channel' to generate it."
+    if not backends_bin_dir.is_dir():
+        return  # Skip if not built yet
+
+    backends = [
+        "pixi-build-cmake",
+        "pixi-build-python",
+        "pixi-build-rattler-build",
+        "pixi-build-rust",
+    ]
+
+    override_parts = []
+    missing_files = []
+    for backend in backends:
+        backend_path = backends_bin_dir / exec_extension(backend)
+        if backend_path.is_file():
+            override_parts.append(f"{backend}={backend_path}")
+        else:
+            missing_files.append(backend_path)
+
+    if missing_files:
+        missing_list = "\n  ".join(str(p) for p in missing_files)
+        build_cmd = "build-debug" if build_type == "debug" else "build-release"
+        raise RuntimeError(
+            f"Missing backend binaries:\n  {missing_list}\n"
+            f"Run 'pixi run {build_cmd}' to build them."
         )
-    return channel_dir
 
-
-@pytest.fixture(scope="session")
-def local_backend_channel_uri(local_backend_channel_dir: Path) -> str:
-    """Return the file URI of the local backend channel."""
-    return local_backend_channel_dir.as_uri()
+    os.environ["PIXI_BUILD_BACKEND_OVERRIDE"] = ",".join(override_parts)
 
 
 @pytest.fixture
@@ -51,7 +59,6 @@ def build_data(test_data: Path) -> Path:
 def simple_workspace(
     tmp_pixi_workspace: Path,
     request: pytest.FixtureRequest,
-    local_backend_channel_uri: str,
 ) -> Workspace:
     """Create a simple workspace for build tests."""
     name = request.node.name
@@ -69,10 +76,7 @@ def simple_workspace(
 
     workspace_manifest = {
         "workspace": {
-            "channels": [
-                local_backend_channel_uri,
-                "https://prefix.dev/conda-forge",
-            ],
+            "channels": ["https://prefix.dev/conda-forge"],
             "preview": ["pixi-build"],
             "platforms": [CURRENT_PLATFORM],
         },
@@ -87,10 +91,6 @@ def simple_workspace(
                 "backend": {
                     "name": "pixi-build-rattler-build",
                     "version": "*",
-                    "channels": [
-                        local_backend_channel_uri,
-                        "https://prefix.dev/conda-forge",
-                    ],
                 },
             },
         },

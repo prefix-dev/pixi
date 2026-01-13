@@ -296,6 +296,7 @@ jobs:
       - name: "Build"
         run: >
           cargo build
+          -p pixi
           --locked
           --target x86_64-unknown-linux-musl
           --profile $CARGO_BUILD_PROFILE
@@ -322,6 +323,7 @@ jobs:
       - name: "Build"
         run: >
           cargo build
+          -p pixi
           --locked
           --profile $CARGO_BUILD_PROFILE
           --features self_update
@@ -347,6 +349,7 @@ jobs:
       - name: "Build"
         run: >
           cargo build
+          -p pixi
           --locked
           --profile $CARGO_BUILD_PROFILE
           --features self_update
@@ -379,6 +382,7 @@ jobs:
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: >
           cargo build
+          -p pixi
           --locked
           --profile $env:CARGO_BUILD_PROFILE
           --features self_update
@@ -414,6 +418,7 @@ jobs:
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: >
           cargo build
+          -p pixi
           --locked
           --target aarch64-pc-windows-msvc
           --profile $env:CARGO_BUILD_PROFILE

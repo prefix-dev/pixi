@@ -980,6 +980,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_all_system_marker_styles() {
         // Test all supported system marker types in a compact table-driven test
         let mappings = IndexMap::from([(

@@ -36,11 +36,36 @@ test = { features = ["test"], solve-group = "default" }
 [feature.test.tasks]
 lint-mypy = "mypy"
 test = "pytest tests"
+test-integration = { cmd = "pytest tests/integration", depends-on = ["create-channel"] }
+
+[feature.test.tasks.build-ros-channel]
+cmd = """
+rattler-build build \
+  --experimental \
+  --no-build-id \
+  --recipe ../../recipe/pixi-build-ros \
+  --variant-config ../../recipe/variants.yaml \
+  --channel https://prefix.dev/pixi-build-backends \
+  --channel https://prefix.dev/conda-forge \
+  --output-dir tests/integration/artifacts-channel
+"""
+description = "Build pixi-build-ros into local test channel"
+
+[feature.test.tasks.index-ros-channel]
+depends-on = ["build-ros-channel"]
+cmd = "rattler-index fs --force --write-shards false --write-zst false tests/integration/artifacts-channel"
+description = "Index the local ROS backend channel"
+
+[feature.test.tasks.create-channel]
+depends-on = ["build-ros-channel", "index-ros-channel"]
+description = "Build and index local ROS backend channel for integration tests"
 
 [feature.test.dependencies]
 mypy = ">=1.18.2,<2"
 pixi-pycharm = ">=0.0.8,<0.1"
 pytest = "*"
+rattler-build = ">=0.55.0,<0.56"
+rattler-index = ">=0.25.2,<0.26"
 syrupy = ">=5,<6"
 types-pyyaml = "*"
 # You can skip this as it's a long build, uncomment this when developing only in this package

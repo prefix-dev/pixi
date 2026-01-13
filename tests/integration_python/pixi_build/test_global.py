@@ -179,6 +179,7 @@ def test_add_git_repository_to_existing_environment(
     verify_cli_command([simple_package], env=env, stdout_contains="hello from simple-package")
 
 
+@pytest.mark.slow
 def test_update(pixi: Path, tmp_path: Path, build_data: Path) -> None:
     """Test that pixi global update works with path dependencies."""
     pixi_home = tmp_path / "pixi_home"
@@ -299,6 +300,7 @@ def test_install_multi_output_multiple(
     verify_cli_command([bizbar], env=env, stdout_contains="Hello from bizbar")
 
 
+@pytest.mark.slow
 def test_install_recursive_source_run_dependencies(
     pixi: Path,
     tmp_path: Path,
