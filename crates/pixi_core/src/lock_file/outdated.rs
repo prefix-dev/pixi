@@ -193,7 +193,7 @@ async fn find_unsatisfiable_targets<'p>(
                 | EnvironmentUnsat::ChannelPriorityMismatch { .. }
                 | EnvironmentUnsat::SolveStrategyMismatch { .. }
                 | EnvironmentUnsat::ExcludeNewerMismatch(..) => {
-                    // We cannot trust any of the locked content.
+                    // We cannot trust any of the locked contents.
                     unsatisfiable_targets
                         .disregard_locked_content
                         .conda
