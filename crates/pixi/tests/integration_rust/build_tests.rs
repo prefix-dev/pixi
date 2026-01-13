@@ -668,3 +668,126 @@ my-package = {{ path = "./my-package" }}
 
     assert_eq!(events.len(), 1, "Expected another build for sdl2-32");
 }
+
+/// Regression test for issue #5256: Lock file becomes out-of-date immediately after `pixi lock`
+///
+/// This test verifies that when running `pixi lock` followed by `pixi install --locked`,
+/// the installation should succeed because the lock file should be in sync with the workspace.
+///
+/// The issue occurs with:
+/// - Multiple Python versions via build-variants
+/// - Multiple environments with solve-groups
+/// - Local path dependencies using pixi-build
+#[tokio::test]
+async fn test_lock_file_stays_up_to_date_with_build_variants() {
+    setup_tracing();
+
+    // Create a package database with common dependencies
+    // Each Python package has run_exports that propagate itself
+    let run_exports = RunExportsJson {
+        weak: vec!["python *".to_string()],
+        ..Default::default()
+    };
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.10.0")
+            .with_materialize(true)
+            .with_run_exports(run_exports.clone())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("python", "3.11.0")
+            .with_materialize(true)
+            .with_run_exports(run_exports.clone())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_materialize(true)
+            .with_run_exports(run_exports.clone())
+            .finish(),
+    );
+
+    // Convert to channel
+    let channel = package_database.into_channel().await.unwrap();
+
+    // Create a PixiControl instance with PassthroughBackend
+    let passthrough =
+        PassthroughBackend::instantiator().with_run_exports("python", run_exports.clone());
+    let backend_override = BackendOverride::from_memory(passthrough);
+
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create a simple source directory
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+
+    // Create a pixi.toml that the PassthroughBackend will read
+    let pixi_toml_content = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.host-dependencies]
+python = "*"
+"#;
+    fs::write(source_dir.join("pixi.toml"), pixi_toml_content).unwrap();
+
+    // Create a manifest with build-variants and multiple environments
+    // This mimics the numba-cuda setup that triggers issue #5256
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = ["{}"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[workspace.build-variants]
+python = ["3.10.*", "3.11.*", "3.12.*"]
+
+[feature.py310.dependencies]
+python = "3.10.*"
+
+[feature.py311.dependencies]
+python = "3.11.*"
+
+[feature.py312.dependencies]
+python = "3.12.*"
+
+[environments]
+py310 = {{ features = ["py310"], solve-group = "py310" }}
+py311 = {{ features = ["py311"], solve-group = "py311" }}
+py312 = {{ features = ["py312"], solve-group = "py312" }}
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        channel.url(),
+        Platform::current(),
+    );
+
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // Step 1: Run pixi lock to create the lock file
+    pixi.lock().await.unwrap();
+
+    // Step 2: Immediately run pixi install --locked
+    // This should NOT fail with "lock-file not up-to-date with the workspace"
+    let install_result = pixi.install().with_locked().await;
+
+    // The install should succeed - if it fails, it means the lock file
+    // became out-of-date immediately after locking (the bug from #5256)
+    assert!(
+        install_result.is_ok(),
+        "pixi install --locked should succeed immediately after pixi lock. \
+         If this fails with 'lock-file not up-to-date', the bug from issue #5256 is present. \
+         Error: {:?}",
+        install_result.err()
+    );
+}
