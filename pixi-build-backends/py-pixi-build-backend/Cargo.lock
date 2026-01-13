@@ -3705,7 +3705,6 @@ dependencies = [
 [[package]]
 name = "pixi_build_types"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#b2eae1791c2ddbc465ebc4b83a1a409fa0cd3649"
 dependencies = [
  "ordermap",
  "pixi_stable_hash",
@@ -3720,7 +3719,6 @@ dependencies = [
 [[package]]
 name = "pixi_stable_hash"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/pixi?branch=main#b2eae1791c2ddbc465ebc4b83a1a409fa0cd3649"
 dependencies = [
  "ordermap",
  "rattler_conda_types",
@@ -3876,6 +3874,7 @@ name = "py-pixi-build-backend"
 version = "0.4.1"
 dependencies = [
  "async-trait",
+ "fs-err",
  "indexmap 2.12.1",
  "miette",
  "paste",

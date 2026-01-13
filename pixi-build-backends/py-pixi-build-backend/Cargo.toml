@@ -24,11 +24,11 @@ pyo3 = { version = "0.26", features = [
 pyo3-async-runtimes = { version = "0.26.0", features = ["tokio-runtime"] }
 
 # Core pixi-build dependencies (local crates)
-pixi-build-backend = { path = "../crates/pixi-build-backend" }
-recipe-stage0 = { path = "../crates/recipe-stage0" }
+pixi-build-backend = { path = "../../crates/pixi-build-backend" }
+recipe-stage0 = { path = "../../crates/recipe-stage0" }
 
 # Pixi types
-pixi_build_types = { git = "https://github.com/prefix-dev/pixi", branch = "main" }
+pixi_build_types = { path = "../../crates/pixi_build_types" }
 
 # Async support
 async-trait = "0.1"
@@ -48,6 +48,7 @@ miette = "7.5.0"
 thiserror = "2.0.12"
 
 # Utilities
+fs-err = "3.1.0"
 indexmap = "2.7.1"
 paste = "1.0.15"
 pythonize = "0.26"

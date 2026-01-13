@@ -1,4 +1,6 @@
-use std::{fs, str::FromStr};
+use std::str::FromStr;
+
+use fs_err as fs;
 
 use pixi_build_types::ProjectModel;
 use pyo3::{exceptions::PyValueError, prelude::*};
