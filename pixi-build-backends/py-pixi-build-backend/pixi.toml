@@ -4,8 +4,8 @@ channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
-platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 license = "BSD-3-Clause"
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 preview = ["pixi-build"]
 
 [package]
@@ -25,16 +25,16 @@ rust = ">=1.90.0,<1.91"
 maturin = "*"
 
 [package.run-dependencies]
-typing-extensions = "*"
 pixi-build-api-version = ">=4,<5"
+typing-extensions = "*"
 
 [activation.env]
 PIP_REQUIRE_VIRTUALENV = "false"
 
 [feature.build.dependencies]
-python = "*"
 maturin = "~=1.10.2"
 pip = "~=25.3.0"
+python = "*"
 rust = ">=1.90.0,<1.91"
 
 [feature.build.target.linux-64.dependencies]

@@ -10,8 +10,8 @@ from .common import CURRENT_PLATFORM, Workspace
 
 def get_local_backend_channel() -> str:
     """Get the local backend channel from the test data directory."""
-    channel_dir = Path(__file__).parents[2].joinpath(
-        "data", "channels", "channels", "pixi_build_backends"
+    channel_dir = (
+        Path(__file__).parents[2].joinpath("data", "channels", "channels", "pixi_build_backends")
     )
     if channel_dir.is_dir() and any(channel_dir.rglob("repodata.json")):
         return channel_dir.as_uri()
@@ -24,8 +24,8 @@ def get_local_backend_channel() -> str:
 @pytest.fixture(scope="session")
 def local_backend_channel_dir() -> Path:
     """Return the path to the local backend channel directory."""
-    channel_dir = Path(__file__).parents[2].joinpath(
-        "data", "channels", "channels", "pixi_build_backends"
+    channel_dir = (
+        Path(__file__).parents[2].joinpath("data", "channels", "channels", "pixi_build_backends")
     )
     if not channel_dir.is_dir() or not any(channel_dir.rglob("repodata.json")):
         pytest.skip(

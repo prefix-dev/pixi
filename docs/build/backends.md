@@ -14,7 +14,7 @@ This also allows for decoupling of the build backend from Pixi and it's manifest
 | [**`pixi-build-mojo`**](./backends/pixi-build-mojo.md) |  Mojo applications and packages |
 
 All backends are available through the [conda-forge](https://prefix.dev/channels/conda-forge) conda channel and work across multiple platforms (Linux, macOS, Windows).
-For the latest backend versions, you can preprend the channel list with the [prefix.dev/pixi-build-backends](https://prefix.dev/channels/pixi-build-backends) conda channel.
+For the latest backend versions, you can prepend the channel list with the [prefix.dev/pixi-build-backends](https://prefix.dev/channels/pixi-build-backends) conda channel.
 
 ## Key Concepts
 

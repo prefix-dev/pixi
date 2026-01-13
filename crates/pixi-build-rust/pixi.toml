@@ -1,10 +1,10 @@
 [package.build.backend]
-name = "pixi-build-rust"
-version = "*"
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
+name = "pixi-build-rust"
+version = "*"
 
 [package.run-dependencies]
 pixi-build-api-version = ">=4,<5"

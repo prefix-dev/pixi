@@ -97,7 +97,9 @@ def verify_cli_command(
         if isinstance(stdout_contains, str):
             stdout_contains = [stdout_contains]
         for substring in stdout_contains:
-            assert substring in stdout_for_matching, f"'{substring}'\n not found in stdout:\n {stdout}"
+            assert substring in stdout_for_matching, (
+                f"'{substring}'\n not found in stdout:\n {stdout}"
+            )
 
     if stdout_excludes:
         if isinstance(stdout_excludes, str):
@@ -111,7 +113,9 @@ def verify_cli_command(
         if isinstance(stderr_contains, str):
             stderr_contains = [stderr_contains]
         for substring in stderr_contains:
-            assert substring in stderr_for_matching, f"'{substring}'\n not found in stderr:\n {stderr}"
+            assert substring in stderr_for_matching, (
+                f"'{substring}'\n not found in stderr:\n {stderr}"
+            )
 
     if stderr_excludes:
         if isinstance(stderr_excludes, str):

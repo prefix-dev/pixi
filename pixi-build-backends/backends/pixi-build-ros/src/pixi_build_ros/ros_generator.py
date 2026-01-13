@@ -3,36 +3,35 @@ ROS generator implementation using Python bindings.
 """
 
 import os
-from pathlib import Path
 from importlib.resources import files
+from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
-from typing import Any
 from pixi_build_backend.types.generated_recipe import (
-    GenerateRecipeProtocol,
     GeneratedRecipe,
+    GenerateRecipeProtocol,
 )
-from .metadata_provider import ROSPackageXmlMetadataProvider
 from pixi_build_backend.types.intermediate_recipe import Script
-
 from pixi_build_backend.types.item import ItemPackageDependency
 from pixi_build_backend.types.platform import Platform
 from pixi_build_backend.types.project_model import ProjectModel
 from pixi_build_backend.types.python_params import PythonParams
 
-from .build_script import BuildScriptContext, BuildPlatform
+from .build_script import BuildPlatform, BuildScriptContext
+from .config import PackageMappingSource, ROSBackendConfig
+from .metadata_provider import ROSPackageXmlMetadataProvider
 from .utils import (
-    get_build_input_globs,
-    package_xml_to_conda_requirements,
     convert_package_xml_to_catkin_package,
+    get_build_input_globs,
     get_package_xml_content,
     load_package_map_data,
     merge_requirements,
+    package_xml_to_conda_requirements,
 )
-from .config import ROSBackendConfig, PackageMappingSource
 
 
-class ROSGenerator(GenerateRecipeProtocol):  # type: ignore[misc]  # MetadatProvider is not typed
+class ROSGenerator(GenerateRecipeProtocol):  # type: ignore[misc]  # MetadataProvider is not typed
     """ROS recipe generator using Python bindings."""
 
     def generate_recipe(

@@ -21,26 +21,26 @@ patchelf = "==0.18.0"
 scripts = ["../../scripts/activate.sh"]
 
 [dependencies]
-pydantic = ">=2.8.2,<3"
-py_rattler = ">=0.20,<0.21"
 py-pixi-build-backend = "*"
+py_rattler = ">=0.20,<0.21"
+pydantic = ">=2.8.2,<3"
 
 [pypi-dependencies]
 pixi-build-ros = { path = ".", editable = true }
 
 [environments]
 default = { features = ["test", "lint"], solve-group = "default" }
-test = { features = ["test"], solve-group = "default" }
 lint = { features = ["lint"], no-default-feature = true }
+test = { features = ["test"], solve-group = "default" }
 
 [feature.test.tasks]
-test = "pytest tests"
 lint-mypy = "mypy"
+test = "pytest tests"
 
 [feature.test.dependencies]
+mypy = ">=1.18.2,<2"
 pixi-pycharm = ">=0.0.8,<0.1"
 pytest = "*"
-mypy = ">=1.18.2,<2"
 syrupy = ">=5,<6"
 types-pyyaml = "*"
 # You can skip this as it's a long build, uncomment this when developing only in this package
@@ -48,14 +48,14 @@ types-pyyaml = "*"
 py-pixi-build-backend = { path = "../../py-pixi-build-backend" }
 
 [feature.lint.dependencies]
-ruff = "*"
 pyupgrade = ">=3.20.0,<4"
+ruff = "*"
 
 [feature.lint.tasks]
-lint-ruff = "ruff check ."
+fmt = { depends-on = ["fmt-pyupgrade", "fmt-ruff"] }
 fmt-pyupgrade = "pyupgrade --py310-plus **/**/*.py"
 fmt-ruff = "ruff format src tests"
-fmt = { depends-on = ["fmt-pyupgrade", "fmt-ruff"] }
+lint-ruff = "ruff check ."
 
 ## Package section
 [package.build.backend]
@@ -70,13 +70,13 @@ hatchling = "*"
 python = ">=3.10"
 
 [package.run-dependencies]
-python = ">=3.10"
-rosdistro = "*"
-pydantic = ">=2.8.2,<3"
-py_rattler = ">=0.15.0,<0.16"
 catkin_pkg = "*"
-pyyaml = "*"
 pixi-build-api-version = ">=4,<5"
+py_rattler = ">=0.15.0,<0.16"
+pydantic = ">=2.8.2,<3"
+python = ">=3.10"
+pyyaml = "*"
+rosdistro = "*"
 # should be added to `py-pixi-build-backend`
 typing-extensions = "*"
 # this depends has to match the test dependency, so switch comments if needed

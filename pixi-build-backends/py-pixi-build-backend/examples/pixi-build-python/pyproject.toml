@@ -1,12 +1,8 @@
 [build-system]
-requires = ["hatchling"]
 build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 [project]
-name = "pixi-build-python"
-description = "Python bindings for pixi-build-backends"
-requires-python = ">=3.8"
-license = { text = "MIT OR Apache-2.0" }
 authors = [{ name = "pixi contributors" }]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -22,23 +18,27 @@ classifiers = [
   "Programming Language :: Rust",
   "Topic :: Software Development :: Build Tools",
 ]
-keywords = ["build", "conda", "package", "python", "rust"]
-version = "0.0.1"
 dependencies = [
   "py-rattler",
   "asyncio",
   "toml",
   # "py-pixi-build-backend @ file:../../"
 ]
+description = "Python bindings for pixi-build-backends"
+keywords = ["build", "conda", "package", "python", "rust"]
+license = { text = "MIT OR Apache-2.0" }
+name = "pixi-build-python"
+requires-python = ">=3.8"
+version = "0.0.1"
 
 [project.scripts]
 pixi-build-python = "pixi_build_python.main:main"
 
 
 [project.urls]
+"Bug Tracker" = "https://github.com/prefix-dev/pixi-build-backends/issues"
 Homepage = "https://github.com/prefix-dev/pixi-build-backends"
 Repository = "https://github.com/prefix-dev/pixi-build-backends"
-"Bug Tracker" = "https://github.com/prefix-dev/pixi-build-backends/issues"
 
 [tool.hatch.metadata]
 allow-direct-references = true

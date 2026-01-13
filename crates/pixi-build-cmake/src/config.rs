@@ -76,7 +76,7 @@ mod tests {
     use super::CMakeBackendConfig;
 
     #[test]
-    fn test_ensure_deseralize_from_empty() {
+    fn test_ensure_deserialize_from_empty() {
         let json_data = json!({});
         serde_json::from_value::<CMakeBackendConfig>(json_data).unwrap();
     }

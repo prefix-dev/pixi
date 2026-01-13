@@ -5,7 +5,7 @@ set -eo pipefail
 BUILD_DIR=@BUILD_DIR@
 
 if [ ! -d "$BUILD_DIR" ]; then
-  mkdir -p "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR"
 fi
 pushd $BUILD_DIR
 
@@ -14,14 +14,14 @@ BUILD_TYPE=@BUILD_TYPE@
 # necessary for correctly linking SIP files (from python_qt_bindings)
 export LINK=$CXX
 
-if [[ "$CONDA_BUILD_CROSS_COMPILATION" != "1" ]]; then
-  PYTHON_EXECUTABLE=$PREFIX/bin/python
-  PKG_CONFIG_EXECUTABLE=$PREFIX/bin/pkg-config
-  export QT_HOST_PATH="$PREFIX"
+if [[ $CONDA_BUILD_CROSS_COMPILATION != "1" ]]; then
+    PYTHON_EXECUTABLE=$PREFIX/bin/python
+    PKG_CONFIG_EXECUTABLE=$PREFIX/bin/pkg-config
+    export QT_HOST_PATH="$PREFIX"
 else
-  PYTHON_EXECUTABLE=$BUILD_PREFIX/bin/python
-  PKG_CONFIG_EXECUTABLE=$BUILD_PREFIX/bin/pkg-config
-  export QT_HOST_PATH="$BUILD_PREFIX"
+    PYTHON_EXECUTABLE=$BUILD_PREFIX/bin/python
+    PKG_CONFIG_EXECUTABLE=$BUILD_PREFIX/bin/pkg-config
+    export QT_HOST_PATH="$BUILD_PREFIX"
 fi
 
 # Only support 11.0+ for now
@@ -31,7 +31,7 @@ OSX_DEPLOYMENT_TARGET="11.0"
 if [[ $target_platform =~ linux.* ]]; then
     export CFLAGS="${CFLAGS} -D__STDC_FORMAT_MACROS=1"
     export CXXFLAGS="${CXXFLAGS} -D__STDC_FORMAT_MACROS=1"
-fi;
+fi
 
 echo "USING PYTHON_EXECUTABLE=${PYTHON_EXECUTABLE}"
 echo "USING PKG_CONFIG_EXECUTABLE=${PKG_CONFIG_EXECUTABLE}"

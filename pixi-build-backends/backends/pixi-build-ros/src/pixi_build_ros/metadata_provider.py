@@ -36,7 +36,7 @@ class PackageData:
         self.repository = repository
 
 
-class PackageXmlMetadataProvider(MetadataProvider):  # type: ignore[misc]  # MetadatProvider is not typed
+class PackageXmlMetadataProvider(MetadataProvider):  # type: ignore[misc]  # MetadataProvider is not typed
     """
     Metadata provider that extracts metadata from ROS package.xml files.
 

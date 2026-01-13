@@ -1,12 +1,8 @@
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
+requires = ["maturin>=1.0,<2.0"]
 
 [project]
-name = "py-pixi-build-backend"
-description = "Python bindings for pixi-build-backends"
-requires-python = ">=3.8"
-license = { text = "BSD-3-Clause" }
 authors = [{ name = "pixi contributors" }]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -21,14 +17,18 @@ classifiers = [
   "Programming Language :: Rust",
   "Topic :: Software Development :: Build Tools",
 ]
-keywords = ["build", "conda", "package", "python", "rust"]
+description = "Python bindings for pixi-build-backends"
 dynamic = ["version"]
+keywords = ["build", "conda", "package", "python", "rust"]
+license = { text = "BSD-3-Clause" }
+name = "py-pixi-build-backend"
+requires-python = ">=3.8"
 
 
 [project.urls]
+"Bug Tracker" = "https://github.com/prefix-dev/pixi-build-backends/issues"
 Homepage = "https://github.com/prefix-dev/pixi-build-backends"
 Repository = "https://github.com/prefix-dev/pixi-build-backends"
-"Bug Tracker" = "https://github.com/prefix-dev/pixi-build-backends/issues"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
@@ -38,15 +38,15 @@ line-length = 120
 target-version = "py38"
 
 [tool.mypy]
-python_version = "3.8"
-files = ["pixi_build_backend", "tests", "examples"]
-strict = true
-enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
 disable_error_code = ["empty-body"]
+enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
+files = ["pixi_build_backend", "tests", "examples"]
+python_version = "3.8"
+strict = true
 
 [[tool.mypy.overrides]]
-module = ["pixi_build_backend.pixi_build_backend"]
 ignore_missing_imports = true
+module = ["pixi_build_backend.pixi_build_backend"]
 
 [[tool.mypy.overrides]]
 module = ["pixi_build_backend.*"]

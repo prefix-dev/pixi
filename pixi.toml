@@ -215,8 +215,8 @@ mike = ">=2.1.3,<3"
 mkdocs-llmstxt = ">=0.4.0,<0.5"
 mkdocs-material = ">=9.6.21,<10"
 mkdocs-redirects = ">=1.2.1,<2"
-pillow = ">=12,<13"
 nushell = ">=0.109.1,<0.110"
+pillow = ">=12,<13"
 
 [feature.docs.tasks]
 build-docs = { cmd = "mkdocs build --strict", depends-on = ["download-font"] }
@@ -289,13 +289,13 @@ test-native-certs = { cmd = "python scripts/test_native_certs.py --pixi-bin $CAR
 #
 
 [environments]
+build = { features = ["build", "rust"], solve-group = "default" }
 default = { features = [
   "dev",
   "schema",
   "pytest",
   "rust",
 ], solve-group = "default" }
-build = { features = ["build", "rust"], solve-group = "default" }
 dist = { features = ["dist"], no-default-feature = true }
 docs = { features = [
   "docs",

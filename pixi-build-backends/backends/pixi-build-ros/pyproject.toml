@@ -24,25 +24,25 @@ pixi-build-ros = "pixi_build_ros.main:main"
 packages = ["src/pixi_build_ros"]
 
 [tool.hatch.build.targets.wheel.shared-data]
-"templates" = "site-packages/pixi_build_ros/templates"
 "robostack.yaml" = "site-packages/pixi_build_ros/robostack.yaml"
+"templates" = "site-packages/pixi_build_ros/templates"
 
 [tool.hatch.build.targets.editable]
 packages = ["src/pixi_build_ros"]
 
 [tool.hatch.build.targets.editable.shared-data]
-"templates" = "site-packages/pixi_build_ros/templates"
 "robostack.yaml" = "site-packages/pixi_build_ros/robostack.yaml"
+"templates" = "site-packages/pixi_build_ros/templates"
 
 [tool.ruff]
+fix = true
 line-length = 120
 target-version = "py310"
-fix = true
 
 [tool.mypy]
-python_version = "3.10"
-files = ["src/pixi_build_ros"]
-strict = true
-ignore_missing_imports = true
-enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
 disable_error_code = ["empty-body", "no-untyped-call"]
+enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
+files = ["src/pixi_build_ros"]
+ignore_missing_imports = true
+python_version = "3.10"
+strict = true

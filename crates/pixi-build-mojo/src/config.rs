@@ -452,7 +452,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_ensure_deseralize_from_empty() {
+    fn test_ensure_deserialize_from_empty() {
         let json_data = json!({});
         serde_json::from_value::<MojoBackendConfig>(json_data).unwrap();
     }
