@@ -1,6 +1,15 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    sync::Arc,
+};
 
-use super::{verify_environment_satisfiability, verify_platform_satisfiability};
+use super::{
+    CondaPrefixUpdater,
+    resolve::build_dispatch::LazyBuildDispatchDependencies,
+    satisfiability::{VerifySatisfiabilityContext, pypi_metadata},
+    verify_environment_satisfiability, verify_platform_satisfiability,
+};
 use crate::{
     Workspace,
     lock_file::satisfiability::{EnvironmentUnsat, verify_solve_group_satisfiability},
@@ -8,18 +17,45 @@ use crate::{
 };
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
+use once_cell::sync::OnceCell;
 use pixi_command_dispatcher::CommandDispatcher;
 use pixi_consts::consts;
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{EnvironmentName, FeaturesExt};
+use pixi_uv_context::UvResolutionContext;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackageRef};
+
+/// Cache for build-related resources that can be shared between
+/// satisfiability checking and PyPI resolution.
+#[derive(Default)]
+pub struct PypiEnvironmentBuildCache {
+    /// Lazily initialized build dispatch dependencies (interpreter, env, etc.)
+    pub lazy_build_dispatch_deps: LazyBuildDispatchDependencies,
+    /// Optional conda prefix updater (created during satisfiability checking)
+    pub conda_prefix_updater: OnceCell<CondaPrefixUpdater>,
+}
+
+/// Key for the build cache, combining environment name and platform.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BuildCacheKey {
+    pub environment: EnvironmentName,
+    pub platform: Platform,
+}
+
+impl BuildCacheKey {
+    pub fn new(environment: EnvironmentName, platform: Platform) -> Self {
+        Self {
+            environment,
+            platform,
+        }
+    }
+}
 
 /// A struct that contains information about specific outdated environments.
 ///
 /// Use the [`OutdatedEnvironments::from_project_and_lock_file`] to create an
 /// instance of this struct by examining the project and lock-file and finding
 /// any mismatches.
-#[derive(Debug)]
 pub struct OutdatedEnvironments<'p> {
     /// The conda environments that are considered out of date with the
     /// lock-file.
@@ -33,6 +69,18 @@ pub struct OutdatedEnvironments<'p> {
     /// discarded. This is the case for instance when the order of the
     /// channels changed.
     pub disregard_locked_content: DisregardLockedContent<'p>,
+
+    /// Lazily initialized UV context for building dynamic metadata.
+    /// This is shared between satisfiability checking and pypi resolution.
+    pub uv_context: OnceCell<UvResolutionContext>,
+
+    /// Per-environment-platform build caches for sharing resources between
+    /// satisfiability checking and PyPI resolution.
+    pub build_caches: HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
+
+    /// Cache for static metadata extracted from pyproject.toml files.
+    /// This is shared across platforms since static metadata is platform-independent.
+    pub static_metadata_cache: HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
 }
 
 /// A struct that stores whether the locked content of certain environments
@@ -66,11 +114,16 @@ impl<'p> OutdatedEnvironments<'p> {
         lock_file: &LockFile,
     ) -> Self {
         // Find all targets that are not satisfied by the lock-file
-        let UnsatisfiableTargets {
-            mut outdated_conda,
-            mut outdated_pypi,
-            disregard_locked_content,
-        } = find_unsatisfiable_targets(workspace, command_dispatcher, lock_file).await;
+        let (
+            UnsatisfiableTargets {
+                mut outdated_conda,
+                mut outdated_pypi,
+                disregard_locked_content,
+            },
+            uv_context,
+            build_caches,
+            static_metadata_cache,
+        ) = find_unsatisfiable_targets(workspace, command_dispatcher, lock_file).await;
 
         // Extend the outdated targets to include the solve groups
         let (mut conda_solve_groups_out_of_date, mut pypi_solve_groups_out_of_date) =
@@ -118,6 +171,9 @@ impl<'p> OutdatedEnvironments<'p> {
             conda: outdated_conda,
             pypi: outdated_pypi,
             disregard_locked_content,
+            uv_context,
+            build_caches,
+            static_metadata_cache,
         }
     }
 
@@ -137,13 +193,35 @@ struct UnsatisfiableTargets<'p> {
 
 /// Find all targets (combination of environment and platform) who's
 /// requirements in the `project` are not satisfied by the `lock_file`.
+///
+/// Returns the unsatisfiable targets, the lazily-initialized UV context
+/// (which may have been initialized during satisfiability checking),
+/// build caches for each environment, and the static metadata cache.
 async fn find_unsatisfiable_targets<'p>(
     project: &'p Workspace,
     command_dispatcher: CommandDispatcher,
     lock_file: &LockFile,
-) -> UnsatisfiableTargets<'p> {
+) -> (
+    UnsatisfiableTargets<'p>,
+    OnceCell<UvResolutionContext>,
+    HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
+    HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
+) {
     let mut verified_environments = HashMap::new();
     let mut unsatisfiable_targets = UnsatisfiableTargets::default();
+
+    // Create UV context lazily for building dynamic metadata
+    let uv_context: OnceCell<UvResolutionContext> = OnceCell::new();
+
+    // Create build caches for sharing between satisfiability and resolution
+    let mut build_caches: HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>> = HashMap::new();
+
+    // Create static metadata cache for sharing across platforms
+    let mut static_metadata_cache: HashMap<PathBuf, pypi_metadata::LocalPackageMetadata> =
+        HashMap::new();
+
+    let project_config = project.config();
+
     for environment in project.environments() {
         let platforms = environment.platforms();
 
@@ -218,15 +296,18 @@ async fn find_unsatisfiable_targets<'p>(
 
         // Verify each individual platform
         for platform in platforms {
-            match verify_platform_satisfiability(
-                &environment,
-                command_dispatcher.clone(),
-                locked_environment,
+            let mut ctx = VerifySatisfiabilityContext {
+                environment: &environment,
+                command_dispatcher: command_dispatcher.clone(),
                 platform,
-                project.root(),
-            )
-            .await
-            {
+                project_root: project.root(),
+                uv_context: &uv_context,
+                config: project_config,
+                project_env_vars: project.env_vars().clone(),
+                build_caches: &mut build_caches,
+                static_metadata_cache: &mut static_metadata_cache,
+            };
+            match verify_platform_satisfiability(&mut ctx, locked_environment).await {
                 Ok(verified_env) => {
                     verified_environments.insert((environment.clone(), platform), verified_env);
                 }
@@ -308,7 +389,12 @@ async fn find_unsatisfiable_targets<'p>(
             .insert(platform);
     }
 
-    unsatisfiable_targets
+    (
+        unsatisfiable_targets,
+        uv_context,
+        build_caches,
+        static_metadata_cache,
+    )
 }
 
 /// Given a mapping of outdated targets, construct a new mapping of all the

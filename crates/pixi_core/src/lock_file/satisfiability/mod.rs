@@ -1,3 +1,5 @@
+pub mod pypi_metadata;
+
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -5,11 +7,13 @@ use std::{
     hash::Hash,
     path::{Path, PathBuf},
     str::FromStr,
+    sync::LazyLock,
 };
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
+use once_cell::sync::OnceCell;
 use pep440_rs::VersionSpecifiers;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
@@ -17,6 +21,7 @@ use pixi_command_dispatcher::{
     DevSourceMetadataError, DevSourceMetadataSpec, SourceCheckoutError, SourceMetadataError,
     SourceMetadataSpec,
 };
+use pixi_config::Config;
 use pixi_git::url::RepositoryUrl;
 use pixi_manifest::{
     FeaturesExt,
@@ -37,24 +42,41 @@ use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, PackageName,
     PackageRecord, ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
 };
-use rattler_lock::{
-    LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable,
-    UrlOrPath,
-};
+use rattler_lock::{LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData, UrlOrPath};
 use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
+use uv_configuration::RAYON_INITIALIZE;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
 use uv_distribution_types::{RequirementSource, RequiresPython};
 use uv_git_types::GitReference;
-use uv_pypi_types::ParsedUrlError;
+use uv_pypi_types::{ParsedUrlError, PyProjectToml};
 
 use super::{
-    PixiRecordsByName, PypiRecord, PypiRecordsByName, package_identifier::ConversionError,
+    CondaPrefixUpdater, PixiRecordsByName, PypiRecord, PypiRecordsByName,
+    outdated::{BuildCacheKey, PypiEnvironmentBuildCache},
+    package_identifier::ConversionError,
+    resolve::build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
 };
 use crate::workspace::{
-    Environment, HasWorkspaceRef, errors::VariantsError, grouped_environment::GroupedEnvironment,
+    Environment, EnvironmentVars, HasWorkspaceRef, errors::VariantsError,
+    grouped_environment::GroupedEnvironment,
 };
+use pixi_manifest::EnvironmentName;
+use pixi_uv_context::UvResolutionContext;
+use pixi_uv_conversions::{
+    configure_insecure_hosts_for_tls_bypass, pypi_options_to_build_options,
+    pypi_options_to_index_locations, to_index_strategy,
+};
+use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
+use std::sync::Arc;
+use uv_client::{BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClientBuilder};
+use uv_distribution::DistributionDatabase;
+use uv_distribution_types::{
+    ConfigSettings, DependencyMetadata, DirectorySourceDist, Dist, HashPolicy, IndexUrl, SourceDist,
+};
+use uv_pep508;
+use uv_resolver::FlatIndex;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -226,6 +248,63 @@ impl Display for SourceTreeHashMismatch {
     }
 }
 
+/// Describes what metadata changed for a local package.
+#[derive(Debug, Error)]
+pub enum LocalMetadataMismatch {
+    #[error("dependencies changed - added: [{added}], removed: [{removed}]",
+        added = format_requirements(added),
+        removed = format_requirements(removed))]
+    RequiresDist {
+        added: Vec<pep508_rs::Requirement>,
+        removed: Vec<pep508_rs::Requirement>,
+    },
+    #[error("version changed from {locked} to {current}")]
+    Version {
+        locked: pep440_rs::Version,
+        current: pep440_rs::Version,
+    },
+    #[error("requires-python changed from {locked:?} to {current:?}")]
+    RequiresPython {
+        locked: Option<VersionSpecifiers>,
+        current: Option<VersionSpecifiers>,
+    },
+}
+
+/// Formats a list of requirements, showing only the first 3 names.
+fn format_requirements(reqs: &[pep508_rs::Requirement]) -> String {
+    const MAX_DISPLAY: usize = 3;
+    let names: Vec<_> = reqs
+        .iter()
+        .take(MAX_DISPLAY)
+        .map(|r| r.name.to_string())
+        .collect();
+    let formatted = names.join(", ");
+    if reqs.len() > MAX_DISPLAY {
+        format!("{}, ... and {} more", formatted, reqs.len() - MAX_DISPLAY)
+    } else {
+        formatted
+    }
+}
+
+impl From<pypi_metadata::MetadataMismatch> for LocalMetadataMismatch {
+    fn from(mismatch: pypi_metadata::MetadataMismatch) -> Self {
+        match mismatch {
+            pypi_metadata::MetadataMismatch::RequiresDist(diff) => {
+                LocalMetadataMismatch::RequiresDist {
+                    added: diff.added,
+                    removed: diff.removed,
+                }
+            }
+            pypi_metadata::MetadataMismatch::Version { locked, current } => {
+                LocalMetadataMismatch::Version { locked, current }
+            }
+            pypi_metadata::MetadataMismatch::RequiresPython { locked, current } => {
+                LocalMetadataMismatch::RequiresPython { locked, current }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Error, Diagnostic)]
 pub enum PlatformUnsat {
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
@@ -323,6 +402,18 @@ pub enum PlatformUnsat {
 
     #[error("source tree hash for {0} does not match the hash in the lock-file")]
     SourceTreeHashMismatch(pep508_rs::PackageName, #[source] SourceTreeHashMismatch),
+
+    #[error("metadata for local package '{0}' has changed: {1}")]
+    LocalPackageMetadataMismatch(pep508_rs::PackageName, LocalMetadataMismatch),
+
+    #[error("failed to read metadata for local package '{0}': {1}")]
+    FailedToReadLocalMetadata(pep508_rs::PackageName, String),
+
+    #[error("failed to build metadata for local package '{0}': {1}")]
+    FailedToBuildLocalMetadata(pep508_rs::PackageName, String),
+
+    #[error("local package '{0}' has dynamic {1} metadata that requires re-resolution")]
+    LocalPackageHasDynamicMetadata(pep508_rs::PackageName, &'static str),
 
     #[error("the path '{0}, cannot be canonicalized")]
     FailedToCanonicalizePath(PathBuf, #[source] std::io::Error),
@@ -479,7 +570,9 @@ impl PlatformUnsat {
                 | PlatformUnsat::AsPep508Error(_, _)
                 | PlatformUnsat::FailedToDetermineSourceTreeHash(_, _)
                 | PlatformUnsat::PythonVersionMismatch(_, _, _)
-                | PlatformUnsat::SourceTreeHashMismatch(..),
+                | PlatformUnsat::SourceTreeHashMismatch(..)
+                | PlatformUnsat::LocalPackageMetadataMismatch(_, _)
+                | PlatformUnsat::FailedToReadLocalMetadata(_, _),
         )
     }
 }
@@ -806,6 +899,21 @@ fn verify_pypi_indexes(
     Ok(())
 }
 
+/// Context for verifying platform satisfiability.
+pub struct VerifySatisfiabilityContext<'a> {
+    pub environment: &'a Environment<'a>,
+    pub command_dispatcher: CommandDispatcher,
+    pub platform: Platform,
+    pub project_root: &'a Path,
+    pub uv_context: &'a OnceCell<UvResolutionContext>,
+    pub config: &'a Config,
+    pub project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
+    pub build_caches: &'a mut HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
+    /// Cache for static metadata extracted from pyproject.toml files.
+    /// This is shared across platforms since static metadata is platform-independent.
+    pub static_metadata_cache: &'a mut HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
+}
+
 /// Verifies that the package requirements of the specified `environment` can be
 /// satisfied with the packages present in the lock-file.
 ///
@@ -817,22 +925,24 @@ fn verify_pypi_indexes(
 /// This function returns a [`PlatformUnsat`] error if a verification issue
 /// occurred. The [`PlatformUnsat`] error should contain enough information for
 /// the user and developer to figure out what went wrong.
+///
 pub async fn verify_platform_satisfiability(
-    environment: &Environment<'_>,
-    command_dispatcher: CommandDispatcher,
+    ctx: &mut VerifySatisfiabilityContext<'_>,
     locked_environment: rattler_lock::Environment<'_>,
-    platform: Platform,
-    project_root: &Path,
 ) -> Result<VerifiedIndividualEnvironment, Box<PlatformUnsat>> {
     // Convert the lock file into a list of conda and pypi packages
     let mut pixi_records: Vec<PixiRecord> = Vec::new();
     let mut pypi_packages: Vec<PypiRecord> = Vec::new();
-    for package in locked_environment.packages(platform).into_iter().flatten() {
+    for package in locked_environment
+        .packages(ctx.platform)
+        .into_iter()
+        .flatten()
+    {
         match package {
             LockedPackageRef::Conda(conda) => {
                 let url = conda.location().clone();
                 pixi_records.push(
-                    PixiRecord::from_conda_package_data(conda.clone(), project_root)
+                    PixiRecord::from_conda_package_data(conda.clone(), ctx.project_root)
                         .map_err(|e| PlatformUnsat::CorruptedEntry(url.to_string(), e))?,
                 );
             }
@@ -845,7 +955,7 @@ pub async fn verify_platform_satisfiability(
     // to reflect new purls for pypi packages
     // we need to invalidate the locked environment
     // if all conda packages have empty purls
-    if environment.has_pypi_dependencies()
+    if ctx.environment.has_pypi_dependencies()
         && pypi_packages.is_empty()
         && pixi_records
             .iter()
@@ -859,7 +969,7 @@ pub async fn verify_platform_satisfiability(
 
     // Create a lookup table from package name to package record. Returns an error
     // if we find a duplicate entry for a record
-    let pixi_records_by_name = match PixiRecordsByName::from_unique_iter(pixi_records) {
+    let pixi_records_by_name = match PixiRecordsByName::from_unique_iter(pixi_records.clone()) {
         Ok(pixi_records) => pixi_records,
         Err(duplicate) => {
             return Err(Box::new(PlatformUnsat::DuplicateEntry(
@@ -879,13 +989,39 @@ pub async fn verify_platform_satisfiability(
         }
     };
 
+    // Get host platform records for building (we can only run Python on the host platform)
+    let best_platform = ctx.environment.best_platform();
+    let building_pixi_records = if ctx.platform == best_platform {
+        // Same platform, reuse the records
+        Ok(pixi_records_by_name.clone())
+    } else {
+        // Different platform - extract host platform records for building
+        let mut host_pixi_records: Vec<PixiRecord> = Vec::new();
+        for package in locked_environment
+            .packages(best_platform)
+            .into_iter()
+            .flatten()
+        {
+            if let LockedPackageRef::Conda(conda) = package {
+                let url = conda.location().clone();
+                host_pixi_records.push(
+                    PixiRecord::from_conda_package_data(conda.clone(), ctx.project_root)
+                        .map_err(|e| PlatformUnsat::CorruptedEntry(url.to_string(), e))?,
+                );
+            }
+        }
+        PixiRecordsByName::from_unique_iter(host_pixi_records).map_err(|duplicate| {
+            PlatformUnsat::DuplicateEntry(duplicate.package_record().name.as_source().to_string())
+        })
+    };
+
+    // Run satisfiability check - for local packages with dynamic metadata,
+    // we use UV infrastructure to build metadata if available.
     verify_package_platform_satisfiability(
-        environment,
-        command_dispatcher,
+        ctx,
         &pixi_records_by_name,
         &pypi_records_by_name,
-        platform,
-        project_root,
+        building_pixi_records,
     )
     .await
 }
@@ -1566,35 +1702,36 @@ async fn resolve_single_dev_dependency(
 }
 
 pub(crate) async fn verify_package_platform_satisfiability(
-    environment: &Environment<'_>,
-    command_dispatcher: CommandDispatcher,
+    ctx: &mut VerifySatisfiabilityContext<'_>,
     locked_pixi_records: &PixiRecordsByName,
     locked_pypi_environment: &PypiRecordsByName,
-    platform: Platform,
-    project_root: &Path,
+    building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
 ) -> Result<VerifiedIndividualEnvironment, Box<PlatformUnsat>> {
     // Determine the dependencies requested by the environment
-    let environment_dependencies = environment
-        .combined_dependencies(Some(platform))
+    let environment_dependencies = ctx
+        .environment
+        .combined_dependencies(Some(ctx.platform))
         .into_specs()
         .map(|(package_name, spec)| Dependency::Input(package_name, spec, "<environment>".into()))
         .collect_vec();
 
     // Get the dev dependencies for this platform
-    let dev_dependencies = environment
-        .combined_dev_dependencies(Some(platform))
+    let dev_dependencies = ctx
+        .environment
+        .combined_dev_dependencies(Some(ctx.platform))
         .into_specs()
         .collect_vec();
 
     // retrieve dependency-overrides
     // map it to (name => requirement) for later matching
-    let dependency_overrides = environment
+    let dependency_overrides = ctx
+        .environment
         .pypi_options()
         .dependency_overrides
         .unwrap_or_default()
         .into_iter()
         .map(|(name, req)| -> Result<_, Box<PlatformUnsat>> {
-            let uv_req = as_uv_req(&req, name.as_source(), project_root).map_err(|e| {
+            let uv_req = as_uv_req(&req, name.as_source(), ctx.project_root).map_err(|e| {
                 Box::new(PlatformUnsat::AsPep508Error(
                     name.as_normalized().clone(),
                     e,
@@ -1605,8 +1742,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
 
     // Transform from PyPiPackage name into UV Requirement type
-    let pypi_requirements = environment
-        .pypi_dependencies(Some(platform))
+    let project_root = ctx.project_root;
+    let pypi_requirements = ctx
+        .environment
+        .pypi_dependencies(Some(ctx.platform))
         .iter()
         .flat_map(|(name, reqs)| {
             reqs.iter().map(move |req| {
@@ -1630,18 +1769,24 @@ pub(crate) async fn verify_package_platform_satisfiability(
     }
 
     // Create a list of virtual packages by name
-    let virtual_packages = environment
-        .virtual_packages(platform)
+    let virtual_packages = ctx
+        .environment
+        .virtual_packages(ctx.platform)
         .into_iter()
         .map(GenericVirtualPackage::from)
         .map(|vpkg| (vpkg.name.clone(), vpkg))
         .collect::<HashMap<_, _>>();
 
     // The list of channels and platforms we need for this task
-    let channels = environment.channels().into_iter().cloned().collect_vec();
+    let channels = ctx
+        .environment
+        .channels()
+        .into_iter()
+        .cloned()
+        .collect_vec();
 
     // Get the channel configuration
-    let channel_config = environment.workspace().channel_config();
+    let channel_config = ctx.environment.workspace().channel_config();
 
     // Resolve the channel URLs for the channels we need.
     let channels = channels
@@ -1654,13 +1799,14 @@ pub(crate) async fn verify_package_platform_satisfiability(
     let VariantConfig {
         variant_configuration,
         variant_files,
-    } = environment
+    } = ctx
+        .environment
         .workspace()
-        .variants(platform)
+        .variants(ctx.platform)
         .map_err(|e| Box::new(PlatformUnsat::Variants(e)))?;
 
     let build_environment =
-        BuildEnvironment::simple(platform, virtual_packages.values().cloned().collect());
+        BuildEnvironment::simple(ctx.platform, virtual_packages.values().cloned().collect());
 
     // Get all source records from the lock file for metadata verification
     let source_records: Vec<_> = locked_pixi_records
@@ -1672,7 +1818,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
     // Resolve dev dependencies and verify source metadata in parallel
     let dev_deps_future = resolve_dev_dependencies(
         dev_dependencies,
-        &command_dispatcher,
+        &ctx.command_dispatcher,
         &channel_config,
         &channels,
         &build_environment,
@@ -1682,13 +1828,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
     let source_metadata_future = verify_source_metadata(
         source_records,
-        command_dispatcher.clone(),
+        ctx.command_dispatcher.clone(),
         channel_config.clone(),
         channels.clone(),
         variant_configuration.clone(),
         variant_files.clone(),
         virtual_packages.values().cloned().collect(),
-        platform,
+        ctx.platform,
     );
 
     let (resolved_dev_dependencies, source_metadata_result) =
@@ -1711,7 +1857,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
     // Determine the marker environment from the python interpreter package.
     let marker_environment = python_interpreter_record
-        .map(|interpreter| determine_marker_environment(platform, &interpreter.package_record))
+        .map(|interpreter| determine_marker_environment(ctx.platform, &interpreter.package_record))
         .transpose()
         .map_err(|err| {
             Box::new(PlatformUnsat::FailedToDetermineMarkerEnvironment(
@@ -1900,9 +2046,11 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                 .unwrap_or(requirement);
 
                             if requirement.is_editable() {
-                                if let Err(err) =
-                                    pypi_satisfies_editable(&requirement, &record.0, project_root)
-                                {
+                                if let Err(err) = pypi_satisfies_editable(
+                                    &requirement,
+                                    &record.0,
+                                    ctx.project_root,
+                                ) {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
 
@@ -1911,7 +2059,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                 if let Err(err) = pypi_satisfies_requirement(
                                     &requirement,
                                     &record.0,
-                                    project_root,
+                                    ctx.project_root,
                                 ) {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
@@ -2014,30 +2162,84 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         let absolute_path = if path.is_absolute() {
                             Cow::Borrowed(Path::new(path.as_str()))
                         } else {
-                            Cow::Owned(project_root.join(Path::new(path.as_str())))
+                            Cow::Owned(ctx.project_root.join(Path::new(path.as_str())))
                         };
 
                         if absolute_path.is_dir() {
-                            match PypiSourceTreeHashable::from_directory(&absolute_path)
-                                .map(|hashable| hashable.hash())
+                            // Note: We ignore (until lockfile version is bumped) the hash field if present (from older lock files)
+                            // rather than triggering re-resolution.
+                            // Read metadata using UV's DistributionDatabase.
+                            // This first tries database.requires_dist() for static extraction,
+                            // then falls back to building the wheel if needed.
+                            let uv_ctx = ctx
+                                .uv_context
+                                .get_or_try_init(|| UvResolutionContext::from_config(ctx.config))
+                                .map_err(|e| {
+                                    Box::new(PlatformUnsat::FailedToReadLocalMetadata(
+                                        record.0.name.clone(),
+                                        format!("failed to initialize UV context: {e}"),
+                                    ))
+                                })?;
+
+                            let mut build_ctx = BuildMetadataContext {
+                                environment: ctx.environment,
+                                locked_pixi_records,
+                                platform: ctx.platform,
+                                project_root: ctx.project_root,
+                                uv_context: uv_ctx,
+                                project_env_vars: &ctx.project_env_vars,
+                                command_dispatcher: ctx.command_dispatcher.clone(),
+                                build_caches: ctx.build_caches,
+                                building_pixi_records: &building_pixi_records,
+                                static_metadata_cache: ctx.static_metadata_cache,
+                            };
+
+                            match read_local_package_metadata(
+                                &absolute_path,
+                                &record.0.name,
+                                record.0.editable,
+                                &mut build_ctx,
+                            )
+                            .await
                             {
-                                Ok(hashable) if Some(&hashable) != record.0.hash.as_ref() => {
-                                    delayed_pypi_error.get_or_insert_with(|| {
-                                        Box::new(PlatformUnsat::SourceTreeHashMismatch(
-                                            record.0.name.clone(),
-                                            SourceTreeHashMismatch {
-                                                computed: hashable,
-                                                locked: record.0.hash.clone(),
+                                Ok(current_metadata) => {
+                                    // Compare metadata with locked metadata
+                                    if let Some(mismatch) = pypi_metadata::compare_metadata(
+                                        &record.0,
+                                        &current_metadata,
+                                    ) {
+                                        let local_mismatch = match mismatch {
+                                            pypi_metadata::MetadataMismatch::RequiresDist(diff) => {
+                                                LocalMetadataMismatch::RequiresDist {
+                                                    added: diff.added,
+                                                    removed: diff.removed,
+                                                }
+                                            }
+                                            pypi_metadata::MetadataMismatch::Version {
+                                                locked,
+                                                current,
+                                            } => LocalMetadataMismatch::Version { locked, current },
+                                            pypi_metadata::MetadataMismatch::RequiresPython {
+                                                locked,
+                                                current,
+                                            } => LocalMetadataMismatch::RequiresPython {
+                                                locked,
+                                                current,
                                             },
-                                        ))
-                                    });
+                                        };
+                                        delayed_pypi_error.get_or_insert_with(|| {
+                                            Box::new(PlatformUnsat::LocalPackageMetadataMismatch(
+                                                record.0.name.clone(),
+                                                local_mismatch,
+                                            ))
+                                        });
+                                    }
                                 }
-                                Ok(_) => {}
-                                Err(err) => {
+                                Err(e) => {
                                     delayed_pypi_error.get_or_insert_with(|| {
-                                        Box::new(PlatformUnsat::FailedToDetermineSourceTreeHash(
+                                        Box::new(PlatformUnsat::FailedToReadLocalMetadata(
                                             record.0.name.clone(),
-                                            err,
+                                            format!("failed to read metadata: {e}"),
                                         ))
                                     });
                                 }
@@ -2166,7 +2368,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
     // the same path-based package.
 
     // Verify the pixi build package's package_build_source matches the manifest.
-    verify_build_source_matches_manifest(environment, locked_pixi_records)?;
+    verify_build_source_matches_manifest(ctx.environment, locked_pixi_records)?;
 
     Ok(VerifiedIndividualEnvironment {
         expected_conda_packages,
@@ -2188,6 +2390,373 @@ pub struct CondaPackageIdx(usize);
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 #[repr(transparent)]
 pub struct PypiPackageIdx(usize);
+
+/// Context for building dynamic metadata for local packages.
+struct BuildMetadataContext<'a> {
+    environment: &'a Environment<'a>,
+    locked_pixi_records: &'a PixiRecordsByName,
+    platform: Platform,
+    project_root: &'a Path,
+    uv_context: &'a UvResolutionContext,
+    project_env_vars: &'a HashMap<EnvironmentName, EnvironmentVars>,
+    command_dispatcher: CommandDispatcher,
+    build_caches: &'a mut HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
+    building_pixi_records: &'a Result<PixiRecordsByName, PlatformUnsat>,
+    static_metadata_cache: &'a mut HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
+}
+
+/// Read metadata for a local directory package using UV's DistributionDatabase.
+///
+/// This first tries to extract metadata statically via `database.requires_dist()`,
+/// which parses the pyproject.toml without building. If static extraction fails
+/// (e.g., dynamic dependencies), it falls back to building the wheel metadata.
+///
+/// Static metadata is cached across platforms since it doesn't depend on the platform.
+async fn read_local_package_metadata(
+    directory: &Path,
+    package_name: &pep508_rs::PackageName,
+    editable: bool,
+    ctx: &mut BuildMetadataContext<'_>,
+) -> Result<pypi_metadata::LocalPackageMetadata, PlatformUnsat> {
+    // Check if we already have static metadata cached for this directory
+    if let Some(cached_metadata) = ctx.static_metadata_cache.get(directory) {
+        tracing::debug!("Package {} - using cached static metadata", package_name);
+        return Ok(cached_metadata.clone());
+    }
+
+    let pypi_options = ctx.environment.pypi_options();
+
+    // Find the Python interpreter from locked records
+    let python_record = ctx
+        .locked_pixi_records
+        .records
+        .iter()
+        .find(|r| is_python_record(r))
+        .ok_or_else(|| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                "No Python interpreter found in locked packages".to_string(),
+            )
+        })?;
+
+    // Create marker environment for the target platform
+    let marker_environment = determine_marker_environment(ctx.platform, python_record.as_ref())
+        .map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Failed to determine marker environment: {e}"),
+            )
+        })?;
+
+    let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
+
+    // Get or create cache entry for this environment and host platform
+    // We use best_platform() since the build prefix is shared across all target platforms
+    let best_platform = ctx.environment.best_platform();
+    let cache_key = BuildCacheKey::new(ctx.environment.name().clone(), best_platform);
+    let cache = ctx.build_caches.entry(cache_key).or_default();
+
+    let index_locations = pypi_options_to_index_locations(&pypi_options, ctx.project_root)
+        .map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Failed to setup index locations: {e}"),
+            )
+        })?;
+
+    let build_options = pypi_options_to_build_options(
+        &pypi_options.no_build.clone().unwrap_or_default(),
+        &pypi_options.no_binary.clone().unwrap_or_default(),
+    )
+    .map_err(|e| {
+        PlatformUnsat::FailedToReadLocalMetadata(
+            package_name.clone(),
+            format!("Failed to create build options: {e}"),
+        )
+    })?;
+
+    let dependency_metadata = DependencyMetadata::default();
+
+    // Configure insecure hosts
+    let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
+        ctx.uv_context.allow_insecure_host.clone(),
+        ctx.uv_context.tls_no_verify,
+        &index_locations,
+    );
+
+    let registry_client = {
+        let base_client_builder = BaseClientBuilder::default()
+            .allow_insecure_host(allow_insecure_hosts.clone())
+            .markers(&marker_environment)
+            .keyring(ctx.uv_context.keyring_provider)
+            .connectivity(Connectivity::Online)
+            .native_tls(ctx.uv_context.use_native_tls)
+            .extra_middleware(ctx.uv_context.extra_middleware.clone());
+
+        let mut uv_client_builder =
+            RegistryClientBuilder::new(base_client_builder, ctx.uv_context.cache.clone())
+                .index_locations(index_locations.clone())
+                .index_strategy(index_strategy);
+
+        for p in &ctx.uv_context.proxies {
+            uv_client_builder = uv_client_builder.proxy(p.clone())
+        }
+
+        Arc::new(uv_client_builder.build())
+    };
+
+    // Get tags for this platform (needed for FlatIndex)
+    let system_requirements = ctx.environment.system_requirements();
+    let tags =
+        get_pypi_tags(ctx.platform, &system_requirements, python_record.as_ref()).map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Failed to determine pypi tags: {e}"),
+            )
+        })?;
+
+    let flat_index = {
+        let flat_index_client = FlatIndexClient::new(
+            registry_client.cached_client(),
+            Connectivity::Online,
+            &ctx.uv_context.cache,
+        );
+        let flat_index_urls: Vec<&IndexUrl> = index_locations
+            .flat_indexes()
+            .map(|index| index.url())
+            .collect();
+        let flat_index_entries = flat_index_client
+            .fetch_all(flat_index_urls.into_iter())
+            .await
+            .map_err(|e| {
+                PlatformUnsat::FailedToReadLocalMetadata(
+                    package_name.clone(),
+                    format!("Failed to fetch flat index entries: {e}"),
+                )
+            })?;
+        FlatIndex::from_entries(
+            flat_index_entries,
+            Some(&tags),
+            &ctx.uv_context.hash_strategy,
+            &build_options,
+        )
+    };
+
+    // Create build dispatch parameters
+    let config_settings = ConfigSettings::default();
+    let build_params = UvBuildDispatchParams::new(
+        &registry_client,
+        &ctx.uv_context.cache,
+        &index_locations,
+        &flat_index,
+        &dependency_metadata,
+        &config_settings,
+        &build_options,
+        &ctx.uv_context.hash_strategy,
+    )
+    .with_index_strategy(index_strategy)
+    .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
+    .with_shared_state(ctx.uv_context.shared_state.fork())
+    .with_source_strategy(ctx.uv_context.source_strategy)
+    .with_concurrency(ctx.uv_context.concurrency);
+
+    // Get or create conda prefix updater for the environment
+    // Use best_platform() because we can only install/run Python on the host platform
+    let conda_prefix_updater = cache
+        .conda_prefix_updater
+        .get_or_try_init(|| {
+            let prefix_platform = ctx.environment.best_platform();
+            let group = GroupedEnvironment::Environment(ctx.environment.clone());
+            let virtual_packages = ctx.environment.virtual_packages(prefix_platform);
+
+            // Force the initialization of the rayon thread pool to avoid implicit creation
+            // by the uv.
+            LazyLock::force(&RAYON_INITIALIZE);
+
+            CondaPrefixUpdater::builder(
+                group,
+                prefix_platform,
+                virtual_packages
+                    .into_iter()
+                    .map(GenericVirtualPackage::from)
+                    .collect(),
+                ctx.command_dispatcher.clone(),
+            )
+            .finish()
+            .map_err(|e| {
+                PlatformUnsat::FailedToReadLocalMetadata(
+                    package_name.clone(),
+                    format!("Failed to create conda prefix updater: {e}"),
+                )
+            })
+        })?
+        .clone();
+
+    // Use cached lazy build dispatch dependencies
+    // Use building_pixi_records (host platform) for installing Python and building,
+    // since we can only run binaries on the host platform
+    let building_records: miette::Result<Vec<PixiRecord>> = ctx
+        .building_pixi_records
+        .as_ref()
+        .map(|r| r.records.clone())
+        .map_err(|e| miette::miette!("{}", e));
+    let lazy_build_dispatch = LazyBuildDispatch::new(
+        build_params,
+        conda_prefix_updater,
+        ctx.project_env_vars.clone(),
+        ctx.environment.clone(),
+        building_records,
+        pypi_options.no_build_isolation.clone(),
+        &cache.lazy_build_dispatch_deps,
+        None,
+        false,
+    );
+
+    // Create distribution database
+    let database = DistributionDatabase::new(
+        &registry_client,
+        &lazy_build_dispatch,
+        ctx.uv_context.concurrency.downloads,
+    );
+
+    // Try to read pyproject.toml and use requires_dist() first
+    let pyproject_path = directory.join("pyproject.toml");
+    if let Ok(contents) = fs_err::read_to_string(&pyproject_path) {
+        // Parse with toml_edit for version/requires_python
+        if let Ok(toml) = contents.parse::<toml_edit::DocumentMut>() {
+            let version = toml
+                .get("project")
+                .and_then(|p| p.get("version"))
+                .and_then(|v| v.as_str())
+                .and_then(|v| v.parse::<pep440_rs::Version>().ok());
+
+            let requires_python = toml
+                .get("project")
+                .and_then(|p| p.get("requires-python"))
+                .and_then(|v| v.as_str())
+                .and_then(|rp| rp.parse::<VersionSpecifiers>().ok());
+
+            // Parse pyproject.toml with UV's parser for requires_dist
+            if let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents) {
+                // Try to extract requires_dist statically using UV's database
+                match (
+                    database.requires_dist(directory, &pyproject_toml).await,
+                    version,
+                ) {
+                    (Ok(Some(requires_dist)), Some(version)) if !requires_dist.dynamic => {
+                        tracing::debug!(
+                            "Package {} - extracted requires_dist using database.requires_dist(). Dynamic: {}",
+                            package_name,
+                            requires_dist.dynamic
+                        );
+
+                        // Convert uv requirements to pep508_rs requirements
+                        let requires_dist_converted: Result<Vec<pep508_rs::Requirement>, _> =
+                            requires_dist
+                                .requires_dist
+                                .iter()
+                                .map(|req| {
+                                    let req_str = req.to_string();
+                                    req_str.parse::<pep508_rs::Requirement>().map_err(|e| {
+                                        PlatformUnsat::FailedToReadLocalMetadata(
+                                            package_name.clone(),
+                                            format!("Invalid requirement: {e}"),
+                                        )
+                                    })
+                                })
+                                .collect();
+
+                        if let Ok(requires_dist_vec) = requires_dist_converted {
+                            let metadata = pypi_metadata::LocalPackageMetadata {
+                                version,
+                                requires_dist: requires_dist_vec,
+                                requires_python,
+                            };
+                            // Cache the static metadata for reuse on other platforms
+                            ctx.static_metadata_cache
+                                .insert(directory.to_path_buf(), metadata.clone());
+                            return Ok(metadata);
+                        }
+                    }
+                    (Ok(Some(requires_dist)), _) => {
+                        // Dynamic dependencies or missing/dynamic version - need to build wheel for accurate metadata
+                        tracing::debug!(
+                            "Package {} - requires_dist is dynamic (dynamic={}) or version is missing/dynamic, falling back to wheel build",
+                            package_name,
+                            requires_dist.dynamic,
+                        );
+                    }
+                    (Ok(None), _) => {
+                        tracing::debug!(
+                            "Package {} - requires_dist() returned None, falling back to build",
+                            package_name
+                        );
+                    }
+                    (Err(e), _) => {
+                        tracing::debug!(
+                            "Package {} - requires_dist() failed: {}, falling back to build",
+                            package_name,
+                            e
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // Fall back to building the wheel metadata
+    tracing::debug!(
+        "Package {} - building wheel metadata with get_or_build_wheel_metadata()",
+        package_name
+    );
+
+    // Create the directory source dist
+    let uv_package_name =
+        uv_normalize::PackageName::from_str(package_name.as_ref()).map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Invalid package name: {e}"),
+            )
+        })?;
+
+    let install_path = directory.to_path_buf();
+    let file_url = url::Url::from_file_path(&install_path).map_err(|_| {
+        PlatformUnsat::FailedToReadLocalMetadata(
+            package_name.clone(),
+            format!("Failed to convert path to URL: {}", install_path.display()),
+        )
+    })?;
+    let verbatim_url = uv_pep508::VerbatimUrl::from_url(file_url.into());
+    let source_dist = DirectorySourceDist {
+        name: uv_package_name,
+        install_path: install_path.into_boxed_path(),
+        editable: Some(editable),
+        r#virtual: Some(false),
+        url: verbatim_url,
+    };
+
+    // Build the metadata
+    let metadata_response = database
+        .get_or_build_wheel_metadata(
+            &Dist::Source(SourceDist::Directory(source_dist)),
+            HashPolicy::None,
+        )
+        .await
+        .map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Failed to build metadata: {e}"),
+            )
+        })?;
+
+    // Convert UV metadata to our format
+    pypi_metadata::from_uv_metadata(&metadata_response.metadata).map_err(|e| {
+        PlatformUnsat::FailedToReadLocalMetadata(
+            package_name.clone(),
+            format!("Failed to convert metadata: {e}"),
+        )
+    })
+}
 
 fn find_matching_package(
     locked_pixi_records: &PixiRecordsByName,
@@ -2489,6 +3058,17 @@ mod tests {
             command_dispatcher.finish()
         };
 
+        // Create UV context lazily for building dynamic metadata
+        let uv_context: OnceCell<UvResolutionContext> = OnceCell::new();
+
+        // Create build caches for sharing between satisfiability and resolution
+        let mut build_caches: HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>> =
+            HashMap::new();
+
+        // Create static metadata cache for sharing across platforms
+        let mut static_metadata_cache: HashMap<PathBuf, pypi_metadata::LocalPackageMetadata> =
+            HashMap::new();
+
         // Verify individual environment satisfiability
         for env in project.environments() {
             let locked_env = lock_file
@@ -2498,15 +3078,22 @@ mod tests {
                 .map_err(|e| LockfileUnsat::Environment(env.name().to_string(), e))?;
 
             for platform in env.platforms() {
-                let verified_env = verify_platform_satisfiability(
-                    &env,
-                    command_dispatcher.clone(),
-                    locked_env,
+                let mut ctx = VerifySatisfiabilityContext {
+                    environment: &env,
+                    command_dispatcher: command_dispatcher.clone(),
                     platform,
-                    project.root(),
-                )
-                .await
-                .map_err(|e| LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e))?;
+                    project_root: project.root(),
+                    uv_context: &uv_context,
+                    config: project.config(),
+                    project_env_vars: project.env_vars().clone(),
+                    build_caches: &mut build_caches,
+                    static_metadata_cache: &mut static_metadata_cache,
+                };
+                let verified_env = verify_platform_satisfiability(&mut ctx, locked_env)
+                    .await
+                    .map_err(|e| {
+                        LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e)
+                    })?;
 
                 individual_verified_envs.insert((env.name(), platform), verified_env);
             }
@@ -2577,9 +3164,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     #[traced_test]
-    async fn test_example_satisfiability(
-        #[files("../../examples/**/p*.toml")] manifest_path: PathBuf,
-    ) {
+    async fn q(#[files("../../examples/**/p*.toml")] manifest_path: PathBuf) {
         // If a pyproject.toml is present check for `tool.pixi` in the file to avoid
         // testing of non-pixi files
         if manifest_path.file_name().unwrap() == "pyproject.toml" {

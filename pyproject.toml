@@ -5,7 +5,13 @@
 format-command = "pixi run -e lint ruff format --stdin-filename {filename}"
 
 [tool.basedpyright]
-ignore = ["**/*.ipynb", "**/docs_hooks.py", "scripts/test_native_certs.py"]
+ignore = [
+  "**/*.ipynb",
+  "**/docs_hooks.py",
+  "scripts/test_native_certs.py",
+  "examples/dynamic-source-deps/minimal-project/hatch_build.py",
+  "/Users/graf/oss/pixi/examples/dynamic-source-deps/setup-project/setup.py",
+]
 pythonPlatform = "All"
 pythonVersion = "3.13"
 typeCheckingMode = "all"
