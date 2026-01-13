@@ -5338,7 +5338,7 @@ dependencies = [
  "clap",
  "clap-verbosity-flag",
  "fs-err",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "insta",
  "itertools 0.14.0",
  "jsonrpc-core",
@@ -5371,7 +5371,7 @@ name = "pixi-build-cmake"
 version = "0.3.7"
 dependencies = [
  "async-trait",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "insta",
  "miette 7.6.0",
  "minijinja",
@@ -5393,7 +5393,7 @@ name = "pixi-build-mojo"
 version = "0.1.7"
 dependencies = [
  "async-trait",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "insta",
  "miette 7.6.0",
  "minijinja",
@@ -5415,7 +5415,7 @@ version = "0.4.4"
 dependencies = [
  "async-trait",
  "fs-err",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "insta",
  "miette 7.6.0",
  "minijinja",
@@ -5465,7 +5465,7 @@ dependencies = [
  "async-trait",
  "cargo_toml",
  "fs-err",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "insta",
  "miette 7.6.0",
  "minijinja",
@@ -7116,7 +7116,7 @@ dependencies = [
  "hex",
  "http-range-client",
  "ignore",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "indicatif",
  "itertools 0.14.0",
  "lazy_static",
@@ -7310,7 +7310,7 @@ dependencies = [
  "console 0.16.2",
  "fs-err",
  "futures",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "indicatif",
  "opendal",
  "rattler_conda_types",
@@ -7696,7 +7696,7 @@ name = "recipe-stage0"
 version = "0.1.1"
 dependencies = [
  "hashlink",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "insta",
  "itertools 0.14.0",
  "marked-yaml",

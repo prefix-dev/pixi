@@ -1,3 +1,4 @@
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,11 +39,14 @@ def local_cpp_git_repo(
     original_source = main_source_path.read_text(encoding="utf-8")
 
     def run_git(*args: str) -> str:
+        # Remove all PIXI_ prefixed env vars to avoid interference from the outer environment
+        env = {k: v for k, v in os.environ.items() if not k.startswith("PIXI_")}
         result = subprocess.run(
             [str(pixi), "run", "git", *args],
             cwd=repo_path,
             capture_output=True,
             text=True,
+            env=env,
         )
         if result.returncode != 0:
             raise RuntimeError(

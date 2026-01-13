@@ -12,7 +12,6 @@ preview = ["pixi-build"]
 requires-pixi = ">=0.45"
 
 [workspace.target.linux-64.build-variants]
-#c_stdlib = ["sysroot"]
 c_stdlib_version = ["2.17"]
 
 [dependencies]
@@ -60,6 +59,8 @@ rattler-build = ">=0.55,<0.56"
 rich = ">=14.1.0,<15"
 tomli-w = ">=1.2.0,<2"
 types-pyyaml = ">=6.0.12.20250915,<7"
+git = ">=2.51.0,<3"
+
 
 [feature.pytest.tasks]
 test-common-wheels = { cmd = "pytest -s --numprocesses=auto tests/wheel_tests/", depends-on = [
@@ -289,13 +290,13 @@ test-native-certs = { cmd = "python scripts/test_native_certs.py --pixi-bin $CAR
 #
 
 [environments]
-build = { features = ["build", "rust"], solve-group = "default" }
 default = { features = [
+  "build",
   "dev",
   "schema",
-  "pytest",
   "rust",
 ], solve-group = "default" }
+pytest = { features = ["pytest"], no-default-feature = true }
 dist = { features = ["dist"], no-default-feature = true }
 docs = { features = [
   "docs",
@@ -303,7 +304,6 @@ docs = { features = [
 lint = { features = [
   "lint",
   "rust",
-  "pytest",
   "schema",
   "pypi-gen",
 ], no-default-feature = true, solve-group = "default" }
@@ -311,7 +311,6 @@ pypi-gen = { features = ["pypi-gen"] }
 recipes = { features = ["recipes"], no-default-feature = true }
 schema = { features = [
   "schema",
-  "pytest",
 ], no-default-feature = true, solve-group = "default" }
 test-export = { features = ["micromamba"], no-default-feature = true }
 test-native-certs = { features = ["native-certs-test"] }

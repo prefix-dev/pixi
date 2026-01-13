@@ -10,7 +10,6 @@ from typing import override
 
 from rattler import Platform
 
-
 # Regex pattern to match ANSI escape sequences
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -68,6 +67,8 @@ def verify_cli_command(
     strip_ansi: bool = False,
 ) -> Output:
     base_env = {} if reset_env else dict(os.environ)
+    # Remove all PIXI_ prefixed env vars to avoid interference from the outer environment
+    base_env = {k: v for k, v in base_env.items() if not k.startswith("PIXI_")}
     complete_env = base_env if env is None else base_env | env
     # Set `PIXI_NO_WRAP` to avoid to have miette wrapping lines
     complete_env |= {"PIXI_NO_WRAP": "1"}
