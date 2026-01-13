@@ -19,9 +19,7 @@ class TurtleNavigator(Node):  # type: ignore[misc]
         self.integral = 0.0
 
         self.subscription = self.create_subscription(Point, "coordinates", self.goal_callback, 10)
-        self.pose_subscription = self.create_subscription(
-            Pose, "turtle1/pose", self.pose_callback, 10
-        )
+        self.pose_subscription = self.create_subscription(Pose, "turtle1/pose", self.pose_callback, 10)
         self.publisher = self.create_publisher(Twist, "turtle1/cmd_vel", 10)
 
         self.timer = self.create_timer(0.1, self.control_loop)
@@ -56,9 +54,7 @@ class TurtleNavigator(Node):  # type: ignore[misc]
 
         # PID control
         control_signal = (
-            self.kp * distance_error
-            + self.ki * self.integral
-            + self.kd * (distance_error - self.prev_error)
+            self.kp * distance_error + self.ki * self.integral + self.kd * (distance_error - self.prev_error)
         )
         self.integral += distance_error
         self.prev_error = distance_error

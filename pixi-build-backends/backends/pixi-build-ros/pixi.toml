@@ -36,7 +36,9 @@ test = { features = ["test"], solve-group = "default" }
 [feature.test.tasks]
 lint-mypy = "mypy"
 test = "pytest tests"
-test-integration = { cmd = "pytest tests/integration", depends-on = ["create-channel"] }
+test-integration = { cmd = "pytest tests/integration", depends-on = [
+  "create-channel",
+] }
 
 [feature.test.tasks.build-ros-channel]
 cmd = """
@@ -52,8 +54,8 @@ rattler-build build \
 description = "Build pixi-build-ros into local test channel"
 
 [feature.test.tasks.index-ros-channel]
-depends-on = ["build-ros-channel"]
 cmd = "rattler-index fs --force --write-shards false --write-zst false tests/integration/artifacts-channel"
+depends-on = ["build-ros-channel"]
 description = "Index the local ROS backend channel"
 
 [feature.test.tasks.create-channel]

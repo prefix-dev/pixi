@@ -82,33 +82,25 @@ def verify_cli_command(
         if isinstance(stdout_contains, str):
             stdout_contains = [stdout_contains]
         for substring in stdout_contains:
-            assert substring in stdout_for_matching, (
-                f"'{substring}'\n not found in stdout:\n {stdout}"
-            )
+            assert substring in stdout_for_matching, f"'{substring}'\n not found in stdout:\n {stdout}"
 
     if stdout_excludes:
         if isinstance(stdout_excludes, str):
             stdout_excludes = [stdout_excludes]
         for substring in stdout_excludes:
-            assert substring not in stdout_for_matching, (
-                f"'{substring}'\n unexpectedly found in stdout:\n {stdout}"
-            )
+            assert substring not in stdout_for_matching, f"'{substring}'\n unexpectedly found in stdout:\n {stdout}"
 
     if stderr_contains:
         if isinstance(stderr_contains, str):
             stderr_contains = [stderr_contains]
         for substring in stderr_contains:
-            assert substring in stderr_for_matching, (
-                f"'{substring}'\n not found in stderr:\n {stderr}"
-            )
+            assert substring in stderr_for_matching, f"'{substring}'\n not found in stderr:\n {stderr}"
 
     if stderr_excludes:
         if isinstance(stderr_excludes, str):
             stderr_excludes = [stderr_excludes]
         for substring in stderr_excludes:
-            assert substring not in stderr_for_matching, (
-                f"'{substring}'\n unexpectedly found in stderr:\n {stderr}"
-            )
+            assert substring not in stderr_for_matching, f"'{substring}'\n unexpectedly found in stderr:\n {stderr}"
 
     return output
 
@@ -135,6 +127,4 @@ def copytree_with_local_backend(
     """Copy tree while ignoring .pixi directories and .conda files."""
     kwargs.setdefault("copy_function", copy_manifest)
 
-    return Path(
-        shutil.copytree(src, dst, ignore=shutil.ignore_patterns(".pixi", "*.conda"), **kwargs)
-    )
+    return Path(shutil.copytree(src, dst, ignore=shutil.ignore_patterns(".pixi", "*.conda"), **kwargs))

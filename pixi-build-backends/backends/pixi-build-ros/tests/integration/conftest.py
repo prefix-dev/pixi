@@ -19,8 +19,7 @@ def local_backend_channel_uri() -> str:
     channel_dir = Path(__file__).parent / "artifacts-channel"
     if not channel_dir.is_dir() or not any(channel_dir.rglob("repodata.json")):
         raise RuntimeError(
-            f"Local backend channel not found at {channel_dir}. "
-            "Run 'pixi run create-channel' to generate it."
+            f"Local backend channel not found at {channel_dir}. Run 'pixi run create-channel' to generate it."
         )
     return channel_dir.as_uri()
 

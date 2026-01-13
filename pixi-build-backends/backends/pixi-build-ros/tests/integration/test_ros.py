@@ -32,8 +32,7 @@ def _load_package_metadata(project_root: Path, package_name: str) -> dict[str, A
         metadata = json.loads(metadata_file.read_text())
         outputs = metadata.get("outputs", [])
         if any(
-            isinstance(output, dict) and output.get("metadata", {}).get("name") == package_name
-            for output in outputs
+            isinstance(output, dict) and output.get("metadata", {}).get("name") == package_name for output in outputs
         ):
             mtime = metadata_file.stat().st_mtime
             if mtime > selected_mtime:
@@ -46,9 +45,7 @@ def _load_package_metadata(project_root: Path, package_name: str) -> dict[str, A
 
 @pytest.mark.slow
 @pytest.mark.parametrize("package_dir", ROS_PACKAGE_DIRS, ids=ROS_PACKAGE_DIRS)
-def test_ros_packages_build(
-    package_dir: str, pixi: Path, build_data: Path, tmp_pixi_workspace: Path
-) -> None:
+def test_ros_packages_build(package_dir: str, pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     workspace = _prepare_ros_workspace(build_data, tmp_pixi_workspace)
     output_dir = workspace.joinpath("dist")
     output_dir.mkdir(parents=True, exist_ok=True)
