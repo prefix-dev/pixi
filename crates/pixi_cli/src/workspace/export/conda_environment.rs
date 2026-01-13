@@ -120,7 +120,7 @@ fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> 
 
     let marker_str = markers.try_to_string();
     if let Some(marker_str) = marker_str {
-        dependency.push_str(&format!("; {}", marker_str));
+        dependency.push_str(&format!("; {marker_str}"));
     }
 
     dependency

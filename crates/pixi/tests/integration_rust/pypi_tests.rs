@@ -223,7 +223,7 @@ index-url = "{index_url}"
     // But not for osx-arm64
     assert!(
         !lock.contains_pep508_requirement("default", platform2, nccl_req.clone()),
-        "default environment shouldn't include nccl for osx-64"
+        "default environment shouldn't include nccl for osx-arm64"
     );
 }
 

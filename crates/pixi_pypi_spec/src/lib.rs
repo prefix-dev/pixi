@@ -124,7 +124,7 @@ fn serialize_markertree<S>(value: &MarkerTree, s: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
-    // `.unwrap()` succeeds because we don't serialize when
+    // `.expect()` succeeds because we don't serialize when
     // `value.is_true()`, which is the default.
     value.contents().expect("contents were null").serialize(s)
 }
