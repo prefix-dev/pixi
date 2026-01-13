@@ -304,6 +304,7 @@ docs = { features = [
 ], no-default-feature = true, solve-group = "default" }
 lint = { features = [
   "lint",
+  "pytest",
   "rust",
   "schema",
   "pypi-gen",

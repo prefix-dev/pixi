@@ -1,7 +1,8 @@
 import json
 import shutil
 from pathlib import Path
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any, cast
 
 import pytest
 import tomli_w
@@ -27,10 +28,12 @@ def _git_source_entries(lock_file: Path) -> list[dict[str, Any]]:
 
     serialized_sources: list[dict[str, Any]] = []
     for entry in iter_entries():
-        if isinstance(entry, dict) and entry.get("conda") == ".":
-            package_build_source = entry.get("package_build_source")
-            if package_build_source is not None:
-                serialized_sources.append(package_build_source)
+        if isinstance(entry, dict):
+            entry = cast(dict[str, Any], entry)
+            if entry.get("conda") == ".":
+                package_build_source = entry.get("package_build_source")
+                if package_build_source is not None:
+                    serialized_sources.append(package_build_source)
 
     assert serialized_sources, (
         "expected at least one git package with package_build_source in pixi.lock"
@@ -299,7 +302,7 @@ def test_git_path_build_has_absolutely_no_respect_to_lock_file(
             if path.suffix in {".o", ".bin", ".txt", ".json"} or "simple-app" in path.name:
                 yield path
 
-    found = []
+    found: list[Path] = []
     for candidate in iter_candidate_files():
         try:
             data = candidate.read_bytes()
@@ -400,11 +403,13 @@ def test_git_path_lock_detects_manual_rev_change(
 
     def mutate(node: Any) -> None:
         if isinstance(node, dict):
+            node = cast(dict[str, Any], node)
             if node.get("conda") == "." and "package_build_source" in node:
                 node["package_build_source"]["rev"] = local_cpp_git_repo.other_feature_rev
             for value in node.values():
                 mutate(value)
         elif isinstance(node, list):
+            node = cast(list[Any], node)
             for item in node:
                 mutate(item)
 

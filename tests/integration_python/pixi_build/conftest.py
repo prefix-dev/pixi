@@ -3,6 +3,7 @@
 import os
 import shutil
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -29,8 +30,8 @@ def setup_build_backend_override(request: pytest.FixtureRequest) -> None:
         "pixi-build-rust",
     ]
 
-    override_parts = []
-    missing_files = []
+    override_parts: list[str] = []
+    missing_files: list[Path] = []
     for backend in backends:
         backend_path = backends_bin_dir / exec_extension(backend)
         if backend_path.is_file():
@@ -43,7 +44,7 @@ def setup_build_backend_override(request: pytest.FixtureRequest) -> None:
         build_cmd = "build-debug" if build_type == "debug" else "build-release"
         raise RuntimeError(
             f"Missing backend binaries:\n  {missing_list}\n"
-            f"Run 'pixi run {build_cmd}' to build them."
+            + f"Run 'pixi run {build_cmd}' to build them."
         )
 
     os.environ["PIXI_BUILD_BACKEND_OVERRIDE"] = ",".join(override_parts)
@@ -61,7 +62,7 @@ def simple_workspace(
     request: pytest.FixtureRequest,
 ) -> Workspace:
     """Create a simple workspace for build tests."""
-    name = request.node.name
+    name: str = request.node.name  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
 
     workspace_dir = tmp_pixi_workspace.joinpath("workspace")
     workspace_dir.mkdir()
@@ -70,11 +71,11 @@ def simple_workspace(
     debug_dir = tmp_pixi_workspace.joinpath("debug_dir")
     debug_dir.mkdir()
 
-    recipe = {"package": {"name": name, "version": "1.0.0"}}
+    recipe: dict[str, Any] = {"package": {"name": name, "version": "1.0.0"}}
 
     package_rel_dir = "package"
 
-    workspace_manifest = {
+    workspace_manifest: dict[str, Any] = {
         "workspace": {
             "channels": ["https://prefix.dev/conda-forge"],
             "preview": ["pixi-build"],
@@ -83,7 +84,7 @@ def simple_workspace(
         "dependencies": {name: {"path": package_rel_dir}},
     }
 
-    package_manifest = {
+    package_manifest: dict[str, Any] = {
         "package": {
             "name": name,
             "version": "1.0.0",
