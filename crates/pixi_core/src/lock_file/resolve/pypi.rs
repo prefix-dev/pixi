@@ -384,7 +384,7 @@ pub async fn resolve_pypi(
                     reference: uv_reference,
                 };
 
-                tracing::debug!("Pre-populating git resolver: {:?} -> {}", reference, uv_sha);
+                tracing::debug!("pre-populating git resolver: {:?} -> {}", reference, uv_sha);
                 context.shared_state.git().insert(reference, uv_sha);
             }
         }
