@@ -461,6 +461,8 @@ pub enum LockFileUsage {
     Locked,
     /// Don't update the lock-file and don't check if it is out of date
     Frozen,
+    /// Don't update the lock-file, but don't check if it is out of date
+    DryRun,
 }
 
 impl LockFileUsage {
@@ -474,6 +476,7 @@ impl LockFileUsage {
         match self {
             LockFileUsage::Update | LockFileUsage::Locked => true,
             LockFileUsage::Frozen => false,
+            LockFileUsage::DryRun => false,
         }
     }
 }

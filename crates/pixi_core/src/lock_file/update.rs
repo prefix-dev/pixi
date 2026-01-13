@@ -340,7 +340,10 @@ impl Workspace {
             .await?;
 
         // Write the lock-file to disk
-        lock_file_derived_data.write_to_disk()?;
+
+        if options.lock_file_usage != LockFileUsage::DryRun {
+            lock_file_derived_data.write_to_disk()?;
+        }
 
         Ok((lock_file_derived_data, true))
     }
