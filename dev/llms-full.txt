@@ -5803,6 +5803,9 @@ requests3 = { git = "https://github.com/psf/requests.git", subdirectory = "reque
 local_package = { path = "../local_package" }
 local_package2 = { path = "../local_package2", extras = ["extra_feature"] }
 local_package3 = { path = "../local_package3", editable = true }
+
+# With environment markers
+nvidia-nccl-cu12 = { version = "==2.27.3", env-markers = "sys_platform == 'linux'" }
 ```
 
 ## Further Reading
