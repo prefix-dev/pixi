@@ -65,13 +65,3 @@ strip = false
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
 reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
-
-[patch."https://github.com/prefix-dev/pixi"]
-#pixi_build_types = { git = "https://github.com/prefix-dev/pixi", branch = "main" }
-
-# Local path overrides for development
-#pixi_build_types = { path = "../../pixi_build_types/crates/pixi_build_types" }
-#pixi_consts = { path = "../../pixi/crates/pixi_consts" }
-#pixi_manifest = { path = "../../pixi/crates/pixi_manifest" }
-#pixi_spec = { path = "../../pixi/crates/pixi_spec" }
-#pixi_build_type_conversions = { path = "../../pixi/crates/pixi_build_type_conversions" }
