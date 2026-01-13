@@ -2986,7 +2986,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "http 1.4.0",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "slab",
  "tokio",
  "tokio-util",
@@ -3515,9 +3515,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.12.1"
+version = "2.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ad4bb2b565bca0645f4d68c5c9af97fba094e9791da685bf83cb5f3ce74acf2"
+checksum = "7714e70437a7dc3ac8eb7e6f8df75fd8eb422675fc7678aff7364301092b1017"
 dependencies = [
  "equivalent",
  "hashbrown 0.16.1",
@@ -4723,7 +4723,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed637741ced8fb240855d22a2b4f208dab7a06bcce73380162e5253000c16758"
 dependencies = [
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "serde",
  "serde_core",
 ]
@@ -4858,7 +4858,7 @@ checksum = "01693f3eaa8c61226a6def42ca70616c1c06736f1233a6c5d26cb13523e2aad3"
 dependencies = [
  "ahash",
  "fs-err",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "itertools 0.14.0",
  "proptest",
  "tempfile",
@@ -4900,7 +4900,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faee7227064121fcadcd2ff788ea26f0d8f2bd23a0574da11eca23bc935bcc05"
 dependencies = [
  "boxcar",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "itertools 0.13.0",
  "once_cell",
  "pep440_rs",
@@ -4972,7 +4972,7 @@ checksum = "8701b58ea97060d5e5b155d383a69952a60943f0e6dfe30b04c287beb0b27455"
 dependencies = [
  "fixedbitset",
  "hashbrown 0.15.5",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "serde",
 ]
 
@@ -5030,7 +5030,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "http 1.4.0",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "indicatif",
  "insta",
  "miette 7.6.0",
@@ -5089,7 +5089,7 @@ dependencies = [
  "dunce",
  "fancy_display",
  "fs-err",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "itertools 0.14.0",
  "miette 7.6.0",
  "minijinja",
@@ -5236,7 +5236,7 @@ dependencies = [
  "flate2",
  "fs-err",
  "futures",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "indicatif",
  "insta",
  "is_executable",
@@ -5323,7 +5323,7 @@ dependencies = [
  "dunce",
  "fs-err",
  "futures",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
@@ -5429,7 +5429,7 @@ dependencies = [
  "futures",
  "human_bytes",
  "humantime",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "indicatif",
  "insta",
  "itertools 0.14.0",
@@ -5524,7 +5524,7 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "console 0.16.2",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "itertools 0.14.0",
  "pixi_consts",
  "pixi_manifest",
@@ -5598,7 +5598,7 @@ dependencies = [
  "fancy_display",
  "fs-err",
  "futures",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "indicatif",
  "insta",
  "is_executable",
@@ -5713,7 +5713,7 @@ dependencies = [
  "dunce",
  "fancy_display",
  "fs-err",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
@@ -5837,7 +5837,7 @@ dependencies = [
  "console 0.16.2",
  "futures",
  "human_bytes",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "indicatif",
  "itertools 0.14.0",
  "parking_lot",
@@ -5891,7 +5891,7 @@ dependencies = [
 name = "pixi_spec_containers"
 version = "0.1.0"
 dependencies = [
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "itertools 0.14.0",
  "pixi_spec",
  "rattler_conda_types",
@@ -5964,7 +5964,7 @@ version = "0.1.0"
 dependencies = [
  "digest",
  "hex",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
@@ -6156,7 +6156,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "740ebea15c5d1428f910cd1a5f52cebf8d25006245ed8ade92702f4943d91e07"
 dependencies = [
  "base64 0.22.1",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "quick-xml 0.38.4",
  "serde",
  "time",
@@ -6247,7 +6247,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93980406f12d9f8140ed5abe7155acb10bb1e69ea55c88960b9c2f117445ef96"
 dependencies = [
  "equivalent",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "serde",
 ]
 
@@ -6368,7 +6368,7 @@ name = "pubgrub"
 version = "0.3.0"
 source = "git+https://github.com/astral-sh/pubgrub?rev=d8efd77673c9a90792da9da31b6c0da7ea8a324b#d8efd77673c9a90792da9da31b6c0da7ea8a324b"
 dependencies = [
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "log",
  "priority-queue",
  "rustc-hash",
@@ -6439,7 +6439,7 @@ version = "0.13.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6d755483ad14b49e76713b52285235461a5b4f73f17612353e11a5de36a5fd2"
 dependencies = [
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "pep440_rs",
  "pep508_rs",
  "serde",
@@ -6646,7 +6646,7 @@ dependencies = [
  "fs-err",
  "futures",
  "humantime",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "indicatif",
  "itertools 0.14.0",
  "memchr",
@@ -6725,7 +6725,7 @@ dependencies = [
  "fs-err",
  "glob",
  "hex",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "itertools 0.14.0",
  "lazy-regex",
  "memmap2 0.9.9",
@@ -6761,7 +6761,7 @@ checksum = "b12cabcb8dd512fea07a95d71e2a91db09090cefda992253d87e1f72bdb31226"
 dependencies = [
  "console 0.16.2",
  "fs-err",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "rattler_conda_types",
  "serde",
  "serde_json",
@@ -6799,7 +6799,7 @@ dependencies = [
  "ahash",
  "chrono",
  "file_url",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "itertools 0.14.0",
  "pep440_rs",
  "pep508_rs",
@@ -6836,7 +6836,7 @@ dependencies = [
  "configparser",
  "dirs",
  "fs-err",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "known-folders",
  "once_cell",
  "plist",
@@ -7034,7 +7034,7 @@ dependencies = [
  "anyhow",
  "enum_dispatch",
  "fs-err",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "itertools 0.14.0",
  "rattler_conda_types",
  "rattler_pty",
@@ -7497,7 +7497,7 @@ dependencies = [
  "elsa",
  "event-listener",
  "futures",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "itertools 0.14.0",
  "petgraph",
  "tracing",
@@ -7565,7 +7565,7 @@ dependencies = [
  "bytecheck",
  "bytes",
  "hashbrown 0.15.5",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "munge",
  "ptr_meta",
  "rancor",
@@ -8150,7 +8150,7 @@ version = "1.0.148"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3084b546a1dd6289475996f182a22aba973866ea8e8b02c51d9f46b1336a22da"
 dependencies = [
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "itoa",
  "memchr",
  "serde",
@@ -8211,7 +8211,7 @@ dependencies = [
  "chrono",
  "hex",
  "indexmap 1.9.3",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "schemars 0.9.0",
  "schemars 1.1.0",
  "serde_core",
@@ -8238,7 +8238,7 @@ version = "0.9.34+deprecated"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
 dependencies = [
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "itoa",
  "ryu",
  "serde",
@@ -9038,7 +9038,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0dc8b1fb61449e27716ec0e1bdf0f6b8f3e8f6b05391e8497b8b6d7804ea6d8"
 dependencies = [
  "foldhash 0.2.0",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "serde_core",
  "serde_spanned",
  "toml_datetime",
@@ -9072,7 +9072,7 @@ version = "0.23.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d7cbc3b4b49633d57a0509303158ca50de80ae32c265093b24c414705807832"
 dependencies = [
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "serde_core",
  "serde_spanned",
  "toml_datetime",
@@ -9144,7 +9144,7 @@ checksum = "d039ad9159c98b70ecfd540b2573b97f7f52c3e8d9f8ad57a24b916a536975f9"
 dependencies = [
  "futures-core",
  "futures-util",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "pin-project-lite",
  "slab",
  "sync_wrapper",
@@ -10138,7 +10138,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.9.5#d5f39331a73d5042e70ab770
 dependencies = [
  "arcstr",
  "boxcar",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "itertools 0.14.0",
  "regex",
  "rkyv",
@@ -10203,7 +10203,7 @@ version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.9.5#d5f39331a73d5042e70ab770463dff632e20c127"
 dependencies = [
  "hashbrown 0.16.1",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "itertools 0.14.0",
  "jiff",
  "mailparse",
@@ -10239,7 +10239,7 @@ dependencies = [
  "dunce",
  "fs-err",
  "futures",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "itertools 0.14.0",
  "once_cell",
  "owo-colors",
@@ -10371,7 +10371,7 @@ dependencies = [
  "fs-err",
  "futures",
  "hashbrown 0.16.1",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "itertools 0.14.0",
  "jiff",
  "owo-colors",
@@ -11835,7 +11835,7 @@ dependencies = [
  "crossbeam-utils",
  "displaydoc",
  "flate2",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "lzma-rs",
  "memchr",
  "thiserror 2.0.17",
@@ -11854,7 +11854,7 @@ dependencies = [
  "arbitrary",
  "crc32fast",
  "flate2",
- "indexmap 2.12.1",
+ "indexmap 2.13.0",
  "memchr",
  "time",
  "zopfli",
