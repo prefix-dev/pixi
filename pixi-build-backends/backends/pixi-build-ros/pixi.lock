@@ -1804,8 +1804,8 @@ packages:
   timestamp: 1767791335095
 - pypi: ./
   name: pixi-build-ros
-  version: 0.3.2
-  sha256: 2baf955d1db02bfbf21b4a14fd11b7b76081ebbe9d1420653740cf937e01617c
+  version: 0.3.3
+  sha256: 0fa837fe1562ae8003160a20e040d8a7198c0f8a3fa9855c1ff6327e7c9f5296
   requires_dist:
   - rosdistro
   - catkin-pkg
@@ -1913,8 +1913,8 @@ packages:
   variants:
     target_platform: osx-arm64
   depends:
-  - typing-extensions
   - pixi-build-api-version >=4,<5
+  - typing-extensions
   - python >=3.8
   - python_abi 3.12.* *_cp312
   license: BSD-3-Clause
@@ -1926,8 +1926,8 @@ packages:
   variants:
     target_platform: win-64
   depends:
-  - typing-extensions
   - pixi-build-api-version >=4,<5
+  - typing-extensions
   - python >=3.8
   - python_abi 3.14.* *_cp314
   license: BSD-3-Clause
@@ -1939,8 +1939,8 @@ packages:
   variants:
     target_platform: linux-64
   depends:
-  - typing-extensions
   - pixi-build-api-version >=4,<5
+  - typing-extensions
   - python >=3.8
   - python_abi 3.14.* *_cp314
   constrains:
@@ -1954,8 +1954,8 @@ packages:
   variants:
     target_platform: linux-aarch64
   depends:
-  - typing-extensions
   - pixi-build-api-version >=4,<5
+  - typing-extensions
   - python >=3.8
   - python_abi 3.12.* *_cp312
   constrains:
