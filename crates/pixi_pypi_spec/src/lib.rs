@@ -420,7 +420,7 @@ mod tests {
                 git: GitSpec {
                     git: Url::parse("https://github.com/example/repo").unwrap(),
                     rev: None,
-                    subdirectory: None,
+                    subdirectory: Default::default(),
                 },
             },
             vec![],
