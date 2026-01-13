@@ -20,25 +20,29 @@ fn has_editable_pth_file(prefix: &Path, package_name: &str) -> bool {
         // Find the python version directory
         let lib_dir = prefix.join("lib");
         if let Ok(entries) = fs_err::read_dir(&lib_dir) {
-            entries
+            let entry = entries
                 .filter_map(|e| e.ok())
                 // Find the directory that starts with "python"
                 .find(|e| e.file_name().to_string_lossy().starts_with("python"))
-                // N
-                .map(|e| e.path().join("site-packages"))
-                .unwrap_or_else(|| lib_dir.join("python3.12").join("site-packages"))
+                .map(|e| e.path().join("site-packages"));
+            if let Some(entry) = entry {
+                entry
+            } else {
+                panic!("expected site-packages folder");
+            }
         } else {
-            // Use some default path
-            lib_dir.join("python3.12").join("site-packages")
+            panic!("expected lib folder");
         }
     };
 
     // Look for editable .pth files - different build backends use different naming:
     // - hatchling: _{package_name}.pth (e.g., _editable_test.pth)
     // - setuptools: __editable__.{package_name}-{version}.pth
+    let mut count = 0u32;
     let normalized_name = package_name.replace('-', "_");
     if let Ok(entries) = fs_err::read_dir(&site_packages) {
         for entry in entries.flatten() {
+            count += 1;
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
             if name_str.ends_with(".pth") {
@@ -53,6 +57,10 @@ fn has_editable_pth_file(prefix: &Path, package_name: &str) -> bool {
             }
         }
     }
+    if count == 0 {
+        panic!("expected folders in directory");
+    }
+
     false
 }
 
