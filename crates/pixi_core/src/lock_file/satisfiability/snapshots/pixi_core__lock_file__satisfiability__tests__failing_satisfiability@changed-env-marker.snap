@@ -1,6 +1,7 @@
 ---
 source: crates/pixi_core/src/lock_file/satisfiability/mod.rs
 expression: s
+snapshot_kind: text
 ---
 environment 'default' does not satisfy the requirements of the project for platform 'osx-arm64'
     Diagnostic severity: error
