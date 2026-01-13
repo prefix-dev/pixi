@@ -284,6 +284,7 @@ fn git_reference_from_shallow(spec: Option<GitShallowSpec>, rev: &str) -> GitRef
 mod tests {
     use super::*;
     use pixi_git::sha::GitSha;
+    use pixi_spec::Subdirectory;
     use serde_json::json;
     use std::str::FromStr;
     use url::Url;

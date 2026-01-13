@@ -76,7 +76,7 @@ impl Subdirectory {
         self.0
     }
 
-    /// Converts to an `Option<String>``, returning None if empty.
+    /// Converts to an `Option<String>`, returning None if empty.
     pub fn to_option_string(&self) -> Option<String> {
         if self.is_empty() {
             None
