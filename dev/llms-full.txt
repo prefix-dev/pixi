@@ -8097,7 +8097,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.9.2
   with:
-    pixi-version: v0.62.2
+    pixi-version: v0.63.0
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -8858,7 +8858,7 @@ Create a new directory `.devcontainer` in the root of your workspace. Then, crea
 ```dockerfile
 FROM mcr.microsoft.com/devcontainers/base:jammy
 
-ARG PIXI_VERSION=v0.62.2
+ARG PIXI_VERSION=v0.63.0
 
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \
@@ -16833,6 +16833,57 @@ pixi workspace version set <VERSION>
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+### [0.63.0] - 2026-01-14
+
+#### ✨ Highlights
+
+Pixi now supports [PEP508 environment markers](https://peps.python.org/pep-0508/#environment-markers) for PyPI dependencies. Tasks can specify a `default_environment`, making it easier to run tasks without explicitly selecting an environment. Error messages become more readable with syntax highlighting in error reports.
+
+As usual this release also includes a lot of bug fixes. This version introduces a breaking chance in the communication protocol between build backends and pixi. New versions of the build backends that support this protocol have been released but if you pin your build backends to an older version you might encounter an error. Updating the version constraints of your build backend will fix this.
+
+#### Added
+
+- `default_environment` option for specifying the default environment for a task by @prady0t in [#5164](https://github.com/prefix-dev/pixi/pull/5164)
+- Add set_channels() to WorkspaceContext by @haecker-felix in [#5172](https://github.com/prefix-dev/pixi/pull/5172)
+- Expose PIXI_VERSION const by @haecker-felix in [#5232](https://github.com/prefix-dev/pixi/pull/5232)
+- Add arborium syntax highlighting to miette error reporting by @Hofer-Julian in [#5231](https://github.com/prefix-dev/pixi/pull/5231)
+- Source records nameless match spec by @baszalmstra in [#5103](https://github.com/prefix-dev/pixi/pull/5103)
+- Fix installation reading editable from the lock incorrectly by @tdejager in [#5249](https://github.com/prefix-dev/pixi/pull/5249)
+- Support PEP508 environment markers by @hameerabbasi in [#5241](https://github.com/prefix-dev/pixi/pull/5241)
+
+#### Documentation
+
+- Add section on pinned package conflicts in conda and PyPI integration by @maurosilber in [#5217](https://github.com/prefix-dev/pixi/pull/5217)
+- Explain the matchspec and source spec by @ruben-arts in [#5224](https://github.com/prefix-dev/pixi/pull/5224)
+- Improve system requirements documentation clarity by @Hofer-Julian in [#5264](https://github.com/prefix-dev/pixi/pull/5264)
+
+#### Fixed
+
+- Hover color on footer links by @ruben-arts in [#5189](https://github.com/prefix-dev/pixi/pull/5189)
+- `pixi lock` backend override by @nichmor in [#5179](https://github.com/prefix-dev/pixi/pull/5179)
+- Reporter context retrieval by @ruben-arts in [#5202](https://github.com/prefix-dev/pixi/pull/5202)
+- Stale metadata when pointing to file by @nichmor in [#5203](https://github.com/prefix-dev/pixi/pull/5203)
+- Improve python version specifier handling in pypi.rs by @ruben-arts in [#5211](https://github.com/prefix-dev/pixi/pull/5211)
+- Correct admonition on pixi_manifest page by @claudiushaag in [#5252](https://github.com/prefix-dev/pixi/pull/5252)
+- Fix freeze and update examples by @baszalmstra in [#5255](https://github.com/prefix-dev/pixi/pull/5255)
+- Use latest versions of build backends by @baszalmstra in [#5258](https://github.com/prefix-dev/pixi/pull/5258)
+- Move retry middleware to the front by @pavelzw in [#5257](https://github.com/prefix-dev/pixi/pull/5257)
+- Use new uv caching mechanism to determine freshness by @tdejager in [#5254](https://github.com/prefix-dev/pixi/pull/5254)
+- Change `TlsRootCerts` to select `All` by default by @tdejager in [#5244](https://github.com/prefix-dev/pixi/pull/5244)
+- Recognize incompatible python wheels by @hunger in [#5273](https://github.com/prefix-dev/pixi/pull/5273)
+- Preserve branch reference by @nichmor in [#5215](https://github.com/prefix-dev/pixi/pull/5215)
+- Operation was cancelled error by @baszalmstra in [#5287](https://github.com/prefix-dev/pixi/pull/5287)
+- Comparison of None in git source subdir vs empty string by @wolfv in [#5269](https://github.com/prefix-dev/pixi/pull/5269)
+
+#### Style
+
+- Docs/ polish by @hunger in [#5234](https://github.com/prefix-dev/pixi/pull/5234)
+
+#### New Contributors
+
+- @hunger made their first contribution in [#5273](https://github.com/prefix-dev/pixi/pull/5273)
+- @claudiushaag made their first contribution in [#5252](https://github.com/prefix-dev/pixi/pull/5252)
 
 ### [0.62.2] - 2025-12-22
 
