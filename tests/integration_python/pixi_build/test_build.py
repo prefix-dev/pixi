@@ -111,9 +111,7 @@ def test_recipe_change_trigger_metadata_invalidation(
 
 
 @pytest.mark.slow
-def test_project_model_change_trigger_rebuild(
-    pixi: Path, simple_workspace: Workspace
-) -> None:
+def test_project_model_change_trigger_rebuild(pixi: Path, simple_workspace: Workspace) -> None:
     simple_workspace.write_files()
     verify_cli_command(
         [
