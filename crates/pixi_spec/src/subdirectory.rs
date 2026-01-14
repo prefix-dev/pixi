@@ -13,7 +13,7 @@ use thiserror::Error;
 ///
 /// This type ensures that the path:
 /// - Is not absolute (doesn't start with `/`)
-/// - Doesn't contain parent directory references (`..`)
+/// - Does not escape its root (e.g., `../foo` is invalid, but `a/../b` is valid)
 ///
 /// This provides type safety and prevents path traversal attacks when
 /// specifying subdirectories within git repositories or archives.
@@ -27,9 +27,9 @@ pub enum SubdirectoryError {
     #[error("subdirectory path cannot be absolute: {0}")]
     AbsolutePath(String),
 
-    /// The path contains parent directory references.
-    #[error("subdirectory path cannot contain '..': {0}")]
-    ParentReference(String),
+    /// The path escapes its root directory.
+    #[error("subdirectory path escapes its root: {0}")]
+    EscapesRoot(String),
 }
 
 impl Subdirectory {
@@ -37,15 +37,18 @@ impl Subdirectory {
     ///
     /// Normalization includes:
     /// - Removing `.` (current directory) components
+    /// - Resolving `..` (parent directory) components where possible
     /// - Removing trailing slashes
     /// - Collapsing multiple slashes
     ///
     /// This ensures that equivalent paths like `"./foobar"`, `"foobar"`, and
     /// `"foobar/"` all result in the same normalized `Subdirectory`.
+    ///
+    /// Paths that would escape the root (e.g., `../foo` or `a/../../b`) are rejected.
     pub fn new(path: impl Into<PathBuf>) -> Result<Self, SubdirectoryError> {
         let path = path.into();
         Self::validate(&path)?;
-        let normalized = Self::normalize(&path);
+        let normalized = Self::normalize(&path)?;
         Ok(Self(normalized))
     }
 
@@ -60,33 +63,35 @@ impl Subdirectory {
             ));
         }
 
-        // Check for parent directory references
-        for component in path.components() {
-            if matches!(component, Component::ParentDir) {
-                return Err(SubdirectoryError::ParentReference(
-                    path.to_string_lossy().into_owned(),
-                ));
-            }
-        }
-
         Ok(())
     }
 
-    /// Normalizes a path by removing `.` components and trailing slashes.
-    fn normalize(path: &Path) -> PathBuf {
+    /// Normalizes a path by removing `.` components, resolving `..` components,
+    /// and removing trailing slashes.
+    ///
+    /// Returns an error if the path would escape the root directory.
+    pub fn normalize(path: &Path) -> Result<PathBuf, SubdirectoryError> {
         let mut normalized = PathBuf::new();
         for component in path.components() {
             match component {
                 // Skip current directory components (`.`)
                 Component::CurDir => {}
+                // Handle parent directory components (`..`)
+                Component::ParentDir => {
+                    // If we can't pop (path is empty), the path escapes the root
+                    if !normalized.pop() {
+                        return Err(SubdirectoryError::EscapesRoot(
+                            path.to_string_lossy().into_owned(),
+                        ));
+                    }
+                }
                 // Keep normal path segments
                 Component::Normal(segment) => normalized.push(segment),
                 // RootDir and Prefix shouldn't occur (we validate against absolute paths)
-                // ParentDir shouldn't occur (we validate against `..`)
                 _ => {}
             }
         }
-        normalized
+        Ok(normalized)
     }
 
     /// Returns true if this subdirectory is empty (no path specified).
@@ -177,7 +182,9 @@ impl FromStr for Subdirectory {
 
 impl Display for Subdirectory {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.display())
+        // Use forward slashes for consistent cross-platform display
+        let path_str = self.0.to_string_lossy();
+        write!(f, "{}", path_str.replace('\\', "/"))
     }
 }
 
@@ -186,8 +193,9 @@ impl Serialize for Subdirectory {
     where
         S: Serializer,
     {
-        // Serialize as a string
-        self.0.to_string_lossy().serialize(serializer)
+        // Serialize with forward slashes for cross-platform consistency
+        let path_str = self.0.to_string_lossy();
+        path_str.replace('\\', "/").serialize(serializer)
     }
 }
 
@@ -222,15 +230,36 @@ mod tests {
     }
 
     #[test]
-    fn test_parent_reference_rejected() {
-        let result = Subdirectory::new("foo/../bar");
-        assert!(matches!(result, Err(SubdirectoryError::ParentReference(_))));
+    fn test_parent_reference_within_root_allowed() {
+        // These should be valid because they don't escape the root
+        let result = Subdirectory::new("foo/../bar").unwrap();
+        assert_eq!(result.as_path(), Path::new("bar"));
 
+        let result = Subdirectory::new("a/b/../c").unwrap();
+        assert_eq!(result.as_path(), Path::new("a/c"));
+
+        let result = Subdirectory::new("a/b/c/../../d").unwrap();
+        assert_eq!(result.as_path(), Path::new("a/d"));
+
+        // Going back to root should result in empty path
+        let result = Subdirectory::new("a/..").unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_escapes_root_rejected() {
+        // These should be rejected because they escape the root
         let result = Subdirectory::new("..");
-        assert!(matches!(result, Err(SubdirectoryError::ParentReference(_))));
+        assert!(matches!(result, Err(SubdirectoryError::EscapesRoot(_))));
 
         let result = Subdirectory::new("../foo");
-        assert!(matches!(result, Err(SubdirectoryError::ParentReference(_))));
+        assert!(matches!(result, Err(SubdirectoryError::EscapesRoot(_))));
+
+        let result = Subdirectory::new("a/../../b");
+        assert!(matches!(result, Err(SubdirectoryError::EscapesRoot(_))));
+
+        let result = Subdirectory::new("a/../..");
+        assert!(matches!(result, Err(SubdirectoryError::EscapesRoot(_))));
     }
 
     #[test]

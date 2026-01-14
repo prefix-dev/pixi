@@ -26,7 +26,9 @@ use pixi_record::{
     DevSourceRecord, LockedGitUrl, ParseLockFileError, PinnedSourceSpec, PixiRecord,
     SourceMismatchError, SourceRecord, VariantValue,
 };
-use pixi_spec::{PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError};
+use pixi_spec::{
+    PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError, Subdirectory,
+};
 use pixi_utils::variants::VariantConfig;
 use pixi_uv_conversions::{
     AsPep508Error, as_uv_req, into_pixi_reference, pep508_requirement_to_uv_requirement,
@@ -1074,9 +1076,20 @@ pub(crate) fn pypi_satisfies_requirement(
                             }
                         }
 
+                        // Normalize the input requirement subdirectory the same way we do in our
+                        // lock-file. We convert to string to ensure we have a valid fallback if
+                        // `Subdirectory` validation fails.
                         let spec_subdir_str = subdirectory
-                            .as_ref()
-                            .map(|s| s.to_string_lossy().to_string());
+                            .as_deref()
+                            .and_then(|s| Subdirectory::normalize(s).ok())
+                            .map_or_else(
+                                || {
+                                    subdirectory
+                                        .as_ref()
+                                        .map(|s| s.to_string_lossy().to_string())
+                                },
+                                |s| Some(s.to_string_lossy().to_string()),
+                            );
                         let lock_subdir_str =
                             pinned_git_spec.source.subdirectory.to_option_string();
                         if lock_subdir_str != spec_subdir_str {
@@ -1335,7 +1348,8 @@ async fn verify_source_metadata(
 
 /// Returns true if the package records are considered equal.
 fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> bool {
-    // Use destructuring to ensure we get compiler errors if these types change significantly.
+    // Use destructuring to ensure we get compiler errors if these types change
+    // significantly.
     let PackageRecord {
         arch: _,
         build: a_build,
@@ -2695,16 +2709,17 @@ mod tests {
         .unwrap();
         pypi_satisfies_requirement(&non_matching_spec, &locked_data, &project_root).unwrap_err();
 
-        // Removing the rev from the Requirement should NOT satisfy when lock has explicit Rev.
-        // This ensures that when a user removes an explicit ref from the manifest,
-        // the lock file gets re-resolved.
+        // Removing the rev from the Requirement should NOT satisfy when lock has
+        // explicit Rev. This ensures that when a user removes an explicit ref
+        // from the manifest, the lock file gets re-resolved.
         let spec_without_rev = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap(),
         )
         .unwrap();
         pypi_satisfies_requirement(&spec_without_rev, &locked_data, &project_root).unwrap_err();
 
-        // When lock has DefaultBranch (no explicit ref), removing rev from manifest should satisfy
+        // When lock has DefaultBranch (no explicit ref), removing rev from manifest
+        // should satisfy
         let locked_data_default_branch = PypiPackageData {
             name: "mypkg".parse().unwrap(),
             version: Version::from_str("0.1.0").unwrap(),
