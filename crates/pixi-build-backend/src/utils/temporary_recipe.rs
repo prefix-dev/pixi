@@ -4,6 +4,8 @@ use std::future::Future;
 use std::io::BufWriter;
 use std::path::PathBuf;
 
+use fs_err as fs;
+
 /// A helper struct that owns a temporary file containing a rendered recipe.
 /// If `finish` is not called, the temporary file will stay on disk for
 /// debugging purposes.
@@ -14,7 +16,7 @@ pub struct TemporaryRenderedRecipe {
 impl TemporaryRenderedRecipe {
     pub fn from_output(output: &Output) -> miette::Result<Self> {
         // Ensure that the output directory exists
-        std::fs::create_dir_all(&output.build_configuration.directories.output_dir)
+        fs::create_dir_all(&output.build_configuration.directories.output_dir)
             .into_diagnostic()
             .context("failed to create output directory")?;
 
@@ -45,7 +47,7 @@ impl TemporaryRenderedRecipe {
         operation: F,
     ) -> miette::Result<R> {
         let result = operation().await?;
-        std::fs::remove_file(self.file)
+        fs::remove_file(self.file)
             .into_diagnostic()
             .context("failed to remove temporary recipe file")?;
         Ok(result)

@@ -10,6 +10,7 @@ rustls-tls = ["pixi-build-backend/rustls-tls", "rattler-build/rustls-tls"]
 
 [dependencies]
 async-trait = { workspace = true }
+fs-err = { workspace = true }
 indexmap = { workspace = true }
 miette = { workspace = true }
 minijinja = { workspace = true }

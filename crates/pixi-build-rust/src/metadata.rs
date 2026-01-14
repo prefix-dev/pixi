@@ -357,8 +357,7 @@ impl MetadataProvider for CargoMetadataProvider {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
+    use fs_err as fs;
     use pixi_build_backend::generated_recipe::MetadataProvider;
     use tempfile::TempDir;
 

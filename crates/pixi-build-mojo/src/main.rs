@@ -170,6 +170,7 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::config::{MojoBinConfig, MojoPkgConfig};
+    use fs_err as fs;
     use indexmap::IndexMap;
     use recipe_stage0::recipe::{Item, Value};
 
@@ -311,7 +312,7 @@ mod tests {
 
         // Create a temporary directory with a main.mojo file so the test has something to build
         let temp = tempfile::TempDir::new().unwrap();
-        std::fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
+        fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
 
         let generated_recipe = MojoGenerator::default()
             .generate_recipe(
@@ -355,7 +356,7 @@ mod tests {
 
         // Create a temporary directory with a main.mojo file so the test has something to build
         let temp = tempfile::TempDir::new().unwrap();
-        std::fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
+        fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
 
         let generated_recipe = MojoGenerator::default()
             .generate_recipe(
@@ -407,7 +408,7 @@ mod tests {
 
         // Create a temporary directory with a main.mojo file so the test has something to build
         let temp = tempfile::TempDir::new().unwrap();
-        std::fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
+        fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
 
         let generated_recipe = MojoGenerator::default()
             .generate_recipe(
@@ -449,7 +450,7 @@ mod tests {
 
         // Create a temporary directory with a main.mojo file so the test has something to build
         let temp = tempfile::TempDir::new().unwrap();
-        std::fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
+        fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
 
         let generated_recipe = MojoGenerator::default()
             .generate_recipe(
@@ -524,7 +525,7 @@ mod tests {
 
         // Create a temporary directory with a main.mojo file so the test has something to build
         let temp = tempfile::TempDir::new().unwrap();
-        std::fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
+        fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
 
         let generated_recipe = MojoGenerator::default()
             .generate_recipe(
@@ -583,7 +584,7 @@ mod tests {
 
         // Create a temporary directory with a main.mojo file so the test has something to build
         let temp = tempfile::TempDir::new().unwrap();
-        std::fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
+        fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
 
         let generated_recipe = MojoGenerator::default()
             .generate_recipe(

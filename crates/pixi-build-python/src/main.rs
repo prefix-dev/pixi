@@ -5,6 +5,7 @@ mod pypi_mapping;
 
 use build_script::{BuildPlatform, BuildScriptContext, Installer};
 use config::PythonBackendConfig;
+use fs_err as fs;
 use miette::IntoDiagnostic;
 use pixi_build_backend::variants::NormalizedKey;
 use pixi_build_backend::{
@@ -278,7 +279,7 @@ impl GenerateRecipe for PythonGenerator {
         // read pyproject.toml content if it exists
         let pyproject_manifest_path = manifest_root.join("pyproject.toml");
         let pyproject_manifest = if pyproject_manifest_path.exists() {
-            let contents = std::fs::read_to_string(&pyproject_manifest_path).into_diagnostic()?;
+            let contents = fs::read_to_string(&pyproject_manifest_path).into_diagnostic()?;
             generated_recipe.build_input_globs =
                 BTreeSet::from([pyproject_manifest_path.to_string_lossy().to_string()]);
             Some(toml::from_str(&contents).into_diagnostic()?)

@@ -445,6 +445,7 @@ pub fn clean_project_name(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use fs_err as fs;
     use rstest::rstest;
     use serde_json::json;
     use tempfile::TempDir;
@@ -539,7 +540,7 @@ mod tests {
 
         // Write the main.mojo file specified by test case, if present
         if let Some(filename) = test_case.main_file {
-            std::fs::write(manifest_root.join(filename), "def main():\n    pass").unwrap();
+            fs::write(manifest_root.join(filename), "def main():\n    pass").unwrap();
         }
 
         let result =
@@ -642,8 +643,8 @@ mod tests {
 
         if let Some((dir, filename)) = test_case.init_file {
             let init_dir = manifest_root.join(dir);
-            std::fs::create_dir_all(&init_dir).unwrap();
-            std::fs::write(init_dir.join(filename), "").unwrap();
+            fs::create_dir_all(&init_dir).unwrap();
+            fs::write(init_dir.join(filename), "").unwrap();
         }
 
         let result =

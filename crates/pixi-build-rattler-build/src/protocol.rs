@@ -616,6 +616,7 @@ pub(crate) fn default_capabilities() -> BackendCapabilities {
 mod tests {
     use std::collections::BTreeMap;
 
+    use fs_err as fs;
     use pixi_build_backend::utils::test::conda_outputs_snapshot;
     use pixi_build_types::{VariantValue, procedures::initialize::InitializeParams};
     use rattler_build::console_utils::LoggingOutputHandler;
@@ -939,7 +940,7 @@ numpy:
     async fn test_recipe_discovery() {
         let tmp = tempdir().unwrap();
         let recipe = tmp.path().join("recipe.yaml");
-        std::fs::write(&recipe, FAKE_RECIPE).unwrap();
+        fs::write(&recipe, FAKE_RECIPE).unwrap();
         assert_eq!(
             try_initialize(&tmp.path().join("pixi.toml"))
                 .await
@@ -955,7 +956,7 @@ numpy:
 
         let tmp = tempdir().unwrap();
         let recipe = tmp.path().join("recipe.yml");
-        std::fs::write(&recipe, FAKE_RECIPE).unwrap();
+        fs::write(&recipe, FAKE_RECIPE).unwrap();
         assert_eq!(
             try_initialize(&tmp.path().join("pixi.toml"))
                 .await
@@ -972,8 +973,8 @@ numpy:
         let tmp = tempdir().unwrap();
         let recipe_dir = tmp.path().join("recipe");
         let recipe = recipe_dir.join("recipe.yaml");
-        std::fs::create_dir(recipe_dir).unwrap();
-        std::fs::write(&recipe, FAKE_RECIPE).unwrap();
+        fs::create_dir(&recipe_dir).unwrap();
+        fs::write(&recipe, FAKE_RECIPE).unwrap();
         assert_eq!(
             try_initialize(&tmp.path().join("pixi.toml"))
                 .await
@@ -986,8 +987,8 @@ numpy:
         let tmp = tempdir().unwrap();
         let recipe_dir = tmp.path().join("recipe");
         let recipe = recipe_dir.join("recipe.yml");
-        std::fs::create_dir(recipe_dir).unwrap();
-        std::fs::write(&recipe, FAKE_RECIPE).unwrap();
+        fs::create_dir(&recipe_dir).unwrap();
+        fs::write(&recipe, FAKE_RECIPE).unwrap();
         assert_eq!(
             try_initialize(&tmp.path().join("pixi.toml"))
                 .await
@@ -1042,10 +1043,6 @@ numpy:
 
     #[test]
     fn test_build_input_globs_with_tempdirs() {
-        use std::fs;
-
-        use tempfile::tempdir;
-
         // Create a temp directory to act as the base
         let base_dir = tempdir().unwrap();
         let base_path = base_dir.path();
@@ -1081,10 +1078,6 @@ numpy:
 
     #[test]
     fn test_build_input_globs_two_folders_in_tempdir() {
-        use std::fs;
-
-        use tempfile::tempdir;
-
         // Create a temp directory
         let temp = tempdir().unwrap();
         let temp_path = temp.path();
@@ -1112,9 +1105,7 @@ numpy:
 
     #[test]
     fn test_build_input_globs_relative_source() {
-        use std::{fs, path::PathBuf};
-
-        use tempfile::tempdir;
+        use std::path::PathBuf;
 
         // Create a temp directory to act as the base
         let base_dir = tempdir().unwrap();
@@ -1168,10 +1159,6 @@ numpy:
 
     #[test]
     fn test_build_input_globs_includes_extra_globs() {
-        use std::fs;
-
-        use tempfile::tempdir;
-
         // Create a temp directory to act as the base
         let base_dir = tempdir().unwrap();
         let base_path = base_dir.path();

@@ -344,8 +344,9 @@ impl PyprojectMetadataProvider {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, fs};
+    use std::collections::HashSet;
 
+    use fs_err as fs;
     use pixi_build_backend::generated_recipe::{GenerateRecipe, MetadataProvider};
     use rattler_conda_types::Platform;
     use tempfile::TempDir;

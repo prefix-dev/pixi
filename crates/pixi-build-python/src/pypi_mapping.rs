@@ -10,6 +10,8 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use fs_err as fs;
+
 use indexmap::IndexMap;
 
 use miette::Diagnostic;
@@ -143,7 +145,7 @@ impl PyPiToCondaMapper {
 
     /// Check if a cached file is still valid.
     fn is_cache_valid(path: &Path) -> bool {
-        if let Ok(metadata) = std::fs::metadata(path)
+        if let Ok(metadata) = fs::metadata(path)
             && let Ok(modified) = metadata.modified()
             && let Ok(elapsed) = SystemTime::now().duration_since(modified)
         {
@@ -161,7 +163,7 @@ impl PyPiToCondaMapper {
             return None;
         }
 
-        let content = std::fs::read_to_string(&cache_path).ok()?;
+        let content = fs::read_to_string(&cache_path).ok()?;
         serde_json::from_str(&content).ok()
     }
 
@@ -172,11 +174,11 @@ impl PyPiToCondaMapper {
         };
 
         if let Some(parent) = cache_path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+            let _ = fs::create_dir_all(parent);
         }
 
         if let Ok(content) = serde_json::to_string(lookup) {
-            let _ = std::fs::write(cache_path, content);
+            let _ = fs::write(cache_path, content);
         }
     }
 

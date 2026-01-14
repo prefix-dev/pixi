@@ -7,6 +7,7 @@ use pixi_build_types::{
 
 use rattler_conda_types::{ParseStrictness, Version, VersionSpec};
 
+use fs_err as fs;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 
@@ -87,7 +88,7 @@ pub(crate) fn load_project_model_from_json(filename: &str) -> TestProjectModel {
         .join("fixtures")
         .join(filename);
 
-    let json_content = std::fs::read_to_string(&fixture_path)
+    let json_content = fs::read_to_string(&fixture_path)
         .unwrap_or_else(|e| panic!("Failed to read JSON fixture '{filename}': {e}"));
 
     serde_json::from_str(&json_content)
