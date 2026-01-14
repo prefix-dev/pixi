@@ -16,6 +16,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  PYTHONIOENCODING: utf-8
+
 jobs:
   test:
     name: Test the pixi-build-ros package
