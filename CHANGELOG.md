@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### [0.63.0] - 2026-01-14
 #### ✨ Highlights
 
-Pixi now supports [PEP508 environment markers](https://peps.python.org/pep-0508/#environment-markers) for PyPI dependencies. Tasks can now specify a `default_environment`, making it easier to run tasks without explicitly selecting an environment. Error messages are now more readable with syntax highlighting in error reports.
+Pixi now supports [PEP508 environment markers](https://peps.python.org/pep-0508/#environment-markers) for PyPI dependencies. Tasks can specify a `default_environment`, making it easier to run tasks without explicitly selecting an environment. Error messages become more readable with syntax highlighting in error reports.
 
 As usual this release also includes a lot of bug fixes.
 
