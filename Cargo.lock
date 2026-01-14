@@ -5295,6 +5295,7 @@ dependencies = [
  "uv-pypi-types",
  "uv-requirements-txt",
  "uv-types",
+ "walkdir",
  "which",
  "zip 2.4.2",
 ]
