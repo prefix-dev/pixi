@@ -441,17 +441,8 @@ mod tests {
             python = "3.9"
            "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), toml).unwrap();
-        let args = Args {
-            output_path: None,
-            platform: Some(Platform::Osx64),
-            environment: None,
-            workspace_config: WorkspaceConfig::default(),
-            name: None,
-        };
-        let environment = workspace
-            .environment_from_name_or_env_var(args.environment)
-            .unwrap();
-        let platform = args.platform.unwrap_or_else(|| environment.best_platform());
+        let environment = workspace.default_environment();
+        let platform = Platform::Osx64;
 
         let env_yaml = build_env_yaml(
             &platform,
