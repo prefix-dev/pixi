@@ -88,8 +88,10 @@ impl CommandDispatcher {
             .expect("git checkout returned a relative path")
             .into_assume_dir();
 
-        let path = if let Some(subdir) = &pinned.source.subdirectory {
-            root_dir.join(subdir).into_assume_dir()
+        let path = if !pinned.source.subdirectory.is_empty() {
+            root_dir
+                .join(pinned.source.subdirectory.as_path())
+                .into_assume_dir()
         } else {
             root_dir
         };

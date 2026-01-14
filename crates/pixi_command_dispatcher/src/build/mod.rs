@@ -139,8 +139,8 @@ pub(crate) fn source_checkout_cache_key(source: &PinnedSourceSpec) -> String {
         PinnedSourceSpec::Git(git) => {
             let name = pretty_url_name(&git.git);
             let hash = git.source.commit.to_short_string();
-            if let Some(subdir) = &git.source.subdirectory {
-                format!("{name}-{subdir}-{hash}",)
+            if !git.source.subdirectory.is_empty() {
+                format!("{name}-{}-{hash}", git.source.subdirectory)
             } else {
                 format!("{name}-{hash}",)
             }

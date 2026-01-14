@@ -5,7 +5,7 @@ use pixi_core::{
     workspace::{PypiDeps, UpdateDeps, WorkspaceMut},
 };
 use pixi_manifest::{FeatureName, KnownPreviewFeature, SpecType};
-use pixi_spec::{GitSpec, SourceLocationSpec};
+use pixi_spec::{GitSpec, SourceLocationSpec, Subdirectory};
 use rattler_conda_types::{MatchSpec, PackageName};
 
 mod options;
@@ -52,13 +52,20 @@ pub async fn add_conda_dep(
             ));
         }
 
+        let subdirectory = git_options
+            .subdir
+            .clone()
+            .map(Subdirectory::try_from)
+            .transpose()
+            .into_diagnostic()?
+            .unwrap_or_default();
         source_specs = passed_specs
             .iter()
             .map(|(name, (_spec, spec_type))| {
                 let git_spec = GitSpec {
                     git: git.clone(),
                     rev: Some(git_options.reference.clone()),
-                    subdirectory: git_options.subdir.clone(),
+                    subdirectory: subdirectory.clone(),
                 };
                 (
                     name.clone(),

@@ -22,7 +22,7 @@ use pixi_command_dispatcher::{
 };
 use pixi_config::default_channel_config;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
-use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
+use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec, Subdirectory, UrlSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
 use pixi_url::UrlError;
@@ -137,7 +137,7 @@ pub async fn simple_test() {
                 GitSpec {
                     git: git_repo.url.parse().unwrap(),
                     rev: Some(GitReference::Rev(git_repo.commits[0].clone())),
-                    subdirectory: Some(String::from("recipe")),
+                    subdirectory: Subdirectory::try_from("recipe").unwrap(),
                 }
                 .into(),
             )]),
@@ -1153,7 +1153,7 @@ pub async fn pin_and_checkout_url_reuses_cached_checkout() {
         url: "https://example.com/archive.tar.gz".parse().unwrap(),
         md5: None,
         sha256: Some(sha),
-        subdirectory: None,
+        subdirectory: Subdirectory::default(),
     };
 
     let checkout = dispatcher
@@ -1187,13 +1187,13 @@ pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request()
         url: url.clone(),
         md5: None,
         sha256: None,
-        subdirectory: None,
+        subdirectory: Subdirectory::default(),
     };
     let bad_spec = UrlSpec {
         url,
         md5: None,
         sha256: Some(Sha256::digest(b"pixi-url-bad-sha")),
-        subdirectory: None,
+        subdirectory: Subdirectory::default(),
     };
 
     let (good, bad) = tokio::join!(
@@ -1226,7 +1226,7 @@ pub async fn pin_and_checkout_url_validates_cached_results() {
         url: url.clone(),
         md5: None,
         sha256: None,
-        subdirectory: None,
+        subdirectory: Subdirectory::default(),
     };
 
     dispatcher
@@ -1238,7 +1238,7 @@ pub async fn pin_and_checkout_url_validates_cached_results() {
         url: url.clone(),
         md5: None,
         sha256: Some(Sha256::digest(b"pixi-url-bad-cache")),
-        subdirectory: None,
+        subdirectory: Subdirectory::default(),
     };
 
     let err = dispatcher.checkout_url(bad_spec).await.unwrap_err();
