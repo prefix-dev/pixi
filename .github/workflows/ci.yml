@@ -836,6 +836,20 @@ jobs:
       runs-on: macos-15
 
   #
+  # Test pixi-build-ros backend
+  #
+
+  test-backends-ros:
+    name: Backends - ROS
+    needs:
+      - build-binary-linux-x86_64
+      - build-binary-macos-aarch64
+      - build-binary-windows-x86_64
+    uses: ./.github/workflows/backends-ros.yml
+    with:
+      sha: ${{ github.sha }}
+
+  #
   # Test unix installer on some platforms
   #
 

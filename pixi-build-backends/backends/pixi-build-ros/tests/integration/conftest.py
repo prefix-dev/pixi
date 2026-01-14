@@ -32,14 +32,14 @@ def build_data() -> Path:
 
 @pytest.fixture
 def pixi() -> Path:
-    """Return path to the pixi executable."""
-    # Use the pixi from target/pixi/release
+    """Return path to the pixi executable.
+
+    Locally, use the built binary in target/pixi/release.
+    In CI, the pre-built binary is downloaded to target/pixi/release.
+    """
     pixi_bin = repo_root() / "target" / "pixi" / "release" / exec_extension("pixi")
     if not pixi_bin.is_file():
-        raise RuntimeError(
-            f"pixi binary not found at {pixi_bin}. "
-            "This is a bug with the test setup: make sure the task depends on 'build-release'."
-        )
+        raise RuntimeError(f"pixi binary not found at {pixi_bin}. ")
     return pixi_bin
 
 

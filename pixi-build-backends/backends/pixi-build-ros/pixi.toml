@@ -33,12 +33,15 @@ default = { features = ["test", "lint"], solve-group = "default" }
 lint = { features = ["lint"], no-default-feature = true }
 test = { features = ["test"], solve-group = "default" }
 
+
 [feature.test.tasks]
 lint-mypy = "mypy"
-test = "pytest tests"
-test-integration = { cmd = "pytest tests/integration", depends-on = [
+test = { cmd = "pytest tests", depends-on = [
+  "build-pixi-release",
   "create-channel",
 ] }
+test-ci = { cmd = "pytest tests", depends-on = ["create-channel"] }
+build-pixi-release = "pixi run --manifest-path ../../../pixi.toml build-release"
 
 [feature.test.tasks.build-ros-channel]
 cmd = """
