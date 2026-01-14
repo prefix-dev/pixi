@@ -37,7 +37,7 @@ vs2017_win-64 = ">=19.16.27033,<20"
 # Shared feature for Python
 #
 [feature.python.dependencies]
-python = ">=3.13.5,<3.15"
+python = ">=3.14,<3.15"
 
 #
 # Shared feature for Rust toolchain
@@ -59,7 +59,6 @@ scripts = ["scripts/activate.sh"]
 RUSTC_WRAPPER = "sccache"
 
 [feature.backends-release.dependencies]
-python = ">=3.12,<4"
 rattler-build = ">=0.55.0,<0.56"
 sccache = ">=0.12,<0.13"
 
@@ -279,7 +278,6 @@ pytest = ">=9.0.2,<10"
 pytest-rerunfailures = ">=16.0.1,<17"
 pytest-timeout = ">=2.4.0,<3"
 pytest-xdist = ">=3.8.0,<4"
-python = ">=3.14.0,<3.15"
 pyyaml = ">=6.0.3,<7"
 rattler-build = ">=0.55,<0.56"
 rich = ">=14.1.0,<15"
@@ -361,7 +359,6 @@ test-all-slow = { depends-on = [
 # Feature for building Python trampolines
 #
 [feature.trampoline.dependencies]
-python = ">=3.14.0,<3.15"
 zstd = ">=1.5.7,<2"
 
 [feature.trampoline.tasks]
@@ -371,21 +368,21 @@ build-trampoline = { cmd = "python trampoline/build-trampoline.py", description 
 # Environment definitions
 #
 [environments]
-backends-release = { features = ["backends-release"] }
+backends-release = { features = ["backends-release", "python"] }
 dev = { features = ["rust", "compilers", "python", "dev"] }
 dist = { features = ["dist"] }
 docs = { features = ["rust", "compilers", "python", "docs"] }
 lint = { features = [
   "rust",
   "compilers",
-  "python",
   "lint",
+  "python",
   "python-test-deps",
   "schema",
   "pypi-gen",
 ] }
 pypi-gen = { features = ["rust", "compilers", "python", "pypi-gen"] }
-python-test = { features = ["rust", "pytest", "python-test-deps"] }
+python-test = { features = ["rust", "pytest", "python-test-deps", "python"] }
 recipes = { features = ["recipes"] }
 release = { features = ["release"] }
 rust-build = { features = ["rust", "compilers", "python", "rust-build"] }
@@ -399,7 +396,7 @@ test-native-certs = { features = [
   "python",
   "native-certs-test",
 ] }
-trampoline = { features = ["trampoline"] }
+trampoline = { features = ["trampoline", "python"] }
 
 #
 # Package definitions
