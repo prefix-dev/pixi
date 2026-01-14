@@ -33,11 +33,20 @@ pub enum SubdirectoryError {
 }
 
 impl Subdirectory {
-    /// Creates a new subdirectory from a path, validating it.
+    /// Creates a new subdirectory from a path, validating and normalizing it.
+    ///
+    /// Normalization includes:
+    /// - Removing `.` (current directory) components
+    /// - Removing trailing slashes
+    /// - Collapsing multiple slashes
+    ///
+    /// This ensures that equivalent paths like `"./foobar"`, `"foobar"`, and
+    /// `"foobar/"` all result in the same normalized `Subdirectory`.
     pub fn new(path: impl Into<PathBuf>) -> Result<Self, SubdirectoryError> {
         let path = path.into();
         Self::validate(&path)?;
-        Ok(Self(path))
+        let normalized = Self::normalize(&path);
+        Ok(Self(normalized))
     }
 
     /// Validates a path for use as a subdirectory.
@@ -61,6 +70,23 @@ impl Subdirectory {
         }
 
         Ok(())
+    }
+
+    /// Normalizes a path by removing `.` components and trailing slashes.
+    fn normalize(path: &Path) -> PathBuf {
+        let mut normalized = PathBuf::new();
+        for component in path.components() {
+            match component {
+                // Skip current directory components (`.`)
+                Component::CurDir => {}
+                // Keep normal path segments
+                Component::Normal(segment) => normalized.push(segment),
+                // RootDir and Prefix shouldn't occur (we validate against absolute paths)
+                // ParentDir shouldn't occur (we validate against `..`)
+                _ => {}
+            }
+        }
+        normalized
     }
 
     /// Returns true if this subdirectory is empty (no path specified).
@@ -231,5 +257,99 @@ mod tests {
 
         let result: Result<Subdirectory, _> = serde_json::from_str("\"../parent\"");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_empty_path_equivalence() {
+        // All of these should be equivalent representations of the current/empty directory
+        let empty = Subdirectory::new("").unwrap();
+        let dot_slash = Subdirectory::new("./").unwrap();
+        let dot_multi_slash = Subdirectory::new(".///").unwrap();
+
+        assert_eq!(empty, dot_slash);
+        assert_eq!(empty, dot_multi_slash);
+        assert_eq!(dot_slash, dot_multi_slash);
+    }
+
+    #[test]
+    fn test_subdirectory_path_equivalence() {
+        // All of these should be equivalent representations of the same subdirectory
+        let plain = Subdirectory::new("foobar").unwrap();
+        let with_dot_prefix = Subdirectory::new("./foobar").unwrap();
+        let with_trailing_slash = Subdirectory::new("foobar/").unwrap();
+
+        assert_eq!(plain, with_dot_prefix);
+        assert_eq!(plain, with_trailing_slash);
+        assert_eq!(with_dot_prefix, with_trailing_slash);
+    }
+
+    #[test]
+    fn test_nested_path_equivalence() {
+        // Nested paths with various representations
+        let plain = Subdirectory::new("foo/bar/baz").unwrap();
+        let with_dot_prefix = Subdirectory::new("./foo/bar/baz").unwrap();
+        let with_trailing_slash = Subdirectory::new("foo/bar/baz/").unwrap();
+        let with_inner_dots = Subdirectory::new("./foo/./bar/./baz").unwrap();
+
+        assert_eq!(plain, with_dot_prefix);
+        assert_eq!(plain, with_trailing_slash);
+        assert_eq!(plain, with_inner_dots);
+    }
+
+    #[test]
+    fn test_multiple_slashes_normalized() {
+        // Multiple slashes should be collapsed
+        let single = Subdirectory::new("foo/bar").unwrap();
+        let double = Subdirectory::new("foo//bar").unwrap();
+        let triple = Subdirectory::new("foo///bar").unwrap();
+
+        assert_eq!(single, double);
+        assert_eq!(single, triple);
+    }
+
+    #[test]
+    fn test_just_dot_is_empty() {
+        // A single `.` should normalize to empty
+        let dot = Subdirectory::new(".").unwrap();
+        let empty = Subdirectory::new("").unwrap();
+
+        assert_eq!(dot, empty);
+        assert!(dot.is_empty());
+    }
+
+    #[test]
+    fn test_serialization_is_normalized() {
+        // Paths should serialize to their normalized form
+        let cases: Vec<(&str, Subdirectory)> = vec![
+            ("empty", Subdirectory::new("").unwrap()),
+            ("dot", Subdirectory::new(".").unwrap()),
+            ("dot_slash", Subdirectory::new("./").unwrap()),
+            ("simple", Subdirectory::new("foobar").unwrap()),
+            ("simple_with_dot", Subdirectory::new("./foobar").unwrap()),
+            (
+                "simple_with_trailing",
+                Subdirectory::new("foobar/").unwrap(),
+            ),
+            ("nested", Subdirectory::new("foo/bar").unwrap()),
+            (
+                "nested_with_dots",
+                Subdirectory::new("./foo/./bar").unwrap(),
+            ),
+            (
+                "nested_with_slashes",
+                Subdirectory::new("foo//bar").unwrap(),
+            ),
+        ];
+
+        // Show input → serialized output
+        let snapshot: Vec<_> = cases
+            .into_iter()
+            .map(|(name, subdir)| {
+                let serialized = serde_json::to_string(&subdir).unwrap();
+                (name, serialized)
+            })
+            .collect();
+
+        insta::assert_yaml_snapshot!(snapshot);
     }
 }
