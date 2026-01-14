@@ -18,6 +18,12 @@ impl BuildScriptContext {
         let template = env
             .template_from_str(include_str!("build_script.j2"))
             .unwrap();
-        template.render(self).unwrap().trim().to_string()
+        // Normalize line endings to Unix-style for consistent output across platforms
+        template
+            .render(self)
+            .unwrap()
+            .trim()
+            .replace("\r\n", "\n")
+            .to_string()
     }
 }
