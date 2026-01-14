@@ -35,13 +35,13 @@ test = { features = ["test"], solve-group = "default" }
 
 
 [feature.test.tasks]
+build-pixi-release = "pixi run --manifest-path ../../../pixi.toml build-release"
 lint-mypy = "mypy"
 test = { cmd = "pytest tests", depends-on = [
   "build-pixi-release",
   "create-channel",
 ] }
 test-ci = { cmd = "pytest tests", depends-on = ["create-channel"] }
-build-pixi-release = "pixi run --manifest-path ../../../pixi.toml build-release"
 
 [feature.test.tasks.build-ros-channel]
 cmd = """

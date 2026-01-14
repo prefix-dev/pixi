@@ -309,7 +309,10 @@ lint = { features = [
   "pypi-gen",
 ], no-default-feature = true, solve-group = "default" }
 pypi-gen = { features = ["pypi-gen"] }
-pytest = { features = ["pytest", "python-test-deps"], no-default-feature = true }
+pytest = { features = [
+  "pytest",
+  "python-test-deps",
+], no-default-feature = true }
 recipes = { features = ["recipes"], no-default-feature = true }
 schema = { features = [
   "schema",
