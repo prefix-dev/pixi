@@ -76,9 +76,7 @@ def generate_matrix(filter_package_name=None):
             if not package["name"].startswith("pixi-build-"):
                 continue
 
-            has_binary = any(
-                target["kind"][0] == "bin" for target in package.get("targets", [])
-            )
+            has_binary = any(target["kind"][0] == "bin" for target in package.get("targets", []))
 
             if has_binary:
                 all_packages.append(
@@ -99,7 +97,9 @@ def generate_matrix(filter_package_name=None):
             )
 
     # Add pixi-build-ros manually since it's a Python package in backends/
-    ros_pyproject = repo_root / "pixi-build-backends" / "backends" / "pixi-build-ros" / "pyproject.toml"
+    ros_pyproject = (
+        repo_root / "pixi-build-backends" / "backends" / "pixi-build-ros" / "pyproject.toml"
+    )
     if ros_pyproject.exists():
         with open(ros_pyproject, "rb") as f:
             pyproject_toml = tomllib.load(f)
@@ -114,9 +114,7 @@ def generate_matrix(filter_package_name=None):
     # Filter packages by name if specified
     if filter_package_name:
         available_packages = [pkg["name"] for pkg in all_packages]
-        filtered_packages = [
-            pkg for pkg in all_packages if pkg["name"] == filter_package_name
-        ]
+        filtered_packages = [pkg for pkg in all_packages if pkg["name"] == filter_package_name]
         if not filtered_packages:
             raise ValueError(
                 f"Package '{filter_package_name}' not found. Available packages: {', '.join(available_packages)}"
@@ -242,9 +240,7 @@ def generate_matrix(filter_package_name=None):
     if not is_untagged_build and git_tags:
         for git_tag, has_a_package in tagged_packages.items():
             if not has_a_package:
-                raise ValueError(
-                    f"Git tag {git_tag} does not match any package in Cargo.toml"
-                )
+                raise ValueError(f"Git tag {git_tag} does not match any package in Cargo.toml")
 
     if not matrix:
         if is_untagged_build:

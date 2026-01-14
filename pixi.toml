@@ -277,8 +277,8 @@ zig = ">=0.15.1,<0.16"
 # Feature for building and releasing pixi-build-backends
 #
 [feature.backends-release.dependencies]
-rattler-build = ">=0.55.0,<0.56"
 python = ">=3.12,<4"
+rattler-build = ">=0.55.0,<0.56"
 sccache = ">=0.12,<0.13"
 
 [feature.backends-release.activation.env]
@@ -288,8 +288,8 @@ RUSTC_WRAPPER = "sccache"
 generate-matrix = { cmd = "python pixi-build-backends/scripts/generate-matrix.py", description = "Generate build matrix for backends release" }
 
 [feature.backends-release.tasks.build-recipe-ci]
-cmd = "rattler-build build --test native --channel https://prefix.dev/pixi-build-backends --channel https://prefix.dev/conda-forge --variant-config pixi-build-backends/recipe/variants.yaml --output-dir={{ output_dir }} --recipe {{ recipe }}{% if target_platform is defined and target_platform %} --target-platform {{ target_platform }}{% endif %}"
 args = ["output_dir", "recipe", { arg = "target_platform", default = "" }]
+cmd = "rattler-build build --test native --channel https://prefix.dev/pixi-build-backends --channel https://prefix.dev/conda-forge --variant-config pixi-build-backends/recipe/variants.yaml --output-dir={{ output_dir }} --recipe {{ recipe }}{% if target_platform is defined and target_platform %} --target-platform {{ target_platform }}{% endif %}"
 description = "Build a backend recipe for CI"
 
 # Feature for native-certs testing
@@ -309,6 +309,9 @@ test-native-certs = { cmd = "python scripts/test_native_certs.py --pixi-bin $CAR
 #
 
 [environments]
+backends-release = { features = [
+  "backends-release",
+], no-default-feature = true }
 default = { features = [
   "build",
   "dev",
@@ -338,7 +341,6 @@ schema = { features = [
 test-export = { features = ["micromamba"], no-default-feature = true }
 test-native-certs = { features = ["native-certs-test"] }
 trampoline = { features = ["trampoline"], no-default-feature = true }
-backends-release = { features = ["backends-release"], no-default-feature = true }
 
 
 #
