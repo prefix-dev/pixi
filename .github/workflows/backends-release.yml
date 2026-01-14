@@ -99,8 +99,9 @@ jobs:
         shell: bash
         run: |
           # Convert Windows paths to Unix-style for bash compatibility
-          RUNNER_TEMP_UNIX=$(echo "${{ runner.temp }}" | sed 's|\\|/|g')
-          BUNDLE_PATH_UNIX=$(echo "${STEPS_ATTEST_OUTPUTS_BUNDLE_PATH}" | sed 's|\\|/|g')
+          RUNNER_TEMP_UNIX="${{ runner.temp }}"
+          RUNNER_TEMP_UNIX="${RUNNER_TEMP_UNIX//\\//}"
+          BUNDLE_PATH_UNIX="${STEPS_ATTEST_OUTPUTS_BUNDLE_PATH//\\//}"
 
           # Find the actual conda package file (search recursively)
           CONDA_PACKAGE=$(find "$RUNNER_TEMP_UNIX" -name "*.conda" -type f | head -1)
