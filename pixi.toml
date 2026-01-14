@@ -17,6 +17,42 @@ requires-pixi = ">=0.45"
 c_stdlib_version = ["2.17"]
 
 #
+# Shared feature for C/C++ compilers and build tools
+#
+[feature.compilers.dependencies]
+compilers = ">=1.11.0,<2"
+openssl = ">=3.5.4,<4"
+pkg-config = ">=0.29.2,<0.30"
+
+[feature.compilers.target.linux.dependencies]
+clang = ">=21.1.2,<22"
+compilers = ">=1.6.0"
+make = ">=4.4.1,<5"
+mold = ">=2.40.2,<3"
+
+[feature.compilers.target.win-64.dependencies]
+vs2017_win-64 = ">=19.16.27033,<20"
+
+#
+# Shared feature for Python
+#
+[feature.python.dependencies]
+python = ">=3.13.5,<3.15"
+
+#
+# Shared feature for Rust toolchain
+#
+[feature.rust.activation]
+env.CARGO_TARGET_DIR = "target/pixi"
+
+[feature.rust.dependencies]
+rust = ">=1.90.0,<1.91"
+rust-src = ">=1.90.0,<2"
+
+[feature.rust.target.unix.activation]
+scripts = ["scripts/activate.sh"]
+
+#
 # Feature for building and releasing pixi-build-backends
 #
 [feature.backends-release.activation.env]
@@ -41,14 +77,10 @@ description = "Build a backend recipe for CI"
 [feature.dev.dependencies]
 cargo-edit = ">=0.13.7,<0.14"
 cargo-nextest = ">=0.9.105,<0.10"
-cffconvert = ">=2.0.0,<3"         # Needed for the citation
-tbump = ">=6.9.0,<7"
 
 [feature.dev.tasks]
-bump = { cmd = "tbump --only-patch $RELEASE_VERSION", description = "Bump the version using tbump" }
 insta-review = { cmd = "cargo insta review --workspace", description = "Review cargo-insta snapshots" }
 pypi-proxy = { cmd = "python scripts/pypi-proxy.py", description = "Run PyPI proxy server" }
-release = { cmd = "python scripts/release.py", description = "Run the release script" }
 switch-to-remote-rattler = { cmd = "python scripts/local_patch.py rattler remote", description = "Switch back to remote rattler dependencies" }
 switch-to-remote-uv = { cmd = "python scripts/local_patch.py uv remote", description = "Switch back to remote uv dependencies" }
 update-rattler = { cmd = "cargo upgrade --incompatible allow -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages", description = "Update rattler dependencies to latest versions" }
@@ -79,7 +111,6 @@ zig = ">=0.15.1,<0.16"
 #
 [feature.docs.dependencies]
 cairosvg = ">=2.8.2,<3"
-git-cliff = ">=2.11.0,<3"
 mdx_truly_sane_lists = ">=1.3,<2"
 mike = ">=2.1.3,<3"
 mkdocs-llmstxt = ">=0.4.0,<0.5"
@@ -92,13 +123,13 @@ pillow = ">=12,<13"
 build-docs = { cmd = "mkdocs build --strict", depends-on = [
   "download-font",
 ], description = "Build documentation" }
-bump-changelog = { cmd = "git-cliff --unreleased --prepend CHANGELOG.md --tag $RELEASE_VERSION", description = "Update changelog with unreleased changes" }
 deploy-dev = { cmd = "mike deploy --push dev devel", description = "Deploy development docs" }
 deploy-latest = { cmd = "mike deploy --push --update-aliases $RELEASE_VERSION latest", description = "Deploy latest release docs" }
 docs = { cmd = "mkdocs serve", depends-on = [
   "download-font",
 ], description = "Serve the docs locally" }
 download-font = { cmd = "nu docs/layouts/download-font-to-cache.nu", description = "Download fonts for documentation" }
+generate-cli-docs = { cmd = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml", description = "Generate CLI documentation" }
 mike-serve = { cmd = "mike serve", description = "Serve versioned docs with mike" }
 
 #
@@ -179,6 +210,19 @@ python-build = ">=1.3.0,<2"
 pypi-gen-indexes = { cmd = "python tests/data/pypi-indexes/generate-indexes.py", description = "Generate PyPI test indexes" }
 
 #
+# Feature for release tasks
+#
+[feature.release.dependencies]
+cffconvert = ">=2.0.0,<3"
+git-cliff = ">=2.11.0,<3"
+tbump = ">=6.9.0,<7"
+
+[feature.release.tasks]
+bump = { cmd = "tbump --only-patch $RELEASE_VERSION", description = "Bump the version using tbump" }
+bump-changelog = { cmd = "git-cliff --unreleased --prepend CHANGELOG.md --tag $RELEASE_VERSION", description = "Update changelog with unreleased changes" }
+release = { cmd = "python scripts/release.py", description = "Run the release script" }
+
+#
 # Feature for Python integration tests with pytest
 #
 [feature.pytest.tasks]
@@ -235,6 +279,7 @@ pytest = ">=9.0.2,<10"
 pytest-rerunfailures = ">=16.0.1,<17"
 pytest-timeout = ">=2.4.0,<3"
 pytest-xdist = ">=3.8.0,<4"
+python = ">=3.14.0,<3.15"
 pyyaml = ">=6.0.3,<7"
 rattler-build = ">=0.55,<0.56"
 rich = ">=14.1.0,<15"
@@ -251,36 +296,14 @@ rattler-build = ">=0.55,<0.56"
 build-backends = { cmd = "rattler-build build --recipe-dir empty --output-dir .", cwd = "tests/build-backends", description = "Build build-backends used for testing purposes" }
 
 #
-# Feature for Rust building and compilation
+# Feature for Rust building and compilation tasks
 #
-[feature.rust-build.activation]
-env.CARGO_TARGET_DIR = "target/pixi"
-
 [feature.rust-build.dependencies]
-compilers = ">=1.11.0,<2"
 git = ">=2.51.0,<3"
-openssl = ">=3.5.4,<4"
-pkg-config = ">=0.29.2,<0.30"
-python = ">=3.13.5,<3.15"
-rust = ">=1.90.0,<1.91"
-rust-src = ">=1.90.0,<2"
-
-[feature.rust-build.target.linux.dependencies]
-clang = ">=21.1.2,<22"
-compilers = ">=1.6.0"
-make = ">=4.4.1,<5"
-mold = ">=2.40.2,<3"
-
-[feature.rust-build.target.unix.activation]
-scripts = ["scripts/activate.sh"]
-
-[feature.rust-build.target.win-64.dependencies]
-vs2017_win-64 = ">=19.16.27033,<20"
 
 [feature.rust-build.tasks]
 build-debug = { cmd = "cargo build", description = "Build pixi in debug mode" }
 build-release = { cmd = "cargo build --release", description = "Build pixi in release mode" }
-generate-cli-docs = { cmd = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml", description = "Generate CLI documentation" }
 install = { cmd = "cargo install --path crates/pixi --locked", description = "Install pixi itself locally using cargo" }
 install-as = { cmd = "python scripts/install.py", depends-on = [
   "build-release",
@@ -300,19 +323,6 @@ cargo-insta = "*"
 
 [feature.rust-test.tasks]
 insta = { cmd = "cargo insta", description = "Run cargo-insta commands" }
-test = { depends-on = ["test-all-fast"], description = "Run all fast tests" }
-test-all-extra-slow = { depends-on = [
-  "test-slow",
-  "test-integration-extra-slow",
-], description = "Run all tests including extra slow" }
-test-all-fast = { depends-on = [
-  "test-fast",
-  "test-integration-fast",
-], description = "Run all fast Rust and Python tests" }
-test-all-slow = { depends-on = [
-  "test-slow",
-  "test-integration-slow",
-], description = "Run all slow tests" }
 test-fast = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets""", description = "Run fast Rust tests" }
 test-slow = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets --features slow_integration_tests,online_tests --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow""", description = "Run slow Rust tests with integration and online features" }
 
@@ -330,6 +340,24 @@ generate-schema = { cmd = "python model.py > schema.json", cwd = "schema", descr
 test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema", description = "Test the manifest JSON schema" }
 
 #
+# Feature for test wrapper/aggregator tasks
+#
+[feature.test.tasks]
+test = { depends-on = ["test-all-fast"], description = "Run all fast tests" }
+test-all-extra-slow = { depends-on = [
+  "test-slow",
+  "test-integration-extra-slow",
+], description = "Run all tests including extra slow" }
+test-all-fast = { depends-on = [
+  "test-fast",
+  "test-integration-fast",
+], description = "Run all fast Rust and Python tests" }
+test-all-slow = { depends-on = [
+  "test-slow",
+  "test-integration-slow",
+], description = "Run all slow tests" }
+
+#
 # Feature for building Python trampolines
 #
 [feature.trampoline.dependencies]
@@ -344,30 +372,33 @@ build-trampoline = { cmd = "python trampoline/build-trampoline.py", description 
 #
 [environments]
 backends-release = { features = ["backends-release"] }
-default = { features = [
-  "rust-build",
-  "dev",
-  "schema",
-], solve-group = "default" }
+dev = { features = ["rust", "compilers", "python", "dev"] }
 dist = { features = ["dist"] }
-docs = { features = ["docs"] }
+docs = { features = ["rust", "compilers", "python", "docs"] }
 lint = { features = [
+  "rust",
+  "compilers",
+  "python",
   "lint",
   "python-test-deps",
-  "rust-build",
   "schema",
   "pypi-gen",
-], solve-group = "default" }
-pypi-gen = { features = ["pypi-gen", "rust-build"], solve-group = "default" }
-python-test = { features = ["pytest", "python-test-deps"] }
+] }
+pypi-gen = { features = ["rust", "compilers", "python", "pypi-gen"] }
+python-test = { features = ["rust", "pytest", "python-test-deps"] }
 recipes = { features = ["recipes"] }
-rust-test = { features = ["rust-test", "dev"], solve-group = "default" }
-schema = { features = ["schema"], solve-group = "default" }
+release = { features = ["release"] }
+rust-build = { features = ["rust", "compilers", "python", "rust-build"] }
+rust-test = { features = ["rust", "compilers", "python", "dev", "rust-test"] }
+schema = { features = ["schema"] }
+test = { features = ["test"] }
 test-export = { features = ["micromamba"] }
 test-native-certs = { features = [
+  "rust",
+  "compilers",
+  "python",
   "native-certs-test",
-  "rust-build",
-], solve-group = "default" }
+] }
 trampoline = { features = ["trampoline"] }
 
 #
