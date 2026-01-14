@@ -11,7 +11,7 @@ use std::{
 
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::ExtraName;
-use pixi_spec::GitSpec;
+use pixi_spec::{GitSpec, Subdirectory};
 use serde::Serialize;
 use thiserror::Error;
 use url::Url;
@@ -49,8 +49,8 @@ pub enum PixiPypiSource {
     /// From a direct URL to a package archive.
     Url {
         url: Url,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        subdirectory: Option<String>,
+        #[serde(default, skip_serializing_if = "Subdirectory::is_empty")]
+        subdirectory: Subdirectory,
     },
 }
 
@@ -305,7 +305,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pep508_rs::Requirement;
-    use pixi_spec::GitReference;
+    use pixi_spec::{GitReference, Subdirectory};
     use pixi_test_utils::format_parse_error;
     use pixi_toml::TomlDiagnostic;
     use serde_json::{Value, json};
@@ -321,7 +321,7 @@ mod tests {
             git: GitSpec {
                 git: Url::parse("https://github.com/example/repo").unwrap(),
                 rev: None,
-                subdirectory: None,
+                subdirectory: Default::default(),
             },
         });
         assert!(spec.is_source_dependency());
@@ -340,7 +340,7 @@ mod tests {
     fn test_is_source_dependency_for_url() {
         let spec = PixiPypiSpec::new(PixiPypiSource::Url {
             url: Url::parse("https://example.com/pkg.whl").unwrap(),
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
         assert!(spec.is_source_dependency());
     }
@@ -364,7 +364,7 @@ mod tests {
                 git: GitSpec {
                     git: Url::parse("https://github.com/example/repo").unwrap(),
                     rev: None,
-                    subdirectory: None,
+                    subdirectory: Default::default(),
                 },
             },
             vec![extra.clone()],
@@ -499,7 +499,7 @@ mod tests {
                 git: GitSpec {
                     git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
                     rev: Some(GitReference::DefaultBranch),
-                    subdirectory: None,
+                    subdirectory: Default::default(),
                 },
             })
         );
@@ -514,18 +514,18 @@ mod tests {
                     rev: Some(GitReference::Rev(
                         "b283011c6df4a9e034baca9aea19aa8e5a70e3ab".to_string()
                     )),
-                    subdirectory: None,
+                    subdirectory: Default::default(),
                 },
             })
         );
 
         let pypi: Requirement = "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl".parse().unwrap();
         let as_pypi_req: PixiPypiSpec = pypi.try_into().unwrap();
-        assert_eq!(as_pypi_req, PixiPypiSpec::new(PixiPypiSource::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), subdirectory: None }));
+        assert_eq!(as_pypi_req, PixiPypiSpec::new(PixiPypiSource::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), subdirectory: Default::default() }));
 
         let pypi: Requirement = "boltons[nichita] @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl".parse().unwrap();
         let as_pypi_req: PixiPypiSpec = pypi.try_into().unwrap();
-        assert_eq!(as_pypi_req, PixiPypiSpec::with_extras(PixiPypiSource::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), subdirectory: None }, vec![ExtraName::new("nichita".to_string()).unwrap()]));
+        assert_eq!(as_pypi_req, PixiPypiSpec::with_extras(PixiPypiSource::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), subdirectory: Default::default() }, vec![ExtraName::new("nichita".to_string()).unwrap()]));
 
         #[cfg(target_os = "windows")]
         let pypi: Requirement = "boltons @ file:///C:/path/to/boltons".parse().unwrap();
@@ -564,7 +564,7 @@ mod tests {
                 git: GitSpec {
                     git: Url::parse("ssh://git@github.com/python-attrs/attrs.git").unwrap(),
                     rev: Some(GitReference::Rev("main".to_string())),
-                    subdirectory: None
+                    subdirectory: Default::default()
                 },
             })
         );
@@ -580,7 +580,7 @@ mod tests {
                 git: GitSpec {
                     git: Url::parse("https://github.com/Deltares/Ribasim.git").unwrap(),
                     rev: Some(GitReference::DefaultBranch),
-                    subdirectory: Some("python/ribasim".to_string()),
+                    subdirectory: Subdirectory::try_from("python/ribasim").unwrap(),
                 },
             })
         );

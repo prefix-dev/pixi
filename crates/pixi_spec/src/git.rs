@@ -5,6 +5,8 @@ use serde::{Serialize, Serializer};
 use thiserror::Error;
 use url::Url;
 
+use crate::Subdirectory;
+
 /// A specification of a package from a git repository.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -17,8 +19,8 @@ pub struct GitSpec {
     pub rev: Option<GitReference>,
 
     /// The git subdirectory of the package
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub subdirectory: Option<String>,
+    #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
+    pub subdirectory: Subdirectory,
 }
 
 impl Display for GitSpec {
@@ -27,8 +29,8 @@ impl Display for GitSpec {
         if let Some(rev) = &self.rev {
             write!(f, " @ {rev}")?;
         }
-        if let Some(subdir) = &self.subdirectory {
-            write!(f, " in {subdir}")?;
+        if !self.subdirectory.is_empty() {
+            write!(f, " in {}", self.subdirectory)?;
         }
         Ok(())
     }

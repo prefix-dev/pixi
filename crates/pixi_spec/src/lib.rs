@@ -13,6 +13,7 @@ mod dev_source;
 mod git;
 mod path;
 mod source_anchor;
+mod subdirectory;
 mod toml;
 mod url;
 
@@ -28,6 +29,7 @@ use rattler_conda_types::{
     ParseChannelError, StringMatcher, VersionSpec,
 };
 pub use source_anchor::SourceAnchor;
+pub use subdirectory::{Subdirectory, SubdirectoryError};
 use thiserror::Error;
 pub use toml::{TomlLocationSpec, TomlSpec, TomlVersionSpecStr};
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
@@ -134,7 +136,7 @@ impl PixiSpec {
                 sha256: spec.sha256,
                 // A namelessmatchspec always describes a binary spec which cannot have a
                 // subdirectory
-                subdirectory: None,
+                subdirectory: Subdirectory::default(),
             })
         } else if spec.build.is_none()
             && spec.build_number.is_none()
@@ -684,7 +686,7 @@ impl From<rattler_lock::source::UrlSourceLocation> for UrlSourceSpec {
             url,
             md5,
             sha256,
-            subdirectory: None,
+            subdirectory: Subdirectory::default(),
         }
     }
 }
@@ -713,7 +715,10 @@ impl From<rattler_lock::source::GitSourceLocation> for GitSpec {
                 Some(rattler_lock::source::GitReference::Rev(rev)) => Some(GitReference::Rev(rev)),
                 None => None,
             },
-            subdirectory: value.subdirectory,
+            subdirectory: value
+                .subdirectory
+                .and_then(|s| Subdirectory::try_from(s).ok())
+                .unwrap_or_default(),
         }
     }
 }
@@ -731,7 +736,7 @@ impl From<GitSpec> for rattler_lock::source::GitSourceLocation {
                 Some(GitReference::Rev(rev)) => Some(rattler_lock::source::GitReference::Rev(rev)),
                 Some(GitReference::DefaultBranch) | None => None,
             },
-            subdirectory: value.subdirectory,
+            subdirectory: value.subdirectory.to_option_string(),
         }
     }
 }

@@ -72,8 +72,11 @@ impl CommandDispatcher {
             .await
             .map_err(|err| err.map(SourceCheckoutError::from))?;
 
-        let path = if let Some(subdir) = &pinned_url_spec.subdirectory {
-            fetch.dir.join(subdir).into_assume_dir()
+        let path = if !pinned_url_spec.subdirectory.is_empty() {
+            fetch
+                .dir
+                .join(pinned_url_spec.subdirectory.as_path())
+                .into_assume_dir()
         } else {
             fetch.into_path()
         };

@@ -56,7 +56,10 @@ impl SourceRecord {
                     PinnedSourceSpec::Url(pinned_url_spec) => Some(PackageBuildSource::Url {
                         url: pinned_url_spec.url,
                         sha256: pinned_url_spec.sha256,
-                        subdir: pinned_url_spec.subdirectory.map(Into::into),
+                        subdir: pinned_url_spec
+                            .subdirectory
+                            .to_option_string()
+                            .map(Into::into),
                     }),
                     PinnedSourceSpec::Git(pinned_git_spec) => Some(PackageBuildSource::Git {
                         url: pinned_git_spec.git,
@@ -65,6 +68,7 @@ impl SourceRecord {
                         subdir: pinned_git_spec
                             .source
                             .subdirectory
+                            .to_option_string()
                             .map(Utf8TypedPathBuf::from),
                     }),
                     PinnedSourceSpec::Path(pinned_path_spec) => Some(PackageBuildSource::Path {
@@ -134,7 +138,9 @@ impl SourceRecord {
                     git: url,
                     source: PinnedGitCheckout {
                         commit: GitSha::from_str(&rev).unwrap(),
-                        subdirectory: subdir.map(|s| s.to_string()),
+                        subdirectory: subdir
+                            .and_then(|s| pixi_spec::Subdirectory::try_from(s.to_string()).ok())
+                            .unwrap_or_default(),
                         reference,
                     },
                 })
@@ -147,7 +153,9 @@ impl SourceRecord {
                 url,
                 sha256,
                 md5: None,
-                subdirectory: subdir.map(|s| s.to_string()),
+                subdirectory: subdir
+                    .and_then(|s| pixi_spec::Subdirectory::try_from(s.to_string()).ok())
+                    .unwrap_or_default(),
             }),
             PackageBuildSource::Path { path } => {
                 // Convert path to Unix format for from_relative_to
@@ -276,6 +284,7 @@ fn git_reference_from_shallow(spec: Option<GitShallowSpec>, rev: &str) -> GitRef
 mod tests {
     use super::*;
     use pixi_git::sha::GitSha;
+    use pixi_spec::Subdirectory;
     use serde_json::json;
     use std::str::FromStr;
     use url::Url;
@@ -372,7 +381,7 @@ mod tests {
             git: git_url.clone(),
             source: PinnedGitCheckout {
                 commit,
-                subdirectory: Some("recipes".to_string()),
+                subdirectory: Subdirectory::try_from("recipes").unwrap(),
                 reference: GitReference::Branch("main".to_string()),
             },
         });
@@ -382,7 +391,7 @@ mod tests {
             git: git_url.clone(),
             source: PinnedGitCheckout {
                 commit,
-                subdirectory: Some("src".to_string()),
+                subdirectory: Subdirectory::try_from("src").unwrap(),
                 reference: GitReference::Branch("main".to_string()),
             },
         });
@@ -426,14 +435,11 @@ mod tests {
         };
 
         // After roundtrip, the path will contain .. components (not normalized)
-        assert_eq!(
-            roundtrip_path
-                .source
-                .subdirectory
-                .expect("subdirectory should be set")
-                .as_str(),
-            "src"
+        assert!(
+            !roundtrip_path.source.subdirectory.is_empty(),
+            "subdirectory should be set"
         );
+        assert_eq!(roundtrip_path.source.subdirectory.to_string(), "src");
     }
 
     #[test]
@@ -457,7 +463,7 @@ mod tests {
             git: manifest_git_url.clone(),
             source: PinnedGitCheckout {
                 commit: commit1,
-                subdirectory: Some("recipes".to_string()),
+                subdirectory: Subdirectory::try_from("recipes").unwrap(),
                 reference: GitReference::Branch("main".to_string()),
             },
         });
@@ -467,7 +473,7 @@ mod tests {
             git: build_git_url.clone(),
             source: PinnedGitCheckout {
                 commit: commit2,
-                subdirectory: Some("src".to_string()),
+                subdirectory: Subdirectory::try_from("src").unwrap(),
                 reference: GitReference::Branch("main".to_string()),
             },
         });
