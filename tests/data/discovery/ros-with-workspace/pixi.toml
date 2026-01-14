@@ -1,0 +1,4 @@
+[workspace]
+channels = ["robostack-staging", "conda-forge"]
+name = "ros-workspace"
+platforms = ["linux-64"]
