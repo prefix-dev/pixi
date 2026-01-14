@@ -1,5 +1,6 @@
 [package]
 edition.workspace = true
+license.workspace = true
 name = "pixi-build-backend"
 version = "0.1.5"
 

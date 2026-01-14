@@ -1,5 +1,6 @@
 [package]
 edition.workspace = true
+license.workspace = true
 name = "recipe-stage0"
 version = "0.1.1"
 

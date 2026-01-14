@@ -1,5 +1,6 @@
 [package]
 edition.workspace = true
+license.workspace = true
 name = "pixi-build-mojo"
 version = "0.1.7"
 
