@@ -18,9 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  id-token: write
   contents: read
-  attestations: write
 
 jobs:
   generate-matrix:
@@ -29,6 +27,8 @@ jobs:
       matrix: ${{ steps.set_version.outputs.matrix }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           environments: backends-release
@@ -37,10 +37,10 @@ jobs:
         run: |
           # extract names and versions from cargo metadata
           # and generate a matrix entries for the build job
-          echo "Package name input: '${{ github.event.inputs.package_name }}'"
-          if [ -n "${{ github.event.inputs.package_name }}" ]; then
-            echo "Building specific package: ${{ github.event.inputs.package_name }}"
-            MATRIX_JSON=$(pixi run -e backends-release generate-matrix --package "${{ github.event.inputs.package_name }}")
+          echo "Package name input: '${GITHUB_EVENT_INPUTS_PACKAGE_NAME}'"
+          if [ -n "${GITHUB_EVENT_INPUTS_PACKAGE_NAME}" ]; then
+            echo "Building specific package: ${GITHUB_EVENT_INPUTS_PACKAGE_NAME}"
+            MATRIX_JSON=$(pixi run -e backends-release generate-matrix --package "${GITHUB_EVENT_INPUTS_PACKAGE_NAME}")
           else
             echo "Building all packages"
             MATRIX_JSON=$(pixi run -e backends-release generate-matrix)
@@ -48,9 +48,15 @@ jobs:
 
           echo "Generated matrix: $MATRIX_JSON"
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_EVENT_INPUTS_PACKAGE_NAME: ${{ github.event.inputs.package_name }}
 
   build:
     needs: generate-matrix
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
     env:
       REPO_NAME: "prefix-dev/pixi"
     strategy:
@@ -60,6 +66,8 @@ jobs:
     runs-on: ${{ matrix.bins.os }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           environments: backends-release
@@ -92,7 +100,7 @@ jobs:
         run: |
           # Convert Windows paths to Unix-style for bash compatibility
           RUNNER_TEMP_UNIX=$(echo "${{ runner.temp }}" | sed 's|\\|/|g')
-          BUNDLE_PATH_UNIX=$(echo "${{ steps.attest.outputs.bundle-path }}" | sed 's|\\|/|g')
+          BUNDLE_PATH_UNIX=$(echo "${STEPS_ATTEST_OUTPUTS_BUNDLE_PATH}" | sed 's|\\|/|g')
 
           # Find the actual conda package file (search recursively)
           CONDA_PACKAGE=$(find "$RUNNER_TEMP_UNIX" -name "*.conda" -type f | head -1)
@@ -110,6 +118,8 @@ jobs:
             echo "Error: No conda package found in $RUNNER_TEMP_UNIX"
             exit 1
           fi
+        env:
+          STEPS_ATTEST_OUTPUTS_BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -158,6 +168,8 @@ jobs:
     if: ${{ github.event.inputs.push_to_channel == 'true' && github.repository == 'prefix-dev/pixi' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
       - name: Download all conda packages
         uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
         with:
