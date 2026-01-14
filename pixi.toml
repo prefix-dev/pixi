@@ -45,7 +45,7 @@ test-fast = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all
 test-slow = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets --features slow_integration_tests,online_tests
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
 
-[feature.pytest.dependencies]
+[feature.python-test-deps.dependencies]
 dirty-equals = ">=0.11,<0.12"
 filelock = ">=3.19.1,<4"
 git = ">=2.51.0,<3"
@@ -60,7 +60,6 @@ rattler-build = ">=0.55,<0.56"
 rich = ">=14.1.0,<15"
 tomli-w = ">=1.2.0,<2"
 types-pyyaml = ">=6.0.12.20250915,<7"
-
 
 [feature.pytest.tasks]
 test-common-wheels = { cmd = "pytest -s --numprocesses=auto tests/wheel_tests/", depends-on = [
@@ -304,13 +303,13 @@ docs = { features = [
 ], no-default-feature = true, solve-group = "default" }
 lint = { features = [
   "lint",
-  "pytest",
+  "python-test-deps",
   "rust",
   "schema",
   "pypi-gen",
 ], no-default-feature = true, solve-group = "default" }
 pypi-gen = { features = ["pypi-gen"] }
-pytest = { features = ["pytest"], no-default-feature = true }
+pytest = { features = ["pytest", "python-test-deps"], no-default-feature = true }
 recipes = { features = ["recipes"], no-default-feature = true }
 schema = { features = [
   "schema",
