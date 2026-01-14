@@ -1,12 +1,12 @@
 import json
 import shutil
-from pathlib import Path
+import tomllib
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
 import tomli_w
-import tomllib
 import yaml
 
 from ..common import (
@@ -226,7 +226,7 @@ def test_git_path_lock_branch_records_branch_metadata(
     assert {entry.get("branch") for entry in entries} == {"other-feature"}
     assert {entry.get("rev") for entry in entries} == {local_cpp_git_repo.other_feature_rev}
     assert all("tag" not in entry for entry in entries)
-    assert {entry.get("subdir") for entry in entries} == {"."}
+    assert {entry.get("subdir") for entry in entries} == {None}
 
     verify_cli_command(
         [pixi, "install", "-v", "--manifest-path", tmp_pixi_workspace, "--locked"],
@@ -335,7 +335,7 @@ def test_git_path_lock_tag_records_tag_metadata(
     assert {entry.get("tag") for entry in entries} == {local_cpp_git_repo.tag}
     assert {entry.get("rev") for entry in entries} == {local_cpp_git_repo.main_rev}
     assert all("branch" not in entry for entry in entries)
-    assert {entry.get("subdir") for entry in entries} == {"."}
+    assert {entry.get("subdir") for entry in entries} == {None}
 
     verify_cli_command(
         [pixi, "install", "-v", "--manifest-path", tmp_pixi_workspace, "--locked"],
