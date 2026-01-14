@@ -1356,6 +1356,12 @@ pub async fn resolve_dev_dependencies(
     variants: &std::collections::BTreeMap<String, Vec<VariantValue>>,
     variant_files: &[PathBuf],
 ) -> Result<Vec<Dependency>, PlatformUnsat> {
+    // Collect all dev source package names to filter out interdependencies
+    let dev_source_names: HashSet<PackageName> = dev_dependencies
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
+
     let futures = dev_dependencies
         .into_iter()
         .map(|(package_name, source_spec)| {
@@ -1365,6 +1371,7 @@ pub async fn resolve_dev_dependencies(
             let build_environment = build_environment.clone();
             let variants = variants.clone();
             let variant_files = variant_files.to_vec();
+            let dev_source_names = dev_source_names.clone();
 
             resolve_single_dev_dependency(
                 package_name,
@@ -1375,6 +1382,7 @@ pub async fn resolve_dev_dependencies(
                 build_environment,
                 variants,
                 variant_files,
+                dev_source_names,
             )
         })
         .collect::<futures::stream::FuturesUnordered<_>>();
@@ -1400,6 +1408,7 @@ async fn resolve_single_dev_dependency(
     build_environment: BuildEnvironment,
     variants: std::collections::BTreeMap<String, Vec<VariantValue>>,
     variant_files: Vec<PathBuf>,
+    dev_source_names: HashSet<PackageName>,
 ) -> Result<Vec<Dependency>, PlatformUnsat> {
     let pinned_source = command_dispatcher
         .pin_and_checkout(source_spec.location)
@@ -1429,20 +1438,25 @@ async fn resolve_single_dev_dependency(
 
     let mut dependencies = Vec::new();
 
-    // Process source dependencies
-    for (dev_name, dep) in dev_source.into_specs() {
-        let string = dep.to_string();
+    // Process source dependencies, filtering out dependencies that are also dev sources
+    for (dep_name, dep) in dev_source
+        .into_specs()
+        .filter(|(name, _)| !dev_source_names.contains(name))
+    {
         let anchored_source = dep.resolve(&SourceAnchor::Workspace);
 
         dependencies.push(Dependency::CondaSource(
-            dev_name.clone(),
+            dep_name.clone(),
             anchored_source,
-            Cow::Owned(format!("{} @ {}", dev_name.as_source(), string)),
+            Cow::Owned(package_name.as_source().to_string()),
         ));
     }
 
-    // Process binary dependencies
-    for (dev_name, binary_spec) in dev_bin.into_specs() {
+    // Process binary dependencies, filtering out dependencies that are also dev sources
+    for (dep_name, binary_spec) in dev_bin
+        .into_specs()
+        .filter(|(name, _)| !dev_source_names.contains(name))
+    {
         // Convert BinarySpec to NamelessMatchSpec
         let nameless_spec = binary_spec
             .try_into_nameless_match_spec(&channel_config)
@@ -1459,16 +1473,16 @@ async fn resolve_single_dev_dependency(
                     SpecConversionError::MissingName => ParseMatchSpecError::MissingPackageName,
                 };
                 PlatformUnsat::FailedToParseMatchSpec(
-                    dev_name.as_source().to_string(),
+                    dep_name.as_source().to_string(),
                     parse_channel_err,
                 )
             })?;
 
-        let spec = MatchSpec::from_nameless(nameless_spec, Some(dev_name.clone().into()));
+        let spec = MatchSpec::from_nameless(nameless_spec, Some(dep_name.clone().into()));
 
         dependencies.push(Dependency::Conda(
             spec,
-            Cow::Owned(dev_name.as_source().to_string()),
+            Cow::Owned(package_name.as_source().to_string()),
         ));
     }
 
