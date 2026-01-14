@@ -249,7 +249,9 @@ impl SourceMetadataSpec {
                 reporter.clone(),
             )
             .await
-            .map_err(|err| SourceMetadataError::RunExportsExtraction(String::from("build"), err))
+            .map_err(|err| {
+                SourceMetadataError::RunExportsExtraction(String::from("build"), Arc::new(err))
+            })
             .map_err(CommandDispatcherError::Failed)?;
 
         compatibility_map.extend(
@@ -286,7 +288,9 @@ impl SourceMetadataSpec {
                 reporter,
             )
             .await
-            .map_err(|err| SourceMetadataError::RunExportsExtraction(String::from("host"), err))
+            .map_err(|err| {
+                SourceMetadataError::RunExportsExtraction(String::from("host"), Arc::new(err))
+            })
             .map_err(CommandDispatcherError::Failed)?;
 
         compatibility_map.extend(
@@ -311,7 +315,7 @@ impl SourceMetadataSpec {
             constrains,
             mut sources,
         } = PackageRecordDependencies::new(run_dependencies, &self.backend_metadata.channel_config)
-            .map_err(SourceMetadataError::SpecConversionError)
+            .map_err(SourceMetadataError::from)
             .map_err(CommandDispatcherError::Failed)?;
 
         // Convert the run exports
@@ -350,7 +354,7 @@ impl SourceMetadataSpec {
                 Either::Right(binary) => {
                     let spec = binary
                         .try_into_nameless_match_spec(&self.backend_metadata.channel_config)
-                        .map_err(SourceMetadataError::SpecConversionError)?;
+                        .map_err(SourceMetadataError::from)?;
                     Ok(MatchSpec::from_nameless(spec, Some(name.clone().into())))
                 }
             }
@@ -378,7 +382,7 @@ impl SourceMetadataSpec {
                 .map(|(name, spec)| {
                     let nameless_spec = spec
                         .try_into_nameless_match_spec(&self.backend_metadata.channel_config)
-                        .map_err(SourceMetadataError::SpecConversionError)?;
+                        .map_err(SourceMetadataError::from)?;
                     Ok(MatchSpec::from_nameless(nameless_spec, Some(name.into())).to_string())
                 })
                 .collect::<Result<Vec<_>, SourceMetadataError>>()
@@ -583,14 +587,14 @@ impl PackageRecordDependencies {
     }
 }
 
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Clone, Error, Diagnostic)]
 pub enum SourceMetadataError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     BuildBackendMetadata(#[from] BuildBackendMetadataError),
 
     #[error("failed to amend run exports for {0} environment")]
-    RunExportsExtraction(String, #[source] RunExportExtractorError),
+    RunExportsExtraction(String, #[source] Arc<RunExportExtractorError>),
 
     #[error("while trying to solve the build environment for the package")]
     SolveBuildEnvironment(
@@ -607,10 +611,10 @@ pub enum SourceMetadataError {
     ),
 
     #[error(transparent)]
-    SpecConversionError(#[from] SpecConversionError),
+    SpecConversionError(Arc<SpecConversionError>),
 
     #[error(transparent)]
-    InvalidPackageName(#[from] InvalidPackageNameError),
+    InvalidPackageName(Arc<InvalidPackageNameError>),
 
     #[error(transparent)]
     PinCompatibleError(#[from] crate::build::pin_compatible::PinCompatibleError),
@@ -632,6 +636,18 @@ pub enum SourceMetadataError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     PackageNotProvided(#[from] PackageNotProvidedError),
+}
+
+impl From<SpecConversionError> for SourceMetadataError {
+    fn from(err: SpecConversionError) -> Self {
+        Self::SpecConversionError(Arc::new(err))
+    }
+}
+
+impl From<InvalidPackageNameError> for SourceMetadataError {
+    fn from(err: InvalidPackageNameError) -> Self {
+        Self::InvalidPackageName(Arc::new(err))
+    }
 }
 
 impl From<DependenciesError> for SourceMetadataError {

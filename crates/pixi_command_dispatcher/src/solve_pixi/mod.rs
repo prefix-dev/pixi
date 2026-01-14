@@ -1,7 +1,7 @@
 mod reporter;
 mod source_metadata_collector;
 
-use std::{borrow::Borrow, collections::BTreeMap, path::PathBuf, time::Instant};
+use std::{borrow::Borrow, collections::BTreeMap, path::PathBuf, sync::Arc, time::Instant};
 
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
@@ -180,12 +180,12 @@ impl PixiEnvironmentSpec {
         let binary_match_specs = binary_specs
             .clone()
             .into_match_specs(&self.channel_config)
-            .map_err(SolvePixiEnvironmentError::SpecConversionError)
+            .map_err(SolvePixiEnvironmentError::from)
             .map_err(CommandDispatcherError::Failed)?;
 
         let dev_source_binary_match_specs = dev_source_binary_specs
             .into_match_specs(&self.channel_config)
-            .map_err(SolvePixiEnvironmentError::SpecConversionError)
+            .map_err(SolvePixiEnvironmentError::from)
             .map_err(CommandDispatcherError::Failed)?;
 
         // Query the gateway for conda repodata. This fetches the repodata for both the
@@ -213,7 +213,7 @@ impl PixiEnvironmentSpec {
 
         let binary_repodata = query
             .await
-            .map_err(SolvePixiEnvironmentError::QueryError)
+            .map_err(SolvePixiEnvironmentError::from)
             .map_err(CommandDispatcherError::Failed)?;
         let total_records = binary_repodata.iter().map(RepoData::len).sum::<usize>();
         tracing::debug!(
@@ -330,7 +330,9 @@ impl PixiEnvironmentSpec {
                 let base_url = channel
                     .clone()
                     .into_base_url(channel_config)
-                    .map_err(|err| Box::new(SolvePixiEnvironmentError::ParseChannelError(err)))?;
+                    .map_err(|err| {
+                        Box::new(SolvePixiEnvironmentError::ParseChannelError(Arc::new(err)))
+                    })?;
 
                 if !channels.iter().any(|c| c == &base_url) {
                     return Err(Box::new(SolvePixiEnvironmentError::MissingChannel(
@@ -348,26 +350,26 @@ impl PixiEnvironmentSpec {
 }
 
 /// An error that might be returned when solving a pixi environment.
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Clone, Error, Diagnostic)]
 pub enum SolvePixiEnvironmentError {
     #[error(transparent)]
-    QueryError(#[from] rattler_repodata_gateway::GatewayError),
+    QueryError(Arc<rattler_repodata_gateway::GatewayError>),
 
     #[error("failed to solve the environment")]
-    SolveError(#[from] rattler_solve::SolveError),
+    SolveError(#[source] Arc<rattler_solve::SolveError>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
     CollectSourceMetadataError(CollectSourceMetadataError),
 
     #[error(transparent)]
-    SpecConversionError(#[from] SpecConversionError),
+    SpecConversionError(Arc<SpecConversionError>),
 
     #[error("detected a cyclic dependency:\n\n{0}")]
     Cycle(Cycle),
 
     #[error(transparent)]
-    ParseChannelError(#[from] ParseChannelError),
+    ParseChannelError(Arc<ParseChannelError>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -382,8 +384,32 @@ pub enum SolvePixiEnvironmentError {
     SourceCheckoutError(crate::SourceCheckoutError),
 }
 
+impl From<rattler_repodata_gateway::GatewayError> for SolvePixiEnvironmentError {
+    fn from(err: rattler_repodata_gateway::GatewayError) -> Self {
+        Self::QueryError(Arc::new(err))
+    }
+}
+
+impl From<rattler_solve::SolveError> for SolvePixiEnvironmentError {
+    fn from(err: rattler_solve::SolveError) -> Self {
+        Self::SolveError(Arc::new(err))
+    }
+}
+
+impl From<SpecConversionError> for SolvePixiEnvironmentError {
+    fn from(err: SpecConversionError) -> Self {
+        Self::SpecConversionError(Arc::new(err))
+    }
+}
+
+impl From<ParseChannelError> for SolvePixiEnvironmentError {
+    fn from(err: ParseChannelError) -> Self {
+        Self::ParseChannelError(Arc::new(err))
+    }
+}
+
 /// An error for a missing channel in the solve request
-#[derive(Debug, Diagnostic, Error)]
+#[derive(Debug, Clone, Diagnostic, Error)]
 #[error("Package '{package}' requested unavailable channel '{channel}'")]
 pub struct MissingChannelError {
     pub package: String,
@@ -402,10 +428,10 @@ impl From<SolveCondaEnvironmentError> for SolvePixiEnvironmentError {
     fn from(err: SolveCondaEnvironmentError) -> Self {
         match err {
             SolveCondaEnvironmentError::SolveError(err) => {
-                SolvePixiEnvironmentError::SolveError(err)
+                SolvePixiEnvironmentError::SolveError(Arc::new(err))
             }
             SolveCondaEnvironmentError::SpecConversionError(err) => {
-                SolvePixiEnvironmentError::SpecConversionError(err)
+                SolvePixiEnvironmentError::SpecConversionError(Arc::new(err))
             }
         }
     }

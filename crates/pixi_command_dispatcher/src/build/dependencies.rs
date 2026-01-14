@@ -21,13 +21,19 @@ use rattler_conda_types::{
 use rattler_repodata_gateway::{Gateway, RunExportExtractorError, RunExportsReporter};
 use serde::Serialize;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum DependenciesError {
     #[error(transparent)]
-    InvalidPackageName(#[from] InvalidPackageNameError),
+    InvalidPackageName(Arc<InvalidPackageNameError>),
 
     #[error(transparent)]
     PinCompatibleError(#[from] PinCompatibleError),
+}
+
+impl From<InvalidPackageNameError> for DependenciesError {
+    fn from(err: InvalidPackageNameError) -> Self {
+        Self::InvalidPackageName(Arc::new(err))
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize)]

@@ -36,10 +36,10 @@ impl CommandDispatcherProcessor {
                 PendingDeduplicatingTask::Pending(pending, _) => {
                     pending.push(task.tx);
                 }
-                PendingDeduplicatingTask::Result(result, _) => {
-                    let _ = task.tx.send(Ok(result.clone()));
+                PendingDeduplicatingTask::Completed(result, _) => {
+                    let _ = task.tx.send(result.clone());
                 }
-                PendingDeduplicatingTask::Errored => {
+                PendingDeduplicatingTask::Cancelled => {
                     // Drop the sender, this will cause a cancellation on the other side.
                     drop(task.tx);
                 }

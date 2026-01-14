@@ -1445,7 +1445,7 @@ pub async fn resolve_dev_dependencies(
     build_environment: &BuildEnvironment,
     variants: &std::collections::BTreeMap<String, Vec<VariantValue>>,
     variant_files: &[PathBuf],
-) -> Result<Vec<Dependency>, PlatformUnsat> {
+) -> Result<Vec<Dependency>, Box<PlatformUnsat>> {
     let futures = dev_dependencies
         .into_iter()
         .map(|(package_name, source_spec)| {
@@ -1473,7 +1473,7 @@ pub async fn resolve_dev_dependencies(
 
     let mut resolved_dependencies = Vec::new();
     for result in results {
-        resolved_dependencies.extend(result?);
+        resolved_dependencies.extend(result.map_err(Box::new)?);
     }
 
     Ok(resolved_dependencies)
@@ -1725,11 +1725,8 @@ pub(crate) async fn verify_package_platform_satisfiability(
         platform,
     );
 
-    let (resolved_dev_dependencies, source_metadata_result) =
-        futures::join!(dev_deps_future, source_metadata_future);
-
-    let resolved_dev_dependencies = resolved_dev_dependencies?;
-    source_metadata_result?;
+    let (resolved_dev_dependencies, _source_metadata_result) =
+        futures::try_join!(dev_deps_future, source_metadata_future)?;
 
     if (environment_dependencies.is_empty() && resolved_dev_dependencies.is_empty())
         && !locked_pixi_records.is_empty()

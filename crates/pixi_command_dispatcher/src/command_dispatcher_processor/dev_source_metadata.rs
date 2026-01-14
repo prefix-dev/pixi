@@ -43,10 +43,10 @@ impl CommandDispatcherProcessor {
         match self.dev_source_metadata.entry(dev_source_metadata_id) {
             Entry::Occupied(mut entry) => match entry.get_mut() {
                 PendingDeduplicatingTask::Pending(pending, _) => pending.push(task.tx),
-                PendingDeduplicatingTask::Result(result, _) => {
-                    let _ = task.tx.send(Ok(result.clone()));
+                PendingDeduplicatingTask::Completed(result, _) => {
+                    let _ = task.tx.send(result.clone());
                 }
-                PendingDeduplicatingTask::Errored => {
+                PendingDeduplicatingTask::Cancelled => {
                     // Drop the sender, this will cause a cancellation on the other side.
                     drop(task.tx);
                 }

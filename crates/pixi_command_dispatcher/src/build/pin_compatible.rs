@@ -72,7 +72,7 @@ impl Display for PinExpression {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum PinCompatibleError {
     #[error("Could not apply pin_compatible. Package '{}' is not in the compatibility environment", .0.as_normalized())]
     PackageNotFound(PackageName),
