@@ -7,6 +7,9 @@ name = "pixi-build-rust"
 repository.workspace = true
 version = "0.4.4"
 
+[package.metadata.dist]
+dist = false
+
 [features]
 default = ["rustls-tls"]
 native-tls = ["pixi-build-backend/native-tls"]

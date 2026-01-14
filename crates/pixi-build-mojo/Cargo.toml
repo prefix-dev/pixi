@@ -4,6 +4,9 @@ license.workspace = true
 name = "pixi-build-mojo"
 version = "0.1.7"
 
+[package.metadata.dist]
+dist = false
+
 [features]
 default = ["rustls-tls"]
 native-tls = ["pixi-build-backend/native-tls", "rattler-build/native-tls"]
