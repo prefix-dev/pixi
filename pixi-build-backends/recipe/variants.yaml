@@ -1,6 +1,6 @@
 # This is a semi distilled variant config from conda-forge.
 #
-# It adds sysroot (2.34) for linux, macosx_deployment_target for osx
+# It adds sysroot (2.17) for linux, macosx_deployment_target for osx
 # and uses vs2022 for windows.
 #
 c_stdlib:
@@ -12,7 +12,7 @@ c_stdlib:
     then: vs
 c_stdlib_version:
   - if: linux
-    then: 2.34
+    then: 2.17
   - if: osx and x86_64
     then: 10.13
   - if: osx and arm64
