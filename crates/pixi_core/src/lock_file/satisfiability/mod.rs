@@ -1371,7 +1371,9 @@ fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> bool {
         platform: _,
         purls: a_purls,
         python_site_packages_path: a_python_site_packages_path,
-        run_exports: a_run_exports,
+        // run_exports are not compared because they are used during the solve
+        // but not stored in the lock-file for source packages.
+        run_exports: _,
         sha256: _,
         size: _,
         subdir: a_subdir,
@@ -1397,7 +1399,9 @@ fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> bool {
         platform: _,
         purls: b_purls,
         python_site_packages_path: b_python_site_packages_path,
-        run_exports: b_run_exports,
+        // run_exports are not compared because they are used during the solve
+        // but not stored in the lock-file for source packages.
+        run_exports: _,
         sha256: _,
         size: _,
         subdir: b_subdir,
@@ -1418,12 +1422,6 @@ fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> bool {
         && a_noarch == b_noarch
         && a_purls == b_purls
         && a_python_site_packages_path == b_python_site_packages_path
-        && match (a_run_exports, b_run_exports) {
-            (Some(a_run_exports), Some(b_run_exports)) => a_run_exports == b_run_exports,
-            (Some(a_run_exports), None) => a_run_exports.is_empty(),
-            (None, Some(b_run_exports)) => b_run_exports.is_empty(),
-            (None, None) => true,
-        }
         && a_subdir == b_subdir
         && a_track_features == b_track_features
         && a_version == b_version
