@@ -5,7 +5,7 @@ use pixi_build_discovery::{CommandSpec, EnabledProtocols};
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_glob::GlobSet;
-use pixi_record::{PinnedSourceSpec, VariantValue};
+use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec, VariantValue};
 use pixi_spec::{SourceAnchor, SourceLocationSpec};
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use std::time::SystemTime;
@@ -32,6 +32,7 @@ use crate::{
 use pixi_build_discovery::BackendSpec;
 use pixi_build_frontend::BackendOverride;
 use pixi_path::AbsPath;
+use pixi_path::normalize::normalize_typed;
 
 static WARNED_BACKENDS: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(HashSet::new()));
 
@@ -139,33 +140,52 @@ impl BuildBackendMetadataSpec {
         let build_source_checkout = match &discovered_backend.init_params.build_source {
             None => None,
             Some(build_source) => {
-                // An out of tree source is provided. Resolve it against the manifest source.
+                let relative_build_source_spec = if let SourceLocationSpec::Path(path) =
+                    build_source
+                    && path.path.is_relative()
+                {
+                    Some(normalize_typed(path.path.to_path()).to_string())
+                } else {
+                    None
+                };
+
+                // An out-of-tree source is provided. Resolve it against the manifest source.
                 let resolved_location = manifest_source_anchor.resolve(build_source.clone());
 
                 // Check if we have a preferred build source that matches this same location
                 match &self.preferred_build_source {
-                    Some(pinned) if pinned.matches_source_spec(&resolved_location) => Some(
+                    Some(pinned) if pinned.matches_source_spec(&resolved_location) => Some((
                         command_dispatcher
                             .checkout_pinned_source(pinned.clone())
                             .await
                             .map_err_with(BuildBackendMetadataError::SourceCheckout)?,
-                    ),
-                    _ => Some(
+                        relative_build_source_spec,
+                    )),
+                    _ => Some((
                         command_dispatcher
                             .pin_and_checkout(resolved_location)
                             .await
                             .map_err_with(BuildBackendMetadataError::SourceCheckout)?,
-                    ),
+                        relative_build_source_spec,
+                    )),
                 }
             }
         };
 
-        let (build_source_checkout, build_source) = if let Some(checkout) = build_source_checkout {
-            let pinned = checkout.pinned.clone();
-            (checkout, Some(pinned))
-        } else {
-            (manifest_source_checkout.clone(), None)
-        };
+        let (build_source_checkout, build_source) =
+            if let Some((checkout, relative_build_source)) = build_source_checkout {
+                let pinned = checkout.pinned.clone();
+                (
+                    checkout,
+                    Some(if let Some(relative) = relative_build_source {
+                        PinnedBuildSourceSpec::Relative(relative, pinned)
+                    } else {
+                        PinnedBuildSourceSpec::Absolute(pinned)
+                    }),
+                )
+            } else {
+                (manifest_source_checkout.clone(), None)
+            };
         let manifest_source_location = SourceCodeLocation::new(
             manifest_source_checkout.pinned.clone(),
             build_source.clone(),

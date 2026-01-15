@@ -5167,7 +5167,6 @@ dependencies = [
  "pixi_build_discovery",
  "pixi_build_types",
  "rattler_conda_types",
- "schemars 1.2.0",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
@@ -5747,6 +5746,7 @@ dependencies = [
  "serde",
  "tempfile",
  "thiserror 2.0.17",
+ "typed-path",
 ]
 
 [[package]]
@@ -5799,13 +5799,12 @@ dependencies = [
 name = "pixi_record"
 version = "0.1.0"
 dependencies = [
- "dunce",
  "file_url",
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
- "pathdiff",
  "pixi_git",
+ "pixi_path",
  "pixi_spec",
  "pixi_spec_containers",
  "pixi_variant",
@@ -5813,7 +5812,6 @@ dependencies = [
  "rattler_digest",
  "rattler_lock",
  "serde",
- "serde_json",
  "serde_with",
  "thiserror 2.0.17",
  "typed-path",
@@ -5861,6 +5859,7 @@ dependencies = [
  "itertools 0.14.0",
  "pixi_consts",
  "pixi_git",
+ "pixi_path",
  "pixi_toml",
  "rattler_conda_types",
  "rattler_digest",

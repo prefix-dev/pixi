@@ -11,6 +11,7 @@ use pixi_git::{
     sha::GitSha,
     url::{RepositoryUrl, redact_credentials},
 };
+use pixi_path::normalize::normalize_typed;
 use pixi_spec::{
     GitReference, GitSpec, PathSourceSpec, SourceLocationSpec, Subdirectory, UrlSourceSpec,
 };
@@ -19,10 +20,8 @@ use rattler_lock::UrlOrPath;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
-use typed_path::{Utf8TypedPathBuf, Utf8UnixPathBuf};
+use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
-
-use crate::path_utils::unixify_relative_path;
 
 /// Describes an exact revision of a source checkout. This is used to pin a
 /// particular source definition to a revision. A git source spec does not
@@ -215,157 +214,12 @@ impl PinnedSourceSpec {
         }
     }
 
-    /// Resolves a relative path from the lock file back into a full pinned
-    /// source spec. This is the inverse of `make_relative_to`.
-    ///
-    /// Given a relative path (typically from a lock file's `build_source`) and
-    /// a base pinned source (typically the `manifest_source`), this
-    /// reconstructs the full pinned source spec.
-    ///
-    /// Returns `None` if:
-    /// - The base is not a compatible type
-    /// - The path cannot be resolved
-    ///
-    /// # Arguments
-    /// * `build_source_path` - The possibly relative path from the lock file
-    /// * `base` - The base pinned source to resolve against (typically the
-    ///   manifest_source)
-    /// * `workspace_root` - The workspace root directory
-    pub fn from_relative_to(
-        build_source_path: Utf8UnixPathBuf,
-        base: &PinnedSourceSpec,
-        workspace_root: &Path,
-    ) -> Option<PinnedSourceSpec> {
-        match base {
-            // Path-to-Path: Resolve the relative path against the base path
-            PinnedSourceSpec::Path(base_path) => {
-                match (
-                    base_path.path.is_absolute(),
-                    build_source_path.is_absolute(),
-                ) {
-                    // Both are absolute cannot do anything with these
-                    (true, true) => return None,
-                    // The source path is in a completely different location,
-                    // so we need to return None as we cannot make this relative to the base
-                    (false, true) => return None,
-                    // In this case the source is relative to the absolute base path
-                    // because the `base_path.resolve` will not do anything with absolute paths,
-                    // we should be fine
-                    (true, false) => {}
-                    // Both are relative, so we can just continue
-                    (false, false) => {}
-                }
-
-                let base_absolute = base_path.resolve(workspace_root);
-                // We know that possible_relative_path is relative here
-                let relative_std_path = Path::new(build_source_path.as_str());
-                // Join base with relative path to get the target absolute path
-                let target_path_abs = base_absolute.join(relative_std_path);
-
-                // Normalize the path (resolve . and ..)
-                let normalized = crate::path_utils::normalize_path(&target_path_abs);
-                // Convert back to a path that's either absolute or relative to workspace
-                let path_spec = normalized.strip_prefix(workspace_root).expect(
-                    "the workspace_root should be part of the source build path at this point",
-                );
-
-                Some(PinnedSourceSpec::Path(PinnedPathSpec {
-                    path: Utf8TypedPathBuf::from(path_spec.to_string_lossy().as_ref()),
-                }))
-            }
-
-            // Git-to-Git: If same repository, convert relative path to subdirectory
-            PinnedSourceSpec::Git(base_git) => {
-                // Base subdirectory
-                let base_path = base_git.source.subdirectory.as_path();
-
-                let relative_std_path = Path::new(build_source_path.as_str());
-
-                // `relative_std_path` is relative to the base_subdir, we want it relative to
-                // the repository root, because base_subdir is relative to the repo
-                // we should be able to join
-                let target_subdir = base_path.join(relative_std_path);
-                // Normalize the path, join does not do this per-se
-                let normalized = crate::path_utils::normalize_path(&target_subdir);
-
-                // Convert to Subdirectory
-                let subdirectory = Subdirectory::try_from(normalized).unwrap_or_default();
-
-                Some(PinnedSourceSpec::Git(PinnedGitSpec {
-                    git: base_git.git.clone(),
-                    source: PinnedGitCheckout {
-                        commit: base_git.source.commit,
-                        subdirectory,
-                        reference: base_git.source.reference.clone(),
-                    },
-                }))
-            }
-
-            PinnedSourceSpec::Url(_) => unreachable!("url specs have not been implemented"),
-        }
-    }
-
-    /// Makes this pinned source relative to another pinned source if both are
-    /// path sources or both are git sources pointing to the same
-    /// repository. This is useful for making `build_source` relative to
-    /// `manifest_source` in lock files.
-    ///
-    /// Returns `None` if:
-    /// - Not a compatible combination (different types or different git repos)
-    /// - The sources cannot be made relative to each other
-    ///
-    /// # Arguments
-    /// * `base` - The base pinned source to make this path relative to
-    ///   (typically the manifest_source)
-    pub fn make_relative_to(
-        &self,
-        base: &PinnedSourceSpec,
-        workspace_root: &Path,
-    ) -> Option<Utf8UnixPathBuf> {
-        match (self, base) {
-            // Path-to-Path: Make the path relative
-            (PinnedSourceSpec::Path(this_path), PinnedSourceSpec::Path(base_path)) => {
-                let this_path = this_path.resolve(workspace_root);
-                let base_path = base_path.resolve(workspace_root);
-
-                let relative_path = pathdiff::diff_paths(this_path, base_path)?;
-
-                // `pathdiff` yields native separators; convert to `/` for lock-file stability.
-                Some(Utf8UnixPathBuf::from(unixify_relative_path(
-                    relative_path.as_path(),
-                )))
-            }
-            // Git-to-Git: If same repository, convert to a relative path based on subdirectories
-            (PinnedSourceSpec::Git(this_git), PinnedSourceSpec::Git(base_git)) => {
-                // Check if both point to the same repository
-                let this_repo = RepositoryUrl::new(&this_git.git);
-                let base_repo = RepositoryUrl::new(&base_git.git);
-
-                if this_repo != base_repo {
-                    // Different repositories, can't make relative
-                    return None;
-                }
-
-                if this_git.source.commit != base_git.source.commit {
-                    return None;
-                }
-
-                // Same repository and commit - compute relative path between subdirectories
-                // Both subdirectories are relative to the repository root
-                let base_path = base_git.source.subdirectory.as_path();
-                let this_path = this_git.source.subdirectory.as_path();
-
-                let relative = pathdiff::diff_paths(this_path, base_path)?;
-                // Same here: ensure lock only contains `/` even when diff runs on Windows
-                // paths.
-                let relative_str = unixify_relative_path(relative.as_path());
-
-                Some(Utf8UnixPathBuf::from(relative_str))
-            }
-            (PinnedSourceSpec::Url(_), _) => unreachable!("url specs have not been implemented"),
-            (_, PinnedSourceSpec::Url(_)) => unreachable!("url specs have not been implemented"),
-            // Different types or incompatible sources
-            _ => None,
+    /// Returns a new pinned instance but with a different subdirectory.
+    pub fn join(&self, path: Utf8TypedPath<'_>) -> Self {
+        match self {
+            PinnedSourceSpec::Url(pinned) => PinnedSourceSpec::Url(pinned.join(path)),
+            PinnedSourceSpec::Git(pinned) => PinnedSourceSpec::Git(pinned.join(path)),
+            PinnedSourceSpec::Path(pinned) => PinnedSourceSpec::Path(pinned.join(path)),
         }
     }
 }
@@ -419,6 +273,16 @@ impl PinnedUrlSpec {
         url.query_pairs_mut()
             .append_pair("sha256", &format!("{:x}", self.sha256));
         url
+    }
+
+    /// Construct a new pinned instance but with a different subdirectory.
+    pub fn join(&self, path: Utf8TypedPath<'_>) -> Self {
+        Self {
+            url: self.url.clone(),
+            sha256: self.sha256,
+            md5: self.md5,
+            subdirectory: self.subdirectory.join(path.as_str()),
+        }
     }
 }
 
@@ -592,6 +456,18 @@ impl PinnedGitSpec {
 
         LockedGitUrl(url)
     }
+
+    /// Construct a new pinned instance but with a different subdirectory.
+    pub fn join(&self, path: Utf8TypedPath<'_>) -> Self {
+        Self {
+            git: self.git.clone(),
+            source: PinnedGitCheckout {
+                commit: self.source.commit,
+                subdirectory: self.source.subdirectory.join(path.as_str()),
+                reference: self.source.reference.clone(),
+            },
+        }
+    }
 }
 
 impl From<PinnedGitSpec> for PinnedSourceSpec {
@@ -634,6 +510,13 @@ impl PinnedPathSpec {
             self.resolve(Path::new("/"))
         };
         Url::from_directory_path(resolved).expect("expected valid URL")
+    }
+
+    /// Returns a new pinned instance but with a different subdirectory.
+    pub fn join(&self, path: Utf8TypedPath<'_>) -> Self {
+        Self {
+            path: normalize_typed(self.path.join(path).to_path()),
+        }
     }
 }
 
@@ -1076,16 +959,15 @@ impl From<PinnedGitSpec> for GitSpec {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::Path, str::FromStr};
+    use std::str::FromStr;
 
     use pixi_git::sha::GitSha;
     use pixi_spec::{GitReference, GitSpec, Subdirectory};
     use url::Url;
 
-    use crate::{
-        PinnedGitCheckout, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec,
-        SourceMismatchError,
-    };
+    use crate::{PinnedGitCheckout, PinnedGitSpec, PinnedUrlSpec, SourceMismatchError};
+
+    use crate::{PinnedPathSpec, PinnedSourceSpec};
 
     #[test]
     fn test_spec_satisfies() {
@@ -1618,79 +1500,54 @@ mod tests {
     }
 
     #[test]
-    fn test_relative_to_relative() {
-        // Both paths are relative - after resolution they become absolute, then
-        // relative path is computed
-        let workspace_root = Path::new("/workspace");
+    fn test_path_spec_join() {
+        use typed_path::Utf8TypedPath;
 
-        let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
-            path: "foo/bar".into(),
-        });
-        let base_spec = PinnedSourceSpec::Path(PinnedPathSpec { path: "foo".into() });
+        let base = PinnedPathSpec {
+            path: "/workspace/recipes".into(),
+        };
+        let joined = base.join(Utf8TypedPath::derive("../src"));
 
-        let result = this_spec.make_relative_to(&base_spec, workspace_root);
-
-        // Both resolve to /workspace/foo/bar and /workspace/foo
-        // Relative path should be "bar"
-        let path = result.expect("Should return Some");
-        assert_eq!(path.as_str(), "bar");
+        assert_eq!(joined.path.as_str(), "/workspace/src");
     }
 
     #[test]
-    fn test_absolute_to_absolute() {
-        // Both paths are absolute
-        let workspace_root = Path::new("/workspace");
+    fn test_git_spec_join_with_subdir() {
+        use typed_path::Utf8TypedPath;
 
-        let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
-            path: "/foo/bar/baz".into(),
-        });
-        let base_spec = PinnedSourceSpec::Path(PinnedPathSpec {
-            path: "/foo/bar".into(),
-        });
+        let git_spec = PinnedGitSpec {
+            git: Url::parse("https://github.com/example/repo.git").unwrap(),
+            source: PinnedGitCheckout {
+                commit: GitSha::from_str("abc123def456abc123def456abc123def456abc1").unwrap(),
+                subdirectory: Subdirectory::new("recipes").unwrap(),
+                reference: GitReference::DefaultBranch,
+            },
+        };
 
-        let result = this_spec.make_relative_to(&base_spec, workspace_root);
-
-        // Should compute relative path
-        let path = result.expect("Should return Some");
-        assert_eq!(path.as_str(), "baz");
+        let joined = git_spec.join(Utf8TypedPath::derive("../src"));
+        assert_eq!(
+            joined.source.subdirectory.to_option_string(),
+            Some("src".to_string())
+        );
     }
 
     #[test]
-    fn test_relative_to_absolute() {
-        // Self is relative, base is absolute - after resolution they're both absolute
-        let workspace_root = Path::new("/workspace");
+    fn test_git_spec_join_without_subdir() {
+        use typed_path::Utf8TypedPath;
 
-        let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
-            path: "foo/bar".into(), // Resolves to /workspace/foo/bar
-        });
-        let base_spec = PinnedSourceSpec::Path(PinnedPathSpec {
-            path: "/other/path".into(), // Already absolute
-        });
+        let git_spec = PinnedGitSpec {
+            git: Url::parse("https://github.com/example/repo.git").unwrap(),
+            source: PinnedGitCheckout {
+                commit: GitSha::from_str("abc123def456abc123def456abc123def456abc1").unwrap(),
+                subdirectory: Subdirectory::default(),
+                reference: GitReference::DefaultBranch,
+            },
+        };
 
-        let result = this_spec.make_relative_to(&base_spec, workspace_root);
-
-        // Both are absolute after resolution, pathdiff should compute relative path
-        let path = result.expect("Should return Some");
-        // From /other/path to /workspace/foo/bar
-        assert_eq!(path.as_str(), "../../workspace/foo/bar");
-    }
-
-    #[test]
-    fn test_absolute_with_parent_navigation() {
-        // Test paths that require .. navigation
-        let workspace_root = Path::new("/workspace");
-
-        let this_spec = PinnedSourceSpec::Path(PinnedPathSpec {
-            path: "/foo/bar/qux".into(),
-        });
-        let base_spec = PinnedSourceSpec::Path(PinnedPathSpec {
-            path: "/foo/baz/quux".into(),
-        });
-
-        let result = this_spec.make_relative_to(&base_spec, workspace_root);
-
-        let path = result.expect("Should return Some");
-        // From /foo/baz/quux to /foo/bar/qux requires ../../bar/qux
-        assert_eq!(path.as_str(), "../../bar/qux");
+        let joined = git_spec.join(Utf8TypedPath::derive("src/lib"));
+        assert_eq!(
+            joined.source.subdirectory.to_option_string(),
+            Some("src/lib".to_string())
+        );
     }
 }
