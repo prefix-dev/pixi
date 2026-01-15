@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.63.1] - 2026-01-15
+#### ✨ Highlights
+
+Yes, a patch release looks like we messed up the last release, but we really just wanted to get this fix out 🙃
+
+#### Fixed
+
+- An issue with source-interdependencies and dev packages by @wolfv in [#5292](https://github.com/prefix-dev/pixi/pull/5292)
+
+
+
 ### [0.63.0] - 2026-01-14
 #### ✨ Highlights
 
