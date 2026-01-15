@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### [0.63.1] - 2026-01-15
 #### ✨ Highlights
 
-Yes, a patch release looks like we messed up the last release, but we really just wanted to get this fix out 🙃
+Yes, a patch release the day after looks like we messed up the last release, but we really just wanted to get this fix out 🙃
 
 #### Fixed
 
