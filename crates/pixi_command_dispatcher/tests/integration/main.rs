@@ -77,33 +77,6 @@ fn workspaces_dir() -> PathBuf {
     cargo_workspace_dir().join("tests/data/workspaces")
 }
 
-/// Recursively copies a directory and its contents to a destination.
-fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-        if src_path.is_dir() {
-            copy_dir_recursive(&src_path, &dst_path)?;
-        } else {
-            fs::copy(&src_path, &dst_path)?;
-        }
-    }
-    Ok(())
-}
-
-/// Copies a workspace to a temporary directory for isolated testing.
-///
-/// Returns the temp directory handle (must be kept alive) and the path to the workspace copy.
-fn copy_workspace_to_temp(workspace_name: &str) -> (TempDir, PathBuf) {
-    let temp = tempfile::tempdir().unwrap();
-    let src = workspaces_dir().join(workspace_name);
-    let dst = temp.path().join(workspace_name);
-    copy_dir_recursive(&src, &dst).unwrap();
-    (temp, dst)
-}
-
 /// Returns the default build environment to use for tests.
 fn default_build_environment() -> BuildEnvironment {
     let (tool_platform, tool_virtual_packages) = tool_platform();
@@ -293,7 +266,7 @@ pub async fn instantiate_backend_without_compatible_api_version_cancels_duplicat
         dispatcher.instantiate_tool_environment(spec),
     );
 
-    // Exactly one result should be a failure and the other should be cancelled.
+    // Both results should be failures since errors are now cloned and sent to all channels.
     let is_cancelled = |r: &Result<
         _,
         CommandDispatcherError<pixi_command_dispatcher::InstantiateToolEnvironmentError>,
@@ -307,10 +280,13 @@ pub async fn instantiate_backend_without_compatible_api_version_cancels_duplicat
     let failed_count = usize::from(is_failed(&r1)) + usize::from(is_failed(&r2));
 
     assert_eq!(
-        cancelled_count, 1,
-        "expected exactly one request to be cancelled"
+        cancelled_count, 0,
+        "no requests should be cancelled - errors are cloned to all channels"
     );
-    assert_eq!(failed_count, 1, "expected exactly one request to fail");
+    assert_eq!(
+        failed_count, 2,
+        "both requests should fail with the same error"
+    );
 }
 
 /// Dropping the returned future should cancel the background task promptly.
@@ -586,6 +562,22 @@ pub async fn instantiate_backend_with_from_source() {
     let source_dir = workspaces_dir().join("source-backends");
     let tmp_dir = tempfile::tempdir().unwrap();
     let root_dir = tmp_dir.path().to_path_buf();
+
+    // Copy all files from source to temp
+    fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+        fs_err::create_dir_all(dst)?;
+        for entry in fs_err::read_dir(src)? {
+            let entry = entry?;
+            let src_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+            if src_path.is_dir() {
+                copy_dir_recursive(&src_path, &dst_path)?;
+            } else {
+                fs_err::copy(&src_path, &dst_path)?;
+            }
+        }
+        Ok(())
+    }
     copy_dir_recursive(&source_dir, &root_dir).unwrap();
 
     // Update workspace pixi.toml to use local channel instead of conda-forge
@@ -1262,8 +1254,7 @@ pub async fn pin_and_checkout_url_validates_cached_results() {
 /// and verifies that the cache is properly reused (CacheStatus::UpToDate).
 #[tokio::test]
 pub async fn test_package_not_rebuilt_across_sessions_when_no_files_changed() {
-    // Copy workspace to temp directory for isolation from other tests
-    let (_workspace_temp, root_dir) = copy_workspace_to_temp("host-dependency");
+    let root_dir = workspaces_dir().join("host-dependency");
     let tempdir = tempfile::tempdir().unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
@@ -1350,8 +1341,7 @@ pub async fn test_package_not_rebuilt_across_sessions_when_no_files_changed() {
 /// and verifies that file changes are detected and trigger a rebuild.
 #[tokio::test]
 pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
-    // Copy workspace to temp directory for isolation from other tests
-    let (_workspace_temp, root_dir) = copy_workspace_to_temp("host-dependency");
+    let root_dir = workspaces_dir().join("host-dependency");
     let tempdir = tempfile::tempdir().unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
@@ -1445,8 +1435,7 @@ pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
 /// without testing dependency chains or force rebuild flags.
 #[tokio::test]
 pub async fn test_package_rebuilt_when_source_file_modified() {
-    // Copy workspace to temp directory for isolation from other tests
-    let (_workspace_temp, root_dir) = copy_workspace_to_temp("host-dependency");
+    let root_dir = workspaces_dir().join("host-dependency");
     let tempdir = tempfile::tempdir().unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());

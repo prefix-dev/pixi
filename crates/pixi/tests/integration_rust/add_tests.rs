@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use pep508_rs::MarkerTree;
 use pixi_cli::cli_config::GitRev;
 use pixi_consts::consts;
 use pixi_core::{DependencyType, Workspace};
@@ -545,7 +546,8 @@ index-url = "{index_url}"
                         source: PixiPypiSource::Registry {
                             version: VersionOrStar::from_str("==24.8.0").unwrap(),
                             index: None,
-                        }
+                        },
+                        env_markers: MarkerTree::default(),
                     }
                 );
             }

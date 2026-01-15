@@ -292,9 +292,21 @@ pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiRef
 }
 
 /// Convert a solved [`GitSourceDist`] into [`PinnedGitSpec`]
-pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
-    let reference = into_pixi_reference(dist.git.reference().clone());
-
+///
+/// The `original_reference` parameter allows preserving the original git reference
+/// from the manifest (e.g., `Branch("main")`). When uv resolves a git dependency,
+/// it may normalize branch references to `DefaultBranch`, losing the original
+/// branch information. If provided, this original reference will be used instead
+/// of the one from uv's resolution.
+///
+/// If no original reference is provided (user didn't specify branch/tag/rev),
+/// we store the resolved commit as `Rev(commit)` rather than `DefaultBranch`.
+/// This ensures the lock file has a precise reference that doesn't require
+/// cache lookups when re-resolving (similar to how uv's lockfile works).
+pub fn into_pinned_git_spec(
+    dist: GitSourceDist,
+    original_reference: Option<PixiReference>,
+) -> PinnedGitSpec {
     // Necessary to convert between our gitsha and uv gitsha.
     let git_sha = PixiGitSha::from_str(
         &dist
@@ -304,6 +316,12 @@ pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
             .to_string(),
     )
     .expect("we expect it to be a valid sha");
+
+    // Use the original reference from the manifest if provided.
+    // If no explicit reference was specified, use DefaultBranch.
+    // The precise commit is already captured in the fragment (`#commit`),
+    // so we don't need to duplicate it in the query string as `?rev=commit`.
+    let reference = original_reference.unwrap_or(PixiReference::DefaultBranch);
 
     let pinned_checkout = PinnedGitCheckout::new(
         git_sha,

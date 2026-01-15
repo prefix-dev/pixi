@@ -2015,9 +2015,9 @@ dependencies = [
 
 [[package]]
 name = "deno_task_shell"
-version = "0.26.1"
+version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcb3527b0dc64fb6c1cb19023ef92a949b54c735c37af9bfb9fe4095922278da"
+checksum = "d6c8906a44dee412f17bf3ec79da41548612c5da3741fd0023c718408d6fe685"
 dependencies = [
  "anyhow",
  "deno_path_util",
@@ -2025,7 +2025,6 @@ dependencies = [
  "glob",
  "monch",
  "nix 0.29.0",
- "os_pipe",
  "path-dedot",
  "sys_traits",
  "thiserror 2.0.17",
@@ -4960,16 +4959,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "os_pipe"
-version = "1.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
-dependencies = [
- "libc",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "os_str_bytes"
 version = "6.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5899,6 +5888,7 @@ dependencies = [
  "url",
  "uv-build-frontend",
  "uv-cache",
+ "uv-cache-key",
  "uv-client",
  "uv-configuration",
  "uv-dispatch",
@@ -6403,7 +6393,7 @@ dependencies = [
  "rattler_networking",
  "reqwest",
  "reqwest-middleware",
- "sevenz-rust2 0.19.4",
+ "sevenz-rust2",
  "tar",
  "tempfile",
  "thiserror 2.0.17",
@@ -7160,7 +7150,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serde_yaml",
- "sevenz-rust2 0.20.1",
+ "sevenz-rust2",
  "sha1",
  "sha2",
  "spdx 0.13.3",
@@ -8823,24 +8813,6 @@ dependencies = [
  "ryu",
  "serde",
  "unsafe-libyaml",
-]
-
-[[package]]
-name = "sevenz-rust2"
-version = "0.19.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "414256b6bb303a2a38ad800096664c3b332295c17b7ef0674bf0acf44284036c"
-dependencies = [
- "aes",
- "bzip2 0.6.1",
- "cbc",
- "crc32fast",
- "getrandom 0.3.4",
- "js-sys",
- "lzma-rust2",
- "ppmd-rust",
- "sha2",
- "wasm-bindgen",
 ]
 
 [[package]]

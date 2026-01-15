@@ -13,7 +13,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     hash::Hash,
     path::PathBuf,
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 use thiserror::Error;
 use tracing::instrument;
@@ -130,7 +130,7 @@ impl BuildBackendMetadataSpec {
                 self.enabled_protocols.clone(),
             )
             .await
-            .map_err_with(BuildBackendMetadataError::Discovery)?;
+            .map_err_with(|e| BuildBackendMetadataError::Discovery(Arc::new(e)))?;
 
         // Determine the location of the source to build from.
         let manifest_source_anchor =
@@ -547,7 +547,7 @@ impl BuildBackendMetadataSpec {
                 let _err = futures::executor::block_on(log_sink.send(line));
             })
             .await
-            .map_err(BuildBackendMetadataError::Communication)
+            .map_err(|e| BuildBackendMetadataError::Communication(Arc::new(e)))
             .map_err(CommandDispatcherError::Failed)?;
         let timestamp = SystemTime::now();
 
@@ -611,7 +611,7 @@ impl BuildBackendMetadataSpec {
     }
 }
 
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Clone, Error, Diagnostic)]
 pub enum BuildBackendMetadataError {
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -619,7 +619,7 @@ pub enum BuildBackendMetadataError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Discovery(#[from] pixi_build_discovery::DiscoveryError),
+    Discovery(Arc<pixi_build_discovery::DiscoveryError>),
 
     #[error("could not initialize the build-backend")]
     Initialize(
@@ -630,7 +630,7 @@ pub enum BuildBackendMetadataError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Communication(#[from] pixi_build_frontend::json_rpc::CommunicationError),
+    Communication(Arc<pixi_build_frontend::json_rpc::CommunicationError>),
 
     #[error("the build backend {0} does not support the `conda/outputs` procedure")]
     BackendMissingCapabilities(String),
@@ -641,16 +641,46 @@ pub enum BuildBackendMetadataError {
     DuplicateVariants { package: String, duplicates: String },
 
     #[error("could not compute hash of input files")]
-    GlobHash(#[from] pixi_glob::GlobHashError),
+    GlobHash(Arc<pixi_glob::GlobHashError>),
 
     #[error("failed to determine input file modification times")]
-    GlobSet(#[from] pixi_glob::GlobSetError),
+    GlobSet(Arc<pixi_glob::GlobSetError>),
 
     #[error(transparent)]
     Cache(#[from] build_backend_metadata::BuildBackendMetadataCacheError),
 
     #[error("failed to normalize path")]
-    NormalizePath(#[from] pixi_path::NormalizeError),
+    NormalizePath(Arc<pixi_path::NormalizeError>),
+}
+
+impl From<pixi_build_discovery::DiscoveryError> for BuildBackendMetadataError {
+    fn from(err: pixi_build_discovery::DiscoveryError) -> Self {
+        Self::Discovery(Arc::new(err))
+    }
+}
+
+impl From<pixi_build_frontend::json_rpc::CommunicationError> for BuildBackendMetadataError {
+    fn from(err: pixi_build_frontend::json_rpc::CommunicationError) -> Self {
+        Self::Communication(Arc::new(err))
+    }
+}
+
+impl From<pixi_glob::GlobHashError> for BuildBackendMetadataError {
+    fn from(err: pixi_glob::GlobHashError) -> Self {
+        Self::GlobHash(Arc::new(err))
+    }
+}
+
+impl From<pixi_glob::GlobSetError> for BuildBackendMetadataError {
+    fn from(err: pixi_glob::GlobSetError) -> Self {
+        Self::GlobSet(Arc::new(err))
+    }
+}
+
+impl From<pixi_path::NormalizeError> for BuildBackendMetadataError {
+    fn from(err: pixi_path::NormalizeError) -> Self {
+        Self::NormalizePath(Arc::new(err))
+    }
 }
 
 #[cfg(test)]

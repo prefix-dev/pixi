@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use thiserror::Error;
 
@@ -31,11 +32,11 @@ pub struct SourceMetadataCache {
     root: AbsPathBuf,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum SourceMetadataCacheError {
     /// An I/O error occurred while reading or writing the cache.
     #[error("an IO error occurred while {0} {1}")]
-    IoError(String, PathBuf, #[source] std::io::Error),
+    IoError(String, PathBuf, #[source] Arc<std::io::Error>),
 }
 
 /// Defines additional input besides the source files that are used to compute
@@ -113,7 +114,7 @@ impl CacheKey for SourceMetadataCacheShard {
 
 impl CacheError for SourceMetadataCacheError {
     fn from_io_error(operation: String, path: PathBuf, error: std::io::Error) -> Self {
-        SourceMetadataCacheError::IoError(operation, path, error)
+        SourceMetadataCacheError::IoError(operation, path, Arc::new(error))
     }
 }
 
