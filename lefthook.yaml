@@ -93,10 +93,6 @@ pre-push:
       run: pixi {run} -e lint cargo-deny
     - name: check-openssl
       run: pixi {run} -e lint check-openssl
-    - name: pixi-build-ros-mypy
-      root: pixi-build-backends/backends/pixi-build-ros
-      glob: "*.{py,pyi}"
-      run: pixi {run} -e default lint-mypy
     - name: py-pixi-build-backend-clippy
       root: pixi-build-backends/py-pixi-build-backend
       glob: "*.rs"

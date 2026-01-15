@@ -10,7 +10,7 @@ preview = ["pixi-build"]
 CARGO_TARGET_DIR = "target/pixi"
 
 [tasks]
-lint.depends-on = ["fmt", "lint-ruff", "lint-mypy"]
+lint.depends-on = ["lint-ruff", "lint-mypy"]
 
 [target.linux-64.dependencies]
 clang = ">=21.1,<21.2"

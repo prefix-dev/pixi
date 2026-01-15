@@ -42,7 +42,7 @@ jobs:
         run: |
           chmod a+x ${{ github.workspace }}/${{ env.TARGET_RELEASE }}/pixi
           echo "${{ github.workspace }}/${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
-      - name: Run mypy
+      - name: Lint
         run: |
           cd pixi-build-backends/backends/pixi-build-ros
           pixi run lint
