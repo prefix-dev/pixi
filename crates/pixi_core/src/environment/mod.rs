@@ -474,9 +474,8 @@ impl LockFileUsage {
     /// Returns true if the lock-file should be checked if it is out of date.
     pub(crate) fn should_check_if_out_of_date(self) -> bool {
         match self {
-            LockFileUsage::Update | LockFileUsage::Locked => true,
+            LockFileUsage::Update | LockFileUsage::Locked | LockFileUsage::DryRun => true,
             LockFileUsage::Frozen => false,
-            LockFileUsage::DryRun => false,
         }
     }
 }
