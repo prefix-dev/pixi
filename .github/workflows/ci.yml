@@ -101,6 +101,14 @@ jobs:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
       - name: lint (if this step fails, please 'pixi run lint' locally and push the changes)
         run: pixi run lint
+      - name: Check if lint made any changes
+        run: |
+          if ! git diff --quiet; then
+            echo "Error: Linting made changes to the code"
+            echo "Please run 'pixi run lint' locally and commit the changes."
+            git diff
+            exit 1
+          fi
 
   # Check that all the code references are correct.
   check-rustdoc-links:
