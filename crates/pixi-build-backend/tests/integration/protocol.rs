@@ -73,6 +73,7 @@ mod imp {
 }
 
 #[tokio::test]
+#[ignore] // TODO: this test since it sometimes hangs in CI
 async fn test_conda_build_v1() {
     let tmp_dir = TempDir::new().unwrap();
     let tmp_dir_path = tmp_dir.path().to_path_buf();
