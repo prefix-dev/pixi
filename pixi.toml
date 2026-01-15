@@ -132,6 +132,23 @@ generate-cli-docs = { cmd = "cargo run --locked --manifest-path crates/pixi_docs
 mike-serve = { cmd = "mike serve", description = "Serve versioned docs with mike" }
 
 #
+# Feature for running lefthook (lint orchestration)
+#
+[feature.lefthook.dependencies]
+lefthook = ">=2.0.11,<3"
+
+[feature.lefthook.tasks]
+lefthook = { cmd = "lefthook", description = "Run lefthook" }
+lint = { depends-on = [
+  "lint-fast",
+  "lint-slow",
+], description = "Run all linters and formatters on all code" }
+lint-fast = { cmd = "lefthook run pre-commit --all-files --force", description = "Run all fast linters and formatters (no clippy)" }
+lint-slow = { cmd = "lefthook run pre-push --all-files --force", description = "Run all slow linters and formatters" }
+pre-commit-install = { cmd = "lefthook install", description = "Install all git hooks" }
+pre-commit-install-minimal = { cmd = "lefthook install pre-commit", description = "Install only pre-commit hook" }
+
+#
 # Feature for linting and formatting tools
 #
 [feature.lint.dependencies]
@@ -141,7 +158,6 @@ cargo-deny = ">=0.19,<0.19.1" # 0.18.5 breaks license checking for uv crates
 cargo-shear = ">=1.7.1,<2"
 dprint = ">=0.49.1,<0.51"
 go-shfmt = ">=3.12.0,<4"
-lefthook = ">=2.0.11,<3"
 ruff = ">=0.14.0,<0.15"
 shellcheck = ">=0.10.0,<0.11"
 taplo = ">=0.10.0,<0.11"
@@ -157,15 +173,6 @@ cargo-shear = { cmd = "cargo shear --fix", description = "Remove unused dependen
 check-openssl = { cmd = "python tests/scripts/check-openssl.py", description = "Check OpenSSL configuration" }
 dprint-check = { cmd = "dprint check --log-level=silent", description = "Check formatting with dprint" }
 dprint-fmt = { cmd = "dprint fmt --incremental=false", description = "Format with dprint" }
-lefthook = { cmd = "lefthook", description = "Run lefthook" }
-lint = { depends-on = [
-  "lint-fast",
-  "lint-slow",
-], description = "Run all linters and formatters on all code" }
-lint-fast = { cmd = "lefthook run pre-commit --all-files --force", description = "Run all fast linters and formatters (no clippy)" }
-lint-slow = { cmd = "lefthook run pre-push --all-files --force", description = "Run all slow linters and formatters" }
-pre-commit-install = { cmd = "lefthook install", description = "Install all git hooks" }
-pre-commit-install-minimal = { cmd = "lefthook install pre-commit", description = "Install only pre-commit hook" }
 ruff-format = { cmd = "ruff format --exit-non-zero-on-format --force-exclude", description = "Format Python code with ruff" }
 ruff-lint = { cmd = "ruff check --fix --exit-non-zero-on-fix --force-exclude", description = "Lint Python code with ruff" }
 shell-format = { cmd = "shfmt --write --indent=4 --simplify --binary-next-line", description = "Format shell scripts" }
@@ -372,6 +379,7 @@ backends-release = { features = ["backends-release", "python"] }
 dev = { features = ["rust", "compilers", "python", "dev"] }
 dist = { features = ["dist"] }
 docs = { features = ["rust", "compilers", "python", "docs"] }
+lefthook = { features = ["lefthook"] }
 lint = { features = [
   "rust",
   "compilers",
