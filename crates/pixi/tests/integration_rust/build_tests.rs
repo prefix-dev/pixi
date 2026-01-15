@@ -668,3 +668,147 @@ my-package = {{ path = "./my-package" }}
 
     assert_eq!(events.len(), 1, "Expected another build for sdl2-32");
 }
+
+/// Test that verifies when we generate a lock-file with a source package,
+/// a second invocation of generating the lock-file should report it's already up to date.
+///
+/// This test creates a noarch: generic package with all fields that are compared
+/// in `package_records_are_equal`:
+/// - name, version, build, build_number
+/// - depends, constrains
+/// - license, license_family
+/// - noarch, subdir
+/// - features, track_features
+/// - purls, python_site_packages_path
+/// - run_exports
+#[tokio::test]
+async fn test_source_package_lock_file_up_to_date() {
+    use pixi_test_utils::create_conda_package;
+    use rattler_conda_types::{NoArchType, package::RunExportsJson};
+
+    setup_tracing();
+
+    // Create a PixiControl instance with PassthroughBackend
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create a source package directory
+    let source_dir = pixi.workspace_path().join("source-package");
+    fs::create_dir_all(&source_dir).unwrap();
+
+    // Create run_exports for the package
+    let run_exports = RunExportsJson {
+        weak: vec!["weak-dep >=1.0".to_string()],
+        strong: vec!["strong-dep >=2.0".to_string()],
+        ..Default::default()
+    };
+
+    // Create a Package with all fields from package_records_are_equal
+    let mut package = pixi_test_utils::Package::build("test-source-pkg", "1.2.3")
+        .with_build("test_build_0")
+        .with_build_number(0)
+        .with_subdir(Platform::NoArch)
+        .with_dependency("some-dependency >=1.0")
+        .with_run_exports(run_exports)
+        .finish();
+
+    // Modify the package_record to include all fields compared in package_records_are_equal
+    package.package_record.license = Some("MIT".to_string());
+    package.package_record.license_family = Some("MIT".to_string());
+    package.package_record.noarch = NoArchType::generic();
+    package.package_record.constrains = vec!["constrained-pkg <2.0".to_string()];
+    package.package_record.track_features = vec!["test_feature".to_string()];
+    package.package_record.features = Some("test_features".to_string());
+    // Note: purls, python_site_packages_path, and experimental_extra_depends
+    // are left as defaults since they're optional and the equality check handles None values
+
+    // Create the .conda package file in the source directory
+    let package_filename = format!(
+        "{}-{}-{}.conda",
+        package.package_record.name.as_normalized(),
+        package.package_record.version,
+        package.package_record.build
+    );
+    let package_path = source_dir.join(&package_filename);
+    create_conda_package(&package, &package_path).expect("Failed to create conda package");
+
+    // Create the pixi.toml for the source package that configures
+    // PassthroughBackend to use the pre-built package
+    let source_pixi_toml = format!(
+        r#"
+[package]
+name = "test-source-pkg"
+version = "1.2.3"
+
+[package.build]
+backend = {{ name = "passthrough", version = "0.1.0" }}
+
+[package.build.config]
+package = "{}"
+"#,
+        package_filename
+    );
+    fs::write(source_dir.join("pixi.toml"), source_pixi_toml).unwrap();
+
+    // Create the workspace manifest that depends on the source package
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = []
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+test-source-pkg = {{ path = "./source-package" }}
+"#,
+        Platform::current()
+    );
+
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // First invocation: Generate the lock-file
+    let workspace = pixi.workspace().unwrap();
+    let (lock_file_data, was_updated) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("First lock file generation should succeed");
+
+    // Verify the lock-file was actually created/updated
+    assert!(was_updated, "First invocation should update the lock-file");
+
+    // Verify the package is in the lock-file
+    let lock_file = lock_file_data.into_lock_file();
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "test-source-pkg",
+        ),
+        "Lock file should contain the source package"
+    );
+
+    // Verify we can find the package with the expected version
+    assert!(
+        lock_file.contains_match_spec(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "test-source-pkg ==1.2.3"
+        ),
+        "Lock file should contain test-source-pkg with version 1.2.3"
+    );
+
+    // Second invocation: Load the workspace again and check if lock-file is up to date
+    let workspace = pixi.workspace().unwrap();
+    let (_, was_updated_second) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("Second lock file check should succeed");
+
+    // The second invocation should NOT update the lock-file since it's already up to date
+    assert!(
+        !was_updated_second,
+        "Second invocation should report lock-file is already up to date"
+    );
+}
