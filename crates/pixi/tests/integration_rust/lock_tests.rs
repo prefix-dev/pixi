@@ -1,12 +1,39 @@
 use crate::common::{LockFileExt, PixiControl};
+use pixi_test_utils::{MockRepoData, Package};
 use rattler_conda_types::Platform;
+use tempfile::TempDir;
 
 /// Test that `pixi lock --dry-run` doesn't modify the lock file on disk
 #[tokio::test]
 async fn test_lock_dry_run_doesnt_modify_lockfile() {
-    // Create a new pixi project
+    // Create a mock package database
+    let mut package_database = MockRepoData::default();
+
+    // Add mock packages
+    package_database.add_package(
+        Package::build("python", "3.11.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("numpy", "1.24.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+
+    // Write the repodata to disk
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    // Create a new pixi project using our local channel
     let pixi = PixiControl::new().unwrap();
-    pixi.init().with_channel("conda-forge").await.unwrap();
+    pixi.init()
+        .with_local_channel(channel_dir.path())
+        .await
+        .unwrap();
 
     // Add a dependency to create an initial lock file
     pixi.add("python").await.unwrap();
@@ -63,9 +90,34 @@ async fn test_lock_dry_run_doesnt_modify_lockfile() {
 /// Test that `pixi lock --dry-run` implies `--no-install`
 #[tokio::test]
 async fn test_lock_dry_run_implies_no_install() {
-    // Create a new pixi project
+    // Create a mock package database
+    let mut package_database = MockRepoData::default();
+
+    // Add mock packages
+    package_database.add_package(
+        Package::build("python", "3.11.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("numpy", "1.24.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+
+    // Write the repodata to disk
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    // Create a new pixi project using our local channel
     let pixi = PixiControl::new().unwrap();
-    pixi.init().with_channel("conda-forge").await.unwrap();
+    pixi.init()
+        .with_local_channel(channel_dir.path())
+        .await
+        .unwrap();
 
     // Add a dependency
     pixi.add("python").await.unwrap();
