@@ -78,14 +78,10 @@ types-pyyaml = "*"
 py-pixi-build-backend = { path = "../../py-pixi-build-backend" }
 
 [feature.lint.dependencies]
-pyupgrade = ">=3.20.0,<4"
 ruff = "*"
 
 [feature.lint.tasks]
-fmt = { depends-on = ["fmt-pyupgrade", "fmt-ruff"] }
-fmt-pyupgrade = "pyupgrade --py310-plus **/**/*.py"
-fmt-ruff = "ruff format src tests"
-lint-ruff = "ruff check ."
+lint-ruff = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
 
 ## Package section
 [package.build.backend]

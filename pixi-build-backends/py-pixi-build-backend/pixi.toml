@@ -65,12 +65,10 @@ build-release = "maturin develop --release"
 test = { cmd = "pytest --doctest-modules", depends-on = ["build"] }
 test-fast = "pytest --doctest-modules"
 
-fmt = { depends-on = ["fmt-python", "fmt-rust"] }
-fmt-python = "ruff format pixi_build_backend examples tests"
 fmt-rust = "cargo fmt --all"
 
 lint = { depends-on = ["lint-python", "lint-rust"] }
-lint-python = "ruff check ."
+lint-python = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
 lint-rust = "cargo clippy --all -- -D warnings"
 
 [environments]
