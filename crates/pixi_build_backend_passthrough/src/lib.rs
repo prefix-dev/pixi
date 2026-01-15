@@ -19,7 +19,7 @@ use pixi_build_frontend::{
     json_rpc::CommunicationError,
 };
 use pixi_build_types::{
-    BackendCapabilities, BinaryPackageSpec, NamedSpec, PackageSpec, ProjectModel,
+    BackendCapabilities, BinaryPackageSpec, ConstraintSpec, NamedSpec, PackageSpec, ProjectModel,
     SourcePackageName, Target, TargetSelector, Targets, VariantValue,
     procedures::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
@@ -59,6 +59,8 @@ pub struct PassthroughBackend {
     /// Run exports configuration for simulating package run_exports.
     /// Maps package names to their run_exports definitions.
     run_exports: BTreeMap<String, RunExportsJson>,
+    /// Run exports read from the package file (when config.package is specified).
+    package_run_exports: Option<RunExportsJson>,
 }
 
 impl PassthroughBackend {
@@ -92,6 +94,7 @@ impl InMemoryBackend for PassthroughBackend {
             &self.index_json,
             &params,
             &self.run_exports,
+            self.package_run_exports.as_ref(),
         );
 
         Ok(CondaOutputsResult {
@@ -260,6 +263,7 @@ fn generate_variant_outputs(
     index_json: &IndexJson,
     params: &CondaOutputsParams,
     run_exports: &BTreeMap<String, RunExportsJson>,
+    package_run_exports: Option<&RunExportsJson>,
 ) -> Vec<CondaOutput> {
     // Check if we have variant configurations and dependencies with "*"
     let variant_keys = find_variant_keys(project_model, params);
@@ -272,6 +276,7 @@ fn generate_variant_outputs(
             params,
             BTreeMap::new(),
             run_exports,
+            package_run_exports,
         )];
     }
 
@@ -295,6 +300,7 @@ fn generate_variant_outputs(
             params,
             BTreeMap::new(),
             run_exports,
+            package_run_exports,
         )];
     }
 
@@ -304,7 +310,16 @@ fn generate_variant_outputs(
     // Create an output for each variant combination
     combinations
         .into_iter()
-        .map(|variant| create_output(project_model, index_json, params, variant, run_exports))
+        .map(|variant| {
+            create_output(
+                project_model,
+                index_json,
+                params,
+                variant,
+                run_exports,
+                package_run_exports,
+            )
+        })
         .collect()
 }
 
@@ -469,6 +484,7 @@ fn create_output(
     params: &CondaOutputsParams,
     mut variant: BTreeMap<String, VariantValue>,
     run_exports_config: &BTreeMap<String, RunExportsJson>,
+    package_run_exports: Option<&RunExportsJson>,
 ) -> CondaOutput {
     let subdir = index_json
         .subdir
@@ -552,7 +568,9 @@ fn create_output(
             variant,
         },
         ignore_run_exports: Default::default(),
-        run_exports: Default::default(),
+        run_exports: package_run_exports
+            .map(convert_run_exports_json)
+            .unwrap_or_default(),
         input_globs: None,
     }
 }
@@ -668,6 +686,75 @@ fn resolve_run_export_spec(
     })
 }
 
+/// Converts a `RunExportsJson` (from a conda package) to `CondaOutputRunExports`.
+fn convert_run_exports_json(
+    run_exports: &RunExportsJson,
+) -> pixi_build_types::procedures::conda_outputs::CondaOutputRunExports {
+    fn convert_specs(specs: &[String]) -> Vec<NamedSpec<PackageSpec>> {
+        specs
+            .iter()
+            .filter_map(|spec_str| {
+                let match_spec = rattler_conda_types::MatchSpec::from_str(
+                    spec_str,
+                    rattler_conda_types::ParseStrictness::Lenient,
+                )
+                .ok()?;
+
+                let name = match_spec
+                    .name
+                    .as_ref()?
+                    .as_exact()?
+                    .as_source()
+                    .to_string();
+
+                Some(NamedSpec {
+                    name: SourcePackageName::from(name),
+                    spec: PackageSpec::Binary(BinaryPackageSpec {
+                        version: match_spec.version.clone(),
+                        ..Default::default()
+                    }),
+                })
+            })
+            .collect()
+    }
+
+    fn convert_constraint_specs(specs: &[String]) -> Vec<NamedSpec<ConstraintSpec>> {
+        specs
+            .iter()
+            .filter_map(|spec_str| {
+                let match_spec = rattler_conda_types::MatchSpec::from_str(
+                    spec_str,
+                    rattler_conda_types::ParseStrictness::Lenient,
+                )
+                .ok()?;
+
+                let name = match_spec
+                    .name
+                    .as_ref()?
+                    .as_exact()?
+                    .as_source()
+                    .to_string();
+
+                Some(NamedSpec {
+                    name: SourcePackageName::from(name),
+                    spec: ConstraintSpec::Binary(BinaryPackageSpec {
+                        version: match_spec.version.clone(),
+                        ..Default::default()
+                    }),
+                })
+            })
+            .collect()
+    }
+
+    pixi_build_types::procedures::conda_outputs::CondaOutputRunExports {
+        weak: convert_specs(&run_exports.weak),
+        strong: convert_specs(&run_exports.strong),
+        noarch: convert_specs(&run_exports.noarch),
+        weak_constrains: convert_constraint_specs(&run_exports.weak_constrains),
+        strong_constrains: convert_constraint_specs(&run_exports.strong_constrains),
+    }
+}
+
 /// Returns true if the given [`TargetSelector`] matches the specified
 /// `platform`.
 fn matches_target_selector(selector: &TargetSelector, platform: Platform) -> bool {
@@ -724,26 +811,31 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
 
         // Read the package file if it is specified, or create IndexJson for on_the_fly mode
         let source_dir = params.source_directory.expect("Missing source directory");
-        let index_json = match &config.package {
+        let (index_json, package_run_exports) = match &config.package {
             Some(path) => {
                 let path = source_dir.join(path);
-                match rattler_package_streaming::seek::read_package_file(&path) {
-                    Err(err) => {
-                        return Err(Box::new(
-                            BackendError::new(format!(
-                                "failed to read '{}' file: {}",
-                                path.display(),
-                                err
-                            ))
-                            .into(),
-                        ));
-                    }
-                    Ok(index_json) => index_json,
-                }
+                let index_json: IndexJson =
+                    match rattler_package_streaming::seek::read_package_file(&path) {
+                        Err(err) => {
+                            return Err(Box::new(
+                                BackendError::new(format!(
+                                    "failed to read index.json from '{}': {}",
+                                    path.display(),
+                                    err
+                                ))
+                                .into(),
+                            ));
+                        }
+                        Ok(index_json) => index_json,
+                    };
+                // Also read run_exports.json from the package (optional, may not exist)
+                let run_exports: Option<RunExportsJson> =
+                    rattler_package_streaming::seek::read_package_file(&path).ok();
+                (index_json, run_exports)
             }
             None => {
                 // Create IndexJson from project model for on-the-fly package generation
-                IndexJson {
+                let index_json = IndexJson {
                     arch: None,
                     build: String::new(),
                     build_number: 0,
@@ -770,7 +862,8 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                         .clone()
                         .unwrap_or_else(|| Version::major(0))
                         .into(),
-                }
+                };
+                (index_json, None)
             }
         };
 
@@ -780,6 +873,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
             source_dir,
             index_json,
             run_exports: self.run_exports.clone(),
+            package_run_exports,
         })
     }
 

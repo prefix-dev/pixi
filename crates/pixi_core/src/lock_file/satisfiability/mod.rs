@@ -430,8 +430,8 @@ pub enum PlatformUnsat {
     )]
     PackageBuildSourceMismatch(String, SourceMismatchError),
 
-    #[error("the locked metadata of '{0}' package changed (see trace logs for details)")]
-    SourcePackageMetadataChanged(String),
+    #[error("the metadata of source package '{0}' changed: {1}")]
+    SourcePackageMetadataChanged(String, String),
 
     #[error("the source location '{0}' changed from '{1}' to '{2}'")]
     SourceBuildLocationChanged(String, String, String),
@@ -1327,12 +1327,13 @@ async fn verify_source_metadata(
                     package_name
                 );
 
-                if !package_records_are_equal(
+                if let Err(reason) = package_records_are_equal(
                     &current_record.package_record,
                     &source_record.package_record,
                 ) {
                     return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
                         package_name.to_string(),
+                        reason,
                     )));
                 }
 
@@ -1349,8 +1350,9 @@ async fn verify_source_metadata(
     Ok(())
 }
 
-/// Returns true if the package records are considered equal.
-fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> bool {
+/// Returns `Ok(())` if the package records are considered equal, or an error
+/// message describing which field differs.
+fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> Result<(), String> {
     // Use destructuring to ensure we get compiler errors if these types change
     // significantly.
     let PackageRecord {
@@ -1371,7 +1373,9 @@ fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> bool {
         platform: _,
         purls: a_purls,
         python_site_packages_path: a_python_site_packages_path,
-        run_exports: a_run_exports,
+        // run_exports are not compared because they are used during the solve
+        // but not stored in the lock-file for source packages.
+        run_exports: _,
         sha256: _,
         size: _,
         subdir: a_subdir,
@@ -1397,7 +1401,9 @@ fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> bool {
         platform: _,
         purls: b_purls,
         python_site_packages_path: b_python_site_packages_path,
-        run_exports: b_run_exports,
+        // run_exports are not compared because they are used during the solve
+        // but not stored in the lock-file for source packages.
+        run_exports: _,
         sha256: _,
         size: _,
         subdir: b_subdir,
@@ -1406,27 +1412,83 @@ fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> bool {
         version: b_version,
     } = &b;
 
-    a_build == b_build
-        && a_build_number == b_build_number
-        && a_constrains == b_constrains
-        && a_depends == b_depends
-        && a_extra_depends == b_extra_depends
-        && a_features == b_features
-        && a_license == b_license
-        && a_license_family == b_license_family
-        && a_name == b_name
-        && a_noarch == b_noarch
-        && a_purls == b_purls
-        && a_python_site_packages_path == b_python_site_packages_path
-        && match (a_run_exports, b_run_exports) {
-            (Some(a_run_exports), Some(b_run_exports)) => a_run_exports == b_run_exports,
-            (Some(a_run_exports), None) => a_run_exports.is_empty(),
-            (None, Some(b_run_exports)) => b_run_exports.is_empty(),
-            (None, None) => true,
-        }
-        && a_subdir == b_subdir
-        && a_track_features == b_track_features
-        && a_version == b_version
+    if a_name != b_name {
+        return Err(format!(
+            "the package name changed (\"{}\" != \"{}\")",
+            a_name.as_source(),
+            b_name.as_source()
+        ));
+    }
+    if a_version != b_version {
+        return Err(format!(
+            "the version changed (\"{a_version}\" != \"{b_version}\")"
+        ));
+    }
+    if a_build != b_build {
+        return Err(format!(
+            "the build string changed (\"{a_build}\" != \"{b_build}\")"
+        ));
+    }
+    if a_build_number != b_build_number {
+        return Err(format!(
+            "the build number changed ({a_build_number} != {b_build_number})"
+        ));
+    }
+    if a_subdir != b_subdir {
+        return Err(format!(
+            "the subdir changed (\"{a_subdir}\" != \"{b_subdir}\")"
+        ));
+    }
+    if a_noarch != b_noarch {
+        return Err(format!(
+            "the noarch type changed ({a_noarch:?} != {b_noarch:?})"
+        ));
+    }
+    if a_depends != b_depends {
+        return Err(format!(
+            "the dependencies changed ({a_depends:?} != {b_depends:?})"
+        ));
+    }
+    if a_constrains != b_constrains {
+        return Err(format!(
+            "the constraints changed ({a_constrains:?} != {b_constrains:?})"
+        ));
+    }
+    if a_extra_depends != b_extra_depends {
+        return Err(format!(
+            "the extra dependencies changed ({a_extra_depends:?} != {b_extra_depends:?})"
+        ));
+    }
+    if a_features != b_features {
+        return Err(format!(
+            "the features changed ({a_features:?} != {b_features:?})"
+        ));
+    }
+    if a_track_features != b_track_features {
+        return Err(format!(
+            "the track_features changed ({a_track_features:?} != {b_track_features:?})"
+        ));
+    }
+    if a_license != b_license {
+        return Err(format!(
+            "the license changed ({a_license:?} != {b_license:?})"
+        ));
+    }
+    if a_license_family != b_license_family {
+        return Err(format!(
+            "the license_family changed ({a_license_family:?} != {b_license_family:?})"
+        ));
+    }
+    if a_purls != b_purls {
+        return Err(format!("the purls changed ({a_purls:?} != {b_purls:?})"));
+    }
+    if a_python_site_packages_path != b_python_site_packages_path {
+        return Err(format!(
+            "the python_site_packages_path changed ({a_python_site_packages_path:?} != {b_python_site_packages_path:?})"
+        ));
+    }
+
+    Ok(())
 }
 
 fn format_source_record(r: &SourceRecord) -> String {
