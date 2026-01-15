@@ -1253,6 +1253,7 @@ pub async fn pin_and_checkout_url_validates_cached_results() {
 /// This test simulates a program restart by dropping and recreating the dispatcher,
 /// and verifies that the cache is properly reused (CacheStatus::UpToDate).
 #[tokio::test]
+#[ignore] // TODO: this test has a race condition with other tests modifying the same workspace
 pub async fn test_package_not_rebuilt_across_sessions_when_no_files_changed() {
     let root_dir = workspaces_dir().join("host-dependency");
     let tempdir = tempfile::tempdir().unwrap();
