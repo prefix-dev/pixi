@@ -1341,8 +1341,26 @@ pub async fn test_package_not_rebuilt_across_sessions_when_no_files_changed() {
 /// and verifies that file changes are detected and trigger a rebuild.
 #[tokio::test]
 pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
-    let root_dir = workspaces_dir().join("host-dependency");
+    // Copy workspace to temp directory so we can modify files without affecting other tests
+    let source_dir = workspaces_dir().join("host-dependency");
     let tempdir = tempfile::tempdir().unwrap();
+    let root_dir = tempdir.path().join("workspace");
+    fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+        fs_err::create_dir_all(dst)?;
+        for entry in fs_err::read_dir(src)? {
+            let entry = entry?;
+            let src_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+            if src_path.is_dir() {
+                copy_dir_recursive(&src_path, &dst_path)?;
+            } else {
+                fs_err::copy(&src_path, &dst_path)?;
+            }
+        }
+        Ok(())
+    }
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
+
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
@@ -1393,10 +1411,7 @@ pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
     drop(dispatcher);
 
     // Create a file that matches package-b's build glob pattern ("TOUCH*")
-    let _touch_file = tempfile::Builder::new()
-        .prefix("TOUCH")
-        .tempfile_in(root_dir.join("package-b"))
-        .unwrap();
+    fs_err::write(root_dir.join("package-b/TOUCH_FILE"), "trigger rebuild").unwrap();
 
     // Second session: reinstall after file modification
     let (reporter, events) = EventReporter::new();
