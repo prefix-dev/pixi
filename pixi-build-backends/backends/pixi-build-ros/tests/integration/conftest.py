@@ -55,8 +55,10 @@ def tmp_pixi_workspace(tmp_path: Path) -> Iterator[Path]:
     The build process creates deeply nested paths that can exceed this limit.
     """
     if sys.platform == "win32":
-        # Use a short base path on Windows to avoid MAX_PATH issues
-        short_base = Path(tempfile.gettempdir()) / "pxros"
+        # Use a very short base path on Windows to avoid MAX_PATH issues.
+        # The standard temp directory (e.g. C:\Users\<user>\AppData\Local\Temp)
+        # is already quite long, so we use C:\.r instead.
+        short_base = Path("C:/.r")
         short_base.mkdir(parents=True, exist_ok=True)
         workspace = Path(tempfile.mkdtemp(dir=short_base))
         try:
