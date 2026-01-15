@@ -1,5 +1,3 @@
-use std::collections::{HashMap, HashSet};
-
 use super::{verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::{
     Workspace,
@@ -7,12 +5,16 @@ use crate::{
     workspace::{Environment, SolveGroup},
 };
 use fancy_display::FancyDisplay;
+use futures::FutureExt;
+use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use itertools::Itertools;
 use pixi_command_dispatcher::CommandDispatcher;
 use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackageRef};
+use std::collections::{HashMap, HashSet};
 
 /// A struct that contains information about specific outdated environments.
 ///
@@ -216,17 +218,23 @@ async fn find_unsatisfiable_targets<'p>(
             continue;
         }
 
-        // Verify each individual platform
+        // Verify each individual platform concurrently
+        let mut verify_futures = FuturesUnordered::new();
         for platform in platforms {
-            match verify_platform_satisfiability(
-                &environment,
-                command_dispatcher.clone(),
-                locked_environment,
-                platform,
-                project.root(),
-            )
-            .await
-            {
+            verify_futures.push(
+                verify_platform_satisfiability(
+                    &environment,
+                    command_dispatcher.clone(),
+                    locked_environment,
+                    platform,
+                    project.root(),
+                )
+                .map(move |result| (platform, result)),
+            );
+        }
+
+        while let Some((platform, verify_result)) = verify_futures.next().await {
+            match verify_result {
                 Ok(verified_env) => {
                     verified_environments.insert((environment.clone(), platform), verified_env);
                 }

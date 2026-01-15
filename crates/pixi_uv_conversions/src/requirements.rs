@@ -133,9 +133,11 @@ pub fn as_uv_req(
                         .transpose()
                         .expect("could not parse sha"),
                 )?,
-                subdirectory: subdirectory
-                    .as_ref()
-                    .map(|s| PathBuf::from(s).into_boxed_path()),
+                subdirectory: if subdirectory.is_empty() {
+                    None
+                } else {
+                    Some(subdirectory.as_path().to_path_buf().into_boxed_path())
+                },
                 // The full url used to clone, comparable to the git+ url in pip. e.g:
                 // - 'git+SCHEMA://HOST/PATH@REF#subdirectory=SUBDIRECTORY'
                 // - 'git+ssh://github.com/user/repo@d099af3b1028b00c232d8eda28a997984ae5848b'
@@ -143,7 +145,7 @@ pub fn as_uv_req(
                     let created_url = create_uv_url(
                         git_url.without_git_prefix(),
                         rev.as_ref(),
-                        subdirectory.as_deref(),
+                        subdirectory.to_option_string().as_deref(),
                     )
                     .map_err(|e| AsPep508Error::UrlParseError {
                         source: e,
@@ -203,9 +205,11 @@ pub fn as_uv_req(
             let verbatim_url = VerbatimUrl::from_url(url.clone().into());
 
             RequirementSource::Url {
-                subdirectory: subdirectory
-                    .as_ref()
-                    .map(|sub| PathBuf::from(sub.as_str()).into_boxed_path()),
+                subdirectory: if subdirectory.is_empty() {
+                    None
+                } else {
+                    Some(subdirectory.as_path().to_path_buf().into_boxed_path())
+                },
                 location: location_url.into(),
                 url: verbatim_url,
                 ext: DistExtension::from_path(url.path())?,
@@ -358,7 +362,7 @@ mod tests {
                 rev: Some(GitReference::Rev(
                     "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
                 )),
-                subdirectory: None,
+                subdirectory: Default::default(),
             },
         });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
@@ -368,7 +372,7 @@ mod tests {
                 DisplaySafeUrl::parse("ssh://git@github.com/user/test.git").unwrap(),
                 uv_git_types::GitReference::BranchOrTagOrCommit("d099af3b1028b00c232d8eda28a997984ae5848b".to_string()),
                 Some(uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap())).unwrap(),
-            subdirectory: None,
+            subdirectory: Default::default(),
             url: VerbatimUrl::from_url(DisplaySafeUrl::parse("git+ssh://git@github.com/user/test.git@d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
         };
 
@@ -385,7 +389,7 @@ mod tests {
                 rev: Some(GitReference::Rev(
                     "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
                 )),
-                subdirectory: None,
+                subdirectory: Default::default(),
             },
         });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
@@ -401,7 +405,7 @@ mod tests {
                 ),
             )
             .unwrap(),
-            subdirectory: None,
+            subdirectory: Default::default(),
             url: VerbatimUrl::from_url(
                 DisplaySafeUrl::parse(
                     "git+https://github.com/user/test.git@d099af3b1028b00c232d8eda28a997984ae5848b",
@@ -418,7 +422,7 @@ mod tests {
             Url::parse("https://example.com/package.tar.gz#sha256=abc123def456").unwrap();
         let pypi_req = PixiPypiSpec::new(PixiPypiSource::Url {
             url: url_with_hash.clone(),
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
 
         let uv_req = as_uv_req(&pypi_req, "test-package", Path::new("")).unwrap();

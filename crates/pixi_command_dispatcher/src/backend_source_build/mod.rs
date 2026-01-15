@@ -4,6 +4,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, BinaryHeap},
     fmt::Display,
     path::PathBuf,
+    sync::Arc,
 };
 
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
@@ -270,7 +271,7 @@ impl BackendSourceBuildSpec {
                 },
             )
             .await
-            .map_err(BackendSourceBuildError::BuildError)
+            .map_err(BackendSourceBuildError::from)
             .map_err(CommandDispatcherError::Failed)?;
 
         // Make sure that the built package matches the expected output.
@@ -296,7 +297,7 @@ impl BackendSourceBuildSpec {
         let glob_set = GlobSet::create(built_package.input_globs.iter().map(String::as_str));
         let input_files = glob_set
             .collect_matching(&source_dir)
-            .map_err(BackendSourceBuildError::GlobSet)
+            .map_err(BackendSourceBuildError::from)
             .map_err(CommandDispatcherError::Failed)?
             .into_iter()
             .filter_map(|entry| {
@@ -396,22 +397,34 @@ fn convert_binary_spec_to_match_spec(
     ))
 }
 
-#[derive(Debug, thiserror::Error, Diagnostic)]
+#[derive(Debug, Clone, thiserror::Error, Diagnostic)]
 pub enum BackendSourceBuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    BuildError(#[from] CommunicationError),
+    BuildError(Arc<CommunicationError>),
 
     #[error(transparent)]
     UnexpectedPackage(UnexpectedPackageError),
 
     #[error(transparent)]
-    GlobSet(#[from] pixi_glob::GlobSetError),
+    GlobSet(Arc<pixi_glob::GlobSetError>),
+}
+
+impl From<CommunicationError> for BackendSourceBuildError {
+    fn from(err: CommunicationError) -> Self {
+        Self::BuildError(Arc::new(err))
+    }
+}
+
+impl From<pixi_glob::GlobSetError> for BackendSourceBuildError {
+    fn from(err: pixi_glob::GlobSetError) -> Self {
+        Self::GlobSet(Arc::new(err))
+    }
 }
 
 /// An error that can occur when the build backend did not return the expected
 /// package.
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub struct UnexpectedPackageError {
     pub subdir: String,
     pub name: String,

@@ -45,7 +45,7 @@ pub struct CollectedSourceMetadata {
 }
 
 /// An error that can occur while collecting source metadata.
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Clone, Error, Diagnostic)]
 pub enum CollectSourceMetadataError {
     #[error("failed to extract metadata for package '{}'", .name.as_source())]
     SourceMetadataError {

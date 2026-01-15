@@ -2,6 +2,7 @@ use std::{
     collections::BTreeMap,
     hash::{Hash, Hasher},
     path::PathBuf,
+    sync::Arc,
 };
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD, prelude::BASE64_URL_SAFE_NO_PAD};
@@ -221,8 +222,7 @@ impl InstantiateToolEnvironmentSpec {
                 preferred_build_source: BTreeMap::new(),
             })
             .await
-            .map_err_with(Box::new)
-            .map_err_with(InstantiateToolEnvironmentError::SolveEnvironment)?;
+            .map_err_with(|e| InstantiateToolEnvironmentError::SolveEnvironment(Arc::new(e)))?;
 
         // Ensure that the solution contains matching api version package
         let Some(api_version) = solved_environment
@@ -249,21 +249,21 @@ impl InstantiateToolEnvironmentSpec {
 
         // Construct the prefix for the tool environment.
         let prefix = Prefix::create(command_queue.cache_dirs().build_backends().join(cache_key))
-            .map_err(InstantiateToolEnvironmentError::CreatePrefix)
+            .map_err(|e| InstantiateToolEnvironmentError::CreatePrefix(Arc::new(e)))
             .map_err(CommandDispatcherError::Failed)?;
 
         // Acquire a lock on the tool prefix.
         let mut prefix_guard = AsyncPrefixGuard::new(prefix.path())
             .and_then(|guard| guard.write())
             .await
-            .map_err(InstantiateToolEnvironmentError::AcquireLock)
+            .map_err(|e| InstantiateToolEnvironmentError::AcquireLock(Arc::new(e)))
             .map_err(CommandDispatcherError::Failed)?;
 
         // Update the prefix to indicate that we are install it.
         prefix_guard
             .begin()
             .await
-            .map_err(InstantiateToolEnvironmentError::UpdateLock)
+            .map_err(|e| InstantiateToolEnvironmentError::UpdateLock(Arc::new(e)))
             .map_err(CommandDispatcherError::Failed)?;
 
         // Install the environment
@@ -283,14 +283,13 @@ impl InstantiateToolEnvironmentSpec {
                 enabled_protocols: self.enabled_protocols,
             })
             .await
-            .map_err_with(Box::new)
-            .map_err_with(InstantiateToolEnvironmentError::InstallEnvironment)?;
+            .map_err_with(|e| InstantiateToolEnvironmentError::InstallEnvironment(Arc::new(e)))?;
 
         // Mark the environment as finished.
         prefix_guard
             .finish()
             .await
-            .map_err(InstantiateToolEnvironmentError::UpdateLock)
+            .map_err(|e| InstantiateToolEnvironmentError::UpdateLock(Arc::new(e)))
             .map_err(CommandDispatcherError::Failed)?;
 
         Ok(InstantiateToolEnvironmentResult {
@@ -302,27 +301,27 @@ impl InstantiateToolEnvironmentSpec {
 }
 
 /// An error that may occur while trying to instantiate a tool environment.
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Clone, Error, Diagnostic)]
 pub enum InstantiateToolEnvironmentError {
     #[error("failed to construct a tool prefix")]
-    CreatePrefix(#[source] std::io::Error),
+    CreatePrefix(#[source] Arc<std::io::Error>),
 
     #[error("failed to acquire a lock for the tool prefix")]
-    AcquireLock(#[source] std::io::Error),
+    AcquireLock(#[source] Arc<std::io::Error>),
 
     #[error("failed to release lock for the tool prefix")]
-    ReleaseLock(#[source] std::io::Error),
+    ReleaseLock(#[source] Arc<std::io::Error>),
 
     #[error("failed to update lock for the tool prefix")]
-    UpdateLock(#[source] std::io::Error),
+    UpdateLock(#[source] Arc<std::io::Error>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    SolveEnvironment(Box<SolvePixiEnvironmentError>),
+    SolveEnvironment(Arc<SolvePixiEnvironmentError>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InstallEnvironment(Box<InstallPixiEnvironmentError>),
+    InstallEnvironment(Arc<InstallPixiEnvironmentError>),
 
     #[error("The environment for the build backend package (`{} {}`) does not depend on `{}`. Without this package pixi has no way of knowing the API to use to communicate with the backend.", .build_backend.0.as_normalized(), .build_backend.1.to_string(), PIXI_BUILD_API_VERSION_NAME.as_normalized()
     )]

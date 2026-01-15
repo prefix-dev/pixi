@@ -3,7 +3,7 @@ use typed_path::{
     Utf8Component, Utf8Encoding, Utf8Path, Utf8PathBuf, Utf8TypedPath, Utf8TypedPathBuf,
 };
 
-use crate::{GitSpec, PathSourceSpec, SourceLocationSpec, SourceSpec, UrlSourceSpec};
+use crate::{GitSpec, PathSourceSpec, SourceLocationSpec, SourceSpec, Subdirectory, UrlSourceSpec};
 
 /// `SourceAnchor` represents the resolved base location of a `SourceSpec`.
 /// It serves as a reference point for interpreting relative or recursive
@@ -85,15 +85,23 @@ impl SourceAnchor {
                 rev,
                 subdirectory,
             }) => {
+                let base_subdir = subdirectory.as_path().to_string_lossy();
                 let relative_subdir = normalize_typed(
-                    Utf8TypedPath::from(subdirectory.as_deref().unwrap_or_default())
+                    Utf8TypedPath::from(base_subdir.as_ref())
                         .join(path)
                         .to_path(),
                 );
+                // Convert to Subdirectory (defaults to empty if normalization results in empty)
+                let subdir_str = relative_subdir.to_string();
+                let subdirectory = if subdir_str.is_empty() {
+                    Subdirectory::default()
+                } else {
+                    Subdirectory::try_from(subdir_str).unwrap_or_default()
+                };
                 SourceLocationSpec::Git(GitSpec {
                     git: git.clone(),
                     rev: rev.clone(),
-                    subdirectory: Some(relative_subdir.to_string()),
+                    subdirectory,
                 })
             }
         }

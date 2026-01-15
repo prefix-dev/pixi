@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fmt, path::PathBuf};
+use std::{collections::BTreeMap, fmt, path::PathBuf, sync::Arc};
 
 use itertools::chain;
 use miette::Diagnostic;
@@ -339,7 +339,7 @@ impl SourceBuildCacheStatusSpec {
                 self.enabled_protocols.clone(),
             )
             .await
-            .map_err_with(SourceBuildCacheStatusError::Discovery)?;
+            .map_err_with(|e| SourceBuildCacheStatusError::Discovery(Arc::new(e)))?;
 
         // Compute a hash of the package configuration.
         let package_build_input_hash = PackageBuildInputHashBuilder {
@@ -422,7 +422,7 @@ impl SourceBuildCacheStatusSpec {
         let glob_set = GlobSet::create(source_info.input_globs.iter().map(String::as_str));
         let matching_files = glob_set
             .collect_matching(source_dir.as_std_path())
-            .map_err(SourceBuildCacheStatusError::GlobSet)
+            .map_err(SourceBuildCacheStatusError::from)
             .map_err(CommandDispatcherError::Failed)?;
 
         for matching_file in matching_files {
@@ -446,7 +446,7 @@ impl SourceBuildCacheStatusSpec {
     }
 }
 
-#[derive(Debug, thiserror::Error, Diagnostic)]
+#[derive(Debug, Clone, thiserror::Error, Diagnostic)]
 pub enum SourceBuildCacheStatusError {
     #[error(transparent)]
     BuildCache(BuildCacheError),
@@ -457,11 +457,17 @@ pub enum SourceBuildCacheStatusError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Discovery(pixi_build_discovery::DiscoveryError),
+    Discovery(Arc<pixi_build_discovery::DiscoveryError>),
 
     #[error(transparent)]
-    GlobSet(#[from] pixi_glob::GlobSetError),
+    GlobSet(Arc<pixi_glob::GlobSetError>),
 
     #[error("a cycle was detected in the build/host dependencies of the package")]
     Cycle,
+}
+
+impl From<pixi_glob::GlobSetError> for SourceBuildCacheStatusError {
+    fn from(err: pixi_glob::GlobSetError) -> Self {
+        Self::GlobSet(Arc::new(err))
+    }
 }
