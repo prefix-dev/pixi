@@ -1,5 +1,4 @@
 import json
-import os
 import platform
 import shutil
 import signal
@@ -1683,16 +1682,11 @@ def test_signal_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # Use the manifest from the copied run_signals directory
     manifest = tmp_data_path.joinpath("pixi.toml")
 
-    # Remove all PIXI_ prefixed env vars to avoid interference from the outer environment
-    env = {k: v for k, v in os.environ.items() if not k.startswith("PIXI_")}
-
     # install the dependencies
-    subprocess.check_call(
-        [pixi, "install", "--manifest-path", manifest], cwd=tmp_data_path, env=env
-    )
+    subprocess.check_call([pixi, "install", "--manifest-path", manifest], cwd=tmp_data_path)
     # run the `start` task in the background and send some signals to it
     process = subprocess.Popen(
-        [pixi, "run", "--manifest-path", manifest, "start"], cwd=tmp_data_path, env=env
+        [pixi, "run", "--manifest-path", manifest, "start"], cwd=tmp_data_path
     )
 
     time.sleep(1)  # wait for the process to start
