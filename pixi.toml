@@ -398,10 +398,7 @@ rust-test = { features = ["rust", "compilers", "python", "dev", "rust-test"] }
 schema = { features = ["schema"] }
 test = { features = ["test"] }
 test-export = { features = ["micromamba"] }
-test-native-certs = { features = [
-  "python",
-  "test-native-certs",
-] }
+test-native-certs = { features = ["python", "test-native-certs"] }
 trampoline = { features = ["trampoline", "python"] }
 
 #
