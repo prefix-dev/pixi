@@ -899,9 +899,50 @@ def test_pixi_task_list_platforms(pixi: Path, tmp_pixi_workspace: Path) -> None:
         bar = "echo bar"
         """
     manifest.write_text(toml)
+    # Task list table goes to stdout, heading goes to stderr
     verify_cli_command(
-        [pixi, "task", "list", "--manifest-path", manifest], stderr_contains=["foo", "bar"]
+        [pixi, "task", "list", "--manifest-path", manifest], stdout_contains=["foo", "bar"]
     )
+
+
+def test_pixi_task_list_with_groups(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that task list works with grouped tasks."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [tasks]
+        build = "cargo build"
+        test = { cmd = "cargo test", group = "testing" }
+        lint = { cmd = "cargo clippy", group = "testing" }
+        """
+    manifest.write_text(toml)
+
+    # Default list should show ungrouped tasks and hint about groups
+    # Task list table goes to stdout, heading and group hints go to stderr
+    result = verify_cli_command([pixi, "task", "list", "--manifest-path", manifest])
+    assert "build" in result.stdout
+    # Should indicate there are grouped tasks (hints go to stderr)
+    assert "task(s)" in result.stderr and "group" in result.stderr
+
+    # --all flag should show all tasks including grouped ones
+    result = verify_cli_command([pixi, "task", "list", "--all", "--manifest-path", manifest])
+    combined = result.stdout + result.stderr
+    assert "build" in combined
+    assert "test" in combined
+    assert "lint" in combined
+
+    # --group flag should filter to specific group
+    result = verify_cli_command(
+        [pixi, "task", "list", "--group", "testing", "--manifest-path", manifest]
+    )
+    # Task list table goes to stdout
+    assert "test" in result.stdout
+    assert "lint" in result.stdout
+    assert "build" not in result.stdout
 
 
 def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:

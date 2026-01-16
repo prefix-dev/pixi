@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, HashMap},
     error::Error,
     io::Write,
     path::PathBuf,
@@ -23,6 +23,56 @@ use serde_with::serde_as;
 use pixi_core::{Workspace, WorkspaceLocator, workspace::Environment};
 
 use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
+
+// Type alias for the common pattern of tasks organized by environment
+pub type TasksPerEnvironment = HashMap<EnvironmentName, HashMap<TaskName, Task>>;
+
+// Group summary: (name, description, count)
+pub type GroupSummary = (String, Option<String>, usize);
+
+// Hint messages for group display
+const GROUP_HINT_SHORT: &str = "Use --all or --group <NAME>";
+const GROUP_HINT_FULL: &str = "Use `pixi task list --all` or `pixi task list --group <NAME>`";
+
+/// Collect tasks from a single environment, returning None if no tasks exist.
+fn collect_tasks_from_env(env: &Environment) -> Option<(EnvironmentName, HashMap<TaskName, Task>)> {
+    let best_platform = env.best_platform();
+    let task_map: HashMap<TaskName, Task> = env
+        .get_filtered_tasks()
+        .into_iter()
+        .filter_map(|name| {
+            env.task(&name, Some(best_platform))
+                .ok()
+                .map(|task| (name, task.clone()))
+        })
+        .collect();
+
+    if task_map.is_empty() {
+        None
+    } else {
+        Some((env.name().clone(), task_map))
+    }
+}
+
+/// Collect tasks with their definitions from the workspace.
+/// If an explicit environment is provided, only tasks from that environment are collected.
+/// Otherwise, tasks from all environments are collected.
+pub fn collect_tasks_with_definitions<'p>(
+    workspace: &'p Workspace,
+    explicit_environment: Option<&Environment<'p>>,
+) -> TasksPerEnvironment {
+    if let Some(env) = explicit_environment {
+        collect_tasks_from_env(env)
+            .map(|(name, tasks)| HashMap::from([(name, tasks)]))
+            .unwrap_or_default()
+    } else {
+        workspace
+            .environments()
+            .iter()
+            .filter_map(collect_tasks_from_env)
+            .collect()
+    }
+}
 
 #[derive(Parser, Debug)]
 pub enum Operation {
@@ -159,6 +209,14 @@ pub struct ListArgs {
     /// If not specified, the default environment is used.
     #[arg(long)]
     pub json: bool,
+
+    /// Show only tasks belonging to the specified group
+    #[arg(long, short = 'g')]
+    pub group: Option<String>,
+
+    /// Show all tasks including those in groups
+    #[arg(long)]
+    pub all: bool,
 }
 
 impl From<AddArgs> for Task {
@@ -188,6 +246,8 @@ impl From<AddArgs> for Task {
                 depends_on,
                 description,
                 args: value.args,
+                group: None,
+                group_description: None,
             })
         } else if depends_on.is_empty()
             && value.cwd.is_none()
@@ -223,6 +283,8 @@ impl From<AddArgs> for Task {
                 description,
                 clean_env,
                 args,
+                group: None,
+                group_description: None,
             }))
         }
     }
@@ -234,6 +296,8 @@ impl From<AliasArgs> for Task {
             depends_on: value.depends_on,
             description: value.description,
             args: None,
+            group: None,
+            group_description: None,
         })
     }
 }
@@ -256,11 +320,8 @@ fn print_heading(value: &str) {
 }
 
 /// Create a human-readable representation of a list of tasks.
-/// Using a tabwriter for described tasks.
-fn print_tasks(
-    task_map: HashMap<EnvironmentName, HashMap<TaskName, Task>>,
-    summary: bool,
-) -> Result<(), std::io::Error> {
+/// Uses a unified table format with all tasks and their descriptions.
+fn print_tasks(task_map: TasksPerEnvironment, summary: bool) -> Result<(), std::io::Error> {
     if summary {
         print_heading("Tasks per environment:");
         for (env, tasks) in task_map {
@@ -274,35 +335,65 @@ fn print_tasks(
         return Ok(());
     }
 
-    let mut all_tasks: BTreeSet<TaskName> = BTreeSet::new();
-    let mut formatted_descriptions: BTreeMap<TaskName, String> = BTreeMap::new();
-
-    task_map.values().for_each(|tasks| {
-        tasks.iter().for_each(|(taskname, task)| {
-            all_tasks.insert(taskname.clone());
-            if let Some(description) = task.description() {
-                formatted_descriptions.insert(
-                    taskname.clone(),
-                    format!("{}", console::style(description).italic()),
-                );
-            }
-        });
-    });
+    let items = collect_unique_tasks_for_display(&task_map);
+    if items.is_empty() {
+        return Ok(());
+    }
 
     print_heading("Tasks that can run on this machine:");
-    let formatted_tasks: String = all_tasks.iter().map(|name| name.fancy_display()).join(", ");
-    eprintln!("{formatted_tasks}");
+    print_styled_table("Task", "Description", &items)
+}
 
+/// Check if any tasks in the collection have a group assigned
+fn any_task_has_group(tasks_per_env: &TasksPerEnvironment) -> bool {
+    tasks_per_env
+        .values()
+        .flat_map(|tasks| tasks.values())
+        .any(|task| task.group().is_some())
+}
+
+/// Collect unique tasks across environments and format them for table display.
+fn collect_unique_tasks_for_display(
+    tasks_per_env: &TasksPerEnvironment,
+) -> Vec<(String, Option<String>)> {
+    let mut all_tasks: BTreeMap<TaskName, Option<String>> = BTreeMap::new();
+
+    for tasks in tasks_per_env.values() {
+        for (name, task) in tasks {
+            all_tasks
+                .entry(name.clone())
+                .or_insert_with(|| task.description().map(|s| s.to_string()));
+        }
+    }
+
+    all_tasks
+        .iter()
+        .map(|(name, desc)| (name.fancy_display().to_string(), desc.clone()))
+        .collect()
+}
+
+/// Print a styled table with name/description pairs
+fn print_styled_table(
+    header_left: &str,
+    header_right: &str,
+    items: &[(String, Option<String>)],
+) -> std::io::Result<()> {
     let mut writer = tabwriter::TabWriter::new(std::io::stdout());
     let header_style = console::Style::new().bold().cyan();
-    let header = format!(
+
+    writeln!(
+        writer,
         "{}\t{}",
-        header_style.apply_to("Task"),
-        header_style.apply_to("Description"),
-    );
-    writeln!(writer, "{}", &header)?;
-    for (taskname, row) in formatted_descriptions {
-        writeln!(writer, "{}\t{}", taskname.fancy_display(), row)?;
+        header_style.apply_to(header_left),
+        header_style.apply_to(header_right)
+    )?;
+
+    for (name, description) in items {
+        let desc_display = match description {
+            Some(desc) => console::style(desc).italic().to_string(),
+            None => String::new(),
+        };
+        writeln!(writer, "{}\t{}", name, desc_display)?;
     }
 
     writer.flush().inspect_err(|e| {
@@ -312,6 +403,45 @@ fn print_tasks(
     })?;
 
     Ok(())
+}
+
+/// Print hints about available groups
+fn print_group_hints(groups: &[GroupSummary], use_full_command: bool) {
+    if groups.is_empty() {
+        return;
+    }
+
+    let total_grouped: usize = groups.iter().map(|(_, _, count)| count).sum();
+    let hint = if use_full_command {
+        GROUP_HINT_FULL
+    } else {
+        GROUP_HINT_SHORT
+    };
+
+    eprintln!(
+        "\n{} task(s) in {} group(s) not shown. {}.",
+        total_grouped,
+        groups.len(),
+        hint
+    );
+
+    // Convert groups to (name, description) pairs for table display
+    let items: Vec<(String, Option<String>)> = groups
+        .iter()
+        .map(|(name, desc, _)| (name.clone(), desc.clone()))
+        .collect();
+
+    let _ = print_styled_table("Group", "Description", &items);
+}
+
+/// Print message when no ungrouped tasks exist
+fn print_no_ungrouped_tasks_hint(use_full_command: bool) {
+    let hint = if use_full_command {
+        GROUP_HINT_FULL
+    } else {
+        GROUP_HINT_SHORT
+    };
+    eprintln!("No ungrouped tasks. {} to see grouped tasks.", hint);
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -367,8 +497,209 @@ async fn list_tasks(
         return Ok(());
     }
 
-    print_tasks(tasks_per_env, args.summary).into_diagnostic()?;
+    let has_groups = any_task_has_group(&tasks_per_env);
+
+    // Handle group filtering
+    if let Some(group_filter) = &args.group {
+        // Filter to only tasks in the specified group
+        let filtered: TasksPerEnvironment = tasks_per_env
+            .into_iter()
+            .map(|(env, tasks)| {
+                let filtered_tasks: HashMap<TaskName, Task> = tasks
+                    .into_iter()
+                    .filter(|(_, task)| task.group() == Some(group_filter.as_str()))
+                    .collect();
+                (env, filtered_tasks)
+            })
+            .filter(|(_, tasks)| !tasks.is_empty())
+            .collect();
+
+        if filtered.is_empty() {
+            eprintln!("No tasks found in group '{}'", group_filter);
+            return Ok(());
+        }
+
+        print_tasks(filtered, args.summary).into_diagnostic()?;
+    } else if args.all && has_groups {
+        // Show all tasks organized by group (only if groups exist)
+        print_tasks_by_group(tasks_per_env, args.summary).into_diagnostic()?;
+    } else if has_groups {
+        // Default with groups: show ungrouped tasks, then hint about groups
+        let (ungrouped, groups) = partition_tasks_by_group(&tasks_per_env);
+        let ungrouped_empty = ungrouped.is_empty();
+
+        if !ungrouped_empty {
+            print_tasks(ungrouped, args.summary).into_diagnostic()?;
+        }
+
+        print_group_hints(&groups, false);
+
+        if ungrouped_empty {
+            print_no_ungrouped_tasks_hint(false);
+        }
+    } else {
+        // No groups exist - just show all tasks normally
+        print_tasks(tasks_per_env, args.summary).into_diagnostic()?;
+    }
+
     Ok(())
+}
+
+/// Partition tasks into ungrouped and grouped, returning group info (name, description, count)
+fn partition_tasks_by_group(
+    tasks_per_env: &TasksPerEnvironment,
+) -> (TasksPerEnvironment, Vec<GroupSummary>) {
+    let mut ungrouped: TasksPerEnvironment = HashMap::new();
+    // Track count and description for each group
+    let mut group_info: HashMap<String, (usize, Option<String>)> = HashMap::new();
+
+    for (env, tasks) in tasks_per_env {
+        let mut env_ungrouped: HashMap<TaskName, Task> = HashMap::new();
+
+        for (name, task) in tasks {
+            if let Some(group) = task.group() {
+                let entry = group_info.entry(group.to_string()).or_insert((0, None));
+                entry.0 += 1;
+                // Use the first group_description encountered for this group.
+                // If multiple tasks in the same group have different descriptions,
+                // only the first one is used (others are silently ignored).
+                if entry.1.is_none()
+                    && let Some(desc) = task.group_description()
+                {
+                    entry.1 = Some(desc.to_string());
+                }
+            } else {
+                env_ungrouped.insert(name.clone(), task.clone());
+            }
+        }
+
+        if !env_ungrouped.is_empty() {
+            ungrouped.insert(env.clone(), env_ungrouped);
+        }
+    }
+
+    // Convert to vec with (name, description, count)
+    let groups: Vec<GroupSummary> = group_info
+        .into_iter()
+        .map(|(name, (count, desc))| (name, desc, count))
+        .collect();
+
+    (ungrouped, groups)
+}
+
+/// Print tasks organized by group
+fn print_tasks_by_group(tasks_per_env: TasksPerEnvironment, summary: bool) -> std::io::Result<()> {
+    // Collect all tasks across environments, grouped.
+    // For group descriptions, we use the first one encountered for each group.
+    // If multiple tasks in the same group have different descriptions, only
+    // the first is used (others are silently ignored).
+    let mut ungrouped: HashMap<TaskName, Task> = HashMap::new();
+    let mut grouped: HashMap<String, HashMap<TaskName, Task>> = HashMap::new();
+    let mut group_descriptions: HashMap<String, String> = HashMap::new();
+
+    for (_env, tasks) in tasks_per_env {
+        for (name, task) in tasks {
+            if let Some(group) = task.group() {
+                grouped
+                    .entry(group.to_string())
+                    .or_default()
+                    .insert(name, task.clone());
+                // Use first group_description encountered for this group
+                if !group_descriptions.contains_key(group) {
+                    if let Some(desc) = task.group_description() {
+                        group_descriptions.insert(group.to_string(), desc.to_string());
+                    }
+                }
+            } else {
+                ungrouped.insert(name, task);
+            }
+        }
+    }
+
+    let mut writer = tabwriter::TabWriter::new(std::io::stdout());
+
+    // Print ungrouped tasks first
+    if !ungrouped.is_empty() {
+        writeln!(writer, "Tasks:")?;
+        for (name, task) in &ungrouped {
+            if summary {
+                writeln!(writer, "  {}", name.fancy_display())?;
+            } else {
+                let desc_display = task
+                    .description()
+                    .map(|d| console::style(d).italic().to_string())
+                    .unwrap_or_default();
+                writeln!(writer, "  {}\t{}", name.fancy_display(), desc_display)?;
+            }
+        }
+    }
+
+    // Print grouped tasks
+    for (group_name, tasks) in &grouped {
+        writeln!(writer)?;
+        // Show group name with optional description
+        if let Some(group_desc) = group_descriptions.get(group_name) {
+            writeln!(
+                writer,
+                "{}: {}",
+                group_name,
+                console::style(group_desc).italic()
+            )?;
+        } else {
+            writeln!(writer, "{}:", group_name)?;
+        }
+        for (name, task) in tasks {
+            if summary {
+                writeln!(writer, "  {}", name.fancy_display())?;
+            } else {
+                let desc_display = task
+                    .description()
+                    .map(|d| console::style(d).italic().to_string())
+                    .unwrap_or_default();
+                writeln!(writer, "  {}\t{}", name.fancy_display(), desc_display)?;
+            }
+        }
+    }
+
+    writer.flush()?;
+    Ok(())
+}
+
+/// Display available tasks with descriptions and hints about grouped tasks.
+/// This is used by both `pixi task list` and `pixi run` (when no task is specified).
+pub fn display_available_tasks_with_hints(tasks_per_env: &TasksPerEnvironment) {
+    if tasks_per_env.is_empty() {
+        return;
+    }
+
+    if any_task_has_group(tasks_per_env) {
+        // Show ungrouped tasks with hints about groups
+        let (ungrouped, groups) = partition_tasks_by_group(tasks_per_env);
+
+        if !ungrouped.is_empty() {
+            display_task_list_with_descriptions(&ungrouped);
+        }
+
+        print_group_hints(&groups, true);
+
+        if ungrouped.is_empty() && !groups.is_empty() {
+            print_no_ungrouped_tasks_hint(true);
+        }
+    } else {
+        // No groups - show all tasks with descriptions
+        display_task_list_with_descriptions(tasks_per_env);
+    }
+}
+
+/// Display a simple list of tasks with their descriptions (used for `pixi run` hint output)
+fn display_task_list_with_descriptions(tasks_per_env: &TasksPerEnvironment) {
+    let items = collect_unique_tasks_for_display(tasks_per_env);
+    if items.is_empty() {
+        return;
+    }
+
+    eprintln!("\nAvailable tasks:");
+    let _ = print_styled_table("Task", "Description", &items);
 }
 
 async fn add_task(

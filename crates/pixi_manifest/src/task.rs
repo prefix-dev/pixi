@@ -302,6 +302,62 @@ impl Task {
             _ => None,
         }
     }
+
+    /// Returns the group this task belongs to.
+    pub fn group(&self) -> Option<&str> {
+        match self {
+            Task::Execute(exe) => exe.group.as_deref(),
+            Task::Alias(alias) => alias.group.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Sets the group for this task.
+    /// Note: This converts `Task::Plain` to `Task::Execute` since Plain tasks don't have a group field.
+    pub fn set_group(&mut self, group: String) {
+        match self {
+            Task::Execute(exe) => exe.group = Some(group),
+            Task::Alias(alias) => alias.group = Some(group),
+            Task::Plain(cmd) => {
+                // Convert Plain to Execute to support groups
+                *self = Task::Execute(Box::new(Execute {
+                    cmd: CmdArgs::Single(cmd.clone()),
+                    inputs: None,
+                    outputs: None,
+                    depends_on: Vec::new(),
+                    cwd: None,
+                    env: None,
+                    default_environment: None,
+                    description: None,
+                    clean_env: false,
+                    args: None,
+                    group: Some(group),
+                    group_description: None,
+                }));
+            }
+            Task::Custom(_) => {
+                // Custom tasks don't support groups
+            }
+        }
+    }
+
+    /// Returns the group description for this task.
+    pub fn group_description(&self) -> Option<&str> {
+        match self {
+            Task::Execute(exe) => exe.group_description.as_deref(),
+            Task::Alias(alias) => alias.group_description.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Sets the group description for this task.
+    pub fn set_group_description(&mut self, description: String) {
+        match self {
+            Task::Execute(exe) => exe.group_description = Some(description),
+            Task::Alias(alias) => alias.group_description = Some(description),
+            _ => {}
+        }
+    }
 }
 
 /// A list of glob patterns that can be used as input or output for a task
@@ -370,6 +426,12 @@ pub struct Execute {
 
     /// The arguments to pass to the task
     pub args: Option<Vec<TaskArg>>,
+
+    /// The group this task belongs to
+    pub group: Option<String>,
+
+    /// Description of the group (used for display purposes)
+    pub group_description: Option<String>,
 }
 
 impl From<Execute> for Task {
@@ -762,6 +824,12 @@ pub struct Alias {
 
     /// A list of arguments to pass to the task.
     pub args: Option<Vec<TaskArg>>,
+
+    /// The group this task belongs to
+    pub group: Option<String>,
+
+    /// Description of the group (used for display purposes)
+    pub group_description: Option<String>,
 }
 
 impl Display for Task {
@@ -913,6 +981,9 @@ impl From<Task> for Item {
                 if let Some(description) = &process.description {
                     table.insert("description", description.into());
                 }
+                if let Some(group) = &process.group {
+                    table.insert("group", group.into());
+                }
                 Item::Value(Value::InlineTable(table))
             }
             Task::Alias(alias) => {
@@ -968,6 +1039,9 @@ impl From<Task> for Item {
                     if let Some(description) = &alias.description {
                         table.insert("description", description.into());
                     }
+                    if let Some(group) = &alias.group {
+                        table.insert("group", group.into());
+                    }
 
                     Item::Value(Value::InlineTable(table))
                 } else {
@@ -999,10 +1073,15 @@ impl From<Task> for Item {
                         array.push(Value::InlineTable(table));
                     }
 
-                    if let Some(description) = &alias.description {
+                    if alias.description.is_some() || alias.group.is_some() {
                         let mut table = Table::new().into_inline_table();
                         table.insert("depends-on", Value::Array(array));
-                        table.insert("description", description.into());
+                        if let Some(description) = &alias.description {
+                            table.insert("description", description.into());
+                        }
+                        if let Some(group) = &alias.group {
+                            table.insert("group", group.into());
+                        }
                         Item::Value(Value::InlineTable(table))
                     } else {
                         Item::Value(Value::Array(array))
@@ -1050,6 +1129,8 @@ mod tests {
             depends_on: vec![dep],
             description: None,
             args: None,
+            group: None,
+            group_description: None,
         };
         let task = Task::Alias(alias);
         let toml = toml_edit::Item::from(task);

@@ -20,5 +20,9 @@ pixi task list [OPTIONS]
 :  The environment the list should be generated for. If not specified, the default environment is used
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  List as json instead of a tree If not specified, the default environment is used
+- <a id="arg---group" href="#arg---group">`--group (-g) <GROUP>`</a>
+:  Show only tasks belonging to the specified group
+- <a id="arg---all" href="#arg---all">`--all`</a>
+:  Show all tasks including those in groups
 
 --8<-- "docs/reference/cli/pixi/task/list_extender:example"

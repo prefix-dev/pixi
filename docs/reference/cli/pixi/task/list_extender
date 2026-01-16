@@ -6,6 +6,8 @@
 pixi task list
 pixi task list --environment cuda
 pixi task list --summary
+pixi task list --all          # Show all tasks including those in groups
+pixi task list --group ci     # Show only tasks in the "ci" group
 ```
 
 --8<-- [end:example]

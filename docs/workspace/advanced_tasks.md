@@ -332,6 +332,63 @@ Hiding tasks can be useful if your workspace defines many tasks but your users o
 --8<-- "docs/source_files/pixi_tomls/task_visibility.toml:project_tasks"
 ```
 
+## Task Groups
+
+Tasks can be organized into groups using the `group` field. This is useful for categorizing related tasks (e.g., CI tasks, development tasks, testing tasks) and controlling their visibility in task listings.
+
+### Defining Task Groups
+
+Add a `group` field to any task to assign it to a group:
+
+```toml title="pixi.toml"
+[tasks]
+# Ungrouped tasks are always visible
+build = "cargo build"
+run = "cargo run"
+
+# CI-related tasks
+test = { cmd = "cargo test", group = "ci" }
+lint = { cmd = "cargo clippy", group = "ci" }
+fmt-check = { cmd = "cargo fmt --check", group = "ci" }
+
+# Development tasks
+watch = { cmd = "cargo watch -x run", group = "dev" }
+```
+
+### Listing Tasks with Groups
+
+By default, `pixi task list` shows only ungrouped tasks and displays hints about hidden groups:
+
+```shell
+pixi task list
+# Output:
+# Task   Description
+# build
+# run
+#
+# 4 task(s) in 2 group(s) not shown. Use `pixi task list --all` or `pixi task list --group <NAME>`.
+# Group  Description
+# ci
+# dev
+```
+
+Use `--all` to see all tasks organized by group:
+
+```shell
+pixi task list --all
+```
+
+Use `--group` to filter to a specific group:
+
+```shell
+pixi task list --group ci
+# Output:
+# Task       Description
+# test
+# lint
+# fmt-check
+```
+
 ## Caching
 
 When you specify `inputs` and/or `outputs` to a task, Pixi will reuse the result of the task.

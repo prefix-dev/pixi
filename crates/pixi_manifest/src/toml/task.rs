@@ -126,6 +126,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                     depends_on: deps,
                     description: None,
                     args: None,
+                    group: None,
+                    group_description: None,
                 })
                 .into());
             }
@@ -225,6 +227,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
             let description = th.optional("description");
             let clean_env = th.optional("clean-env").unwrap_or(false);
             let args = th.optional::<Vec<TaskArg>>("args");
+            let group = th.optional::<String>("group");
+            let group_description = th.optional::<String>("group-description");
 
             let mut have_default = false;
             for arg in args.iter().flat_map(|a| a.iter()) {
@@ -254,17 +258,23 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 description,
                 clean_env,
                 args,
+                group,
+                group_description,
             }))
         } else {
             let depends_on = depends_on(&mut th)?;
             let description = th.optional("description");
             let args = th.optional::<Vec<TaskArg>>("args");
+            let group = th.optional::<String>("group");
+            let group_description = th.optional::<String>("group-description");
             th.finalize(None)?;
 
             Task::Alias(Alias {
                 depends_on,
                 description,
                 args,
+                group,
+                group_description,
             })
         };
 
@@ -371,5 +381,72 @@ mod test {
             depends-on = [{ task = "foo", args = [{ "foo" = "bar" }, { "baz" = "qux" }] }]
         "#
         ), @"test, depends-on = 'foo with args'");
+    }
+
+    #[test]
+    fn test_task_with_group() {
+        let input = r#"
+            cmd = "test"
+            group = "testing"
+        "#;
+
+        let parsed = TomlTask::from_toml_str(input).unwrap();
+        assert_eq!(parsed.value.group(), Some("testing"));
+    }
+
+    #[test]
+    fn test_alias_with_group() {
+        let input = r#"
+            depends-on = ["build"]
+            group = "ci"
+            description = "Run all CI tasks"
+        "#;
+
+        let parsed = TomlTask::from_toml_str(input).unwrap();
+        assert_eq!(parsed.value.group(), Some("ci"));
+    }
+
+    #[test]
+    fn test_task_with_group_description() {
+        let input = r#"
+            cmd = "pytest"
+            group = "testing"
+            group-description = "Tasks for running tests"
+        "#;
+
+        let parsed = TomlTask::from_toml_str(input).unwrap();
+        assert_eq!(parsed.value.group(), Some("testing"));
+        assert_eq!(
+            parsed.value.group_description(),
+            Some("Tasks for running tests")
+        );
+    }
+
+    #[test]
+    fn test_alias_with_group_description() {
+        let input = r#"
+            depends-on = ["test", "lint"]
+            group = "ci"
+            group-description = "CI/CD pipeline tasks"
+        "#;
+
+        let parsed = TomlTask::from_toml_str(input).unwrap();
+        assert_eq!(parsed.value.group(), Some("ci"));
+        assert_eq!(
+            parsed.value.group_description(),
+            Some("CI/CD pipeline tasks")
+        );
+    }
+
+    #[test]
+    fn test_group_without_group_description() {
+        let input = r#"
+            cmd = "cargo build"
+            group = "build"
+        "#;
+
+        let parsed = TomlTask::from_toml_str(input).unwrap();
+        assert_eq!(parsed.value.group(), Some("build"));
+        assert_eq!(parsed.value.group_description(), None);
     }
 }
