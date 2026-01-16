@@ -1191,7 +1191,9 @@ deploy = { cmd = "echo 'Deploying to {{target}}'", description = "Deploy the app
     greet_task = next((t for t in all_tasks if t["name"] == "greet"), None)
     assert greet_task is not None
     assert greet_task["args"] is not None
-    assert any(arg.get("name") == "name" and arg.get("default") == "World" for arg in greet_task["args"])
+    assert any(
+        arg.get("name") == "name" and arg.get("default") == "World" for arg in greet_task["args"]
+    )
 
     deploy_task = next((t for t in all_tasks if t["name"] == "deploy"), None)
     assert deploy_task is not None

@@ -321,10 +321,7 @@ fn print_heading(value: &str) {
 
 /// Create a human-readable representation of a list of tasks.
 /// Uses a unified table format with all tasks and their descriptions.
-fn print_tasks(
-    task_map: TasksPerEnvironment,
-    summary: bool,
-) -> Result<(), std::io::Error> {
+fn print_tasks(task_map: TasksPerEnvironment, summary: bool) -> Result<(), std::io::Error> {
     if summary {
         print_heading("Tasks per environment:");
         for (env, tasks) in task_map {

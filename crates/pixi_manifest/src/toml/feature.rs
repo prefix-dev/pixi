@@ -34,9 +34,7 @@ pub struct TaskInclude {
 impl<'de> toml_span::Deserialize<'de> for TaskInclude {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
-        let path = th
-            .required::<TomlFromStr<PathBuf>>("path")?
-            .into_inner();
+        let path = th.required::<TomlFromStr<PathBuf>>("path")?.into_inner();
         let description = th.optional::<String>("description");
         th.finalize(None)?;
         Ok(TaskInclude { path, description })
@@ -100,8 +98,12 @@ impl TomlFeature {
         // Process task includes for this feature
         if let Some(root_dir) = root_directory {
             for (group_name, include) in &self.task_includes {
-                let (included_tasks, mut include_warnings) =
-                    load_tasks_from_file(&include.path, root_dir, group_name, include.description.as_deref())?;
+                let (included_tasks, mut include_warnings) = load_tasks_from_file(
+                    &include.path,
+                    root_dir,
+                    group_name,
+                    include.description.as_deref(),
+                )?;
                 warnings.append(&mut include_warnings);
 
                 // Merge included tasks into the default target
