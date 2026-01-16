@@ -28,21 +28,30 @@ use pixi_pypi_spec::PypiPackageName;
 #[derive(Parser, Debug, Default, Clone)]
 pub struct WorkspaceConfig {
     /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
-    #[arg(long, short, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    #[arg(long, short, global = true, conflicts_with = "workspace_name", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub manifest_path: Option<PathBuf>,
 
     /// Backend override for testing purposes. This field is ignored by clap
     /// and should only be set programmatically in tests.
     #[clap(skip)]
     pub backend_override: Option<BackendOverride>,
+
+    /// Name of the workspace
+    #[arg(long, short = 'b', global = true, conflicts_with = "manifest_path", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    pub workspace_name: Option<String>,
 }
 
 impl WorkspaceConfig {
     /// Returns the start location when trying to discover a workspace.
     pub fn workspace_locator_start(&self) -> DiscoveryStart {
-        match &self.manifest_path {
-            Some(path) => DiscoveryStart::ExplicitManifest(path.clone()),
-            None => DiscoveryStart::CurrentDir,
+        if let Some(manifest_path) = &self.manifest_path {
+            DiscoveryStart::ExplicitManifest(manifest_path.clone())
+        } else if let Some(workspace_name) = &self.workspace_name {
+            let config = Config::load_global();
+            let path = config.named_workspace(&workspace_name.to_string()).unwrap();
+            DiscoveryStart::ExplicitManifest(path.clone())
+        } else {
+            DiscoveryStart::CurrentDir
         }
     }
 }
