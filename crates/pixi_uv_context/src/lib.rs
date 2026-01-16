@@ -4,7 +4,9 @@ use fs_err::create_dir_all;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, Config, get_cache_dir};
 use pixi_consts::consts;
-use pixi_utils::reqwest::{should_use_native_tls_for_uv, uv_middlewares};
+use pixi_utils::reqwest::{
+    should_use_builtin_certs_uv, should_use_native_tls_for_uv, uv_middlewares,
+};
 use pixi_uv_conversions::{ConversionError, to_uv_trusted_host};
 use tracing::debug;
 use uv_cache::Cache;
@@ -40,6 +42,7 @@ pub struct UvResolutionContext {
     /// Whether UV should use native TLS (system certificates).
     /// This is computed based on the `tls-root-certs` config and the TLS feature used.
     pub use_native_tls: bool,
+    pub use_builtin_certs: bool,
     pub package_config_settings: PackageConfigSettings,
     pub extra_build_requires: ExtraBuildRequires,
     pub extra_build_variables: ExtraBuildVariables,
@@ -96,7 +99,8 @@ impl UvResolutionContext {
             extra_middleware: ExtraMiddleware(uv_middlewares(config)),
             proxies: config.get_proxies().into_diagnostic()?,
             tls_no_verify: config.tls_no_verify(),
-            use_native_tls: should_use_native_tls_for_uv(config),
+            use_native_tls: should_use_native_tls_for_uv(),
+            use_builtin_certs: should_use_builtin_certs_uv(config),
             package_config_settings: PackageConfigSettings::default(),
             extra_build_requires: ExtraBuildRequires::default(),
             extra_build_variables: ExtraBuildVariables::default(),
@@ -136,6 +140,7 @@ impl UvResolutionContext {
             .keyring(self.keyring_provider)
             .connectivity(Connectivity::Online)
             .native_tls(self.use_native_tls)
+            .built_in_root_certs(self.use_builtin_certs)
             .extra_middleware(self.extra_middleware.clone());
 
         if let Some(markers) = markers {
