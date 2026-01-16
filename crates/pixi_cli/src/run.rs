@@ -357,7 +357,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 /// Called when a command was not found.
 fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<Environment<'p>>) {
     let tasks_per_env = collect_tasks_with_definitions(workspace, explicit_environment.as_ref());
-    display_available_tasks_with_hints(&tasks_per_env);
+    display_available_tasks_with_hints(&tasks_per_env, &workspace.workspace.value.task_groups);
 
     // Help user when there is no task available because the platform is not
     // supported

@@ -334,26 +334,36 @@ Hiding tasks can be useful if your workspace defines many tasks but your users o
 
 ## Task Groups
 
-Tasks can be organized into groups using the `group` field. This is useful for categorizing related tasks (e.g., CI tasks, development tasks, testing tasks) and controlling their visibility in task listings.
+Tasks can be organized into groups using the `[task-groups]` section. This is useful for categorizing related tasks (e.g., CI tasks, development tasks, testing tasks) and controlling their visibility in task listings.
 
 ### Defining Task Groups
 
-Add a `group` field to any task to assign it to a group:
+Define groups in a separate `[task-groups]` section, specifying which tasks belong to each group:
 
 ```toml title="pixi.toml"
 [tasks]
-# Ungrouped tasks are always visible
+# Define your tasks as usual
 build = "cargo build"
 run = "cargo run"
+test = "cargo test"
+lint = "cargo clippy"
+fmt-check = "cargo fmt --check"
+watch = "cargo watch -x run"
 
-# CI-related tasks
-test = { cmd = "cargo test", group = "ci" }
-lint = { cmd = "cargo clippy", group = "ci" }
-fmt-check = { cmd = "cargo fmt --check", group = "ci" }
+# Organize tasks into groups
+[task-groups.ci]
+description = "CI pipeline tasks"
+tasks = ["test", "lint", "fmt-check"]
 
-# Development tasks
-watch = { cmd = "cargo watch -x run", group = "dev" }
+[task-groups.dev]
+description = "Development tasks"
+tasks = ["watch"]
 ```
+
+Each task group can have:
+
+- `description` (optional): A description shown in task listings
+- `tasks`: A list of task names that belong to this group
 
 ### Listing Tasks with Groups
 
@@ -368,8 +378,8 @@ pixi task list
 #
 # 4 task(s) in 2 group(s) not shown. Use `pixi task list --all` or `pixi task list --group <NAME>`.
 # Group  Description
-# ci
-# dev
+# ci     CI pipeline tasks
+# dev    Development tasks
 ```
 
 Use `--all` to see all tasks organized by group:

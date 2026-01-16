@@ -409,7 +409,6 @@ build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "fro
 run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
 format = { cmd="black $INIT_CWD" } # runs black where you run pixi run format
 clean-env = { cmd = "python isolated.py", clean-env = true} # Only on Unix!
-ci-test = { cmd = "pytest", group = "ci" } # Task in the "ci" group
 ```
 
 You can modify this table using [`pixi task`](cli/pixi/task.md).
@@ -422,7 +421,27 @@ You can modify this table using [`pixi task`](cli/pixi/task.md).
     For example, if you want to hide `depending`, you can rename it to `_depending`.
 
 !!! tip "Task Groups"
-    Use the `group` field to organize tasks into groups. Grouped tasks are hidden by default in `pixi task list` but can be shown with `--all` or `--group <NAME>`. See [Task Groups](../workspace/advanced_tasks.md#task-groups) for details.
+    Use the `[task-groups]` table to organize tasks into groups. Grouped tasks are hidden by default in `pixi task list` but can be shown with `--all` or `--group <NAME>`. See [Task Groups](../workspace/advanced_tasks.md#task-groups) for details.
+
+## The `task-groups` table
+
+The `task-groups` table allows you to organize tasks into named groups with optional descriptions.
+
+```toml
+[task-groups.ci]
+description = "CI pipeline tasks"
+tasks = ["test", "lint", "fmt-check"]
+
+[task-groups.dev]
+tasks = ["watch", "serve"]
+```
+
+Each group can have:
+
+- `description` (optional): A description shown in task listings
+- `tasks`: A list of task names that belong to this group
+
+Tasks in groups are hidden by default from `pixi task list` but can be shown with `--all` or filtered with `--group <NAME>`.
 
 ## The `system-requirements` table
 

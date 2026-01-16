@@ -56,7 +56,7 @@ pub use system_requirements::{
     GLIBC_FAMILY, LibCFamilyAndVersion, LibCSystemRequirement, MUSL_FAMILY, SystemRequirements,
 };
 pub use target::{PackageTarget, TargetSelector, Targets, WorkspaceTarget};
-pub use task::{Task, TaskName};
+pub use task::{Task, TaskGroup, TaskGroups, TaskName};
 use thiserror::Error;
 pub use warning::{Warning, WarningWithSource, WithWarnings};
 pub use workspace::{BuildVariantSource, ChannelPriority, SolveStrategy, Workspace};

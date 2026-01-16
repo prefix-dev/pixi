@@ -18,8 +18,8 @@ use url::Url;
 
 use crate::{
     Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
-    KnownPreviewFeature, SolveGroups, SystemRequirements, TargetSelector, Targets, Task, TaskName,
-    TomlError, Warning, WithWarnings, WorkspaceManifest,
+    KnownPreviewFeature, SolveGroups, SystemRequirements, TargetSelector, Targets, Task, TaskGroup,
+    TaskGroups, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
@@ -55,6 +55,9 @@ pub struct TomlManifest {
 
     /// Target specific tasks to run in the environment
     pub tasks: Option<PixiSpanned<HashMap<TaskName, Task>>>,
+
+    /// Task groups for organizing tasks
+    pub task_groups: Option<PixiSpanned<TaskGroups>>,
 
     /// The features defined in the project.
     pub feature: Option<PixiSpanned<IndexMap<PixiSpanned<FeatureName>, TomlFeature>>>,
@@ -427,6 +430,10 @@ impl TomlManifest {
             features,
             environments,
             solve_groups,
+            task_groups: self
+                .task_groups
+                .map(|tg| tg.value)
+                .unwrap_or_default(),
         };
 
         let package_manifest = if let Some(PixiSpanned {
@@ -545,6 +552,12 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
                     span: inner.span,
                 }
             });
+        let task_groups: Option<PixiSpanned<TaskGroups>> = th
+            .optional::<PixiSpanned<TomlIndexMap<String, TaskGroup>>>("task-groups")
+            .map(|spanned| PixiSpanned {
+                value: spanned.value.into_inner(),
+                span: spanned.span,
+            });
         let feature = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("feature")
             .map(TomlWith::into_inner);
@@ -588,6 +601,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             dev_dependencies: dev,
             activation,
             tasks,
+            task_groups,
             feature,
             environments,
             pypi_options,

@@ -10,8 +10,8 @@ use toml_edit::Value;
 
 use crate::{
     DependencyOverwriteBehavior, GetFeatureError, Preview, PrioritizedChannel,
-    PypiDependencyLocation, SpecType, SystemRequirements, TargetSelector, Task, TaskName,
-    TomlError, WorkspaceTarget, consts,
+    PypiDependencyLocation, SpecType, SystemRequirements, TargetSelector, Task, TaskGroup,
+    TaskGroups, TaskName, TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName},
     environments::Environments,
     error::{DependencyError, UnknownFeature},
@@ -42,6 +42,9 @@ pub struct WorkspaceManifest {
 
     /// The solve groups that are part of the project.
     pub solve_groups: SolveGroups,
+
+    /// Task groups for organizing tasks
+    pub task_groups: TaskGroups,
 }
 
 impl WorkspaceManifest {
@@ -183,6 +186,15 @@ impl WorkspaceManifest {
     /// Returns the preview field of the project
     pub fn preview(&self) -> &Preview {
         &self.workspace.preview
+    }
+
+    /// Returns the task group that contains the given task, if any.
+    /// Returns the group name and the group definition.
+    pub fn task_group(&self, task_name: &TaskName) -> Option<(&str, &TaskGroup)> {
+        self.task_groups
+            .iter()
+            .find(|(_, group)| group.tasks.contains(task_name))
+            .map(|(name, group)| (name.as_str(), group))
     }
 
     /// Returns true if any of the features has pypi dependencies defined.
@@ -3303,6 +3315,49 @@ channels = ["nvidia", "pytorch"]
         channels = ['conda-forge']
         platforms = [ 'win-64']
         "###);
+    }
+
+    #[test]
+    fn test_task_groups() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [tasks]
+        test = "pytest"
+        lint = "ruff check"
+        build = "cargo build"
+
+        [task-groups.ci]
+        description = "CI pipeline tasks"
+        tasks = ["test", "lint"]
+
+        [task-groups.dev]
+        tasks = ["build"]
+        "#;
+        let manifest = parse_pixi_toml(contents).manifest;
+
+        assert_eq!(manifest.task_groups.len(), 2);
+
+        let ci_group = manifest.task_groups.get("ci").unwrap();
+        assert_eq!(ci_group.description, Some("CI pipeline tasks".to_string()));
+        assert_eq!(ci_group.tasks.len(), 2);
+        assert_eq!(ci_group.tasks[0].as_str(), "test");
+        assert_eq!(ci_group.tasks[1].as_str(), "lint");
+
+        let dev_group = manifest.task_groups.get("dev").unwrap();
+        assert_eq!(dev_group.description, None);
+        assert_eq!(dev_group.tasks.len(), 1);
+        assert_eq!(dev_group.tasks[0].as_str(), "build");
+
+        // Test task_group lookup
+        let (group_name, group) = manifest.task_group(&"test".into()).unwrap();
+        assert_eq!(group_name, "ci");
+        assert_eq!(group.description, Some("CI pipeline tasks".to_string()));
+
+        assert!(manifest.task_group(&"nonexistent".into()).is_none());
     }
 
     #[test]

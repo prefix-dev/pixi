@@ -10,7 +10,7 @@ use toml_span::{
 };
 
 use crate::{
-    EnvironmentName, Task, TaskName, WithWarnings,
+    EnvironmentName, Task, TaskGroup, TaskName, WithWarnings,
     task::{
         Alias, ArgName, CmdArgs, Dependency, DependencyArg, Execute, GlobPatterns, TaskArg,
         TemplateString,
@@ -126,8 +126,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                     depends_on: deps,
                     description: None,
                     args: None,
-                    group: None,
-                    group_description: None,
                 })
                 .into());
             }
@@ -227,8 +225,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
             let description = th.optional("description");
             let clean_env = th.optional("clean-env").unwrap_or(false);
             let args = th.optional::<Vec<TaskArg>>("args");
-            let group = th.optional::<String>("group");
-            let group_description = th.optional::<String>("group-description");
 
             let mut have_default = false;
             for arg in args.iter().flat_map(|a| a.iter()) {
@@ -258,23 +254,17 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 description,
                 clean_env,
                 args,
-                group,
-                group_description,
             }))
         } else {
             let depends_on = depends_on(&mut th)?;
             let description = th.optional("description");
             let args = th.optional::<Vec<TaskArg>>("args");
-            let group = th.optional::<String>("group");
-            let group_description = th.optional::<String>("group-description");
             th.finalize(None)?;
 
             Task::Alias(Alias {
                 depends_on,
                 description,
                 args,
-                group,
-                group_description,
             })
         };
 
@@ -303,6 +293,16 @@ impl<'de> toml_span::Deserialize<'de> for CmdArgs {
 impl<'de> toml_span::Deserialize<'de> for TaskName {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         TomlFromStr::deserialize(value).map(TomlFromStr::into_inner)
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for TaskGroup {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+        let description = th.optional::<String>("description");
+        let tasks = th.optional::<Vec<TaskName>>("tasks").unwrap_or_default();
+        th.finalize(None)?;
+        Ok(TaskGroup { description, tasks })
     }
 }
 
@@ -384,69 +384,38 @@ mod test {
     }
 
     #[test]
-    fn test_task_with_group() {
+    fn test_task_group_parsing() {
         let input = r#"
-            cmd = "test"
-            group = "testing"
+            description = "CI tasks"
+            tasks = ["test", "lint"]
         "#;
 
-        let parsed = TomlTask::from_toml_str(input).unwrap();
-        assert_eq!(parsed.value.group(), Some("testing"));
+        let parsed = TaskGroup::from_toml_str(input).unwrap();
+        assert_eq!(parsed.description, Some("CI tasks".to_string()));
+        assert_eq!(parsed.tasks.len(), 2);
+        assert_eq!(parsed.tasks[0].as_str(), "test");
+        assert_eq!(parsed.tasks[1].as_str(), "lint");
     }
 
     #[test]
-    fn test_alias_with_group() {
+    fn test_task_group_no_description() {
         let input = r#"
-            depends-on = ["build"]
-            group = "ci"
-            description = "Run all CI tasks"
+            tasks = ["build"]
         "#;
 
-        let parsed = TomlTask::from_toml_str(input).unwrap();
-        assert_eq!(parsed.value.group(), Some("ci"));
+        let parsed = TaskGroup::from_toml_str(input).unwrap();
+        assert_eq!(parsed.description, None);
+        assert_eq!(parsed.tasks.len(), 1);
     }
 
     #[test]
-    fn test_task_with_group_description() {
+    fn test_task_group_empty_tasks() {
         let input = r#"
-            cmd = "pytest"
-            group = "testing"
-            group-description = "Tasks for running tests"
+            description = "Empty group"
         "#;
 
-        let parsed = TomlTask::from_toml_str(input).unwrap();
-        assert_eq!(parsed.value.group(), Some("testing"));
-        assert_eq!(
-            parsed.value.group_description(),
-            Some("Tasks for running tests")
-        );
-    }
-
-    #[test]
-    fn test_alias_with_group_description() {
-        let input = r#"
-            depends-on = ["test", "lint"]
-            group = "ci"
-            group-description = "CI/CD pipeline tasks"
-        "#;
-
-        let parsed = TomlTask::from_toml_str(input).unwrap();
-        assert_eq!(parsed.value.group(), Some("ci"));
-        assert_eq!(
-            parsed.value.group_description(),
-            Some("CI/CD pipeline tasks")
-        );
-    }
-
-    #[test]
-    fn test_group_without_group_description() {
-        let input = r#"
-            cmd = "cargo build"
-            group = "build"
-        "#;
-
-        let parsed = TomlTask::from_toml_str(input).unwrap();
-        assert_eq!(parsed.value.group(), Some("build"));
-        assert_eq!(parsed.value.group_description(), None);
+        let parsed = TaskGroup::from_toml_str(input).unwrap();
+        assert_eq!(parsed.description, Some("Empty group".to_string()));
+        assert!(parsed.tasks.is_empty());
     }
 }
