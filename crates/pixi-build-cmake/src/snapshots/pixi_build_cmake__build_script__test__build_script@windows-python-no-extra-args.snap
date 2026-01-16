@@ -1,0 +1,24 @@
+---
+source: crates/pixi-build-cmake/src/build_script.rs
+expression: script
+---
+ninja --version
+cmake --version
+
+if not exist build mkdir build
+pushd build
+
+if not exist build.ninja (
+    cmake %CMAKE_ARGS% ^
+        -GNinja ^
+        -S "my-prefix-dir" ^
+        -DCMAKE_BUILD_TYPE=Release ^
+        -DCMAKE_INSTALL_PREFIX=%LIBRARY_PREFIX% ^
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ^
+        -DBUILD_SHARED_LIBS=ON ^
+        -DPython_EXECUTABLE=%PYTHON%
+    @if errorlevel 1 exit 1
+)
+
+cmake --build . --target install
+@if errorlevel 1 exit 1

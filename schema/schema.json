@@ -1352,12 +1352,6 @@
           "type": "string",
           "minLength": 1
         },
-        "env-markers": {
-          "title": "Env-Markers",
-          "description": "The [PEP 508 markers](https://peps.python.org/pep-0508/#environment-markers) of the package",
-          "type": "string",
-          "minLength": 1
-        },
         "extras": {
           "title": "Extras",
           "description": "The [PEP 508 extras](https://peps.python.org/pep-0508/#extras) of the package",
@@ -1386,12 +1380,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "env-markers": {
-          "title": "Env-Markers",
-          "description": "The [PEP 508 markers](https://peps.python.org/pep-0508/#environment-markers) of the package",
-          "type": "string",
-          "minLength": 1
-        },
         "extras": {
           "title": "Extras",
           "description": "The [PEP 508 extras](https://peps.python.org/pep-0508/#extras) of the package",
@@ -1426,12 +1414,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "env-markers": {
-          "title": "Env-Markers",
-          "description": "The [PEP 508 markers](https://peps.python.org/pep-0508/#environment-markers) of the package",
-          "type": "string",
-          "minLength": 1
-        },
         "extras": {
           "title": "Extras",
           "description": "The [PEP 508 extras](https://peps.python.org/pep-0508/#extras) of the package",
@@ -1679,12 +1661,6 @@
           "description": "If `true` the package will be installed as editable",
           "type": "boolean"
         },
-        "env-markers": {
-          "title": "Env-Markers",
-          "description": "The [PEP 508 markers](https://peps.python.org/pep-0508/#environment-markers) of the package",
-          "type": "string",
-          "minLength": 1
-        },
         "extras": {
           "title": "Extras",
           "description": "The [PEP 508 extras](https://peps.python.org/pep-0508/#extras) of the package",
@@ -1713,12 +1689,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "env-markers": {
-          "title": "Env-Markers",
-          "description": "The [PEP 508 markers](https://peps.python.org/pep-0508/#environment-markers) of the package",
-          "type": "string",
-          "minLength": 1
-        },
         "extras": {
           "title": "Extras",
           "description": "The [PEP 508 extras](https://peps.python.org/pep-0508/#extras) of the package",
@@ -1741,12 +1711,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "env-markers": {
-          "title": "Env-Markers",
-          "description": "The [PEP 508 markers](https://peps.python.org/pep-0508/#environment-markers) of the package",
-          "type": "string",
-          "minLength": 1
-        },
         "extras": {
           "title": "Extras",
           "description": "The [PEP 508 extras](https://peps.python.org/pep-0508/#extras) of the package",

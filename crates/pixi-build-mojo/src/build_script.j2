@@ -1,0 +1,22 @@
+{%- set is_cmd_exe = build_platform == "windows" -%}
+{%- macro env(key) -%}
+{%- if is_cmd_exe %}{{ "%" ~ key ~ "%" }}{% else %}{{ "$" ~key }}{% endif -%}
+{% endmacro -%}
+
+{# - Set up common variables -#}
+{%- set library_prefix =  "%LIBRARY_PREFIX%" if build_platform == "windows" else "$PREFIX" -%}
+
+mojo --version
+
+
+{#- Build any binaries -#}
+{% if bins %}
+{% for bin in bins %}
+mojo build {{ bin.extra_args | join(" ")  }} {{ bin.path }} -o {{ library_prefix }}/bin/{{ bin.name }}
+{% endfor %}
+{% endif %}
+
+{#- Build pkg -#}
+{% if pkg %}
+mojo package {{ pkg.extra_args | join(" ") }} {{ pkg.path }} -o {{ library_prefix }}/lib/mojo/{{ pkg.name}}.mojopkg
+{% endif %}

@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use pep508_rs::MarkerTree;
 use pixi_cli::cli_config::GitRev;
 use pixi_consts::consts;
 use pixi_core::{DependencyType, Workspace};
@@ -256,6 +257,7 @@ async fn add_functionality_os() {
 
 /// Test the `pixi add --pypi` functionality (using local mocks)
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_pypi_functionality() {
     use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 
@@ -545,7 +547,7 @@ index-url = "{index_url}"
                             version: VersionOrStar::from_str("==24.8.0").unwrap(),
                             index: None,
                         },
-                        env_markers: pep508_rs::MarkerTree::default(),
+                        env_markers: MarkerTree::default(),
                     }
                 );
             }
@@ -1094,131 +1096,6 @@ platforms = ["{platform}"]
     ]}, {
         insta::assert_snapshot!(boltons.location);
     });
-}
-
-/// Test that git branch references are correctly preserved in lock files.
-/// This tests issue #5185: git references should be preserved across lock file updates.
-#[tokio::test]
-#[cfg_attr(not(feature = "online_tests"), ignore)]
-async fn test_pypi_git_branch_preservation() {
-    setup_tracing();
-
-    let pixi = PixiControl::from_manifest(
-        format!(
-            r#"
-[workspace]
-name = "test-git-branch-preservation"
-channels = ["https://prefix.dev/conda-forge"]
-platforms = ["{platform}"]
-
-[dependencies]
-python = ">=3.13"
-"#,
-            platform = Platform::current()
-        )
-        .as_str(),
-    )
-    .unwrap();
-
-    // Step 1: Add git dependency WITHOUT branch
-    pixi.add("boltons")
-        .set_pypi(true)
-        .with_git_url(Url::parse("https://github.com/mahmoud/boltons.git").unwrap())
-        .await
-        .unwrap();
-
-    // Verify: lock file should NOT have ?branch= when no branch specified
-    let lock = pixi.lock_file().await.unwrap();
-    let url1 = lock
-        .default_environment()
-        .unwrap()
-        .pypi_packages(Platform::current())
-        .unwrap()
-        .find(|(p, _)| p.name.to_string() == "boltons")
-        .map(|(p, _)| p.location.to_string())
-        .unwrap();
-    assert!(
-        !url1.contains("branch="),
-        "Should not have branch= without manifest branch, got: {url1}"
-    );
-
-    // Step 2: Update manifest to ADD branch = "master" (boltons uses master, not main)
-    pixi.update_manifest(
-        format!(
-            r#"
-[workspace]
-name = "test-git-branch-preservation"
-channels = ["https://prefix.dev/conda-forge"]
-platforms = ["{platform}"]
-
-[dependencies]
-python = ">=3.13"
-
-[pypi-dependencies]
-boltons = {{ git = "https://github.com/mahmoud/boltons.git", branch = "master" }}
-"#,
-            platform = Platform::current()
-        )
-        .as_str(),
-    )
-    .unwrap();
-
-    // Re-lock to update
-    pixi.lock().await.unwrap();
-
-    // Verify: lock file should have ?branch=master
-    let lock = pixi.lock_file().await.unwrap();
-    let url2 = lock
-        .default_environment()
-        .unwrap()
-        .pypi_packages(Platform::current())
-        .unwrap()
-        .find(|(p, _)| p.name.to_string() == "boltons")
-        .map(|(p, _)| p.location.to_string())
-        .unwrap();
-    assert!(
-        url2.contains("branch=master"),
-        "Should have branch=master after adding to manifest, got: {url2}"
-    );
-
-    // Step 3: Update manifest to REMOVE branch
-    pixi.update_manifest(
-        format!(
-            r#"
-[workspace]
-name = "test-git-branch-preservation"
-channels = ["https://prefix.dev/conda-forge"]
-platforms = ["{platform}"]
-
-[dependencies]
-python = ">=3.13"
-
-[pypi-dependencies]
-boltons = {{ git = "https://github.com/mahmoud/boltons.git" }}
-"#,
-            platform = Platform::current()
-        )
-        .as_str(),
-    )
-    .unwrap();
-
-    // Re-lock to update
-    pixi.lock().await.unwrap();
-
-    // Verify: lock file should NOT have branch=main anymore
-    let lock = pixi.lock_file().await.unwrap();
-    let url3 = lock
-        .default_environment()
-        .unwrap()
-        .pypi_packages(Platform::current())
-        .unwrap()
-        .find(|(p, _)| p.name.to_string() == "boltons")
-        .map(|(p, _)| p.location.to_string())
-        .unwrap();
-    assert!(
-        !url3.contains("branch="),
-        "Should not have branch= after removing from manifest, got: {url3}"
-    );
 }
 
 #[tokio::test]

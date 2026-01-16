@@ -40,3 +40,39 @@ path = "../my_other_source_directory"
 ```
 
 This works great in combination with git submodules.
+
+## Git
+
+If your source is hosted in a git repository, you can specify the repository URL using the `package.build.source.git` field.
+
+```toml
+[package.build.source]
+git = "https://github.com/user/repo.git"
+```
+
+You can pin to a specific branch, tag, or revision:
+```toml
+[package.build.source]
+git = "https://github.com/user/repo.git"
+branch = "main"
+```
+
+```toml
+[package.build.source]
+git = "https://github.com/user/repo.git"
+tag = "v1.0.0"
+```
+
+```toml
+[package.build.source]
+git = "https://github.com/user/repo.git"
+rev = "abc123"
+```
+
+If the source is located in a subdirectory of the repository, you can specify that as well:
+```toml
+[package.build.source]
+git = "https://github.com/user/repo.git"
+tag = "v1.0.0"
+subdirectory = "packages/mypackage"
+```

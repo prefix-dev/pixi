@@ -366,6 +366,7 @@ def test_concurrency_flags(
     )
 
 
+@pytest.mark.slow
 def test_cli_config_options(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:

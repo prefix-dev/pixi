@@ -1,0 +1,10 @@
+[workspace]
+authors = ["remimimimimi <remimimimimi@protonmail.com>"]
+channels = ["conda-forge"]
+name = "project"
+platforms = ["osx-arm64", "linux-64", "osx-64", "win-64"]
+preview = ["pixi-build"]
+version = "0.1.0"
+
+[dependencies]
+b = { path = "b" }

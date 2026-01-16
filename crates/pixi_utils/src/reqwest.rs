@@ -69,20 +69,14 @@ static DEFAULT_REQWEST_IDLE_PER_HOST: usize = 20;
 ///
 /// For `native-tls` builds, this always returns `true` since the system TLS library is used.
 /// For `rustls-tls` builds, this returns `true` if the config is set to `Native` or `All`.
-pub fn should_use_native_tls_for_uv(config: &Config) -> bool {
-    #[cfg(feature = "native-tls")]
-    {
-        let _ = config;
-        return true;
-    }
+pub fn should_use_native_tls_for_uv() -> bool {
+    tls_backend() == "native-tls"
+}
 
-    #[cfg(not(feature = "native-tls"))]
-    {
-        matches!(
-            config.tls_root_certs(),
-            pixi_config::TlsRootCerts::Native | pixi_config::TlsRootCerts::All
-        )
-    }
+/// Determines whether we should load all builtin certificates
+/// for uv
+pub fn should_use_builtin_certs_uv(config: &Config) -> bool {
+    matches!(config.tls_root_certs(), pixi_config::TlsRootCerts::All)
 }
 
 /// Returns the name of the TLS backend used by this build.

@@ -267,17 +267,12 @@ class SourceSpecTable(StrictBaseModel):
 
 MatchSpec = NonEmptyStr | MatchspecTable
 CondaPackageName = NonEmptyStr
-EnvironmentMarkers = NonEmptyStr
 
 
 class _PyPIRequirement(StrictBaseModel):
     extras: list[NonEmptyStr] | None = Field(
         None,
         description="The [PEP 508 extras](https://peps.python.org/pep-0508/#extras) of the package",
-    )
-    env_markers: EnvironmentMarkers | None = Field(
-        None,
-        description="The [PEP 508 markers](https://peps.python.org/pep-0508/#environment-markers) of the package",
     )
 
 
