@@ -937,6 +937,7 @@ dependencies = [
  "matchit",
  "memchr",
  "mime",
+ "multer",
  "percent-encoding",
  "pin-project-lite",
  "serde_core",
@@ -4324,6 +4325,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b52c1b33ff98142aecea13138bd399b68aa7ab5d9546c300988c345004001eea"
 
 [[package]]
+name = "multer"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83e87776546dc87511aa5ee218730c92b666d7264ab6ed41f9d215af9cd5224b"
+dependencies = [
+ "bytes",
+ "encoding_rs",
+ "futures-util",
+ "http 1.4.0",
+ "httparse",
+ "memchr",
+ "mime",
+ "spin",
+ "version_check",
+]
+
+[[package]]
 name = "munge"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5102,6 +5120,29 @@ dependencies = [
  "tracing",
  "url",
  "uv-normalize",
+]
+
+[[package]]
+name = "pixi_artifact_server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "clap",
+ "fs-err",
+ "hex",
+ "rattler_conda_types",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -8956,6 +8997,7 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
+ "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
@@ -9166,6 +9208,7 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
