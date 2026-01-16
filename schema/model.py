@@ -461,6 +461,19 @@ class TaskInlineTable(StrictBaseModel):
     )
 
 
+class TaskGroup(StrictBaseModel):
+    """A named group of tasks with optional description."""
+
+    description: NonEmptyStr | None = Field(
+        None,
+        description="Description of the group (used for display purposes)",
+    )
+    tasks: list[TaskName] | None = Field(
+        None,
+        description="The tasks that belong to this group",
+    )
+
+
 #######################
 # System requirements #
 #######################
@@ -904,6 +917,9 @@ class BaseManifest(StrictBaseModel):
     )
     tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the project"
+    )
+    task_groups: dict[NonEmptyStr, TaskGroup] | None = Field(
+        None, description="Named groups of tasks with optional descriptions"
     )
     system_requirements: SystemRequirements | None = Field(
         None, description="The system requirements of the project"

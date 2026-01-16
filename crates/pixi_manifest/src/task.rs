@@ -46,6 +46,18 @@ impl From<String> for TaskName {
     }
 }
 
+/// A named group of tasks with optional description
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TaskGroup {
+    /// Description of the group (used for display purposes)
+    pub description: Option<String>,
+    /// The tasks that belong to this group
+    pub tasks: Vec<TaskName>,
+}
+
+/// Maps group name to group definition
+pub type TaskGroups = IndexMap<String, TaskGroup>;
+
 /// A task dependency with optional args
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Dependency {
@@ -999,10 +1011,12 @@ impl From<Task> for Item {
                         array.push(Value::InlineTable(table));
                     }
 
-                    if let Some(description) = &alias.description {
+                    if alias.description.is_some() {
                         let mut table = Table::new().into_inline_table();
                         table.insert("depends-on", Value::Array(array));
-                        table.insert("description", description.into());
+                        if let Some(description) = &alias.description {
+                            table.insert("description", description.into());
+                        }
                         Item::Value(Value::InlineTable(table))
                     } else {
                         Item::Value(Value::Array(array))
