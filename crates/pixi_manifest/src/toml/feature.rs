@@ -1,7 +1,8 @@
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use indexmap::{IndexMap, IndexSet};
-use pixi_toml::{TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
+use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::Platform;
 use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper};
 
@@ -11,14 +12,36 @@ use crate::{
     pypi::pypi_options::PypiOptions,
     toml::{
         PlatformSpan, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
-        create_unsupported_selector_warning, platform::TomlPlatform, preview::TomlPreview,
-        task::TomlTask,
+        create_unsupported_selector_warning, load_tasks_from_file, platform::TomlPlatform,
+        preview::TomlPreview, task::TomlTask,
     },
     utils::{PixiSpanned, package_map::UniquePackageMap},
     warning::Deprecation,
     workspace::{ChannelPriority, SolveStrategy},
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
+
+/// Represents a task include directive for loading tasks from external files.
+/// The group name comes from the key in [tasks-include].
+#[derive(Debug, Clone)]
+pub struct TaskInclude {
+    /// Path to the external TOML file containing task definitions
+    pub path: PathBuf,
+    /// Optional description for the group
+    pub description: Option<String>,
+}
+
+impl<'de> toml_span::Deserialize<'de> for TaskInclude {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+        let path = th
+            .required::<TomlFromStr<PathBuf>>("path")?
+            .into_inner();
+        let description = th.optional::<String>("description");
+        th.finalize(None)?;
+        Ok(TaskInclude { path, description })
+    }
+}
 
 #[derive(Debug)]
 pub struct TomlFeature {
@@ -40,6 +63,10 @@ pub struct TomlFeature {
     /// Target specific tasks to run in the environment
     pub tasks: HashMap<TaskName, Task>,
 
+    /// Task includes for loading tasks from external files
+    /// Key is the group name, value contains path and optional description
+    pub task_includes: HashMap<String, TaskInclude>,
+
     /// Additional options for PyPi dependencies.
     pub pypi_options: Option<PypiOptions>,
 
@@ -53,9 +80,10 @@ impl TomlFeature {
         name: FeatureName,
         preview: &TomlPreview,
         workspace: &TomlWorkspace,
+        root_directory: Option<&Path>,
     ) -> Result<WithWarnings<Feature>, TomlError> {
         let WithWarnings {
-            value: default_target,
+            value: mut default_target,
             mut warnings,
         } = TomlTarget {
             dependencies: self.dependencies,
@@ -68,6 +96,20 @@ impl TomlFeature {
             warnings: self.warnings,
         }
         .into_workspace_target(None, preview)?;
+
+        // Process task includes for this feature
+        if let Some(root_dir) = root_directory {
+            for (group_name, include) in &self.task_includes {
+                let (included_tasks, mut include_warnings) =
+                    load_tasks_from_file(&include.path, root_dir, group_name, include.description.as_deref())?;
+                warnings.append(&mut include_warnings);
+
+                // Merge included tasks into the default target
+                for (task_name, task) in included_tasks {
+                    default_target.tasks.insert(task_name, task);
+                }
+            }
+        }
 
         let mut targets = IndexMap::new();
         for (selector, target) in self.target {
@@ -191,6 +233,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
                 (key, task)
             })
             .collect();
+        let task_includes = th
+            .optional::<TomlHashMap<String, TaskInclude>>("tasks-include")
+            .map(TomlHashMap::into_inner)
+            .unwrap_or_default();
         let pypi_options = th.optional("pypi-options");
         let system_requirements = th.optional("system-requirements").unwrap_or_default();
 
@@ -210,6 +256,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             dev,
             activation,
             tasks,
+            task_includes,
             pypi_options,
             warnings,
         })
@@ -311,5 +358,42 @@ mod test {
           ╰────
         "#
         );
+    }
+
+    #[test]
+    fn test_task_includes_parsing() {
+        use crate::toml::FromTomlStr;
+
+        let input = r#"
+            platforms = ['linux-64']
+            [tasks]
+            build = "cargo build"
+            [tasks-include.ci]
+            path = "ci-tasks.toml"
+            description = "CI related tasks"
+        "#;
+
+        let parsed = super::TomlFeature::from_toml_str(input).unwrap();
+        assert_eq!(parsed.task_includes.len(), 1);
+        let ci_include = parsed.task_includes.get("ci").unwrap();
+        assert_eq!(ci_include.path.to_str().unwrap(), "ci-tasks.toml");
+        assert_eq!(ci_include.description.as_deref(), Some("CI related tasks"));
+    }
+
+    #[test]
+    fn test_task_includes_without_description() {
+        use crate::toml::FromTomlStr;
+
+        let input = r#"
+            platforms = ['linux-64']
+            [tasks-include.testing]
+            path = "test-tasks.toml"
+        "#;
+
+        let parsed = super::TomlFeature::from_toml_str(input).unwrap();
+        assert_eq!(parsed.task_includes.len(), 1);
+        let testing_include = parsed.task_includes.get("testing").unwrap();
+        assert_eq!(testing_include.path.to_str().unwrap(), "test-tasks.toml");
+        assert_eq!(testing_include.description, None);
     }
 }

@@ -332,6 +332,138 @@ Hiding tasks can be useful if your workspace defines many tasks but your users o
 --8<-- "docs/source_files/pixi_tomls/task_visibility.toml:project_tasks"
 ```
 
+## Task Groups
+
+Tasks can be organized into groups using the `group` field. This is useful for categorizing related tasks (e.g., CI tasks, development tasks, testing tasks) and controlling their visibility in task listings.
+
+### Defining Task Groups
+
+Add a `group` field to any task to assign it to a group:
+
+```toml title="pixi.toml"
+[tasks]
+# Ungrouped tasks are always visible
+build = "cargo build"
+run = "cargo run"
+
+# CI-related tasks
+test = { cmd = "cargo test", group = "ci" }
+lint = { cmd = "cargo clippy", group = "ci" }
+fmt-check = { cmd = "cargo fmt --check", group = "ci" }
+
+# Development tasks
+watch = { cmd = "cargo watch -x run", group = "dev" }
+```
+
+### Listing Tasks with Groups
+
+By default, `pixi task list` shows only ungrouped tasks and displays hints about hidden groups:
+
+```shell
+pixi task list
+# Output:
+# Task   Description
+# build
+# run
+#
+# 4 task(s) in 2 group(s) not shown. Use `pixi task list --all` or `pixi task list --group <NAME>`.
+# Group  Description
+# ci
+# dev
+```
+
+Use `--all` to see all tasks organized by group:
+
+```shell
+pixi task list --all
+```
+
+Use `--group` to filter to a specific group:
+
+```shell
+pixi task list --group ci
+# Output:
+# Task       Description
+# test
+# lint
+# fmt-check
+```
+
+## Including Tasks from External Files
+
+For large workspaces with many tasks, you can organize tasks into separate TOML files using `[tasks-include]`. This helps keep your main `pixi.toml` clean and allows logical grouping of related tasks.
+
+### Defining Task Includes
+
+In your `pixi.toml`, use the `[tasks-include]` section to reference external task files:
+
+```toml title="pixi.toml"
+[workspace]
+name = "my-project"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64"]
+
+[tasks]
+build = "cargo build"
+
+[tasks-include.ci]
+path = "tasks/ci.toml"
+description = "CI/CD related tasks"
+
+[tasks-include.dev]
+path = "tasks/dev.toml"
+description = "Development utilities"
+```
+
+### External Task File Format
+
+External task files contain task definitions directly at the root level (no `[tasks]` header):
+
+```toml title="tasks/ci.toml"
+test = "cargo test"
+lint = "cargo clippy"
+fmt-check = "cargo fmt --check"
+coverage = { cmd = "cargo tarpaulin", description = "Generate code coverage" }
+```
+
+```toml title="tasks/dev.toml"
+watch = "cargo watch -x run"
+docs = "cargo doc --open"
+clean = "cargo clean"
+```
+
+### How Task Includes Work
+
+- The key in `[tasks-include.KEY]` becomes the group name for all tasks in that file (e.g., `[tasks-include.ci]` assigns tasks to the "ci" group)
+- The `description` field describes the group (shown in task list hints)
+- Grouped tasks are hidden by default in `pixi task list` but can be shown with `--all` or `--group`
+- Task names must be unique across all files - duplicates will cause an error
+
+### Example Usage
+
+```shell
+# List only ungrouped tasks (build)
+pixi task list
+# Output:
+# Task   Description
+# build
+#
+# 7 task(s) in 2 group(s) not shown. Use `pixi task list --all` or `pixi task list --group <NAME>`.
+# Group  Description
+# ci     CI/CD related tasks
+# dev    Development utilities
+
+# List all tasks
+pixi task list --all
+
+# List only CI tasks
+pixi task list --group ci
+
+# Run a task from an included file
+pixi run test
+pixi run watch
+```
+
 ## Caching
 
 When you specify `inputs` and/or `outputs` to a task, Pixi will reuse the result of the task.

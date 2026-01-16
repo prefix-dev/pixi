@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, hash_map::Entry},
+    collections::{HashMap, hash_map::Entry},
     convert::identity,
     ffi::OsString,
     string::String,
@@ -22,7 +22,7 @@ use pixi_core::{
     lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     workspace::{Environment, errors::UnsupportedPlatformError},
 };
-use pixi_manifest::{FeaturesExt, TaskName};
+use pixi_manifest::FeaturesExt;
 use pixi_progress::global_multi_progress;
 use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
@@ -34,6 +34,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
 use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
+use crate::task::{collect_tasks_with_definitions, display_available_tasks_with_hints};
 
 /// Runs task in the pixi environment.
 ///
@@ -355,28 +356,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 /// Called when a command was not found.
 fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<Environment<'p>>) {
-    let available_tasks: HashSet<TaskName> =
-        if let Some(explicit_environment) = explicit_environment {
-            explicit_environment.get_filtered_tasks()
-        } else {
-            workspace
-                .environments()
-                .into_iter()
-                .flat_map(|env| env.get_filtered_tasks())
-                .collect()
-        };
-
-    if !available_tasks.is_empty() {
-        pixi_progress::println!(
-            "\nAvailable tasks:\n{}",
-            available_tasks
-                .into_iter()
-                .sorted()
-                .format_with("\n", |name, f| {
-                    f(&format_args!("\t{}", name.fancy_display().bold()))
-                })
-        );
-    }
+    let tasks_per_env = collect_tasks_with_definitions(workspace, explicit_environment.as_ref());
+    display_available_tasks_with_hints(&tasks_per_env);
 
     // Help user when there is no task available because the platform is not
     // supported

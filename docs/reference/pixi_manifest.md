@@ -409,15 +409,32 @@ build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "fro
 run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
 format = { cmd="black $INIT_CWD" } # runs black where you run pixi run format
 clean-env = { cmd = "python isolated.py", clean-env = true} # Only on Unix!
+ci-test = { cmd = "pytest", group = "ci" } # Task in the "ci" group
 ```
 
 You can modify this table using [`pixi task`](cli/pixi/task.md).
+
 !!! note
     Specify different tasks for different platforms using the [target](#the-target-table) table
 
 !!! info
     If you want to hide a task from showing up with `pixi task list` or `pixi info`, you can prefix the name with `_`.
     For example, if you want to hide `depending`, you can rename it to `_depending`.
+
+!!! tip "Task Groups"
+    Use the `group` field to organize tasks into groups. Grouped tasks are hidden by default in `pixi task list` but can be shown with `--all` or `--group <NAME>`. See [Task Groups](../workspace/advanced_tasks.md#task-groups) for details.
+
+## The `tasks-include` table
+
+Load tasks from external TOML files. The key becomes the group name for those tasks.
+
+```toml
+[tasks-include.ci]
+path = "tasks/ci.toml"
+description = "CI/CD related tasks"
+```
+
+See [Task Groups](../workspace/advanced_tasks.md#task-groups) and [Including Tasks from External Files](../workspace/advanced_tasks.md#including-tasks-from-external-files) for details.
 
 ## The `system-requirements` table
 

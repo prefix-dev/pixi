@@ -899,8 +899,9 @@ def test_pixi_task_list_platforms(pixi: Path, tmp_pixi_workspace: Path) -> None:
         bar = "echo bar"
         """
     manifest.write_text(toml)
+    # Task list table goes to stdout, heading goes to stderr
     verify_cli_command(
-        [pixi, "task", "list", "--manifest-path", manifest], stderr_contains=["foo", "bar"]
+        [pixi, "task", "list", "--manifest-path", manifest], stdout_contains=["foo", "bar"]
     )
 
 
@@ -1035,6 +1036,166 @@ def test_pixi_task_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
             }
         ]
     )
+
+
+def test_pixi_task_list_with_groups(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that task list works with grouped tasks."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [tasks]
+        build = "cargo build"
+        test = { cmd = "cargo test", group = "testing" }
+        lint = { cmd = "cargo clippy", group = "testing" }
+        """
+    manifest.write_text(toml)
+
+    # Default list should show ungrouped tasks and hint about groups
+    # Task list table goes to stdout, heading and group hints go to stderr
+    result = verify_cli_command([pixi, "task", "list", "--manifest-path", manifest])
+    assert "build" in result.stdout
+    # Should indicate there are grouped tasks (hints go to stderr)
+    assert "task(s)" in result.stderr and "group" in result.stderr
+
+    # --all flag should show all tasks including grouped ones
+    result = verify_cli_command([pixi, "task", "list", "--all", "--manifest-path", manifest])
+    combined = result.stdout + result.stderr
+    assert "build" in combined
+    assert "test" in combined
+    assert "lint" in combined
+
+    # --group flag should filter to specific group
+    result = verify_cli_command(
+        [pixi, "task", "list", "--group", "testing", "--manifest-path", manifest]
+    )
+    # Task list table goes to stdout
+    assert "test" in result.stdout
+    assert "lint" in result.stdout
+    assert "build" not in result.stdout
+
+
+def test_pixi_task_includes(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that tasks can be loaded from external files."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    ci_tasks_file = tmp_pixi_workspace.joinpath("ci-tasks.toml")
+
+    # Create the external tasks file
+    ci_tasks_content = """
+run-tests = "cargo test"
+run-lint = "cargo clippy"
+"""
+    ci_tasks_file.write_text(ci_tasks_content)
+
+    # Create the main manifest with tasks-include
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [tasks]
+        build = "cargo build"
+
+        [tasks-include.ci]
+        path = "ci-tasks.toml"
+        description = "CI related tasks"
+        """
+    manifest.write_text(toml)
+
+    # --all flag should show all tasks including those from includes
+    # With groups present, output goes through print_tasks_by_group to stdout
+    result = verify_cli_command([pixi, "task", "list", "--all", "--manifest-path", manifest])
+    combined = result.stdout + result.stderr
+    assert "build" in combined
+    assert "run-tests" in combined
+    assert "run-lint" in combined
+
+    # --group flag should filter to the ci group (tasks from include file)
+    result = verify_cli_command(
+        [pixi, "task", "list", "--group", "ci", "--manifest-path", manifest]
+    )
+    # Task list table goes to stdout
+    assert "run-tests" in result.stdout
+    assert "run-lint" in result.stdout
+    assert "build" not in result.stdout
+
+
+def test_pixi_task_includes_advanced_features(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that advanced task features (depends-on, args, etc.) work in included TOML files."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    build_tasks_file = tmp_pixi_workspace.joinpath("build-tasks.toml")
+
+    # Create the external tasks file with advanced features
+    build_tasks_content = """
+# Task with depends-on
+build-all = { cmd = "echo 'Building all'", depends-on = ["build-lib", "build-bin"] }
+build-lib = "echo 'Building lib'"
+build-bin = "echo 'Building bin'"
+
+# Task with args
+greet = { cmd = "echo 'Hello {{name}}'", args = [{arg = "name", default = "World"}] }
+
+# Task with description, cwd, and env
+deploy = { cmd = "echo 'Deploying to {{target}}'", description = "Deploy the application", args = [{arg = "target", default = "staging"}] }
+"""
+    build_tasks_file.write_text(build_tasks_content)
+
+    # Create the main manifest with tasks-include
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [tasks]
+        clean = "echo 'Cleaning'"
+
+        [tasks-include.build]
+        path = "build-tasks.toml"
+        """
+    manifest.write_text(toml)
+
+    # Verify all tasks are listed
+    result = verify_cli_command([pixi, "task", "list", "--all", "--manifest-path", manifest])
+    combined = result.stdout + result.stderr
+    assert "clean" in combined
+    assert "build-all" in combined
+    assert "build-lib" in combined
+    assert "build-bin" in combined
+    assert "greet" in combined
+    assert "deploy" in combined
+    # Check description is shown
+    assert "Deploy the application" in combined
+
+    # Verify JSON output includes the advanced features
+    result = verify_cli_command([pixi, "task", "list", "--json", "--manifest-path", manifest])
+    task_data = json.loads(result.stdout)
+
+    # Find the build-all task and verify depends-on
+    all_tasks = []
+    for env in task_data:
+        for feature in env.get("features", []):
+            all_tasks.extend(feature.get("tasks", []))
+
+    build_all_task = next((t for t in all_tasks if t["name"] == "build-all"), None)
+    assert build_all_task is not None
+    # depends_on is a list of objects with task_name field
+    depends_on_names = [dep.get("task_name") for dep in build_all_task["depends_on"]]
+    assert "build-lib" in depends_on_names
+    assert "build-bin" in depends_on_names
+
+    greet_task = next((t for t in all_tasks if t["name"] == "greet"), None)
+    assert greet_task is not None
+    assert greet_task["args"] is not None
+    assert any(arg.get("name") == "name" and arg.get("default") == "World" for arg in greet_task["args"])
+
+    deploy_task = next((t for t in all_tasks if t["name"] == "deploy"), None)
+    assert deploy_task is not None
+    assert deploy_task["description"] == "Deploy the application"
 
 
 @pytest.mark.extra_slow

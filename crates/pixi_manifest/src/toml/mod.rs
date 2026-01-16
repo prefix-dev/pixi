@@ -27,6 +27,7 @@ pub use feature::TomlFeature;
 use itertools::Itertools;
 pub use manifest::ExternalWorkspaceProperties;
 pub use manifest::TomlManifest;
+pub use manifest::load_tasks_from_file;
 use miette::LabeledSpan;
 pub use package::{PackageDefaults, PackageError, TomlPackage, WorkspacePackageProperties};
 pub use platform::TomlPlatform;

@@ -10,7 +10,7 @@ use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
 use rattler_conda_types::{Platform, Version};
 use toml_span::{
-    DeserError, Spanned, Value,
+    DeserError, Deserialize, Spanned, Value,
     de_helpers::{TableHelper, expected},
     value::ValueInner,
 };
@@ -27,7 +27,7 @@ use crate::{
     toml::{
         PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
         WorkspacePackageProperties, create_unsupported_selector_warning,
-        environment::TomlEnvironmentList, task::TomlTask,
+        environment::TomlEnvironmentList, feature::TaskInclude, task::TomlTask,
     },
     utils::{PixiSpanned, package_map::UniquePackageMap},
     warning::Deprecation,
@@ -55,6 +55,10 @@ pub struct TomlManifest {
 
     /// Target specific tasks to run in the environment
     pub tasks: Option<PixiSpanned<HashMap<TaskName, Task>>>,
+
+    /// Task includes for loading tasks from external files
+    /// Key is the group name, value contains path and optional description
+    pub task_includes: HashMap<String, TaskInclude>,
 
     /// The features defined in the project.
     pub feature: Option<PixiSpanned<IndexMap<PixiSpanned<FeatureName>, TomlFeature>>>,
@@ -151,7 +155,7 @@ impl TomlManifest {
         let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
 
         let WithWarnings {
-            value: default_workspace_target,
+            value: mut default_workspace_target,
             mut warnings,
         } = TomlTarget {
             dependencies: self.dependencies,
@@ -164,6 +168,20 @@ impl TomlManifest {
             warnings: self.warnings,
         }
         .into_workspace_target(None, preview)?;
+
+        // Process task includes for the default feature
+        if let Some(root_dir) = root_directory {
+            for (group_name, include) in &self.task_includes {
+                let (included_tasks, mut include_warnings) =
+                    load_tasks_from_file(&include.path, root_dir, group_name, include.description.as_deref())?;
+                warnings.append(&mut include_warnings);
+
+                // Merge included tasks into the default target
+                for (task_name, task) in included_tasks {
+                    default_workspace_target.tasks.insert(task_name, task);
+                }
+            }
+        }
 
         let mut workspace_targets = IndexMap::new();
         for (selector, target) in self.target.map(|t| t.value).unwrap_or_default() {
@@ -240,7 +258,7 @@ impl TomlManifest {
                 let WithWarnings {
                     value: feature,
                     warnings: mut feature_warnings,
-                } = feature.into_feature(name.value.clone(), preview, &workspace.value)?;
+                } = feature.into_feature(name.value.clone(), preview, &workspace.value, root_directory)?;
                 warnings.append(&mut feature_warnings);
                 feature_name_to_span
                     .entry(name.value.clone().to_string())
@@ -466,6 +484,86 @@ impl TomlManifest {
     }
 }
 
+/// Load tasks from an external TOML file.
+///
+/// The file should contain a flat mapping of task names to task definitions,
+/// like:
+/// ```toml
+/// build = "cargo build"
+/// test = { cmd = "cargo test", depends-on = ["build"] }
+/// ```
+pub fn load_tasks_from_file(
+    path: &Path,
+    root_directory: &Path,
+    group_name: &str,
+    group_description: Option<&str>,
+) -> Result<(HashMap<TaskName, Task>, Vec<Warning>), TomlError> {
+    let full_path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        root_directory.join(path)
+    };
+
+    let contents = std::fs::read_to_string(&full_path).map_err(|e| {
+        TomlError::Generic(
+            GenericError::new(format!(
+                "Failed to read task include file '{}': {}",
+                full_path.display(),
+                e
+            ))
+            .with_help(format!(
+                "Make sure the file exists and is readable at '{}'",
+                full_path.display()
+            )),
+        )
+    })?;
+
+    // Parse the file as a simple task mapping
+    let mut toml = toml_span::parse(&contents).map_err(|e| {
+        TomlError::Generic(
+            GenericError::new(format!(
+                "Failed to parse task include file '{}': {}",
+                full_path.display(),
+                e
+            ))
+            .with_help("Task include files should contain a flat mapping of task names to task definitions"),
+        )
+    })?;
+
+    let tasks_map = TomlHashMap::<String, TomlTask>::deserialize(&mut toml).map_err(|e| {
+        TomlError::Generic(
+            GenericError::new(format!(
+                "Failed to parse tasks in '{}': {}",
+                full_path.display(),
+                e
+            ))
+            .with_help("Each task should be either a string command or a table with 'cmd' and optional fields"),
+        )
+    })?;
+
+    let mut warnings = Vec::new();
+    let tasks: HashMap<TaskName, Task> = tasks_map
+        .into_inner()
+        .into_iter()
+        .map(|(name, toml_task)| {
+            let WithWarnings {
+                value: mut task,
+                warnings: mut task_warnings,
+            } = toml_task;
+            warnings.append(&mut task_warnings);
+            // Set the group on the task
+            task.set_group(group_name.to_string());
+            // Set the group description if provided
+            if let Some(desc) = group_description {
+                task.set_group_description(desc.to_string());
+            }
+            (name.into(), task)
+        })
+        .collect();
+
+    Ok((tasks, warnings))
+}
+
 impl<'de> toml_span::Deserialize<'de> for TomlManifest {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
@@ -545,6 +643,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
                     span: inner.span,
                 }
             });
+        let task_includes = th
+            .optional::<TomlHashMap<String, TaskInclude>>("tasks-include")
+            .map(TomlHashMap::into_inner)
+            .unwrap_or_default();
         let feature = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("feature")
             .map(TomlWith::into_inner);
@@ -588,6 +690,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             dev_dependencies: dev,
             activation,
             tasks,
+            task_includes,
             feature,
             environments,
             pypi_options,
