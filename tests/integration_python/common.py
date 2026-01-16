@@ -13,7 +13,7 @@ from rattler import Platform
 # Regex pattern to match ANSI escape sequences
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 
-PIXI_VERSION = "0.63.0"
+PIXI_VERSION = "0.63.1"
 
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "osx-arm64", "win-64", "linux-ppc64le", "linux-aarch64"]'
