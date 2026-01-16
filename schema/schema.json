@@ -192,6 +192,17 @@
         }
       ]
     },
+    "task-groups": {
+      "title": "Task-Groups",
+      "description": "Named groups of tasks with optional descriptions",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/TaskGroup"
+      },
+      "propertyNames": {
+        "minLength": 1
+      }
+    },
     "tasks": {
       "title": "Tasks",
       "description": "The tasks of the project",
@@ -2143,6 +2154,30 @@
           "title": "Default",
           "description": "The default value of the argument",
           "type": "string"
+        }
+      }
+    },
+    "TaskGroup": {
+      "title": "TaskGroup",
+      "description": "A named group of tasks with optional description.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "title": "Description",
+          "description": "Description of the group (used for display purposes)",
+          "type": "string",
+          "minLength": 1
+        },
+        "tasks": {
+          "title": "Tasks",
+          "description": "The tasks that belong to this group",
+          "type": "array",
+          "items": {
+            "description": "A valid task name.",
+            "type": "string",
+            "pattern": "^[^\\s\\$]+$"
+          }
         }
       }
     },
