@@ -43,6 +43,21 @@ fn join_args_with_single_quotes<'a>(args: impl IntoIterator<Item = &'a str>) -> 
         .join(" ")
 }
 
+/// Controls whether to prefer resolving commands as executables over Pixi tasks
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreferExecutable {
+    /// Always try to resolve as a Pixi task first (default behavior)
+    Never,
+    /// Always treat as an executable, skip task resolution
+    Always,
+}
+
+impl Default for PreferExecutable {
+    fn default() -> Self {
+        Self::Never
+    }
+}
+
 /// A task ID is a unique identifier for a [`TaskNode`] in a [`TaskGraph`].
 ///
 /// To get a task from a [`TaskGraph`], you can use the [`TaskId`] as an index.
@@ -199,7 +214,7 @@ impl<'p> TaskGraph<'p> {
         search_envs: &SearchEnvironments<'p, D>,
         args: Vec<String>,
         skip_deps: bool,
-        prefer_executable: bool,
+        prefer_executable: PreferExecutable,
     ) -> Result<Self, TaskGraphError> {
         // Split 'args' into arguments if it's a single string, supporting commands
         // like: `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or
@@ -214,7 +229,7 @@ impl<'p> TaskGraph<'p> {
             (args, true)
         };
 
-        if !prefer_executable && let Some(name) = args.first() {
+        if prefer_executable == PreferExecutable::Never && let Some(name) = args.first() {
             match search_envs.find_task(TaskName::from(name.clone()), FindTaskSource::CmdArgs, None)
             {
                 Err(FindTaskError::MissingTask(_)) => {}
@@ -619,7 +634,7 @@ mod test {
 
     use crate::{
         task_environment::SearchEnvironments,
-        task_graph::{TaskGraph, join_args_with_single_quotes},
+        task_graph::{TaskGraph, join_args_with_single_quotes, PreferExecutable},
     };
 
     fn commands_in_order(
@@ -639,7 +654,7 @@ mod test {
             &search_envs,
             run_args.iter().map(|arg| arg.to_string()).collect(),
             skip_deps,
-            false,
+            PreferExecutable::Never,
         )
         .unwrap();
 

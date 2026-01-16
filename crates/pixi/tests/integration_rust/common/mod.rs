@@ -38,7 +38,7 @@ use pixi_manifest::{EnvironmentName, FeatureName};
 use pixi_progress::global_multi_progress;
 use pixi_task::{
     ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph, TaskGraphError,
-    TaskName, get_task_env,
+    TaskName, get_task_env, PreferExecutable,
 };
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, LockedPackageRef, UrlOrPath};
@@ -591,7 +591,7 @@ impl PixiControl {
                 .map(|e| e.best_platform())
                 .or(Some(Platform::current())),
         );
-        let task_graph = TaskGraph::from_cmd_args(&project, &search_env, args.task, false, false)
+        let task_graph = TaskGraph::from_cmd_args(&project, &search_env, args.task, false, PreferExecutable::Never)
             .map_err(RunError::TaskGraphError)?;
 
         // Iterate over all tasks in the graph and execute them.
