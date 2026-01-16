@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/prefix-dev/recipe-format/main/schema.json
+
+context:
+  version: "23.0.0"
+
+package:
+  name: boltons-with-extra
+  version: ${{ version }}
+
+source:
+  - url: https://github.com/mahmoud/boltons/archive/refs/tags/${{ version }}.tar.gz
+    sha256: 9b2998cd9525ed472079c7dd90fbd216a887202e8729d5969d4f33878f0ff668
+
+build:
+  noarch: python
+  script:
+    content:
+      - python -m pip install . --no-deps -vv
+
+requirements:
+  host:
+    - python
+    - pip
+    - setuptools
+  run:
+    - pip
+
+about:
+  license: BSD-3-Clause
+  license_file: LICENSE

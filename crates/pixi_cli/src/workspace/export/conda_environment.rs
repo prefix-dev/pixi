@@ -452,7 +452,7 @@ mod tests {
         let args = Args {
             output_path: None,
             platform: Some(Platform::Osx64),
-            environment: None,
+            environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
             name: None,
         };

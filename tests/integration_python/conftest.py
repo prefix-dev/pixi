@@ -1,8 +1,23 @@
+import os
 from pathlib import Path
 
 import pytest
 
 from .common import CONDA_FORGE_CHANNEL, exec_extension
+
+
+@pytest.fixture(autouse=True)
+def clean_pixi_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Remove all PIXI_ prefixed environment variables before each test.
+
+    Since tests are run via `pixi run`, the environment contains PIXI_ variables
+    (like PIXI_IN_SHELL, PIXI_PROJECT_ROOT, etc.) that can interfere with the
+    pixi commands being tested. This fixture ensures each test starts with a
+    clean environment.
+    """
+    for key in list(os.environ.keys()):
+        if key.startswith("PIXI_"):
+            monkeypatch.delenv(key, raising=False)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -93,6 +108,11 @@ def dummy_channel_2(channels: Path) -> str:
 @pytest.fixture
 def multiple_versions_channel_1(channels: Path) -> str:
     return channels.joinpath("multiple_versions_channel_1").as_uri()
+
+
+@pytest.fixture
+def target_specific_channel_1(channels: Path) -> str:
+    return channels.joinpath("target_specific_channel_1").as_uri()
 
 
 @pytest.fixture

@@ -35,9 +35,7 @@ use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rayon::prelude::*;
 use utils::elapsed;
 use uv_auth::store_credentials_from_url;
-use uv_client::{
-    BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder,
-};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClient};
 use uv_configuration::{BuildOptions, Constraints, IndexStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{BuiltWheelIndex, DistributionDatabase, RegistryWheelIndex};
@@ -347,25 +345,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &index_locations,
         );
 
-        let base_client_builder = BaseClientBuilder::default()
-            .allow_insecure_host(allow_insecure_hosts)
-            .keyring(self.context_config.uv_context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .native_tls(self.context_config.uv_context.use_native_tls)
-            .extra_middleware(self.context_config.uv_context.extra_middleware.clone());
-
-        let mut uv_client_builder = RegistryClientBuilder::new(
-            base_client_builder,
-            self.context_config.uv_context.cache.clone(),
-        )
-        .index_locations(index_locations.clone())
-        .index_strategy(index_strategy);
-
-        for p in &self.context_config.uv_context.proxies {
-            uv_client_builder = uv_client_builder.proxy(p.clone())
-        }
-
-        let registry_client = Arc::new(uv_client_builder.build());
+        let registry_client = self.context_config.uv_context.build_registry_client(
+            allow_insecure_hosts,
+            &index_locations,
+            index_strategy,
+            None,
+        );
 
         // Resolve the flat indexes from `--find-links`.
         let flat_index_client = FlatIndexClient::new(
