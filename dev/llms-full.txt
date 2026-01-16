@@ -6670,6 +6670,44 @@ path = "../my_other_source_directory"
 
 This works great in combination with git submodules.
 
+## Git
+
+If your source is hosted in a git repository, you can specify the repository URL using the `package.build.source.git` field.
+
+```toml
+[package.build.source]
+git = "https://github.com/user/repo.git"
+```
+
+You can pin to a specific branch, tag, or revision:
+
+```toml
+[package.build.source]
+git = "https://github.com/user/repo.git"
+branch = "main"
+```
+
+```toml
+[package.build.source]
+git = "https://github.com/user/repo.git"
+tag = "v1.0.0"
+```
+
+```toml
+[package.build.source]
+git = "https://github.com/user/repo.git"
+rev = "abc123"
+```
+
+If the source is located in a subdirectory of the repository, you can specify that as well:
+
+```toml
+[package.build.source]
+git = "https://github.com/user/repo.git"
+tag = "v1.0.0"
+subdirectory = "packages/mypackage"
+```
+
 In this tutorial, we will show you how to create a simple Python package with pixi. To read more about how building packages work with Pixi see the [Getting Started](../getting_started/) guide. You might also want to check out the [documentation](https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-python/) for the `pixi-build-python` backend.
 
 Warning
@@ -16982,12 +17020,6 @@ This release removes the input hashes from the lockfile for source dependencies 
 
 - @prady0t made their first contribution in [#5112](https://github.com/prefix-dev/pixi/pull/5112)
 - @TheSkyentist made their first contribution in [#5126](https://github.com/prefix-dev/pixi/pull/5126)
-
-# Changelog
-
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### [0.61.0] - 2025-12-09
 
