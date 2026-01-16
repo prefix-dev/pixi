@@ -383,6 +383,12 @@ jobs:
           name: artifacts-pixi-aarch64-pc-windows-msvc.exe
           path: unpacked-artifacts/pixi-aarch64-pc-windows-msvc.exe
 
+      - name: Upload unpacked artifact for pixi-riscv64gc-unknown-linux-gnu
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: artifacts-pixi-riscv64gc-unknown-linux-gnu
+          path: unpacked-artifacts/pixi-riscv64gc-unknown-linux-gnu
+
       # Upload installer scripts
       - name: Upload install.sh
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
