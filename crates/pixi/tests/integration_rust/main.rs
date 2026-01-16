@@ -8,6 +8,7 @@ mod global_tests;
 mod init_tests;
 mod install_filter_tests;
 mod install_tests;
+mod lock_tests;
 mod project_tests;
 mod pypi_tests;
 mod search_tests;

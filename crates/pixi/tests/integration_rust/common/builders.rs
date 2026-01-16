@@ -621,6 +621,17 @@ pub struct LockBuilder {
     pub args: lock::Args,
 }
 
+impl LockBuilder {
+    pub fn with_dry_run(mut self, dry_run: bool) -> Self {
+        self.args.dry_run = dry_run;
+        self
+    }
+    pub fn with_check(mut self, check: bool) -> Self {
+        self.args.check = check;
+        self
+    }
+}
+
 impl IntoFuture for LockBuilder {
     type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
