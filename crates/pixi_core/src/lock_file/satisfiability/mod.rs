@@ -23,8 +23,8 @@ use pixi_manifest::{
     pypi::pypi_options::{NoBuild, PrereleaseMode},
 };
 use pixi_record::{
-    DevSourceRecord, LockedGitUrl, ParseLockFileError, PinnedSourceSpec, PixiRecord,
-    SourceMismatchError, SourceRecord, VariantValue,
+    DevSourceRecord, LockedGitUrl, ParseLockFileError, PinnedBuildSourceSpec, PinnedSourceSpec,
+    PixiRecord, SourceMismatchError, SourceRecord, VariantValue,
 };
 use pixi_spec::{
     PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError, Subdirectory,
@@ -1205,7 +1205,10 @@ async fn verify_source_metadata(
                     package: source_record.package_record.name.clone(),
                     backend_metadata: BuildBackendMetadataSpec {
                         manifest_source: source_record.manifest_source.clone(),
-                        preferred_build_source: source_record.build_source.clone(),
+                        preferred_build_source: source_record
+                            .build_source
+                            .clone()
+                            .map(PinnedBuildSourceSpec::into_pinned),
                         channel_config,
                         channels: channel_urls,
                         build_environment: BuildEnvironment {
@@ -2419,7 +2422,10 @@ fn verify_build_source_matches_manifest(
         ))
     };
 
-    match (manifest_source_location, lockfile_source_location) {
+    match (
+        manifest_source_location,
+        lockfile_source_location.map(PinnedBuildSourceSpec::into_pinned),
+    ) {
         (None, None) => ok,
         (Some(SourceLocationSpec::Url(murl_spec)), Some(PinnedSourceSpec::Url(lurl_spec))) => {
             lurl_spec.satisfies(&murl_spec).map_err(sat_err)
