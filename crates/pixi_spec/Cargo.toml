@@ -27,6 +27,7 @@ tracing = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
 
+pixi_path = { workspace = true }
 pixi_toml = { workspace = true }
 toml-span = { workspace = true }
 

@@ -21,7 +21,7 @@ pub use dependencies::{
     Dependencies, DependenciesError, DependencySource, KnownEnvironment, PixiRunExports, WithSource,
 };
 pub(crate) use move_file::{MoveError, move_file};
-use pixi_record::PinnedSourceSpec;
+use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec};
 use serde::{Deserialize, Serialize};
 use url::Url;
 pub use work_dir_key::{SourceRecordOrCheckout, WorkDirKey};
@@ -44,11 +44,14 @@ pub struct SourceCodeLocation {
     /// The location of the manifest and the possible source code
     manifest_source: PinnedSourceSpec,
     /// The location of the source code that should be queried and build
-    build_source: Option<PinnedSourceSpec>,
+    build_source: Option<PinnedBuildSourceSpec>,
 }
 
 impl SourceCodeLocation {
-    pub fn new(manifest_source: PinnedSourceSpec, build_source: Option<PinnedSourceSpec>) -> Self {
+    pub fn new(
+        manifest_source: PinnedSourceSpec,
+        build_source: Option<PinnedBuildSourceSpec>,
+    ) -> Self {
         Self {
             manifest_source,
             build_source,
@@ -64,17 +67,20 @@ impl SourceCodeLocation {
     /// This is the normally the path to the manifest_source
     /// but when set is the path to the build_source
     pub fn source_code(&self) -> &PinnedSourceSpec {
-        self.build_source.as_ref().unwrap_or(&self.manifest_source)
+        self.build_source
+            .as_ref()
+            .map(PinnedBuildSourceSpec::pinned)
+            .unwrap_or(&self.manifest_source)
     }
 
     /// Get the optional explicit build source override.
-    pub fn build_source(&self) -> Option<&PinnedSourceSpec> {
+    pub fn build_source(&self) -> Option<&PinnedBuildSourceSpec> {
         self.build_source.as_ref()
     }
 
     pub fn as_source_and_alternative_root(&self) -> (&PinnedSourceSpec, Option<&PinnedSourceSpec>) {
         if let Some(build_source) = &self.build_source {
-            (build_source, Some(&self.manifest_source))
+            (build_source.pinned(), Some(&self.manifest_source))
         } else {
             (&self.manifest_source, None)
         }
@@ -139,8 +145,8 @@ pub(crate) fn source_checkout_cache_key(source: &PinnedSourceSpec) -> String {
         PinnedSourceSpec::Git(git) => {
             let name = pretty_url_name(&git.git);
             let hash = git.source.commit.to_short_string();
-            if let Some(subdir) = &git.source.subdirectory {
-                format!("{name}-{subdir}-{hash}",)
+            if !git.source.subdirectory.is_empty() {
+                format!("{name}-{}-{hash}", git.source.subdirectory)
             } else {
                 format!("{name}-{hash}",)
             }

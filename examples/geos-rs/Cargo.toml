@@ -1,6 +1,3 @@
-[workspace]
-# Otherwise the example thinks it belongs to the workspace of the Pixi repository
-
 [package]
 edition = "2024"
 name = "geos-rs"

@@ -1,9 +1,7 @@
+use crate::{GitSpec, PathSourceSpec, SourceLocationSpec, SourceSpec, Subdirectory, UrlSourceSpec};
 use pixi_consts::consts::{KNOWN_MANIFEST_FILES, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES};
-use typed_path::{
-    Utf8Component, Utf8Encoding, Utf8Path, Utf8PathBuf, Utf8TypedPath, Utf8TypedPathBuf,
-};
-
-use crate::{GitSpec, PathSourceSpec, SourceLocationSpec, SourceSpec, UrlSourceSpec};
+use pixi_path::normalize;
+use typed_path::Utf8TypedPath;
 
 /// `SourceAnchor` represents the resolved base location of a `SourceSpec`.
 /// It serves as a reference point for interpreting relative or recursive
@@ -41,7 +39,7 @@ impl SourceAnchor {
                 SourceLocationSpec::Path(PathSourceSpec { path }) => {
                     SourceLocationSpec::Path(PathSourceSpec {
                         // Normalize the input path.
-                        path: normalize_typed(path.to_path()),
+                        path: normalize::normalize_typed(path.to_path()),
                     })
                 }
             };
@@ -72,7 +70,7 @@ impl SourceAnchor {
                     base.to_path()
                 };
 
-                let relative_path = normalize_typed(base_dir.join(path).to_path());
+                let relative_path = normalize::normalize_typed(base_dir.join(path).to_path());
                 SourceLocationSpec::Path(PathSourceSpec {
                     path: relative_path,
                 })
@@ -85,15 +83,23 @@ impl SourceAnchor {
                 rev,
                 subdirectory,
             }) => {
-                let relative_subdir = normalize_typed(
-                    Utf8TypedPath::from(subdirectory.as_deref().unwrap_or_default())
+                let base_subdir = subdirectory.as_path().to_string_lossy();
+                let relative_subdir = normalize::normalize_typed(
+                    Utf8TypedPath::from(base_subdir.as_ref())
                         .join(path)
                         .to_path(),
                 );
+                // Convert to Subdirectory (defaults to empty if normalization results in empty)
+                let subdir_str = relative_subdir.to_string();
+                let subdirectory = if subdir_str.is_empty() {
+                    Subdirectory::default()
+                } else {
+                    Subdirectory::try_from(subdir_str).unwrap_or_default()
+                };
                 SourceLocationSpec::Git(GitSpec {
                     git: git.clone(),
                     rev: rev.clone(),
-                    subdirectory: Some(relative_subdir.to_string()),
+                    subdirectory,
                 })
             }
         }
@@ -114,42 +120,4 @@ fn is_known_manifest_file(path: Utf8TypedPath<'_>) -> bool {
                 || ROS_BACKEND_FILE_NAMES.contains(&name)
         })
         .unwrap_or(false)
-}
-
-/// A slightly modified version of [`Utf8TypedPath::normalize`] that retains
-/// `..` components that lead outside the path.
-fn normalize_typed(path: Utf8TypedPath<'_>) -> Utf8TypedPathBuf {
-    match path {
-        Utf8TypedPath::Unix(path) => Utf8TypedPathBuf::Unix(normalize(path)),
-        Utf8TypedPath::Windows(path) => Utf8TypedPathBuf::Windows(normalize(path)),
-    }
-}
-
-/// A slightly modified version of [`Utf8Path::normalize`] that retains `..`
-/// components that lead outside the path.
-fn normalize<T: Utf8Encoding>(path: &Utf8Path<T>) -> Utf8PathBuf<T> {
-    let mut components = Vec::new();
-    for component in path.components() {
-        if !component.is_current() && !component.is_parent() {
-            components.push(component);
-        } else if component.is_parent() {
-            if let Some(last) = components.last() {
-                if last.is_normal() {
-                    components.pop();
-                } else {
-                    components.push(component);
-                }
-            } else {
-                components.push(component);
-            }
-        }
-    }
-
-    let mut path = Utf8PathBuf::<T>::new();
-
-    for component in components {
-        path.push(component.as_str());
-    }
-
-    path
 }

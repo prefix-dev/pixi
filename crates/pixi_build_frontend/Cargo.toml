@@ -24,7 +24,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["process", "io-std"] }
 tokio-util = { workspace = true, features = ["codec"] }
 tracing = { workspace = true }
-schemars = { workspace = true, optional = true }
 
 
 [dev-dependencies]

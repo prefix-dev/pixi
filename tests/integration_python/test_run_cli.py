@@ -1,5 +1,4 @@
 import json
-import os
 import platform
 import shutil
 import signal
@@ -92,10 +91,7 @@ def test_run_in_shell_project(pixi: Path) -> None:
         """
         manifest_2.write_text(toml)
 
-        base_env = dict(os.environ)
-        base_env.pop("PIXI_IN_SHELL", None)
-        base_env.pop("PIXI_PROJECT_MANIFEST", None)
-        extended_env = base_env | {
+        env = {
             "PIXI_IN_SHELL": "true",
             "PIXI_PROJECT_MANIFEST": str(manifest_2),
         }
@@ -104,18 +100,15 @@ def test_run_in_shell_project(pixi: Path) -> None:
         verify_cli_command(
             [pixi, "run", "task"],
             stdout_contains="manifest_2",
-            env=extended_env,
+            env=env,
             cwd=tmp_pixi_workspace,
-            reset_env=True,
         )
 
         # Run with working directory at manifest_1_dir
         verify_cli_command(
             [pixi, "run", "task"],
             stdout_contains="manifest_1",
-            env=base_env,
             cwd=manifest_1_dir,
-            reset_env=True,
         )
 
         # Run task with PIXI_PROJECT_MANIFEST set to manifest_2 and working directory at manifest_1_dir
@@ -125,12 +118,13 @@ def test_run_in_shell_project(pixi: Path) -> None:
             [pixi, "run", "task"],
             stdout_contains="manifest_1",
             stderr_contains="manifest_2",
-            env=extended_env,
+            env=env,
             cwd=manifest_1_dir,
             reset_env=True,
         )
 
 
+@pytest.mark.slow
 def test_using_prefix_validation(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
@@ -325,6 +319,7 @@ def test_run_help(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
+@pytest.mark.slow
 def test_run_deno(pixi: Path, tmp_pixi_workspace: Path, deno_channel: str) -> None:
     """Ensure that `pixi run deno` will just be forwarded instead of calling pixi"""
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
@@ -971,6 +966,7 @@ def test_task_args_multiple_inputs(pixi: Path, tmp_pixi_workspace: Path) -> None
     )
 
 
+@pytest.mark.slow
 def test_task_environment(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:
@@ -1021,6 +1017,7 @@ def test_task_environment(
     )
 
 
+@pytest.mark.slow
 def test_task_environment_precedence(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:
@@ -1088,6 +1085,7 @@ def test_task_environment_precedence(
     )
 
 
+@pytest.mark.slow
 def test_multiple_dependencies_with_environments(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:
@@ -1667,6 +1665,7 @@ def test_run_with_environment_variable_priority(
     )
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(
     sys.platform == "win32",
     reason="Signal handling is different on Windows",

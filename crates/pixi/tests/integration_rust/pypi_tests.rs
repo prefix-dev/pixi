@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, str::FromStr};
+use std::{fs::File, io::Write, path::Path, str::FromStr};
 
 use pep508_rs::Requirement;
 use rattler_conda_types::Platform;
@@ -9,6 +9,60 @@ use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 use crate::common::{LockFileExt, PixiControl};
 use crate::setup_tracing;
 use pixi_test_utils::{MockRepoData, Package};
+
+/// Helper to check if a pypi package is installed as editable by looking for a .pth file.
+/// Editable installations create a .pth file in site-packages that points to the source directory.
+/// For most backends, make sure to use the old style editables when using this function
+fn has_editable_pth_file(prefix: &Path, package_name: &str) -> bool {
+    let site_packages = if cfg!(target_os = "windows") {
+        prefix.join("Lib").join("site-packages")
+    } else {
+        // Find the python version directory
+        let lib_dir = prefix.join("lib");
+        if let Ok(entries) = fs_err::read_dir(&lib_dir) {
+            let entry = entries
+                .filter_map(|e| e.ok())
+                // Find the directory that starts with "python"
+                .find(|e| e.file_name().to_string_lossy().starts_with("python"))
+                .map(|e| e.path().join("site-packages"));
+            if let Some(entry) = entry {
+                entry
+            } else {
+                panic!("expected site-packages folder");
+            }
+        } else {
+            panic!("expected lib folder");
+        }
+    };
+
+    // Look for editable .pth files - different build backends use different naming:
+    // - hatchling: _{package_name}.pth (e.g., _editable_test.pth)
+    // - setuptools: __editable__.{package_name}-{version}.pth
+    let mut count = 0u32;
+    let normalized_name = package_name.replace('-', "_");
+    if let Ok(entries) = fs_err::read_dir(&site_packages) {
+        for entry in entries.flatten() {
+            count += 1;
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            if name_str.ends_with(".pth") {
+                // Check for hatchling style: _{package_name}.pth
+                if name_str == format!("_{}.pth", normalized_name) {
+                    return true;
+                }
+                // Check for setuptools style: __editable__.{package_name}-*.pth
+                if name_str.starts_with(&format!("__editable__.{}", normalized_name)) {
+                    return true;
+                }
+            }
+        }
+    }
+    if count == 0 {
+        panic!("expected folders in directory");
+    }
+
+    false
+}
 
 /// This tests if we can resolve pyproject optional dependencies recursively
 /// before when running `pixi list -e all`, this would have not included numpy
@@ -93,6 +147,83 @@ test = {{features = ["test"]}}
     assert!(
         lock.contains_pep508_requirement("test", platform, sphinx_req),
         "test environment should include sphinx inherited from recursive dependency group"
+    );
+}
+
+#[tokio::test]
+async fn pyproject_environment_markers_resolved() {
+    setup_tracing();
+
+    // Add a dependency that's present only on linux-64
+    let simple = PyPIDatabase::new()
+        .with(PyPIPackage::new("nvidia-nccl-cu12", "1.0.0").with_tag(
+            "cp311",
+            "cp311",
+            "manylinux1_x86_64",
+        ))
+        .into_simple_index()
+        .unwrap();
+
+    // Create a TOML with two platforms
+    let platform1 = Platform::Linux64;
+    let platform2 = Platform::OsxArm64;
+    let platform_str = format!("\"{}\", \"{}\"", platform1, platform2);
+
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.11.0")
+            .with_subdir(platform1)
+            .finish(),
+    );
+    package_db.add_package(
+        Package::build("python", "3.11.0")
+            .with_subdir(platform2)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+    let channel_url = channel.url();
+    let index_url = simple.index_url();
+
+    // Make sure that the TOML contains an env marker to allow linux-64.
+    let pyproject = format!(
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "environment-markers"
+dependencies = [
+    "nvidia-nccl-cu12; sys_platform == 'linux'"
+]
+
+[tool.pixi.workspace]
+channels = ["{channel_url}"]
+platforms = [{platform_str}]
+conda-pypi-map = {{}}
+
+[tool.pixi.dependencies]
+python = "==3.11.0"
+
+[tool.pixi.pypi-options]
+index-url = "{index_url}"
+"#,
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    let nccl_req = Requirement::from_str("nvidia-nccl-cu12; sys_platform == 'linux'").unwrap();
+    // Check that the requirement is present in the lockfile for linux-64
+    assert!(
+        lock.contains_pep508_requirement("default", platform1, nccl_req.clone()),
+        "default environment should include nccl for linux-64"
+    );
+    // But not for osx-arm64
+    assert!(
+        !lock.contains_pep508_requirement("default", platform2, nccl_req.clone()),
+        "default environment shouldn't include nccl for osx-arm64"
     );
 }
 
@@ -1228,4 +1359,104 @@ test-project = {{ path = "." }}
             );
         }
     }
+}
+
+/// Test that when a lock file has editable: true but the manifest doesn't specify editable,
+/// the package is installed as non-editable (manifest takes precedence).
+///
+/// This tests the fix for the bug where old lock files with editable: true would cause
+/// packages to be installed as editable even when the manifest didn't specify it.
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
+async fn test_editable_from_manifest_not_lockfile() {
+    use rattler_lock::LockFile;
+
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create a project with a path dependency WITHOUT editable specified
+    // Use conda-forge directly since we need a real Python
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "editable-test"
+        platforms = ["{platform}"]
+        channels = ["https://prefix.dev/conda-forge"]
+
+        [dependencies]
+        python = "~=3.12.0"
+
+        [pypi-dependencies]
+        editable-test = {{ path = "." }}
+        "#,
+        platform = platform,
+    ))
+    .unwrap();
+
+    // Create a minimal pyproject.toml for the package
+    let pyproject = r#"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "editable-test"
+version = "0.1.0"
+"#;
+    fs_err::write(pixi.workspace_path().join("pyproject.toml"), pyproject).unwrap();
+
+    // Create the package source
+    let src_dir = pixi.workspace_path().join("editable_test");
+    fs_err::create_dir_all(&src_dir).unwrap();
+    fs_err::write(src_dir.join("__init__.py"), "").unwrap();
+
+    // First, update the lock file (this won't have editable field since we don't record it)
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    // Manually modify the lock file to add editable: true, simulating an old lock file
+    let lock_file_str = lock.render_to_string().unwrap();
+
+    // Add editable: true after the package name line
+    let modified_lock_file_str = lock_file_str.replace(
+        "name: editable-test\n",
+        "name: editable-test\n  editable: true\n",
+    );
+
+    assert!(
+        modified_lock_file_str.contains("editable: true"),
+        "Failed to add editable: true to lock file"
+    );
+
+    // Parse and write the modified lock file back
+    let modified_lockfile = LockFile::from_str(&modified_lock_file_str).unwrap();
+    let workspace = pixi.workspace().unwrap();
+    modified_lockfile
+        .to_path(&workspace.lock_file_path())
+        .unwrap();
+
+    // Verify the lock file now has editable: true
+    let lock_after_modification = pixi.lock_file().await.unwrap();
+    assert!(
+        lock_after_modification
+            .is_pypi_package_editable("default", platform, "editable-test")
+            .unwrap_or(false),
+        "Lock file should have editable: true after manual modification"
+    );
+
+    // Now install with --locked (uses the modified lock file without re-resolving)
+    // The fix should ensure that the package is installed as NON-editable
+    // because the manifest doesn't specify editable = true
+    pixi.install().with_locked().await.unwrap();
+
+    let prefix_path = pixi.default_env_path().unwrap();
+
+    // The package should NOT be installed as editable because the manifest doesn't specify editable
+    assert!(
+        !has_editable_pth_file(&prefix_path, "editable_test"),
+        "Package should NOT be installed as editable when manifest doesn't specify editable = true (even if lock file has editable: true)"
+    );
 }

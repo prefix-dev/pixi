@@ -25,6 +25,7 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 use rattler_virtual_packages::DetectVirtualPackageError;
+use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Debug)]
@@ -69,13 +70,13 @@ impl CommandDispatcher {
         // Canonicalize the source_dir to ensure it's a fully resolved absolute path
         // without any relative components like ".." or "."
         let source_dir = dunce::canonicalize(&spec.build_source_dir).map_err(|e| {
-            CommandDispatcherError::Failed(InstantiateBackendError::SpecConversionError(
+            CommandDispatcherError::Failed(InstantiateBackendError::SpecConversionError(Arc::new(
                 SpecConversionError::InvalidPath(format!(
                     "failed to canonicalize source directory '{}': {}",
                     spec.build_source_dir.display(),
                     e
                 )),
-            ))
+            )))
         })?;
 
         let command_spec = match self.build_backend_overrides() {
@@ -96,7 +97,7 @@ impl CommandDispatcher {
                             configuration: spec.configuration,
                             target_configuration: spec.target_configuration,
                         })
-                        .map_err(InstantiateBackendError::InMemoryError)
+                        .map_err(InstantiateBackendError::from)
                         .map_err(CommandDispatcherError::Failed)?;
                     return Ok(Backend::new(memory.into(), in_mem.api_version()));
                 } else {
@@ -184,7 +185,9 @@ impl CommandDispatcher {
                 .is_some_and(|p| p.name.is_none())
         {
             return Err(CommandDispatcherError::Failed(
-                InstantiateBackendError::SpecConversionError(SpecConversionError::MissingName),
+                InstantiateBackendError::SpecConversionError(Arc::new(
+                    SpecConversionError::MissingName,
+                )),
             ));
         }
 
@@ -205,33 +208,63 @@ impl CommandDispatcher {
     }
 }
 
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Clone, Error, Diagnostic)]
 pub enum InstantiateBackendError {
     /// The command dispatcher could not be initialized.
     #[error(transparent)]
     #[diagnostic(transparent)]
-    JsonRpc(#[from] json_rpc::InitializeError),
+    JsonRpc(Arc<json_rpc::InitializeError>),
 
     /// The command dispatcher could not be initialized.
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InMemoryError(Box<CommunicationError>),
+    InMemoryError(Arc<CommunicationError>),
 
     /// Could not detect the virtual packages for the system
     #[error(transparent)]
-    VirtualPackages(#[from] DetectVirtualPackageError),
+    VirtualPackages(Arc<DetectVirtualPackageError>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
     InstantiateToolEnvironment(#[from] InstantiateToolEnvironmentError),
 
     #[error("failed to run activation for the backend tool")]
-    Activation(#[from] ActivationError),
+    Activation(Arc<ActivationError>),
 
     #[error(transparent)]
-    SpecConversionError(#[from] SpecConversionError),
+    SpecConversionError(Arc<SpecConversionError>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
     SourceCheckout(#[from] SourceCheckoutError),
+}
+
+impl From<json_rpc::InitializeError> for InstantiateBackendError {
+    fn from(err: json_rpc::InitializeError) -> Self {
+        Self::JsonRpc(Arc::new(err))
+    }
+}
+
+impl From<Box<CommunicationError>> for InstantiateBackendError {
+    fn from(err: Box<CommunicationError>) -> Self {
+        Self::InMemoryError(Arc::new(*err))
+    }
+}
+
+impl From<DetectVirtualPackageError> for InstantiateBackendError {
+    fn from(err: DetectVirtualPackageError) -> Self {
+        Self::VirtualPackages(Arc::new(err))
+    }
+}
+
+impl From<ActivationError> for InstantiateBackendError {
+    fn from(err: ActivationError) -> Self {
+        Self::Activation(Arc::new(err))
+    }
+}
+
+impl From<SpecConversionError> for InstantiateBackendError {
+    fn from(err: SpecConversionError) -> Self {
+        Self::SpecConversionError(Arc::new(err))
+    }
 }

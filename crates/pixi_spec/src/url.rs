@@ -1,4 +1,4 @@
-use crate::BinarySpec;
+use crate::{BinarySpec, Subdirectory};
 use itertools::Either;
 use rattler_conda_types::{NamelessMatchSpec, package::ArchiveIdentifier};
 use rattler_digest::{Md5Hash, Sha256Hash};
@@ -26,8 +26,8 @@ pub struct UrlSpec {
     pub sha256: Option<Sha256Hash>,
 
     /// The subdirectory of the package inside the archive
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub subdirectory: Option<String>,
+    #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
+    pub subdirectory: Subdirectory,
 }
 
 impl UrlSpec {
@@ -119,8 +119,8 @@ pub struct UrlSourceSpec {
     pub sha256: Option<Sha256Hash>,
 
     /// The subdirectory of the package inside the archive
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub subdirectory: Option<String>,
+    #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
+    pub subdirectory: Subdirectory,
 }
 
 impl Display for UrlSourceSpec {
@@ -132,8 +132,8 @@ impl Display for UrlSourceSpec {
         if let Some(sha256) = &self.sha256 {
             write!(f, " sha256={sha256:x}")?;
         }
-        if let Some(subdirectory) = &self.subdirectory {
-            write!(f, " subdirectory={subdirectory}")?;
+        if !self.subdirectory.is_empty() {
+            write!(f, " subdirectory={}", self.subdirectory)?;
         }
         Ok(())
     }
@@ -170,7 +170,7 @@ impl From<UrlBinarySpec> for UrlSpec {
             md5: value.md5,
             sha256: value.sha256,
             // A binary url spec is already a conda package so it cannot have a subdirectory
-            subdirectory: None,
+            subdirectory: Subdirectory::default(),
         }
     }
 }

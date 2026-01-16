@@ -144,7 +144,16 @@ nav:
           - Variants: build/variants.md
           - Advanced Building Using rattler-build: build/advanced_cpp.md
       - Dependency Types: build/dependency_types.md
-      - Build Backends: build/backends.md
+      - Build Backends:
+          - Overview: build/backends.md
+          - CMake: build/backends/pixi-build-cmake.md
+          - Python: build/backends/pixi-build-python.md
+          - rattler-build: build/backends/pixi-build-rattler-build.md
+          - ROS: build/backends/pixi-build-ros.md
+          - Rust: build/backends/pixi-build-rust.md
+          - Mojo: build/backends/pixi-build-mojo.md
+      - Key Concepts:
+          - Compilers: build/key_concepts/compilers.md
       - Package Source: build/package_source.md
       - Dev Packages: build/dev.md
   - Distributing:

@@ -1,23 +1,24 @@
 use rattler_digest::{Md5Hash, Sha256Hash};
 use reqwest::StatusCode;
 use reqwest_middleware::Error as ReqwestMiddlewareError;
+use std::sync::Arc;
 use thiserror::Error;
 use url::Url;
 
 /// Errors that can occur while fetching and unpacking a URL source.
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum UrlError {
     #[error(transparent)]
-    Io(#[from] std::io::Error),
+    Io(Arc<std::io::Error>),
 
     #[error("failed to download {url}: {status}")]
     HttpStatus { url: Url, status: StatusCode },
 
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Reqwest(Arc<reqwest::Error>),
 
     #[error(transparent)]
-    ReqwestMiddleware(#[from] ReqwestMiddlewareError),
+    ReqwestMiddleware(Arc<ReqwestMiddlewareError>),
 
     #[error("sha256 mismatch for {url}: expected {expected:x}, got {actual:x}")]
     Sha256Mismatch {
@@ -40,14 +41,38 @@ pub enum UrlError {
     UnsupportedArchive(String),
 
     #[error(transparent)]
-    Join(#[from] tokio::task::JoinError),
+    Join(Arc<tokio::task::JoinError>),
+}
+
+impl From<std::io::Error> for UrlError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(Arc::new(err))
+    }
+}
+
+impl From<reqwest::Error> for UrlError {
+    fn from(err: reqwest::Error) -> Self {
+        Self::Reqwest(Arc::new(err))
+    }
+}
+
+impl From<ReqwestMiddlewareError> for UrlError {
+    fn from(err: ReqwestMiddlewareError) -> Self {
+        Self::ReqwestMiddleware(Arc::new(err))
+    }
+}
+
+impl From<tokio::task::JoinError> for UrlError {
+    fn from(err: tokio::task::JoinError) -> Self {
+        Self::Join(Arc::new(err))
+    }
 }
 
 /// Errors emitted while unpacking an archive.
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum ExtractError {
     #[error(transparent)]
-    Io(#[from] std::io::Error),
+    Io(Arc<std::io::Error>),
 
     #[error("failed to extract tar archive: {0}")]
     TarExtractionError(String),
@@ -63,4 +88,10 @@ pub enum ExtractError {
 
     #[error("compression format `{0}` is currently unsupported")]
     UnsupportedCompression(&'static str),
+}
+
+impl From<std::io::Error> for ExtractError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(Arc::new(err))
+    }
 }

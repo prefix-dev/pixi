@@ -16,6 +16,7 @@ use std::{
     collections::BTreeMap,
     hash::{DefaultHasher, Hash, Hasher},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use thiserror::Error;
 
@@ -35,11 +36,11 @@ pub struct BuildBackendMetadataCache {
     root: AbsPathBuf,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum BuildBackendMetadataCacheError {
     /// An I/O error occurred while reading or writing the cache.
     #[error("an IO error occurred while {0} {1}")]
-    IoError(String, PathBuf, #[source] std::io::Error),
+    IoError(String, PathBuf, #[source] Arc<std::io::Error>),
 }
 
 /// Defines additional input besides the source files that are used to compute
@@ -112,7 +113,7 @@ impl CacheKey for BuildBackendMetadataCacheShard {
 
 impl CacheError for BuildBackendMetadataCacheError {
     fn from_io_error(operation: String, path: PathBuf, error: std::io::Error) -> Self {
-        BuildBackendMetadataCacheError::IoError(operation, path, error)
+        BuildBackendMetadataCacheError::IoError(operation, path, Arc::new(error))
     }
 }
 

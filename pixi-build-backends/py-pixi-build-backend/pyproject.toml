@@ -1,0 +1,58 @@
+[build-system]
+build-backend = "maturin"
+requires = ["maturin>=1.0,<2.0"]
+
+[project]
+authors = [{ name = "pixi contributors" }]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: BSD License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Rust",
+  "Topic :: Software Development :: Build Tools",
+]
+description = "Python bindings for pixi-build-backends"
+dynamic = ["version"]
+keywords = ["build", "conda", "package", "python", "rust"]
+license = { text = "BSD-3-Clause" }
+name = "py-pixi-build-backend"
+requires-python = ">=3.8"
+
+
+[project.urls]
+"Bug Tracker" = "https://github.com/prefix-dev/pixi-build-backends/issues"
+Homepage = "https://github.com/prefix-dev/pixi-build-backends"
+Repository = "https://github.com/prefix-dev/pixi-build-backends"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py38"
+
+[tool.mypy]
+disable_error_code = ["empty-body"]
+enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
+files = ["pixi_build_backend", "tests", "examples"]
+python_version = "3.8"
+strict = true
+
+[[tool.mypy.overrides]]
+ignore_missing_imports = true
+module = ["pixi_build_backend.pixi_build_backend"]
+
+[[tool.mypy.overrides]]
+module = ["pixi_build_backend.*"]
+# We exclude the pixi_build_backend module from warn_return_any, because the PyO3 api does not have Python
+# type annotations. See https://github.com/PyO3/pyo3/issues/1112 for a discussion on adding
+# this capability. We could add a stub file for pixi_build_backend.pixi_build_backend (the PyO3 api), but that
+# amounts to duplicating almost all type annotations on our api, as the Python api itself is a
+# thin wrapper around the PyO3 api to start with.
+warn_return_any = false

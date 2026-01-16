@@ -25,7 +25,7 @@ impl SourceCheckout {
     }
 }
 
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Clone, Error, Diagnostic)]
 pub enum SourceCheckoutError {
     #[error(transparent)]
     InvalidPath(#[from] InvalidPathError),
@@ -46,7 +46,7 @@ pub enum SourceCheckoutError {
     SubdirIsAFile(PathBuf),
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum InvalidPathError {
     #[error("the path escapes the root directory: {0}")]
     RelativePathEscapesRoot(PathBuf),
