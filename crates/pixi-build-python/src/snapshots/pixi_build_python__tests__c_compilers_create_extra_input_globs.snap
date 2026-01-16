@@ -1,0 +1,19 @@
+---
+source: crates/pixi-build-python/src/main.rs
+expression: result
+---
+Ok(
+    {
+        "**/*.py",
+        "**/*.pyx",
+        "**/*.{c,h}",
+        "Pipfile",
+        "Pipfile.lock",
+        "poetry.lock",
+        "pyproject.toml",
+        "requirements*.txt",
+        "setup.cfg",
+        "setup.py",
+        "tox.ini",
+    },
+)

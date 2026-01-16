@@ -1,0 +1,8 @@
+alsa-oss:
+  conda: [other-alsa-oss]
+new_package:
+  conda: new-package
+multi_package:
+  conda: [multi-package-a, multi-package-b]
+ros_package:
+  ros: [ros_package, ros_package_msgs]
