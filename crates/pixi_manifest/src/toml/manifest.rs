@@ -508,7 +508,7 @@ pub fn load_tasks_from_file(
         root_directory.join(path)
     };
 
-    let contents = std::fs::read_to_string(&full_path).map_err(|e| {
+    let contents = fs_err::read_to_string(&full_path).map_err(|e| {
         TomlError::Generic(
             GenericError::new(format!(
                 "Failed to read task include file '{}': {}",

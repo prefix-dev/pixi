@@ -561,10 +561,10 @@ fn partition_tasks_by_group(
                 let entry = group_info.entry(group.to_string()).or_insert((0, None));
                 entry.0 += 1;
                 // Grab description from first task that has one
-                if entry.1.is_none() {
-                    if let Some(desc) = task.group_description() {
-                        entry.1 = Some(desc.to_string());
-                    }
+                if entry.1.is_none()
+                    && let Some(desc) = task.group_description()
+                {
+                    entry.1 = Some(desc.to_string());
                 }
             } else {
                 env_ungrouped.insert(name.clone(), task.clone());

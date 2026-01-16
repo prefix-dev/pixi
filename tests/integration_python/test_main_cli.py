@@ -4,6 +4,7 @@ import shutil
 import sys
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import pytest
 import tomli_w
@@ -1176,7 +1177,7 @@ deploy = { cmd = "echo 'Deploying to {{target}}'", description = "Deploy the app
     task_data = json.loads(result.stdout)
 
     # Find the build-all task and verify depends-on
-    all_tasks = []
+    all_tasks: list[dict[str, Any]] = []
     for env in task_data:
         for feature in env.get("features", []):
             all_tasks.extend(feature.get("tasks", []))
