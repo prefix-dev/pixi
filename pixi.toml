@@ -194,13 +194,13 @@ test-export = { cmd = "bash tests/scripts/test-export.sh", description = "Test m
 #
 # Feature for native-certs testing with local HTTPS server
 #
-[feature.native-certs-test.dependencies]
+[feature.test-native-certs.dependencies]
 mkcert = ">=1.4.4,<2"
 pip = ">=25,<26"
 rich = ">=14,<15"
 testcontainers = ">=4,<5"
 
-[feature.native-certs-test.tasks]
+[feature.test-native-certs.tasks]
 test-native-certs = { cmd = "python scripts/test_native_certs.py --pixi-bin $CARGO_TARGET_DIR/release/pixi", depends-on = [
   "build-release",
 ], description = "Test native-certs feature with local HTTPS PyPI server" }
@@ -389,8 +389,8 @@ lint = { features = [
   "schema",
   "pypi-gen",
 ] }
-pypi-gen = { features = ["rust", "compilers", "python", "pypi-gen"] }
-python-test = { features = ["rust", "pytest", "python-test-deps", "python"] }
+pypi-gen = { features = ["python", "pypi-gen"] }
+python-test = { features = ["pytest", "python-test-deps", "python"] }
 recipes = { features = ["recipes"] }
 release = { features = ["release"] }
 rust-build = { features = ["rust", "compilers", "python", "rust-build"] }
@@ -399,10 +399,8 @@ schema = { features = ["schema"] }
 test = { features = ["test"] }
 test-export = { features = ["micromamba"] }
 test-native-certs = { features = [
-  "rust",
-  "compilers",
   "python",
-  "native-certs-test",
+  "test-native-certs",
 ] }
 trampoline = { features = ["trampoline", "python"] }
 
