@@ -81,6 +81,34 @@
          <lastmod>2026-01-16</lastmod>
     </url>
     <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-cmake/</loc>
+         <lastmod>2026-01-16</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-mojo/</loc>
+         <lastmod>2026-01-16</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-python/</loc>
+         <lastmod>2026-01-16</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-rattler-build/</loc>
+         <lastmod>2026-01-16</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-ros/</loc>
+         <lastmod>2026-01-16</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-rust/</loc>
+         <lastmod>2026-01-16</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/build/key_concepts/compilers/</loc>
+         <lastmod>2026-01-16</lastmod>
+    </url>
+    <url>
          <loc>https://prefix-dev.github.io/pixi/dev/concepts/conda_pypi/</loc>
          <lastmod>2026-01-16</lastmod>
     </url>

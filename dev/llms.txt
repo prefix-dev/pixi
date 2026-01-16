@@ -54,7 +54,7 @@ for further details on how to use the software.
 ## Building documentation
 
 - [Advanced Building Using rattler-build](https://prefix-dev.github.io/pixi/dev/build/advanced_cpp/index.md)
-- [Build Backends](https://prefix-dev.github.io/pixi/dev/build/backends/index.md)
+- [Overview](https://prefix-dev.github.io/pixi/dev/build/backends/index.md)
 - [Building a C++ Package](https://prefix-dev.github.io/pixi/dev/build/cpp/index.md)
 - [Dependency Types](https://prefix-dev.github.io/pixi/dev/build/dependency_types/index.md)
 - [Dev Packages](https://prefix-dev.github.io/pixi/dev/build/dev/index.md)
@@ -64,6 +64,13 @@ for further details on how to use the software.
 - [Building a ROS Package](https://prefix-dev.github.io/pixi/dev/build/ros/index.md)
 - [Variants](https://prefix-dev.github.io/pixi/dev/build/variants/index.md)
 - [Multiple Packages in Workspace](https://prefix-dev.github.io/pixi/dev/build/workspace/index.md)
+- [CMake](https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-cmake/index.md)
+- [Mojo](https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-mojo/index.md)
+- [Python](https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-python/index.md)
+- [rattler-build](https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-rattler-build/index.md)
+- [ROS](https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-ros/index.md)
+- [Rust](https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-rust/index.md)
+- [Compilers](https://prefix-dev.github.io/pixi/dev/build/key_concepts/compilers/index.md)
 
 ## Distributing documentation
 

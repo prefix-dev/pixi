@@ -36,6 +36,8 @@ pixi upload prefix [OPTIONS] --channel <CHANNEL>
 
 - [`--generate-attestation`](#arg---generate-attestation) : Automatically generate attestation using cosign in CI. Mutually exclusive with --attestation
 
+- [`--store-github-attestation`](#arg---store-github-attestation) : Also store the generated attestation to GitHub's attestation API. Requires `GITHUB_TOKEN` environment variable and only works in GitHub Actions. The attestation will be associated with the current repository
+
 - [`--skip-existing (-s)`](#arg---skip-existing) : Skip upload if package already exists
 
 - [`--force`](#arg---force) : Force overwrite existing packages
