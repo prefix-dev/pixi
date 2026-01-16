@@ -6047,6 +6047,7 @@ dependencies = [
  "uv-dispatch",
  "uv-distribution-types",
  "uv-normalize",
+ "uv-pep508",
  "uv-preview",
  "uv-types",
  "uv-workspace",

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use fs_err::create_dir_all;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, Config, get_cache_dir};
@@ -6,12 +8,16 @@ use pixi_utils::reqwest::{should_use_native_tls_for_uv, uv_middlewares};
 use pixi_uv_conversions::{ConversionError, to_uv_trusted_host};
 use tracing::debug;
 use uv_cache::Cache;
-use uv_client::ExtraMiddleware;
-use uv_configuration::{Concurrency, SourceStrategy, TrustedHost};
+use uv_client::{
+    BaseClientBuilder, Connectivity, ExtraMiddleware, RegistryClient, RegistryClientBuilder,
+};
+use uv_configuration::{Concurrency, IndexStrategy, SourceStrategy, TrustedHost};
 use uv_dispatch::SharedState;
 use uv_distribution_types::{
-    ExtraBuildRequires, ExtraBuildVariables, IndexCapabilities, PackageConfigSettings,
+    ExtraBuildRequires, ExtraBuildVariables, IndexCapabilities, IndexLocations,
+    PackageConfigSettings,
 };
+use uv_pep508::MarkerEnvironment;
 use uv_preview::Preview;
 use uv_types::{HashStrategy, InFlight};
 use uv_workspace::WorkspaceCache;
@@ -108,5 +114,43 @@ impl UvResolutionContext {
         let policy = uv_cache::Refresh::from_args(all, specific_packages.unwrap_or_default());
         self.cache = self.cache.with_refresh(policy);
         self
+    }
+
+    /// Build a registry client configured with the context settings.
+    ///
+    /// Parameters:
+    /// - `allow_insecure_hosts`: Pre-computed insecure hosts (use
+    ///   `configure_insecure_hosts_for_tls_bypass`)
+    /// - `index_locations`: The index locations to use
+    /// - `index_strategy`: The index strategy to use
+    /// - `markers`: Optional marker environment for platform-specific resolution
+    pub fn build_registry_client(
+        &self,
+        allow_insecure_hosts: Vec<TrustedHost>,
+        index_locations: &IndexLocations,
+        index_strategy: IndexStrategy,
+        markers: Option<&MarkerEnvironment>,
+    ) -> Arc<RegistryClient> {
+        let mut base_client_builder = BaseClientBuilder::default()
+            .allow_insecure_host(allow_insecure_hosts)
+            .keyring(self.keyring_provider)
+            .connectivity(Connectivity::Online)
+            .native_tls(self.use_native_tls)
+            .extra_middleware(self.extra_middleware.clone());
+
+        if let Some(markers) = markers {
+            base_client_builder = base_client_builder.markers(markers);
+        }
+
+        let mut uv_client_builder =
+            RegistryClientBuilder::new(base_client_builder, self.cache.clone())
+                .index_locations(index_locations.clone())
+                .index_strategy(index_strategy);
+
+        for p in &self.proxies {
+            uv_client_builder = uv_client_builder.proxy(p.clone());
+        }
+
+        Arc::new(uv_client_builder.build())
     }
 }
