@@ -26,7 +26,7 @@ use pixi_manifest::{FeaturesExt, TaskName};
 use pixi_progress::global_multi_progress;
 use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
-    SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
+    SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env, PreferExecutable,
 };
 use rattler_conda_types::Platform;
 use thiserror::Error;
@@ -49,6 +49,11 @@ pub struct Args {
     /// The pixi task or a task shell command you want to run in the workspace's
     /// environment, which can be an executable in the environment's PATH.
     pub task: Vec<String>,
+
+    /// Prefer running the command as an executable instead of a Pixi task
+    /// when both share the same name. Short: -x
+    #[arg(long = "executable", short = 'x')]
+    pub executable: bool,
 
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
@@ -178,9 +183,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         SearchEnvironments::from_opt_env(&workspace, explicit_environment.clone(), search_platform)
             .with_disambiguate_fn(disambiguate_task_interactive);
 
-    let task_graph =
-        TaskGraph::from_cmd_args(&workspace, &search_environment, args.task, args.skip_deps)?;
-
+    let task_graph = TaskGraph::from_cmd_args(
+        &workspace,
+        &search_environment,
+        args.task,
+        args.skip_deps,
+        if args.executable {
+            PreferExecutable::Always
+        } else {
+            PreferExecutable::Never
+        },
+    )?;
     tracing::debug!("Task graph: {}", task_graph);
 
     // Print dry-run message if dry-run mode is enabled
