@@ -11,6 +11,7 @@ ignore = [
   "scripts/test_native_certs.py",
   "pixi-build-backends",
   "tests/data",
+  "site",
 ]
 pythonPlatform = "All"
 pythonVersion = "3.13"
