@@ -751,9 +751,12 @@ jobs:
         run: pixi install -vvv --locked
         working-directory: polarify
       - run: pixi info
+        working-directory: polarify
       - run: pixi list
+        working-directory: polarify
       - name: Run downstream polarify environment
         run: pixi run --locked echo "Running downstream polarify environment"
+        working-directory: polarify
 
   test-downstream-linux-x86_64:
     timeout-minutes: 15
@@ -814,9 +817,12 @@ jobs:
         run: pixi install -vvv --locked
         working-directory: polarify
       - run: pixi info
+        working-directory: polarify
       - run: pixi list
+        working-directory: polarify
       - name: Run downstream polarify environment
         run: pixi run --locked echo "Running downstream polarify environment"
+        working-directory: polarify
   #
   # Install a number of common wheels on some platforms
   #
