@@ -550,10 +550,8 @@ fn partition_tasks_by_group(
     let mut ungrouped: TasksPerEnvironment = HashMap::new();
 
     // Build a set of all task names that are in any group
-    let grouped_task_names: std::collections::HashSet<&TaskName> = task_groups
-        .values()
-        .flat_map(|g| g.tasks.iter())
-        .collect();
+    let grouped_task_names: std::collections::HashSet<&TaskName> =
+        task_groups.values().flat_map(|g| g.tasks.iter()).collect();
 
     for (env, tasks) in tasks_per_env {
         let mut env_ungrouped: HashMap<TaskName, Task> = HashMap::new();
@@ -588,15 +586,15 @@ fn print_tasks_by_group(
     let mut all_tasks: HashMap<TaskName, Task> = HashMap::new();
     for tasks in tasks_per_env.values() {
         for (name, task) in tasks {
-            all_tasks.entry(name.clone()).or_insert_with(|| task.clone());
+            all_tasks
+                .entry(name.clone())
+                .or_insert_with(|| task.clone());
         }
     }
 
     // Build set of grouped task names
-    let grouped_task_names: std::collections::HashSet<&TaskName> = task_groups
-        .values()
-        .flat_map(|g| g.tasks.iter())
-        .collect();
+    let grouped_task_names: std::collections::HashSet<&TaskName> =
+        task_groups.values().flat_map(|g| g.tasks.iter()).collect();
 
     // Collect ungrouped tasks
     let ungrouped: HashMap<&TaskName, &Task> = all_tasks

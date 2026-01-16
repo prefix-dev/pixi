@@ -430,10 +430,7 @@ impl TomlManifest {
             features,
             environments,
             solve_groups,
-            task_groups: self
-                .task_groups
-                .map(|tg| tg.value)
-                .unwrap_or_default(),
+            task_groups: self.task_groups.map(|tg| tg.value).unwrap_or_default(),
         };
 
         let package_manifest = if let Some(PixiSpanned {
