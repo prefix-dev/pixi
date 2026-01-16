@@ -42,9 +42,7 @@ use rattler_lock::{
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
-use uv_client::{
-    BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder,
-};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClient};
 use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
@@ -450,24 +448,12 @@ pub async fn resolve_pypi(
         &index_locations,
     );
 
-    let base_client_builder = BaseClientBuilder::default()
-        .allow_insecure_host(allow_insecure_hosts)
-        .markers(&marker_environment)
-        .keyring(context.keyring_provider)
-        .connectivity(Connectivity::Online)
-        .native_tls(context.use_native_tls)
-        .extra_middleware(context.extra_middleware.clone());
-
-    let mut uv_client_builder =
-        RegistryClientBuilder::new(base_client_builder, context.cache.clone())
-            .index_locations(index_locations.clone())
-            .index_strategy(index_strategy);
-
-    for p in &context.proxies {
-        uv_client_builder = uv_client_builder.proxy(p.clone())
-    }
-
-    let registry_client = Arc::new(uv_client_builder.build());
+    let registry_client = context.build_registry_client(
+        allow_insecure_hosts,
+        &index_locations,
+        index_strategy,
+        Some(&marker_environment),
+    );
 
     let build_options = pypi_options_to_build_options(
         &pypi_options.no_build.clone().unwrap_or_default(),
