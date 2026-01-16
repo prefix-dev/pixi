@@ -917,8 +917,12 @@ def test_pixi_task_list_with_groups(pixi: Path, tmp_pixi_workspace: Path) -> Non
 
         [tasks]
         build = "cargo build"
-        test = { cmd = "cargo test", group = "testing" }
-        lint = { cmd = "cargo clippy", group = "testing" }
+        test = "cargo test"
+        lint = "cargo clippy"
+
+        [task-groups.testing]
+        description = "Testing tasks"
+        tasks = ["test", "lint"]
         """
     manifest.write_text(toml)
 
