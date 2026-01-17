@@ -124,7 +124,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut env_changes = EnvChanges::default();
     let mut last_updated_project = project_original;
     let mut errors: Vec<(EnvironmentName, Report)> = Vec::new();
-    // Convert the packages into named global specs
 
     for (env_name, specs) in &env_to_specs {
         let mut project = last_updated_project.clone();
@@ -145,7 +144,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Err(err) => {
                 if let Err(revert_err) =
-                    revert_environment_after_error(env_name, &last_updated_project).await
+                    revert_environment_after_error(env_name, &mut last_updated_project).await
                 {
                     tracing::warn!("Reverting of the operation failed");
                     tracing::info!("Reversion error: {:?}", revert_err);
@@ -237,8 +236,9 @@ async fn setup_environment(
     }
 
     // Installing the environment to be able to find the bin paths later
+    // Don't use lockfile for install operations since we may be changing versions
     let environment_update = project
-        .install_environment_with_options(env_name, args.force_reinstall)
+        .install_environment_with_options(env_name, args.force_reinstall, false)
         .await?;
 
     // Sync exposed name
