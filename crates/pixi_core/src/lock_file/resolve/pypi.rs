@@ -230,6 +230,10 @@ pub enum SolveError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LookAhead(Box<dyn miette::Diagnostic + Send + Sync + 'static>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Locking(Box<dyn miette::Diagnostic + Send + Sync + 'static>),
 }
 
 /// Creates a custom `SolveError` from a `ResolveError`.
@@ -747,18 +751,51 @@ pub async fn resolve_pypi(
             UvReporterOptions::new().with_existing(pb.clone()),
         ));
 
-        resolver
+        let resolution = resolver
             .resolve()
             .await
-            .map_err(|e| create_solve_error(e, &conda_python_packages))
+            .map_err(|e| create_solve_error(e, &conda_python_packages))?;
+
+        let resolution = Resolution::from(resolution);
+
+        // Print the overridden package requests
+        print_overridden_requests(package_requests.borrow().deref());
+
+        // Print any diagnostics
+        for diagnostic in resolution.diagnostics() {
+            tracing::warn!("{}", diagnostic.message());
+        }
+
+        // Collect resolution into locked packages
+        // This is inside catch_unwind because lock_pypi_packages can also trigger
+        // interpreter() through database.get_or_build_wheel_metadata() for source dists
+        let locked_packages = lock_pypi_packages(
+            conda_python_packages,
+            &lazy_build_dispatch,
+            &registry_client,
+            resolution,
+            &context.capabilities,
+            context.concurrency.downloads,
+            project_root,
+            &original_git_references,
+        )
+        .await
+        .map_err(|e| SolveError::Locking(e.into()))?;
+
+        let conda_task = lazy_build_dispatch.conda_task;
+
+        Ok::<_, SolveError>((locked_packages, conda_task))
     });
 
     // We try to distinguish between build dispatch panics and any other panics that occur
-    let resolution = match resolution_future.catch_unwind().await {
+    let (locked_packages, conda_task) = match resolution_future.catch_unwind().await {
         Ok(result) => result?,
         Err(panic_payload) => {
-            // Try to get the stored initialization error from the lazy build dispatch
-            if let Some(stored_error) = lazy_build_dispatch.last_initialization_error() {
+            // Try to get the stored initialization error from the lazy build dispatch dependencies
+            // (we use lazy_build_dispatch_dependencies instead of lazy_build_dispatch because
+            // lazy_build_dispatch is moved into the async block above)
+            if let Some(stored_error) = lazy_build_dispatch_dependencies.last_initialization_error()
+            {
                 return Err(SolveError::BuildDispatchPanic {
                     message: format!("{stored_error}"),
                 }
@@ -780,30 +817,6 @@ pub async fn resolve_pypi(
             }
         }
     };
-    let resolution = Resolution::from(resolution);
-
-    // Print the overridden package requests
-    print_overridden_requests(package_requests.borrow().deref());
-
-    // Print any diagnostics
-    for diagnostic in resolution.diagnostics() {
-        tracing::warn!("{}", diagnostic.message());
-    }
-
-    // Collect resolution into locked packages
-    let locked_packages = lock_pypi_packages(
-        conda_python_packages,
-        &lazy_build_dispatch,
-        &registry_client,
-        resolution,
-        &context.capabilities,
-        context.concurrency.downloads,
-        project_root,
-        &original_git_references,
-    )
-    .await?;
-
-    let conda_task = lazy_build_dispatch.conda_task;
 
     Ok((locked_packages, conda_task))
 }

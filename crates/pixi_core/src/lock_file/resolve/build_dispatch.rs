@@ -246,6 +246,13 @@ pub struct LazyBuildDispatchDependencies {
     last_error: OnceCell<LazyBuildDispatchError>,
 }
 
+impl LazyBuildDispatchDependencies {
+    /// Get the last initialization error if available
+    pub fn last_initialization_error(&self) -> Option<&LazyBuildDispatchError> {
+        self.last_error.get()
+    }
+}
+
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum LazyBuildDispatchError {
     #[error(
@@ -276,11 +283,6 @@ impl IsBuildBackendError for LazyBuildDispatchError {
 }
 
 impl<'a> LazyBuildDispatch<'a> {
-    /// Get the last initialization error if available
-    pub fn last_initialization_error(&self) -> Option<&LazyBuildDispatchError> {
-        self.lazy_deps.last_error.get()
-    }
-
     /// Create a new `PixiBuildDispatch` instance.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
