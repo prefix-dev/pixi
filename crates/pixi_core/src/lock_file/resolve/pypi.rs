@@ -766,9 +766,6 @@ pub async fn resolve_pypi(
             tracing::warn!("{}", diagnostic.message());
         }
 
-        // Collect resolution into locked packages
-        // This is inside catch_unwind because lock_pypi_packages can also trigger
-        // interpreter() through database.get_or_build_wheel_metadata() for source dists
         let locked_packages = lock_pypi_packages(
             conda_python_packages,
             &lazy_build_dispatch,
@@ -792,8 +789,6 @@ pub async fn resolve_pypi(
         Ok(result) => result?,
         Err(panic_payload) => {
             // Try to get the stored initialization error from the lazy build dispatch dependencies
-            // (we use lazy_build_dispatch_dependencies instead of lazy_build_dispatch because
-            // lazy_build_dispatch is moved into the async block above)
             if let Some(stored_error) = lazy_build_dispatch_dependencies.last_initialization_error()
             {
                 return Err(SolveError::BuildDispatchPanic {
