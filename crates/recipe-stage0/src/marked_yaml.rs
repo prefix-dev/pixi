@@ -235,11 +235,17 @@ impl ToMarkedYaml for About {
             );
         }
 
-        if let Some(ref license_file) = self.license_file {
-            mapping.insert(
-                MarkedScalarNode::new(Span::new_blank(), "license_file"),
-                license_file.to_marked_yaml(),
-            );
+        if let Some(ref license_files) = self.license_file {
+            if !license_files.is_empty() {
+                let nodes: Vec<MarkedNode> = license_files
+                    .iter()
+                    .map(|f| f.to_marked_yaml())
+                    .collect();
+                mapping.insert(
+                    MarkedScalarNode::new(Span::new_blank(), "license_file"),
+                    MarkedNode::Sequence(MarkedSequenceNode::new(Span::new_blank(), nodes)),
+                );
+            }
         }
 
         if let Some(ref summary) = self.summary {

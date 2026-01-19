@@ -27,4 +27,5 @@ requirements:
 
 about:
   license: BSD-3-Clause
-  license_file: LICENSE
+  license_file:
+    - LICENSE
