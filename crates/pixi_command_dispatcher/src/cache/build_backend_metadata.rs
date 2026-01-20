@@ -62,7 +62,7 @@ pub struct BuildBackendMetadataCacheShard {
 
 impl BuildBackendMetadataCache {
     /// The version identifier that should be used for the cache directory.
-    pub const CACHE_SUFFIX: &'static str = "v0";
+    pub const CACHE_SUFFIX: &'static str = "v1";
 
     /// Constructs a new instance.
     pub fn new(root: AbsPathBuf) -> Self {
@@ -83,7 +83,7 @@ impl MetadataCache for BuildBackendMetadataCache {
         "metadata.json"
     }
 
-    const CACHE_SUFFIX: &'static str = "v0";
+    const CACHE_SUFFIX: &'static str = "v1";
 }
 
 impl CacheKey for BuildBackendMetadataCacheShard {
@@ -196,14 +196,35 @@ impl CachedCondaMetadata {
             })
             .collect()
     }
+
+    /// Checks if this metadata is equivalent to another instance.
+    ///
+    /// This compares all fields except `id`, `cache_version`, and `timestamp`,
+    /// which are metadata about the cache entry rather than the actual content.
+    pub fn is_content_equivalent(&self, other: &Self) -> bool {
+        // BinaryHeap doesn't implement PartialEq, so we need to convert to sorted Vecs
+        let self_variant_files: Vec<_> = self.build_variant_files.iter().collect();
+        let other_variant_files: Vec<_> = other.build_variant_files.iter().collect();
+
+        let self_input_globs: Vec<_> = self.input_globs.iter().collect();
+        let other_input_globs: Vec<_> = other.input_globs.iter().collect();
+
+        self.project_model_hash == other.project_model_hash
+            && self.build_source == other.build_source
+            && self.build_variants == other.build_variants
+            && self_variant_files == other_variant_files
+            && self_input_globs == other_input_globs
+            && self.input_files == other.input_files
+            && self.outputs == other.outputs
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(transparent)]
-pub struct CachedCondaMetadataId(u64);
+pub struct CachedCondaMetadataId(String);
 
 impl CachedCondaMetadataId {
     pub fn random() -> Self {
-        Self(rand::random())
+        Self(nanoid::nanoid!())
     }
 }

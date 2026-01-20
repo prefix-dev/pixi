@@ -103,7 +103,7 @@ impl SourceMetadataSpec {
 
         if !skip_cache
             && let Some(cached_metadata) =
-                Self::verify_cache_freshness(cached_metadata, build_backend_metadata.metadata.id)
+                Self::verify_cache_freshness(cached_metadata, build_backend_metadata.metadata.id.clone())
                     .await?
         {
             tracing::debug!("Using cached source metadata for package",);
@@ -150,7 +150,7 @@ impl SourceMetadataSpec {
             id: CachedSourceMetadataId::random(),
             cache_version,
             records,
-            cached_conda_metadata_id: build_backend_metadata.metadata.id,
+            cached_conda_metadata_id: build_backend_metadata.metadata.id.clone(),
         };
 
         // Try to store the metadata in the cache with version checking

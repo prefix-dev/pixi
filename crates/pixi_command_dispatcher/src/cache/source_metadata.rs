@@ -61,7 +61,7 @@ pub struct SourceMetadataCacheShard {
 
 impl SourceMetadataCache {
     /// The version identifier that should be used for the cache directory.
-    pub const CACHE_SUFFIX: &'static str = "v0";
+    pub const CACHE_SUFFIX: &'static str = "v1";
 
     /// Constructs a new instance.
     pub fn new(root: AbsPathBuf) -> Self {
@@ -82,7 +82,7 @@ impl MetadataCache for SourceMetadataCache {
         "source_metadata.json"
     }
 
-    const CACHE_SUFFIX: &'static str = "v0";
+    const CACHE_SUFFIX: &'static str = "v1";
 }
 
 impl CacheKey for SourceMetadataCacheShard {
@@ -150,12 +150,12 @@ impl VersionedMetadata for CachedSourceMetadata {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(transparent)]
-pub struct CachedSourceMetadataId(u64);
+pub struct CachedSourceMetadataId(String);
 
 impl CachedSourceMetadataId {
     pub fn random() -> Self {
-        Self(rand::random())
+        Self(nanoid::nanoid!())
     }
 }

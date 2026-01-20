@@ -219,6 +219,9 @@ impl BuildBackendMetadataSpec {
             .as_ref()
             .map(ProjectModelHash::from);
 
+        // Keep the cached metadata around for potential ID reuse even if it's stale
+        let previous_cached_metadata = cached_metadata.clone();
+
         if !skip_cache {
             if let Some(cache_entry) = Self::verify_cache_freshness(
                 cached_metadata,
@@ -292,6 +295,17 @@ impl BuildBackendMetadataSpec {
                 log_sink,
             )
             .await?;
+
+        // If the new metadata is content-equivalent to the previous cached metadata,
+        // reuse the old ID to avoid invalidating downstream caches (e.g., source metadata).
+        if let Some(ref previous) = previous_cached_metadata {
+            if metadata.is_content_equivalent(previous) {
+                tracing::debug!(
+                    "New metadata is content-equivalent to cached metadata, reusing ID"
+                );
+                metadata.id = previous.id.clone();
+            }
+        }
 
         metadata.cache_version = cache_version;
 

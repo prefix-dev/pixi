@@ -74,7 +74,7 @@ pub struct CondaOutputsResult {
 }
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaOutput {
     /// The identifier of the output.
@@ -116,7 +116,7 @@ pub struct CondaOutput {
 }
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaOutputMetadata {
     /// The name of the package.
