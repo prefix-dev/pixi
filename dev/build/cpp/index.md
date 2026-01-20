@@ -1,4 +1,4 @@
-This example shows how to build a C++ package with CMake and use it together with `pixi-build`. To read more about how building packages work with Pixi see the [Getting Started](../getting_started/) guide. You might also want to check out the [documentation](https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-cmake/) for the `pixi-build-cmake` backend.
+This example shows how to build a C++ package with CMake and use it together with `pixi-build`. To read more about how building packages work with Pixi see the [Getting Started](../getting_started/) guide. You might also want to check out the [documentation](../backends/pixi-build-cmake/) for the `pixi-build-cmake` backend.
 
 We'll start off by creating a workspace that use [nanobind](https://github.com/wjakob/nanobind) to build Python bindings. That we can also test using pixi. We'll later combine this example together with a Python package.
 
