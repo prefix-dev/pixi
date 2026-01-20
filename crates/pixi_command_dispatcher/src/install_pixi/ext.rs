@@ -16,7 +16,8 @@ use rattler_conda_types::{PackageName, RepoDataRecord};
 use crate::BuildProfile;
 use crate::CommandDispatcherError;
 use crate::compute_data::{
-    HasAllowExecuteLinkScripts, HasCacheDirs, HasDownloadClient, HasPackageCache, HasReporter,
+    HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasCacheDirs, HasDownloadClient,
+    HasPackageCache, HasReporter,
 };
 use crate::install_pixi::{
     InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
@@ -242,7 +243,8 @@ async fn install_inner(
         .with_package_cache(data.package_cache().clone())
         .with_reinstall_packages(std::mem::take(&mut spec.force_reinstall))
         .with_ignored_packages(spec.ignore_packages.take().unwrap_or_default())
-        .with_execute_link_scripts(data.allow_execute_link_scripts());
+        .with_execute_link_scripts(data.allow_execute_link_scripts())
+        .with_link_options(data.allow_link_options());
     if let Some(installed) = spec.installed.take() {
         installer = installer.with_installed_packages(installed);
     }

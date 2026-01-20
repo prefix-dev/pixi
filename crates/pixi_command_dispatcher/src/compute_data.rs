@@ -128,6 +128,41 @@ impl HasAllowExecuteLinkScripts for DataStore {
     }
 }
 
+/// Configured allow/disallow preferences for installation link methods,
+/// stored in the [`DataStore`] keyed by `TypeId`. Mirrors the fields on
+/// [`rattler::install::LinkOptions`] but is `Copy`/`Clone`/`Debug` so it
+/// can live in the data store.
+#[derive(Copy, Clone, Debug, Default)]
+pub struct AllowLinkOptions {
+    pub allow_symbolic_links: Option<bool>,
+    pub allow_hard_links: Option<bool>,
+    pub allow_ref_links: Option<bool>,
+}
+
+impl From<AllowLinkOptions> for rattler::install::LinkOptions {
+    fn from(opts: AllowLinkOptions) -> Self {
+        rattler::install::LinkOptions {
+            allow_symbolic_links: opts.allow_symbolic_links,
+            allow_hard_links: opts.allow_hard_links,
+            allow_ref_links: opts.allow_ref_links,
+        }
+    }
+}
+
+/// Access the configured link-method preferences.
+pub trait HasAllowLinkOptions {
+    fn allow_link_options(&self) -> rattler::install::LinkOptions;
+}
+
+impl HasAllowLinkOptions for DataStore {
+    fn allow_link_options(&self) -> rattler::install::LinkOptions {
+        self.try_get::<AllowLinkOptions>()
+            .copied()
+            .unwrap_or_default()
+            .into()
+    }
+}
+
 /// Newtype around the semaphore that bounds concurrent conda solves.
 /// Conda solves are CPU- and memory-intensive; this semaphore enforces
 /// the `max_concurrent_solves` limit from [`crate::Limits`].
