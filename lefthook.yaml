@@ -26,11 +26,9 @@ pre-commit:
       run: pixi {run} -e lint zizmor
     - name: cargo-fmt
       glob: "*.rs"
-      stage_fixed: true
       run: pixi {run} -e lint cargo-fmt
     - name: ruff
       glob: "*.{py,pyi}"
-      stage_fixed: true
       group:
         piped: true
         jobs:
@@ -40,13 +38,11 @@ pre-commit:
             run: pixi {run} -e lint ruff-format {staged_files}
     - name: cargo-shear
       glob: "*.rs,Cargo.toml"
-      stage_fixed: true
       run: pixi {run} -e lint cargo-shear
     - name: shell-format
       glob: "*.{sh, bash}"
       run: pixi {run} -e lint shell-format {staged_files}
     - name: taplo
-      stage_fixed: true
       glob: "*.toml"
       exclude:
         - schema/examples/invalid/*.toml
@@ -61,22 +57,18 @@ pre-commit:
             run: pixi {run} -e lint dprint-fmt {staged_files}
             stage_fixed: true
     - name: typos
-      stage_fixed: true
       run: pixi {run} -e lint typos
     - name: pixi-build-ros-ruff
       root: pixi-build-backends/backends/pixi-build-ros
       glob: "*.{py,pyi}"
-      stage_fixed: true
       run: pixi {run} -e lint lint-ruff
     - name: py-pixi-build-backend-fmt-rust
       root: pixi-build-backends/py-pixi-build-backend
       glob: "*.rs"
-      stage_fixed: true
       run: pixi {run} -e default fmt-rust
     - name: py-pixi-build-backend-lint-python
       root: pixi-build-backends/py-pixi-build-backend
       glob: "*.{py,pyi}"
-      stage_fixed: true
       run: pixi {run} -e default lint-python
 
 pre-push:
@@ -89,7 +81,6 @@ pre-push:
       run: pixi {run} -e lint cargo-clippy
     - name: cargo-deny
       glob: "Cargo.lock,Cargo.toml"
-      stage_fixed: true
       run: pixi {run} -e lint cargo-deny
     - name: check-openssl
       run: pixi {run} -e lint check-openssl
