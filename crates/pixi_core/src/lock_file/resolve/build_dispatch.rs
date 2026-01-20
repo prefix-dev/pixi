@@ -136,7 +136,10 @@ impl<'a> UvBuildDispatchParams<'a> {
         self
     }
 
-    /// Set the link mode for the build dispatch
+    /// Set the link mode for the build dispatch.
+    ///
+    /// TODO: Wire up link mode from user config when building PyPI source
+    /// distributions during resolution. See: https://github.com/prefix-dev/pixi/issues/5332
     #[expect(unused)]
     pub fn with_link_mode(mut self, link_mode: LinkMode) -> Self {
         self.link_mode = link_mode;

@@ -598,6 +598,9 @@ impl Workspace {
                 RunPostLinkScripts::Insecure => true,
                 RunPostLinkScripts::False => false,
             })
+            .with_allow_symbolic_links(self.config.allow_symbolic_links())
+            .with_allow_hard_links(self.config.allow_hard_links())
+            .with_allow_ref_links(self.config.allow_ref_links())
             .with_tool_platform(tool_platform, tool_virtual_packages))
     }
 

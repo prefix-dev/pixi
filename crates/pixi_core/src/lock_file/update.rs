@@ -26,7 +26,7 @@ use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
 use pixi_install_pypi::{
     LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
-    PyPIUpdateConfig,
+    PyPIUpdateConfig, derive_link_mode,
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
@@ -775,13 +775,21 @@ impl<'p> LockFileDerivedData<'p> {
                     let skip_wheel_filename_check =
                         environment.pypi_options().skip_wheel_filename_check;
 
-                    let config = PyPIUpdateConfig {
+                    let pypi_update_config = PyPIUpdateConfig {
                         environment_name: environment.name(),
                         prefix: &prefix,
                         platform: environment.best_platform(),
                         lock_file_dir: self.workspace.root(),
                         system_requirements: &environment.system_requirements(),
                     };
+
+                    // Derive link mode from config restrictions
+                    let workspace_config = self.workspace.config();
+                    let link_mode = derive_link_mode(
+                        workspace_config.allow_symbolic_links(),
+                        workspace_config.allow_hard_links(),
+                        workspace_config.allow_ref_links(),
+                    );
 
                     let build_config = PyPIBuildConfig {
                         no_build_isolation: &non_isolated_packages,
@@ -790,6 +798,7 @@ impl<'p> LockFileDerivedData<'p> {
                         index_strategy: index_strategy.as_ref(),
                         exclude_newer: exclude_newer.as_ref(),
                         skip_wheel_filename_check,
+                        link_mode: Some(link_mode),
                     };
 
                     let lazy_env_vars = LazyPixiEnvironmentVars {
@@ -807,7 +816,7 @@ impl<'p> LockFileDerivedData<'p> {
                         .map(to_uv_normalize)
                         .collect::<Result<Vec<_>, _>>()
                         .into_diagnostic()?;
-                    PyPIEnvironmentUpdater::new(config, build_config, context_config)
+                    PyPIEnvironmentUpdater::new(pypi_update_config, build_config, context_config)
                         .with_ignored_extraneous(names)
                         .update(&python_status, &pixi_records, &pypi_records)
                         .await

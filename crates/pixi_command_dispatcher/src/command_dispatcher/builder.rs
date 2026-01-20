@@ -36,6 +36,12 @@ pub struct CommandDispatcherBuilder {
     executor: Executor,
     tool_platform: Option<(Platform, Vec<GenericVirtualPackage>)>,
     execute_link_scripts: bool,
+    /// Allow symbolic links during package installation.
+    allow_symbolic_links: Option<bool>,
+    /// Allow hard links during package installation.
+    allow_hard_links: Option<bool>,
+    /// Allow ref links (copy-on-write) during package installation.
+    allow_ref_links: Option<bool>,
 }
 
 impl CommandDispatcherBuilder {
@@ -143,6 +149,30 @@ impl CommandDispatcherBuilder {
         }
     }
 
+    /// Sets whether symbolic links are allowed during package installation.
+    pub fn with_allow_symbolic_links(self, allow: Option<bool>) -> Self {
+        Self {
+            allow_symbolic_links: allow,
+            ..self
+        }
+    }
+
+    /// Sets whether hard links are allowed during package installation.
+    pub fn with_allow_hard_links(self, allow: Option<bool>) -> Self {
+        Self {
+            allow_hard_links: allow,
+            ..self
+        }
+    }
+
+    /// Sets whether ref links (copy-on-write) are allowed during package installation.
+    pub fn with_allow_ref_links(self, allow: Option<bool>) -> Self {
+        Self {
+            allow_ref_links: allow,
+            ..self
+        }
+    }
+
     /// Completes the builder and returns a new [`CommandDispatcher`].
     pub fn finish(self) -> CommandDispatcher {
         let root_dir = self.root_dir.unwrap_or_else(|| {
@@ -202,6 +232,9 @@ impl CommandDispatcherBuilder {
             package_cache,
             tool_platform,
             execute_link_scripts: self.execute_link_scripts,
+            allow_symbolic_links: self.allow_symbolic_links,
+            allow_hard_links: self.allow_hard_links,
+            allow_ref_links: self.allow_ref_links,
             executor: self.executor,
         });
 
