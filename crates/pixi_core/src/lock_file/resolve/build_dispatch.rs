@@ -18,6 +18,7 @@
 //! needed.
 use std::cell::Cell;
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::{collections::HashMap, path::Path};
 
 use crate::environment::{CondaPrefixUpdated, CondaPrefixUpdater};
@@ -218,6 +219,10 @@ pub struct LazyBuildDispatch<'a> {
     workspace_cache: WorkspaceCache,
 
     pub ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
+
+    /// Shared error holder for storing initialization errors that can be retrieved
+    /// after the LazyBuildDispatch is consumed (e.g., in catch_unwind scenarios)
+    pub last_error: Arc<OnceCell<LazyBuildDispatchError>>,
 }
 
 /// These are resources for the [`BuildDispatch`] that need to be lazily
@@ -242,15 +247,6 @@ pub struct LazyBuildDispatchDependencies {
     extra_build_variables: OnceCell<ExtraBuildVariables>,
     /// Package-specific configuration settings
     package_config_settings: OnceCell<PackageConfigSettings>,
-    /// The last initialization error that occurred
-    last_error: OnceCell<LazyBuildDispatchError>,
-}
-
-impl LazyBuildDispatchDependencies {
-    /// Get the last initialization error if available
-    pub fn last_initialization_error(&self) -> Option<&LazyBuildDispatchError> {
-        self.last_error.get()
-    }
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
@@ -295,6 +291,7 @@ impl<'a> LazyBuildDispatch<'a> {
         lazy_deps: &'a LazyBuildDispatchDependencies,
         ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
         disallow_install_conda_prefix: bool,
+        last_error: Arc<OnceCell<LazyBuildDispatchError>>,
     ) -> Self {
         Self {
             params,
@@ -309,6 +306,7 @@ impl<'a> LazyBuildDispatch<'a> {
             disallow_install_conda_prefix,
             workspace_cache: WorkspaceCache::default(),
             ignore_packages,
+            last_error,
         }
     }
 
@@ -443,7 +441,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
             Ok(dispatch) => dispatch.interpreter().await,
             Err(e) => {
                 // Store the error for later retrieval
-                let _ = self.lazy_deps.last_error.set(e);
+                let _ = self.last_error.set(e);
                 panic!("could not initialize build dispatch correctly")
             }
         }

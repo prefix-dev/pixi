@@ -10,6 +10,8 @@ use std::{
     sync::Arc,
 };
 
+use once_cell::sync::OnceCell;
+
 use futures::FutureExt;
 
 use chrono::{DateTime, Utc};
@@ -68,7 +70,8 @@ use crate::{
         records_by_name::HasNameVersion,
         resolve::{
             build_dispatch::{
-                LazyBuildDispatch, LazyBuildDispatchDependencies, UvBuildDispatchParams,
+                LazyBuildDispatch, LazyBuildDispatchDependencies, LazyBuildDispatchError,
+                UvBuildDispatchParams,
             },
             resolver_provider::CondaResolverProvider,
         },
@@ -553,6 +556,7 @@ pub async fn resolve_pypi(
     .with_concurrency(context.concurrency);
 
     let lazy_build_dispatch_dependencies = LazyBuildDispatchDependencies::default();
+    let last_error = Arc::new(OnceCell::new());
     let lazy_build_dispatch = LazyBuildDispatch::new(
         build_params,
         prefix_updater,
@@ -563,6 +567,7 @@ pub async fn resolve_pypi(
         &lazy_build_dispatch_dependencies,
         None,
         disallow_install_conda_prefix,
+        Arc::clone(&last_error),
     );
 
     // Constrain the conda packages to the specific python packages
@@ -788,9 +793,8 @@ pub async fn resolve_pypi(
     let (locked_packages, conda_task) = match resolution_future.catch_unwind().await {
         Ok(result) => result?,
         Err(panic_payload) => {
-            // Try to get the stored initialization error from the lazy build dispatch dependencies
-            if let Some(stored_error) = lazy_build_dispatch_dependencies.last_initialization_error()
-            {
+            // Try to get the stored initialization error from the last_error holder
+            if let Some(stored_error) = last_error.get() {
                 return Err(SolveError::BuildDispatchPanic {
                     message: format!("{stored_error}"),
                 }
