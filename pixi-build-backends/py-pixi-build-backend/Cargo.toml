@@ -54,7 +54,7 @@ paste = "1.0.15"
 pythonize = "0.26"
 
 [build-dependencies]
-pyo3-build-config = "0.26"
+pyo3-build-config = "0.27"
 
 [profile.ci]
 codegen-units = 16
