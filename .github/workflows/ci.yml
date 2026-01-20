@@ -278,6 +278,7 @@ jobs:
       - name: Test pixi
         run: pixi run test-slow --retries 2
         env:
+          CARGO_PROFILE_DEV_DEBUG: 0 # Disable debuginfo only on windows because it takes a lot of space
           CARGO_TARGET_DIR: ${{ env.DEV_DRIVE }}/target
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
