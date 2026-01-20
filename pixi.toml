@@ -63,12 +63,16 @@ rattler-build = ">=0.55.0,<0.56"
 sccache = ">=0.12,<0.13"
 
 [feature.backends-release.tasks]
-generate-matrix = { cmd = "python pixi-build-backends/scripts/generate-matrix.py", description = "Generate build matrix for backends release" }
+generate-versions = { cmd = "python pixi-build-backends/scripts/generate-versions.py", description = "Generate version env vars for CI" }
+[feature.backends-release.tasks.generate-attestations]
+args = ["attestation_bundle"]
+cmd = "python pixi-build-backends/scripts/generate-attestations.py {{ attestation_bundle }}"
+description = "Generate attestation files for conda packages"
 
-[feature.backends-release.tasks.build-recipe-ci]
-args = ["output_dir", "recipe", { arg = "target_platform", default = "" }]
-cmd = "rattler-build build --test native --channel https://prefix.dev/pixi-build-backends --channel https://prefix.dev/conda-forge --variant-config pixi-build-backends/recipe/variants.yaml --output-dir={{ output_dir }} --recipe {{ recipe }}{% if target_platform is defined and target_platform %} --target-platform {{ target_platform }}{% endif %}"
-description = "Build a backend recipe for CI"
+[feature.backends-release.tasks.build-backend-packages]
+args = ["target_platform"]
+cmd = "rattler-build build --experimental --test native --channel https://prefix.dev/pixi-build-backends --channel https://prefix.dev/conda-forge --variant-config pixi-build-backends/recipe/variants.yaml --recipe pixi-build-backends/recipe/all-backends/recipe.yaml --target-platform {{ target_platform }}"
+description = "Build a backend packages"
 
 #
 # Feature for development tools and utilities
