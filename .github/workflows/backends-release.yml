@@ -9,24 +9,24 @@ on:
         type: string
   pull_request:
     paths:
-      - 'pixi-build-backends/**'
-      - 'crates/pixi-build-python/**'
-      - 'crates/pixi-build-rattler-build/**'
-      - 'crates/pixi-build-cmake/**'
-      - 'crates/pixi-build-rust/**'
-      - 'crates/pixi-build-mojo/**'
-      - ' .github/workflows/backends-release.yml'
+      - "pixi-build-backends/**"
+      - "crates/pixi-build-python/**"
+      - "crates/pixi-build-rattler-build/**"
+      - "crates/pixi-build-cmake/**"
+      - "crates/pixi-build-rust/**"
+      - "crates/pixi-build-mojo/**"
+      - ".github/workflows/backends-release.yml"
   push:
     branches:
       - main
     paths:
-      - 'pixi-build-backends/**'
-      - 'crates/pixi-build-python/**'
-      - 'crates/pixi-build-rattler-build/**'
-      - 'crates/pixi-build-cmake/**'
-      - 'crates/pixi-build-rust/**'
-      - 'crates/pixi-build-mojo/**'
-      - ' .github/workflows/backends-release.yml'
+      - "pixi-build-backends/**"
+      - "crates/pixi-build-python/**"
+      - "crates/pixi-build-rattler-build/**"
+      - "crates/pixi-build-cmake/**"
+      - "crates/pixi-build-rust/**"
+      - "crates/pixi-build-mojo/**"
+      - ".github/workflows/backends-release.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
