@@ -61,7 +61,7 @@ pub struct SourceMetadataCacheShard {
 
 impl SourceMetadataCache {
     /// The version identifier that should be used for the cache directory.
-    pub const CACHE_SUFFIX: &'static str = "v1";
+    pub const CACHE_SUFFIX: &'static str = "v0";
 
     /// Constructs a new instance.
     pub fn new(root: AbsPathBuf) -> Self {
@@ -82,7 +82,7 @@ impl MetadataCache for SourceMetadataCache {
         "source_metadata.json"
     }
 
-    const CACHE_SUFFIX: &'static str = "v1";
+    const CACHE_SUFFIX: &'static str = "v0";
 }
 
 impl CacheKey for SourceMetadataCacheShard {

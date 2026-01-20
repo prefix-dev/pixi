@@ -11,7 +11,7 @@ use pixi_path::AbsPathBuf;
 use pixi_record::{PinnedSourceSpec, VariantValue};
 use rattler_conda_types::ChannelUrl;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeSet, BinaryHeap};
+use std::collections::BTreeSet;
 use std::{
     collections::BTreeMap,
     hash::{DefaultHasher, Hash, Hasher},
@@ -62,7 +62,7 @@ pub struct BuildBackendMetadataCacheShard {
 
 impl BuildBackendMetadataCache {
     /// The version identifier that should be used for the cache directory.
-    pub const CACHE_SUFFIX: &'static str = "v1";
+    pub const CACHE_SUFFIX: &'static str = "v0";
 
     /// Constructs a new instance.
     pub fn new(root: AbsPathBuf) -> Self {
@@ -83,7 +83,7 @@ impl MetadataCache for BuildBackendMetadataCache {
         "metadata.json"
     }
 
-    const CACHE_SUFFIX: &'static str = "v1";
+    const CACHE_SUFFIX: &'static str = "v0";
 }
 
 impl CacheKey for BuildBackendMetadataCacheShard {
@@ -117,20 +117,15 @@ impl CacheError for BuildBackendMetadataCacheError {
     }
 }
 
-/// Cached result of calling `conda/outputs` on a build backend. This is
-/// returned by [`MetadataCache::read`].
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CachedCondaMetadata {
-    /// A randomly generated identifier that is generated for each metadata
-    /// file.
-    pub id: CachedCondaMetadataId,
-
-    /// Version number for optimistic locking. Incremented with each cache
-    /// update. Used to detect when another process has updated the cache
-    /// during computation.
-    #[serde(default)]
-    pub cache_version: u64,
-
+/// The content of the cached conda metadata that represents the actual
+/// build backend response. This is separated from cache metadata (id, version,
+/// timestamp) to enable reliable equality comparison.
+///
+/// When fields are added or removed from this struct, the `PartialEq`/`Eq`
+/// derives will automatically include them in comparisons, preventing bugs
+/// from manual field listing.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CachedCondaMetadataContent {
     /// The hash of the project model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project_model_hash: Option<ProjectModelHash>,
@@ -145,8 +140,8 @@ pub struct CachedCondaMetadata {
     pub build_variants: BTreeMap<String, Vec<VariantValue>>,
 
     /// The build variant files
-    #[serde(default, skip_serializing_if = "BinaryHeap::is_empty")]
-    pub build_variant_files: BinaryHeap<PathBuf>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub build_variant_files: BTreeSet<PathBuf>,
 
     /// Globs of files from which the metadata was derived. Globs require
     /// recursively iterating the filesystem which can be particularly slow so
@@ -154,8 +149,8 @@ pub struct CachedCondaMetadata {
     /// work for all backends so we also support globs.
     ///
     /// If the source itself is immutable this is None.
-    #[serde(default, skip_serializing_if = "BinaryHeap::is_empty")]
-    pub input_globs: BinaryHeap<String>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub input_globs: BTreeSet<String>,
 
     /// Paths relative to the source checkout of files that were used to
     /// determine the metadata. This is the result of the matching the globs
@@ -163,11 +158,30 @@ pub struct CachedCondaMetadata {
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub input_files: BTreeSet<PathBuf>,
 
+    /// The outputs as reported by the build backend.
+    pub outputs: Vec<CondaOutput>,
+}
+
+/// Cached result of calling `conda/outputs` on a build backend. This is
+/// returned by [`MetadataCache::read`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CachedCondaMetadata {
+    /// A randomly generated identifier that is generated for each metadata
+    /// file.
+    pub id: CachedCondaMetadataId,
+
+    /// Version number for optimistic locking. Incremented with each cache
+    /// update. Used to detect when another process has updated the cache
+    /// during computation.
+    #[serde(default)]
+    pub cache_version: u64,
+
     /// The timestamp of when the metadata was computed.
     pub timestamp: std::time::SystemTime,
 
-    /// The outputs as reported by the build backend.
-    pub outputs: Vec<CondaOutput>,
+    /// The actual content from the build backend response.
+    #[serde(flatten)]
+    pub content: CachedCondaMetadataContent,
 }
 
 impl CachedMetadata for CachedCondaMetadata {}
@@ -186,7 +200,8 @@ impl CachedCondaMetadata {
     /// Returns the unique package identifiers for the packages in this
     /// metadata.
     pub fn outputs(&self) -> Vec<PackageIdentifier> {
-        self.outputs
+        self.content
+            .outputs
             .iter()
             .map(|output| PackageIdentifier {
                 name: output.metadata.name.clone(),
@@ -202,20 +217,7 @@ impl CachedCondaMetadata {
     /// This compares all fields except `id`, `cache_version`, and `timestamp`,
     /// which are metadata about the cache entry rather than the actual content.
     pub fn is_content_equivalent(&self, other: &Self) -> bool {
-        // BinaryHeap doesn't implement PartialEq, so we need to convert to sorted Vecs
-        let self_variant_files: Vec<_> = self.build_variant_files.iter().collect();
-        let other_variant_files: Vec<_> = other.build_variant_files.iter().collect();
-
-        let self_input_globs: Vec<_> = self.input_globs.iter().collect();
-        let other_input_globs: Vec<_> = other.input_globs.iter().collect();
-
-        self.project_model_hash == other.project_model_hash
-            && self.build_source == other.build_source
-            && self.build_variants == other.build_variants
-            && self_variant_files == other_variant_files
-            && self_input_globs == other_input_globs
-            && self.input_files == other.input_files
-            && self.outputs == other.outputs
+        self.content == other.content
     }
 }
 

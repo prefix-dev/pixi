@@ -102,9 +102,11 @@ impl SourceMetadataSpec {
         };
 
         if !skip_cache
-            && let Some(cached_metadata) =
-                Self::verify_cache_freshness(cached_metadata, build_backend_metadata.metadata.id.clone())
-                    .await?
+            && let Some(cached_metadata) = Self::verify_cache_freshness(
+                cached_metadata,
+                build_backend_metadata.metadata.id.clone(),
+            )
+            .await?
         {
             tracing::debug!("Using cached source metadata for package",);
             return Ok(SourceMetadata {
@@ -115,7 +117,7 @@ impl SourceMetadataSpec {
 
         let mut futures = ExecutorFutures::new(command_dispatcher.executor());
         let source_location = build_backend_metadata.source.clone();
-        for output in &build_backend_metadata.metadata.outputs {
+        for output in &build_backend_metadata.metadata.content.outputs {
             if output.metadata.name != self.package {
                 continue;
             }
@@ -133,6 +135,7 @@ impl SourceMetadataSpec {
         if records.is_empty() {
             let available_names = build_backend_metadata
                 .metadata
+                .content
                 .outputs
                 .iter()
                 .map(|output| output.metadata.name.clone());

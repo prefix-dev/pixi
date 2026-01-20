@@ -153,7 +153,7 @@ impl DevSourceMetadataSpec {
 
         // Create a DevSourceRecord for each output
         let mut records = Vec::new();
-        for output in &build_backend_metadata.metadata.outputs {
+        for output in &build_backend_metadata.metadata.content.outputs {
             if output.metadata.name != self.package_name {
                 continue;
             }
@@ -169,6 +169,7 @@ impl DevSourceMetadataSpec {
         if records.is_empty() {
             let available_names = build_backend_metadata
                 .metadata
+                .content
                 .outputs
                 .iter()
                 .map(|output| output.metadata.name.clone());

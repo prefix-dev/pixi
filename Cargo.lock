@@ -5748,7 +5748,6 @@ dependencies = [
  "pixi_url",
  "pixi_utils",
  "pixi_variant",
- "rand 0.9.2",
  "rattler",
  "rattler_conda_types",
  "rattler_digest",
