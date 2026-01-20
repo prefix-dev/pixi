@@ -7,15 +7,6 @@ on:
         description: "Build specific package only (optional)"
         required: false
         type: string
-  pull_request:
-    paths:
-      - "pixi-build-backends/**"
-      - "crates/pixi-build-python/**"
-      - "crates/pixi-build-rattler-build/**"
-      - "crates/pixi-build-cmake/**"
-      - "crates/pixi-build-rust/**"
-      - "crates/pixi-build-mojo/**"
-      - ".github/workflows/backends-release.yml"
   push:
     branches:
       - main
@@ -104,7 +95,6 @@ jobs:
           pixi run -e backends-release build-recipe-ci $RUNNER_TEMP pixi-build-backends/recipe/${{ matrix.bins.bin }}/recipe.yaml ${{ matrix.bins.target }}
 
       - uses: actions/attest@daf44fb950173508f38bd2406030372c1d1162b1 # v3.0.0
-        if: github.event_name != 'pull_request'
         id: attest
         with:
           subject-path: "${{ runner.temp }}/**/*.conda"
@@ -112,7 +102,6 @@ jobs:
           predicate: "{\"targetChannel\": \"https://prefix.dev/pixi-build-backends\"}"
 
       - name: Generate attestation for conda package
-        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           # Convert Windows paths to Unix-style for bash compatibility
@@ -183,7 +172,7 @@ jobs:
   upload:
     needs: aggregate
     runs-on: ubuntu-latest
-    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.repository == 'prefix-dev/pixi' }}
+    if: github.repository == 'prefix-dev/pixi'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
