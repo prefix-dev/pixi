@@ -60,7 +60,7 @@ RUSTC_WRAPPER = "sccache"
 
 [feature.backends-release.dependencies]
 rattler-build = ">=0.55.0,<0.56"
-sccache = ">=0.12,<0.13"
+sccache = ">=0.13,<0.14"
 
 [feature.backends-release.tasks]
 generate-matrix = { cmd = "python pixi-build-backends/scripts/generate-matrix.py", description = "Generate build matrix for backends release" }
