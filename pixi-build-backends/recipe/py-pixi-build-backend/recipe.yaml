@@ -8,7 +8,7 @@ package:
   version: ${{ version }}
 
 source:
-  path: ../..
+  path: ../../..
 
 requirements:
   build:
@@ -33,7 +33,7 @@ requirements:
 
 build:
   script:
-    - cd py-pixi-build-backend
+    - cd pixi-build-backends/py-pixi-build-backend
     - pip install . -vv --no-build-isolation
   python:
     version_independent: true
