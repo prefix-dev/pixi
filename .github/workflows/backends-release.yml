@@ -3,15 +3,28 @@ name: "Backends - Conda Packages"
 on:
   workflow_dispatch:
     inputs:
-      push_to_channel:
-        description: "Push packages to conda channel after build"
-        required: false
-        default: true
-        type: boolean
       package_name:
         description: "Build specific package only (optional)"
         required: false
         type: string
+  pull_request:
+    paths:
+      - 'pixi-build-backends/**'
+      - 'crates/pixi-build-python/**'
+      - 'crates/pixi-build-rattler-build/**'
+      - 'crates/pixi-build-cmake/**'
+      - 'crates/pixi-build-rust/**'
+      - 'crates/pixi-build-mojo/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'pixi-build-backends/**'
+      - 'crates/pixi-build-python/**'
+      - 'crates/pixi-build-rattler-build/**'
+      - 'crates/pixi-build-cmake/**'
+      - 'crates/pixi-build-rust/**'
+      - 'crates/pixi-build-mojo/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
@@ -166,7 +179,7 @@ jobs:
   upload:
     needs: aggregate
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.push_to_channel == 'true' && github.repository == 'prefix-dev/pixi' }}
+    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.repository == 'prefix-dev/pixi' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:

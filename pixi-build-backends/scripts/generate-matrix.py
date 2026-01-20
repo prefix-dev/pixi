@@ -1,24 +1,9 @@
-import subprocess
 import json
-import re
+import subprocess
 import sys
 import tomllib
 from datetime import datetime
 from pathlib import Path
-
-
-def get_git_tags():
-    try:
-        result = subprocess.run(
-            ["git", "tag", "--points-at", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return result.stdout.strip().splitlines()
-    except subprocess.CalledProcessError:
-        # if no tags are found, return an empty list
-        return []
 
 
 def get_git_short_hash():
@@ -37,19 +22,9 @@ def get_current_date():
     return datetime.now().strftime("%Y%m%d")
 
 
-def extract_name_and_version_from_tag(tag):
-    # Handle both Rust packages and Python package
-    rust_match = re.match(r"(pixi-build-[a-zA-Z-]+)-v(\d+\.\d+\.\d+)", tag)
-    python_match = re.match(r"(py-pixi-build-backend)-v(\d+\.\d+\.\d+)", tag)
-
-    if rust_match:
-        return rust_match.group(1), rust_match.group(2)
-    elif python_match:
-        return python_match.group(1), python_match.group(2)
-
-    raise ValueError(
-        f"Invalid Git tag format: {tag}. Expected format: pixi-build-[name]-v[version]"
-    )
+def get_current_time():
+    """Get current time in HHMM format"""
+    return datetime.now().strftime("%H%M")
 
 
 def generate_matrix(filter_package_name=None):
@@ -140,113 +115,54 @@ def generate_matrix(filter_package_name=None):
         else:
             return all_targets
 
-    git_tags = get_git_tags()
-    is_untagged_build = len(git_tags) == 0
-
     # Extract bin names, versions, and generate env and recipe names
     matrix = []
 
     if not all_packages:
         raise ValueError("No packages found")
 
-    if is_untagged_build:
-        # Untagged build - include all packages with auto-versioning
-        date_suffix = get_current_date()
-        git_hash = get_git_short_hash()
+    # Generate auto-versioning with timestamp
+    date_suffix = get_current_date()
+    time_suffix = get_current_time()
+    git_hash = get_git_short_hash()
 
-        print(
-            f"Building all packages for untagged build with date suffix: {date_suffix}, git hash: {git_hash}",
-            file=sys.stderr,
-        )
+    print(
+        f"Building all packages with date: {date_suffix}, time: {time_suffix}, git hash: {git_hash}",
+        file=sys.stderr,
+    )
 
-        package_names = []
-        for package in all_packages:
-            package_names.append(package["name"])
-            # Create auto-version: original_version.ddmmyyyy.git_hash
-            auto_version = f"{package['version']}.{date_suffix}.{git_hash}"
+    package_names = []
+    for package in all_packages:
+        package_names.append(package["name"])
+        # Create auto-version: original_version.yyyymmdd.hhmm.git_hash
+        auto_version = f"{package['version']}.{date_suffix}.{time_suffix}.{git_hash}"
 
-            # Generate environment variable name
-            if package["name"] == "py-pixi-build-backend":
-                env_name = "PY_PIXI_BUILD_BACKEND_VERSION"
-            elif package["name"] == "pixi-build-ros":
-                env_name = "PIXI_BUILD_ROS_VERSION"
-            else:
-                env_name = f"{package['name'].replace('-', '_').upper()}_VERSION"
+        # Generate environment variable name
+        if package["name"] == "py-pixi-build-backend":
+            env_name = "PY_PIXI_BUILD_BACKEND_VERSION"
+        elif package["name"] == "pixi-build-ros":
+            env_name = "PIXI_BUILD_ROS_VERSION"
+        else:
+            env_name = f"{package['name'].replace('-', '_').upper()}_VERSION"
 
-            for target in get_targets_for_package(package["name"], targets):
-                matrix.append(
-                    {
-                        "bin": package["name"],
-                        "target": target["target"],
-                        "version": auto_version,
-                        "env_name": env_name,
-                        "os": target["os"],
-                    }
-                )
+        for target in get_targets_for_package(package["name"], targets):
+            matrix.append(
+                {
+                    "bin": package["name"],
+                    "target": target["target"],
+                    "version": auto_version,
+                    "env_name": env_name,
+                    "os": target["os"],
+                }
+            )
 
-        if not package_names:
-            raise RuntimeError("No packages found for untagged build")
-
-        print(
-            f"Found {len(package_names)} packages: {', '.join(package_names)}",
-            file=sys.stderr,
-        )
-    else:
-        # Tag-based build - only include tagged packages
-        # verify that the tags match the package versions
-        tagged_packages = {tag: False for tag in git_tags}
-
-        for package in all_packages:
-            package_tagged = False
-            for git_tag in git_tags:
-                # verify that the git tag matches the package version
-                tag_name, tag_version = extract_name_and_version_from_tag(git_tag)
-                if package["name"] != tag_name:
-                    continue  # Skip packages that do not match the tag
-
-                if package["version"] != tag_version:
-                    raise ValueError(
-                        f"Version mismatch: Git tag version {tag_version} does not match package version {package['version']} for {package['name']}"
-                    )
-
-                tagged_packages[git_tag] = package
-                package_tagged = True
-
-            # verify that tags exist for this HEAD
-            # and that the package has been tagged
-            if tagged_packages and not package_tagged:
-                continue
-
-            # Generate environment variable name
-            if package["name"] == "py-pixi-build-backend":
-                env_name = "PY_PIXI_BUILD_BACKEND_VERSION"
-            elif package["name"] == "pixi-build-ros":
-                env_name = "PIXI_BUILD_ROS_VERSION"
-            else:
-                env_name = f"{package['name'].replace('-', '_').upper()}_VERSION"
-
-            for target in get_targets_for_package(package["name"], targets):
-                matrix.append(
-                    {
-                        "bin": package["name"],
-                        "target": target["target"],
-                        "version": package["version"],
-                        "env_name": env_name,
-                        "os": target["os"],
-                    }
-                )
-
-    # Only validate tags for tag-based builds
-    if not is_untagged_build and git_tags:
-        for git_tag, has_a_package in tagged_packages.items():
-            if not has_a_package:
-                raise ValueError(f"Git tag {git_tag} does not match any package in Cargo.toml")
+    print(
+        f"Found {len(package_names)} packages: {', '.join(package_names)}",
+        file=sys.stderr,
+    )
 
     if not matrix:
-        if is_untagged_build:
-            raise RuntimeError("No packages found to build for untagged build")
-        else:
-            raise RuntimeError("No tagged packages found to build")
+        raise RuntimeError("No packages found to build")
 
     matrix_json = json.dumps(matrix)
 
