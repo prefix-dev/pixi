@@ -70,8 +70,7 @@ use crate::{
         records_by_name::HasNameVersion,
         resolve::{
             build_dispatch::{
-                LazyBuildDispatch, LazyBuildDispatchDependencies, LazyBuildDispatchError,
-                UvBuildDispatchParams,
+                LazyBuildDispatch, LazyBuildDispatchDependencies, UvBuildDispatchParams,
             },
             resolver_provider::CondaResolverProvider,
         },
