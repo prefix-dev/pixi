@@ -28,23 +28,34 @@ pub struct ConfigurationHash(u64);
 
 impl ConfigurationHash {
     /// Computes a hash from the configuration and target configuration.
+    /// Returns `None` if both are empty or not provided.
     pub fn compute(
-        configuration: Option<&serde_json::Value>,
-        target_configuration: Option<&OrderMap<TargetSelector, serde_json::Value>>,
+        config: Option<&serde_json::Value>,
+        target_config: Option<&OrderMap<TargetSelector, serde_json::Value>>,
     ) -> Option<Self> {
-        // Only compute a hash if there's any configuration
-        if configuration.is_none() && target_configuration.is_none() {
+        // Treat None and empty the same - only compute a hash if there's actual configuration
+        let has_config = config.is_some();
+        let has_target_config = target_config.is_some_and(|c| !c.is_empty());
+
+        if !has_config && !has_target_config {
             return None;
         }
 
+        // Use empty JSON object for None/empty values to ensure consistent hashing
+        let empty_json = serde_json::Value::Object(Default::default());
+        let empty_target: OrderMap<TargetSelector, serde_json::Value> = OrderMap::default();
+
+        let config = config.unwrap_or(&empty_json);
+        let target_config = target_config
+            .filter(|c| !c.is_empty())
+            .unwrap_or(&empty_target);
+
         let mut hasher = Xxh3::new();
         StableHashBuilder::new()
-            .field("configuration", &configuration.map(StableJson::new))
+            .field("config", &StableJson::new(config))
             .field(
-                "target_configuration",
-                &target_configuration.map(|config| {
-                    StableMap::new(config.iter().map(|(k, v)| (k, StableJson::new(v))))
-                }),
+                "target_config",
+                &StableMap::new(target_config.iter().map(|(k, v)| (k, StableJson::new(v)))),
             )
             .finish(&mut hasher);
         Some(Self(hasher.finish()))

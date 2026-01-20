@@ -1,5 +1,5 @@
 use fs_err as fs;
-use pixi_build_backend_passthrough::{ObservableBackend, PassthroughBackend};
+use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, PassthroughBackend};
 use pixi_build_frontend::BackendOverride;
 use pixi_consts::consts;
 use rattler_conda_types::{Platform, package::RunExportsJson};
@@ -810,5 +810,166 @@ test-source-pkg = {{ path = "./source-package" }}
     assert!(
         !was_updated_second,
         "Second invocation should report lock-file is already up to date"
+    );
+}
+
+/// Test that verifies changing `[package.build.config]` invalidates the metadata cache
+/// and causes the build backend to be re-queried.
+///
+/// This tests the fix for issue #5309 where changes to build configuration
+/// (like `noarch = true` to `noarch = false`) did not invalidate the metadata cache.
+///
+/// The test uses ObservableBackend to verify that the backend is called again
+/// when the configuration changes.
+#[tokio::test]
+async fn test_build_config_change_invalidates_cache() {
+    setup_tracing();
+
+    // Create an observable passthrough backend to track calls
+    let passthrough = PassthroughBackend::instantiator();
+    let (instantiator, mut observer) = ObservableBackend::instantiator(passthrough);
+    let backend_override = BackendOverride::from_memory(instantiator);
+
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create a source package directory
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+
+    // Create the source package manifest with initial build configuration
+    let source_pixi_toml_v1 = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.build.config]
+noarch = true
+"#;
+    fs::write(source_dir.join("pixi.toml"), source_pixi_toml_v1).unwrap();
+
+    // Create the workspace manifest
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = []
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        Platform::current()
+    );
+
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // First invocation: Generate the lock-file
+    let workspace = pixi.workspace().unwrap();
+    let (lock_file_data, was_updated) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("First lock file generation should succeed");
+
+    assert!(was_updated, "First invocation should create the lock-file");
+
+    // Verify the package is in the lock-file
+    let lock_file = lock_file_data.into_lock_file();
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "my-package",
+        ),
+        "Lock file should contain my-package"
+    );
+
+    // Helper to filter CondaOutputsCalled events
+    fn count_conda_outputs_events(events: &[BackendEvent]) -> usize {
+        events
+            .iter()
+            .filter(|e| matches!(e, BackendEvent::CondaOutputsCalled))
+            .count()
+    }
+
+    // Check that conda_outputs was called once
+    let events_after_first = observer.events();
+    assert_eq!(
+        count_conda_outputs_events(&events_after_first),
+        1,
+        "conda_outputs should be called once for first lock file generation"
+    );
+
+    // Second invocation without changes: Should NOT call backend again (cache hit)
+    let workspace = pixi.workspace().unwrap();
+    let (_lock_file_data, was_updated_no_change) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("Second lock file check should succeed");
+
+    assert!(
+        !was_updated_no_change,
+        "Second invocation without changes should NOT update lock-file"
+    );
+
+    // Verify no additional conda_outputs calls
+    let events_after_second = observer.events();
+    assert_eq!(
+        count_conda_outputs_events(&events_after_second),
+        0,
+        "conda_outputs should NOT be called again when config hasn't changed (cache hit)"
+    );
+
+    // Now change the build configuration (noarch = true -> noarch = false)
+    let source_pixi_toml_v2 = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.build.config]
+noarch = false
+"#;
+    fs::write(source_dir.join("pixi.toml"), source_pixi_toml_v2).unwrap();
+
+    // Third invocation: Should detect config change and call backend again
+    let workspace = pixi.workspace().unwrap();
+    let (_lock_file_data, _was_updated_after_config_change) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("Third lock file generation should succeed");
+
+    // Verify conda_outputs was called again due to config change
+    let events_after_third = observer.events();
+    assert_eq!(
+        count_conda_outputs_events(&events_after_third),
+        1,
+        "conda_outputs should be called again when [package.build.config] changes (cache invalidated)"
+    );
+
+    // Fourth invocation: Should NOT call backend again (cache is now fresh)
+    let workspace = pixi.workspace().unwrap();
+    let (_, was_updated_fourth) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("Fourth lock file check should succeed");
+
+    assert!(
+        !was_updated_fourth,
+        "Fourth invocation should NOT update lock-file (cache is now fresh)"
+    );
+
+    // Verify no additional conda_outputs calls
+    let events_after_fourth = observer.events();
+    assert_eq!(
+        count_conda_outputs_events(&events_after_fourth),
+        0,
+        "conda_outputs should NOT be called again after cache is updated"
     );
 }
