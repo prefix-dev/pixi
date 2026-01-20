@@ -87,6 +87,14 @@ impl LoadedVariantConfig {
             }
         };
 
+        let variant_path = source_dir.join(VARIANTS_CONFIG_FILE);
+        if let Some(recipe_path_parent) = recipe_path.parent()
+            && recipe_path_parent != source_dir
+            && variant_path.is_file()
+        {
+            variant_files.push(variant_path);
+        }
+
         // Add additional variant files
         variant_files.extend(additional_variant_files.map(|p| p.to_path_buf()));
 

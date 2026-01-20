@@ -38,8 +38,9 @@ channels = ["https://prefix.dev/conda-forge"]
 
 The backend expects a rattler-build recipe file in one of these locations (searched in order):
 
-1. `recipe.yaml` or `recipe.yml` in the same directory as the package manifest
-2. `recipe/recipe.yaml` or `recipe/recipe.yml` in a subdirectory of the package manifest
+1. `package.build.config.recipe` if given.
+2. `recipe.yaml` or `recipe.yml` in the same directory as the package manifest
+3. `recipe/recipe.yaml` or `recipe/recipe.yml` in a subdirectory of the package manifest
 
 If the package is defined in the same location as the workspace, it is heavily encouraged to place the recipe file in its own directory `recipe`.
 Learn more about the `rattler-build`, and its recipe format in its [high level overview](https://rattler.build/latest/highlevel).
@@ -97,6 +98,21 @@ Enables experimental features in rattler-build. This is required for certain adv
 ```toml
 [package.build.config]
 experimental = true
+```
+
+Note: This option cannot be set in target-specific configurations. It must be set at the root `[package.build.config]` level only.
+
+### `recipe`
+
+- **Type**: `String` (path)
+- **Default**: checks for `recipe.yaml`, `recipe.yml`, `recipe/recipe.yaml`, `recipe/recipe.yml` in order.
+- **Target Merge Behavior**: Not allowed - must be set at root level only
+
+Path to the recipe YAML file.
+
+```toml
+[package.build.config]
+recipe = "../template/recipe.yaml"
 ```
 
 Note: This option cannot be set in target-specific configurations. It must be set at the root `[package.build.config]` level only.

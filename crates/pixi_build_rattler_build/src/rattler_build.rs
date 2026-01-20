@@ -54,21 +54,30 @@ impl RattlerBuildBackend {
                         .unwrap_or(manifest_path)
                         .to_path_buf()
                 });
-                let recipe_path = manifest_path.parent().and_then(|manifest_dir| {
-                    [
-                        "recipe.yaml",
-                        "recipe.yml",
-                        "recipe/recipe.yaml",
-                        "recipe/recipe.yml",
-                    ]
-                    .into_iter()
-                    .find_map(|relative_path| {
-                        let recipe_path = manifest_dir.join(relative_path);
-                        recipe_path.is_file().then_some(recipe_path)
+                let recipe_path = if let Some(recipe_path_local) = config.recipe.clone() {
+                    if !recipe_path_local.is_absolute() {
+                        source_dir.join(recipe_path_local)
+                    } else {
+                        recipe_path_local
+                    }
+                } else {
+                    manifest_path.parent().and_then(|manifest_dir| {
+                        [
+                            "recipe.yaml",
+                            "recipe.yml",
+                            "recipe/recipe.yaml",
+                            "recipe/recipe.yml",
+                        ]
+                        .into_iter()
+                        .find_map(|relative_path| {
+                            let recipe_path = manifest_dir.join(relative_path);
+                            recipe_path.is_file().then_some(recipe_path)
+                        })
                     })
-                });
+                    .ok_or_else(|| miette::miette!("Could not find a recipe.yaml in the source directory to use as the recipe manifest."))?
+                };
 
-                (recipe_path.ok_or_else(|| miette::miette!("Could not find a recipe.yaml in the source directory to use as the recipe manifest."))?, source_dir)
+                (recipe_path, source_dir)
             }
         };
 

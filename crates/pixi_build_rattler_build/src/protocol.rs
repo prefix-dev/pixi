@@ -928,13 +928,14 @@ numpy:
 
     async fn try_initialize(
         manifest_path: impl AsRef<Path>,
+        config: Option<RattlerBuildBackendConfig>,
     ) -> miette::Result<RattlerBuildBackend> {
         RattlerBuildBackend::new(
             None,
             manifest_path.as_ref(),
             LoggingOutputHandler::default(),
             None,
-            RattlerBuildBackendConfig::default(),
+            config.unwrap_or_default(),
         )
     }
 
@@ -944,7 +945,7 @@ numpy:
         let recipe = tmp.path().join("recipe.yaml");
         fs::write(&recipe, FAKE_RECIPE).unwrap();
         assert_eq!(
-            try_initialize(&tmp.path().join("pixi.toml"))
+            try_initialize(&tmp.path().join("pixi.toml"), None)
                 .await
                 .unwrap()
                 .recipe_source
@@ -952,7 +953,11 @@ numpy:
             recipe
         );
         assert_eq!(
-            try_initialize(&recipe).await.unwrap().recipe_source.path,
+            try_initialize(&recipe, None)
+                .await
+                .unwrap()
+                .recipe_source
+                .path,
             recipe
         );
 
@@ -960,7 +965,7 @@ numpy:
         let recipe = tmp.path().join("recipe.yml");
         fs::write(&recipe, FAKE_RECIPE).unwrap();
         assert_eq!(
-            try_initialize(&tmp.path().join("pixi.toml"))
+            try_initialize(&tmp.path().join("pixi.toml"), None)
                 .await
                 .unwrap()
                 .recipe_source
@@ -968,7 +973,11 @@ numpy:
             recipe
         );
         assert_eq!(
-            try_initialize(&recipe).await.unwrap().recipe_source.path,
+            try_initialize(&recipe, None)
+                .await
+                .unwrap()
+                .recipe_source
+                .path,
             recipe
         );
 
@@ -978,7 +987,7 @@ numpy:
         fs::create_dir(&recipe_dir).unwrap();
         fs::write(&recipe, FAKE_RECIPE).unwrap();
         assert_eq!(
-            try_initialize(&tmp.path().join("pixi.toml"))
+            try_initialize(&tmp.path().join("pixi.toml"), None)
                 .await
                 .unwrap()
                 .recipe_source
@@ -992,12 +1001,30 @@ numpy:
         fs::create_dir(&recipe_dir).unwrap();
         fs::write(&recipe, FAKE_RECIPE).unwrap();
         assert_eq!(
-            try_initialize(&tmp.path().join("pixi.toml"))
+            try_initialize(&tmp.path().join("pixi.toml"), None)
                 .await
                 .unwrap()
                 .recipe_source
                 .path,
             recipe
+        );
+
+        // Test custom recipe path
+        let tmp = tempdir().unwrap();
+        let custom_recipe = tmp.path().join("custom").join("my_recipe.yaml");
+        fs::create_dir_all(custom_recipe.parent().unwrap()).unwrap();
+        fs::write(&custom_recipe, FAKE_RECIPE).unwrap();
+        let config = RattlerBuildBackendConfig {
+            recipe: Some(PathBuf::from("custom/my_recipe.yaml")),
+            ..Default::default()
+        };
+        assert_eq!(
+            try_initialize(&tmp.path().join("pixi.toml"), Some(config))
+                .await
+                .unwrap()
+                .recipe_source
+                .path,
+            custom_recipe
         );
     }
 
