@@ -26,22 +26,20 @@ impl From<&'_ ProjectModel> for ProjectModelHash {
 #[serde(transparent)]
 pub struct ConfigurationHash(u64);
 
+impl Default for ConfigurationHash {
+    fn default() -> Self {
+        // Default is the hash of empty config, for backward compatibility with old caches
+        Self::compute(None, None)
+    }
+}
+
 impl ConfigurationHash {
     /// Computes a hash from the configuration and target configuration.
-    /// Returns `None` if both are empty or not provided.
     pub fn compute(
         config: Option<&serde_json::Value>,
         target_config: Option<&OrderMap<TargetSelector, serde_json::Value>>,
-    ) -> Option<Self> {
-        // Treat None and empty the same - only compute a hash if there's actual configuration
-        let has_config = config.is_some();
-        let has_target_config = target_config.is_some_and(|c| !c.is_empty());
-
-        if !has_config && !has_target_config {
-            return None;
-        }
-
-        // Use empty JSON object for None/empty values to ensure consistent hashing
+    ) -> Self {
+        // Use empty JSON object for None values to ensure consistent hashing
         let empty_json = serde_json::Value::Object(Default::default());
         let empty_target: OrderMap<TargetSelector, serde_json::Value> = OrderMap::default();
 
@@ -58,6 +56,6 @@ impl ConfigurationHash {
                 &StableMap::new(target_config.iter().map(|(k, v)| (k, StableJson::new(v)))),
             )
             .finish(&mut hasher);
-        Some(Self(hasher.finish()))
+        Self(hasher.finish())
     }
 }

@@ -387,7 +387,7 @@ impl BuildBackendMetadataSpec {
         cache_entry: Option<CachedCondaMetadata>,
         build_source_checkout: &SourceCheckout,
         project_model_hash: Option<ProjectModelHash>,
-        configuration_hash: Option<ConfigurationHash>,
+        configuration_hash: ConfigurationHash,
         requested_variants: &Option<BTreeMap<String, Vec<VariantValue>>>,
     ) -> Result<Option<CachedCondaMetadata>, CommandDispatcherError<BuildBackendMetadataError>>
     {
@@ -540,7 +540,7 @@ impl BuildBackendMetadataSpec {
         command_dispatcher: CommandDispatcher,
         build_source_checkout: SourceCheckout,
         project_model_hash: Option<ProjectModelHash>,
-        configuration_hash: Option<ConfigurationHash>,
+        configuration_hash: ConfigurationHash,
         backend: Backend,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {

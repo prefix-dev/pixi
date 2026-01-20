@@ -138,8 +138,8 @@ pub struct CachedCondaMetadata {
     /// The hash of the build configuration (from `[package.build.config]`).
     /// This ensures that changes to the build configuration invalidate the
     /// cache even if the project model hasn't changed.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub configuration_hash: Option<ConfigurationHash>,
+    #[serde(default)]
+    pub configuration_hash: ConfigurationHash,
 
     /// The pinned location of the source code. Although the specification of
     /// where to find the source is part of the `project_model_hash`, the
