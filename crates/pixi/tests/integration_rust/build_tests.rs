@@ -996,7 +996,11 @@ backend = { name = "in-memory", version = "0.1.0" }
 [package.build.config]
 noarch = false
 "#;
-    fs::write(source_dir.join("pixi.toml"), source_pixi_toml_changed_config).unwrap();
+    fs::write(
+        source_dir.join("pixi.toml"),
+        source_pixi_toml_changed_config,
+    )
+    .unwrap();
 
     // Fifth invocation: Should detect config change and call backend again
     let workspace = pixi.workspace().unwrap();
