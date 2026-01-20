@@ -12,6 +12,7 @@ pixi lock [OPTIONS]
 
 - [`--json`](#arg---json) : Output the changes in JSON format
 - [`--check`](#arg---check) : Check if any changes have been made to the lock file. If yes, exit with a non-zero code
+- [`--dry-run`](#arg---dry-run) : Compute the lock file without writing to disk. Implies --no-install
 
 ## Update Options
 
