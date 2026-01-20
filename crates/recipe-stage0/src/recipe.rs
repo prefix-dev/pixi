@@ -717,7 +717,11 @@ impl Display for About {
             "About {{ homepage: {}, license: {}, license_file: {}, summary: {}, description: {}, documentation: {}, repository: {} }}",
             self.homepage.as_ref().into_iter().format(", "),
             self.license.as_ref().into_iter().format(", "),
-            self.license_file.as_ref().into_iter().flatten().format(", "),
+            self.license_file
+                .as_ref()
+                .into_iter()
+                .flatten()
+                .format(", "),
             self.summary.as_ref().into_iter().format(", "),
             self.description.as_ref().into_iter().format(", "),
             self.documentation.as_ref().into_iter().format(", "),
