@@ -838,19 +838,16 @@ async fn test_build_config_change_invalidates_cache() {
     let source_dir = pixi.workspace_path().join("my-package");
     fs::create_dir_all(&source_dir).unwrap();
 
-    // Create the source package manifest with initial build configuration
-    let source_pixi_toml_v1 = r#"
+    // Create the source package manifest WITHOUT any [package.build.config] section
+    let source_pixi_toml_no_config = r#"
 [package]
 name = "my-package"
 version = "1.0.0"
 
 [package.build]
 backend = { name = "in-memory", version = "0.1.0" }
-
-[package.build.config]
-noarch = true
 "#;
-    fs::write(source_dir.join("pixi.toml"), source_pixi_toml_v1).unwrap();
+    fs::write(source_dir.join("pixi.toml"), source_pixi_toml_no_config).unwrap();
 
     // Create the workspace manifest
     let manifest_content = format!(
@@ -868,7 +865,15 @@ my-package = {{ path = "./my-package" }}
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // First invocation: Generate the lock-file
+    // Helper to filter CondaOutputsCalled events
+    fn count_conda_outputs_events(events: &[BackendEvent]) -> usize {
+        events
+            .iter()
+            .filter(|e| matches!(e, BackendEvent::CondaOutputsCalled))
+            .count()
+    }
+
+    // First invocation: Generate the lock-file (no config section)
     let workspace = pixi.workspace().unwrap();
     let (lock_file_data, was_updated) = workspace
         .update_lock_file(pixi_core::UpdateLockFileOptions::default())
@@ -888,14 +893,6 @@ my-package = {{ path = "./my-package" }}
         "Lock file should contain my-package"
     );
 
-    // Helper to filter CondaOutputsCalled events
-    fn count_conda_outputs_events(events: &[BackendEvent]) -> usize {
-        events
-            .iter()
-            .filter(|e| matches!(e, BackendEvent::CondaOutputsCalled))
-            .count()
-    }
-
     // Check that conda_outputs was called once
     let events_after_first = observer.events();
     assert_eq!(
@@ -904,28 +901,91 @@ my-package = {{ path = "./my-package" }}
         "conda_outputs should be called once for first lock file generation"
     );
 
-    // Second invocation without changes: Should NOT call backend again (cache hit)
+    // Now add an EMPTY [package.build.config] section
+    // This should NOT invalidate the cache since empty config hashes the same as no config
+    let source_pixi_toml_empty_config = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.build.config]
+"#;
+    fs::write(source_dir.join("pixi.toml"), source_pixi_toml_empty_config).unwrap();
+
+    // Second invocation with empty config section: Should NOT call backend again (cache hit)
     let workspace = pixi.workspace().unwrap();
-    let (_lock_file_data, was_updated_no_change) = workspace
+    let (_lock_file_data, was_updated_empty_config) = workspace
         .update_lock_file(pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Second lock file check should succeed");
 
     assert!(
-        !was_updated_no_change,
-        "Second invocation without changes should NOT update lock-file"
+        !was_updated_empty_config,
+        "Adding empty [package.build.config] should NOT update lock-file"
     );
 
     // Verify no additional conda_outputs calls
-    let events_after_second = observer.events();
+    let events_after_empty_config = observer.events();
     assert_eq!(
-        count_conda_outputs_events(&events_after_second),
+        count_conda_outputs_events(&events_after_empty_config),
+        0,
+        "conda_outputs should NOT be called when adding empty [package.build.config] (cache hit)"
+    );
+
+    // Now add actual configuration values
+    let source_pixi_toml_with_config = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.build.config]
+noarch = true
+"#;
+    fs::write(source_dir.join("pixi.toml"), source_pixi_toml_with_config).unwrap();
+
+    // Third invocation: Should detect config change and call backend again
+    let workspace = pixi.workspace().unwrap();
+    let (_lock_file_data, _was_updated_after_config_added) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("Third lock file generation should succeed");
+
+    // Verify conda_outputs was called again due to config change
+    let events_after_config_added = observer.events();
+    assert_eq!(
+        count_conda_outputs_events(&events_after_config_added),
+        1,
+        "conda_outputs should be called when [package.build.config] gets actual values (cache invalidated)"
+    );
+
+    // Fourth invocation without changes: Should NOT call backend again (cache hit)
+    let workspace = pixi.workspace().unwrap();
+    let (_lock_file_data, was_updated_no_change) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("Fourth lock file check should succeed");
+
+    assert!(
+        !was_updated_no_change,
+        "Fourth invocation without changes should NOT update lock-file"
+    );
+
+    // Verify no additional conda_outputs calls
+    let events_after_no_change = observer.events();
+    assert_eq!(
+        count_conda_outputs_events(&events_after_no_change),
         0,
         "conda_outputs should NOT be called again when config hasn't changed (cache hit)"
     );
 
     // Now change the build configuration (noarch = true -> noarch = false)
-    let source_pixi_toml_v2 = r#"
+    let source_pixi_toml_changed_config = r#"
 [package]
 name = "my-package"
 version = "1.0.0"
@@ -936,39 +996,39 @@ backend = { name = "in-memory", version = "0.1.0" }
 [package.build.config]
 noarch = false
 "#;
-    fs::write(source_dir.join("pixi.toml"), source_pixi_toml_v2).unwrap();
+    fs::write(source_dir.join("pixi.toml"), source_pixi_toml_changed_config).unwrap();
 
-    // Third invocation: Should detect config change and call backend again
+    // Fifth invocation: Should detect config change and call backend again
     let workspace = pixi.workspace().unwrap();
     let (_lock_file_data, _was_updated_after_config_change) = workspace
         .update_lock_file(pixi_core::UpdateLockFileOptions::default())
         .await
-        .expect("Third lock file generation should succeed");
+        .expect("Fifth lock file generation should succeed");
 
     // Verify conda_outputs was called again due to config change
-    let events_after_third = observer.events();
+    let events_after_config_change = observer.events();
     assert_eq!(
-        count_conda_outputs_events(&events_after_third),
+        count_conda_outputs_events(&events_after_config_change),
         1,
-        "conda_outputs should be called again when [package.build.config] changes (cache invalidated)"
+        "conda_outputs should be called again when [package.build.config] values change (cache invalidated)"
     );
 
-    // Fourth invocation: Should NOT call backend again (cache is now fresh)
+    // Sixth invocation: Should NOT call backend again (cache is now fresh)
     let workspace = pixi.workspace().unwrap();
-    let (_, was_updated_fourth) = workspace
+    let (_, was_updated_sixth) = workspace
         .update_lock_file(pixi_core::UpdateLockFileOptions::default())
         .await
-        .expect("Fourth lock file check should succeed");
+        .expect("Sixth lock file check should succeed");
 
     assert!(
-        !was_updated_fourth,
-        "Fourth invocation should NOT update lock-file (cache is now fresh)"
+        !was_updated_sixth,
+        "Sixth invocation should NOT update lock-file (cache is now fresh)"
     );
 
     // Verify no additional conda_outputs calls
-    let events_after_fourth = observer.events();
+    let events_after_sixth = observer.events();
     assert_eq!(
-        count_conda_outputs_events(&events_after_fourth),
+        count_conda_outputs_events(&events_after_sixth),
         0,
         "conda_outputs should NOT be called again after cache is updated"
     );
