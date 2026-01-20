@@ -1,21 +1,25 @@
 //! See [`BackendSourceBuildSpec`]
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, BinaryHeap},
     fmt::Display,
     path::PathBuf,
+    sync::Arc,
 };
 
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_frontend::{Backend, json_rpc::CommunicationError};
-use pixi_build_types::procedures::conda_build_v1::{
-    CondaBuildV1Dependency, CondaBuildV1DependencyRunExportSource, CondaBuildV1DependencySource,
-    CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Prefix, CondaBuildV1PrefixPackage,
-    CondaBuildV1Result, CondaBuildV1RunExports,
+use pixi_build_types::{
+    VariantValue,
+    procedures::conda_build_v1::{
+        CondaBuildV1Dependency, CondaBuildV1DependencyRunExportSource,
+        CondaBuildV1DependencySource, CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Prefix,
+        CondaBuildV1PrefixPackage, CondaBuildV1Result, CondaBuildV1RunExports,
+    },
 };
-use pixi_record::PinnedSourceSpec;
+use pixi_glob::GlobSet;
 use pixi_spec::{BinarySpec, PixiSpec, SpecConversionError};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, MatchSpec, PackageName, Platform, RepoDataRecord,
@@ -43,8 +47,9 @@ pub struct BackendSourceBuildSpec {
     /// The package that we are building.
     pub package: PackageIdentifier,
 
-    /// The source location of the package that we are building.
-    pub source: PinnedSourceSpec,
+    /// The directory where the source code is located on disk.
+    #[serde(skip)]
+    pub source_dir: PathBuf,
 
     /// The method to use for building the source package.
     pub method: BackendSourceBuildMethod,
@@ -79,10 +84,7 @@ pub struct BackendSourceBuildV1Method {
     pub run_exports: PixiRunExports,
 
     /// The variant to build
-    /// TODO: This should move to the `SourceRecord` in the future. The variant
-    /// is an essential part to identity a particular output of a source
-    /// package.
-    pub variant: BTreeMap<String, String>,
+    pub variant: BTreeMap<String, VariantValue>,
 
     /// The directory where to place the built package. This is used as a hint
     /// for the backend, it may still place the package elsewhere.
@@ -116,7 +118,11 @@ pub struct BackendBuiltSource {
 
     /// The globs that were used as input to the build. Use these for
     /// re-verifying the build.
-    pub input_globs: BTreeSet<String>,
+    pub input_globs: BinaryHeap<String>,
+
+    /// The actual files that matched the globs at build time. This allows
+    /// detecting file deletions and additions.
+    pub input_files: BTreeSet<PathBuf>,
 }
 
 impl BackendSourceBuildSpec {
@@ -130,6 +136,7 @@ impl BackendSourceBuildSpec {
                     self.backend,
                     self.package,
                     params,
+                    self.source_dir,
                     self.work_directory,
                     self.channels,
                     self.channel_config,
@@ -140,10 +147,12 @@ impl BackendSourceBuildSpec {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn build_v1(
         backend: Backend,
         record: PackageIdentifier,
         params: BackendSourceBuildV1Method,
+        source_dir: PathBuf,
         work_directory: PathBuf,
         channels: Vec<ChannelUrl>,
         channel_config: ChannelConfig,
@@ -262,7 +271,7 @@ impl BackendSourceBuildSpec {
                 },
             )
             .await
-            .map_err(BackendSourceBuildError::BuildError)
+            .map_err(BackendSourceBuildError::from)
             .map_err(CommandDispatcherError::Failed)?;
 
         // Make sure that the built package matches the expected output.
@@ -284,8 +293,25 @@ impl BackendSourceBuildSpec {
             ));
         };
 
+        // Compute the files that match the input globs.
+        let glob_set = GlobSet::create(built_package.input_globs.iter().map(String::as_str));
+        let input_files = glob_set
+            .collect_matching(&source_dir)
+            .map_err(BackendSourceBuildError::from)
+            .map_err(CommandDispatcherError::Failed)?
+            .into_iter()
+            .filter_map(|entry| {
+                entry
+                    .into_path()
+                    .strip_prefix(&source_dir)
+                    .ok()
+                    .map(|p| p.to_path_buf())
+            })
+            .collect();
+
         Ok(BackendBuiltSource {
-            input_globs: built_package.input_globs,
+            input_globs: built_package.input_globs.into_iter().collect(),
+            input_files,
             output_file: built_package.output_file,
         })
     }
@@ -353,7 +379,10 @@ fn convert_pixi_spec_to_match_spec(
         Either::Left(source) => source.to_nameless_match_spec(),
         Either::Right(binary) => binary.try_into_nameless_match_spec(channel_config)?,
     };
-    Ok(MatchSpec::from_nameless(nameless_spec, Some(package_name)))
+    Ok(MatchSpec::from_nameless(
+        nameless_spec,
+        Some(package_name.into()),
+    ))
 }
 
 fn convert_binary_spec_to_match_spec(
@@ -362,22 +391,40 @@ fn convert_binary_spec_to_match_spec(
     channel_config: &ChannelConfig,
 ) -> Result<MatchSpec, SpecConversionError> {
     let nameless_spec = spec.try_into_nameless_match_spec(channel_config)?;
-    Ok(MatchSpec::from_nameless(nameless_spec, Some(package_name)))
+    Ok(MatchSpec::from_nameless(
+        nameless_spec,
+        Some(package_name.into()),
+    ))
 }
 
-#[derive(Debug, thiserror::Error, Diagnostic)]
+#[derive(Debug, Clone, thiserror::Error, Diagnostic)]
 pub enum BackendSourceBuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    BuildError(#[from] CommunicationError),
+    BuildError(Arc<CommunicationError>),
 
     #[error(transparent)]
     UnexpectedPackage(UnexpectedPackageError),
+
+    #[error(transparent)]
+    GlobSet(Arc<pixi_glob::GlobSetError>),
+}
+
+impl From<CommunicationError> for BackendSourceBuildError {
+    fn from(err: CommunicationError) -> Self {
+        Self::BuildError(Arc::new(err))
+    }
+}
+
+impl From<pixi_glob::GlobSetError> for BackendSourceBuildError {
+    fn from(err: pixi_glob::GlobSetError) -> Self {
+        Self::GlobSet(Arc::new(err))
+    }
 }
 
 /// An error that can occur when the build backend did not return the expected
 /// package.
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub struct UnexpectedPackageError {
     pub subdir: String,
     pub name: String,

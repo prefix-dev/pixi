@@ -44,10 +44,14 @@ use pixi_manifest::{
     HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
     SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
+use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_lazy_reqwest_clients;
-use pixi_utils::{reqwest::LazyReqwestClient, variants::VariantConfig};
+use pixi_utils::{
+    reqwest::LazyReqwestClient,
+    variants::{VariantConfig, VariantValue},
+};
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, LockedPackageRef};
@@ -202,12 +206,12 @@ impl Workspace {
     /// Constructs a new instance from an internal manifest representation
     pub(crate) fn from_manifests(manifest: Manifests) -> Self {
         let env_vars = Workspace::init_env_vars(&manifest.workspace.value.environments);
-        // Canonicalize the root path
-        let root = &manifest.workspace.provenance.path;
-        let root = dunce::canonicalize(root).unwrap_or(root.to_path_buf());
+        // Get the absolute path of the manifest, preserving symlinks by only
+        // canonicalizing the parent directory
+        let manifest_path = manifest.workspace.provenance.absolute_path();
         // Take the parent after canonicalizing to ensure this works even when the
         // manifest
-        let root = root
+        let root = manifest_path
             .parent()
             .expect("manifest path should always have a parent")
             .to_owned();
@@ -429,7 +433,7 @@ impl Workspace {
     }
 
     /// Returns the environments in this project.
-    pub fn environments(&self) -> Vec<Environment> {
+    pub fn environments(&self) -> Vec<Environment<'_>> {
         self.workspace
             .value
             .environments
@@ -439,7 +443,7 @@ impl Workspace {
     }
 
     /// Returns a HashMap of environments in this project.
-    pub fn named_environments(&self) -> HashMap<EnvironmentName, Environment> {
+    pub fn named_environments(&self) -> HashMap<EnvironmentName, Environment<'_>> {
         self.environments()
             .iter()
             .map(|env| (env.name().clone(), env.clone()))
@@ -451,14 +455,14 @@ impl Workspace {
     pub fn environment_from_name_or_env_var(
         &self,
         name: Option<String>,
-    ) -> miette::Result<Environment> {
+    ) -> miette::Result<Environment<'_>> {
         let environment_name = EnvironmentName::from_arg_or_env_var(name).into_diagnostic()?;
         self.environment(&environment_name)
             .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))
     }
 
     /// Returns all the solve groups in the project.
-    pub(crate) fn solve_groups(&self) -> Vec<SolveGroup> {
+    pub(crate) fn solve_groups(&self) -> Vec<SolveGroup<'_>> {
         self.workspace
             .value
             .solve_groups
@@ -472,7 +476,7 @@ impl Workspace {
 
     /// Returns the solve group with the given name or `None` if no such group
     /// exists.
-    pub(crate) fn solve_group(&self, name: &str) -> Option<SolveGroup> {
+    pub(crate) fn solve_group(&self, name: &str) -> Option<SolveGroup<'_>> {
         self.workspace
             .value
             .solve_groups
@@ -486,7 +490,7 @@ impl Workspace {
     /// Returns the resolved variant configuration for a given platform.
     pub fn variants(&self, platform: Platform) -> Result<VariantConfig, VariantsError> {
         // Get inline variants for all targets
-        let mut variants = BTreeMap::new();
+        let mut variant_configuration: BTreeMap<String, Vec<VariantValue>> = BTreeMap::new();
         // Resolves from most specific to least specific.
         for build_variants in self
             .workspace
@@ -498,7 +502,9 @@ impl Workspace {
         {
             // Update the hash map, but only items that are not already in the map.
             for (key, value) in build_variants {
-                variants.entry(key.clone()).or_insert_with(|| value.clone());
+                variant_configuration
+                    .entry(key.clone())
+                    .or_insert_with(|| value.iter().cloned().map(VariantValue::from).collect());
             }
         }
 
@@ -515,7 +521,7 @@ impl Workspace {
             .collect();
 
         Ok(VariantConfig {
-            variants,
+            variant_configuration,
             variant_files,
         })
     }
@@ -546,8 +552,13 @@ impl Workspace {
     /// Returns a pre-filled command dispatcher builder that can be used to
     /// construct a [`pixi_command_dispatcher::CommandDispatcher`].
     pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
-        let cache_dirs =
-            CacheDirs::new(pixi_config::get_cache_dir()?).with_workspace(self.pixi_dir());
+        let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
+            .expect("cache dir is not absolute")
+            .into_assume_dir();
+        let workspace_dir = AbsPathBuf::new(self.pixi_dir())
+            .expect("pixi dir is not absolute")
+            .into_assume_dir();
+        let cache_dirs = CacheDirs::new(cache_dir).with_workspace(workspace_dir);
 
         // Determine the tool platform to use
         let tool_platform = self.config().tool_platform();
@@ -563,10 +574,14 @@ impl Workspace {
                 vec![]
             };
 
+        let root_dir = AbsPathBuf::new(self.root().to_path_buf())
+            .expect("root dir is not absolute")
+            .into_assume_dir();
+
         Ok(CommandDispatcher::builder()
             .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
-            .with_root_dir(self.root().to_path_buf())
+            .with_root_dir(root_dir)
             .with_download_client(self.authenticated_client()?.clone())
             .with_max_download_concurrency(self.concurrent_downloads_semaphore())
             .with_limits(Limits {
@@ -747,12 +762,12 @@ impl Workspace {
 
     /// Verify the pixi version requirement.
     pub fn verify_current_pixi_meets_requirement(&self) -> Result<(), ExplicitManifestError> {
-        if let Some(ref requires_pixi) = self.workspace.value.workspace.requires_pixi {
-            if !requires_pixi.matches(&Version::from_str(consts::PIXI_VERSION)?) {
-                return Err(ExplicitManifestError::SelfVersionMatchError {
-                    requires_pixi: requires_pixi.clone(),
-                });
-            }
+        if let Some(ref requires_pixi) = self.workspace.value.workspace.requires_pixi
+            && !requires_pixi.matches(&Version::from_str(consts::PIXI_VERSION)?)
+        {
+            return Err(ExplicitManifestError::SelfVersionMatchError {
+                requires_pixi: requires_pixi.clone(),
+            });
         }
         Ok(())
     }
@@ -1292,5 +1307,52 @@ mod tests {
         console::set_colors_enabled(false);
 
         insta::assert_snapshot!(workspace.pypi_name_mapping_source().unwrap_err());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_workspace_root_preserves_symlink_location() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let dotfiles_dir = temp_dir.path().join("dotfiles");
+        let home_dir = temp_dir.path().join("home");
+        fs_err::create_dir_all(&dotfiles_dir).unwrap();
+        fs_err::create_dir_all(&home_dir).unwrap();
+
+        // Real manifest lives inside the dotfiles directory
+        let real_manifest = dotfiles_dir.join("pixi.toml");
+        fs_err::write(
+            &real_manifest,
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = []
+            "#,
+        )
+        .unwrap();
+
+        // Home directory contains a symlink that points at the real manifest
+        let symlink_manifest = home_dir.join("pixi.toml");
+        std::os::unix::fs::symlink(&real_manifest, &symlink_manifest).unwrap();
+
+        // Load workspace from the symlinked manifest path
+        let workspace = Workspace::from_path(&symlink_manifest).unwrap();
+
+        // The workspace root should be the home_dir (where the symlink lives),
+        // NOT the dotfiles_dir (where the real file lives)
+        let canonical_home = dunce::canonicalize(&home_dir).unwrap();
+        assert_eq!(
+            workspace.root(),
+            canonical_home,
+            "workspace root should be relative to symlink location, not the real file location"
+        );
+
+        // The .pixi directory should be created in the home directory
+        let expected_pixi_dir = canonical_home.join(consts::PIXI_DIR);
+        assert_eq!(
+            workspace.pixi_dir(),
+            expected_pixi_dir,
+            ".pixi directory should be in the symlink's parent directory"
+        );
     }
 }

@@ -1,14 +1,16 @@
-site_name: "Pixi by prefix.dev"
+site_name: "Pixi"
 site_url: https://prefix-dev.github.io/pixi
 site_description: Pixi Documentation — Next-gen package manager for reproducible development setups
+repo_url: https://github.com/prefix-dev/pixi/
+edit_uri: edit/main/docs/
 
 theme:
   name: material
   custom_dir: docs/overrides
   favicon: assets/pixi.png
-  logo: assets/pixi.png
+  logo: assets/pixi-logo.svg
   font:
-    text: Red Hat Text
+    text: Inter
     code: JetBrains Mono
 
   palette:
@@ -46,7 +48,7 @@ theme:
     - content.action.edit
     - content.code.annotate
     - content.tooltips
-    - content.code.select
+    #    - content.code.select
     - navigation.instant
     - navigation.instant.progress
     - navigation.tracking
@@ -58,9 +60,6 @@ extra_css:
   - stylesheets/extra.css
 extra_javascript:
   - javascripts/extra.js
-
-repo_url: https://github.com/prefix-dev/pixi/
-edit_uri: edit/main/docs/
 
 markdown_extensions:
   - admonition
@@ -130,6 +129,7 @@ nav:
       - Multi Environment: workspace/multi_environment.md
       - Lock File: workspace/lockfile.md
       - System Requirements: workspace/system_requirements.md
+      - Package Specifications: concepts/package_specifications.md
       - Conda & PyPI: concepts/conda_pypi.md
       - Global Tools:
           - Manifest: global_tools/manifest.md
@@ -144,8 +144,18 @@ nav:
           - Variants: build/variants.md
           - Advanced Building Using rattler-build: build/advanced_cpp.md
       - Dependency Types: build/dependency_types.md
-      - Build Backends: build/backends.md
+      - Build Backends:
+          - Overview: build/backends.md
+          - CMake: build/backends/pixi-build-cmake.md
+          - Python: build/backends/pixi-build-python.md
+          - rattler-build: build/backends/pixi-build-rattler-build.md
+          - ROS: build/backends/pixi-build-ros.md
+          - Rust: build/backends/pixi-build-rust.md
+          - Mojo: build/backends/pixi-build-mojo.md
+      - Key Concepts:
+          - Compilers: build/key_concepts/compilers.md
       - Package Source: build/package_source.md
+      - Dev Packages: build/dev.md
   - Distributing:
       - Pixi Pack: deployment/pixi_pack.md
       - Authentication: deployment/authentication.md
@@ -251,7 +261,11 @@ plugins:
 
   - search:
       separator: '[\s\u200b\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
-  - social
+  - social:
+      cards_layout_dir: docs/layouts
+      cards_layout: custom
+      # Set debug to true to help troubleshoot social card generation issues
+      debug: false
   - mike:
     # These fields are all optional; the defaults are as below...
     # alias_type: symlink
@@ -294,6 +308,7 @@ plugins:
           - global_tools/introduction.md
         Concepts documentation:
           - workspace/*.md
+          - concepts/*.md
           - global_tools/manifest.md
           - global_tools/trampolines.md
         Building documentation:
@@ -309,3 +324,6 @@ plugins:
         Miscellaneous documentation:
           - CHANGELOG.md
           - misc/*.md
+
+watch:
+  - docs/

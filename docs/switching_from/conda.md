@@ -27,7 +27,7 @@ This shift towards workspaces offers a more organized and efficient way to manag
 
 ??? tip "Activating Pixi environment in the current shell"
     For some advanced use-cases, you can activate the environment in the current shell.
-    This uses the `pixi shell-hook` which prints the activation script, which can be used to activate the environment in the current shell without `pixi` itself.
+    This uses the `pixi shell-hook` which prints the activation script, which can be used without `pixi` itself.
     ```shell
     ~/myenv > eval "$(pixi shell-hook)"
     ```
@@ -44,16 +44,19 @@ It manages more than one environment for more than one platform in a single work
 
 `conda` installs all environments in one global location.
 When this is important to you for filesystem reasons, you can use the [detached-environments](../reference/pixi_configuration.md#detached-environments) feature of pixi.
+
 ```shell
 pixi config set detached-environments true
 # or a specific location
 pixi config set detached-environments /path/to/envs
 ```
-This doesn't allow you to activate the environments using `pixi shell -n` but it will make the installation of the environments go to the same folder.
+
+This will make the installation of the environments go to the same folder.
 
 `pixi` does have the `pixi global` command to install tools on your machine. (See [global](../reference/cli/pixi/global.md))
 This is not a replacement for `conda` but works the same as [`pipx`](https://pipx.pypa.io/stable/) and [`condax`](https://mariusvniekerk.github.io/condax/).
 It creates a single isolated environment for the given requirement and installs the binaries into the global path.
+
 ```shell
 pixi global install bat
 bat pixi.toml
@@ -62,7 +65,7 @@ bat pixi.toml
 !!! warn "Never install `pip` with `pixi global`"
     Installations with `pixi global` get their own isolated environment.
     Installing `pip` with `pixi global` will create a new isolated environment with its own `pip` binary.
-    Using that `pip` binary will install packages in the `pip` environment, making it unreachable form anywhere as you can't activate it.
+    Using that `pip` binary will install packages in the `pip` environment, making it unreachable from anywhere as you can't activate it.
 
 
 ## Automated switching
@@ -80,9 +83,10 @@ You can import `environment.yml` files into a Pixi workspace — see our [import
 
 Encountering issues? Here are solutions to some common problems when being used to the `conda` workflow:
 
-- Dependency `is excluded because due to strict channel priority not using this option from: 'https://conda.anaconda.org/conda-forge/'`
+- Dependency `is excluded due to strict channel priority not using this option from: 'https://conda.anaconda.org/conda-forge/'`
   This error occurs when the package is in multiple channels. `pixi` uses a strict channel priority. See [channel priority](../advanced/channel_logic.md) for more information.
 - `pixi global install pip`, pip doesn't work.
   `pip` is installed in the global isolated environment. Use `pixi add pip` in a workspace to install `pip` in the workspace environment and use that workspace.
 - `pixi global install <Any Library>` -> `import <Any Library>` -> `ModuleNotFoundError: No module named '<Any Library>'`
-   The library is installed in the global isolated environment. Use `pixi add <Any Library>` in a workspace to install the library in the workspace environment and use that workspace.
+   The library is installed in the global isolated environment. Use `pixi add <Any Library>` in a workspace
+   to install the library in the workspace environment and use that workspace.

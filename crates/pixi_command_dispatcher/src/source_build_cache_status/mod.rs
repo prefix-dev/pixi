@@ -1,11 +1,10 @@
-use std::{fmt, path::PathBuf};
+use std::{collections::BTreeMap, fmt, path::PathBuf, sync::Arc};
 
-use chrono::Utc;
 use itertools::chain;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_glob::GlobModificationTime;
-use pixi_record::PinnedSourceSpec;
+use pixi_glob::GlobSet;
+use pixi_record::{PinnedSourceSpec, VariantValue};
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use tokio::sync::Mutex;
 use tracing::instrument;
@@ -15,6 +14,7 @@ use crate::{
     PackageIdentifier, SourceCheckoutError,
     build::{
         BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, PackageBuildInputHashBuilder,
+        SourceCodeLocation,
     },
 };
 
@@ -35,7 +35,7 @@ pub struct SourceBuildCacheStatusSpec {
     pub package: PackageIdentifier,
 
     /// Describes the source location of the package to query.
-    pub source: PinnedSourceSpec,
+    pub source: SourceCodeLocation,
 
     /// The channels to use when building source packages.
     pub channels: Vec<ChannelUrl>,
@@ -48,6 +48,10 @@ pub struct SourceBuildCacheStatusSpec {
 
     /// The protocols that are enabled when discovering the build backend.
     pub enabled_protocols: EnabledProtocols,
+
+    /// The specific variant values for this build. Different variants result
+    /// in different cache keys to ensure they are cached separately.
+    pub variants: Option<BTreeMap<String, VariantValue>>,
 }
 
 #[derive(Debug)]
@@ -83,15 +87,15 @@ fn fmt_cached_build_status(
 ) -> fmt::Result {
     write!(f, "{state} {}", build.record.package_record)?;
 
-    if let Some(channel) = &build.record.channel {
-        if !channel.is_empty() {
-            write!(f, " @ {channel}")?;
-            let subdir = build.record.package_record.subdir.as_str();
-            if !subdir.is_empty() {
-                write!(f, "/{subdir}")?;
-            }
-            return Ok(());
+    if let Some(channel) = &build.record.channel
+        && !channel.is_empty()
+    {
+        write!(f, " @ {channel}")?;
+        let subdir = build.record.package_record.subdir.as_str();
+        if !subdir.is_empty() {
+            write!(f, "/{subdir}")?;
         }
+        return Ok(());
     }
 
     let subdir = build.record.package_record.subdir.as_str();
@@ -132,19 +136,16 @@ impl SourceBuildCacheStatusSpec {
             host_platform: self.build_environment.host_platform,
             host_virtual_packages: self.build_environment.host_virtual_packages.clone(),
             build_virtual_packages: self.build_environment.build_virtual_packages.clone(),
+            variants: self.variants.clone(),
         };
         let (cached_build, build_cache_entry) = command_dispatcher
             .build_cache()
-            .entry(&self.source, &build_input)
+            .entry(self.source.manifest_source(), &build_input)
             .await
             .map_err(SourceBuildCacheStatusError::BuildCache)
             .map_err(CommandDispatcherError::Failed)?;
 
         // Check the staleness of the cached entry
-        tracing::debug!(
-            "determining cache status for package '{}' from source build cache",
-            self.package,
-        );
         let cached_build = match cached_build {
             Some(cached_build) => {
                 self.determine_cache_status(&command_dispatcher, cached_build)
@@ -161,7 +162,10 @@ impl SourceBuildCacheStatusSpec {
 
         Ok(SourceBuildCacheEntry {
             cached_build: Mutex::new(cached_build),
-            cache_dir: build_cache_entry.cache_dir().to_path_buf(),
+            cache_dir: build_cache_entry
+                .cache_dir()
+                .to_path_buf()
+                .into_std_path_buf(),
             entry: Mutex::new(build_cache_entry),
         })
     }
@@ -176,13 +180,17 @@ impl SourceBuildCacheStatusSpec {
         let source = &self.source;
 
         // Immutable source records are always considered valid.
-        if source.is_immutable() {
+        if source.source_code().is_immutable() {
             return Ok(CachedBuildStatus::UpToDate(cached_build));
         }
 
         // Check if the project configuration has changed.
         let cached_build = match self
-            .check_package_configuration_changed(command_dispatcher, cached_build, source)
+            .check_package_configuration_changed(
+                command_dispatcher,
+                cached_build,
+                source.manifest_source(),
+            )
             .await?
         {
             CachedBuildStatus::UpToDate(cached_build) | CachedBuildStatus::New(cached_build) => {
@@ -196,7 +204,7 @@ impl SourceBuildCacheStatusSpec {
 
         // Determine if the package is out of date by checking the source
         let cached_build = match self
-            .check_source_out_of_date(command_dispatcher, cached_build, source)
+            .check_source_out_of_date(command_dispatcher, cached_build)
             .await?
         {
             CachedBuildStatus::UpToDate(cached_build) | CachedBuildStatus::New(cached_build) => {
@@ -246,6 +254,7 @@ impl SourceBuildCacheStatusSpec {
                     build_environment: self.build_environment.clone(),
                     channel_config: self.channel_config.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
+                    variants: self.variants.clone(),
                 })
                 .await
                 .try_into_failed()?
@@ -303,7 +312,7 @@ impl SourceBuildCacheStatusSpec {
         &self,
         command_dispatcher: &CommandDispatcher,
         cached_build: CachedBuild,
-        source: &PinnedSourceSpec,
+        manifest_source: &PinnedSourceSpec,
     ) -> Result<CachedBuildStatus, CommandDispatcherError<SourceBuildCacheStatusError>> {
         let Some(source_info) = &cached_build.source else {
             return Ok(CachedBuildStatus::UpToDate(cached_build));
@@ -318,19 +327,19 @@ impl SourceBuildCacheStatusSpec {
 
         // Checkout the source for the package.
         let source_checkout = command_dispatcher
-            .checkout_pinned_source(source.clone())
+            .checkout_pinned_source(manifest_source.clone())
             .await
             .map_err_with(SourceBuildCacheStatusError::SourceCheckout)?;
 
         // Determine the backend parameters for the package.
         let backend = command_dispatcher
             .discover_backend(
-                &source_checkout.path,
+                source_checkout.path.as_std_path(),
                 self.channel_config.clone(),
                 self.enabled_protocols.clone(),
             )
             .await
-            .map_err_with(SourceBuildCacheStatusError::Discovery)?;
+            .map_err_with(|e| SourceBuildCacheStatusError::Discovery(Arc::new(e)))?;
 
         // Compute a hash of the package configuration.
         let package_build_input_hash = PackageBuildInputHashBuilder {
@@ -356,58 +365,79 @@ impl SourceBuildCacheStatusSpec {
         &self,
         command_dispatcher: &CommandDispatcher,
         cached_build: CachedBuild,
-        source: &PinnedSourceSpec,
     ) -> Result<CachedBuildStatus, CommandDispatcherError<SourceBuildCacheStatusError>> {
         // If there are no source globs, we always consider the cached package
         // up-to-date.
-        let Some(source_info) = cached_build.source.as_ref().filter(|p| !p.globs.is_empty()) else {
+        let Some(source_info) = cached_build
+            .source
+            .as_ref()
+            .filter(|p| !p.input_globs.is_empty())
+        else {
             return Ok(CachedBuildStatus::UpToDate(cached_build));
         };
 
         // Checkout the source for the package.
-        let source_checkout = command_dispatcher
-            .checkout_pinned_source(source.clone())
+        let source_build_checkout = command_dispatcher
+            .checkout_pinned_source(self.source.source_code().clone())
             .await
             .map_err_with(SourceBuildCacheStatusError::SourceCheckout)?;
 
-        // Compute the modification time of the files that match the source input globs.
-        let glob_time = match GlobModificationTime::from_patterns(
-            &source_checkout.path,
-            source_info.globs.iter().map(String::as_str),
-        ) {
-            Ok(glob_time) => glob_time,
-            Err(e) => {
-                tracing::warn!(
-                    "failed to determine modification time of input files: {}. Assuming the package is out-of-date.",
-                    e
-                );
-                return Ok(CachedBuildStatus::Stale(cached_build));
-            }
-        };
+        let source_dir = source_build_checkout.path.as_dir_or_file_parent();
+        let timestamp = cached_build.record.package_record.timestamp;
 
-        // Determine the staleness of the package based on the timestamps of the last
-        // updated file and the package itself.
-        match glob_time {
-            GlobModificationTime::MatchesFound {
-                modified_at,
-                designated_file,
-            } => {
-                if cached_build
-                    .record
-                    .package_record
-                    .timestamp
-                    .map(|t| t < chrono::DateTime::<Utc>::from(modified_at))
-                    .unwrap_or(true)
-                {
+        // Check the files that were explicitly recorded at cache time.
+        // This detects file modifications and deletions.
+        for source_file_path in source_info
+            .input_files
+            .iter()
+            .map(|path| source_dir.join(path))
+        {
+            match source_file_path.metadata().and_then(|m| m.modified()) {
+                Ok(modified_date) => {
+                    // Check if the file was modified after the package was built.
+                    let modified_date = chrono::DateTime::<chrono::Utc>::from(modified_date);
+                    let is_stale = timestamp.map(|t| t < modified_date).unwrap_or(true);
+                    if is_stale {
+                        tracing::debug!(
+                            "package is stale, the file '{}' has been modified",
+                            source_file_path.display()
+                        );
+                        return Ok(CachedBuildStatus::Stale(cached_build));
+                    }
+                }
+                Err(err) => {
+                    // File was deleted or is no longer accessible.
                     tracing::debug!(
-                        "package is stale, the file {} is newer than the package in cache",
-                        designated_file.display()
+                        "package is stale, requested metadata for '{}' failed with: {}",
+                        source_file_path.display(),
+                        err
                     );
                     return Ok(CachedBuildStatus::Stale(cached_build));
                 }
-            }
-            GlobModificationTime::NoMatches => {
-                tracing::debug!("package is stale, no files match the source globs",);
+            };
+        }
+
+        // Check if any new files match the globs that weren't recorded at cache time.
+        // This detects file additions.
+        let glob_set = GlobSet::create(source_info.input_globs.iter().map(String::as_str));
+        let matching_files = glob_set
+            .collect_matching(source_dir.as_std_path())
+            .map_err(SourceBuildCacheStatusError::from)
+            .map_err(CommandDispatcherError::Failed)?;
+
+        for matching_file in matching_files {
+            let path = matching_file.into_path();
+            let relative_path = path
+                .strip_prefix(source_dir.as_std_path())
+                .ok()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| path.clone());
+
+            if !source_info.input_files.contains(&relative_path) {
+                tracing::debug!(
+                    "package is stale, a new matching file at '{}' has been detected",
+                    path.display()
+                );
                 return Ok(CachedBuildStatus::Stale(cached_build));
             }
         }
@@ -416,7 +446,7 @@ impl SourceBuildCacheStatusSpec {
     }
 }
 
-#[derive(Debug, thiserror::Error, Diagnostic)]
+#[derive(Debug, Clone, thiserror::Error, Diagnostic)]
 pub enum SourceBuildCacheStatusError {
     #[error(transparent)]
     BuildCache(BuildCacheError),
@@ -427,8 +457,17 @@ pub enum SourceBuildCacheStatusError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Discovery(pixi_build_discovery::DiscoveryError),
+    Discovery(Arc<pixi_build_discovery::DiscoveryError>),
+
+    #[error(transparent)]
+    GlobSet(Arc<pixi_glob::GlobSetError>),
 
     #[error("a cycle was detected in the build/host dependencies of the package")]
     Cycle,
+}
+
+impl From<pixi_glob::GlobSetError> for SourceBuildCacheStatusError {
+    fn from(err: pixi_glob::GlobSetError) -> Self {
+        Self::GlobSet(Arc::new(err))
+    }
 }

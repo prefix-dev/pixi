@@ -1,6 +1,6 @@
 # Basic usage of Pixi
 
-Pixi can do alot of things, but it is designed to be simple to use.
+Pixi can do a lot of things, but it is designed to be simple to use.
 Let's go through the basic usage of Pixi.
 
 ## Managing workspaces
@@ -19,20 +19,22 @@ Let's go through the basic usage of Pixi.
 - [`pixi clean`](./reference/cli/pixi/clean.md) - remove the environment from your machine
 
 ## Managing global installations
-Pixi can manage global installations of tools and environments.
+
+Pixi can manage global installations of tools in global environments.
 It installs the environments in a central location, so you can use them from anywhere.
 
 - [`pixi global install`](./reference/cli/pixi/global/install.md) - install a package into it's own environment in the global space.
 - [`pixi global uninstall`](./reference/cli/pixi/global/uninstall.md) - uninstall an environment from the global space.
-- [`pixi global add`](./reference/cli/pixi/global/add.md) - add a package to an existing globally installed environment.
+- [`pixi global add`](./reference/cli/pixi/global/add.md) - add a package to an existing global environment.
 - [`pixi global sync`](./reference/cli/pixi/global/sync.md) - sync the globally installed environments with the global manifest, describing all the environments you want to install.
 - [`pixi global edit`](./reference/cli/pixi/global/edit.md) - edit the global manifest.
 - [`pixi global update`](./reference/cli/pixi/global/update.md) - update the global environments
-- [`pixi global list`](./reference/cli/pixi/global/list.md) - list all the installed environments
+- [`pixi global list`](./reference/cli/pixi/global/list.md) - list all the global environments
 
 More information: [Global Tools](./global_tools/introduction.md)
 
 ## Running one-off commands
+
 Pixi can run one-off commands in a specific environment.
 
 - [`pixi exec`](./reference/cli/pixi/exec.md) - run a command in a temporary environment.
@@ -47,9 +49,9 @@ Python 3.13.5 | packaged by conda-forge | (main, Jun 16 2025, 08:24:05) [Clang 1
 Python 3.12.11 | packaged by conda-forge | (main, Jun  4 2025, 14:38:53) [Clang 18.1.8 ]
 ```
 
-## Multiple environments
-Pixi workspaces allow you to manage multiple environments.
-An environment is build out of one or multiple features.
+## Multiple Environments
+
+Pixi workspaces allow you to manage multiple environments. An environment is build out of one or multiple features.
 
 - [`pixi add --feature`](./reference/cli/pixi/add.md#arg---feature) - add a package to a feature
 - [`pixi task add --feature`](./reference/cli/pixi/task/add.md#arg---feature) - add a task to a specific feature
@@ -58,9 +60,10 @@ An environment is build out of one or multiple features.
 - [`pixi shell --environment`](./reference/cli/pixi/shell.md#arg---environment) - activate a specific environment
 - [`pixi list --environment`](./reference/cli/pixi/list.md#arg---environment) - list the dependencies in a specific environment
 
-More information: [Multiple environments](./workspace/multi_environment.md)
+More information: [Multiple Environments](./workspace/multi_environment.md)
 
 ## Tasks
+
 Pixi can run cross-platform tasks using it's built-in task runner.
 This can be a predefined task or any normal executable.
 
@@ -68,7 +71,8 @@ This can be a predefined task or any normal executable.
 - [`pixi task add`](./reference/cli/pixi/task/add.md) - Add a new task to the manifest
 
 Tasks can have other tasks as dependencies.
-Here is an example of a more complex task usecase
+Here is an example of a more complex task use case
+
 ```toml title="pixi.toml"
 [tasks]
 build = "make build"
@@ -77,9 +81,11 @@ build = "make build"
 cmd = "pytest"
 depends-on = ["build"]
 ```
+
 More information: [Tasks](./workspace/advanced_tasks.md)
 
 ## Multi platform support
+
 Pixi supports multiple platforms out of the box.
 You can specify which platforms your workspace supports and Pixi will ensure that the dependencies are compatible with those platforms.
 
@@ -89,6 +95,7 @@ You can specify which platforms your workspace supports and Pixi will ensure tha
 More information: [Multi platform support](./workspace/multi_platform_configuration.md)
 
 ## Utilities
+
 Pixi comes with a set of utilities to help you debug or manage your setup.
 
 - [`pixi info`](./reference/cli/pixi/info.md) - Show information about the current workspace, and the global setup.

@@ -5,10 +5,10 @@ mod build_environment;
 pub mod conversion;
 mod dependencies;
 mod move_file;
-pub(crate) mod source_metadata_cache;
+pub mod pin_compatible;
 mod work_dir_key;
 
-use std::hash::{Hash, Hasher};
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 pub use build_cache::{
@@ -21,27 +21,100 @@ pub use dependencies::{
     Dependencies, DependenciesError, DependencySource, KnownEnvironment, PixiRunExports, WithSource,
 };
 pub(crate) use move_file::{MoveError, move_file};
-use pixi_record::PinnedSourceSpec;
+use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec};
+use serde::{Deserialize, Serialize};
 use url::Url;
 pub use work_dir_key::{SourceRecordOrCheckout, WorkDirKey};
 use xxhash_rust::xxh3::Xxh3;
 
 const KNOWN_SUFFIXES: [&str; 3] = [".git", ".tar.gz", ".zip"];
 
+/// Stores the two possible locations for the source code,
+/// in the case of an out-of-tree source build.
+///
+/// Something which looks like:
+/// ```toml
+/// [package.build]
+/// source = { path = "some-path" }
+/// ```
+///
+/// We want to prefer that location for our cache checks
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct SourceCodeLocation {
+    /// The location of the manifest and the possible source code
+    manifest_source: PinnedSourceSpec,
+    /// The location of the source code that should be queried and build
+    build_source: Option<PinnedBuildSourceSpec>,
+}
+
+impl SourceCodeLocation {
+    pub fn new(
+        manifest_source: PinnedSourceSpec,
+        build_source: Option<PinnedBuildSourceSpec>,
+    ) -> Self {
+        Self {
+            manifest_source,
+            build_source,
+        }
+    }
+
+    /// Get the reference to the manifest source
+    pub fn manifest_source(&self) -> &PinnedSourceSpec {
+        &self.manifest_source
+    }
+
+    /// Get the pinned source spec to the actual source code
+    /// This is the normally the path to the manifest_source
+    /// but when set is the path to the build_source
+    pub fn source_code(&self) -> &PinnedSourceSpec {
+        self.build_source
+            .as_ref()
+            .map(PinnedBuildSourceSpec::pinned)
+            .unwrap_or(&self.manifest_source)
+    }
+
+    /// Get the optional explicit build source override.
+    pub fn build_source(&self) -> Option<&PinnedBuildSourceSpec> {
+        self.build_source.as_ref()
+    }
+
+    pub fn as_source_and_alternative_root(&self) -> (&PinnedSourceSpec, Option<&PinnedSourceSpec>) {
+        if let Some(build_source) = &self.build_source {
+            (build_source.pinned(), Some(&self.manifest_source))
+        } else {
+            (&self.manifest_source, None)
+        }
+    }
+}
+
+impl std::fmt::Display for SourceCodeLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "(manifest-src: {}, build-src: {})",
+            self.manifest_source(),
+            self.build_source
+                .as_ref()
+                .map(|build| format!("{build}"))
+                .unwrap_or("undefined".to_string())
+        )
+    }
+}
+
 /// Try to deduce a name from a url.
 fn pretty_url_name(url: &Url) -> String {
-    if let Some(last_segment) = url
-        .path_segments()
-        .and_then(|mut segments| segments.next_back())
-    {
-        // Strip known suffixes
-        for suffix in KNOWN_SUFFIXES {
-            if let Some(segment) = last_segment.strip_suffix(suffix) {
-                return segment.to_string();
+    if let Some(segments) = url.path_segments() {
+        // Collect path segments, filtering out empty ones (e.g., from trailing slashes)
+        let non_empty_segments: Vec<_> = segments.filter(|s| !s.is_empty()).collect();
+
+        if let Some(last_segment) = non_empty_segments.last() {
+            // Strip known suffixes
+            for suffix in KNOWN_SUFFIXES {
+                if let Some(segment) = last_segment.strip_suffix(suffix) {
+                    return segment.to_string();
+                }
             }
-        }
-        if !last_segment.is_empty() {
-            return last_segment.to_string();
+            return (*last_segment).to_string();
         }
     }
 
@@ -49,7 +122,10 @@ fn pretty_url_name(url: &Url) -> String {
         // If the URL has no path segments, we can use the host as a fallback
         host.to_string()
     } else {
-        url.to_string()
+        // Final fallback: use a hash of the URL to avoid invalid path characters
+        let mut hasher = DefaultHasher::new();
+        url.as_str().hash(&mut hasher);
+        URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())
     }
 }
 
@@ -69,8 +145,8 @@ pub(crate) fn source_checkout_cache_key(source: &PinnedSourceSpec) -> String {
         PinnedSourceSpec::Git(git) => {
             let name = pretty_url_name(&git.git);
             let hash = git.source.commit.to_short_string();
-            if let Some(subdir) = &git.source.subdirectory {
-                format!("{name}-{subdir}-{hash}",)
+            if !git.source.subdirectory.is_empty() {
+                format!("{name}-{}-{hash}", git.source.subdirectory)
             } else {
                 format!("{name}-{hash}",)
             }

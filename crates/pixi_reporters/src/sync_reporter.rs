@@ -131,15 +131,13 @@ impl BackendSourceBuildReporter for SyncReporter {
 
         // If the build failed, we want to print the output from the backend.
         let progress_bar = self.multi_progress.clone();
-        if failed {
-            if let Some(mut build_output_receiver) = build_output_receiver {
-                tokio::spawn(async move {
-                    while let Some(line) = build_output_receiver.recv().await {
-                        // Suspend the main progress bar while we print the line.
-                        progress_bar.suspend(|| eprintln!("{line}"));
-                    }
-                });
-            }
+        if failed && let Some(mut build_output_receiver) = build_output_receiver {
+            tokio::spawn(async move {
+                while let Some(line) = build_output_receiver.recv().await {
+                    // Suspend the main progress bar while we print the line.
+                    progress_bar.suspend(|| eprintln!("{line}"));
+                }
+            });
         }
     }
 }
@@ -474,6 +472,24 @@ impl rattler::install::Reporter for InstallReporter {
 
     fn on_link_complete(&self, index: usize) {
         self.combined.lock().on_link_complete(self.id, index)
+    }
+
+    fn on_post_link_start(&self, _package_name: &str, _script_path: &str) -> usize {
+        // Return a dummy index since we don't track post-link scripts
+        0
+    }
+
+    fn on_post_link_complete(&self, _index: usize, _success: bool) {
+        // No-op since we don't track post-link scripts
+    }
+
+    fn on_pre_unlink_start(&self, _package_name: &str, _script_path: &str) -> usize {
+        // Return a dummy index since we don't track pre-unlink scripts
+        0
+    }
+
+    fn on_pre_unlink_complete(&self, _index: usize, _success: bool) {
+        // No-op since we don't track pre-unlink scripts
     }
 
     fn on_transaction_operation_complete(&self, operation: usize) {

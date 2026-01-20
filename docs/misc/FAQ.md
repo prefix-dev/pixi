@@ -1,6 +1,6 @@
 ## What is the difference with `conda`, `mamba`, `poetry`, `pip`
 
-| Tool   | Installs python | Builds packages | Runs predefined tasks | Has lock files builtin | Fast | Use without python                                                     |
+| Tool   | Installs Python | Builds packages | Runs predefined tasks | Has lock files builtin | Fast | Use without python                                                     |
 |--------|-----------------|-----------------|-----------------------|-----------------------|------|------------------------------------------------------------------------|
 | Conda  | ✅               | ❌               | ❌                     | ❌                     | ❌    | ❌                                                                      |
 | Mamba  | ✅               | ❌               | ❌                     | ❌                     | ✅    | [✅](https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html) |
@@ -27,6 +27,7 @@ We think the name sparks curiosity and fun, if you don't agree, I'm sorry, but y
     ```
 
 ## Where is `pixi build`
+
 **TL;DR**: It's coming we promise!
 
 `pixi build` is going to be the subcommand that can generate a conda package out of a Pixi workspace.

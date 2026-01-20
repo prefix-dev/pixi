@@ -62,9 +62,11 @@ impl WorkDirKey {
             SourceRecordOrCheckout::Record { package_name, .. } => {
                 Some(package_name.as_normalized())
             }
-            SourceRecordOrCheckout::Checkout { checkout } => {
-                checkout.path.file_name().and_then(OsStr::to_str)
-            }
+            SourceRecordOrCheckout::Checkout { checkout } => checkout
+                .path
+                .as_std_path()
+                .file_name()
+                .and_then(OsStr::to_str),
         };
 
         match name {
@@ -73,7 +75,7 @@ impl WorkDirKey {
         }
     }
 
-    pub fn variant_key(variant_key: &BTreeMap<String, String>) -> String {
+    pub fn variant_key(variant_key: &BTreeMap<String, impl Hash>) -> String {
         let mut hasher = Xxh3::new();
         for (key, value) in variant_key {
             key.hash(&mut hasher);

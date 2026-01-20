@@ -1,20 +1,24 @@
 use std::str::FromStr;
 
+use pep508_rs::MarkerTree;
 use pixi_cli::cli_config::GitRev;
 use pixi_consts::consts;
 use pixi_core::{DependencyType, Workspace};
 use pixi_manifest::{FeaturesExt, SpecType};
-use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName, VersionOrStar};
+use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{PackageName, Platform};
 use tempfile::TempDir;
 use url::Url;
 
+use pixi_build_backend_passthrough::PassthroughBackend;
+use pixi_build_frontend::BackendOverride;
+
 use crate::common::{
     LockFileExt, PixiControl,
     builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig},
-    package_database::{Package, PackageDatabase},
 };
 use crate::setup_tracing;
+use pixi_test_utils::{GitRepoFixture, MockRepoData, Package};
 
 /// Test add functionality for different types of packages.
 /// Run, dev, build
@@ -22,7 +26,7 @@ use crate::setup_tracing;
 async fn add_functionality() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package `foo` that depends on `bar` both set to version 1.
     package_database.add_package(Package::build("rattler", "1").finish());
@@ -89,19 +93,19 @@ async fn add_with_channel() {
 
     let pixi = PixiControl::new().unwrap();
 
-    pixi.init().no_fast_prefix_overwrite(true).await.unwrap();
+    pixi.init().await.unwrap();
 
-    pixi.add("https://prefix.dev/conda-forge::py_rattler")
+    pixi.add("https://prefix.dev/conda-forge::_openmp_mutex")
         .with_install(false)
         .with_frozen(true)
         .await
         .unwrap();
 
     pixi.project_channel_add()
-        .with_channel("https://conda.anaconda.org/conda-forge")
+        .with_channel("https://prefix.dev/robostack-kilted")
         .await
         .unwrap();
-    pixi.add("https://conda.anaconda.org/conda-forge::_r-mutex")
+    pixi.add("https://prefix.dev/robostack-kilted::ros2-distro-mutex")
         .with_install(false)
         .await
         .unwrap();
@@ -113,17 +117,17 @@ async fn add_with_channel() {
         .into_specs();
 
     let (name, spec) = specs.next().unwrap();
-    assert_eq!(name, PackageName::try_from("py_rattler").unwrap());
+    assert_eq!(name, PackageName::try_from("_openmp_mutex").unwrap());
     assert_eq!(
         spec.into_detailed().unwrap().channel.unwrap().as_str(),
         "https://prefix.dev/conda-forge"
     );
 
     let (name, spec) = specs.next().unwrap();
-    assert_eq!(name, PackageName::try_from("_r-mutex").unwrap());
+    assert_eq!(name, PackageName::try_from("ros2-distro-mutex").unwrap());
     assert_eq!(
         spec.into_detailed().unwrap().channel.unwrap().as_str(),
-        "conda-forge"
+        "https://prefix.dev/robostack-kilted"
     );
 }
 
@@ -133,7 +137,7 @@ async fn add_with_channel() {
 async fn add_functionality_union() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package `foo` that depends on `bar` both set to version 1.
     package_database.add_package(Package::build("rattler", "1").finish());
@@ -213,7 +217,7 @@ async fn add_functionality_union() {
 async fn add_functionality_os() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package `foo` that depends on `bar` both set to version 1.
     package_database.add_package(
@@ -251,20 +255,75 @@ async fn add_functionality_os() {
     ));
 }
 
-/// Test the `pixi add --pypi` functionality
+/// Test the `pixi add --pypi` functionality (using local mocks)
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_pypi_functionality() {
+    use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
+
     setup_tracing();
+
+    // Create local git fixtures for pypi git packages
+    let boltons_fixture = GitRepoFixture::new("pypi-boltons");
+    let httpx_fixture = GitRepoFixture::new("pypi-httpx");
+    let isort_fixture = GitRepoFixture::new("pypi-isort");
+
+    // Create local PyPI index with test packages
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("pipx", "1.7.1"))
+        .with(
+            PyPIPackage::new("pytest", "8.3.2").with_requires_dist(["mock; extra == \"dev\""]), // dev extra requires mock
+        )
+        .with(PyPIPackage::new("mock", "5.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    // Create a separate flat index for direct wheel URL testing
+    let pytest_wheel = PyPIDatabase::new()
+        .with(PyPIPackage::new("pytest", "8.2.0"))
+        .into_flat_index()
+        .unwrap();
+    let pytest_wheel_url = pytest_wheel
+        .url()
+        .join("pytest-8.2.0-py3-none-any.whl")
+        .unwrap();
+
+    // Create local conda channel with Python for multiple platforms
+    let mut package_db = MockRepoData::default();
+    for platform in [Platform::current(), Platform::Linux64, Platform::Osx64] {
+        package_db.add_package(
+            Package::build("python", "3.12.0")
+                .with_subdir(platform)
+                .finish(),
+        );
+    }
+    let channel = package_db.into_channel().await.unwrap();
 
     let pixi = PixiControl::new().unwrap();
 
-    pixi.init().await.unwrap();
+    pixi.init()
+        .without_channels()
+        .with_local_channel(channel.url().to_file_path().unwrap())
+        .with_platforms(vec![
+            Platform::current(),
+            Platform::Linux64,
+            Platform::Osx64,
+        ])
+        .await
+        .unwrap();
+
+    // Add pypi-options to the manifest
+    let manifest = pixi.manifest_contents().unwrap();
+    let updated_manifest = format!(
+        "{}\n[pypi-options]\nindex-url = \"{}\"\n",
+        manifest,
+        pypi_index.index_url()
+    );
+    pixi.update_manifest(&updated_manifest).unwrap();
 
     // Add python
     pixi.add("python~=3.12.0")
         .set_type(DependencyType::CondaDependency(SpecType::Run))
-        .with_install(false)
         .await
         .unwrap();
 
@@ -272,23 +331,24 @@ async fn add_pypi_functionality() {
     // without installing should succeed
     pixi.add("pipx==1.7.1")
         .set_type(DependencyType::PypiDependency)
-        .with_install(false)
         .await
         .unwrap();
 
-    // Add a pypi package to a target with short hash
-    pixi.add("boltons @ git+https://github.com/mahmoud/boltons.git@d463c60")
-        .set_type(DependencyType::PypiDependency)
-        .with_install(true)
-        .set_platforms(&[Platform::Osx64])
-        .await
-        .unwrap();
+    // Add a pypi package to a target with short hash (using local git fixture)
+    let boltons_short_commit = &boltons_fixture.first_commit()[..7];
+    pixi.add(&format!(
+        "boltons @ git+{}@{}",
+        boltons_fixture.base_url, boltons_short_commit
+    ))
+    .set_type(DependencyType::PypiDependency)
+    .set_platforms(&[Platform::Osx64])
+    .await
+    .unwrap();
 
     // Add a pypi package to a target with extras
     pixi.add("pytest[dev]==8.3.2")
         .set_type(DependencyType::PypiDependency)
         .set_platforms(&[Platform::Linux64])
-        .with_install(true)
         .await
         .unwrap();
 
@@ -332,25 +392,28 @@ async fn add_pypi_functionality() {
         pep508_rs::Requirement::from_str("mock").unwrap(),
     ));
 
-    // Add a pypi package with a git url
-    pixi.add("httpx @ git+https://github.com/encode/httpx.git")
+    // Add a pypi package with a git url (using local fixture)
+    pixi.add(&format!("httpx @ git+{}", httpx_fixture.base_url))
         .set_type(DependencyType::PypiDependency)
         .set_platforms(&[Platform::Linux64])
-        .with_install(true)
         .await
         .unwrap();
 
-    pixi.add("isort @ git+https://github.com/PyCQA/isort@c655831799765e9593989ee12faba13b6ca391a5")
-        .set_type(DependencyType::PypiDependency)
-        .set_platforms(&[Platform::Linux64])
-        .with_install(true)
-        .await
-        .unwrap();
+    // Add with specific commit (using local fixture)
+    let isort_commit = isort_fixture.first_commit();
+    pixi.add(&format!(
+        "isort @ git+{}@{}",
+        isort_fixture.base_url, isort_commit
+    ))
+    .set_type(DependencyType::PypiDependency)
+    .set_platforms(&[Platform::Linux64])
+    .await
+    .unwrap();
 
-    pixi.add("pytest @ https://github.com/pytest-dev/pytest/releases/download/8.2.0/pytest-8.2.0-py3-none-any.whl")
+    // Add pytest from direct wheel URL (using local wheel file)
+    pixi.add(&format!("pytest @ {pytest_wheel_url}"))
         .set_type(DependencyType::PypiDependency)
         .set_platforms(&[Platform::Linux64])
-        .with_install(true)
         .await
         .unwrap();
 
@@ -372,33 +435,60 @@ async fn add_pypi_functionality() {
     ));
 }
 
-/// Test the `pixi add --pypi` functionality with extras
+/// Test the `pixi add --pypi` functionality with extras (using local mocks)
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_pypi_extra_functionality() {
+    use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
+
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
-
-    pixi.init().await.unwrap();
-
-    // Add python
-    pixi.add("python")
-        .set_type(DependencyType::CondaDependency(SpecType::Run))
-        .with_install(false)
-        .await
+    // Create local PyPI index with black package (multiple versions, with cli extra)
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("black", "24.8.0"))
+        .with(PyPIPackage::new("black", "24.7.0"))
+        .with(PyPIPackage::new("click", "8.0.0")) // cli extra dependency
+        .into_simple_index()
         .unwrap();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    let channel_url = channel.url();
+    let index_url = pypi_index.index_url();
+    let platform = Platform::current();
+
+    // Create manifest with local channel and pypi index
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+[workspace]
+name = "test-pypi-extras"
+channels = ["{channel_url}"]
+platforms = ["{platform}"]
+conda-pypi-map = {{}} # disable mapping
+
+[dependencies]
+python = "==3.12.0"
+
+[pypi-options]
+index-url = "{index_url}"
+"#
+    ))
+    .unwrap();
 
     pixi.add("black")
         .set_type(DependencyType::PypiDependency)
-        .with_install(true)
         .await
         .unwrap();
 
     // Add dep with extra
     pixi.add("black[cli]")
         .set_type(DependencyType::PypiDependency)
-        .with_install(true)
         .await
         .unwrap();
 
@@ -420,7 +510,6 @@ async fn add_pypi_extra_functionality() {
     // Remove extras
     pixi.add("black")
         .set_type(DependencyType::PypiDependency)
-        .with_install(true)
         .await
         .unwrap();
 
@@ -439,7 +528,6 @@ async fn add_pypi_extra_functionality() {
     // Add dep with extra and version
     pixi.add("black[cli]==24.8.0")
         .set_type(DependencyType::PypiDependency)
-        .with_install(true)
         .await
         .unwrap();
 
@@ -453,10 +541,13 @@ async fn add_pypi_extra_functionality() {
             if name == PypiPackageName::from_str("black").unwrap() {
                 assert_eq!(
                     spec,
-                    PixiPypiSpec::Version {
-                        version: VersionOrStar::from_str("==24.8.0").unwrap(),
+                    PixiPypiSpec {
                         extras: vec![pep508_rs::ExtraName::from_str("cli").unwrap()],
-                        index: None
+                        source: PixiPypiSource::Registry {
+                            version: VersionOrStar::from_str("==24.8.0").unwrap(),
+                            index: None,
+                        },
+                        env_markers: MarkerTree::default(),
                     }
                 );
             }
@@ -465,7 +556,10 @@ async fn add_pypi_extra_functionality() {
 
 /// Test the sdist support for pypi packages
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "slow_integration_tests"), not(feature = "online_tests")),
+    ignore
+)]
 async fn add_sdist_functionality() {
     setup_tracing();
 
@@ -476,7 +570,6 @@ async fn add_sdist_functionality() {
     // Add python
     pixi.add("python")
         .set_type(DependencyType::CondaDependency(SpecType::Run))
-        .with_install(true)
         .await
         .unwrap();
 
@@ -493,7 +586,7 @@ async fn add_unconstrained_dependency() {
     setup_tracing();
 
     // Create a channel with a single package
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("foobar", "1").finish());
     package_database.add_package(Package::build("bar", "1").finish());
     let local_channel = package_database.into_channel().await.unwrap();
@@ -548,7 +641,7 @@ async fn pinning_dependency() {
     setup_tracing();
 
     // Create a channel with a single package
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("foobar", "1").finish());
     package_database.add_package(Package::build("python", "3.13").finish());
 
@@ -619,7 +712,7 @@ async fn add_dependency_pinning_strategy() {
     setup_tracing();
 
     // Create a channel with two packages
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("foo", "1").finish());
     package_database.add_package(Package::build("bar", "1").finish());
     package_database.add_package(Package::build("python", "3.13").finish());
@@ -687,11 +780,14 @@ async fn add_dependency_pinning_strategy() {
     assert_eq!(bar_spec, r#"">=1,<2""#);
 }
 
-/// Test adding a git dependency with a specific branch
+/// Test adding a git dependency with a specific branch (using local fixture)
 #[tokio::test]
-#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_git_deps() {
     setup_tracing();
+
+    // Create local git fixture with passthrough backend
+    let fixture = GitRepoFixture::new("conda-build-package");
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
 
     let pixi = PixiControl::from_manifest(
         r#"
@@ -702,11 +798,12 @@ platforms = ["win-64"]
 preview = ['pixi-build']
 "#,
     )
-    .unwrap();
+    .unwrap()
+    .with_backend_override(backend_override);
 
-    // Add a package
+    // Add a package using local git fixture URL
     pixi.add("boost-check")
-        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
+        .with_git_url(fixture.base_url.clone())
         .with_git_rev(GitRev::new().with_branch("main".to_string()))
         .with_git_subdir("boost-check".to_string())
         .await
@@ -720,23 +817,19 @@ preview = ['pixi-build']
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
+    let location = git_package
+        .unwrap()
+        .as_conda()
+        .unwrap()
+        .location()
+        .to_string();
+
     insta::with_settings!({filters => vec![
-        (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+        (r"file://[^?#]+", "file://[TEMP_PATH]"),
+        (r"#[a-f0-9]+", "#[COMMIT]"),
     ]}, {
-        insta::assert_snapshot!(git_package.unwrap().as_conda().unwrap().location());
-
+        insta::assert_snapshot!(location, @"git+file://[TEMP_PATH]?subdirectory=boost-check&branch=main#[COMMIT]");
     });
-
-    // Check the manifest itself
-    insta::assert_snapshot!(
-        pixi.workspace()
-            .unwrap()
-            .workspace
-            .provenance
-            .read()
-            .unwrap()
-            .into_inner()
-    );
 }
 
 /// Test adding git dependencies with credentials
@@ -797,11 +890,14 @@ preview = ['pixi-build']
     );
 }
 
-/// Test adding a git dependency with a specific commit
+/// Test adding a git dependency with a specific commit (using local fixture)
 #[tokio::test]
-#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_git_with_specific_commit() {
     setup_tracing();
+
+    // Create local git fixture with passthrough backend
+    let fixture = GitRepoFixture::new("conda-build-package");
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
 
     let pixi = PixiControl::from_manifest(
         r#"
@@ -811,12 +907,16 @@ channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64"]
 preview = ['pixi-build']"#,
     )
-    .unwrap();
+    .unwrap()
+    .with_backend_override(backend_override);
 
-    // Add a package
+    // Add a package using the first commit from our fixture
+    let first_commit = fixture.first_commit().to_string();
+    let short_commit = &first_commit[..7]; // Use short hash like the original test
+
     pixi.add("boost-check")
-        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
-        .with_git_rev(GitRev::new().with_rev("8a1d9b9".to_string()))
+        .with_git_url(fixture.base_url.clone())
+        .with_git_rev(GitRev::new().with_rev(short_commit.to_string()))
         .with_git_subdir("boost-check".to_string())
         .await
         .unwrap();
@@ -830,30 +930,31 @@ preview = ['pixi-build']"#,
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
+    let location = git_package
+        .unwrap()
+        .as_conda()
+        .unwrap()
+        .location()
+        .to_string();
+
     insta::with_settings!({filters => vec![
-        (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+        (r"file://[^?#]+", "file://[TEMP_PATH]"),
+        (r"rev=[a-f0-9]+", "rev=[SHORT_COMMIT]"),
+        (r"#[a-f0-9]+", "#[FULL_COMMIT]"),
     ]}, {
-        insta::assert_snapshot!(git_package.unwrap().as_conda().unwrap().location());
-
+        insta::assert_snapshot!(location, @"git+file://[TEMP_PATH]?subdirectory=boost-check&rev=[SHORT_COMMIT]#[FULL_COMMIT]");
     });
-
-    // Check the manifest itself
-    insta::assert_snapshot!(
-        pixi.workspace()
-            .unwrap()
-            .workspace
-            .provenance
-            .read()
-            .unwrap()
-            .into_inner()
-    );
 }
 
-/// Test adding a git dependency with a specific tag
+/// Test adding a git dependency with a specific tag (using local fixture)
 #[tokio::test]
-#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_git_with_tag() {
     setup_tracing();
+
+    // Create local git fixture with passthrough backend
+    // The fixture creates a tag "v0.1.0" for the second commit
+    let fixture = GitRepoFixture::new("conda-build-package");
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
 
     let pixi = PixiControl::from_manifest(
         r#"
@@ -863,14 +964,15 @@ channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64"]
 preview = ['pixi-build']"#,
     )
-    .unwrap();
+    .unwrap()
+    .with_backend_override(backend_override);
 
-    // Add a package
+    // Add a package using the tag from our fixture
+    let tag_commit = fixture.tag_commit("v0.1.0").to_string();
+
     pixi.add("boost-check")
-        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
-        .with_git_rev(
-            GitRev::new().with_rev("8a1d9b9b1755825165a615d563966aaa59a5361c".to_string()),
-        )
+        .with_git_url(fixture.base_url.clone())
+        .with_git_rev(GitRev::new().with_tag("v0.1.0".to_string()))
         .with_git_subdir("boost-check".to_string())
         .await
         .unwrap();
@@ -884,22 +986,24 @@ preview = ['pixi-build']"#,
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
+    let location = git_package
+        .unwrap()
+        .as_conda()
+        .unwrap()
+        .location()
+        .to_string();
+
     insta::with_settings!({filters => vec![
-        (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
-        (r"rev=([a-f0-9]+)", "rev=[REV]"),
+        (r"file://[^?#]+", "file://[TEMP_PATH]"),
+        (r"#[a-f0-9]+", "#[COMMIT]"),
     ]}, {
-        insta::assert_snapshot!(git_package.unwrap().as_conda().unwrap().location());
+        insta::assert_snapshot!(location, @"git+file://[TEMP_PATH]?subdirectory=boost-check&tag=v0.1.0#[COMMIT]");
     });
 
-    // Check the manifest itself
-    insta::assert_snapshot!(
-        pixi.workspace()
-            .unwrap()
-            .workspace
-            .provenance
-            .read()
-            .unwrap()
-            .into_inner()
+    // Verify the commit hash matches the tag's commit
+    assert!(
+        location.ends_with(&format!("#{tag_commit}")),
+        "Expected tag to resolve to commit {tag_commit}, got {location}"
     );
 }
 
@@ -1071,7 +1175,7 @@ async fn add_dependency_dont_create_project() {
     setup_tracing();
 
     // Create a channel with two packages
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("foo", "1").finish());
     package_database.add_package(Package::build("bar", "1").finish());
     package_database.add_package(Package::build("python", "3.13").finish());

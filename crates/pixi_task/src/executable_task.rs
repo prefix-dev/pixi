@@ -128,12 +128,25 @@ impl<'p> ExecutableTask<'p> {
         &self.args
     }
 
+    /// Creates a properly populated `TaskRenderContext` for this task.
+    ///
+    /// This includes the platform, environment name, manifest path, and arguments.
+    pub fn render_context(&self) -> pixi_manifest::task::TaskRenderContext<'_> {
+        pixi_manifest::task::TaskRenderContext {
+            platform: self.run_environment.best_platform(),
+            environment_name: self.run_environment.name(),
+            manifest_path: Some(&self.workspace.workspace.provenance.path),
+            args: Some(&self.args),
+        }
+    }
+
     /// Returns the task as script
     fn as_script(&self) -> Result<Option<String>, FailedToParseShellScript> {
         // Convert the task into an executable string
+        let context = self.render_context();
         let task = self
             .task
-            .as_single_command(Some(&self.args))
+            .as_single_command(&context)
             .map_err(FailedToParseShellScript::ArgumentReplacement)?;
         if let Some(task) = task {
             // Get the export specific environment variables
@@ -207,17 +220,18 @@ impl<'p> ExecutableTask<'p> {
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
     pub fn full_command(&self) -> Result<Option<String>, TemplateStringError> {
+        let context = self.render_context();
         let original_cmd = self
             .task
-            .as_single_command(Some(&self.args))?
+            .as_single_command(&context)?
             .map(|c| c.into_owned());
 
         if let Some(mut cmd) = original_cmd {
-            if let ArgValues::FreeFormArgs(additional_args) = &self.args {
-                if !additional_args.is_empty() {
-                    cmd.push(' ');
-                    cmd.push_str(&additional_args.join(" "));
-                }
+            if let ArgValues::FreeFormArgs(additional_args) = &self.args
+                && !additional_args.is_empty()
+            {
+                cmd.push(' ');
+                cmd.push_str(&additional_args.join(" "));
             }
             Ok(Some(cmd))
         } else {
@@ -305,41 +319,44 @@ impl<'p> ExecutableTask<'p> {
     pub fn warn_on_missing_globs(&self, post_hash: &TaskHash) {
         let (rendered_inputs, rendered_outputs) = match self.task().as_execute() {
             Ok(exe) => {
+                let context = self.render_context();
                 let ins = exe
                     .inputs
                     .as_ref()
-                    .map(|p| p.render(Some(self.args())).unwrap_or_default());
+                    .map(|p| p.render(&context).unwrap_or_default());
                 let outs = exe
                     .outputs
                     .as_ref()
-                    .map(|p| p.render(Some(self.args())).unwrap_or_default());
+                    .map(|p| p.render(&context).unwrap_or_default());
                 (ins, outs)
             }
             Err(_) => (None, None),
         };
 
         // Outputs warning
-        if rendered_outputs.is_some() && post_hash.outputs.is_none() {
-            if let Some(globs) = rendered_outputs.as_ref() {
-                tracing::warn!(
-                    "No files matched the output globs for task '{}'",
-                    self.name().unwrap_or_default()
-                );
-                let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
-                tracing::warn!("Output globs: {}", formatted);
-            }
+        if rendered_outputs.is_some()
+            && post_hash.outputs.is_none()
+            && let Some(globs) = rendered_outputs.as_ref()
+        {
+            tracing::warn!(
+                "No files matched the output globs for task '{}'",
+                self.name().unwrap_or_default()
+            );
+            let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
+            tracing::warn!("Output globs: {}", formatted);
         }
 
         // Inputs warning
-        if rendered_inputs.is_some() && post_hash.inputs.is_none() {
-            if let Some(globs) = rendered_inputs.as_ref() {
-                tracing::warn!(
-                    "No files matched the input globs for task '{}'",
-                    self.name().unwrap_or_default()
-                );
-                let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
-                tracing::warn!("Input globs: {}", formatted);
-            }
+        if rendered_inputs.is_some()
+            && post_hash.inputs.is_none()
+            && let Some(globs) = rendered_inputs.as_ref()
+        {
+            tracing::warn!(
+                "No files matched the input globs for task '{}'",
+                self.name().unwrap_or_default()
+            );
+            let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
+            tracing::warn!("Input globs: {}", formatted);
         }
     }
 
@@ -429,7 +446,8 @@ struct ExecutableTaskConsoleDisplay<'p, 't> {
 
 impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self.task.task.as_single_command(Some(&self.task.args)) {
+        let context = self.task.render_context();
+        match self.task.task.as_single_command(&context) {
             Ok(command) => {
                 write!(
                     f,
@@ -438,14 +456,14 @@ impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
                         .apply_to(command.as_deref().unwrap_or("<alias>"))
                         .bold()
                 )?;
-                if let ArgValues::FreeFormArgs(additional_args) = &self.task.args {
-                    if !additional_args.is_empty() {
-                        write!(
-                            f,
-                            " {}",
-                            consts::TASK_STYLE.apply_to(additional_args.iter().format(" "))
-                        )?;
-                    }
+                if let ArgValues::FreeFormArgs(additional_args) = &self.task.args
+                    && !additional_args.is_empty()
+                {
+                    write!(
+                        f,
+                        " {}",
+                        consts::TASK_STYLE.apply_to(additional_args.iter().format(" "))
+                    )?;
                 }
                 Ok(())
             }

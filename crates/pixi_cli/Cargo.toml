@@ -8,43 +8,21 @@ readme.workspace = true
 repository.workspace = true
 version = "0.1.0"
 
-[features]
-default = []
-native-tls = [
-  "reqwest/native-tls",
-  "reqwest/native-tls-alpn",
-  "pixi_api/native-tls",
-  "rattler/native-tls",
-  "pixi_utils/native-tls",
-]
-# run tests connecting to remote Internet services
-online_tests = []
-rustls-tls = [
-  "reqwest/rustls-tls",
-  "reqwest/rustls-tls-native-roots",
-  "pixi_api/rustls-tls",
-  "rattler/rustls-tls",
-  "pixi_utils/rustls-tls",
-]
-self_update = ["pixi_core/self_update"]
-slow_integration_tests = []
-tokio-console = ["console-subscriber", "tokio/tracing"]
-
-
 [dependencies]
 ahash = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = [
+  "color",
   "derive",
+  "env",
+  "error-context",
+  "std",
   "usage",
   "wrap_help",
-  "std",
-  "color",
-  "error-context",
-  "env",
 ] }
 clap_complete = { workspace = true }
 clap_complete_nushell = { workspace = true }
+comfy-table = { workspace = true, features = ["custom_styling"] }
 console = { workspace = true, features = ["windows-console-colors"] }
 console-subscriber = { workspace = true, optional = true }
 ctrlc = { workspace = true }
@@ -55,15 +33,16 @@ fancy_display = { workspace = true }
 flate2 = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
 futures = { workspace = true }
-human_bytes = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 indicatif = { workspace = true }
 is_executable = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
+miette-arborium = { version = "2.5.0", features = ["lang-toml"] }
 pathdiff = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_api = { workspace = true }
+pixi_auth = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
 pixi_config = { workspace = true }
@@ -73,6 +52,7 @@ pixi_diff = { workspace = true }
 pixi_git = { workspace = true }
 pixi_global = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
+pixi_path = { workspace = true }
 pixi_progress = { workspace = true }
 pixi_pypi_spec = { workspace = true }
 pixi_record = { workspace = true }
@@ -85,11 +65,11 @@ pixi_uv_conversions = { workspace = true }
 pypi_modifiers = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
-rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_networking = { workspace = true, default-features = false }
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
+rattler_upload = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [
@@ -131,7 +111,28 @@ insta = { workspace = true, features = ["filters"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }
-nix = { workspace = true, features = ["poll", "term"] }
 pixi_pty = { path = "../pixi_pty" }
-sha2 = { workspace = true, features = ["asm"] }
-signal-hook = { workspace = true }
+
+[features]
+default = []
+native-tls = [
+  "pixi_api/native-tls",
+  "pixi_auth/native-tls",
+  "pixi_utils/native-tls",
+  "rattler/native-tls",
+  "reqwest/native-tls",
+  "reqwest/native-tls-alpn",
+]
+# run tests connecting to remote Internet services
+online_tests = []
+rustls-tls = [
+  "pixi_api/rustls-tls",
+  "pixi_auth/rustls-tls",
+  "pixi_utils/rustls-tls",
+  "rattler/rustls-tls",
+  "reqwest/rustls-tls",
+  "reqwest/rustls-tls-native-roots",
+]
+self_update = ["pixi_core/self_update"]
+slow_integration_tests = []
+tokio-console = ["console-subscriber", "tokio/tracing"]

@@ -4,9 +4,9 @@ use miette::Diagnostic;
 use pixi_manifest::EnvironmentName;
 use pypi_modifiers::pypi_tags::{PyPITagError, get_tags_from_machine, is_python_record};
 use rattler_conda_types::ParseStrictness::Lenient;
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Matches, PackageRecord};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Matches, PackageName, PackageRecord};
 use rattler_conda_types::{ParseMatchSpecError, Platform};
-use rattler_lock::{ConversionError, LockFile, PypiPackageData};
+use rattler_lock::{CondaPackageData, ConversionError, LockFile, PypiPackageData};
 use rattler_virtual_packages::{
     DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
 };
@@ -32,10 +32,14 @@ impl VirtualPackageNotFoundError {
         required_package: &MatchSpec,
         system_virtual_packages: &Vec<&GenericVirtualPackage>,
     ) -> Self {
+        let glibc = PackageName::from_str("__glibc").expect("__glibc is a valid package name");
+        let cuda = PackageName::from_str("__cuda").expect("__cuda is a valid package name");
+        let osx = PackageName::from_str("__osx").expect("__osx is a valid package name");
+
         let override_var = if required_package
             .name
             .as_ref()
-            .is_some_and(|name| name.as_normalized() == "__glibc")
+            .is_some_and(|name| name.matches(&glibc))
         {
             // TODO: would be awesome to set the version based on the required version.
             // 2.17 is used as it's a good default
@@ -43,13 +47,13 @@ impl VirtualPackageNotFoundError {
         } else if required_package
             .name
             .as_ref()
-            .is_some_and(|name| name.as_normalized() == "__cuda")
+            .is_some_and(|name| name.matches(&cuda))
         {
             Some("`CONDA_OVERRIDE_CUDA=12.0`")
         } else if required_package
             .name
             .as_ref()
-            .is_some_and(|name| name.as_normalized() == "__osx")
+            .is_some_and(|name| name.matches(&osx))
         {
             Some("`CONDA_OVERRIDE_OSX=10.15`")
         } else {
@@ -162,19 +166,28 @@ pub(crate) fn validate_system_meets_environment_requirements(
         MachineValidationError::EnvironmentNotFound(environment_name.as_str().to_string()),
     )?;
 
-    // Retrieve the conda package records for the specified platform.
-    let Some(conda_data) = environment
-        .conda_repodata_records(platform)
-        .map_err(MachineValidationError::RepodataConversionError)?
-    else {
-        // Early out if there are no conda records, as we don't need to check for virtual packages
+    // Retrieve all conda packages for the specified platform (both binary and source).
+    let Some(conda_packages) = environment.conda_packages(platform) else {
+        // Early out if there are no packages, as we don't need to check for virtual packages
         return Ok(true);
     };
 
-    let conda_records: Vec<&PackageRecord> = conda_data
+    // Collect conda packages (both binary and source) into a vector of CondaPackageData
+    let conda_packages: Vec<&CondaPackageData> = conda_packages.collect_vec();
+
+    if conda_packages.is_empty() {
+        // Early out if there are no conda records, as we don't need to check for virtual packages
+        return Ok(true);
+    }
+
+    // Get package records from both binary and source packages
+    let conda_records = conda_packages
         .iter()
-        .map(|record| &record.package_record)
-        .collect();
+        .map(|data| match data {
+            CondaPackageData::Binary(binary) => &binary.package_record,
+            CondaPackageData::Source(source) => &source.package_record,
+        })
+        .collect_vec();
 
     // Get the virtual packages required by the conda records
     let required_virtual_packages =
@@ -214,11 +227,11 @@ pub(crate) fn validate_system_meets_environment_requirements(
     // Check if all the required virtual conda packages match the system virtual packages
     for required in required_virtual_packages {
         // Check if the package name is in our accepted list
-        let is_accepted = required
-            .name
-            .as_ref()
-            .iter()
-            .any(|name| ACCEPTED_VIRTUAL_PACKAGES.contains(&name.as_normalized()));
+        let is_accepted = required.name.as_ref().iter().any(|name| {
+            name.as_exact()
+                .map(|n| ACCEPTED_VIRTUAL_PACKAGES.contains(&n.as_normalized()))
+                .unwrap_or(false)
+        });
 
         // Skip if not in accepted packages
         if !is_accepted {
@@ -229,8 +242,10 @@ pub(crate) fn validate_system_meets_environment_requirements(
             continue;
         }
 
-        let name = if let Some(name) = required.name.as_ref() {
-            name
+        let name = if let Some(name_matcher) = required.name.as_ref() {
+            name_matcher
+                .as_exact()
+                .expect("virtual package names must be exact")
         } else {
             continue;
         };
@@ -254,34 +269,34 @@ pub(crate) fn validate_system_meets_environment_requirements(
     }
 
     // Check if the wheel tags match the system virtual packages if there are any
-    if environment.has_pypi_packages(platform) {
-        if let Some(pypi_packages) = environment.pypi_packages(platform) {
-            // Get python record from conda packages
-            let python_record = conda_records
-                .iter()
-                .find(|record| is_python_record(record))
-                .ok_or(MachineValidationError::NoPythonRecordFound(platform))?;
+    if environment.has_pypi_packages(platform)
+        && let Some(pypi_packages) = environment.pypi_packages(platform)
+    {
+        // Get python record from conda packages
+        let python_record = conda_records
+            .iter()
+            .find(|record| is_python_record(record))
+            .ok_or(MachineValidationError::NoPythonRecordFound(platform))?;
 
-            // Check if all the wheel tags match the system virtual packages
-            let pypi_packages = pypi_packages
-                .map(|(pkg_data, _)| pkg_data.clone())
-                .collect_vec();
+        // Check if all the wheel tags match the system virtual packages
+        let pypi_packages = pypi_packages
+            .map(|(pkg_data, _)| pkg_data.clone())
+            .collect_vec();
 
-            let wheels = get_wheels_from_pypi_package_data(pypi_packages);
+        let wheels = get_wheels_from_pypi_package_data(pypi_packages);
 
-            let uv_system_tags =
-                get_tags_from_machine(&system_virtual_packages, platform, python_record)?;
+        let uv_system_tags =
+            get_tags_from_machine(&system_virtual_packages, platform, python_record)?;
 
-            // Check if all the wheel tags match the system virtual packages
-            for wheel in wheels {
-                if !wheel.is_compatible(&uv_system_tags) {
-                    return Err(MachineValidationError::WheelTagsMismatch(
-                        wheel.to_string(),
-                        uv_system_tags.to_string(),
-                    ));
-                }
-                tracing::debug!("Wheel: {} matches the system", wheel);
+        // Check if all the wheel tags match the system virtual packages
+        for wheel in wheels {
+            if !wheel.is_compatible(&uv_system_tags) {
+                return Err(MachineValidationError::WheelTagsMismatch(
+                    wheel.to_string(),
+                    uv_system_tags.to_string(),
+                ));
             }
+            tracing::debug!("Wheel: {} matches the system", wheel);
         }
     }
     Ok(true)

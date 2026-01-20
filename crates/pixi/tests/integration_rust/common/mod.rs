@@ -3,8 +3,9 @@
 pub mod builders;
 pub mod client;
 pub mod logging;
-pub mod package_database;
 pub mod pypi_index;
+
+pub use pixi_test_utils::GitRepoFixture;
 
 use std::{
     ffi::OsString,
@@ -46,9 +47,9 @@ use thiserror::Error;
 
 use self::builders::{HasDependencyConfig, RemoveBuilder};
 use crate::common::builders::{
-    AddBuilder, BuildBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder,
-    ProjectChannelRemoveBuilder, ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder,
-    UpdateBuilder,
+    AddBuilder, BuildBuilder, GlobalInstallBuilder, InitBuilder, InstallBuilder,
+    ProjectChannelAddBuilder, ProjectChannelRemoveBuilder, ProjectEnvironmentAddBuilder,
+    TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
 };
 
 const DEFAULT_PROJECT_CONFIG: &str = r#"
@@ -57,6 +58,16 @@ default-channels = ["https://prefix.dev/conda-forge"]
 [repodata-config."https://prefix.dev"]
 disable-sharded = false
 "#;
+
+/// Returns the path to the root of the workspace.
+pub(crate) fn cargo_workspace_dir() -> &'static Path {
+    Path::new(env!("CARGO_WORKSPACE_DIR"))
+}
+
+/// Returns the path to the `tests/data/workspaces` directory in the repository.
+pub(crate) fn workspaces_dir() -> PathBuf {
+    cargo_workspace_dir().join("tests/data/workspaces")
+}
 
 /// To control the pixi process
 pub struct PixiControl {
@@ -132,7 +143,15 @@ pub trait LockFileExt {
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<LockedPackageRef>;
+    ) -> Option<LockedPackageRef<'_>>;
+
+    /// Check if a PyPI package is marked as editable in the lock file
+    fn is_pypi_package_editable(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<bool>;
 }
 
 impl LockFileExt for LockFile {
@@ -215,7 +234,7 @@ impl LockFileExt for LockFile {
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<LockedPackageRef> {
+    ) -> Option<LockedPackageRef<'_>> {
         self.environment(environment).and_then(|env| {
             env.packages(platform)
                 .and_then(|mut packages| packages.find(|p| p.name() == package))
@@ -234,6 +253,21 @@ impl LockFileExt for LockFile {
                     .and_then(|mut packages| packages.find(|p| p.name() == package))
             })
             .map(|p| p.location().clone())
+    }
+
+    fn is_pypi_package_editable(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<bool> {
+        self.environment(environment)
+            .and_then(|env| {
+                env.pypi_packages(platform).and_then(|mut packages| {
+                    packages.find(|(data, _)| data.name.as_ref() == package)
+                })
+            })
+            .map(|(data, _)| data.editable)
     }
 }
 
@@ -367,6 +401,7 @@ impl PixiControl {
                 format: None,
                 pyproject_toml: false,
                 scm: Some(GitAttributes::Github),
+                conda_pypi_map: None,
             },
         }
     }
@@ -385,6 +420,7 @@ impl PixiControl {
                 format: None,
                 pyproject_toml: false,
                 scm: Some(GitAttributes::Github),
+                conda_pypi_map: None,
             },
         }
     }
@@ -408,7 +444,7 @@ impl PixiControl {
             args: add::Args {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
+                    backend_override: self.backend_override.clone(),
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
                 no_install_config: NoInstallConfig { no_install: true },
@@ -461,11 +497,11 @@ impl PixiControl {
     /// Add a new channel to the project.
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
+            workspace_config: WorkspaceConfig {
+                manifest_path: Some(self.manifest_path()),
+                ..Default::default()
+            },
             args: workspace::channel::AddRemoveArgs {
-                workspace_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
-                },
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
@@ -483,12 +519,11 @@ impl PixiControl {
     /// Remove a channel from the project.
     pub fn project_channel_remove(&self) -> ProjectChannelRemoveBuilder {
         ProjectChannelRemoveBuilder {
-            manifest_path: Some(self.manifest_path()),
+            workspace_config: WorkspaceConfig {
+                manifest_path: Some(self.manifest_path()),
+                ..Default::default()
+            },
             args: workspace::channel::AddRemoveArgs {
-                workspace_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
-                },
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
@@ -506,7 +541,7 @@ impl PixiControl {
     pub fn project_environment_add(&self, name: EnvironmentName) -> ProjectEnvironmentAddBuilder {
         ProjectEnvironmentAddBuilder {
             manifest_path: Some(self.manifest_path()),
-            args: workspace::environment::add::Args {
+            args: workspace::environment::AddArgs {
                 name,
                 features: None,
                 solve_group: None,
@@ -607,9 +642,9 @@ impl PixiControl {
         InstallBuilder {
             args: Args {
                 environment: None,
-                project_config: WorkspaceConfig {
+                workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
+                    backend_override: self.backend_override.clone(),
                 },
                 lock_file_usage: LockFileUsageConfig {
                     frozen: false,
@@ -622,6 +657,15 @@ impl PixiControl {
                 only: None,
             },
         }
+    }
+
+    /// Returns a [`GlobalInstallBuilder`].
+    /// To execute the command and await the result, call `.await` on the return value.
+    pub fn global_install(&self) -> GlobalInstallBuilder {
+        GlobalInstallBuilder::new(
+            self.tmpdir.path().to_path_buf(),
+            self.backend_override.clone(),
+        )
     }
 
     /// Returns a [`UpdateBuilder]. To execute the command and await the result
@@ -669,7 +713,7 @@ impl PixiControl {
             args: lock::Args {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
+                    backend_override: self.backend_override.clone(),
                 },
                 no_install_config: NoInstallConfig { no_install: false },
                 check: false,
@@ -696,7 +740,7 @@ impl PixiControl {
         }
     }
 
-    pub fn tasks(&self) -> TasksControl {
+    pub fn tasks(&self) -> TasksControl<'_> {
         TasksControl { pixi: self }
     }
 }
@@ -723,6 +767,7 @@ impl TasksControl<'_> {
                 platform,
                 feature: feature_name.non_default().map(str::to_owned),
                 cwd: None,
+                default_environment: None,
                 env: Default::default(),
                 description: None,
                 clean_env: false,

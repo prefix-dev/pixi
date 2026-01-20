@@ -65,13 +65,13 @@ impl EnvironmentName {
     ) -> Result<Self, ParseEnvironmentNameError> {
         if let Some(arg_name) = arg_name {
             return EnvironmentName::from_str(&arg_name);
-        } else if std::env::var("PIXI_IN_SHELL").is_ok() {
-            if let Ok(env_var_name) = std::env::var("PIXI_ENVIRONMENT_NAME") {
-                if env_var_name == DEFAULT_ENVIRONMENT_NAME {
-                    return Ok(EnvironmentName::Default);
-                }
-                return Ok(EnvironmentName::Named(env_var_name));
+        } else if std::env::var("PIXI_IN_SHELL").is_ok()
+            && let Ok(env_var_name) = std::env::var("PIXI_ENVIRONMENT_NAME")
+        {
+            if env_var_name == DEFAULT_ENVIRONMENT_NAME {
+                return Ok(EnvironmentName::Default);
             }
+            return Ok(EnvironmentName::Named(env_var_name));
         }
         Ok(EnvironmentName::Default)
     }
@@ -132,7 +132,7 @@ impl<'de> Deserialize<'de> for EnvironmentName {
 ///
 /// Individual features cannot be used directly, instead they are grouped
 /// together into environments. Environments are then locked and installed.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Environment {
     /// The name of the environment
     pub name: EnvironmentName,

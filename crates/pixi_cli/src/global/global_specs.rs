@@ -8,7 +8,7 @@ use url::Url;
 use pixi_config::pixi_home;
 use pixi_consts::consts;
 use pixi_global::project::FromMatchSpecError;
-use pixi_spec::PixiSpec;
+use pixi_spec::{PixiSpec, Subdirectory, SubdirectoryError};
 use rattler_conda_types::{ChannelConfig, MatchSpec, ParseMatchSpecError, ParseStrictness};
 use typed_path::Utf8NativePathBuf;
 
@@ -80,6 +80,8 @@ pub enum GlobalSpecsConversionError {
     PackageNameInference(#[from] pixi_global::project::InferPackageNameError),
     #[error("Input {0} looks like a path: please pass `--path`.")]
     MissingPathArg(String),
+    #[error(transparent)]
+    InvalidSubdirectory(#[from] SubdirectoryError),
 }
 
 impl GlobalSpecs {
@@ -94,7 +96,12 @@ impl GlobalSpecs {
             let git_spec = pixi_spec::GitSpec {
                 git: git_url.clone(),
                 rev: self.rev.clone().map(Into::into),
-                subdirectory: self.subdir.clone(),
+                subdirectory: self
+                    .subdir
+                    .clone()
+                    .map(Subdirectory::try_from)
+                    .transpose()?
+                    .unwrap_or_default(),
             };
             Some(PixiSpec::Git(git_spec))
         } else if let Some(path) = &self.path {
@@ -178,10 +185,14 @@ impl GlobalSpecs {
             self.specs
                 .iter()
                 .map(|spec_str| {
-                    MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?
+                    let name = MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?
                         .name
-                        .ok_or(GlobalSpecsConversionError::NameRequired)
-                        .map(|name| pixi_global::project::GlobalSpec::new(name, pixi_spec.clone()))
+                        .and_then(|matcher| matcher.as_exact().cloned())
+                        .ok_or(GlobalSpecsConversionError::NameRequired)?;
+                    Ok(pixi_global::project::GlobalSpec::new(
+                        name,
+                        pixi_spec.clone(),
+                    ))
                 })
                 .collect()
         } else {

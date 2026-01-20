@@ -10,8 +10,8 @@ use futures::TryStreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
-use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
-use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
+use pixi_record::{PixiRecord, SourceRecord};
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, PackageRecord,
@@ -21,13 +21,16 @@ use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
 use thiserror::Error;
 use tracing::instrument;
 
+use crate::cache::build_backend_metadata::CachedCondaMetadataId;
+use crate::cache::source_metadata::CachedSourceMetadataId;
 use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
-    CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
-    SolvePixiEnvironmentError,
-    build::{
-        Dependencies, DependenciesError, PixiRunExports, conversion,
-        source_metadata_cache::MetadataKind,
+    CommandDispatcherError, CommandDispatcherErrorResultExt, PackageNotProvidedError,
+    PixiEnvironmentSpec, SolvePixiEnvironmentError,
+    build::{Dependencies, DependenciesError, PixiRunExports, SourceCodeLocation},
+    cache::{
+        common::MetadataCache,
+        source_metadata::{self, CachedSourceMetadata, SourceMetadataCacheShard},
     },
     executor::ExecutorFutures,
 };
@@ -42,21 +45,13 @@ pub struct SourceMetadataSpec {
 }
 
 /// The result of building a particular source record.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SourceMetadata {
-    /// Information about the source checkout that was used to build the
-    /// package.
-    pub manifest_source: PinnedSourceSpec,
+    /// Manifest and optional build source location for this metadata.
+    pub source: SourceCodeLocation,
 
-    /// The optional location of where the actual source code is located,
-    /// this is used mainly for out-of-tree builds
-    pub build_source: Option<PinnedSourceSpec>,
-
-    /// All the source records for this particular package.
-    pub records: Vec<SourceRecord>,
-
-    /// All package names that where skipped but the backend could provide.
-    pub skipped_packages: Vec<PackageName>,
+    /// The metadata that was acquired from the build backend.
+    pub cached_metadata: CachedSourceMetadata,
 }
 
 impl SourceMetadataSpec {
@@ -64,7 +59,8 @@ impl SourceMetadataSpec {
         skip_all,
         name = "source-metadata",
         fields(
-            source= %self.backend_metadata.manifest_source,
+            manifest_source= %self.backend_metadata.manifest_source,
+            preferred_build_source=self.backend_metadata.preferred_build_source.as_ref().map(tracing::field::display),
             name = %self.package.as_source(),
             platform = %self.backend_metadata.build_environment.host_platform,
         )
@@ -82,70 +78,152 @@ impl SourceMetadataSpec {
 
         let build_backend_metadata = build_backend_metadata?;
 
-        match &build_backend_metadata.metadata.metadata {
-            MetadataKind::GetMetadata { packages } => {
-                // Convert the metadata to source records.
-                let records = conversion::package_metadata_to_source_records(
-                    &build_backend_metadata.manifest_source,
-                    build_backend_metadata.build_source.as_ref(),
-                    packages,
-                    &self.package,
-                    &build_backend_metadata.metadata.input_hash,
-                );
+        tracing::trace!(
+            "Retrieving source metadata for package {}",
+            self.package.as_source()
+        );
 
-                Ok(SourceMetadata {
-                    manifest_source: build_backend_metadata.manifest_source.clone(),
-                    records,
-                    // As the GetMetadata kind returns all records at once and we don't solve them we can skip this.
-                    skipped_packages: Default::default(),
-                    build_source: build_backend_metadata.build_source.clone(),
-                })
+        let cache_key = self.cache_key();
+
+        // Get the skip_cache flag from the build backend metadata
+        let skip_cache = build_backend_metadata.skip_cache;
+
+        let cache_read_result = command_dispatcher
+            .source_metadata_cache()
+            .read(&cache_key)
+            .await
+            .map_err(SourceMetadataError::Cache)
+            .map_err(CommandDispatcherError::Failed)?;
+
+        let (cached_metadata, cache_version) = match cache_read_result {
+            Some((metadata, version)) => (Some(metadata), version),
+            // Start at cache version 0 if no cache exists
+            None => (None, 0),
+        };
+
+        if !skip_cache
+            && let Some(cached_metadata) =
+                Self::verify_cache_freshness(cached_metadata, build_backend_metadata.metadata.id)
+                    .await?
+        {
+            tracing::debug!("Using cached source metadata for package",);
+            return Ok(SourceMetadata {
+                source: build_backend_metadata.source.clone(),
+                cached_metadata,
+            });
+        }
+
+        let mut futures = ExecutorFutures::new(command_dispatcher.executor());
+        let source_location = build_backend_metadata.source.clone();
+        for output in &build_backend_metadata.metadata.outputs {
+            if output.metadata.name != self.package {
+                continue;
             }
-            MetadataKind::Outputs { outputs } => {
-                let mut skipped_packages = vec![];
-                let mut futures = ExecutorFutures::new(command_dispatcher.executor());
-                for output in outputs {
-                    if output.metadata.name != self.package {
-                        skipped_packages.push(output.metadata.name.clone());
-                        continue;
-                    }
-                    futures.push(self.resolve_output(
-                        &command_dispatcher,
-                        output,
-                        build_backend_metadata.metadata.input_hash.clone(),
-                        build_backend_metadata.manifest_source.clone(),
-                        build_backend_metadata.build_source.clone(),
-                        reporter.clone(),
-                    ));
-                }
+            futures.push(self.resolve_output(
+                &command_dispatcher,
+                output,
+                source_location.clone(),
+                reporter.clone(),
+            ));
+        }
 
-                Ok(SourceMetadata {
-                    manifest_source: build_backend_metadata.manifest_source.clone(),
-                    records: futures.try_collect().await?,
-                    skipped_packages,
-                    build_source: build_backend_metadata.build_source.clone(),
-                })
+        let records: Vec<SourceRecord> = futures.try_collect().await?;
+
+        // Ensure the source provides the requested package
+        if records.is_empty() {
+            let available_names = build_backend_metadata
+                .metadata
+                .outputs
+                .iter()
+                .map(|output| output.metadata.name.clone());
+            return Err(CommandDispatcherError::Failed(
+                PackageNotProvidedError::new(
+                    self.package,
+                    build_backend_metadata.source.manifest_source().clone(),
+                    available_names,
+                )
+                .into(),
+            ));
+        }
+
+        let cached_source_metadata = CachedSourceMetadata {
+            id: CachedSourceMetadataId::random(),
+            cache_version,
+            records,
+            cached_conda_metadata_id: build_backend_metadata.metadata.id,
+        };
+
+        // Try to store the metadata in the cache with version checking
+        match command_dispatcher
+            .source_metadata_cache()
+            .try_write(&cache_key, cached_source_metadata.clone(), cache_version)
+            .await
+            .map_err(SourceMetadataError::Cache)
+            .map_err(CommandDispatcherError::Failed)?
+        {
+            source_metadata::WriteResult::Written => {
+                tracing::trace!("Cache updated successfully");
+            }
+            source_metadata::WriteResult::Conflict(_) => {
+                tracing::warn!(
+                    "Cache was updated by another process during computation (version conflict), using our computed result"
+                );
             }
         }
+
+        Ok(SourceMetadata {
+            cached_metadata: cached_source_metadata,
+            source: source_location,
+        })
+    }
+
+    /// Computes the cache key for this instance
+    pub(crate) fn cache_key(&self) -> SourceMetadataCacheShard {
+        SourceMetadataCacheShard {
+            package: self.package.clone(),
+            channel_urls: self.backend_metadata.channels.clone(),
+            build_environment: self.backend_metadata.build_environment.clone(),
+            enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
+            pinned_source: self.backend_metadata.manifest_source.clone(),
+        }
+    }
+
+    async fn verify_cache_freshness(
+        cached_metadata: Option<CachedSourceMetadata>,
+        current_conda_metadata_id: CachedCondaMetadataId,
+    ) -> Result<Option<CachedSourceMetadata>, CommandDispatcherError<SourceMetadataError>> {
+        let Some(cached_metadata) = cached_metadata else {
+            tracing::debug!("no cached metadata passed.");
+            return Ok(None);
+        };
+
+        if cached_metadata.cached_conda_metadata_id != current_conda_metadata_id {
+            // Not adding tracing here because the backend metadata would already have done that.
+            tracing::info!("Cached metadata is stale, skipping cache");
+            return Ok(None);
+        }
+
+        Ok(Some(cached_metadata))
     }
 
     async fn resolve_output(
         &self,
         command_dispatcher: &CommandDispatcher,
         output: &CondaOutput,
-        input_hash: Option<InputHash>,
-        manifest_source: PinnedSourceSpec,
-        build_source: Option<PinnedSourceSpec>,
+        source: SourceCodeLocation,
         reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
-        let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
+        let manifest_source = source.manifest_source().clone();
+        let build_source = source.build_source().cloned();
+        let source_anchor = SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
 
         // Solve the build environment for the output.
+        let mut compatibility_map = HashMap::new();
         let build_dependencies = output
             .build_dependencies
             .as_ref()
             // TODO(tim): we need to check if this works for out-of-tree builds with source dependencies in the out-of-tree, this might be incorrectly anchored
-            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone())))
+            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone()), &compatibility_map))
             .transpose()
             .map_err(SourceMetadataError::from)
             .map_err(CommandDispatcherError::Failed)?
@@ -171,14 +249,22 @@ impl SourceMetadataSpec {
                 reporter.clone(),
             )
             .await
-            .map_err(SourceMetadataError::from)
+            .map_err(|err| {
+                SourceMetadataError::RunExportsExtraction(String::from("build"), Arc::new(err))
+            })
             .map_err(CommandDispatcherError::Failed)?;
+
+        compatibility_map.extend(
+            build_records
+                .iter()
+                .map(|record| (record.package_record().name.clone(), record)),
+        );
 
         // Solve the host environment for the output.
         let host_dependencies = output
             .host_dependencies
             .as_ref()
-            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone())))
+            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone()), &compatibility_map))
             .transpose()
             .map_err(SourceMetadataError::from)
             .map_err(CommandDispatcherError::Failed)?
@@ -202,68 +288,80 @@ impl SourceMetadataSpec {
                 reporter,
             )
             .await
-            .map_err(SourceMetadataError::from)
+            .map_err(|err| {
+                SourceMetadataError::RunExportsExtraction(String::from("host"), Arc::new(err))
+            })
             .map_err(CommandDispatcherError::Failed)?;
 
+        compatibility_map.extend(
+            host_records
+                .iter()
+                .map(|record| (record.package_record().name.clone(), record)),
+        );
+
         // Gather the dependencies for the output.
-        let run_dependencies = Dependencies::new(&output.run_dependencies, None)
-            .map_err(SourceMetadataError::from)
-            .map_err(CommandDispatcherError::Failed)?
-            .extend_with_run_exports_from_build_and_host(
-                host_run_exports,
-                build_run_exports,
-                output.metadata.subdir,
-            );
+        let run_dependencies =
+            Dependencies::new(&output.run_dependencies, None, &compatibility_map)
+                .map_err(SourceMetadataError::from)
+                .map_err(CommandDispatcherError::Failed)?
+                .extend_with_run_exports_from_build_and_host(
+                    host_run_exports,
+                    build_run_exports,
+                    output.metadata.subdir,
+                );
 
         let PackageRecordDependencies {
             depends,
             constrains,
             mut sources,
         } = PackageRecordDependencies::new(run_dependencies, &self.backend_metadata.channel_config)
-            .map_err(SourceMetadataError::SpecConversionError)
-            .map_err(CommandDispatcherError::Failed)?;
-
-        // Convert the run exports
-        let run_exports = PixiRunExports::try_from_protocol(&output.run_exports)
             .map_err(SourceMetadataError::from)
             .map_err(CommandDispatcherError::Failed)?;
 
+        // Convert the run exports
+        let run_exports =
+            PixiRunExports::try_from_protocol(&output.run_exports, &compatibility_map)
+                .map_err(SourceMetadataError::from)
+                .map_err(CommandDispatcherError::Failed)?;
+
         let pixi_spec_to_match_spec = |name: &PackageName,
                                        spec: &PixiSpec,
-                                       sources: &mut HashMap<PackageName, SourceSpec>|
+                                       sources: &mut HashMap<PackageName, SourceLocationSpec>|
          -> Result<MatchSpec, SourceMetadataError> {
             match spec.clone().into_source_or_binary() {
                 Either::Left(source) => {
-                    let source = match sources.entry(name.clone()) {
+                    match sources.entry(name.clone()) {
                         std::collections::hash_map::Entry::Occupied(entry) => {
                             // If the entry already exists, check if it points to the same source.
-                            if entry.get() == &source {
+                            if entry.get() == &source.location {
                                 return Err(SourceMetadataError::DuplicateSourceDependency {
                                     package: name.clone(),
                                     source1: Box::new(entry.get().clone()),
-                                    source2: Box::new(source.clone()),
+                                    source2: Box::new(source.location.clone()),
                                 });
                             }
                             entry.into_mut()
                         }
-                        std::collections::hash_map::Entry::Vacant(entry) => entry.insert(source),
+                        std::collections::hash_map::Entry::Vacant(entry) => {
+                            entry.insert(source.location.clone())
+                        }
                     };
                     Ok(MatchSpec::from_nameless(
                         source.to_nameless_match_spec(),
-                        Some(name.clone()),
+                        Some(name.clone().into()),
                     ))
                 }
                 Either::Right(binary) => {
                     let spec = binary
                         .try_into_nameless_match_spec(&self.backend_metadata.channel_config)
-                        .map_err(SourceMetadataError::SpecConversionError)?;
-                    Ok(MatchSpec::from_nameless(spec, Some(name.clone())))
+                        .map_err(SourceMetadataError::from)?;
+                    Ok(MatchSpec::from_nameless(spec, Some(name.clone().into())))
                 }
             }
         };
 
         let pixi_specs_to_match_spec = |specs: DependencyMap<PackageName, PixiSpec>,
-                                        sources: &mut HashMap<PackageName, SourceSpec>|
+                                        sources: &mut HashMap<PackageName, SourceLocationSpec>|
          -> Result<
             Vec<String>,
             CommandDispatcherError<SourceMetadataError>,
@@ -284,8 +382,8 @@ impl SourceMetadataSpec {
                 .map(|(name, spec)| {
                     let nameless_spec = spec
                         .try_into_nameless_match_spec(&self.backend_metadata.channel_config)
-                        .map_err(SourceMetadataError::SpecConversionError)?;
-                    Ok(MatchSpec::from_nameless(nameless_spec, Some(name)).to_string())
+                        .map_err(SourceMetadataError::from)?;
+                    Ok(MatchSpec::from_nameless(nameless_spec, Some(name.into())).to_string())
                 })
                 .collect::<Result<Vec<_>, SourceMetadataError>>()
                 .map_err(CommandDispatcherError::Failed)
@@ -354,12 +452,19 @@ impl SourceMetadataSpec {
                 experimental_extra_depends: Default::default(),
             },
             manifest_source,
-            input_hash,
             build_source,
             sources: sources
                 .into_iter()
                 .map(|(name, source)| (name.as_source().to_string(), source))
                 .collect(),
+            variants: Some(
+                output
+                    .metadata
+                    .variant
+                    .iter()
+                    .map(|(k, v)| (k.clone(), pixi_record::VariantValue::from(v.clone())))
+                    .collect(),
+            ),
         })
     }
 
@@ -374,9 +479,9 @@ impl SourceMetadataSpec {
         if dependencies.dependencies.is_empty() {
             return Ok(vec![]);
         }
-        let pin_overrides = self
+        let preferred_build_source = self
             .backend_metadata
-            .pin_override
+            .preferred_build_source
             .as_ref()
             .map(|pinned| BTreeMap::from([(pkg_name.clone(), pinned.clone())]))
             .unwrap_or_default();
@@ -393,6 +498,7 @@ impl SourceMetadataSpec {
                     .into_specs()
                     .map(|(name, spec)| (name, spec.value))
                     .collect(),
+                dev_sources: Default::default(),
                 installed: vec![], // TODO: To lock build environments, fill this.
                 build_environment,
                 channels: self.backend_metadata.channels.clone(),
@@ -400,10 +506,10 @@ impl SourceMetadataSpec {
                 channel_priority: Default::default(),
                 exclude_newer: None,
                 channel_config: self.backend_metadata.channel_config.clone(),
-                variants: self.backend_metadata.variants.clone(),
+                variant_configuration: self.backend_metadata.variant_configuration.clone(),
                 variant_files: self.backend_metadata.variant_files.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
-                pin_overrides,
+                preferred_build_source,
             })
             .await
         {
@@ -435,7 +541,7 @@ impl SourceMetadataSpec {
 struct PackageRecordDependencies {
     pub depends: Vec<String>,
     pub constrains: Vec<String>,
-    pub sources: HashMap<rattler_conda_types::PackageName, SourceSpec>,
+    pub sources: HashMap<rattler_conda_types::PackageName, SourceLocationSpec>,
 }
 
 impl PackageRecordDependencies {
@@ -449,7 +555,7 @@ impl PackageRecordDependencies {
             .map(|(name, spec)| {
                 Ok(MatchSpec::from_nameless(
                     spec.value.try_into_nameless_match_spec(channel_config)?,
-                    Some(name),
+                    Some(name.into()),
                 ))
             })
             .map_ok(|spec| spec.to_string())
@@ -459,18 +565,16 @@ impl PackageRecordDependencies {
         for (name, spec) in dependencies.dependencies.into_specs() {
             match spec.value.into_source_or_binary() {
                 Either::Left(source) => {
-                    depends.push(
-                        MatchSpec {
-                            name: Some(name.clone()),
-                            ..MatchSpec::default()
-                        }
-                        .to_string(),
+                    let spec = MatchSpec::from_nameless(
+                        source.to_nameless_match_spec(),
+                        Some(name.clone().into()),
                     );
-                    sources.insert(name, source);
+                    depends.push(spec.to_string());
+                    sources.insert(name, source.location);
                 }
                 Either::Right(binary) => {
                     if let Ok(spec) = binary.try_into_nameless_match_spec(channel_config) {
-                        depends.push(MatchSpec::from_nameless(spec, Some(name)).to_string());
+                        depends.push(MatchSpec::from_nameless(spec, Some(name.into())).to_string());
                     }
                 }
             }
@@ -483,14 +587,14 @@ impl PackageRecordDependencies {
     }
 }
 
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Clone, Error, Diagnostic)]
 pub enum SourceMetadataError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     BuildBackendMetadata(#[from] BuildBackendMetadataError),
 
-    #[error("failed to amend run exports: {0}")]
-    RunExportsExtraction(#[from] RunExportExtractorError),
+    #[error("failed to amend run exports for {0} environment")]
+    RunExportsExtraction(String, #[source] Arc<RunExportExtractorError>),
 
     #[error("while trying to solve the build environment for the package")]
     SolveBuildEnvironment(
@@ -507,28 +611,53 @@ pub enum SourceMetadataError {
     ),
 
     #[error(transparent)]
-    SpecConversionError(#[from] SpecConversionError),
+    SpecConversionError(Arc<SpecConversionError>),
 
-    #[error("backend returned a dependency on an invalid package name: {0}")]
-    InvalidPackageName(String, #[source] InvalidPackageNameError),
+    #[error(transparent)]
+    InvalidPackageName(Arc<InvalidPackageNameError>),
+
+    #[error(transparent)]
+    PinCompatibleError(#[from] crate::build::pin_compatible::PinCompatibleError),
 
     #[error("found two source dependencies for {} but for different sources ({source1} and {source2})", package.as_source()
     )]
     DuplicateSourceDependency {
         package: PackageName,
-        source1: Box<SourceSpec>,
-        source2: Box<SourceSpec>,
+        source1: Box<SourceLocationSpec>,
+        source2: Box<SourceLocationSpec>,
     },
 
     #[error("the dependencies of some packages in the environment form a cycle")]
     Cycle(Cycle),
+
+    #[error(transparent)]
+    Cache(#[from] source_metadata::SourceMetadataCacheError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PackageNotProvided(#[from] PackageNotProvidedError),
+}
+
+impl From<SpecConversionError> for SourceMetadataError {
+    fn from(err: SpecConversionError) -> Self {
+        Self::SpecConversionError(Arc::new(err))
+    }
+}
+
+impl From<InvalidPackageNameError> for SourceMetadataError {
+    fn from(err: InvalidPackageNameError) -> Self {
+        Self::InvalidPackageName(Arc::new(err))
+    }
 }
 
 impl From<DependenciesError> for SourceMetadataError {
     fn from(value: DependenciesError) -> Self {
         match value {
-            DependenciesError::InvalidPackageName(name, error) => {
-                SourceMetadataError::InvalidPackageName(name, error)
+            DependenciesError::InvalidPackageName(error) => {
+                SourceMetadataError::InvalidPackageName(error)
+            }
+            DependenciesError::PinCompatibleError(error) => {
+                SourceMetadataError::PinCompatibleError(error)
             }
         }
     }

@@ -3,6 +3,7 @@ use crate::NeedReinstall;
 use crate::plan::test::harness::AllCached;
 use assert_matches::assert_matches;
 use harness::empty_wheel;
+use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
@@ -389,17 +390,22 @@ fn test_installed_local_required_registry() {
 }
 
 /// When requiring a local package and that same local package is installed, we should not reinstall it
-/// except if the pyproject.toml file, or some other source files we won't check here is newer than the cache
+/// except if the source CacheInfo has changed since installation.
 #[test]
 fn test_installed_local_required_local() {
-    let ten_minutes_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(60 * 10);
-    let (fake, _) = harness::fake_pyproject_toml(Some(ten_minutes_ago));
+    let (fake, _) = harness::fake_pyproject_toml(None);
+
+    // Capture the current CacheInfo from the source directory
+    let current_cache_info =
+        uv_cache_info::CacheInfo::from_path(fake.path()).expect("should get cache info");
+
     let site_packages = MockedSitePackages::new().add_directory(
         "aiofiles",
         "0.6.0",
         fake.path().to_path_buf(),
         false,
-        InstalledDistOptions::default(),
+        // Provide the same CacheInfo to simulate unchanged source
+        InstalledDistOptions::default().with_cache_info(current_cache_info),
     );
     // Requires following package
     let required = RequiredPackages::new().add_directory(
@@ -409,8 +415,7 @@ fn test_installed_local_required_local() {
         false,
     );
 
-    // pyproject.toml file is older than the cache, all else is the same
-    // so we do not expect a re-installation
+    // Source CacheInfo matches the stored one, so we do not expect a re-installation
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
@@ -435,23 +440,33 @@ fn test_installed_local_required_local() {
 /// except if the pyproject.toml file, or some other source files we won't check here is newer than the cache
 /// NOTE: We are skipping that test since it is flaky on linux
 /// uv checks ctime on unix systems
-/// During debug, we noticed that some times ctime isn't updated, and we couldn't find a relieable way to ensure that
-/// At this time, we believe this to be a problem with our test, not with pixi or uv.
-/// If user encounter this problem we should investigate this again
-#[cfg(not(target_os = "linux"))]
+/// During debug, we noticed that some times ctime isn't updated, and we couldn't find a reliable way to ensure that
+/// Test that when source is modified after installation, reinstall is triggered.
+/// This uses CacheInfo comparison to detect changes.
 #[test]
 fn test_local_source_newer_than_local_metadata() {
-    let (fake, pyproject) = harness::fake_pyproject_toml(None);
+    let (fake, mut pyproject) = harness::fake_pyproject_toml(None);
+
+    // Capture the initial CacheInfo from the source directory
+    let initial_cache_info =
+        uv_cache_info::CacheInfo::from_path(fake.path()).expect("should get cache info");
+
+    // Modify pyproject.toml to change its content and timestamp
+    std::thread::sleep(std::time::Duration::from_millis(10));
+    pyproject
+        .write_all(b"[build-system]\nrequires = [\"hatchling\"]")
+        .unwrap();
+    pyproject.sync_all().unwrap();
+
+    // Set up site_packages with the OLD cache info (simulating package installed before modification)
     let site_packages = MockedSitePackages::new().add_directory(
         "aiofiles",
         "0.6.0",
         fake.path().to_path_buf(),
         false,
-        // Set the metadata mtime to 1 day ago
-        InstalledDistOptions::default().with_metadata_mtime(
-            std::time::SystemTime::now() - std::time::Duration::from_secs(60 * 60 * 24),
-        ),
+        InstalledDistOptions::default().with_cache_info(initial_cache_info),
     );
+
     // Requires following package
     let required = RequiredPackages::new().add_directory(
         "aiofiles",
@@ -459,14 +474,8 @@ fn test_local_source_newer_than_local_metadata() {
         fake.path().to_path_buf(),
         false,
     );
-    // Set the pyproject.toml file to be newer than the installed metadata
-    // We need to do this otherwise the test seems to fail even though the file should be newer
-    pyproject
-        .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(60 * 60 * 24))
-        .unwrap();
-    pyproject.sync_all().unwrap();
 
-    // We expect a reinstall, because the pyproject.toml file is newer than the cache
+    // We expect a reinstall, because the source CacheInfo differs from the stored one
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
@@ -483,19 +492,24 @@ fn test_local_source_newer_than_local_metadata() {
     );
 }
 
+/// Test that when source CacheInfo matches stored CacheInfo, no reinstall is needed.
 #[test]
 fn test_local_source_older_than_local_metadata() {
-    let (fake, pyproject) = harness::fake_pyproject_toml(Some(
-        std::time::SystemTime::now() - std::time::Duration::from_secs(60 * 60 * 24),
-    ));
+    let (fake, _pyproject) = harness::fake_pyproject_toml(None);
+
+    // Capture the current CacheInfo from the source directory
+    let current_cache_info =
+        uv_cache_info::CacheInfo::from_path(fake.path()).expect("should get cache info");
+
+    // Set up site_packages with the SAME cache info (simulating source hasn't changed since install)
     let site_packages = MockedSitePackages::new().add_directory(
         "aiofiles",
         "0.6.0",
         fake.path().to_path_buf(),
         false,
-        // Set the metadata mtime to now explicitly
-        InstalledDistOptions::default().with_metadata_mtime(std::time::SystemTime::now()),
+        InstalledDistOptions::default().with_cache_info(current_cache_info),
     );
+
     // Requires following package
     let required = RequiredPackages::new().add_directory(
         "aiofiles",
@@ -504,17 +518,7 @@ fn test_local_source_older_than_local_metadata() {
         false,
     );
 
-    let dist_info = site_packages
-        .base_dir()
-        .join(format!("{}-{}.dist-info", "aiofiles", "0.6.0"))
-        .join("METADATA");
-    // Sanity check that these timestamps are different
-    assert_ne!(
-        pyproject.metadata().unwrap().modified().unwrap(),
-        dist_info.metadata().unwrap().modified().unwrap()
-    );
-
-    // Install plan should not reinstall anything
+    // Install plan should not reinstall anything since CacheInfo matches
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
@@ -535,12 +539,18 @@ fn test_local_source_older_than_local_metadata() {
 #[test]
 fn test_installed_editable_required_non_editable() {
     let (fake, _) = harness::fake_pyproject_toml(None);
+
+    // Capture the current CacheInfo from the source directory
+    let current_cache_info =
+        uv_cache_info::CacheInfo::from_path(fake.path()).expect("should get cache info");
+
     let site_packages = MockedSitePackages::new().add_directory(
         "aiofiles",
         "0.6.0",
         fake.path().to_path_buf(),
         true,
-        InstalledDistOptions::default(),
+        // Provide matching CacheInfo so freshness check passes
+        InstalledDistOptions::default().with_cache_info(current_cache_info),
     );
 
     // Requires following package
@@ -851,4 +861,100 @@ fn duplicates_are_not_extraneous() {
 
     assert!(installs.extraneous.is_empty());
     assert_eq!(installs.duplicates.len(), 1);
+}
+
+/// Test that custom [tool.uv].cache-keys triggers reinstall when matching files change.
+/// This tests the fix for respecting uv's cache-keys configuration.
+///
+/// Test that custom cache-keys in pyproject.toml are respected.
+/// When a file matching the cache-keys pattern is modified, the package should be reinstalled.
+#[test]
+fn test_custom_cache_keys_trigger_reinstall() {
+    // Create temp directory with custom structure
+    let temp_dir = tempfile::tempdir().unwrap();
+
+    // Create src directory
+    let src_dir = temp_dir.path().join("src");
+    fs_err::create_dir_all(&src_dir).unwrap();
+    let py_file_path = src_dir.join("mymodule.py");
+
+    // Create pyproject.toml with custom cache-keys
+    // Note: cache-keys uses "src/**/*.py" as a string (Path variant)
+    {
+        let mut pyproject_toml =
+            std::fs::File::create(temp_dir.path().join("pyproject.toml")).unwrap();
+        pyproject_toml
+            .write_all(
+                r#"
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+cache-keys = ["src/**/*.py"]
+"#
+                .as_bytes(),
+            )
+            .unwrap();
+        pyproject_toml.sync_all().unwrap();
+    }
+
+    // Create the Python file initially
+    {
+        let mut py_file = std::fs::File::create(&py_file_path).unwrap();
+        py_file.write_all(b"# test").unwrap();
+        py_file.sync_all().unwrap();
+    }
+
+    // Get the initial CacheInfo from the source directory (this is what would be stored at install time)
+    let initial_cache_info =
+        uv_cache_info::CacheInfo::from_path(temp_dir.path()).expect("should get cache info");
+
+    // Modify the Python file to change its content and timestamp
+    std::thread::sleep(std::time::Duration::from_millis(10));
+    {
+        let mut py_file = std::fs::File::create(&py_file_path).unwrap();
+        py_file.write_all(b"# modified test").unwrap();
+        py_file.sync_all().unwrap();
+    }
+
+    // Set-up site-packages with the OLD cache info (simulating a package installed before modification)
+    let site_packages = MockedSitePackages::new().add_directory(
+        "testpkg",
+        "0.1.0",
+        temp_dir.path().to_path_buf(),
+        false,
+        InstalledDistOptions::default().with_cache_info(initial_cache_info),
+    );
+
+    // Requires following package
+    let required = RequiredPackages::new().add_directory(
+        "testpkg",
+        "0.1.0",
+        temp_dir.path().to_path_buf(),
+        false,
+    );
+
+    // We expect a reinstall, because the source CacheInfo differs from the stored one
+    let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
+    let installs = plan
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
+        .expect("should install");
+
+    assert_eq!(
+        installs.reinstalls.len(),
+        1,
+        "Expected 1 reinstall but got {}",
+        installs.reinstalls.len()
+    );
+    assert_matches!(
+        installs.reinstalls[0].1,
+        NeedReinstall::SourceDirectoryNewerThanCache
+    );
 }

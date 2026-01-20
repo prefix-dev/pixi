@@ -10,6 +10,7 @@ on:
       - ".github/workflows/docs.yml"
       - "mkdocs.yml"
       - "pixi.*"
+      - "install/*"
     tags:
       - v**
   pull_request:
@@ -20,6 +21,7 @@ on:
       - ".github/workflows/docs.yml"
       - "mkdocs.yml"
       - "pixi.*"
+      - "install/*"
   workflow_dispatch:
     inputs:
       tag:
@@ -32,7 +34,8 @@ concurrency:
   group: "pages"
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   build-docs:
@@ -40,13 +43,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           submodules: recursive
+          persist-credentials: false
 
-      - uses: prefix-dev/setup-pixi@main
+      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           environments: docs
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build docs for test
         run: |
@@ -60,7 +65,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           # fetch everything so we can checkout the tag
           fetch-depth: 0
@@ -70,11 +75,14 @@ jobs:
       - name: Checkout tag
         if: github.event_name == 'workflow_dispatch'
         run: |
-          git checkout tags/${{ github.event.inputs.tag }}
+          git checkout tags/${GITHUB_EVENT_INPUTS_TAG}
+        env:
+          GITHUB_EVENT_INPUTS_TAG: ${{ github.event.inputs.tag }}
 
-      - uses: prefix-dev/setup-pixi@main
+      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           environments: docs
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Configure Git user
         run: |
@@ -87,7 +95,9 @@ jobs:
 
       - name: Tag from workflow_dispatch
         if: github.event_name == 'workflow_dispatch'
-        run: echo "RELEASE_VERSION=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+        run: echo "RELEASE_VERSION=${GITHUB_EVENT_INPUTS_TAG}" >> $GITHUB_ENV
+        env:
+          GITHUB_EVENT_INPUTS_TAG: ${{ github.event.inputs.tag }}
 
       - name: Deploy with mike 🚀
         run: |
@@ -101,15 +111,16 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           # fetch everything so we can checkout the tag
           fetch-depth: 0
           submodules: recursive
 
-      - uses: prefix-dev/setup-pixi@main
+      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           environments: docs
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Configure Git user
         run: |
@@ -131,3 +142,7 @@ jobs:
           # Check diff before committing
           git diff-index --quiet HEAD || git commit -m "Update install scripts from main"
           git push origin gh-pages
+
+      - name: Checkout main branch
+        # Important to run the post setup-pixi steps, we want to cache based on the `main` branch and we checked out another in the step above.
+        run: git checkout main

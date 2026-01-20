@@ -8,12 +8,14 @@ use miette::IntoDiagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_git::{git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha};
 use pixi_manifest::pypi::pypi_options::{
-    FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PypiOptions,
+    FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PrereleaseMode,
+    PypiOptions,
 };
 use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
 use pixi_spec::GitReference as PixiReference;
-use std::fmt::Write;
+use std::{collections::HashSet, fmt::Write};
 use uv_configuration::BuildOptions;
+use uv_configuration::TrustedHost;
 use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep508::{VerbatimUrl, VerbatimUrlError};
@@ -244,6 +246,19 @@ pub fn to_index_strategy(
     }
 }
 
+/// Convert pixi `PrereleaseMode` to `uv_resolver::PrereleaseMode`
+pub fn to_prerelease_mode(prerelease_mode: Option<&PrereleaseMode>) -> uv_resolver::PrereleaseMode {
+    match prerelease_mode {
+        Some(PrereleaseMode::Disallow) => uv_resolver::PrereleaseMode::Disallow,
+        Some(PrereleaseMode::Allow) => uv_resolver::PrereleaseMode::Allow,
+        Some(PrereleaseMode::IfNecessary) => uv_resolver::PrereleaseMode::IfNecessary,
+        Some(PrereleaseMode::Explicit) => uv_resolver::PrereleaseMode::Explicit,
+        Some(PrereleaseMode::IfNecessaryOrExplicit) | None => {
+            uv_resolver::PrereleaseMode::IfNecessaryOrExplicit
+        }
+    }
+}
+
 pub fn into_uv_git_reference(git_ref: PixiGitReference) -> uv_git_types::GitReference {
     match git_ref {
         PixiGitReference::Branch(branch) => uv_git_types::GitReference::Branch(branch),
@@ -277,9 +292,21 @@ pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiRef
 }
 
 /// Convert a solved [`GitSourceDist`] into [`PinnedGitSpec`]
-pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
-    let reference = into_pixi_reference(dist.git.reference().clone());
-
+///
+/// The `original_reference` parameter allows preserving the original git reference
+/// from the manifest (e.g., `Branch("main")`). When uv resolves a git dependency,
+/// it may normalize branch references to `DefaultBranch`, losing the original
+/// branch information. If provided, this original reference will be used instead
+/// of the one from uv's resolution.
+///
+/// If no original reference is provided (user didn't specify branch/tag/rev),
+/// we store the resolved commit as `Rev(commit)` rather than `DefaultBranch`.
+/// This ensures the lock file has a precise reference that doesn't require
+/// cache lookups when re-resolving (similar to how uv's lockfile works).
+pub fn into_pinned_git_spec(
+    dist: GitSourceDist,
+    original_reference: Option<PixiReference>,
+) -> PinnedGitSpec {
     // Necessary to convert between our gitsha and uv gitsha.
     let git_sha = PixiGitSha::from_str(
         &dist
@@ -290,9 +317,17 @@ pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
     )
     .expect("we expect it to be a valid sha");
 
+    // Use the original reference from the manifest if provided.
+    // If no explicit reference was specified, use DefaultBranch.
+    // The precise commit is already captured in the fragment (`#commit`),
+    // so we don't need to duplicate it in the query string as `?rev=commit`.
+    let reference = original_reference.unwrap_or(PixiReference::DefaultBranch);
+
     let pinned_checkout = PinnedGitCheckout::new(
         git_sha,
-        dist.subdirectory.map(|sd| sd.to_string_lossy().to_string()),
+        dist.subdirectory
+            .and_then(|sd| pixi_spec::Subdirectory::try_from(sd.to_path_buf()).ok())
+            .unwrap_or_default(),
         reference,
     );
 
@@ -329,9 +364,17 @@ pub fn to_parsed_git_url(
             Some(into_uv_git_sha(git_source.commit)),
         )
         .into_diagnostic()?,
-        git_source
-            .subdirectory
-            .map(|s| PathBuf::from(s.as_str()).into_boxed_path()),
+        if git_source.subdirectory.is_empty() {
+            None
+        } else {
+            Some(
+                git_source
+                    .subdirectory
+                    .as_path()
+                    .to_path_buf()
+                    .into_boxed_path(),
+            )
+        },
     );
 
     Ok(parsed_git_url)
@@ -536,6 +579,67 @@ pub fn to_uv_trusted_host(
     Ok(uv_configuration::TrustedHost::from_str(trusted_host)?)
 }
 
+/// Configure insecure hosts for TLS verification bypass
+/// This function handles the logic for when tls_no_verify is enabled,
+/// adding all index hosts to the insecure list as a workaround since UV doesn't have a global SSL disable option
+pub fn configure_insecure_hosts_for_tls_bypass(
+    base_insecure_hosts: Vec<TrustedHost>,
+    tls_no_verify: bool,
+    index_locations: &IndexLocations,
+) -> Vec<TrustedHost> {
+    let mut allow_insecure_hosts = base_insecure_hosts;
+    let mut seen: HashSet<String> = allow_insecure_hosts
+        .iter()
+        .map(|host| host.to_string().to_ascii_lowercase())
+        .collect();
+
+    if tls_no_verify {
+        // When tls_no_verify is enabled, add all index hosts to the insecure list
+        // This is a workaround since UV doesn't have a global SSL disable option
+        //
+        // We use allowed_indexes() instead of known_indexes() because:
+        // - allowed_indexes() returns only indexes that will actually be used for package resolution
+        // - It deduplicates by name, excluding overridden/duplicate index definitions
+        // - This matches uv's authentication behavior and ensures we only bypass TLS for actively used indexes
+        let mut has_pypi_org_index = false;
+
+        let mut push_host = |host: &str, allow_insecure_hosts: &mut Vec<TrustedHost>| {
+            let key = host.to_ascii_lowercase();
+            if seen.insert(key.clone()) {
+                match to_uv_trusted_host(host) {
+                    Ok(trusted_host) => allow_insecure_hosts.push(trusted_host),
+                    Err(e) => tracing::warn!("Failed to add host {} as trusted: {}", host, e),
+                }
+            }
+        };
+
+        for index_url in index_locations.allowed_indexes() {
+            if let Some(host) = index_url.url().host_str() {
+                has_pypi_org_index |= host.eq_ignore_ascii_case("pypi.org");
+                push_host(host, &mut allow_insecure_hosts);
+            }
+        }
+
+        // Add hosts from find-links/flat indexes (if they are http/https)
+        for flat_index in index_locations.flat_indexes() {
+            if let Some(host) = flat_index.url().host_str() {
+                push_host(host, &mut allow_insecure_hosts);
+            }
+        }
+
+        // Add the default PyPI download host when using the main PyPI index.
+        if has_pypi_org_index {
+            push_host("files.pythonhosted.org", &mut allow_insecure_hosts);
+        }
+
+        tracing::warn!(
+            "TLS verification is disabled for PyPI operations. This is insecure and should only be used for testing or internal networks."
+        );
+    }
+
+    allow_insecure_hosts
+}
+
 /// Converts a date to a `uv_resolver::ExcludeNewer`
 /// since 0.8.2 uv also allows this per package,
 /// but we only support the global one for now
@@ -552,4 +656,109 @@ pub fn to_exclude_newer(exclude_newer: chrono::DateTime<chrono::Utc>) -> uv_reso
     // Will convert into a global ExcludeNewer
     // ..into is needed to convert into the uv timestamp type
     uv_resolver::ExcludeNewer::global(timestamp.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use url::Url;
+    use uv_distribution_types::{Index, IndexUrl};
+
+    #[test]
+    fn test_configure_insecure_hosts_for_tls_bypass_enabled() {
+        // Create test index locations
+        let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://pypi.org/simple/").unwrap().into(),
+        ));
+        let extra_index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://test-index.example.com/simple/")
+                .unwrap()
+                .into(),
+        ));
+
+        let indexes = vec![
+            Index::from_index_url(index_url),
+            Index::from_extra_index_url(extra_index_url),
+        ];
+        let index_locations = IndexLocations::new(indexes, vec![], false);
+
+        // Test with tls_no_verify enabled
+        let base_hosts = vec![];
+        let result = configure_insecure_hosts_for_tls_bypass(
+            base_hosts,
+            true, // tls_no_verify = true
+            &index_locations,
+        );
+
+        // Should have added both hosts
+        assert_eq!(result.len(), 3);
+        let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
+        assert!(host_names.contains(&"pypi.org".to_string()));
+        assert!(host_names.contains(&"test-index.example.com".to_string()));
+        assert!(host_names.contains(&"files.pythonhosted.org".to_string()));
+    }
+
+    #[test]
+    fn test_configure_insecure_hosts_for_tls_bypass_disabled() {
+        // Create test index locations
+        let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://pypi.org/simple/").unwrap().into(),
+        ));
+        let indexes = vec![Index::from_index_url(index_url)];
+        let index_locations = IndexLocations::new(indexes, vec![], false);
+
+        // Test with tls_no_verify disabled
+        let base_hosts = vec![];
+        let result = configure_insecure_hosts_for_tls_bypass(
+            base_hosts,
+            false, // tls_no_verify = false
+            &index_locations,
+        );
+
+        // Should not have added any hosts
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_configure_insecure_hosts_for_tls_bypass_preserves_existing() {
+        // Create test index locations
+        let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://pypi.org/simple/").unwrap().into(),
+        ));
+        let indexes = vec![Index::from_index_url(index_url)];
+        let index_locations = IndexLocations::new(indexes, vec![], false);
+
+        // Start with existing trusted host
+        let existing_host = to_uv_trusted_host("existing.example.com").unwrap();
+        let base_hosts = vec![existing_host];
+
+        let result = configure_insecure_hosts_for_tls_bypass(
+            base_hosts,
+            true, // tls_no_verify = true
+            &index_locations,
+        );
+
+        // Should have preserved existing host and added new one
+        assert_eq!(result.len(), 3);
+        let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
+        assert!(host_names.contains(&"existing.example.com".to_string()));
+        assert!(host_names.contains(&"pypi.org".to_string()));
+        assert!(host_names.contains(&"files.pythonhosted.org".to_string()));
+    }
+
+    #[test]
+    fn test_configure_insecure_hosts_for_flat_index_hosts() {
+        // Flat index hosted on a custom domain should be added when tls_no_verify is enabled
+        let flat_index = Index::from_find_links(IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://packages.example.org/simple/")
+                .unwrap()
+                .into(),
+        )));
+        let index_locations = IndexLocations::new(vec![], vec![flat_index], true);
+
+        let result = configure_insecure_hosts_for_tls_bypass(vec![], true, &index_locations);
+
+        let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
+        assert!(host_names.contains(&"packages.example.org".to_string()));
+    }
 }

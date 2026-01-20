@@ -8,6 +8,8 @@ use std::{
     str::FromStr,
 };
 
+use pixi_path::AbsPathBuf;
+
 use event_reporter::EventReporter;
 use fs_err as fs;
 use itertools::Itertools;
@@ -16,11 +18,11 @@ use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, CommandDispatcherError, Executor,
     InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PackageIdentifier,
-    PixiEnvironmentSpec, SourceBuildCacheStatusSpec,
+    PixiEnvironmentSpec, SourceBuildCacheStatusSpec, build::SourceCodeLocation,
 };
 use pixi_config::default_channel_config;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
-use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
+use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec, Subdirectory, UrlSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
 use pixi_url::UrlError;
@@ -35,9 +37,17 @@ use url::Url;
 
 use crate::{event_reporter::Event, event_tree::EventTree};
 
+/// Converts a PathBuf to AbsPresumedDirPathBuf for tests.
+fn to_abs_dir(path: impl Into<PathBuf>) -> pixi_path::AbsPresumedDirPathBuf {
+    AbsPathBuf::new(path)
+        .expect("path is not absolute")
+        .into_assume_dir()
+}
+
 /// Returns a default set of cache directories for the test.
 fn default_cache_dirs() -> CacheDirs {
-    CacheDirs::new(pixi_config::get_cache_dir().unwrap())
+    let cache_dir = pixi_config::get_cache_dir().unwrap();
+    CacheDirs::new(to_abs_dir(cache_dir))
 }
 
 /// Returns the tool platform that is appropriate for the current platform.
@@ -65,6 +75,22 @@ fn cargo_workspace_dir() -> &'static Path {
 /// Returns the path to the `tests/data/workspaces` directory in the repository.
 fn workspaces_dir() -> PathBuf {
     cargo_workspace_dir().join("tests/data/workspaces")
+}
+
+/// Recursively copies a directory from `src` to `dst`.
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if src_path.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
 }
 
 /// Returns the default build environment to use for tests.
@@ -98,12 +124,21 @@ fn file_url_for_test(tempdir: &TempDir, name: &str) -> Url {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 pub async fn simple_test() {
+    use pixi_test_utils::GitRepoFixture;
+
+    // Create a local git repo from our fixture
+    let git_repo = GitRepoFixture::new("multi-output-recipe");
+
+    // Use a local channel (backend_channel_1 has pixi-build-api-version which is needed for builds)
+    let channel_dir = cargo_workspace_dir().join("tests/data/channels/channels/backend_channel_1");
+    let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
+
     let (reporter, events) = EventReporter::new();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let tempdir = tempfile::tempdir().unwrap();
     let prefix_dir = tempdir.path().join("prefix");
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_reporter(reporter)
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages.clone())
@@ -116,21 +151,13 @@ pub async fn simple_test() {
             dependencies: DependencyMap::from_iter([(
                 "foobar-desktop".parse().unwrap(),
                 GitSpec {
-                    git: "https://github.com/wolfv/pixi-build-examples.git"
-                        .parse()
-                        .unwrap(),
-                    rev: Some(GitReference::Rev(
-                        "8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a".to_owned(),
-                    )),
-                    subdirectory: Some(String::from("multi-output/recipe")),
+                    git: git_repo.url.parse().unwrap(),
+                    rev: Some(GitReference::Rev(git_repo.commits[0].clone())),
+                    subdirectory: Subdirectory::try_from("recipe").unwrap(),
                 }
                 .into(),
             )]),
-            channels: vec![
-                Url::from_str("https://prefix.dev/conda-forge")
-                    .unwrap()
-                    .into(),
-            ],
+            channels: vec![channel_url.clone()],
             build_environment: build_env.clone(),
             channel_config: default_channel_config(),
             ..PixiEnvironmentSpec::default()
@@ -147,13 +174,9 @@ pub async fn simple_test() {
             build_environment: build_env,
             ignore_packages: None,
             force_reinstall: Default::default(),
-            channels: vec![
-                Url::from_str("https://prefix.dev/conda-forge")
-                    .unwrap()
-                    .into(),
-            ],
+            channels: vec![channel_url],
             channel_config: default_channel_config(),
-            variants: None,
+            variant_configuration: None,
             variant_files: None,
             enabled_protocols: Default::default(),
         })
@@ -166,7 +189,16 @@ pub async fn simple_test() {
     );
 
     let event_tree = EventTree::from(events);
-    insta::assert_snapshot!(event_tree.to_string());
+
+    // Redact temp paths and git hashes for stable snapshots
+    let output = event_tree.to_string();
+    let output = regex::Regex::new(r"file:///[^@]+/multi-output-recipe/")
+        .unwrap()
+        .replace_all(&output, "file://[LOCAL_GIT_REPO]/");
+    let output = regex::Regex::new(r"@[a-f0-9]{40}")
+        .unwrap()
+        .replace_all(&output, "@[GIT_HASH]");
+    insta::assert_snapshot!(output);
 }
 
 #[tokio::test]
@@ -250,7 +282,7 @@ pub async fn instantiate_backend_without_compatible_api_version_cancels_duplicat
         dispatcher.instantiate_tool_environment(spec),
     );
 
-    // Exactly one result should be a failure and the other should be cancelled.
+    // Both results should be failures since errors are now cloned and sent to all channels.
     let is_cancelled = |r: &Result<
         _,
         CommandDispatcherError<pixi_command_dispatcher::InstantiateToolEnvironmentError>,
@@ -264,10 +296,13 @@ pub async fn instantiate_backend_without_compatible_api_version_cancels_duplicat
     let failed_count = usize::from(is_failed(&r1)) + usize::from(is_failed(&r2));
 
     assert_eq!(
-        cancelled_count, 1,
-        "expected exactly one request to be cancelled"
+        cancelled_count, 0,
+        "no requests should be cancelled - errors are cloned to all channels"
     );
-    assert_eq!(failed_count, 1, "expected exactly one request to fail");
+    assert_eq!(
+        failed_count, 2,
+        "both requests should fail with the same error"
+    );
 }
 
 /// Dropping the returned future should cancel the background task promptly.
@@ -304,7 +339,7 @@ pub async fn dropping_future_cancels_background_task() {
         .cache_dirs()
         .build_backends()
         .join(spec.cache_key());
-    let mut write_guard = pixi_utils::AsyncPrefixGuard::new(&prefix_dir)
+    let mut write_guard = pixi_utils::AsyncPrefixGuard::new(prefix_dir.as_std_path())
         .await
         .unwrap()
         .write()
@@ -373,8 +408,8 @@ pub async fn test_cycle() {
     let root_dir = workspaces_dir().join("cycle");
     let tempdir = tempfile::tempdir().unwrap();
     let dispatcher = CommandDispatcher::builder()
-        .with_root_dir(root_dir.clone())
-        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_reporter(reporter)
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages.clone())
@@ -413,21 +448,17 @@ pub async fn test_cycle() {
 /// package and any package that specifies it as a host dependency.
 #[tokio::test]
 pub async fn test_stale_host_dependency_triggers_rebuild() {
-    // Construct a command dispatcher with:
-    // - a root directory located in the `cycle` workspace
-    // - the default cache directories but with a temporary workspace cache
-    //   directory
-    // - the default tool platform and virtual packages
-    // - a backend override that uses a passthrough backend to avoid any actual
-    //   backend calls
-    let root_dir = workspaces_dir().join("host-dependency");
+    // Copy workspace to temp directory so we can modify files without affecting other tests
+    let source_dir = workspaces_dir().join("host-dependency");
     let tempdir = tempfile::tempdir().unwrap();
+    let root_dir = tempdir.path().join("workspace");
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
     let build_command_dispatcher = || {
         CommandDispatcher::builder()
-            .with_root_dir(root_dir.clone())
-            .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
             .with_executor(Executor::Serial)
             .with_tool_platform(tool_platform, tool_virtual_packages.clone())
             .with_backend_overrides(BackendOverride::from_memory(
@@ -534,13 +565,26 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 pub async fn instantiate_backend_with_from_source() {
-    let root_dir = workspaces_dir().join("source-backends");
+    // Use existing backend_channel_1 which has pixi-build-api-version package with actual .conda files
+    let channel_dir = cargo_workspace_dir().join("tests/data/channels/channels/backend_channel_1");
+    let channel_url = url::Url::from_directory_path(&channel_dir).unwrap();
+
+    // Copy source-backends workspace to temp directory so we can modify the channel
+    let source_dir = workspaces_dir().join("source-backends");
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let root_dir = tmp_dir.path().to_path_buf();
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
+
+    // Update workspace pixi.toml to use local channel instead of conda-forge
+    let workspace_toml = root_dir.join("pixi.toml");
+    let content = fs_err::read_to_string(&workspace_toml).unwrap();
+    let content = content.replace("conda-forge", channel_url.as_str());
+    fs_err::write(&workspace_toml, content).unwrap();
 
     let dispatcher = CommandDispatcher::builder()
-        .with_root_dir(root_dir.clone())
-        .with_cache_dirs(default_cache_dirs())
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(CacheDirs::new(to_abs_dir(root_dir.join(".pixi"))))
         .with_executor(Executor::Serial)
         .with_backend_overrides(BackendOverride::InMemory(
             InMemoryOverriddenBackends::Specified(HashMap::from_iter([(
@@ -569,7 +613,7 @@ async fn source_build_cache_status_clear_works() {
     let tmp_dir = tempfile::tempdir().unwrap();
 
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(CacheDirs::new(tmp_dir.path().to_path_buf()))
+        .with_cache_dirs(CacheDirs::new(to_abs_dir(tmp_dir.path())))
         .finish();
 
     let host = Platform::current();
@@ -589,14 +633,18 @@ async fn source_build_cache_status_clear_works() {
 
     let spec = SourceBuildCacheStatusSpec {
         package: pkg,
-        source: PinnedPathSpec {
-            path: tmp_dir.path().to_string_lossy().into_owned().into(),
-        }
-        .into(),
+        source: SourceCodeLocation::new(
+            PinnedPathSpec {
+                path: tmp_dir.path().to_string_lossy().into_owned().into(),
+            }
+            .into(),
+            None,
+        ),
         channels: Vec::<ChannelUrl>::new(),
         build_environment: build_env,
         channel_config: default_channel_config(),
         enabled_protocols: Default::default(),
+        variants: None,
     };
 
     let first = dispatcher
@@ -637,6 +685,298 @@ async fn source_build_cache_status_clear_works() {
     );
 }
 
+/// Tests that `dev_source_metadata` correctly retrieves all outputs from a dev source
+/// and creates DevSourceRecords with combined dependencies.
+#[tokio::test]
+pub async fn test_dev_source_metadata() {
+    use pixi_command_dispatcher::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
+    use pixi_record::PinnedPathSpec;
+
+    // Setup: Create a dispatcher with the in-memory backend
+    let root_dir = workspaces_dir().join("dev-sources");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Pin the source spec to a path
+    let pinned_source = PinnedPathSpec {
+        path: "test-package".into(),
+    }
+    .into();
+
+    // Create the spec for dev source metadata
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("test-package"),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: pinned_source,
+            channel_config: default_channel_config(),
+            channels: vec![],
+            build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
+            variant_configuration: None,
+            variant_files: None,
+            enabled_protocols: Default::default(),
+            preferred_build_source: None,
+        },
+    };
+
+    // Act: Get the dev source metadata
+    let result = dispatcher
+        .dev_source_metadata(spec)
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("dev_source_metadata should succeed");
+
+    // Assert: Should have one record for test-package
+    assert_eq!(
+        result.records.len(),
+        1,
+        "Should have one record for test-package"
+    );
+
+    let record = &result.records[0];
+
+    // Verify the record has the correct name
+    assert_eq!(
+        record.name.as_source(),
+        "test-package",
+        "Record should be for test-package"
+    );
+
+    // Verify all dependencies are combined (build + host + run)
+    // From the test data: build (cmake, make), host (zlib, openssl), run (python, numpy)
+    let dep_names: Vec<_> = record
+        .dependencies
+        .names()
+        .map(|name| name.as_normalized())
+        .sorted()
+        .collect();
+
+    assert_eq!(
+        dep_names,
+        vec!["cmake", "make", "numpy", "openssl", "python", "zlib"],
+        "All dependencies (build, host, run) should be combined"
+    );
+
+    // Verify constraints are empty (test package has no constraints)
+    assert!(
+        record.constraints.is_empty(),
+        "Test package has no constraints"
+    );
+}
+
+/// Tests that `dev_source_metadata` returns an error when requesting a package
+/// that is not provided by the source.
+#[tokio::test]
+pub async fn test_dev_source_metadata_package_not_provided() {
+    use pixi_command_dispatcher::{
+        BuildBackendMetadataSpec, CommandDispatcherError, DevSourceMetadataError,
+        DevSourceMetadataSpec, PackageNotProvidedError,
+    };
+    use pixi_record::PinnedPathSpec;
+
+    // Setup: Create a dispatcher with the in-memory backend
+    let root_dir = workspaces_dir().join("dev-sources");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Pin the source spec to test-package which provides "test-package"
+    let pinned_source = PinnedPathSpec {
+        path: "test-package".into(),
+    }
+    .into();
+
+    // Request a package name that doesn't exist in the source
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("non-existent-package"),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: pinned_source,
+            channel_config: default_channel_config(),
+            channels: vec![],
+            build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
+            variant_configuration: None,
+            variant_files: None,
+            enabled_protocols: Default::default(),
+            preferred_build_source: None,
+        },
+    };
+
+    // Act: Get the dev source metadata - should fail
+    let result = dispatcher.dev_source_metadata(spec).await;
+
+    // Assert: Should return PackageNotProvided error
+    let err = result.expect_err("should fail when package is not provided by source");
+
+    match err {
+        CommandDispatcherError::Failed(DevSourceMetadataError::PackageNotProvided(
+            PackageNotProvidedError { name, .. },
+        )) => {
+            assert_eq!(
+                name.as_source(),
+                "non-existent-package",
+                "Error should contain the requested package name"
+            );
+        }
+        other => panic!("expected PackageNotProvided error, got: {other}"),
+    }
+}
+
+/// Tests that the PassthroughBackend generates multiple outputs based on variant configurations
+/// when dependencies have "*" version requirements.
+#[tokio::test]
+pub async fn test_dev_source_metadata_with_variants() {
+    use pixi_command_dispatcher::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
+    use pixi_record::PinnedPathSpec;
+    use std::collections::BTreeMap;
+
+    // Setup: Create a dispatcher with the in-memory backend
+    let root_dir = workspaces_dir().join("dev-sources");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Pin the source spec to a path
+    let pinned_source = PinnedPathSpec {
+        path: "variant-package".into(),
+    }
+    .into();
+
+    // Create variant configuration for python and numpy
+    let mut variant_config = BTreeMap::new();
+    variant_config.insert(
+        "python".to_string(),
+        vec!["3.10".to_string().into(), "3.11".to_string().into()],
+    );
+    variant_config.insert(
+        "numpy".to_string(),
+        vec!["1.0".to_string().into(), "2.0".to_string().into()],
+    );
+
+    // Create the spec for dev source metadata with variants
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("variant-package"),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: pinned_source,
+            channel_config: default_channel_config(),
+            channels: vec![],
+            build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
+            variant_configuration: Some(variant_config),
+            variant_files: None,
+            enabled_protocols: Default::default(),
+            preferred_build_source: None,
+        },
+    };
+
+    // Act: Get the dev source metadata
+    let result = dispatcher
+        .dev_source_metadata(spec)
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("dev_source_metadata should succeed");
+
+    // Assert: Should have 4 records (2 python versions × 2 numpy versions)
+    assert_eq!(
+        result.records.len(),
+        4,
+        "Should have 4 records for all variant combinations"
+    );
+
+    // Collect all variant combinations
+    let variants: Vec<_> = result
+        .records
+        .iter()
+        .map(|record| {
+            let python = record
+                .variants
+                .get("python")
+                .map(|s| s.to_string())
+                .unwrap_or("none".to_string());
+            let numpy = record
+                .variants
+                .get("numpy")
+                .map(|s| s.to_string())
+                .unwrap_or("none".to_string());
+            (python, numpy)
+        })
+        .sorted()
+        .collect();
+
+    // Verify all expected combinations are present
+    assert_eq!(
+        variants,
+        vec![
+            ("3.10".to_string(), "1.0".to_string()),
+            ("3.10".to_string(), "2.0".to_string()),
+            ("3.11".to_string(), "1.0".to_string()),
+            ("3.11".to_string(), "2.0".to_string()),
+        ],
+        "All variant combinations should be generated"
+    );
+
+    // Verify each record has the correct variant metadata
+    for record in &result.records {
+        assert_eq!(
+            record.name.as_source(),
+            "variant-package",
+            "All records should have the same package name"
+        );
+
+        // Verify the variant is properly set in the record
+        assert!(
+            record.variants.contains_key("python"),
+            "Variant should contain python key"
+        );
+        assert!(
+            record.variants.contains_key("numpy"),
+            "Variant should contain numpy key"
+        );
+
+        // Verify python and numpy are in dependencies (all combined)
+        let dep_names: Vec<_> = record
+            .dependencies
+            .names()
+            .map(|n| n.as_normalized())
+            .sorted()
+            .collect();
+
+        assert!(
+            dep_names.contains(&"python"),
+            "Python should be in dependencies"
+        );
+        assert!(
+            dep_names.contains(&"numpy"),
+            "Numpy should be in dependencies"
+        );
+    }
+}
+
 /// Tests that forcing a rebuild of a package will ignore UpToDate cache status from previous builds.
 #[tokio::test]
 pub async fn test_force_rebuild() {
@@ -646,8 +986,8 @@ pub async fn test_force_rebuild() {
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
     let build_command_dispatcher = || {
         CommandDispatcher::builder()
-            .with_root_dir(root_dir.clone())
-            .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
             .with_executor(Executor::Serial)
             .with_tool_platform(tool_platform, tool_virtual_packages.clone())
             .with_backend_overrides(BackendOverride::from_memory(
@@ -793,11 +1133,11 @@ pub async fn test_force_rebuild() {
 #[tokio::test]
 pub async fn pin_and_checkout_url_reuses_cached_checkout() {
     let tempdir = tempfile::tempdir().unwrap();
-    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
     let url_cache_root = cache_dirs.url();
 
     let sha = dummy_sha();
-    let checkout_dir = prepare_cached_checkout(&url_cache_root, sha);
+    let checkout_dir = prepare_cached_checkout(url_cache_root.as_std_path(), sha);
 
     let dispatcher = CommandDispatcher::builder()
         .with_cache_dirs(cache_dirs)
@@ -809,6 +1149,7 @@ pub async fn pin_and_checkout_url_reuses_cached_checkout() {
         url: "https://example.com/archive.tar.gz".parse().unwrap(),
         md5: None,
         sha256: Some(sha),
+        subdirectory: Subdirectory::default(),
     };
 
     let checkout = dispatcher
@@ -816,7 +1157,7 @@ pub async fn pin_and_checkout_url_reuses_cached_checkout() {
         .await
         .expect("url checkout should succeed");
 
-    assert_eq!(checkout.path, checkout_dir);
+    assert_eq!(checkout.path.as_std_path(), checkout_dir);
     match checkout.pinned {
         PinnedSourceSpec::Url(pinned) => {
             assert_eq!(pinned.url, spec.url);
@@ -829,7 +1170,7 @@ pub async fn pin_and_checkout_url_reuses_cached_checkout() {
 #[tokio::test]
 pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request() {
     let tempdir = tempfile::tempdir().unwrap();
-    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
     let archive = tempfile::tempdir().unwrap();
     let url = file_url_for_test(&archive, "archive.zip");
 
@@ -842,11 +1183,13 @@ pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request()
         url: url.clone(),
         md5: None,
         sha256: None,
+        subdirectory: Subdirectory::default(),
     };
     let bad_spec = UrlSpec {
         url,
         md5: None,
         sha256: Some(Sha256::digest(b"pixi-url-bad-sha")),
+        subdirectory: Subdirectory::default(),
     };
 
     let (good, bad) = tokio::join!(
@@ -866,7 +1209,7 @@ pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request()
 #[tokio::test]
 pub async fn pin_and_checkout_url_validates_cached_results() {
     let tempdir = tempfile::tempdir().unwrap();
-    let cache_dirs = CacheDirs::new(tempdir.path().join("pixi-cache"));
+    let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
     let archive = tempfile::tempdir().unwrap();
     let url = file_url_for_test(&archive, "archive.zip");
 
@@ -879,6 +1222,7 @@ pub async fn pin_and_checkout_url_validates_cached_results() {
         url: url.clone(),
         md5: None,
         sha256: None,
+        subdirectory: Subdirectory::default(),
     };
 
     dispatcher
@@ -890,6 +1234,7 @@ pub async fn pin_and_checkout_url_validates_cached_results() {
         url: url.clone(),
         md5: None,
         sha256: Some(Sha256::digest(b"pixi-url-bad-cache")),
+        subdirectory: Subdirectory::default(),
     };
 
     let err = dispatcher.checkout_url(bad_spec).await.unwrap_err();
@@ -897,4 +1242,558 @@ pub async fn pin_and_checkout_url_validates_cached_results() {
         err,
         CommandDispatcherError::Failed(UrlError::Sha256Mismatch { .. })
     ));
+}
+
+/// Tests that a package is NOT rebuilt across sessions when no source files have changed.
+///
+/// This test simulates a program restart by dropping and recreating the dispatcher,
+/// and verifies that the cache is properly reused (CacheStatus::UpToDate).
+#[tokio::test]
+pub async fn test_package_not_rebuilt_across_sessions_when_no_files_changed() {
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+    };
+
+    // First session: solve and install
+    let dispatcher = build_command_dispatcher().finish();
+
+    let records = dispatcher
+        .solve_pixi_environment(PixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([
+                (
+                    "package-a".parse().unwrap(),
+                    PathSpec::new("package-a").into(),
+                ),
+                (
+                    "package-c".parse().unwrap(),
+                    PathSpec::new("package-c").into(),
+                ),
+            ]),
+            build_environment: build_env.clone(),
+            ..PixiEnvironmentSpec::default()
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("solve should succeed");
+
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("install should succeed");
+
+    // Drop dispatcher to simulate program restart
+    drop(dispatcher);
+
+    // Second session: reinstall WITHOUT modifying any files
+    let (reporter, events) = EventReporter::new();
+    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records, prefix)
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("reinstall should succeed");
+
+    let rebuild_packages: Vec<_> = events
+        .take()
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.name.as_normalized().to_string())
+            }
+            _ => None,
+        })
+        .collect();
+
+    assert!(
+        rebuild_packages.is_empty(),
+        "No packages should be rebuilt across sessions when no files changed, but got: {rebuild_packages:?}"
+    );
+}
+
+/// Tests that a package IS rebuilt across sessions when a source file is modified.
+///
+/// This test simulates a program restart by dropping and recreating the dispatcher,
+/// and verifies that file changes are detected and trigger a rebuild.
+#[tokio::test]
+pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
+    // Copy workspace to temp directory so we can modify files without affecting other tests
+    let source_dir = workspaces_dir().join("host-dependency");
+    let tempdir = tempfile::tempdir().unwrap();
+    let root_dir = tempdir.path().join("workspace");
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
+
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+    };
+
+    // First session: solve and install
+    let dispatcher = build_command_dispatcher().finish();
+
+    let records = dispatcher
+        .solve_pixi_environment(PixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([
+                (
+                    "package-a".parse().unwrap(),
+                    PathSpec::new("package-a").into(),
+                ),
+                (
+                    "package-c".parse().unwrap(),
+                    PathSpec::new("package-c").into(),
+                ),
+            ]),
+            build_environment: build_env.clone(),
+            ..PixiEnvironmentSpec::default()
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("solve should succeed");
+
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("install should succeed");
+
+    // Drop dispatcher to simulate program restart
+    drop(dispatcher);
+
+    // Create a file that matches package-b's build glob pattern ("TOUCH*")
+    fs_err::write(root_dir.join("package-b/TOUCH_FILE"), "trigger rebuild").unwrap();
+
+    // Second session: reinstall after file modification
+    let (reporter, events) = EventReporter::new();
+    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records, prefix)
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("reinstall should succeed");
+
+    let rebuild_packages: Vec<_> = events
+        .take()
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.name.as_normalized().to_string())
+            }
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        rebuild_packages,
+        vec!["package-b"],
+        "Only package-b should be rebuilt after source file modification"
+    );
+}
+
+/// Tests that modifying a source file triggers a rebuild of the package.
+///
+/// This is a focused test that verifies only the file-change detection behavior,
+/// without testing dependency chains or force rebuild flags.
+#[tokio::test]
+pub async fn test_package_rebuilt_when_source_file_modified() {
+    // Copy workspace to temp directory so we can modify files without affecting other tests
+    let source_dir = workspaces_dir().join("host-dependency");
+    let tempdir = tempfile::tempdir().unwrap();
+    let root_dir = tempdir.path().join("workspace");
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+    };
+
+    // First pass: build and install package-b
+    let dispatcher = build_command_dispatcher().finish();
+
+    let records = dispatcher
+        .solve_pixi_environment(PixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package-b".parse().unwrap(),
+                PathSpec::new("package-b").into(),
+            )]),
+            build_environment: build_env.clone(),
+            ..PixiEnvironmentSpec::default()
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("solve should succeed");
+
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("install should succeed");
+
+    // Drop dispatcher to flush caches (simulating program restart)
+    drop(dispatcher);
+
+    // Create a file that matches package-b's build glob pattern ("TOUCH*")
+    let _touch_file = tempfile::Builder::new()
+        .prefix("TOUCH")
+        .tempfile_in(root_dir.join("package-b"))
+        .unwrap();
+
+    // Second pass: reinstall with new dispatcher, expect rebuild
+    let (reporter, events) = EventReporter::new();
+    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records, prefix)
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("reinstall should succeed");
+
+    let rebuild_packages: Vec<_> = events
+        .take()
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.name.as_normalized().to_string())
+            }
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        rebuild_packages,
+        vec!["package-b"],
+        "Package should be rebuilt when source file is modified"
+    );
+}
+
+/// Tests that a package is NOT rebuilt when no source files have changed.
+///
+/// This is a focused test that verifies cache reuse behavior when files are unchanged
+/// within the same dispatcher session (CacheStatus::New is reused).
+#[tokio::test]
+pub async fn test_package_not_rebuilt_when_no_files_changed() {
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let (reporter, events) = EventReporter::new();
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .with_reporter(reporter)
+        .finish();
+
+    // First pass: build and install package-b
+    let records = dispatcher
+        .solve_pixi_environment(PixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package-b".parse().unwrap(),
+                PathSpec::new("package-b").into(),
+            )]),
+            build_environment: build_env.clone(),
+            ..PixiEnvironmentSpec::default()
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("solve should succeed");
+
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("install should succeed");
+
+    // Count first build events
+    let first_build_count: usize = events
+        .take()
+        .iter()
+        .filter(|event| {
+            matches!(
+                event,
+                event_reporter::Event::BackendSourceBuildQueued { .. }
+            )
+        })
+        .count();
+
+    assert_eq!(
+        first_build_count, 1,
+        "First install should build package-b once"
+    );
+
+    // Second pass: reinstall WITHOUT modifying any files (same dispatcher session)
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records, prefix)
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("reinstall should succeed");
+
+    let rebuild_packages: Vec<_> = events
+        .take()
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.name.as_normalized().to_string())
+            }
+            _ => None,
+        })
+        .collect();
+
+    assert!(
+        rebuild_packages.is_empty(),
+        "No packages should be rebuilt when no files changed, but got: {rebuild_packages:?}"
+    );
+}
+
+/// Tests that metadata is NOT re-fetched when no source files have changed.
+///
+/// This is a focused test that verifies metadata cache reuse behavior.
+#[tokio::test]
+pub async fn test_metadata_not_refetched_when_no_files_changed() {
+    use pixi_command_dispatcher::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
+    use pixi_record::PinnedPathSpec;
+
+    let root_dir = workspaces_dir().join("dev-sources");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+    };
+
+    let pinned_source: PinnedSourceSpec = PinnedPathSpec {
+        path: "test-package".into(),
+    }
+    .into();
+
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("test-package"),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: pinned_source,
+            channel_config: default_channel_config(),
+            channels: vec![],
+            build_environment: BuildEnvironment::simple(
+                tool_platform,
+                tool_virtual_packages.clone(),
+            ),
+            variant_configuration: None,
+            variant_files: None,
+            enabled_protocols: Default::default(),
+            preferred_build_source: None,
+        },
+    };
+
+    // First metadata request
+    let (reporter, events) = EventReporter::new();
+    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+
+    dispatcher
+        .dev_source_metadata(spec.clone())
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("first metadata request should succeed");
+
+    let first_metadata_requests: usize = events
+        .take()
+        .iter()
+        .filter(|event| {
+            matches!(
+                event,
+                event_reporter::Event::BuildBackendMetadataQueued { .. }
+            )
+        })
+        .count();
+
+    assert_eq!(
+        first_metadata_requests, 1,
+        "First request should fetch metadata once"
+    );
+
+    // Second metadata request (same dispatcher, no file changes)
+    dispatcher.clear_reporter().await;
+
+    dispatcher
+        .dev_source_metadata(spec)
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("second metadata request should succeed");
+
+    let second_metadata_requests: usize = events
+        .take()
+        .iter()
+        .filter(|event| {
+            matches!(
+                event,
+                event_reporter::Event::BuildBackendMetadataQueued { .. }
+            )
+        })
+        .count();
+
+    assert_eq!(
+        second_metadata_requests, 0,
+        "Second request should use cached metadata, no backend call expected"
+    );
+}
+
+/// Tests that metadata IS re-fetched when a source file is modified.
+///
+/// This is a focused test that verifies metadata cache invalidation on file changes.
+#[tokio::test]
+pub async fn test_metadata_refetched_when_source_file_modified() {
+    use pixi_command_dispatcher::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
+    use pixi_record::PinnedPathSpec;
+
+    // Copy workspace to temp directory so we can modify files without affecting other tests
+    let source_dir = workspaces_dir().join("host-dependency");
+    let tempdir = tempfile::tempdir().unwrap();
+    let root_dir = tempdir.path().join("workspace");
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+    };
+
+    let pinned_source: PinnedSourceSpec = PinnedPathSpec {
+        path: "package-b".into(),
+    }
+    .into();
+
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("package-b"),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: pinned_source,
+            channel_config: default_channel_config(),
+            channels: vec![],
+            build_environment: BuildEnvironment::simple(
+                tool_platform,
+                tool_virtual_packages.clone(),
+            ),
+            variant_configuration: None,
+            variant_files: None,
+            enabled_protocols: Default::default(),
+            preferred_build_source: None,
+        },
+    };
+
+    // First metadata request
+    let dispatcher = build_command_dispatcher().finish();
+
+    dispatcher
+        .dev_source_metadata(spec.clone())
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("first metadata request should succeed");
+
+    // Drop dispatcher to flush caches (simulating program restart)
+    drop(dispatcher);
+
+    // Create a file that matches package-b's build glob pattern ("TOUCH*")
+    let _touch_file = tempfile::Builder::new()
+        .prefix("TOUCH")
+        .tempfile_in(root_dir.join("package-b"))
+        .unwrap();
+
+    // Second metadata request after file modification
+    let (reporter, events) = EventReporter::new();
+    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+
+    dispatcher
+        .dev_source_metadata(spec)
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("second metadata request should succeed");
+
+    let metadata_requests: usize = events
+        .take()
+        .iter()
+        .filter(|event| {
+            matches!(
+                event,
+                event_reporter::Event::BuildBackendMetadataQueued { .. }
+            )
+        })
+        .count();
+
+    assert_eq!(
+        metadata_requests, 1,
+        "Metadata should be re-fetched after source file modification"
+    );
 }

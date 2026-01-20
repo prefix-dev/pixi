@@ -1,16 +1,19 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet, BinaryHeap},
     hash::{Hash, Hasher},
     io::SeekFrom,
-    path::{Path, PathBuf},
+    path::PathBuf,
+    sync::Arc,
 };
 
+use crate::build::{SourceCodeLocation, source_checkout_cache_key};
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use ordermap::OrderMap;
 use pixi_build_discovery::{BackendInitializationParams, DiscoveredBackend};
-use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
-use pixi_record::PinnedSourceSpec;
+use pixi_build_types::{ProjectModel, TargetSelector};
+use pixi_path::{AbsPathBuf, AbsPresumedDirPath, AbsPresumedDirPathBuf, AbsPresumedFilePathBuf};
+use pixi_record::{PinnedSourceSpec, VariantValue};
 use pixi_stable_hash::{StableHashBuilder, json::StableJson, map::StableMap};
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
 use serde::{Deserialize, Serialize};
@@ -19,19 +22,17 @@ use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use xxhash_rust::xxh3::Xxh3;
 
-use crate::build::source_checkout_cache_key;
-
 /// A cache for caching build artifacts of a source checkout.
 #[derive(Clone)]
 pub struct BuildCache {
-    root: PathBuf,
+    pub(crate) root: AbsPresumedDirPathBuf,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum BuildCacheError {
     /// An I/O error occurred while reading or writing the cache.
     #[error("an IO error occurred while {0} {1}")]
-    IoError(String, PathBuf, #[source] std::io::Error),
+    IoError(String, AbsPathBuf, #[source] Arc<std::io::Error>),
 }
 
 /// Defines additional input besides the source files that are used to compute
@@ -60,6 +61,10 @@ pub struct BuildInput {
 
     /// The virtual packages used to build the package
     pub build_virtual_packages: Vec<GenericVirtualPackage>,
+
+    /// The specific variant values for this build. Different variants result
+    /// in different cache keys to ensure they are cached separately.
+    pub variants: Option<BTreeMap<String, VariantValue>>,
 }
 
 impl BuildInput {
@@ -76,6 +81,7 @@ impl BuildInput {
             host_platform,
             host_virtual_packages,
             build_virtual_packages,
+            variants,
         } = self;
 
         // Hash some of the keys
@@ -83,8 +89,20 @@ impl BuildInput {
         build.hash(&mut hasher);
         channel_urls.hash(&mut hasher);
         host_platform.hash(&mut hasher);
-        host_virtual_packages.hash(&mut hasher);
-        build_virtual_packages.hash(&mut hasher);
+
+        let mut sorted_host_virtual_packages = host_virtual_packages.clone();
+        sorted_host_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));
+        sorted_host_virtual_packages.hash(&mut hasher);
+
+        let mut sorted_build_virtual_packages = build_virtual_packages.clone();
+        sorted_build_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));
+        sorted_build_virtual_packages.hash(&mut hasher);
+
+        // Include variants in the hash to ensure different variant values
+        // get different cache keys. BTreeMap is already sorted by key, so we
+        // can hash it directly for deterministic results.
+        variants.hash(&mut hasher);
+
         let hash = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
 
         format!("{name}-{version}-{subdir}-{hash}",)
@@ -96,7 +114,7 @@ impl BuildCache {
     pub const CACHE_SUFFIX: &'static str = "v0";
 
     /// Constructs a new instance.
-    pub fn new(root: PathBuf) -> Self {
+    pub fn new(root: AbsPresumedDirPathBuf) -> Self {
         Self { root }
     }
 
@@ -125,6 +143,7 @@ impl BuildCache {
             channel_urls = ?input.channel_urls,
             host_virtual_packages = ?input.host_virtual_packages,
             build_virtual_packages = ?input.build_virtual_packages,
+            variants = ?input.variants,
             "opening source build cache entry",
         );
 
@@ -133,18 +152,19 @@ impl BuildCache {
             .root
             .join(source_checkout_cache_key(source))
             .join(&input_key);
-        fs_err::tokio::create_dir_all(&cache_dir)
-            .await
+        let cache_dir = cache_dir
+            .create_dir_all()
             .map_err(|e| {
                 BuildCacheError::IoError(
                     "creating cache directory".to_string(),
                     cache_dir.clone(),
-                    e,
+                    Arc::new(e),
                 )
-            })?;
+            })?
+            .to_path_buf();
 
         // Try to acquire a lock on the cache file.
-        let cache_file_path = cache_dir.join(".lock");
+        let cache_file_path = cache_dir.join(".lock").into_assume_file();
         let cache_file = tokio::fs::OpenOptions::new()
             .write(true)
             .read(true)
@@ -155,16 +175,16 @@ impl BuildCache {
             .map_err(|e| {
                 BuildCacheError::IoError(
                     "opening cache file".to_string(),
-                    cache_file_path.clone(),
-                    e,
+                    cache_file_path.clone().into(),
+                    Arc::new(e),
                 )
             })?;
 
         let mut locked_cache_file = cache_file.lock_write().await.map_err(|e| {
             BuildCacheError::IoError(
                 "locking cache file".to_string(),
-                cache_file_path.clone(),
-                e.error,
+                cache_file_path.clone().into(),
+                Arc::new(e.error),
             )
         })?;
 
@@ -176,8 +196,8 @@ impl BuildCache {
             .map_err(|e| {
                 BuildCacheError::IoError(
                     "reading cache file".to_string(),
-                    cache_file_path.clone(),
-                    e,
+                    cache_file_path.clone().into(),
+                    Arc::new(e),
                 )
             })?;
 
@@ -218,9 +238,17 @@ pub struct CachedBuild {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CachedBuildSourceInfo {
-    /// The files that were used during the build process. If any of these
-    /// change, the build should be considered stale.
-    pub globs: BTreeSet<String>,
+    /// Glob patterns that define which files affect the build. If any matching
+    /// file changes, the build should be considered stale.
+    #[serde(default, skip_serializing_if = "BinaryHeap::is_empty")]
+    pub input_globs: BinaryHeap<String>,
+
+    /// The actual files that matched the globs at the time of the build. This
+    /// allows detecting file deletions and additions by comparing against
+    /// current glob matches.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub input_files: BTreeSet<PathBuf>,
+
     /// The packages that were used during the build process.
     #[serde(default)]
     pub build: BuildHostEnvironment,
@@ -249,7 +277,7 @@ pub struct BuildHostPackage {
     pub repodata_record: RepoDataRecord,
 
     /// The source location from which the package was built.
-    pub source: Option<PinnedSourceSpec>,
+    pub source: Option<SourceCodeLocation>,
 }
 
 /// A cache entry returned by [`BuildCache::entry`] which enables
@@ -258,13 +286,13 @@ pub struct BuildHostPackage {
 /// As long as this entry is held, no other process can access this cache entry.
 pub struct BuildCacheEntry {
     file: RwLockWriteGuard<tokio::fs::File>,
-    cache_dir: PathBuf,
-    cache_file_path: PathBuf,
+    cache_dir: AbsPresumedDirPathBuf,
+    cache_file_path: AbsPresumedFilePathBuf,
 }
 
 impl BuildCacheEntry {
     /// The directory where the cache is stored.
-    pub fn cache_dir(&self) -> &Path {
+    pub fn cache_dir(&self) -> &AbsPresumedDirPath {
         &self.cache_dir
     }
 
@@ -276,16 +304,16 @@ impl BuildCacheEntry {
         self.file.seek(SeekFrom::Start(0)).await.map_err(|e| {
             BuildCacheError::IoError(
                 "seeking to start of cache file".to_string(),
-                self.cache_file_path.clone(),
-                e,
+                self.cache_file_path.clone().into(),
+                Arc::new(e),
             )
         })?;
         let bytes = serde_json::to_vec(&metadata).expect("serialization to JSON should not fail");
         self.file.write_all(&bytes).await.map_err(|e| {
             BuildCacheError::IoError(
                 "writing metadata to cache file".to_string(),
-                self.cache_file_path.clone(),
-                e,
+                self.cache_file_path.clone().into(),
+                Arc::new(e),
             )
         })?;
         self.file
@@ -295,8 +323,8 @@ impl BuildCacheEntry {
             .map_err(|e| {
                 BuildCacheError::IoError(
                     "setting length of cache file".to_string(),
-                    self.cache_file_path.clone(),
-                    e,
+                    self.cache_file_path.clone().into(),
+                    Arc::new(e),
                 )
             })?;
 
@@ -317,13 +345,13 @@ impl BuildCacheEntry {
 /// warranted.
 pub struct PackageBuildInputHashBuilder<'a> {
     /// The project model itself. Contains dependencies and more.
-    pub project_model: Option<&'a ProjectModelV1>,
+    pub project_model: Option<&'a ProjectModel>,
 
     /// The backend specific configuration
     pub configuration: Option<&'a serde_json::Value>,
 
     /// Target specific backend configuration
-    pub target_configuration: Option<&'a OrderMap<TargetSelectorV1, serde_json::Value>>,
+    pub target_configuration: Option<&'a OrderMap<TargetSelector, serde_json::Value>>,
 }
 
 impl PackageBuildInputHashBuilder<'_> {

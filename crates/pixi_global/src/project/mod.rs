@@ -21,6 +21,7 @@ use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
 use pixi_build_discovery::EnabledProtocols;
+use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec,
     Limits, PixiEnvironmentSpec,
@@ -29,6 +30,7 @@ use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home}
 use pixi_consts::consts::{self};
 use pixi_core::repodata::Repodata;
 use pixi_manifest::PrioritizedChannel;
+use pixi_path::AbsPathBuf;
 use pixi_progress::global_multi_progress;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::{BinarySpec, PathBinarySpec};
@@ -73,7 +75,6 @@ mod global_spec;
 mod manifest;
 mod parsed_manifest;
 pub use global_spec::{FromMatchSpecError, GlobalSpec};
-use pixi_build_frontend::BackendOverride;
 use pixi_utils::reqwest::{LazyReqwestClient, build_lazy_reqwest_clients};
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
@@ -139,6 +140,8 @@ pub struct Project {
     /// The command dispatcher for solving environments
     /// This is wrapped in a `OnceCell` to allow for lazy initialization.
     command_dispatcher: OnceCell<CommandDispatcher>,
+    /// Optional backend override for testing purposes
+    backend_override: Option<BackendOverride>,
 }
 
 impl Debug for Project {
@@ -321,6 +324,7 @@ impl Project {
             repodata_gateway,
             concurrent_downloads_semaphore: OnceCell::new(),
             command_dispatcher: OnceCell::new(),
+            backend_override: None,
         }
     }
 
@@ -487,6 +491,14 @@ impl Project {
         self
     }
 
+    /// Set the backend override for this project (primarily for testing)
+    pub fn with_backend_override(mut self, backend_override: BackendOverride) -> Self {
+        self.backend_override = Some(backend_override);
+        // Clear the command dispatcher so it will be re-initialized with the new backend override
+        self.command_dispatcher = OnceCell::new();
+        self
+    }
+
     /// Returns the environments in this project.
     pub fn environments(&self) -> &IndexMap<EnvironmentName, ParsedEnvironment> {
         &self.manifest.parsed.envs
@@ -495,6 +507,11 @@ impl Project {
     /// Return the environment with the given name.
     pub fn environment(&self, name: &EnvironmentName) -> Option<&ParsedEnvironment> {
         self.manifest.parsed.envs.get(name)
+    }
+
+    /// Returns the path to the environment root directory.
+    pub fn env_root_path(&self) -> &Path {
+        self.env_root.path()
     }
 
     /// Returns the EnvDir with the environment name.
@@ -553,6 +570,14 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<EnvironmentUpdate> {
+        self.install_environment_with_options(env_name, false).await
+    }
+
+    pub async fn install_environment_with_options(
+        &self,
+        env_name: &EnvironmentName,
+        force_reinstall: bool,
+    ) -> miette::Result<EnvironmentUpdate> {
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
@@ -609,6 +634,12 @@ impl Project {
 
         let prefix = self.environment_prefix(env_name).await?;
 
+        let force_reinstall_packages = if force_reinstall {
+            dependencies_names.iter().cloned().collect()
+        } else {
+            Default::default()
+        };
+
         let result = command_dispatcher
             .install_pixi_environment(InstallPixiEnvironmentSpec {
                 name: env_name.to_string(),
@@ -621,8 +652,8 @@ impl Project {
                 enabled_protocols: EnabledProtocols::default(),
                 installed: None,
                 ignore_packages: None,
-                force_reinstall: Default::default(),
-                variants: None,
+                force_reinstall: force_reinstall_packages,
+                variant_configuration: None,
                 variant_files: None,
             })
             .await?;
@@ -749,10 +780,9 @@ impl Project {
             if !package_executables
                 .iter()
                 .any(|executable| executable.name.as_str() == package_name.as_normalized())
+                && let Some(exec) = find_binary_by_name(&prefix, package_name).await?
             {
-                if let Some(exec) = find_binary_by_name(&prefix, package_name).await? {
-                    package_executables.push(exec);
-                }
+                package_executables.push(exec);
             }
 
             executables_for_package.insert(package_name.clone(), package_executables);
@@ -893,7 +923,7 @@ impl Project {
                         .ok_or_else(|| {
                             miette::miette!("Couldn't convert {spec:?} to nameless match spec.")
                         })?,
-                    Some(name.clone()),
+                    Some(name.clone().into()),
                 );
                 Ok(match_spec)
             })
@@ -1327,11 +1357,17 @@ impl Project {
         self.command_dispatcher.get_or_try_init(|| {
             let multi_progress = global_multi_progress();
             let anchor_pb = multi_progress.add(ProgressBar::hidden());
-            let cache_dirs = pixi_command_dispatcher::CacheDirs::new(
-                pixi_config::get_cache_dir()
-                    .map(|cache_dir| cache_dir.join(BUILD_DIR))
-                    .map_err(|e| CommandDispatcherError::CacheDirectory(e.into()))?,
-            );
+            let cache_dir_path = pixi_config::get_cache_dir()
+                .map(|cache_dir| cache_dir.join(BUILD_DIR))
+                .map_err(|e| CommandDispatcherError::CacheDirectory(e.into()))?;
+            let cache_dir = AbsPathBuf::new(cache_dir_path)
+                .expect("cache dir is not absolute")
+                .into_assume_dir();
+            let cache_dirs = pixi_command_dispatcher::CacheDirs::new(cache_dir);
+
+            let root_dir = AbsPathBuf::new(self.root.clone())
+                .expect("root dir is not absolute")
+                .into_assume_dir();
 
             Ok(pixi_command_dispatcher::CommandDispatcher::builder()
                 .with_gateway(
@@ -1340,7 +1376,7 @@ impl Project {
                         .clone(),
                 )
                 .with_cache_dirs(cache_dirs)
-                .with_root_dir(self.root.clone())
+                .with_root_dir(root_dir)
                 .with_download_client(
                     self.authenticated_client()
                         .map_err(|e| CommandDispatcherError::AuthenticatedClient(e.into()))?
@@ -1351,11 +1387,12 @@ impl Project {
                     max_concurrent_solves: self.config().max_concurrent_solves().into(),
                     ..Limits::default()
                 })
-                .with_backend_overrides(
+                .with_backend_overrides(self.backend_override.clone().unwrap_or_else(|| {
                     BackendOverride::from_env()
-                        .map_err(|e| CommandDispatcherError::BackendOverride(e.into()))?
-                        .unwrap_or_default(),
-                )
+                        .ok()
+                        .flatten()
+                        .unwrap_or_default()
+                }))
                 .execute_link_scripts(match self.config.run_post_link_scripts() {
                     RunPostLinkScripts::Insecure => true,
                     RunPostLinkScripts::False => false,
@@ -1372,7 +1409,7 @@ impl Project {
     ) -> Result<PackageName, InferPackageNameError> {
         let command_dispatcher = self.command_dispatcher()?;
         let checkout = command_dispatcher
-            .pin_and_checkout(source_spec.location, None)
+            .pin_and_checkout(source_spec.location)
             .await
             .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
 
@@ -1381,6 +1418,7 @@ impl Project {
         // Create the metadata spec
         let metadata_spec = BuildBackendMetadataSpec {
             manifest_source: pinned_source_spec,
+            preferred_build_source: None,
             channel_config: self.global_channel_config().clone(),
             channels: self
                 .config()
@@ -1389,10 +1427,9 @@ impl Project {
                 .filter_map(|c| c.clone().into_base_url(self.global_channel_config()).ok())
                 .collect(),
             build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
-            variants: None,
+            variant_configuration: None,
             variant_files: None,
             enabled_protocols: Default::default(),
-            pin_override: None,
         };
 
         // Get the metadata using the command dispatcher

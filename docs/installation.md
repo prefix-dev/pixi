@@ -22,14 +22,14 @@ To install `pixi` you can run the following command in your terminal:
     Or run:
 
     ```powershell
-    powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
+    powershell -ExecutionPolicy Bypass -c "irm -useb https://pixi.sh/install.ps1 | iex"
     ```
 
     ??? note "What does this do?"
         The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `%UserProfile%\.pixi\bin`.
         The command will also add `%UserProfile%\.pixi\bin` to your `PATH` environment variable, allowing you to invoke `pixi` from anywhere.
 
-Now restart your terminal or shell to make the installation effective.
+Now restart your terminal or shell to make the installation take effect.
 
 ??? question "Don't trust our link? Check the script!"
     You can check the installation `sh` script: [download](https://pixi.sh/install.sh) and the `ps1`: [download](https://pixi.sh/install.ps1).
@@ -111,7 +111,7 @@ cargo build
 cargo test
 ```
 
-If you have any issues building because of the dependency on `rattler` checkout
+If you have any issues building because of the dependency on `rattler` check out
 its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 
 
@@ -121,14 +121,16 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 
     The installation script has several options that can be manipulated through environment variables.
 
-    | Variable             | Description                                                                        | Default Value         |
-    |----------------------|------------------------------------------------------------------------------------|-----------------------|
-    | `PIXI_VERSION`       | The version of Pixi getting installed, can be used to up- or down-grade.           | `latest`              |
-    | `PIXI_HOME`          | The location of the binary folder.                                                 | `$HOME/.pixi`         |
-    | `PIXI_ARCH`          | The architecture the Pixi version was built for.                                   | `uname -m`            |
-    | `PIXI_NO_PATH_UPDATE`| If set the `$PATH` will not be updated to add `pixi` to it.                        |                       |
+    | Variable             | Description                                                                           | Default Value         |
+    |----------------------|---------------------------------------------------------------------------------------|-----------------------|
+    | `PIXI_VERSION`       | The version of Pixi getting installed, can be used to up- or down-grade.              | `latest`              |
+    | `PIXI_HOME`          | The location of the pixi home folder containing global environments and configs.      | `$HOME/.pixi`         |
+    | `PIXI_BIN_DIR`       | The location where the standalone pixi binary should be installed.                    | `$PIXI_HOME/bin`      |
+    | `PIXI_ARCH`          | The architecture the Pixi version was built for.                                      | `uname -m`            |
+    | `PIXI_NO_PATH_UPDATE`| If set the `$PATH` will not be updated to add `pixi` to it.                           |                       |
     | `PIXI_DOWNLOAD_URL`  | Overrides the download URL for the Pixi binary (useful for mirrors or custom builds). | GitHub releases, e.g. [linux-64](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-unknown-linux-musl.tar.gz)       |
-    | `TMP_DIR`            | The temporary directory the script uses to download to and unpack the binary from. | `/tmp`                |
+    | `NETRC`              | Path to a custom `.netrc` file for authentication with private repositories.          |                       |
+    | `TMP_DIR`            | The temporary directory the script uses to download to and unpack the binary from.    | `/tmp`                |
 
     For example, on Apple Silicon, you can force the installation of the x86 version:
     ```shell
@@ -138,6 +140,40 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
     ```shell
     curl -fsSL https://pixi.sh/install.sh | PIXI_VERSION=v0.18.0 bash
     ```
+
+    To make a "drop-in" installation of pixi directly in the user `$PATH`:
+    ```shell
+    curl -fsSL https://pixi.sh/install.sh | PIXI_BIN_DIR=/usr/local/bin PIXI_NO_PATH_UPDATE=1 bash
+    ```
+
+    #### Using `.netrc` for Authentication
+
+    If you need to download Pixi from a private repository that requires authentication, you can use a `.netrc` file instead of hardcoding credentials in the `PIXI_DOWNLOAD_URL`.
+
+    The install script automatically uses `.netrc` for authentication with `curl` and `wget`. By default, it looks for `~/.netrc`. You can specify a custom location using the `NETRC` environment variable:
+
+    ```shell
+    # Use the default ~/.netrc file
+    curl -fsSL https://pixi.sh/install.sh | PIXI_DOWNLOAD_URL=https://private.example.com/pixi-latest.tar.gz bash
+    ```
+
+    ```shell
+    # Use a custom .netrc file
+    curl -fsSL https://pixi.sh/install.sh | NETRC=/path/to/custom/.netrc PIXI_DOWNLOAD_URL=https://private.example.com/pixi-latest.tar.gz bash
+    ```
+
+    Your `.netrc` file should contain credentials in the following format:
+    ```
+    machine private.example.com
+    login your-username
+    password your-token-or-password
+    ```
+
+    !!! tip "Security Recommendation"
+        Using `.netrc` is more secure than embedding credentials directly in the `PIXI_DOWNLOAD_URL` (e.g., `https://user:pass@example.com/file`), as it keeps credentials separate from the URL and prevents them from appearing in logs or process listings.
+
+    !!! tip "Security Note"
+        The install script automatically masks any credentials embedded in the download URL when displaying messages, replacing them with `***:***@` to prevent credentials from appearing in logs or console output.
 
 === "Windows"
 
@@ -154,6 +190,17 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
     ```powershell
     $env:PIXI_VERSION='v0.18.0'; powershell -ExecutionPolicy Bypass -Command "iwr -useb https://pixi.sh/install.ps1 | iex"
     ```
+
+    #### Authentication for Private Repositories
+
+    If you need to download Pixi from a private repository that requires authentication, you can embed credentials in the `PIXI_DOWNLOAD_URL`. The install script will automatically mask credentials in its output for security.
+
+    ```powershell
+    $env:PIXI_DOWNLOAD_URL='https://username:token@private.example.com/pixi-latest.zip'; powershell -ExecutionPolicy Bypass -Command "iwr -useb https://pixi.sh/install.ps1 | iex"
+    ```
+
+    !!! tip "Security Note"
+        The PowerShell install script automatically masks any credentials embedded in the download URL when displaying messages, replacing them with `***:***@` to prevent credentials from appearing in logs or console output.
 
 ## Autocompletion
 
@@ -206,7 +253,7 @@ Afterwards, restart the shell or source the shell config file.
     ```
 
 ## Uninstall
-Before un-installation you might want to delete any previous files pixi has installed.
+Before un-installation you might want to delete any files pixi managed.
 
 1. Remove any cached data:
     ```shell
@@ -216,7 +263,7 @@ Before un-installation you might want to delete any previous files pixi has inst
     ```shell
     cd path/to/workspace && pixi clean
     ```
-3. Remove the `pixi` and it's global environments
+3. Remove the `pixi` and its global environments
     ```shell
     rm -r ~/.pixi
     ```

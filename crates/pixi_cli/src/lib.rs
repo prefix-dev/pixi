@@ -36,6 +36,7 @@ pub mod init;
 pub mod install;
 pub mod list;
 pub mod lock;
+pub(crate) mod match_spec_or_path;
 pub mod reinstall;
 pub mod remove;
 pub mod run;
@@ -243,6 +244,7 @@ pub async fn execute() -> miette::Result<()> {
         Box::new(
             miette::MietteHandlerOpts::default()
                 .color(use_colors)
+                .with_syntax_highlighting(miette_arborium::MietteHighlighter::new())
                 // Don't wrap lines in CI environments or when explicitly specified to avoid
                 // breaking logs and tests.
                 .wrap_lines(!in_ci && !no_wrap)

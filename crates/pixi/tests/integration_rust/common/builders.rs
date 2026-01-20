@@ -28,7 +28,7 @@ use pixi_cli::{
     cli_config::{
         DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
     },
-    init, install, lock, remove, search, task, update, workspace,
+    global, init, install, lock, remove, search, task, update, workspace,
 };
 use pixi_core::DependencyType;
 use std::{
@@ -38,6 +38,7 @@ use std::{
     pin::Pin,
     str::FromStr,
 };
+use typed_path::Utf8NativePathBuf;
 
 use futures::FutureExt;
 use pixi_manifest::{EnvironmentName, FeatureName, SpecType, task::Dependency};
@@ -73,8 +74,16 @@ impl InitBuilder {
         self
     }
 
-    pub fn with_local_channel(self, channel: impl AsRef<Path>) -> Self {
-        self.with_channel(Url::from_directory_path(channel).unwrap())
+    pub fn with_local_channel(mut self, channel: impl AsRef<Path>) -> Self {
+        self.args
+            .channels
+            .get_or_insert_with(Default::default)
+            .push(NamedChannelOrUrl::Url(
+                Url::from_directory_path(channel).unwrap(),
+            ));
+        // Disable the pypi mapping
+        self.args.conda_pypi_map = Some(Vec::new());
+        self
     }
 
     pub fn without_channels(mut self) -> Self {
@@ -391,6 +400,7 @@ impl TaskAliasBuilder {
 }
 
 pub struct ProjectChannelAddBuilder {
+    pub workspace_config: WorkspaceConfig,
     pub args: workspace::channel::AddRemoveArgs,
 }
 
@@ -420,6 +430,7 @@ impl IntoFuture for ProjectChannelAddBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         workspace::channel::execute(workspace::channel::Args {
+            workspace_config: self.workspace_config,
             command: workspace::channel::Command::Add(self.args),
         })
         .boxed_local()
@@ -427,7 +438,7 @@ impl IntoFuture for ProjectChannelAddBuilder {
 }
 
 pub struct ProjectChannelRemoveBuilder {
-    pub manifest_path: Option<PathBuf>,
+    pub workspace_config: WorkspaceConfig,
     pub args: workspace::channel::AddRemoveArgs,
 }
 
@@ -452,6 +463,7 @@ impl IntoFuture for ProjectChannelRemoveBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         workspace::channel::execute(workspace::channel::Args {
+            workspace_config: self.workspace_config,
             command: workspace::channel::Command::Remove(self.args),
         })
         .boxed_local()
@@ -485,6 +497,11 @@ impl InstallBuilder {
         self.args.only = Some(pkg);
         self
     }
+
+    pub fn with_environment(mut self, env: Vec<String>) -> Self {
+        self.args.environment = Some(env);
+        self
+    }
 }
 
 impl IntoFuture for InstallBuilder {
@@ -496,7 +513,7 @@ impl IntoFuture for InstallBuilder {
 }
 
 pub struct ProjectEnvironmentAddBuilder {
-    pub args: workspace::environment::add::Args,
+    pub args: workspace::environment::AddArgs,
     pub manifest_path: Option<PathBuf>,
 }
 
@@ -663,5 +680,54 @@ impl IntoFuture for BuildBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         build::execute(self.args).boxed_local()
+    }
+}
+
+/// Contains the arguments to pass to [`global::execute()`]. Call `.await` to call
+/// the CLI execute method and await the result at the same time.
+pub struct GlobalInstallBuilder {
+    args: global::install::Args,
+    tmpdir: PathBuf,
+}
+
+impl GlobalInstallBuilder {
+    /// Create a new GlobalInstallBuilder
+    pub fn new(
+        tmpdir: PathBuf,
+        backend_override: Option<pixi_build_frontend::BackendOverride>,
+    ) -> Self {
+        let mut args = global::install::Args::default();
+        args.backend_override = backend_override;
+        Self { args, tmpdir }
+    }
+
+    pub fn with_path(mut self, path: impl ToString) -> Self {
+        self.args.packages.path = Some(Into::<Utf8NativePathBuf>::into(path.to_string()));
+        self
+    }
+
+    pub fn with_force_reinstall(mut self, force_reinstall: bool) -> Self {
+        self.args.force_reinstall = force_reinstall;
+        self
+    }
+}
+
+impl IntoFuture for GlobalInstallBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        let args = global::Args {
+            command: global::Command::Install(self.args),
+        };
+
+        temp_env::async_with_vars(
+            [
+                ("PIXI_HOME", Some(self.tmpdir.clone())),
+                ("PIXI_CACHE_DIR", Some(self.tmpdir.clone())),
+            ],
+            async { global::execute(args).await },
+        )
+        .boxed_local()
     }
 }

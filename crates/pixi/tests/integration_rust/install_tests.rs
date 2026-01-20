@@ -32,19 +32,23 @@ use uv_configuration::RAYON_INITIALIZE;
 use uv_normalize::PackageName;
 use uv_python::PythonEnvironment;
 
+use crate::common::pypi_index::PyPIPackage;
 use crate::common::{
     LockFileExt, PixiControl,
     builders::{
         HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig, string_from_iter,
     },
-    package_database::{Package, PackageDatabase},
 };
 use crate::setup_tracing;
+use pixi_test_utils::{MockRepoData, Package};
 
 /// Should add a python version to the environment and lock file that matches
 /// the specified version and run it
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn install_run_python() {
     setup_tracing();
 
@@ -97,7 +101,7 @@ async fn install_run_python() {
 async fn test_incremental_lock_file() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package `foo` that depends on `bar` both set to version 1.
     package_database.add_package(Package::build("bar", "1").finish());
@@ -175,7 +179,10 @@ async fn test_incremental_lock_file() {
 
 /// Test the `pixi install --locked` functionality.
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn install_locked_with_config() {
     setup_tracing();
 
@@ -278,7 +285,10 @@ async fn install_locked_with_config() {
 
 /// Test `pixi install/run --frozen` functionality
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn install_frozen() {
     setup_tracing();
 
@@ -357,26 +367,26 @@ async fn is_conda_package_installed(prefix_path: &Path, package_name: &str) -> b
 
 /// Test `pixi install --frozen --skip` functionality
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn install_frozen_skip() {
     setup_tracing();
 
     // Create a project with a local python dependency 'no-build-editable'
-    // and a local conda dependency 'python_rich'
+    // and a local conda dependency 'simple-package'
     let current_platform = Platform::current();
     let manifest = format!(
         r#"
         [workspace]
-        channels = ["conda-forge"]
-        description = "Add a short description here"
-        name = "pyproject"
+        channels = ["https://prefix.dev/conda-forge"]
         platforms = ["{current_platform}"]
         preview = ["pixi-build"]
-        version = "0.1.0"
 
         [dependencies]
         python = "*"
-        python_rich = {{ path = "./python" }}
+        simple-package = {{ path = "./simple-package" }}
 
         [pypi-dependencies]
         no-build-editable = {{ path = "./no-build-editable" }}
@@ -388,7 +398,7 @@ async fn install_frozen_skip() {
     let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
 
     fs_extra::dir::copy(
-        workspace_root.join("docs/source_files/pixi_workspaces/pixi_build/python"),
+        workspace_root.join("tests/data/pixi-build/simple-package"),
         pixi.workspace_path(),
         &fs_extra::dir::CopyOptions::new(),
     )
@@ -403,10 +413,10 @@ async fn install_frozen_skip() {
 
     pixi.update_lock_file().await.unwrap();
 
-    // Check that neither 'python_rich' nor 'no-build-editable' are installed when skipped
+    // Check that neither 'simple-package' nor 'no-build-editable' are installed when skipped
     pixi.install()
         .with_frozen()
-        .with_skipped(vec!["no-build-editable".into(), "python_rich".into()])
+        .with_skipped(vec!["no-build-editable".into(), "simple-package".into()])
         .await
         .unwrap();
 
@@ -415,17 +425,20 @@ async fn install_frozen_skip() {
     let env = create_uv_environment(&prefix_path, &cache);
 
     assert!(!is_pypi_package_installed(&env, "no-build-editable"));
-    assert!(!is_conda_package_installed(&prefix_path, "python_rich").await);
+    assert!(!is_conda_package_installed(&prefix_path, "simple-package").await);
 
-    // Check that 'no-build-editable' and 'python_rich' are installed after a followup normal install
+    // Check that 'no-build-editable' and 'simple-package' are installed after a followup normal install
     pixi.install().with_frozen().await.unwrap();
 
     assert!(is_pypi_package_installed(&env, "no-build-editable"));
-    assert!(is_conda_package_installed(&prefix_path, "python_rich").await);
+    assert!(is_conda_package_installed(&prefix_path, "simple-package").await);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn pypi_reinstall_python() {
     setup_tracing();
 
@@ -482,7 +495,10 @@ async fn pypi_reinstall_python() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 // Check if we add and remove a pypi package that the site-packages is cleared
 async fn pypi_add_remove() {
     setup_tracing();
@@ -523,13 +539,13 @@ async fn test_channels_changed() {
     setup_tracing();
 
     // Write a channel with a package `bar` with only one version
-    let mut package_database_a = PackageDatabase::default();
+    let mut package_database_a = MockRepoData::default();
     package_database_a.add_package(Package::build("bar", "2").finish());
     let channel_a = package_database_a.into_channel().await.unwrap();
 
     // Write another channel with a package `bar` with only one version but another
     // one.
-    let mut package_database_b = PackageDatabase::default();
+    let mut package_database_b = MockRepoData::default();
     package_database_b.add_package(Package::build("bar", "1").finish());
     let channel_b = package_database_b.into_channel().await.unwrap();
 
@@ -590,7 +606,10 @@ async fn install_conda_meta_history() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn minimal_lockfile_update_pypi() {
     setup_tracing();
 
@@ -636,7 +655,10 @@ async fn minimal_lockfile_update_pypi() {
 /// then change the installer back and see if it reinstalls the package
 /// with a new version
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_installer_name() {
     setup_tracing();
 
@@ -734,7 +756,10 @@ async fn test_old_lock_install() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_no_build_isolation() {
     setup_tracing();
 
@@ -818,7 +843,10 @@ setup(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_no_build_isolation_with_dependencies() {
     setup_tracing();
 
@@ -941,7 +969,10 @@ setup(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_setuptools_override_failure() {
     setup_tracing();
 
@@ -985,7 +1016,10 @@ async fn test_setuptools_override_failure() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_many_linux_wheel_tag() {
     setup_tracing();
 
@@ -1004,7 +1038,6 @@ async fn test_many_linux_wheel_tag() {
     // We know that this package has many linux wheel tags for this version
     pixi.add("gmsh==4.13.1")
         .set_type(pixi_core::DependencyType::PypiDependency)
-        .with_install(true)
         .await
         .unwrap();
 }
@@ -1064,7 +1097,10 @@ async fn test_ensure_gitignore_file_creation() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn pypi_prefix_is_not_created_when_whl() {
     setup_tracing();
 
@@ -1105,9 +1141,29 @@ async fn pypi_prefix_is_not_created_when_whl() {
 /// This should result in the PyPI package being overridden on linux and not on
 /// osxarm64.
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn conda_pypi_override_correct_per_platform() {
     setup_tracing();
+
+    // Create local conda channel with Python for multiple platforms
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_db.add_package(
+        Package::build("boltons", "1.0.0")
+            .with_subdir(Platform::NoArch)
+            .with_pypi_purl("boltons")
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    // Create local PyPI index with test packages
+    let pypi_index = crate::common::pypi_index::Database::new()
+        .with(PyPIPackage::new("boltons", "1.0.0"))
+        .into_simple_index()
+        .unwrap();
 
     let pixi = PixiControl::new().unwrap();
     pixi.init_with_platforms(vec![
@@ -1116,9 +1172,19 @@ async fn conda_pypi_override_correct_per_platform() {
         Platform::Win64.to_string(),
         Platform::Osx64.to_string(),
     ])
+    .with_local_channel(channel.url().to_file_path().unwrap())
     .await
     .unwrap();
     pixi.add("python==3.12").with_install(false).await.unwrap();
+
+    // Add pypi-options to the manifest
+    let manifest = pixi.manifest_contents().unwrap();
+    let updated_manifest = format!(
+        "{}\n[pypi-options]\nindex-url = \"{}\"\n",
+        manifest,
+        pypi_index.index_url()
+    );
+    pixi.update_manifest(&updated_manifest).unwrap();
 
     // Add a conda package that is only available on linux
     pixi.add("boltons")
@@ -1161,8 +1227,10 @@ async fn conda_pypi_override_correct_per_platform() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_multiple_prefix_update() {
     setup_tracing();
 
@@ -1390,7 +1458,7 @@ async fn install_s3() {
 async fn test_exclude_newer() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Create a channel with two packages with different timestamps
     package_database.add_package(
@@ -1459,7 +1527,10 @@ async fn test_exclude_newer() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_exclude_newer_pypi() {
     setup_tracing();
 

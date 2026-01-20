@@ -2,6 +2,7 @@ use std::{
     collections::BTreeMap,
     hash::{Hash, Hasher},
     path::PathBuf,
+    sync::Arc,
 };
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD, prelude::BASE64_URL_SAFE_NO_PAD};
@@ -13,6 +14,7 @@ use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::{
     PIXI_BUILD_API_VERSION_NAME, PIXI_BUILD_API_VERSION_SPEC, PixiBuildApiVersion,
 };
+use pixi_record::VariantValue;
 use pixi_spec::{BinarySpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::AsyncPrefixGuard;
@@ -59,7 +61,7 @@ pub struct InstantiateToolEnvironmentSpec {
     pub channel_config: ChannelConfig,
 
     /// Build variants
-    pub variants: Option<BTreeMap<String, Vec<String>>>,
+    pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
 
     /// Build variant file contents
     pub variant_files: Option<Vec<PathBuf>>,
@@ -92,7 +94,7 @@ impl Hash for InstantiateToolEnvironmentSpec {
             exclude_newer,
             channel_config,
             enabled_protocols,
-            variants,
+            variant_configuration: variants,
             variant_files,
         } = self;
         name.hash(state);
@@ -137,7 +139,7 @@ impl InstantiateToolEnvironmentSpec {
             exclude_newer: None,
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
             enabled_protocols: EnabledProtocols::default(),
-            variants: None,
+            variant_configuration: None,
             variant_files: None,
         }
     }
@@ -206,6 +208,7 @@ impl InstantiateToolEnvironmentSpec {
                     .chain([self.requirement.clone()])
                     .collect(),
                 constraints,
+                dev_sources: Default::default(),
                 build_environment: self.build_environment.clone(),
                 exclude_newer: self.exclude_newer,
                 channel_config: self.channel_config.clone(),
@@ -213,14 +216,13 @@ impl InstantiateToolEnvironmentSpec {
                 enabled_protocols: self.enabled_protocols.clone(),
                 installed: Vec::new(), // Install from scratch
                 channel_priority: ChannelPriority::default(),
-                variants: self.variants.clone(),
+                variant_configuration: self.variant_configuration.clone(),
                 variant_files: self.variant_files.clone(),
                 strategy: SolveStrategy::default(),
-                pin_overrides: BTreeMap::new(),
+                preferred_build_source: BTreeMap::new(),
             })
             .await
-            .map_err_with(Box::new)
-            .map_err_with(InstantiateToolEnvironmentError::SolveEnvironment)?;
+            .map_err_with(|e| InstantiateToolEnvironmentError::SolveEnvironment(Arc::new(e)))?;
 
         // Ensure that the solution contains matching api version package
         let Some(api_version) = solved_environment
@@ -231,7 +233,7 @@ impl InstantiateToolEnvironmentSpec {
         else {
             return Err(CommandDispatcherError::Failed(
                 InstantiateToolEnvironmentError::NoMatchingBackends {
-                    build_backend: self.requirement,
+                    build_backend: Box::new(self.requirement),
                 },
             ));
         };
@@ -247,21 +249,21 @@ impl InstantiateToolEnvironmentSpec {
 
         // Construct the prefix for the tool environment.
         let prefix = Prefix::create(command_queue.cache_dirs().build_backends().join(cache_key))
-            .map_err(InstantiateToolEnvironmentError::CreatePrefix)
+            .map_err(|e| InstantiateToolEnvironmentError::CreatePrefix(Arc::new(e)))
             .map_err(CommandDispatcherError::Failed)?;
 
         // Acquire a lock on the tool prefix.
         let mut prefix_guard = AsyncPrefixGuard::new(prefix.path())
             .and_then(|guard| guard.write())
             .await
-            .map_err(InstantiateToolEnvironmentError::AcquireLock)
+            .map_err(|e| InstantiateToolEnvironmentError::AcquireLock(Arc::new(e)))
             .map_err(CommandDispatcherError::Failed)?;
 
         // Update the prefix to indicate that we are install it.
         prefix_guard
             .begin()
             .await
-            .map_err(InstantiateToolEnvironmentError::UpdateLock)
+            .map_err(|e| InstantiateToolEnvironmentError::UpdateLock(Arc::new(e)))
             .map_err(CommandDispatcherError::Failed)?;
 
         // Install the environment
@@ -276,19 +278,18 @@ impl InstantiateToolEnvironmentSpec {
                 force_reinstall: Default::default(),
                 channels: self.channels,
                 channel_config: self.channel_config,
-                variants: self.variants,
+                variant_configuration: self.variant_configuration,
                 variant_files: self.variant_files,
                 enabled_protocols: self.enabled_protocols,
             })
             .await
-            .map_err_with(Box::new)
-            .map_err_with(InstantiateToolEnvironmentError::InstallEnvironment)?;
+            .map_err_with(|e| InstantiateToolEnvironmentError::InstallEnvironment(Arc::new(e)))?;
 
         // Mark the environment as finished.
         prefix_guard
             .finish()
             .await
-            .map_err(InstantiateToolEnvironmentError::UpdateLock)
+            .map_err(|e| InstantiateToolEnvironmentError::UpdateLock(Arc::new(e)))
             .map_err(CommandDispatcherError::Failed)?;
 
         Ok(InstantiateToolEnvironmentResult {
@@ -300,27 +301,27 @@ impl InstantiateToolEnvironmentSpec {
 }
 
 /// An error that may occur while trying to instantiate a tool environment.
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Clone, Error, Diagnostic)]
 pub enum InstantiateToolEnvironmentError {
     #[error("failed to construct a tool prefix")]
-    CreatePrefix(#[source] std::io::Error),
+    CreatePrefix(#[source] Arc<std::io::Error>),
 
     #[error("failed to acquire a lock for the tool prefix")]
-    AcquireLock(#[source] std::io::Error),
+    AcquireLock(#[source] Arc<std::io::Error>),
 
     #[error("failed to release lock for the tool prefix")]
-    ReleaseLock(#[source] std::io::Error),
+    ReleaseLock(#[source] Arc<std::io::Error>),
 
     #[error("failed to update lock for the tool prefix")]
-    UpdateLock(#[source] std::io::Error),
+    UpdateLock(#[source] Arc<std::io::Error>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    SolveEnvironment(Box<SolvePixiEnvironmentError>),
+    SolveEnvironment(Arc<SolvePixiEnvironmentError>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InstallEnvironment(Box<InstallPixiEnvironmentError>),
+    InstallEnvironment(Arc<InstallPixiEnvironmentError>),
 
     #[error("The environment for the build backend package (`{} {}`) does not depend on `{}`. Without this package pixi has no way of knowing the API to use to communicate with the backend.", .build_backend.0.as_normalized(), .build_backend.1.to_string(), PIXI_BUILD_API_VERSION_NAME.as_normalized()
     )]
@@ -328,6 +329,6 @@ pub enum InstantiateToolEnvironmentError {
         "Modify the requirements on `{}` or contact the maintainers to ensure a dependency on `{}` is added.", .build_backend.0.as_normalized(), PIXI_BUILD_API_VERSION_NAME.as_normalized()
     ))]
     NoMatchingBackends {
-        build_backend: (PackageName, PixiSpec),
+        build_backend: Box<(PackageName, PixiSpec)>,
     },
 }

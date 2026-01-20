@@ -11,6 +11,7 @@ use crate::{
     CondaDependencies, DependencyOverwriteBehavior, InternalDependencyBehavior, PyPiDependencies,
     SpecType,
     activation::Activation,
+    dependencies::CondaDevDependencies,
     task::{Task, TaskName},
     utils::PixiSpanned,
 };
@@ -30,6 +31,10 @@ pub struct WorkspaceTarget {
 
     /// Specific python dependencies
     pub pypi_dependencies: Option<PyPiDependencies>,
+
+    /// Dev dependencies - source packages whose dependencies should be
+    /// installed without building the packages themselves
+    pub dev_dependencies: Option<CondaDevDependencies>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -85,13 +90,13 @@ impl WorkspaceTarget {
 
         // Count and find the first non-empty spec type
         for spec_type in [SpecType::Run, SpecType::Host, SpecType::Build] {
-            if let Some(specs) = self.dependencies.get(&spec_type) {
-                if !specs.is_empty() {
-                    if first_deps.is_none() {
-                        first_deps = Some(specs);
-                    }
-                    count += 1;
+            if let Some(specs) = self.dependencies.get(&spec_type)
+                && !specs.is_empty()
+            {
+                if first_deps.is_none() {
+                    first_deps = Some(specs);
                 }
+                count += 1;
             }
         }
 
@@ -287,6 +292,7 @@ impl WorkspaceTarget {
     pub(crate) fn try_add_pep508_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
+        pixi_requirement: Option<&PixiPypiSpec>,
         editable: Option<bool>,
         dependency_overwrite_behavior: DependencyOverwriteBehavior,
     ) -> Result<bool, DependencyError> {
@@ -305,9 +311,13 @@ impl WorkspaceTarget {
             }
         }
 
-        // Convert to an internal representation
+        // Convert to an internal representation, preserving fields like `index` from
+        // the original PixiPypiSpec if provided
         let name = PypiPackageName::from_normalized(requirement.name.clone());
-        let mut requirement = PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?;
+        let mut requirement = match pixi_requirement {
+            Some(existing) => existing.update_requirement(requirement)?,
+            None => PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?,
+        };
         if let Some(editable) = editable {
             requirement.set_editable(editable);
         }

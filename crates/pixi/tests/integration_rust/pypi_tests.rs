@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, str::FromStr};
+use std::{fs::File, io::Write, path::Path, str::FromStr};
 
 use pep508_rs::Requirement;
 use rattler_conda_types::Platform;
@@ -6,17 +6,68 @@ use tempfile::tempdir;
 use typed_path::Utf8TypedPath;
 
 use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
-use crate::common::{
-    LockFileExt, PixiControl,
-    package_database::{Package, PackageDatabase},
-};
+use crate::common::{LockFileExt, PixiControl};
 use crate::setup_tracing;
+use pixi_test_utils::{MockRepoData, Package};
+
+/// Helper to check if a pypi package is installed as editable by looking for a .pth file.
+/// Editable installations create a .pth file in site-packages that points to the source directory.
+/// For most backends, make sure to use the old style editables when using this function
+fn has_editable_pth_file(prefix: &Path, package_name: &str) -> bool {
+    let site_packages = if cfg!(target_os = "windows") {
+        prefix.join("Lib").join("site-packages")
+    } else {
+        // Find the python version directory
+        let lib_dir = prefix.join("lib");
+        if let Ok(entries) = fs_err::read_dir(&lib_dir) {
+            let entry = entries
+                .filter_map(|e| e.ok())
+                // Find the directory that starts with "python"
+                .find(|e| e.file_name().to_string_lossy().starts_with("python"))
+                .map(|e| e.path().join("site-packages"));
+            if let Some(entry) = entry {
+                entry
+            } else {
+                panic!("expected site-packages folder");
+            }
+        } else {
+            panic!("expected lib folder");
+        }
+    };
+
+    // Look for editable .pth files - different build backends use different naming:
+    // - hatchling: _{package_name}.pth (e.g., _editable_test.pth)
+    // - setuptools: __editable__.{package_name}-{version}.pth
+    let mut count = 0u32;
+    let normalized_name = package_name.replace('-', "_");
+    if let Ok(entries) = fs_err::read_dir(&site_packages) {
+        for entry in entries.flatten() {
+            count += 1;
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            if name_str.ends_with(".pth") {
+                // Check for hatchling style: _{package_name}.pth
+                if name_str == format!("_{}.pth", normalized_name) {
+                    return true;
+                }
+                // Check for setuptools style: __editable__.{package_name}-*.pth
+                if name_str.starts_with(&format!("__editable__.{}", normalized_name)) {
+                    return true;
+                }
+            }
+        }
+    }
+    if count == 0 {
+        panic!("expected folders in directory");
+    }
+
+    false
+}
 
 /// This tests if we can resolve pyproject optional dependencies recursively
 /// before when running `pixi list -e all`, this would have not included numpy
 /// we are now explicitly testing that this works
 #[tokio::test]
-#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn pyproject_optional_dependencies_resolve_recursively() {
     setup_tracing();
 
@@ -30,7 +81,7 @@ async fn pyproject_optional_dependencies_resolve_recursively() {
     let platform = Platform::current();
     let platform_str = platform.to_string();
 
-    let mut package_db = PackageDatabase::default();
+    let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.11.0")
             .with_subdir(platform)
@@ -60,6 +111,7 @@ test = ["recursive-optional-groups[np]", "pytest", {{include-group = "docs"}}]
 [tool.pixi.workspace]
 channels = ["{channel_url}"]
 platforms = ["{platform_str}"]
+conda-pypi-map = {{}}
 
 [tool.pixi.dependencies]
 python = "==3.11.0"
@@ -99,9 +151,96 @@ test = {{features = ["test"]}}
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn pyproject_environment_markers_resolved() {
+    setup_tracing();
+
+    // Add a dependency that's present only on linux-64
+    let simple = PyPIDatabase::new()
+        .with(PyPIPackage::new("nvidia-nccl-cu12", "1.0.0").with_tag(
+            "cp311",
+            "cp311",
+            "manylinux1_x86_64",
+        ))
+        .into_simple_index()
+        .unwrap();
+
+    // Create a TOML with two platforms
+    let platform1 = Platform::Linux64;
+    let platform2 = Platform::OsxArm64;
+    let platform_str = format!("\"{}\", \"{}\"", platform1, platform2);
+
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.11.0")
+            .with_subdir(platform1)
+            .finish(),
+    );
+    package_db.add_package(
+        Package::build("python", "3.11.0")
+            .with_subdir(platform2)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+    let channel_url = channel.url();
+    let index_url = simple.index_url();
+
+    // Make sure that the TOML contains an env marker to allow linux-64.
+    let pyproject = format!(
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "environment-markers"
+dependencies = [
+    "nvidia-nccl-cu12; sys_platform == 'linux'"
+]
+
+[tool.pixi.workspace]
+channels = ["{channel_url}"]
+platforms = [{platform_str}]
+conda-pypi-map = {{}}
+
+[tool.pixi.dependencies]
+python = "==3.11.0"
+
+[tool.pixi.pypi-options]
+index-url = "{index_url}"
+"#,
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    let nccl_req = Requirement::from_str("nvidia-nccl-cu12; sys_platform == 'linux'").unwrap();
+    // Check that the requirement is present in the lockfile for linux-64
+    assert!(
+        lock.contains_pep508_requirement("default", platform1, nccl_req.clone()),
+        "default environment should include nccl for linux-64"
+    );
+    // But not for osx-arm64
+    assert!(
+        !lock.contains_pep508_requirement("default", platform2, nccl_req.clone()),
+        "default environment shouldn't include nccl for osx-arm64"
+    );
+}
+
+#[tokio::test]
 async fn test_flat_links_based_index_returns_path() {
     setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
 
     // Build a local flat (find-links) index with a single wheel: foo==1.0.0
     let index = PyPIDatabase::new()
@@ -113,13 +252,14 @@ async fn test_flat_links_based_index_returns_path() {
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-flat-find-links"
         platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [pypi-dependencies]
         foo = "*"
@@ -127,7 +267,8 @@ async fn test_flat_links_based_index_returns_path() {
         [pypi-options]
         find-links = [{{ path = "{find_links_path}"}}]
         "#,
-        platform = Platform::current(),
+        platform = platform,
+        channel_url = channel.url(),
         find_links_path = find_links_path,
     ));
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
@@ -136,7 +277,7 @@ async fn test_flat_links_based_index_returns_path() {
     // Our wheel builder uses the tag py3-none-any by default.
     assert_eq!(
         lock_file
-            .get_pypi_package_url("default", Platform::current(), "foo")
+            .get_pypi_package_url("default", platform, "foo")
             .unwrap()
             .as_path()
             .unwrap(),
@@ -146,9 +287,19 @@ async fn test_flat_links_based_index_returns_path() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_file_based_index_returns_path() {
     setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
 
     let simple = PyPIDatabase::new()
         .with(PyPIPackage::new("foo", "1.0.0"))
@@ -157,13 +308,14 @@ async fn test_file_based_index_returns_path() {
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [pypi-dependencies]
         foo = "*"
@@ -172,14 +324,15 @@ async fn test_file_based_index_returns_path() {
         extra-index-urls = [
             "{index_url}"
         ]"#,
-        platform = Platform::current(),
+        platform = platform,
+        channel_url = channel.url(),
         index_url = simple.index_url(),
     ));
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
 
     assert_eq!(
         lock_file
-            .get_pypi_package_url("default", Platform::current(), "foo")
+            .get_pypi_package_url("default", platform, "foo")
             .unwrap()
             .as_path()
             .unwrap(),
@@ -190,9 +343,20 @@ async fn test_file_based_index_returns_path() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_index_strategy() {
     setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
 
     let idx_a = PyPIDatabase::new()
         .with(PyPIPackage::new("foo", "1.0.0"))
@@ -209,13 +373,14 @@ async fn test_index_strategy() {
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [pypi-dependencies]
         foo = "*"
@@ -248,7 +413,8 @@ async fn test_index_strategy() {
         unsafe-first-match-constrained = ["unsafe-first-match-constrained"]
         unsafe-best-match = ["unsafe-best-match"]
         "#,
-        platform = Platform::current(),
+        platform = platform,
+        channel_url = channel.url(),
         idx_a = idx_a.index_url(),
         idx_b = idx_b.index_url(),
         idx_c = idx_c.index_url(),
@@ -257,37 +423,39 @@ async fn test_index_strategy() {
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
 
     assert_eq!(
-        lock_file.get_pypi_package_version("default", Platform::current(), "foo"),
+        lock_file.get_pypi_package_version("default", platform, "foo"),
         Some("1.0.0".into())
     );
     assert_eq!(
-        lock_file.get_pypi_package_version(
-            "unsafe-first-match-unconstrained",
-            Platform::current(),
-            "foo"
-        ),
+        lock_file.get_pypi_package_version("unsafe-first-match-unconstrained", platform, "foo"),
         Some("1.0.0".into())
     );
 
     assert_eq!(
-        lock_file.get_pypi_package_version(
-            "unsafe-first-match-constrained",
-            Platform::current(),
-            "foo"
-        ),
+        lock_file.get_pypi_package_version("unsafe-first-match-constrained", platform, "foo"),
         Some("3.0.0".into())
     );
     assert_eq!(
-        lock_file.get_pypi_package_version("unsafe-best-match", Platform::current(), "foo"),
+        lock_file.get_pypi_package_version("unsafe-best-match", platform, "foo"),
         Some("3.0.0".into())
     );
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 /// This test checks if we can pin a package from a PyPI index, by explicitly specifying the index.
 async fn test_pinning_index() {
     setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
 
     let idx = PyPIDatabase::new()
         .with(PyPIPackage::new("foo", "1.0.0"))
@@ -296,19 +464,21 @@ async fn test_pinning_index() {
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-pinning-index"
         platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [pypi-dependencies]
         foo = {{ version = "*", index = "{idx_url}" }}
 
         "#,
-        platform = Platform::current(),
+        platform = platform,
+        channel_url = channel.url(),
         idx_url = idx.index_url(),
     ));
 
@@ -316,7 +486,7 @@ async fn test_pinning_index() {
 
     assert_eq!(
         lock_file
-            .get_pypi_package_url("default", Platform::current(), "foo")
+            .get_pypi_package_url("default", platform, "foo")
             .unwrap()
             .as_path()
             .unwrap(),
@@ -327,7 +497,7 @@ async fn test_pinning_index() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 /// This test checks if we can receive torch correctly from the whl/cu124 index.
 async fn pin_torch() {
     setup_tracing();
@@ -339,19 +509,37 @@ async fn pin_torch() {
         _ => format!("\"{platform}\", \"linux-64\""),
     };
 
+    // Create local conda channel with Python for all relevant platforms
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::Linux64)
+            .finish(),
+    );
+    if platform != Platform::Linux64 {
+        package_db.add_package(
+            Package::build("python", "3.12.0")
+                .with_subdir(platform)
+                .finish(),
+        );
+    }
+    let channel = package_db.into_channel().await.unwrap();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-pinning-index"
         platforms = [{platforms}]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [target.linux-64.pypi-dependencies]
         torch = {{ version = "*", index = "https://download.pytorch.org/whl/cu124" }}
         "#,
+        channel_url = channel.url(),
     ));
 
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
@@ -370,26 +558,47 @@ async fn pin_torch() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_allow_insecure_host() {
     setup_tracing();
 
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    // Create local PyPI index with sh package
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("sh", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [pypi-dependencies]
         sh = "*"
 
         [pypi-options]
+        index-url = "{pypi_index_url}"
         extra-index-urls = ["https://expired.badssl.com/"]"#,
-        platform = Platform::current(),
+        platform = platform,
+        channel_url = channel.url(),
+        pypi_index_url = pypi_index.index_url(),
     ))
     .unwrap();
     // will occur ssl error
@@ -414,7 +623,158 @@ async fn test_allow_insecure_host() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
+async fn test_tls_no_verify_with_pypi_dependencies() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    // Create local PyPI index with sh package
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("sh", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "pypi-tls-test"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        sh = "*"
+
+        [pypi-options]
+        index-url = "{pypi_index_url}"
+        extra-index-urls = ["https://expired.badssl.com/"]"#,
+        platform = platform,
+        channel_url = channel.url(),
+        pypi_index_url = pypi_index.index_url(),
+    ))
+    .unwrap();
+
+    // First verify that it fails with SSL errors when tls-no-verify is not set
+    assert!(
+        pixi.update_lock_file().await.is_err(),
+        "should fail with SSL error when tls-no-verify is not enabled"
+    );
+
+    // Now set tls-no-verify = true in the project config
+    let config_path = pixi.workspace().unwrap().pixi_dir().join("config.toml");
+    fs_err::create_dir_all(config_path.parent().unwrap()).unwrap();
+    let mut file = File::create(config_path).unwrap();
+    file.write_all(
+        r#"
+        tls-no-verify = true"#
+            .as_bytes(),
+    )
+    .unwrap();
+
+    // With tls-no-verify = true, this should now succeed or fail for non-SSL reasons
+    let result = pixi.update_lock_file().await;
+
+    // The test should succeed because tls-no-verify bypasses SSL verification
+    // If it fails, it should not be due to SSL certificate issues
+    match result {
+        Ok(_) => {
+            // Success - TLS verification was bypassed
+        }
+        Err(e) => {
+            let error_msg = format!("{e:?}");
+            // If it fails, it should NOT be due to SSL/TLS certificate issues
+            assert!(
+                !error_msg.to_lowercase().contains("certificate")
+                    && !error_msg.to_lowercase().contains("ssl")
+                    && !error_msg.to_lowercase().contains("tls"),
+                "Error should not be SSL/TLS related when tls-no-verify is enabled. Got: {error_msg}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
+async fn test_tls_verify_still_fails_without_config() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    // Create local PyPI index with sh package
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("sh", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "pypi-tls-verify-test"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        sh = "*"
+
+        [pypi-options]
+        index-url = "{pypi_index_url}"
+        extra-index-urls = ["https://expired.badssl.com/"]"#,
+        platform = platform,
+        channel_url = channel.url(),
+        pypi_index_url = pypi_index.index_url(),
+    ))
+    .unwrap();
+
+    // Without tls-no-verify, this should fail with SSL errors
+    let result = pixi.update_lock_file().await;
+    assert!(
+        result.is_err(),
+        "should fail with SSL error when tls-no-verify is not enabled"
+    );
+
+    let error = result.unwrap_err();
+    let error_msg = format!("{error:?}");
+    // The error should be SSL/TLS related
+    assert!(
+        error_msg.to_lowercase().contains("certificate")
+            || error_msg.to_lowercase().contains("ssl")
+            || error_msg.to_lowercase().contains("tls")
+            || error_msg.contains("expired.badssl.com"),
+        "Error should be SSL/TLS related. Got: {error_msg}"
+    );
+}
+
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
     setup_tracing();
 
@@ -524,7 +884,10 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
 /// even when the lower version appears first in `extra-index-urls`.
 /// This was an issue in: https://github.com/prefix-dev/pixi/issues/4588
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_index_strategy_respected_for_build_dependencies() {
     setup_tracing();
 
@@ -587,7 +950,6 @@ async fn test_index_strategy_respected_for_build_dependencies() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_cross_platform_resolve_with_no_build() {
     setup_tracing();
 
@@ -598,6 +960,15 @@ async fn test_cross_platform_resolve_with_no_build() {
         Platform::OsxArm64
     };
 
+    // Create local conda channel with Python for the resolve platform
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(resolve_platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
     // Use a local flat index for foo==1.0.0
     let flat = PyPIDatabase::new()
         .with(PyPIPackage::new("foo", "1.0.0"))
@@ -605,13 +976,14 @@ async fn test_cross_platform_resolve_with_no_build() {
         .expect("failed to create flat index");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [pypi-dependencies]
         foo = "*"
@@ -620,6 +992,7 @@ async fn test_cross_platform_resolve_with_no_build() {
         no-build = true
         find-links = [{{ path = "{find_links}"}}]"#,
         platform = resolve_platform,
+        channel_url = channel.url(),
         find_links = flat.path().display().to_string().replace("\\", "/"),
     ));
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
@@ -640,15 +1013,13 @@ async fn test_cross_platform_resolve_with_no_build() {
 ///
 /// We expect there to be a help message that informs the user about the pinned package
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_pinned_help_message() {
     setup_tracing();
 
     // Construct a minimal local conda channel with python and pandas==1.0.0
-    use crate::common::package_database::{Package, PackageDatabase};
     use rattler_conda_types::Platform;
 
-    let mut conda_db = PackageDatabase::default();
+    let mut conda_db = MockRepoData::default();
     // Python runtime
     conda_db.add_package(
         Package::build("python", "3.12.0")
@@ -676,6 +1047,7 @@ async fn test_pinned_help_message() {
         r#"
         [workspace]
         channels = ["{channel}"]
+        conda-pypi-map = {{}}
         name = "local-pinned-help"
         platforms = ["{platform}"]
         version = "0.1.0"
@@ -701,14 +1073,25 @@ async fn test_pinned_help_message() {
     // Should contain pinned help message for pandas==1.0.0
     assert_eq!(
         format!("{}", err.help().unwrap()),
-        "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\npandas==1.0.0"
+        "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\npandas==1.0.0
+See https://pixi.sh/latest/concepts/conda_pypi/#pinned-package-conflicts for more information."
     );
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_uv_index_correctly_parsed() {
     setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
 
     // Provide a local simple index containing `foo` used in build-system requires.
     let simple = PyPIDatabase::new()
@@ -744,13 +1127,15 @@ async fn test_uv_index_correctly_parsed() {
         module-root = ""
 
         [tool.pixi.workspace]
-        channels = ["conda-forge"]
+        channels = ["{channel_url}"]
         platforms = ["{platform}"]
+        conda-pypi-map = {{}} # Disable mapping
 
         [tool.pixi.pypi-dependencies]
         simple = {{ path = "." }}
         "#,
-        platform = Platform::current(),
+        platform = platform,
+        channel_url = channel.url(),
         index_url = simple.index_url(),
     ))
     .unwrap();
@@ -769,5 +1154,309 @@ async fn test_uv_index_correctly_parsed() {
             .unwrap()
             .as_str()
             .contains(&simple.index_path().display().to_string())
+    );
+}
+
+/// Tests that prerelease-mode = "allow" allows pre-release versions to be resolved.
+/// Without this setting, the resolver would skip pre-releases unless explicitly requested.
+#[tokio::test]
+async fn test_prerelease_mode_allow() {
+    setup_tracing();
+
+    // Build a local simple index with both a stable and prerelease version
+    let simple = PyPIDatabase::new()
+        .with(PyPIPackage::new("testpkg", "1.0.0"))
+        .with(PyPIPackage::new("testpkg", "2.0.0a1")) // Pre-release version
+        .into_simple_index()
+        .expect("failed to create local simple index");
+
+    let platform = Platform::current();
+
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+    let channel_url = channel.url();
+
+    // With prerelease-mode = "allow", the resolver should pick the pre-release 2.0.0a1
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "prerelease-test"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}} # Disable mapping
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        testpkg = "*"
+
+        [pypi-options]
+        index-url = "{index_url}"
+        prerelease-mode = "allow"
+        "#,
+        platform = platform,
+        channel_url = channel_url,
+        index_url = simple.index_url(),
+    ))
+    .unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // With prerelease-mode = "allow", we should get the pre-release version 2.0.0a1
+    // because it's the highest version available
+    let locked_version = lock_file
+        .get_pypi_package_version("default", platform, "testpkg")
+        .expect("testpkg should be in lock file");
+    assert_eq!(
+        locked_version.to_string(),
+        "2.0.0a1",
+        "With prerelease-mode = 'allow', the pre-release version should be selected"
+    );
+}
+
+/// Tests that prerelease-mode = "disallow" prevents pre-release versions from being resolved.
+#[tokio::test]
+async fn test_prerelease_mode_disallow() {
+    setup_tracing();
+
+    // Build a local simple index with both a stable and prerelease version
+    let simple = PyPIDatabase::new()
+        .with(PyPIPackage::new("testpkg", "1.0.0"))
+        .with(PyPIPackage::new("testpkg", "2.0.0a1")) // Pre-release version
+        .into_simple_index()
+        .expect("failed to create local simple index");
+
+    let platform = Platform::current();
+
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+    let channel_url = channel.url();
+
+    // With prerelease-mode = "disallow", the resolver should pick the stable 1.0.0
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "prerelease-test"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        testpkg = "*"
+
+        [pypi-options]
+        index-url = "{index_url}"
+        prerelease-mode = "disallow"
+        "#,
+        platform = platform,
+        channel_url = channel_url,
+        index_url = simple.index_url(),
+    ))
+    .unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // With prerelease-mode = "disallow", we should get the stable version 1.0.0
+    let locked_version = lock_file
+        .get_pypi_package_version("default", platform, "testpkg")
+        .expect("testpkg should be in lock file");
+    assert_eq!(
+        locked_version.to_string(),
+        "1.0.0",
+        "With prerelease-mode = 'disallow', the stable version should be selected"
+    );
+}
+
+/// Test for issue #5205: Specifying a python sub-version (patch) should work correctly
+/// Before the fix, using python 3.10.6 would create a specifier "==3.10.*" which conflicts
+/// with requires-python = "==3.10.6". The fix uses the full version string.
+#[tokio::test]
+async fn test_python_patch_version_requires_python() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Test with different requires-python formats to ensure robustness
+    let test_cases = vec![("==3.10.6", true), (">=3.11", false), ("==3.7.2", true)];
+
+    // Create local conda channel with Python 3.10.6 (with patch version)
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.10.6")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+    let channel_url = channel.url();
+
+    for (requires_python, should_solve) in test_cases {
+        // Create a pyproject.toml with requires-python
+        let pyproject = format!(
+            r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "test-project"
+version = "0.1.0"
+requires-python = "{requires_python}"
+
+[tool.pixi.workspace]
+channels = ["{channel_url}"]
+platforms = ["{platform}"]
+conda-pypi-map = {{}}
+
+[tool.pixi.dependencies]
+python = "==3.10.6"
+
+[tool.pixi.pypi-dependencies]
+test-project = {{ path = "." }}
+"#,
+            channel_url = channel_url,
+            platform = platform,
+            requires_python = requires_python,
+        );
+
+        let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+        let result = pixi.update_lock_file().await;
+
+        assert_eq!(
+            result.is_ok(),
+            should_solve,
+            "Expected solving to be {} for requires-python = '{}'",
+            if should_solve {
+                "successful"
+            } else {
+                "unsuccessful"
+            },
+            requires_python,
+        );
+
+        // Verify that the lock file was created successfully and test-project was resolved
+        if let Ok(lock_file) = result {
+            let test_project_version =
+                lock_file.get_pypi_package_version("default", platform, "test-project");
+            assert!(
+                test_project_version.is_some(),
+                "test-project should be resolved for requires-python = '{}'",
+                requires_python
+            );
+        }
+    }
+}
+
+/// Test that when a lock file has editable: true but the manifest doesn't specify editable,
+/// the package is installed as non-editable (manifest takes precedence).
+///
+/// This tests the fix for the bug where old lock files with editable: true would cause
+/// packages to be installed as editable even when the manifest didn't specify it.
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
+async fn test_editable_from_manifest_not_lockfile() {
+    use rattler_lock::LockFile;
+
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create a project with a path dependency WITHOUT editable specified
+    // Use conda-forge directly since we need a real Python
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "editable-test"
+        platforms = ["{platform}"]
+        channels = ["https://prefix.dev/conda-forge"]
+
+        [dependencies]
+        python = "~=3.12.0"
+
+        [pypi-dependencies]
+        editable-test = {{ path = "." }}
+        "#,
+        platform = platform,
+    ))
+    .unwrap();
+
+    // Create a minimal pyproject.toml for the package
+    let pyproject = r#"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "editable-test"
+version = "0.1.0"
+"#;
+    fs_err::write(pixi.workspace_path().join("pyproject.toml"), pyproject).unwrap();
+
+    // Create the package source
+    let src_dir = pixi.workspace_path().join("editable_test");
+    fs_err::create_dir_all(&src_dir).unwrap();
+    fs_err::write(src_dir.join("__init__.py"), "").unwrap();
+
+    // First, update the lock file (this won't have editable field since we don't record it)
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    // Manually modify the lock file to add editable: true, simulating an old lock file
+    let lock_file_str = lock.render_to_string().unwrap();
+
+    // Add editable: true after the package name line
+    let modified_lock_file_str = lock_file_str.replace(
+        "name: editable-test\n",
+        "name: editable-test\n  editable: true\n",
+    );
+
+    assert!(
+        modified_lock_file_str.contains("editable: true"),
+        "Failed to add editable: true to lock file"
+    );
+
+    // Parse and write the modified lock file back
+    let modified_lockfile = LockFile::from_str(&modified_lock_file_str).unwrap();
+    let workspace = pixi.workspace().unwrap();
+    modified_lockfile
+        .to_path(&workspace.lock_file_path())
+        .unwrap();
+
+    // Verify the lock file now has editable: true
+    let lock_after_modification = pixi.lock_file().await.unwrap();
+    assert!(
+        lock_after_modification
+            .is_pypi_package_editable("default", platform, "editable-test")
+            .unwrap_or(false),
+        "Lock file should have editable: true after manual modification"
+    );
+
+    // Now install with --locked (uses the modified lock file without re-resolving)
+    // The fix should ensure that the package is installed as NON-editable
+    // because the manifest doesn't specify editable = true
+    pixi.install().with_locked().await.unwrap();
+
+    let prefix_path = pixi.default_env_path().unwrap();
+
+    // The package should NOT be installed as editable because the manifest doesn't specify editable
+    assert!(
+        !has_editable_pth_file(&prefix_path, "editable_test"),
+        "Package should NOT be installed as editable when manifest doesn't specify editable = true (even if lock file has editable: true)"
     );
 }

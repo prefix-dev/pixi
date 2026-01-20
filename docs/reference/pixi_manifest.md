@@ -1,6 +1,7 @@
 
 The `pixi.toml` is the workspace manifest, also known as the Pixi workspace configuration file.
-It specifies environments for a workspace, and the package dependency requirements for those environments. It can also specify tasks which can run in those environments, as well as many other configuration options.
+It specifies environments for a workspace, and the package dependency requirements for
+those environments. It can also specify tasks which can run in those environments, as well as many other configuration options.
 
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
@@ -66,13 +67,25 @@ Pixi solves the dependencies for all these platforms and puts them in the lock f
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```
 
-The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html)
+The available platforms (except `noarch` and `unknown`) are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html)
 
-!!! tip "Special macOS behavior"
-    macOS has two platforms: `osx-64` for Intel Macs and `osx-arm64` for Apple Silicon Macs.
-    To support both, include both in your platforms list.
-    Fallback: If `osx-arm64` can't resolve, use `osx-64`.
-    Running `osx-64` on Apple Silicon uses [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment) for Intel binaries.
+!!! tip "Special macOS and Windows ARM behavior"
+    To support both architectures on macOS or Windows, include both platforms in your list.
+
+    ```toml
+    # Specific environment for all platforms
+    platforms = ["osx-64", "osx-arm64", "win-64", "win-arm64"]
+    # Environments that run on both Intel and ARM setups but using the emulators:
+    platforms = ["osx-64", "win-64"]
+    ```
+
+    | OS      | Platform    | Architecture  | Notes                                                                                                                                  |
+    |---------|-------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------|
+    | macOS   | `osx-64`    | Intel         | Runs on Apple Silicon via [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment) |
+    | macOS   | `osx-arm64` | Apple Silicon | Optimized binaries for Apple Silicon (recommended).                                                                                    |
+    | Windows | `win-64`    | Intel/AMD64   | Runs on ARM processors with [Prism](https://learn.microsoft.com/en-us/windows/arm/apps-on-arm-x86-emulation)                           |                                         |
+    | Windows | `win-arm64` | ARM64         | Optimized binaries for ARM, not all packages support this yet.                                                                         |
+
 
 ### `name` (optional)
 
@@ -173,7 +186,17 @@ Example:
 If `conda-forge` is not present in `conda-pypi-map` `pixi` will use `prefix.dev` mapping for it.
 
 ```toml
-conda-pypi-map = { "conda-forge" = "https://example.com/mapping", "https://repo.prefix.dev/robostack" = "local/robostack_mapping.json"}
+conda-pypi-map = { conda-forge = "https://example.com/mapping", "https://repo.prefix.dev/robostack" = "local/robostack_mapping.json"}
+```
+
+It is also possible to disable fetching external mpping by adding an empty map to the list
+
+```toml
+conda-pypi-map = { conda-forge = "map.json" }
+```
+
+```json title="map.json"
+{}
 ```
 
 ### `channel-priority` (optional)
@@ -235,7 +258,7 @@ solve-strategy = "lowest"
     [feature.one]
     solve-strategy = "lowest"
     [feature.two]
-    solve-strategy = "lowest-direct"    
+    solve-strategy = "lowest-direct"
     [environments]
     combined = ["two", "one"] # <- The solve strategy from feature `two` is used
     ```
@@ -264,7 +287,7 @@ requires-pixi = ">=0.40,<1.0"
 
 !!! note
     This option should be used to improve the reproducibility of building the workspace. A complicated
-    requirement spec may be an obstacle to setup the building environment.
+    requirement spec may be an obstacle to setup the build environment.
 
 
 ### `exclude-newer` (optional)
@@ -279,8 +302,9 @@ The date may be specified in the following formats:
 
 Both PyPi and conda packages are considered.
 
-!! note Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
-If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
+!!! note
+    Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
+    If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
 
 ### `build-variants` (optional)
 
@@ -423,7 +447,9 @@ More information in the [system requirements documentation](../workspace/system_
 ## The `pypi-options` table
 
 The `pypi-options` table is used to define options that are specific to PyPI registries.
-These options can be specified either at the root level, which will add it to the default options feature, or on feature level, which will create a union of these options when the features are included in the environment.
+These options can be specified either at the root level, which will add it to the default options feature,
+or on feature level, which will create a union of these options when the features are included in the
+environment.
 
 The options that can be defined are:
 
@@ -434,6 +460,7 @@ The options that can be defined are:
 - `no-build`: don't build source distributions.
 - `no-binary`: don't use pre-build wheels.
 - `index-strategy`: allows for specifying the index strategy to use.
+- `prerelease-mode`: controls whether pre-release versions are allowed during dependency resolution.
 
 These options are explained in the sections below. Most of these options are taken directly or with slight modifications from the [uv settings](https://docs.astral.sh/uv/reference/settings/). If any are missing that you need feel free to create an issue [requesting](https://github.com/prefix-dev/pixi/issues) them.
 
@@ -448,9 +475,11 @@ Often you might want to use an alternative or extra index for your workspace. Th
 
 - `index-url`: replaces the main index url. If this is not set the default index used is `https://pypi.org/simple`.
    **Only one** `index-url` can be defined per environment.
-- `extra-index-urls`: adds an extra index url. The urls are used in the order they are defined. And are preferred over the `index-url`. These are merged across features into an environment.
+- `extra-index-urls`: adds an extra index url. The urls are used in the order they are defined. And
+   are preferred over the `index-url`. These are merged across features into an environment.
 - `find-links`: which can either be a path `{path = './links'}` or a url `{url = 'https://example.com/links'}`.
-   This is similar to the `--find-links` option in `pip`. These are merged across features into an environment.
+   This is similar to the `--find-links` option in `pip`. These are merged across features into an
+   environment.
 
 An example:
 
@@ -468,6 +497,7 @@ There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/
 
 
 ### No Build Isolation
+
 Even though build isolation is a good default.
 One can choose to **not** isolate the build for a certain package name, this allows the build to access the `pixi` environment.
 This is convenient if you want to use `torch` or something similar for your build-process.
@@ -498,9 +528,13 @@ no-build-isolation = true
 ```
 
 !!! tip "Conda dependencies define the build environment"
-    To use `no-build-isolation` effectively, use conda dependencies to define the build environment. These are installed before the PyPI dependencies are resolved, this way these dependencies are available during the build process. In the example above adding `torch` as a PyPI dependency would be ineffective, as it would not yet be installed during the PyPI resolution phase.
+    To use `no-build-isolation` effectively, use conda dependencies to define the build environment.
+    These are installed before the PyPI dependencies are resolved, this way these dependencies are
+    available during the build process. In the example above adding `torch` as a PyPI dependency
+    would be ineffective, as it would not yet be installed during the PyPI resolution phase.
 
 ### No Build
+
 When enabled, resolving will not run arbitrary Python code. The cached wheels of already-built source distributions will be reused, but operations that require building distributions will exit with an error.
 
 Can be either set per package or globally.
@@ -517,7 +551,8 @@ no-build = ["package1", "package2"]
 
 When features are merged, the following priority is adhered:
 `no-build = true` > `no-build = ["package1", "package2"]` > `no-build = false`
-So, to expand: if `no-build = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
+So, to expand: if `no-build = true` is set for *any* feature in the environment, this
+will be used as the setting for the environment.
 
 
 ### No Binary
@@ -540,7 +575,8 @@ no-binary = ["package1", "package2"]
 
 When features are merged, the following priority is adhered:
 `no-binary = true` > `no-binary = ["package1", "package2"]` > `no-binary = false`
-So, to expand: if `no-binary = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
+So, to expand: if `no-binary = true` is set for *any* feature in the environment, this
+will be used as the setting for the environment.
 
 
 ### Index Strategy
@@ -561,6 +597,30 @@ By default, `uv` and thus `pixi`, will stop at the first index on which a given 
 !!! info "PyPI only"
     The `index-strategy` only changes PyPI package resolution and not conda package resolution.
 
+
+### Prerelease Mode
+
+The strategy to use when considering pre-release versions during dependency resolution. Description taken from the [uv documentation](https://docs.astral.sh/uv/reference/settings/#prerelease).
+
+By default, `pixi` will allow pre-release versions when a package only has pre-release versions available, or when a pre-release version is explicitly requested in the version specifier (e.g., `>=1.0.0a1`).
+
+!!! warning "One prerelease mode per environment"
+    Only one `prerelease-mode` can be defined per environment or solve-group, otherwise, an error will be shown.
+
+#### Possible values:
+
+- **"disallow"**: Disallow all pre-release versions.
+- **"allow"**: Allow all pre-release versions.
+- **"if-necessary"**: Allow pre-release versions if all versions of a package are pre-release.
+- **"explicit"**: Allow pre-release versions for first-party packages with explicit pre-release markers in their version requirements.
+- **"if-necessary-or-explicit"** (default): Allow pre-release versions if all versions of a package are pre-release, or if the package has an explicit pre-release marker in its version requirements.
+
+Example:
+```toml
+[pypi-options]
+prerelease-mode = "allow"  # Allow all pre-release versions
+```
+
 ## The `dependencies` table(s)
 ??? info "Details regarding the dependencies"
     For more detail regarding the dependency types, make sure to check the [Run, Host, Build](../build/dependency_types.md) dependency documentation.
@@ -572,6 +632,9 @@ The default is `[dependencies]`, which are dependencies that are shared across p
 
 Dependencies are defined using a [VersionSpec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/version_spec/enum.VersionSpec.html).
 A `VersionSpec` combines a [Version](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html) with an optional operator.
+
+!!! tip "Need to specify build strings or more specific packages?"
+    For detailed information on specifying build strings and advanced package specifications, see the [Package Specifications](../concepts/package_specifications.md) guide.
 
 
 Some examples are:
@@ -587,7 +650,7 @@ package2 = ">1.2,<=1.4"
 package3 = ">=1.2.3|<1.0.0"
 ```
 
-Dependencies can also be defined as a mapping where it is using a [matchspec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.NamelessMatchSpec.html):
+Dependencies can also be defined as a mapping where it is using a matchspec
 
 ```toml
 package0 = { version = ">=1.2.3", channel="conda-forge" }
@@ -636,7 +699,7 @@ PyPI packages are not indexed on [prefix.dev](https://prefix.dev/channels) but c
 
 #### Version specification:
 
-These dependencies don't follow the conda matchspec specification.
+These dependencies don't follow the [conda MatchSpec](https://rattler.prefix.dev/py-rattler/match_spec#matchspec)  specification.
 The `version` is a string specification of the version according to [PEP404/PyPA](https://packaging.python.org/en/latest/specifications/version-specifiers/).
 Additionally, a list of extra's can be included, which are essentially optional dependencies.
 Note that this `version` is distinct from the conda MatchSpec type.
@@ -878,7 +941,8 @@ clang = ">=16.0.6"
 ## The `feature` and `environments` tables
 
 The `feature` table allows you to define features that can be used to create different `[environments]`.
-The `[environments]` table allows you to define different environments. The design is explained in the [this design document](../workspace/multi_environment.md).
+The `[environments]` table allows you to define different environments. The design is
+explained in the [this design document](../workspace/multi_environment.md).
 
 ```toml title="Simplest example"
 [feature.test.dependencies]
@@ -985,10 +1049,21 @@ test = {features = ["test"]}
 When an environment comprises several features (including the default feature):
 
 - The `activation` and `tasks` of the environment are the union of the `activation` and `tasks` of all its features.
-- The `dependencies` and `pypi-dependencies` of the environment are the union of the `dependencies` and `pypi-dependencies` of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.
-- The `system-requirements` of the environment is the union of the `system-requirements` of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.
-- The `channels` of the environment is the union of the `channels` of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
-- The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at workspace level (unless overridden in the feature). This means that it is usually a good idea to set the workspace `platforms` to all platforms it can support across its environments.
+- The `dependencies` and `pypi-dependencies` of the environment are the union of the
+  `dependencies` and `pypi-dependencies` of all its features. This means that if several features
+  define a requirement for the same package, both requirements will be combined. Beware of conflicting
+  requirements across features added to the same environment.
+- The `system-requirements` of the environment is the union of the `system-requirements`
+  of all its features. If multiple features specify a requirement for the same system package, the
+  highest version is chosen.
+- The `channels` of the environment is the union of the `channels` of all its features.
+  Channel priorities can be specified in each feature, to ensure channels are considered in the right
+  order in the environment.
+- The `platforms` of the environment is the intersection of the `platforms` of all its features.
+  Be aware that the platforms supported by a feature (including the default feature) will be considered
+  as the `platforms` defined at workspace level (unless overridden in the feature). This means that
+  it is usually a good idea to set the workspace `platforms` to all platforms it can support across
+  its environments.
 
 ## Global configuration
 
@@ -1006,6 +1081,15 @@ An example of a preview feature in the manifest:
 
 Preview features in the documentation will be marked as such on the relevant pages.
 
+## The `dev` table
+The `dev` table allows you to depend on the development dependencies of a source package.
+
+```toml
+[dev]
+my-package = { path = "src/my-package" }
+```
+This will install the `build-dependencies`, `host-dependencies` and `run-dependencies` defined in the package located at `src/my-package`.
+More information can be found in the [Dev packages](../build/dev.md) documentation.
 
 ## The `package` section
 
@@ -1118,6 +1202,7 @@ Each of these tables has a different purpose and is used to define the dependenc
 
 
 ### `build-dependencies`
+
 Build dependencies are required in the build environment and contain all tools that are not needed on the host of the package.
 
 Following packages are examples of typical build dependencies:
@@ -1155,6 +1240,7 @@ Following packages are typical examples for host dependencies:
 ```
 
 ### `run-dependencies`
+
 The `run-dependencies` are the packages that will be installed in the environment when the package is run.
 
 - Libraries

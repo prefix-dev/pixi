@@ -3,7 +3,7 @@ use clap::{CommandFactory, Parser, ValueEnum};
 use clap_complete::{Generator, shells};
 use clap_complete_nushell::Nushell;
 use miette::IntoDiagnostic;
-use regex::Regex;
+use regex::{Captures, Regex};
 use std::borrow::Cow;
 use std::io::Write;
 
@@ -88,7 +88,7 @@ fn get_completion_script(shell: Shell) -> String {
 }
 
 /// Replace the parts of the bash completion script that need different functionality.
-fn replace_bash_completion(script: &str) -> Cow<str> {
+fn replace_bash_completion(script: &str) -> Cow<'_, str> {
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
     // Replace the '-' with '__' since that's what clap's generator does as well for Bash Shell completion.
@@ -117,7 +117,7 @@ fn replace_bash_completion(script: &str) -> Cow<str> {
 }
 
 /// Replace the parts of the zsh completion script that need different functionality.
-fn replace_zsh_completion(script: &str) -> Cow<str> {
+fn replace_zsh_completion(script: &str) -> Cow<'_, str> {
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
     let pattern = r"(?ms)(\(run\))(?:.*?)(_arguments.*?)(\*::task)";
@@ -137,7 +137,7 @@ $2::task"#;
     re.replace(script, replacement.replace("BIN_NAME", bin_name))
 }
 
-fn replace_fish_completion(script: &str) -> Cow<str> {
+fn replace_fish_completion(script: &str) -> Cow<'_, str> {
     // Adds tab completion to the pixi run command.
     let bin_name = pixi_utils::executable_name();
     let addition = format!(
@@ -152,28 +152,126 @@ fn replace_fish_completion(script: &str) -> Cow<str> {
 }
 
 /// Replace the parts of the nushell completion script that need different functionality.
-fn replace_nushell_completion(script: &str) -> Cow<str> {
+fn replace_nushell_completion(script: &str) -> Cow<'_, str> {
+    fn insert_after_module<'a>(input: &'a str, insert: &str) -> Cow<'a, str> {
+        // Match the literal line
+        let re = Regex::new(r"(?m)^module completions \{").expect("static regex must be valid");
+
+        re.replace(input, |caps: &regex::Captures| {
+            format!("{}{}\n", &caps[0], insert)
+        })
+    }
+
+    /// For every occurrence of `flag` inside any `export extern "<cmd>" [...]` block:
+    /// - Extract the command name.
+    /// - Extract the type token and the rest of the line.
+    /// - Call `modify(cmd, ty, tail)`
+    ///     - If it returns `Some(extra)`, append `extra` after the type.
+    ///     - If it returns `None`, leave the line unchanged.
+    ///
+    /// The closure gets clean values:
+    ///     cmd  = "pixi run"
+    ///     ty   = "string"  (or "path", etc.)
+    ///     tail = " # comment"
+    pub fn append_after_type<F>(input: &str, flag: &str, modify: F) -> String
+    where
+        F: Fn(&str, &str, &str) -> Option<String>,
+    {
+        let flag_escaped = regex::escape(flag);
+
+        // Captures:
+        //   cmd  = the command name in quotes
+        //   pre  = prefix up to and including ": " on the flag line
+        //   ty   = type token
+        //   tail = rest of the line (comment + spacing)
+        let pattern = format!(
+            r#"(?ms)(export extern "(?P<cmd>[^"]+)" \[[^\]]*?^\s*{flag_escaped}\s*:\s*)(?P<ty>[^\s#@]+)(?P<tail>[^\n]*)"#,
+        );
+
+        let re = Regex::new(&pattern).expect("static regex must be valid");
+
+        re.replace_all(input, |caps: &Captures| {
+            let cmd = &caps["cmd"];
+            let pre = &caps[1];
+            let ty = &caps["ty"];
+            let tail = &caps["tail"];
+
+            match modify(cmd, ty, tail) {
+                Some(extra) => format!("{pre}{ty}{extra}{tail}"),
+                None => caps[0].to_string(),
+            }
+        })
+        .into_owned()
+    }
+
+    /// Append `append` after the `string` type for the argument `...task: string`
+    /// but only inside the `export extern "<command>" [...]` block.
+    pub fn append_to_task_arg(input: &str, command: &str, arg: &str, append: &str) -> String {
+        let cmd_escaped = regex::escape(command);
+
+        // Matches:
+        //   export extern "<command>" [ ... <newline>
+        //   ...task: string[rest]
+        //
+        // Captures:
+        //   1 = prefix up to and including "string"
+        //   2 = rest of line (comments, whitespace)
+        let pattern = format!(
+            r#"(?ms)(export extern "{cmd_escaped}" \[[^\]]*?^\s*\.{{3}}{arg}:\s*string)([^\n]*)"#,
+        );
+
+        let re = Regex::new(&pattern).expect("static regex must be valid");
+
+        re.replace_all(input, |caps: &Captures| {
+            let prefix = &caps[1]; // "...task: string"
+            let tail = &caps[2]; // comment / rest of line
+            format!("{prefix}{append}{tail}")
+        })
+        .into_owned()
+    }
+
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
     let bin_name = pixi_utils::executable_name();
-    let pattern = format!(
-        r#"(#.*\n  export extern "{bin_name} run".*\n.*...task: string)([^\]]*--environment\(-e\): string)([^\]]*\n  \])"#
+
+    // Extra definitions we want to add to the completion module.
+    let script = insert_after_module(
+        script,
+        &format!(
+            r#"
+    def "nu-complete {bin_name} run environment" [] {{
+      ^{bin_name} info --json | from json | get environments_info | get name
+    }}
+
+    def "nu-complete {bin_name} run" [] {{
+      ^{bin_name} info --json | from json | get environments_info | get tasks | flatten | uniq
+    }}
+
+    export alias "{bin_name} r" = {bin_name} run
+    "#
+        ),
     );
-    let replacement = r#"
-  def "nu-complete BIN_NAME run" [] {
-    ^BIN_NAME info --json | from json | get environments_info | get tasks | flatten | uniq
-  }
 
-  def "nu-complete BIN_NAME run environment" [] {
-    ^BIN_NAME info --json | from json | get environments_info | get name
-  }
+    // Add completion for all `--environment(-e)` flags.
+    let script = append_after_type(&script, "--environment(-e)", |cmd, _ty, _extra| {
+        let cmd = cmd.strip_prefix(bin_name)?.trim_start();
+        if cmd.starts_with("global") {
+            // --environment means something else for pixi global
+            None
+        } else {
+            Some(format!(r#"@"nu-complete {bin_name} run environment""#))
+        }
+    });
 
-  ${1}@"nu-complete BIN_NAME run"${2}@"nu-complete BIN_NAME run environment"${3}
+    // Add completion for the `...task: string` argument in pixi run.
+    let script = append_to_task_arg(
+        &script,
+        &format!("{bin_name} run"),
+        "task",
+        &format!("@\"nu-complete {bin_name} run\""),
+    );
 
-  export alias "BIN_NAME r" = BIN_NAME run"#;
-
-    let re = Regex::new(pattern.as_str()).expect("should be able to compile the regex");
-    re.replace(script, replacement.replace("BIN_NAME", bin_name))
+    script.into()
 }
 
 #[cfg(test)]
@@ -356,6 +454,10 @@ _arguments "${_arguments_options[@]}" \
         // Generate the original completion script.
         let script = get_completion_script(Shell::Nushell);
         // Test if there was a replacement done on the clap generated completions
-        assert_ne!(replace_nushell_completion(&script), script);
+        if replace_nushell_completion(&script) == script {
+            panic!(
+                "Completion replacement did not work as expected\n\n======================\n= Original script\n======================\n{script}"
+            );
+        }
     }
 }

@@ -3,61 +3,54 @@ source: crates/pixi_pypi_spec/src/lib.rs
 expression: snapshot
 ---
 - input: "pkg = \"==1.2.3\""
-  result: "==1.2.3"
+  result:
+    version: "==1.2.3"
 - input: "pkg = { version = \"==1.2.3\" } "
   result:
     version: "==1.2.3"
-    extras: []
-    index: ~
 - input: "pkg = \"*\""
-  result: "*"
+  result:
+    version: "*"
 - input: "pkg = { path = \"foobar\" } "
   result:
     path: foobar
-    editable: ~
-    extras: []
 - input: "pkg = { path = \"~/.cache\" } "
   result:
     path: ~/.cache
-    editable: ~
-    extras: []
 - input: "pkg = { url = \"https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda\" }"
   result:
     url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
-    subdirectory: ~
-    extras: []
 - input: "pkg = { git = \"https://github.com/conda-forge/21cmfast-feedstock\" }"
   result:
-    url:
-      git: "https://github.com/conda-forge/21cmfast-feedstock"
-    extras: []
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
 - input: "pkg = { git = \"https://github.com/conda-forge/21cmfast-feedstock\", \"branch\" = \"main\" }"
   result:
-    url:
-      git: "https://github.com/conda-forge/21cmfast-feedstock"
-      branch: main
-    extras: []
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
 - input: "pkg = { git = \"ssh://github.com/conda-forge/21cmfast-feedstock\", \"tag\" = \"v1.2.3\" }"
   result:
-    url:
-      git: "ssh://github.com/conda-forge/21cmfast-feedstock"
-      tag: v1.2.3
-    extras: []
+    git: "ssh://github.com/conda-forge/21cmfast-feedstock"
+    tag: v1.2.3
 - input: "pkg = { git = \"https://github.com/prefix-dev/rattler-build\", \"rev\" = \"123456\" }"
   result:
-    url:
-      git: "https://github.com/prefix-dev/rattler-build"
-      rev: "123456"
-    extras: []
+    git: "https://github.com/prefix-dev/rattler-build"
+    rev: "123456"
 - input: "pkg = { git = \"https://github.com/prefix-dev/rattler-build\", \"subdirectory\" = \"pyrattler\" }"
   result:
-    url:
-      git: "https://github.com/prefix-dev/rattler-build"
-      subdirectory: pyrattler
-    extras: []
+    git: "https://github.com/prefix-dev/rattler-build"
+    subdirectory: pyrattler
 - input: "pkg = { git = \"https://github.com/prefix-dev/rattler-build\", \"extras\" = [\"test\"] }"
   result:
-    url:
-      git: "https://github.com/prefix-dev/rattler-build"
     extras:
       - test
+    git: "https://github.com/prefix-dev/rattler-build"
+- input: "pkg = { version = \"*\", \"env-markers\" = \"sys_platform == 'win32'\" }"
+  result:
+    env_markers: "sys_platform == 'win32'"
+    version: "*"
+- input: "pkg = { git = \"https://github.com/prefix-dev/rattler-build\", \"extras\" = [\"test\"], \"env-markers\" = \"sys_platform == 'linux'\" }"
+  result:
+    extras:
+      - test
+    env_markers: "sys_platform == 'linux'"
+    git: "https://github.com/prefix-dev/rattler-build"

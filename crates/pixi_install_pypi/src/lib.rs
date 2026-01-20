@@ -22,8 +22,8 @@ use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_utils::prefix::Prefix;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
-    BuildIsolation, locked_indexes_to_index_locations, pypi_options_to_build_options,
-    to_exclude_newer, to_index_strategy,
+    BuildIsolation, configure_insecure_hosts_for_tls_bypass, locked_indexes_to_index_locations,
+    pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
@@ -35,9 +35,7 @@ use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rayon::prelude::*;
 use utils::elapsed;
 use uv_auth::store_credentials_from_url;
-use uv_client::{
-    BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder,
-};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClient};
 use uv_configuration::{BuildOptions, Constraints, IndexStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{BuiltWheelIndex, DistributionDatabase, RegistryWheelIndex};
@@ -341,24 +339,18 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         let index_strategy = to_index_strategy(self.build_config.index_strategy);
 
-        let base_client_builder = BaseClientBuilder::default()
-            .allow_insecure_host(self.context_config.uv_context.allow_insecure_host.clone())
-            .keyring(self.context_config.uv_context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .extra_middleware(self.context_config.uv_context.extra_middleware.clone());
+        let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
+            self.context_config.uv_context.allow_insecure_host.clone(),
+            self.context_config.uv_context.tls_no_verify,
+            &index_locations,
+        );
 
-        let mut uv_client_builder = RegistryClientBuilder::new(
-            base_client_builder,
-            self.context_config.uv_context.cache.clone(),
-        )
-        .index_locations(index_locations.clone())
-        .index_strategy(index_strategy);
-
-        for p in &self.context_config.uv_context.proxies {
-            uv_client_builder = uv_client_builder.proxy(p.clone())
-        }
-
-        let registry_client = Arc::new(uv_client_builder.build());
+        let registry_client = self.context_config.uv_context.build_registry_client(
+            allow_insecure_hosts,
+            &index_locations,
+            index_strategy,
+            None,
+        );
 
         // Resolve the flat indexes from `--find-links`.
         let flat_index_client = FlatIndexClient::new(

@@ -1,69 +1,27 @@
 use std::{
-    any::Any,
     borrow::Cow,
     collections::HashMap,
-    path::PathBuf,
     sync::{Arc, LazyLock},
     time::{Duration, Instant},
 };
 
 use miette::IntoDiagnostic;
+use pixi_auth::{get_auth_middleware, get_auth_store};
 use pixi_config::Config;
 use pixi_consts::consts;
 use rattler_networking::{
-    AuthenticationMiddleware, AuthenticationStorage, GCSMiddleware, LazyClient, MirrorMiddleware,
-    OciMiddleware, S3Middleware,
-    authentication_storage::{self, AuthenticationStorageError},
+    GCSMiddleware, LazyClient, MirrorMiddleware, OciMiddleware, S3Middleware,
     mirror_middleware::Mirror,
-    retry_policies::ExponentialBackoff,
 };
 use reqwest::Client;
 use reqwest_middleware::{ClientWithMiddleware, Middleware};
 use reqwest_retry::RetryTransientMiddleware;
+use retry_policies::policies::ExponentialBackoff;
 
 /// The default retry policy employed by pixi.
 /// TODO: At some point we might want to make this configurable.
 pub fn default_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff::builder().build_with_max_retries(3)
-}
-
-fn auth_store(config: &Config) -> Result<AuthenticationStorage, AuthenticationStorageError> {
-    let mut store = AuthenticationStorage::from_env_and_defaults()?;
-    if let Some(auth_file) = config.authentication_override_file() {
-        tracing::info!("Loading authentication from file: {:?}", auth_file);
-
-        if !auth_file.exists() {
-            tracing::warn!("Authentication file does not exist: {:?}", auth_file);
-        }
-
-        // this should be the first place before the keyring authentication
-        // i.e. either index 0 if RATTLER_AUTH_FILE is not set or index 1 if it is
-        let first_storage = store.backends.first().unwrap();
-        let index = if first_storage.type_id()
-            == std::any::TypeId::of::<authentication_storage::backends::file::FileStorage>()
-        {
-            1
-        } else {
-            0
-        };
-        store.backends.insert(
-            index,
-            Arc::from(
-                authentication_storage::backends::file::FileStorage::from_path(PathBuf::from(
-                    &auth_file,
-                ))?,
-            ),
-        );
-    }
-    Ok(store)
-}
-
-fn auth_middleware(
-    config: &Config,
-) -> Result<AuthenticationMiddleware, AuthenticationStorageError> {
-    Ok(AuthenticationMiddleware::from_auth_storage(auth_store(
-        config,
-    )?))
 }
 
 pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
@@ -107,19 +65,82 @@ static DEFAULT_REQWEST_USER_AGENT: LazyLock<String> =
 static DEFAULT_REQWEST_TIMEOUT_SEC: Duration = Duration::from_secs(5 * 60);
 static DEFAULT_REQWEST_IDLE_PER_HOST: usize = 20;
 
+/// Returns whether UV should use native TLS (system certificates).
+///
+/// For `native-tls` builds, this always returns `true` since the system TLS library is used.
+/// For `rustls-tls` builds, this returns `true` if the config is set to `Native` or `All`.
+pub fn should_use_native_tls_for_uv() -> bool {
+    tls_backend() == "native-tls"
+}
+
+/// Determines whether we should load all builtin certificates
+/// for uv
+pub fn should_use_builtin_certs_uv(config: &Config) -> bool {
+    matches!(config.tls_root_certs(), pixi_config::TlsRootCerts::All)
+}
+
+/// Returns the name of the TLS backend used by this build.
+///
+/// This is determined at compile time based on the enabled features.
+pub fn tls_backend() -> &'static str {
+    #[cfg(feature = "native-tls")]
+    {
+        return "native-tls";
+    }
+
+    #[cfg(not(feature = "native-tls"))]
+    {
+        "rustls"
+    }
+}
+
 pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest::ClientBuilder> {
     let mut builder = Client::builder()
         .pool_max_idle_per_host(DEFAULT_REQWEST_IDLE_PER_HOST)
         .user_agent(DEFAULT_REQWEST_USER_AGENT.as_str())
-        .read_timeout(DEFAULT_REQWEST_TIMEOUT_SEC)
-        .use_rustls_tls();
+        .read_timeout(DEFAULT_REQWEST_TIMEOUT_SEC);
 
-    let proxies = if let Some(config) = config {
-        config.get_proxies()
-    } else {
-        Config::load_global().get_proxies()
+    #[cfg(feature = "native-tls")]
+    {
+        // With native-tls, the system's TLS library handles certificates.
+        // The tls-root-certs setting has no effect - warn if it's explicitly set.
+        if let Some(tls_root_certs) = config.and_then(|c| c.tls_root_certs) {
+            tracing::warn!(
+                "tls-root-certs is set to '{}' but has no effect with native-tls builds. \
+                 System certificates are always used.",
+                tls_root_certs
+            );
+        }
+        builder = builder.use_native_tls();
     }
-    .into_diagnostic()?;
+
+    #[cfg(feature = "rustls-tls")]
+    {
+        use pixi_config::TlsRootCerts;
+        let tls_root_certs = config.map(|c| c.tls_root_certs()).unwrap_or_default();
+
+        builder = builder.use_rustls_tls().tls_built_in_root_certs(false); // Disable auto-loading to choose explicitly
+
+        match tls_root_certs {
+            TlsRootCerts::Webpki => {
+                builder = builder.tls_built_in_webpki_certs(true);
+            }
+            TlsRootCerts::Native => {
+                builder = builder.tls_built_in_native_certs(true);
+            }
+            TlsRootCerts::All => {
+                builder = builder
+                    .tls_built_in_webpki_certs(true)
+                    .tls_built_in_native_certs(true);
+            }
+        }
+    }
+
+    let proxies = config
+        .map(|c| c.get_proxies())
+        .transpose()
+        .into_diagnostic()?
+        .unwrap_or_default();
 
     for p in proxies {
         builder = builder.proxy(p);
@@ -134,6 +155,14 @@ pub fn build_reqwest_middleware_stack(
 ) -> miette::Result<Box<[Arc<dyn Middleware>]>> {
     let mut result: Vec<Arc<dyn Middleware>> = Vec::new();
 
+    // Retry middleware must come before mirror middleware so that when a mirror
+    // returns a server error (e.g. 500), the retry will go through the mirror
+    // middleware again, which will then select a different mirror due to the
+    // recorded failure.
+    result.push(Arc::new(RetryTransientMiddleware::new_with_policy(
+        default_retry_policy(),
+    )));
+
     if !config.mirror_map().is_empty() {
         result.push(Arc::new(mirror_middleware(config)));
         result.push(Arc::new(oci_middleware()));
@@ -147,16 +176,12 @@ pub fn build_reqwest_middleware_stack(
     s3_config.extend(s3_config_global);
     s3_config.extend(s3_config_project);
 
-    let store = auth_store(config).into_diagnostic()?;
+    let store = get_auth_store(config).into_diagnostic()?;
     result.push(Arc::new(S3Middleware::new(s3_config, store)));
 
     result.push(Arc::new(
-        auth_middleware(config).expect("could not create auth middleware"),
+        get_auth_middleware(config).expect("could not create auth middleware"),
     ));
-
-    result.push(Arc::new(RetryTransientMiddleware::new_with_policy(
-        default_retry_policy(),
-    )));
 
     Ok(result.into_boxed_slice())
 }
@@ -253,7 +278,7 @@ pub fn uv_middlewares(config: &Config) -> Vec<Arc<dyn Middleware>> {
     // Add authentication middleware after mirror rewriting so it can authenticate
     // against the rewritten URLs (important for mirrors that require different
     // credentials)
-    if let Ok(auth_middleware) = auth_middleware(config) {
+    if let Ok(auth_middleware) = get_auth_middleware(config) {
         middlewares.push(Arc::new(auth_middleware));
     }
     middlewares

@@ -213,12 +213,11 @@ pub(crate) async fn completions_sync_status(
             }
         } else {
             for completion in completions {
-                if completion.destination.is_symlink() {
-                    if let Ok(target) = tokio_fs::read_link(&completion.destination).await {
-                        if target == completion.source {
-                            completions_to_remove.push(completion);
-                        }
-                    }
+                if completion.destination.is_symlink()
+                    && let Ok(target) = tokio_fs::read_link(&completion.destination).await
+                    && target == completion.source
+                {
+                    completions_to_remove.push(completion);
                 }
             }
         }

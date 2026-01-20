@@ -7,7 +7,7 @@
 //! and supporting concurrent operations.
 
 use std::{
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
@@ -19,6 +19,7 @@ use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
+use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::{SourceLocationSpec, UrlSpec};
 use pixi_url::UrlResolver;
@@ -32,12 +33,16 @@ use typed_path::Utf8TypedPath;
 use url::UrlCheckoutTask;
 
 use crate::{
-    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, Executor,
-    InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
-    SourceBuildCacheEntry, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout,
-    SourceCheckoutError, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, DevSourceMetadata,
+    DevSourceMetadataError, DevSourceMetadataSpec, Executor, InvalidPathError, PixiEnvironmentSpec,
+    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
+    SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout, SourceCheckoutError,
+    SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
-    build::{BuildCache, source_metadata_cache::SourceMetadataCache},
+    build::BuildCache,
+    cache::{
+        build_backend_metadata::BuildBackendMetadataCache, source_metadata::SourceMetadataCache,
+    },
     cache_dirs::CacheDirs,
     discover_backend_cache::DiscoveryCache,
     install_pixi::{
@@ -105,6 +110,9 @@ pub(crate) struct CommandDispatcherData {
     /// The gateway to use to query conda repodata.
     pub gateway: Gateway,
 
+    /// Backend metadata cache used to store metadata for source packages.
+    pub build_backend_metadata_cache: BuildBackendMetadataCache,
+
     /// Source metadata cache used to store metadata for source packages.
     pub source_metadata_cache: SourceMetadataCache,
 
@@ -118,7 +126,7 @@ pub(crate) struct CommandDispatcherData {
     pub url_resolver: UrlResolver,
 
     /// The base directory to use if relative paths are discovered.
-    pub root_dir: PathBuf,
+    pub root_dir: AbsPresumedDirPathBuf,
 
     /// The location to store caches.
     pub cache_dirs: CacheDirs,
@@ -187,6 +195,7 @@ pub(crate) enum CommandDispatcherContext {
     SourceMetadata(SourceMetadataId),
     SourceBuild(SourceBuildId),
     QuerySourceBuildCache(SourceBuildCacheStatusId),
+    DevSourceMetadata(DevSourceMetadataId),
     InstallPixiEnvironment(InstallPixiEnvironmentId),
     InstantiateToolEnv(InstantiatedToolEnvId),
 }
@@ -224,6 +233,10 @@ pub(crate) struct SourceBuildId(pub usize);
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct SourceBuildCacheStatusId(pub usize);
 
+/// An id that uniquely identifies a dev source metadata request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct DevSourceMetadataId(pub usize);
+
 /// An id that uniquely identifies a tool environment.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct InstantiatedToolEnvId(pub usize);
@@ -239,6 +252,7 @@ pub(crate) enum ForegroundMessage {
     SourceMetadata(SourceMetadataTask),
     SourceBuild(SourceBuildTask),
     QuerySourceBuildCache(SourceBuildCacheStatusTask),
+    DevSourceMetadata(DevSourceMetadataTask),
     GitCheckout(GitCheckoutTask),
     UrlCheckout(UrlCheckoutTask),
     InstallPixiEnvironment(InstallPixiEnvironmentTask),
@@ -314,6 +328,13 @@ impl TaskSpec for SourceBuildCacheStatusSpec {
     type Error = SourceBuildCacheStatusError;
 }
 
+pub(crate) type DevSourceMetadataTask = Task<DevSourceMetadataSpec>;
+
+impl TaskSpec for DevSourceMetadataSpec {
+    type Output = DevSourceMetadata;
+    type Error = DevSourceMetadataError;
+}
+
 impl Default for CommandDispatcher {
     fn default() -> Self {
         Self::new()
@@ -334,6 +355,11 @@ impl CommandDispatcher {
     /// Returns the executor used by the command dispatcher.
     pub fn executor(&self) -> Executor {
         self.data.executor
+    }
+
+    /// Returns the cache for source metadata.
+    pub fn build_backend_metadata_cache(&self) -> &BuildBackendMetadataCache {
+        &self.data.build_backend_metadata_cache
     }
 
     /// Returns the cache for source metadata.
@@ -476,6 +502,25 @@ impl CommandDispatcher {
         self.execute_task(spec).await
     }
 
+    /// Returns the metadata for dev sources.
+    ///
+    /// This method queries the build backend for all outputs from a dev source
+    /// and creates DevSourceRecords for each one. These records contain the
+    /// combined dependencies (build, host, run) for each output.
+    ///
+    /// Unlike `source_metadata`, this is specifically for dev sources
+    /// where the dependencies are installed but the package itself is not built.
+    ///
+    /// # Requirements
+    ///
+    /// - The build backend must support the `conda/outputs` procedure (API v1+)
+    pub async fn dev_source_metadata(
+        &self,
+        spec: DevSourceMetadataSpec,
+    ) -> Result<DevSourceMetadata, CommandDispatcherError<DevSourceMetadataError>> {
+        self.execute_task(spec).await
+    }
+
     /// Query the source build cache for a particular source package.
     pub async fn source_build_cache_status(
         &self,
@@ -493,6 +538,7 @@ impl CommandDispatcher {
         self.execute_task(spec).await
     }
 
+    ///
     /// Calls into a pixi build backend to perform a source build.
     pub(crate) async fn backend_source_build(
         &self,
@@ -597,7 +643,6 @@ impl CommandDispatcher {
     pub async fn pin_and_checkout(
         &self,
         source_location_spec: SourceLocationSpec,
-        alternative_root: Option<&Path>,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match source_location_spec {
             SourceLocationSpec::Url(url) => {
@@ -605,13 +650,14 @@ impl CommandDispatcher {
                     url: url.url,
                     md5: url.md5,
                     sha256: url.sha256,
+                    subdirectory: url.subdirectory,
                 })
                 .await
             }
             SourceLocationSpec::Path(path) => {
                 let source_path = self
                     .data
-                    .resolve_typed_path(path.path.to_path(), alternative_root)
+                    .resolve_typed_path(path.path.to_path())
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
@@ -639,10 +685,10 @@ impl CommandDispatcher {
         pinned_spec: PinnedSourceSpec,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match pinned_spec {
-            PinnedSourceSpec::Path(ref path) => {
+            PinnedSourceSpec::Path(ref path_spec) => {
                 let source_path = self
                     .data
-                    .resolve_typed_path(path.path.to_path(), None)
+                    .resolve_typed_path(path_spec.path.to_path())
                     .map_err(SourceCheckoutError::from)
                     .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
@@ -675,73 +721,29 @@ impl CommandDispatcherData {
     ///
     /// This function does not check if the path exists and also does not follow
     /// symlinks.
-    fn resolve_typed_path(
-        &self,
-        path_spec: Utf8TypedPath,
-        alternative_root: Option<&Path>,
-    ) -> Result<PathBuf, InvalidPathError> {
+    fn resolve_typed_path(&self, path_spec: Utf8TypedPath) -> Result<AbsPathBuf, InvalidPathError> {
         if path_spec.is_absolute() {
-            Ok(Path::new(path_spec.as_str()).to_path_buf())
+            // SAFETY: we checked that the path is absolute
+            Ok(unsafe { AbsPathBuf::new_unchecked(PathBuf::from(path_spec.as_str())) })
         } else if let Ok(user_path) = path_spec.strip_prefix("~/") {
             let home_dir = dirs::home_dir().ok_or_else(|| {
                 InvalidPathError::CouldNotDetermineHomeDirectory(PathBuf::from(path_spec.as_str()))
             })?;
-            debug_assert!(home_dir.is_absolute());
-            normalize_absolute_path(&home_dir.join(Path::new(user_path.as_str())))
+            let home_dir = AbsPathBuf::new(home_dir)
+                .expect("the home directory is absolute")
+                .into_assume_dir();
+            home_dir
+                .join(Path::new(user_path.as_str()))
+                .normalized()
+                .map_err(Into::into)
         } else {
-            let root_dir = match alternative_root {
-                Some(root_path) => {
-                    debug_assert!(
-                        root_path.is_absolute(),
-                        "alternative_root must be absolute, got: {root_path:?}"
-                    );
-                    debug_assert!(
-                        !root_path.is_file(),
-                        "alternative_root should be a directory, not a file: {root_path:?}"
-                    );
-                    root_path
-                }
-                None => self.root_dir.as_path(),
-            };
             let native_path = Path::new(path_spec.as_str());
-            debug_assert!(root_dir.is_absolute());
-            normalize_absolute_path(&root_dir.join(native_path))
+            self.root_dir
+                .join(native_path)
+                .normalized()
+                .map_err(Into::into)
         }
     }
-}
-
-/// Normalize a path, removing things like `.` and `..`.
-///
-/// Source: <https://github.com/rust-lang/cargo/blob/b48c41aedbd69ee3990d62a0e2006edbb506a480/crates/cargo-util/src/paths.rs#L76C1-L109C2>
-fn normalize_absolute_path(path: &Path) -> Result<PathBuf, InvalidPathError> {
-    let mut components = path.components().peekable();
-    let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().copied() {
-        components.next();
-        PathBuf::from(c.as_os_str())
-    } else {
-        PathBuf::new()
-    };
-
-    for component in components {
-        match component {
-            Component::Prefix(..) => unreachable!(),
-            Component::RootDir => {
-                ret.push(component.as_os_str());
-            }
-            Component::CurDir => {}
-            Component::ParentDir => {
-                if !ret.pop() {
-                    return Err(InvalidPathError::RelativePathEscapesRoot(
-                        path.to_path_buf(),
-                    ));
-                }
-            }
-            Component::Normal(c) => {
-                ret.push(c);
-            }
-        }
-    }
-    Ok(ret)
 }
 
 /// Defines the inputs and outputs of a certain foreground task specification.

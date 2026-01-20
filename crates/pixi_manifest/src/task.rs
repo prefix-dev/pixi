@@ -12,6 +12,7 @@ use crate::workspace::JINJA_ENV;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Diagnostic, SourceSpan};
+use rattler_conda_types::Platform;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use toml_edit::{Array, InlineTable, Item, Table, Value};
@@ -81,7 +82,7 @@ impl Dependency {
     }
     pub fn render_args(
         &self,
-        args: Option<&ArgValues>,
+        context: &TaskRenderContext,
     ) -> Result<Option<Vec<TypedDependencyArg>>, TemplateStringError> {
         match &self.args {
             Some(task_args) => {
@@ -89,10 +90,11 @@ impl Dependency {
                 for arg in task_args {
                     match arg {
                         DependencyArg::Positional(val) => {
-                            result.push(TypedDependencyArg::Positional(val.render(args)?));
+                            result.push(TypedDependencyArg::Positional(val.render(context)?));
                         }
                         DependencyArg::Named(key, val) => {
-                            result.push(TypedDependencyArg::Named(key.clone(), val.render(args)?));
+                            result
+                                .push(TypedDependencyArg::Named(key.clone(), val.render(context)?));
                         }
                     }
                 }
@@ -142,11 +144,11 @@ pub enum TypedDependencyArg {
 impl TypedDependency {
     pub fn from_dependency(
         dependency: &Dependency,
-        args: Option<&ArgValues>,
+        context: &TaskRenderContext,
     ) -> Result<Self, TemplateStringError> {
         Ok(TypedDependency {
             task_name: dependency.task_name.clone(),
-            args: dependency.render_args(args)?,
+            args: dependency.render_args(context)?,
             environment: dependency.environment.clone(),
         })
     }
@@ -200,20 +202,20 @@ impl Task {
     /// Returns the command to execute as a single string.
     pub fn as_single_command(
         &self,
-        args_values: Option<&ArgValues>,
-    ) -> Result<Option<Cow<str>>, TemplateStringError> {
+        context: &TaskRenderContext,
+    ) -> Result<Option<Cow<'_, str>>, TemplateStringError> {
         match self {
-            Task::Plain(str) => match str.render(args_values) {
+            Task::Plain(str) => match str.render(context) {
                 Ok(rendered) => Ok(Some(Cow::Owned(rendered))),
                 Err(e) => Err(e),
             },
-            Task::Custom(custom) => custom.cmd.as_single(args_values),
-            Task::Execute(exe) => exe.cmd.as_single(args_values),
+            Task::Custom(custom) => custom.cmd.as_single(context),
+            Task::Execute(exe) => exe.cmd.as_single(context),
             Task::Alias(_) => Ok(None),
         }
     }
 
-    pub fn as_single_command_no_render(&self) -> Result<Option<Cow<str>>, TemplateStringError> {
+    pub fn as_single_command_no_render(&self) -> Result<Option<Cow<'_, str>>, TemplateStringError> {
         match self {
             Task::Plain(str) => Ok(Some(Cow::Owned(str.source().to_string()))),
             Task::Custom(custom) => custom.cmd.as_single_no_render(),
@@ -284,6 +286,14 @@ impl Task {
         }
     }
 
+    // Returns the default environment of the task
+    pub fn default_environment(&self) -> Option<&EnvironmentName> {
+        match self {
+            Task::Execute(exe) => exe.default_environment.as_ref(),
+            _ => None,
+        }
+    }
+
     /// Returns the arguments of the task.
     pub fn args(&self) -> Option<&[TaskArg]> {
         match self {
@@ -303,14 +313,14 @@ impl GlobPatterns {
         GlobPatterns(patterns)
     }
 
-    /// Renders the glob patterns using the provided arguments
+    /// Renders the glob patterns using the provided context
     pub fn render(
         &self,
-        args: Option<&ArgValues>,
+        context: &TaskRenderContext,
     ) -> Result<Vec<RenderedString>, TemplateStringError> {
         self.0
             .iter()
-            .map(|i| i.render(args).map(RenderedString::from))
+            .map(|i| i.render(context).map(RenderedString::from))
             .collect::<Result<Vec<RenderedString>, _>>()
     }
 }
@@ -348,6 +358,9 @@ pub struct Execute {
 
     /// A list of environment variables to set before running the command
     pub env: Option<IndexMap<String, String>>,
+
+    /// A default environment to run the task in.
+    pub default_environment: Option<EnvironmentName>,
 
     /// A description of the task
     pub description: Option<String>,
@@ -439,6 +452,117 @@ impl Display for TypedArg {
     }
 }
 
+// Static default environment name for use in Default impl
+static DEFAULT_ENV: EnvironmentName = EnvironmentName::Default;
+
+/// Context for rendering task templates with MiniJinja.
+///
+/// This struct contains system-provided variables that are automatically
+/// available in task templates, in addition to user-provided arguments.
+#[derive(Debug, Clone)]
+pub struct TaskRenderContext<'a> {
+    /// The platform for which the task is being rendered.
+    /// This corresponds to the environment's best platform.
+    pub platform: Platform,
+
+    /// The name of the environment for which the task is being rendered.
+    pub environment_name: &'a EnvironmentName,
+
+    /// The absolute path to the manifest file.
+    pub manifest_path: Option<&'a Path>,
+
+    /// The arguments to use for rendering.
+    pub args: Option<&'a ArgValues>,
+}
+
+impl Default for TaskRenderContext<'_> {
+    fn default() -> Self {
+        Self {
+            platform: Platform::current(),
+            environment_name: &DEFAULT_ENV,
+            manifest_path: None,
+            args: None,
+        }
+    }
+}
+
+impl<'a> TaskRenderContext<'a> {
+    /// Builds a MiniJinja context value from this render context.
+    ///
+    /// The context always includes the pixi system variables.
+    /// User arguments are added when TypedArgs are provided.
+    pub fn to_jinja_context(&self) -> minijinja::Value {
+        // Build the context map with user arguments if available
+        let mut context_map: HashMap<String, minijinja::Value> =
+            if let Some(ArgValues::TypedArgs(args)) = self.args {
+                args.iter()
+                    .map(|arg| (arg.name.clone(), minijinja::Value::from(arg.value.as_str())))
+                    .collect()
+            } else {
+                HashMap::new()
+            };
+
+        // Create the pixi object with system-provided variables
+        let mut pixi_vars: HashMap<String, minijinja::Value> = HashMap::new();
+
+        // Add platform as a string
+        pixi_vars.insert(
+            "platform".to_string(),
+            minijinja::Value::from(self.platform.to_string()),
+        );
+
+        // Add platform detection boolean flags
+        pixi_vars.insert(
+            "is_win".to_string(),
+            minijinja::Value::from(self.platform.is_windows()),
+        );
+        pixi_vars.insert(
+            "is_unix".to_string(),
+            minijinja::Value::from(self.platform.is_unix()),
+        );
+        pixi_vars.insert(
+            "is_linux".to_string(),
+            minijinja::Value::from(self.platform.is_linux()),
+        );
+        pixi_vars.insert(
+            "is_osx".to_string(),
+            minijinja::Value::from(self.platform.is_osx()),
+        );
+
+        // Add environment object
+        let mut env_vars: HashMap<String, minijinja::Value> = HashMap::new();
+        env_vars.insert(
+            "name".to_string(),
+            minijinja::Value::from(self.environment_name.as_str()),
+        );
+        pixi_vars.insert(
+            "environment".to_string(),
+            minijinja::Value::from_serialize(&env_vars),
+        );
+
+        // Add manifest path if available
+        if let Some(path) = self.manifest_path {
+            pixi_vars.insert(
+                "manifest_path".to_string(),
+                minijinja::Value::from(path.display().to_string()),
+            );
+        }
+
+        // Add pixi version
+        pixi_vars.insert(
+            "version".to_string(),
+            minijinja::Value::from(pixi_consts::consts::PIXI_VERSION),
+        );
+
+        context_map.insert(
+            "pixi".to_string(),
+            minijinja::Value::from_serialize(&pixi_vars),
+        );
+
+        minijinja::Value::from_serialize(&context_map)
+    }
+}
+
 /// A string that contains placeholders to be rendered using the `minijinja` templating engine.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Hash, Deserialize)]
 pub struct TemplateString(String);
@@ -460,26 +584,14 @@ impl TemplateString {
         TemplateString(value)
     }
 
-    pub fn render(&self, args: Option<&ArgValues>) -> Result<String, TemplateStringError> {
-        // Only perform MiniJinja rendering when typed args are provided.
-        // For free-form args or no args, return the source verbatim to avoid
-        // interpreting arbitrary strings as templates.
-        if let Some(ArgValues::TypedArgs(args)) = args {
-            let args_map: HashMap<&str, &str> = args
-                .iter()
-                .map(|arg| (arg.name.as_str(), arg.value.as_str()))
-                .collect();
-            let context = minijinja::Value::from_serialize(&args_map);
-
-            JINJA_ENV
-                .render_str(&self.0, context)
-                .map_err(|e| TemplateStringError {
-                    src: self.0.clone(),
-                    err_span: e.range().unwrap_or_default().into(),
-                })
-        } else {
-            Ok(self.0.clone())
-        }
+    pub fn render(&self, context: &TaskRenderContext) -> Result<String, TemplateStringError> {
+        let jinja_context = context.to_jinja_context();
+        JINJA_ENV
+            .render_str(&self.0, jinja_context)
+            .map_err(|e| TemplateStringError {
+                src: self.0.clone(),
+                err_span: e.range().unwrap_or_default().into(),
+            })
     }
 
     pub fn source(&self) -> &str {
@@ -593,14 +705,14 @@ impl CmdArgs {
     /// Returns a single string representation of the command arguments.
     pub fn as_single(
         &self,
-        args_values: Option<&ArgValues>,
-    ) -> Result<Option<Cow<str>>, TemplateStringError> {
+        context: &TaskRenderContext,
+    ) -> Result<Option<Cow<'_, str>>, TemplateStringError> {
         match self {
-            CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.render(args_values)?))),
+            CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.render(context)?))),
             CmdArgs::Multiple(args) => {
                 let mut rendered_args = Vec::new();
                 for arg in args {
-                    let rendered = arg.render(args_values)?;
+                    let rendered = arg.render(context)?;
                     rendered_args.push(quote(&rendered).to_string());
                 }
                 Ok(Some(Cow::Owned(rendered_args.join(" "))))
@@ -611,15 +723,15 @@ impl CmdArgs {
     /// Returns a single string representation of the command arguments.
     pub fn into_single(
         self,
-        args_values: Option<&ArgValues>,
+        context: &TaskRenderContext,
     ) -> Result<Option<String>, TemplateStringError> {
         match self {
-            CmdArgs::Single(cmd) => cmd.render(args_values).map(Some),
+            CmdArgs::Single(cmd) => cmd.render(context).map(Some),
             CmdArgs::Multiple(args) => {
                 let rendered_args = args
                     .iter()
                     .map(|arg| {
-                        Ok(match arg.render(args_values) {
+                        Ok(match arg.render(context) {
                             Ok(rendered) => quote(&rendered).to_string(),
                             Err(e) => return Err(e),
                         })
@@ -630,7 +742,7 @@ impl CmdArgs {
         }
     }
 
-    pub fn as_single_no_render(&self) -> Result<Option<Cow<str>>, TemplateStringError> {
+    pub fn as_single_no_render(&self) -> Result<Option<Cow<'_, str>>, TemplateStringError> {
         match self {
             CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.source().to_string()))),
             CmdArgs::Multiple(args) => Ok(Some(Cow::Owned(
@@ -676,11 +788,15 @@ impl Display for Task {
             }
         }
 
+        let default_environment = self.default_environment();
+        if let Some(default_environment) = default_environment {
+            write!(f, ", default_environment = {default_environment}")?;
+        }
         let env = self.env();
-        if let Some(env) = env {
-            if !env.is_empty() {
-                write!(f, ", env = {env:?}")?;
-            }
+        if let Some(env) = env
+            && !env.is_empty()
+        {
+            write!(f, ", env = {env:?}")?;
         }
         let description = self.description();
         if let Some(description) = description {
@@ -693,7 +809,7 @@ impl Display for Task {
 
 /// Quotes a string argument if it requires quotes to be able to be properly
 /// represented in our shell implementation.
-pub fn quote(in_str: &str) -> Cow<str> {
+pub fn quote(in_str: &str) -> Cow<'_, str> {
     if in_str.is_empty() {
         "\"\"".into()
     } else if in_str.contains(['\t', '\r', '\n', ' ', '[', ']']) {
@@ -746,6 +862,13 @@ impl From<Task> for Item {
                         }
                     }
                     table.insert("args", Value::Array(args_array));
+                }
+
+                if let Some(default_environment) = &process.default_environment {
+                    table.insert(
+                        "default-environment",
+                        default_environment.as_str().to_string().into(),
+                    );
                 }
 
                 if !process.depends_on.is_empty() {
@@ -894,12 +1017,13 @@ impl From<Task> for Item {
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
+    use rattler_conda_types::Platform;
 
     use crate::task::{Alias, Dependency, DependencyArg, Task};
 
     use super::quote;
 
-    use super::{ArgValues, TemplateString, TypedArg};
+    use super::{ArgValues, TaskRenderContext, TemplateString, TypedArg};
 
     #[test]
     fn test_quote() {
@@ -933,17 +1057,79 @@ mod tests {
     }
 
     #[test]
-    fn test_template_string_no_render_without_typed_args() {
-        let t = TemplateString::from("echo {{ foo }}");
-        // No args -> should not render, return verbatim string
-        let rendered = t.render(None).expect("should not error without typed args");
-        assert_eq!(rendered, "echo {{ foo }}");
+    fn test_template_string_pixi_vars_always_available() {
+        // pixi variables should always be available, even without typed args
+        let t = TemplateString::from("echo {{ pixi.platform }}");
 
-        // Free-form args -> should not render
+        // No args -> pixi.platform still works
+        let context = TaskRenderContext::default();
         let rendered = t
-            .render(Some(&ArgValues::FreeFormArgs(vec!["bar".into()])))
-            .expect("should not error with free-form args");
-        assert_eq!(rendered, "echo {{ foo }}");
+            .render(&context)
+            .expect("pixi.platform should be available without args");
+        assert_eq!(rendered, format!("echo {}", Platform::current()));
+
+        // Free-form args -> pixi.platform still works
+        let free_args = ArgValues::FreeFormArgs(vec!["bar".into()]);
+        let context = TaskRenderContext {
+            args: Some(&free_args),
+            ..TaskRenderContext::default()
+        };
+        let rendered = t
+            .render(&context)
+            .expect("pixi.platform should be available with free-form args");
+        assert_eq!(rendered, format!("echo {}", Platform::current()));
+    }
+
+    #[test]
+    fn test_template_string_undefined_var_errors() {
+        // Undefined user variables should cause an error
+        let t = TemplateString::from("echo {{ foo }}");
+        let context = TaskRenderContext::default();
+        let result = t.render(&context);
+        assert!(result.is_err(), "undefined variable should cause error");
+    }
+
+    #[test]
+    fn test_template_string_pixi_variables() {
+        // Test all pixi system variables
+        use crate::EnvironmentName;
+        use std::path::PathBuf;
+        use std::str::FromStr;
+
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let manifest_path = PathBuf::from("/tmp/pixi.toml");
+        let args = ArgValues::TypedArgs(vec![]);
+
+        let context = TaskRenderContext {
+            platform: Platform::Linux64,
+            environment_name: &env_name,
+            manifest_path: Some(&manifest_path),
+            args: Some(&args),
+        };
+
+        // Test platform
+        let t = TemplateString::from("{{ pixi.platform }}");
+        assert_eq!(t.render(&context).unwrap(), "linux-64");
+
+        // Test is_linux
+        let t = TemplateString::from("{{ pixi.is_linux }}");
+        assert_eq!(t.render(&context).unwrap(), "true");
+
+        // Test is_win
+        let t = TemplateString::from("{{ pixi.is_win }}");
+        assert_eq!(t.render(&context).unwrap(), "false");
+
+        // Test environment
+        let t = TemplateString::from("{{ pixi.environment.name }}");
+        assert_eq!(t.render(&context).unwrap(), "test-env");
+
+        // Test manifest_path
+        let t = TemplateString::from("{{ pixi.manifest_path }}");
+        assert_eq!(t.render(&context).unwrap(), "/tmp/pixi.toml");
+
+        // Test version
+        let t = TemplateString::from("{{ pixi.version }}");
+        assert!(t.render(&context).unwrap().contains("."));
     }
 
     #[test]
@@ -953,9 +1139,44 @@ mod tests {
             name: "foo".into(),
             value: "bar".into(),
         }]);
-        let rendered = t
-            .render(Some(&args))
-            .expect("should render with typed args");
+        let context = TaskRenderContext {
+            args: Some(&args),
+            ..TaskRenderContext::default()
+        };
+        let rendered = t.render(&context).expect("should render with typed args");
         assert_eq!(rendered, "echo bar");
+    }
+
+    #[test]
+    fn test_template_string_renders_platform_variable() {
+        let t = TemplateString::from("echo {{ pixi.platform }}");
+        let args = ArgValues::TypedArgs(vec![]);
+        let context = TaskRenderContext {
+            platform: Platform::Linux64,
+            args: Some(&args),
+            ..TaskRenderContext::default()
+        };
+        let rendered = t.render(&context).expect("should render platform variable");
+
+        assert_eq!(rendered, "echo linux-64");
+    }
+
+    #[test]
+    fn test_template_string_renders_with_platform_and_args() {
+        let t = TemplateString::from("build-{{ pixi.platform }}-{{ version }}");
+        let args = ArgValues::TypedArgs(vec![TypedArg {
+            name: "version".into(),
+            value: "1.0.0".into(),
+        }]);
+        let context = TaskRenderContext {
+            platform: Platform::Linux64,
+            args: Some(&args),
+            ..TaskRenderContext::default()
+        };
+        let rendered = t
+            .render(&context)
+            .expect("should render with platform and args");
+
+        assert_eq!(rendered, "build-linux-64-1.0.0");
     }
 }

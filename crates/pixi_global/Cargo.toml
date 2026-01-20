@@ -29,6 +29,7 @@ pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_core = { workspace = true }
 pixi_manifest = { workspace = true }
+pixi_path = { workspace = true }
 pixi_progress = { workspace = true }
 pixi_reporters = { workspace = true }
 pixi_spec = { workspace = true }
@@ -58,7 +59,6 @@ url = { workspace = true }
 zstd = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-libc = { workspace = true }
 
 [dev-dependencies]
 fake = "4.0.0"

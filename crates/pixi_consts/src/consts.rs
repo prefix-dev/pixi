@@ -16,7 +16,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.59.0",
+    None => "0.63.2",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -43,7 +43,8 @@ pub const CACHED_URL_DIR: &str = "url-v0";
 pub const CACHED_BUILD_WORK_DIR: &str = "work";
 pub const CACHED_BUILD_BACKENDS: &str = "backends-v0";
 pub const CACHED_PACKAGES: &str = "pkgs";
-pub const CACHED_SOURCE_METADATA: &str = "metadata";
+pub const CACHED_BUILD_BACKEND_METADATA: &str = "metadata";
+pub const CACHED_SOURCE_METADATA: &str = "source_metadata";
 pub const CACHED_SOURCE_BUILDS: &str = "pkgs";
 
 /// The directory relative to the .pixi folder that stores build related caches.
@@ -110,6 +111,10 @@ pub const CLAP_UPDATE_OPTIONS: &str = "Update Options";
 pub const RATTLER_BUILD_FILE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
 pub const RATTLER_BUILD_DIRS: [&str; 2] = ["", "recipe"];
 pub const ROS_BACKEND_FILE_NAMES: [&str; 1] = ["package.xml"];
+
+/// Known manifest file names that indicate the path points to a file rather than a directory.
+pub const KNOWN_MANIFEST_FILES: &[&str] =
+    &[WORKSPACE_MANIFEST, PYPROJECT_MANIFEST, MOJOPROJECT_MANIFEST];
 
 pub static TASK_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().blue());
 pub static TASK_ERROR_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().red());

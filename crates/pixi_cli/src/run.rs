@@ -135,6 +135,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let best_platform = environment.best_platform();
 
+    // Check if the current platform is supported, but only when we're going to
+    // install/activate. Without installs we skip environment activation,
+    // so platform doesn't matter.
+    if args.lock_and_install_config.allow_installs()
+        && !environment.platforms().contains(&best_platform)
+    {
+        return Err(UnsupportedPlatformError {
+            environments_platforms: environment.platforms().into_iter().collect(),
+            environment: environment.name().clone(),
+            platform: best_platform,
+        }
+        .into());
+    }
+
     // Ensure that the lock-file is up-to-date.
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
@@ -152,13 +166,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     });
 
-    // Construct a task graph from the input arguments
-    let search_environment = SearchEnvironments::from_opt_env(
-        &workspace,
-        explicit_environment.clone(),
-        Some(best_platform),
-    )
-    .with_disambiguate_fn(disambiguate_task_interactive);
+    // Construct a task graph from the input arguments.
+    // When installs are allowed, filter by platform since we are activating
+    // an environment and the platform matters.
+    let search_platform = if args.lock_and_install_config.allow_installs() {
+        Some(best_platform)
+    } else {
+        None
+    };
+    let search_environment =
+        SearchEnvironments::from_opt_env(&workspace, explicit_environment.clone(), search_platform)
+            .with_disambiguate_fn(disambiguate_task_interactive);
 
     let task_graph =
         TaskGraph::from_cmd_args(&workspace, &search_environment, args.task, args.skip_deps)?;
@@ -424,6 +442,19 @@ async fn execute_task(
 fn disambiguate_task_interactive<'p>(
     problem: &AmbiguousTask<'p>,
 ) -> Option<TaskAndEnvironment<'p>> {
+    // If any of the candidate tasks declares a `default-environment` that
+    // corresponds to one of the candidate environments, prefer that
+    // environment automatically.
+    if let Some(idx) = problem.environments.iter().position(|(env, task)| {
+        if let Some(default_env_name) = task.default_environment() {
+            default_env_name == env.name()
+        } else {
+            false
+        }
+    }) {
+        return Some(problem.environments[idx].clone());
+    }
+
     let environment_names = problem
         .environments
         .iter()

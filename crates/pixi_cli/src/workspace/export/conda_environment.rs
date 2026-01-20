@@ -6,7 +6,7 @@ use miette::{Context, IntoDiagnostic};
 use pep508_rs::ExtraName;
 use pixi_core::{WorkspaceLocator, workspace::Environment};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::FindLinksUrlOrPath};
-use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName, VersionOrStar};
+use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{
     ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl,
     ParseStrictness, Platform,
@@ -49,11 +49,11 @@ fn format_pip_extras(extras: &[ExtraName]) -> String {
 }
 
 fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> String {
-    match requirement {
-        PixiPypiSpec::Git {
-            url: git_url,
-            extras,
-        } => {
+    let extras = &requirement.extras;
+    let markers = &requirement.env_markers;
+
+    let mut dependency = match &requirement.source {
+        PixiPypiSource::Git { git: git_url } => {
             let mut git_string = format!(
                 "{name}{extras} @ git+{url}",
                 name = name.as_normalized(),
@@ -65,18 +65,14 @@ fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> 
                 git_string.push_str(&format!("@{rev}"));
             }
 
-            if let Some(ref subdirectory) = git_url.subdirectory {
-                git_string.push_str(&format!("#subdirectory={subdirectory}"));
+            if !git_url.subdirectory.is_empty() {
+                git_string.push_str(&format!("#subdirectory={}", git_url.subdirectory));
             }
 
             git_string
         }
-        PixiPypiSpec::Path {
-            path,
-            editable,
-            extras,
-        } => {
-            if let Some(_editable) = editable {
+        PixiPypiSource::Path { path, editable } => {
+            if editable.is_some() {
                 format!(
                     "-e {path}{extras}",
                     path = path.to_string_lossy(),
@@ -90,11 +86,7 @@ fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> 
                 )
             }
         }
-        PixiPypiSpec::Url {
-            url,
-            subdirectory,
-            extras,
-        } => {
+        PixiPypiSource::Url { url, subdirectory } => {
             let mut url_string = format!(
                 "{name}{extras} @ {url}",
                 name = name.as_normalized(),
@@ -102,31 +94,36 @@ fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> 
                 url = url,
             );
 
-            if let Some(subdirectory) = subdirectory {
+            if !subdirectory.is_empty() {
                 url_string.push_str(&format!("#subdirectory={subdirectory}"));
             }
 
             url_string
         }
-        PixiPypiSpec::Version {
-            version, extras, ..
-        } => {
-            format!(
+        PixiPypiSource::Registry { version, .. } => match version {
+            VersionOrStar::Version(_) => format!(
                 "{name}{extras}{version}",
                 name = name.as_normalized(),
                 extras = format_pip_extras(extras),
                 version = version
-            )
-        }
-        PixiPypiSpec::RawVersion(version) => match version {
-            VersionOrStar::Version(_) => format!(
-                "{name}{version}",
-                name = name.as_normalized(),
-                version = version
             ),
-            VersionOrStar::Star => format!("{name}", name = name.as_normalized()),
+            VersionOrStar::Star if extras.is_empty() => {
+                format!("{name}", name = name.as_normalized())
+            }
+            VersionOrStar::Star => format!(
+                "{name}{extras}",
+                name = name.as_normalized(),
+                extras = format_pip_extras(extras)
+            ),
         },
+    };
+
+    let marker_str = markers.try_to_string();
+    if let Some(marker_str) = marker_str {
+        dependency.push_str(&format!("; {marker_str}"));
     }
+
+    dependency
 }
 
 fn build_env_yaml(
@@ -154,7 +151,7 @@ fn build_env_yaml(
             .try_into_nameless_match_spec(config)
             .into_diagnostic()?
         {
-            let spec = MatchSpec::from_nameless(nameless_spec, Some(name.clone()));
+            let spec = MatchSpec::from_nameless(nameless_spec, Some(name.clone().into()));
             env_yaml
                 .dependencies
                 .push(MatchSpecOrSubSection::MatchSpec(Box::new(spec)));
@@ -455,7 +452,7 @@ mod tests {
         let args = Args {
             output_path: None,
             platform: Some(Platform::Osx64),
-            environment: None,
+            environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
             name: None,
         };

@@ -41,17 +41,8 @@ impl JsonRpcBackendSpec {
             name: self.name,
             command: {
                 match self.command {
-                    CommandSpec::EnvironmentSpec(mut env_spec) => {
-                        let maybe_source_spec = env_spec.requirement.1.try_into_source_spec();
-                        let pixi_spec = match maybe_source_spec {
-                            Ok(source_spec) => {
-                                let resolved_spec = source_anchor.resolve(source_spec);
-                                PixiSpec::from(resolved_spec)
-                            }
-                            Err(pixi_spec) => pixi_spec,
-                        };
-                        env_spec.requirement.1 = pixi_spec;
-                        CommandSpec::EnvironmentSpec(env_spec)
+                    CommandSpec::EnvironmentSpec(env_spec) => {
+                        CommandSpec::EnvironmentSpec(Box::new(env_spec.resolve(source_anchor)))
                     }
                     CommandSpec::System(system_spec) => CommandSpec::System(system_spec),
                 }
@@ -132,10 +123,7 @@ impl EnvironmentSpec {
     pub fn resolve(mut self, source_anchor: SourceAnchor) -> Self {
         let maybe_source_spec = self.requirement.1.try_into_source_spec();
         let pixi_spec = match maybe_source_spec {
-            Ok(source_spec) => {
-                let resolved_spec = source_anchor.resolve(source_spec);
-                PixiSpec::from(resolved_spec)
-            }
+            Ok(source_spec) => PixiSpec::from(source_spec.resolve(&source_anchor)),
             Err(pixi_spec) => pixi_spec,
         };
         self.requirement.1 = pixi_spec;

@@ -48,6 +48,16 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Extend<(N, D)> for DependencyMa
     }
 }
 
+impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Extend<DependencyMap<N, D>>
+    for DependencyMap<N, D>
+{
+    fn extend<T: IntoIterator<Item = DependencyMap<N, D>>>(&mut self, iter: T) {
+        for other in iter {
+            Extend::<(N, D)>::extend(self, other.into_specs());
+        }
+    }
+}
+
 impl<'a, M, N: Hash + Eq + Clone + 'a, D: Hash + Eq + Clone + 'a> From<M> for DependencyMap<N, D>
 where
     M: IntoIterator<Item = Cow<'a, IndexMap<N, D>>>,
@@ -227,7 +237,7 @@ impl DependencyMap<rattler_conda_types::PackageName, rattler_conda_types::Namele
     ) -> impl DoubleEndedIterator<Item = rattler_conda_types::MatchSpec> {
         self.map.into_iter().flat_map(|(name, specs)| {
             specs.into_iter().map(move |spec| {
-                rattler_conda_types::MatchSpec::from_nameless(spec, Some(name.clone()))
+                rattler_conda_types::MatchSpec::from_nameless(spec, Some(name.clone().into()))
             })
         })
     }
@@ -238,7 +248,10 @@ impl DependencyMap<rattler_conda_types::PackageName, rattler_conda_types::Namele
     ) -> impl DoubleEndedIterator<Item = rattler_conda_types::MatchSpec> {
         self.map.iter().flat_map(|(name, specs)| {
             specs.into_iter().map(move |spec| {
-                rattler_conda_types::MatchSpec::from_nameless(spec.clone(), Some(name.clone()))
+                rattler_conda_types::MatchSpec::from_nameless(
+                    spec.clone(),
+                    Some(name.clone().into()),
+                )
             })
         })
     }
@@ -253,7 +266,7 @@ impl DependencyMap<rattler_conda_types::PackageName, BinarySpec> {
         self.into_specs()
             .map(|(name, spec)| {
                 let spec = spec.try_into_nameless_match_spec(channel_config)?;
-                Ok(MatchSpec::from_nameless(spec, Some(name)))
+                Ok(MatchSpec::from_nameless(spec, Some(name.into())))
             })
             .collect()
     }

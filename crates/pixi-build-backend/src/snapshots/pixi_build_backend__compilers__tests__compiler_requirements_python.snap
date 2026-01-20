@@ -1,0 +1,5 @@
+---
+source: crates/pixi-build-backend/src/compilers.rs
+expression: result
+---
+"${{ compiler('python') }}"

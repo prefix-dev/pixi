@@ -2,6 +2,14 @@ use itertools::Itertools;
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme, NamedSource, Report};
 use std::path::Path;
 
+pub mod git_fixture;
+pub mod mock_repo_data;
+
+pub use git_fixture::GitRepoFixture;
+pub use mock_repo_data::{
+    LocalChannel, MockRepoData, Package, PackageBuilder, create_conda_package,
+};
+
 /// Format a TOML parse error into a string that can be used to generate
 /// snapshots.
 pub fn format_parse_error(source: &str, error: impl Into<Report>) -> String {

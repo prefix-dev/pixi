@@ -120,9 +120,12 @@ When you run the main task, Pixi ensures each dependent task uses its specified 
 pixi run test-all
 ```
 
-The environment specified for a task dependency takes precedence over the environment specified via the CLI `--environment` flag. This means even if you run `pixi run test-all --environment py312`, the first dependency will still run in the `py311` environment as specified in the TOML file.
+The environment specified for a task dependency takes precedence over the environment specified via
+the CLI `--environment` flag. This means even if you run `pixi run test-all --environment py312`,
+the first dependency will still run in the `py311` environment as specified in the TOML file.
 
-In the example above, the `test-all` task runs the `test` task in both Python 3.11 and 3.12 environments, allowing you to verify compatibility across different Python versions with a single command.
+In the example above, the `test-all` task runs the `test` task in both Python 3.11 and 3.12 environments,
+allowing you to verify compatibility across different Python versions with a single command.
 
 ## Working directory
 
@@ -268,6 +271,51 @@ You can also use filters to transform argument values:
 --8<-- "docs/source_files/pixi_workspaces/minijinja/task_args/pixi.toml:tasks"
 ```
 
+#### Pixi Variables
+
+In addition to task arguments, Pixi automatically provides a `pixi` object in the MiniJinja context with system variables:
+
+| Variable | Description | Example Value |
+|----------|-------------|---------------|
+| `pixi.platform` | The platform name for the environment in which the task will run | `linux-64`, `osx-arm64`, `win-64` |
+| `pixi.environment.name` | The name of the current environment (when available) | `default`, `prod`, `test` |
+| `pixi.manifest_path` | Absolute path to the manifest file | `/path/to/project/pixi.toml` |
+| `pixi.version` | The version of pixi being used | `0.59.0` |
+| `pixi.is_win` | Boolean flag indicating if the platform is Windows | `true` or `false` |
+| `pixi.is_unix` | Boolean flag indicating if the platform is Unix-like | `true` or `false` |
+| `pixi.is_linux` | Boolean flag indicating if the platform is Linux | `true` or `false` |
+| `pixi.is_osx` | Boolean flag indicating if the platform is macOS | `true` or `false` |
+
+These variables are particularly useful for creating platform-specific or environment-aware tasks:
+
+```toml title="pixi.toml"
+[tasks]
+# Platform-specific commands
+build = { cmd = "cargo build --target {{ pixi.platform }}", args = [] }
+download-binary = { cmd = "curl -O https://example.com/binary-{{ pixi.platform }}.tar.gz", args = [] }
+
+# Conditional execution based on platform
+install = { cmd = "{% if pixi.is_win %}install.bat{% else %}./install.sh{% endif %}", args = [] }
+
+# Environment-aware tasks
+deploy = { cmd = "deploy.sh --env {{ pixi.environment.name }}", args = [] }
+
+# Using manifest path
+validate = { cmd = "validator --manifest {{ pixi.manifest_path }}", args = [] }
+```
+
+The pixi variables can also be combined with task arguments:
+
+```toml title="pixi.toml"
+[tasks]
+deploy = {
+    cmd = "deploy.sh --platform {{ pixi.platform }} --env {{ environment }} --version {{ pixi.version }}",
+    args = [{ arg = "environment", default = "staging" }]
+}
+```
+
+When running tasks with typed arguments, the platform will automatically reflect the best platform for the environment where the task executes.
+
 For more information about available filters and template syntax, see the [MiniJinja documentation](https://docs.rs/minijinja/latest/minijinja/filters/index.html).
 
 ## Task Names
@@ -345,7 +393,7 @@ Notes on environment variables in tasks:
     If you previously relied on a certain priority which no longer applies, you may need to change your
     task definitions.
 
-    For the specific case of overriding `task.env` with outside environment variables, this behaviour can
+    For the specific case of overriding `task.env` with outside environment variables, this behavior can
     now be recreated using [task arguments](#task-arguments). For example, if you were previously using
     a setup like:
 
@@ -360,7 +408,7 @@ Notes on environment variables in tasks:
     world
     ```
 
-    you can now recreate this behaviour like:
+    you can now recreate this behavior like:
 
     ```toml title="pixi.toml"
     [tasks]
@@ -374,6 +422,7 @@ Notes on environment variables in tasks:
     ```
 
 ## Clean environment
+
 You can make sure the environment of a task is "Pixi only".
 Here Pixi will only include the minimal required environment variables for your platform to run the command in.
 The environment will contain all variables set by the conda environment like `"CONDA_PREFIX"`.

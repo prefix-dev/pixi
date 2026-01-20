@@ -1,7 +1,8 @@
 lefthook: pixi run --no-progress lefthook
+no_auto_install: true
 
 templates:
-  run: run --quiet --no-progress --frozen --environment=lint
+  run: run --quiet --no-progress
 
 colors: true
 
@@ -20,11 +21,13 @@ pre-commit:
   parallel: true
   jobs:
     - name: actionlint
-      run: pixi {run} actionlint
+      run: pixi {run} -e lint actionlint
+    - name: zizmor
+      run: pixi {run} -e lint zizmor
     - name: cargo-fmt
       glob: "*.rs"
       stage_fixed: true
-      run: pixi {run} cargo-fmt
+      run: pixi {run} -e lint cargo-fmt
     - name: ruff
       glob: "*.{py,pyi}"
       stage_fixed: true
@@ -32,42 +35,61 @@ pre-commit:
         piped: true
         jobs:
           - name: ruff lint
-            run: pixi {run} ruff-lint {staged_files}
+            run: pixi {run} -e lint ruff-lint {staged_files}
           - name: ruff format
-            run: pixi {run} ruff-format {staged_files}
+            run: pixi {run} -e lint ruff-format {staged_files}
+    - name: cargo-shear
+      glob: "*.rs,Cargo.toml"
+      stage_fixed: true
+      run: pixi {run} -e lint cargo-shear
     - name: shell-format
       glob: "*.{sh, bash}"
-      run: pixi {run} shell-format {staged_files}
+      run: pixi {run} -e lint shell-format {staged_files}
     - name: taplo
       stage_fixed: true
       glob: "*.toml"
       exclude:
         - schema/examples/invalid/*.toml
-      run: pixi {run} toml-format {staged_files}
+      run: pixi {run} -e lint toml-format {staged_files}
     - name: dprint
       glob: "*.{yaml,yml}"
       group:
         jobs:
           - name: dprint check
-            run: pixi {run} dprint-check {staged_files}
+            run: pixi {run} -e lint dprint-check {staged_files}
           - name: dprint fmt
-            run: pixi {run} dprint-fmt {staged_files}
+            run: pixi {run} -e lint dprint-fmt {staged_files}
             stage_fixed: true
     - name: typos
       stage_fixed: true
-      run: pixi {run} typos
+      run: pixi {run} -e lint typos
+    - name: pixi-build-ros-ruff
+      root: pixi-build-backends/backends/pixi-build-ros
+      glob: "*.{py,pyi}"
+      stage_fixed: true
+      run: pixi {run} -e lint lint-ruff
+    - name: py-pixi-build-backend-fmt-rust
+      root: pixi-build-backends/py-pixi-build-backend
+      glob: "*.rs"
+      stage_fixed: true
+      run: pixi {run} -e default fmt-rust
+    - name: py-pixi-build-backend-lint-python
+      root: pixi-build-backends/py-pixi-build-backend
+      glob: "*.{py,pyi}"
+      stage_fixed: true
+      run: pixi {run} -e default lint-python
 
 pre-push:
   jobs:
     - name: typecheck-python
       glob: "*.{py,pyi}"
-      run: pixi {run} typecheck-python
+      run: pixi {run} -e lint typecheck-python
     - name: cargo-clippy
       glob: "*.rs"
-      run: pixi {run} cargo-clippy
+      run: pixi {run} -e lint cargo-clippy
     - name: cargo-deny
       glob: "Cargo.lock,Cargo.toml"
       stage_fixed: true
-      run: pixi {run} cargo-deny
+      run: pixi {run} -e lint cargo-deny
     - name: check-openssl
-      run: pixi {run} check-openssl
+      run: pixi {run} -e lint check-openssl

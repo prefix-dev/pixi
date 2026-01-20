@@ -10,6 +10,7 @@ use rattler_conda_types::{
 
 use crate::{
     CondaDependencies, PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
+    dependencies::CondaDevDependencies,
     has_features_iter::HasFeaturesIter,
     has_manifest_ref::HasWorkspaceManifest,
     pypi::pypi_options::PypiOptions,
@@ -68,7 +69,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             .collect()
     }
 
-    /// Returns the channel priority, error on multiple values, return None if
+    /// Returns the channel priority, error on multiple, different values, return None if
     /// no value is set.
     ///
     /// When using multiple channel priorities over different features we should
@@ -77,7 +78,8 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         let mut channel_priority = None;
         for feature in self.features() {
             if let Some(priority) = feature.channel_priority {
-                if channel_priority == Some(priority) {
+                // If we already have a priority and it's different, error
+                if channel_priority.is_some() && channel_priority != Some(priority) {
                     return Err(ChannelPriorityCombinationError);
                 }
                 channel_priority = Some(priority);
@@ -203,6 +205,20 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             .features()
             .filter_map(|f| f.combined_dependencies(platform))
             .collect();
+        DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
+    }
+
+    /// Returns the combined dev dependencies to install for this collection.
+    ///
+    /// Dev dependencies from all features in the group are collected and
+    /// merged. If multiple features define the same dev dependency, the
+    /// last one wins (later features override earlier ones).
+    fn combined_dev_dependencies(&self, platform: Option<Platform>) -> CondaDevDependencies {
+        let deps: Vec<_> = self
+            .features()
+            .filter_map(|f| f.dev_dependencies(platform))
+            .collect();
+
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
     }
 

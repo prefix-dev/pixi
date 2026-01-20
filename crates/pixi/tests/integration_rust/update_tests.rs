@@ -5,17 +5,15 @@ use rattler_conda_types::Platform;
 use rattler_lock::LockFile;
 use tempfile::TempDir;
 
-use crate::common::{
-    LockFileExt, PixiControl,
-    package_database::{Package, PackageDatabase},
-};
+use crate::common::{GitRepoFixture, LockFileExt, PixiControl};
 use crate::setup_tracing;
+use pixi_test_utils::{MockRepoData, Package};
 
 #[tokio::test]
 async fn test_update() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add a package
     package_database.add_package(Package::build("bar", "1").finish());
@@ -91,7 +89,7 @@ async fn test_update() {
 async fn test_update_single_package() {
     setup_tracing();
 
-    let mut package_database = PackageDatabase::default();
+    let mut package_database = MockRepoData::default();
 
     // Add packages
     package_database.add_package(Package::build("bar", "1").finish());
@@ -163,20 +161,37 @@ async fn test_update_single_package() {
 async fn test_update_conda_package_doesnt_update_git_pypi() {
     setup_tracing();
 
+    // Create local package database with Python
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("python", "3.12.1")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
     let pixi = PixiControl::new().unwrap();
+
+    // Create local git fixture with two commits
+    let fixture = GitRepoFixture::new("minimal-pypi-package");
 
     // Create a new project using our package database.
     pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
         .with_platforms(vec![Platform::current()])
         .await
         .unwrap();
 
     // Add a dependency on `python`
-    pixi.add("python").with_no_install(false).await.unwrap();
+    pixi.add("python").await.unwrap();
 
-    // Add a git pypi dependency on `tqdm`
-    pixi.add_pypi("tqdm @ git+https://github.com/tqdm/tqdm.git")
-        .with_no_install(false)
+    // Add a git pypi dependency using local fixture
+    pixi.add_pypi(&format!("minimal-package @ {}", fixture.url))
         .await
         .unwrap();
 
@@ -184,20 +199,20 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
     let lock = pixi.lock_file().await.unwrap();
 
     let workspace = pixi.workspace().unwrap();
-    let tqmd_package = lock
+    let pkg = lock
         .get_pypi_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
             Platform::current(),
-            "tqdm",
+            "minimal-package",
         )
         .unwrap();
 
-    let tqmd_version = tqmd_package.as_pypi().unwrap().0.version.to_string();
+    let pkg_version = pkg.as_pypi().unwrap().0.version.to_string();
 
     let mut lock_file_str = lock.render_to_string().unwrap();
 
     // git url should have a fragment
-    let fragment = tqmd_package
+    let fragment = pkg
         .as_pypi()
         .unwrap()
         .0
@@ -207,11 +222,10 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
         .fragment()
         .expect("expected git url to have a fragment");
 
-    // and modify this fragment to simulate an older commit
-    let older_commit = "a2d5f1c9d1cbdbcf56f52dc4365ea4124e3e33f7";
-    lock_file_str = lock_file_str.replace(fragment, older_commit);
+    // Modify this fragment to simulate an older commit (first commit of fixture)
+    lock_file_str = lock_file_str.replace(fragment, fixture.first_commit());
 
-    lock_file_str = lock_file_str.replace(&tqmd_version, "4.67.1.dev5+ga2d5f1c9d");
+    lock_file_str = lock_file_str.replace(&pkg_version, "0.1.0");
 
     let lockfile = LockFile::from_str(&lock_file_str).unwrap();
 
@@ -219,11 +233,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
 
     // now run the update command to update conda packages
     // which will invalidate also pypi packages
-    pixi.update()
-        .with_no_install(false)
-        .with_package("python")
-        .await
-        .unwrap();
+    pixi.update().with_package("python").await.unwrap();
 
     // Get the re-locked lock-file
     let lock = pixi.lock_file().await.unwrap();
@@ -232,7 +242,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
         .get_pypi_package_url(
             consts::DEFAULT_ENVIRONMENT_NAME,
             Platform::current(),
-            "tqdm",
+            "minimal-package",
         )
         .unwrap();
     let new_fragment = url_or_path
@@ -241,7 +251,8 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
         .fragment()
         .expect("expected git url to have a fragment");
     assert_eq!(
-        older_commit, new_fragment,
+        fixture.first_commit(),
+        new_fragment,
         "expected git pypi package to not be updated when updating conda packages"
     );
 }
@@ -250,23 +261,41 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
 async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
     setup_tracing();
 
+    // Create local package database with Python
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("python", "3.12.1")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
     let pixi = PixiControl::new().unwrap();
+
+    // Create local git fixture with two commits
+    let fixture = GitRepoFixture::new("minimal-pypi-package");
 
     // Create a new project using our package database.
     pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
         .with_platforms(vec![Platform::current()])
         .await
         .unwrap();
 
     // Add a dependency on `python`
-    pixi.add("python").with_no_install(false).await.unwrap();
+    pixi.add("python").await.unwrap();
 
-    // Add a `pinned` git pypi dependency on `tqdm`
-    // this should not trigger an update
-    pixi.add_pypi(
-        "tqdm @ git+https://github.com/tqdm/tqdm.git@cac7150d7c8a650c7e76004cd7f8643990932c7f",
-    )
-    .with_no_install(false)
+    // Add a `pinned` git pypi dependency using local fixture (pinned to first commit)
+    pixi.add_pypi(&format!(
+        "minimal-package @ {}@{}",
+        fixture.url,
+        fixture.first_commit()
+    ))
     .await
     .unwrap();
 
@@ -295,22 +324,36 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
 async fn test_update_git_pypi_when_requested() {
     setup_tracing();
 
+    // Create local package database with Python
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
     let pixi = PixiControl::new().unwrap();
+
+    // Create local git fixture with two commits
+    let fixture = GitRepoFixture::new("minimal-pypi-package");
 
     // Create a new project using our package database.
     pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
         .with_platforms(vec![Platform::current()])
         .await
         .unwrap();
 
     // Add a dependency on `python`
-    pixi.add("python").with_no_install(false).await.unwrap();
+    pixi.add("python").await.unwrap();
 
-    // Add a `pinned` git pypi dependency on `tqdm`
-    pixi.add_pypi(
-        "tqdm @ git+https://github.com/tqdm/tqdm.git@cac7150d7c8a650c7e76004cd7f8643990932c7f",
-    )
-    .with_no_install(false)
+    // Add a `pinned` git pypi dependency using local fixture (pinned to first commit)
+    pixi.add_pypi(&format!(
+        "minimal-package @ {}@{}",
+        fixture.url,
+        fixture.first_commit()
+    ))
     .await
     .unwrap();
 
@@ -321,37 +364,33 @@ async fn test_update_git_pypi_when_requested() {
 
     // remove the pin from the dependency
     let new_manifest_txt =
-        manifest_txt.replace(", rev = \"cac7150d7c8a650c7e76004cd7f8643990932c7f\"", "");
+        manifest_txt.replace(&format!(", rev = \"{}\"", fixture.first_commit()), "");
 
     tokio::fs::write(pixi.manifest_path(), new_manifest_txt)
         .await
         .unwrap();
 
     // run pixi update to re-lock
-    pixi.update()
-        .with_no_install(false)
-        .with_package("tqdm")
-        .await
-        .unwrap();
+    pixi.update().with_package("minimal-package").await.unwrap();
 
     // Get the created lock-file
     let lock = pixi.lock_file().await.unwrap();
 
-    // find the tqdm package
-    let tqmd_package = lock
+    // find the package
+    let pkg = lock
         .get_pypi_package_url(
             consts::DEFAULT_ENVIRONMENT_NAME,
             Platform::current(),
-            "tqdm",
+            "minimal-package",
         )
         .unwrap();
 
-    let tqdm_fragment = tqmd_package
+    let pkg_fragment = pkg
         .as_url()
         .unwrap()
         .fragment()
         .expect("expected git url to have a fragment");
 
-    // we expect the fragment to be different than the previous pinned one
-    assert_ne!(tqdm_fragment, "cac7150d7c8a650c7e76004cd7f8643990932c7f");
+    // We expect the fragment to be the latest commit, not the first
+    assert_eq!(pkg_fragment, fixture.latest_commit());
 }

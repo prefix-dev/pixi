@@ -1,6 +1,7 @@
 use std::collections::hash_map::Entry;
 
 use futures::FutureExt;
+use pixi_path::AbsPathBuf;
 
 use super::{CommandDispatcherProcessor, PendingUrlCheckout, PendingUrlWaiter, TaskResult};
 use crate::{
@@ -29,10 +30,13 @@ impl CommandDispatcherProcessor {
                     spec: spec.clone(),
                     tx,
                 }),
-                PendingUrlCheckout::CheckedOut(fetch) => {
-                    let _ = tx.send(validate_checkout(&spec, fetch).map(|_| fetch.clone()));
+                PendingUrlCheckout::CheckedOut(checkout) => {
+                    let _ = tx.send(validate_checkout(&spec, checkout).map(|_| checkout.clone()));
                 }
-                PendingUrlCheckout::Errored => {
+                PendingUrlCheckout::Errored(err) => {
+                    let _ = tx.send(Err(err.clone()));
+                }
+                PendingUrlCheckout::Cancelled => {
                     // Drop the sender, this will cause a cancellation on the other side.
                     drop(tx)
                 }
@@ -81,11 +85,13 @@ impl CommandDispatcherProcessor {
             cancellation_token
                 .run_until_cancelled_owned(async move {
                     resolver
-                        .fetch(spec, client, cache_dir, None)
+                        .fetch(spec, client, cache_dir.into_std_path_buf(), None)
                         .await
                         .map(|fetch| UrlCheckout {
                             pinned_url: fetch.pinned().clone(),
-                            dir: fetch.path().to_path_buf(),
+                            dir: AbsPathBuf::new(fetch.path())
+                                .expect("url fetch does not return absolute path")
+                                .into_assume_dir(),
                         })
                         .map_err(CommandDispatcherError::Failed)
                 })
@@ -122,30 +128,28 @@ impl CommandDispatcherProcessor {
         }
 
         match result {
-            Ok(fetch) => {
+            Ok(checkout) => {
                 for waiter in pending.drain(..) {
-                    fulfill_waiter(waiter, &fetch);
+                    fulfill_waiter(waiter, &checkout);
                 }
 
-                // Store the fetch in the url map.
+                // Store the checkout in the url map.
                 self.url_checkouts
-                    .insert(url, PendingUrlCheckout::CheckedOut(fetch));
+                    .insert(url, PendingUrlCheckout::CheckedOut(checkout));
             }
-            Err(CommandDispatcherError::Failed(mut err)) => {
-                // Only send the error to the first channel, drop the rest, which cancels them.
-                for waiter in pending.drain(..) {
+            Err(CommandDispatcherError::Failed(err)) => {
+                // Clone the error and send to all waiting channels.
+                for waiter in std::mem::take(pending) {
                     let PendingUrlWaiter { tx, .. } = waiter;
-                    match tx.send(Err(err)) {
-                        Ok(_) => return,
-                        Err(Err(failed_to_send)) => err = failed_to_send,
-                        Err(Ok(_)) => unreachable!(),
-                    }
+                    let _ = tx.send(Err(err.clone()));
                 }
 
-                self.url_checkouts.insert(url, PendingUrlCheckout::Errored);
+                self.url_checkouts
+                    .insert(url, PendingUrlCheckout::Errored(err));
             }
             Err(CommandDispatcherError::Cancelled) => {
-                self.url_checkouts.insert(url, PendingUrlCheckout::Errored);
+                self.url_checkouts
+                    .insert(url, PendingUrlCheckout::Cancelled);
             }
         }
     }

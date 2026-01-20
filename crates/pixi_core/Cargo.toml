@@ -45,6 +45,7 @@ pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
 pixi_install_pypi = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
+pixi_path = { workspace = true }
 pixi_progress = { workspace = true }
 pixi_pypi_spec = { workspace = true }
 pixi_python_status = { workspace = true }
@@ -65,8 +66,6 @@ rattler_repodata_gateway = { workspace = true }
 rattler_shell = { workspace = true }
 rattler_solve = { workspace = true }
 rattler_virtual_packages = { workspace = true }
-reqwest = { workspace = true }
-rlimit = { workspace = true }
 rstest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -80,6 +79,7 @@ typed-path = { workspace = true }
 url = { workspace = true }
 uv-build-frontend = { workspace = true }
 uv-cache = { workspace = true }
+uv-cache-key = { workspace = true }
 uv-client = { workspace = true }
 uv-configuration = { workspace = true }
 uv-dispatch = { workspace = true }
@@ -107,11 +107,10 @@ xxhash-rust = { workspace = true }
 libc = { workspace = true }
 
 [dev-dependencies]
-async-trait = { workspace = true }
-fake = "4.0.0"
-http = { workspace = true }
 insta = { workspace = true, features = ["yaml", "glob", "filters"] }
+pixi_build_backend_passthrough = { workspace = true }
 pixi_test_utils = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
+tracing-test = { workspace = true }
