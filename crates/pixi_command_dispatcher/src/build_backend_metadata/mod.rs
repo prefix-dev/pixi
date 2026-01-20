@@ -19,7 +19,7 @@ use thiserror::Error;
 use tracing::instrument;
 
 use crate::cache::build_backend_metadata::CachedCondaMetadataId;
-use crate::input_hash::ProjectModelHash;
+use crate::input_hash::{ConfigurationHash, ProjectModelHash};
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
@@ -219,11 +219,17 @@ impl BuildBackendMetadataSpec {
             .as_ref()
             .map(ProjectModelHash::from);
 
+        let configuration_hash = ConfigurationHash::compute(
+            discovered_backend.init_params.configuration.as_ref(),
+            discovered_backend.init_params.target_configuration.as_ref(),
+        );
+
         if !skip_cache {
             if let Some(cache_entry) = Self::verify_cache_freshness(
                 cached_metadata,
                 &build_source_checkout,
                 project_model_hash,
+                configuration_hash,
                 &self.variant_configuration,
             )
             .await?
@@ -288,6 +294,7 @@ impl BuildBackendMetadataSpec {
                 command_dispatcher.clone(),
                 build_source_checkout,
                 project_model_hash,
+                configuration_hash,
                 backend,
                 log_sink,
             )
@@ -380,6 +387,7 @@ impl BuildBackendMetadataSpec {
         cache_entry: Option<CachedCondaMetadata>,
         build_source_checkout: &SourceCheckout,
         project_model_hash: Option<ProjectModelHash>,
+        configuration_hash: Option<ConfigurationHash>,
         requested_variants: &Option<BTreeMap<String, Vec<VariantValue>>>,
     ) -> Result<Option<CachedCondaMetadata>, CommandDispatcherError<BuildBackendMetadataError>>
     {
@@ -391,6 +399,14 @@ impl BuildBackendMetadataSpec {
         if cache_entry.project_model_hash != project_model_hash {
             tracing::info!(
                 "found cached outputs with different project model, invalidating cache."
+            );
+            return Ok(None);
+        }
+
+        // Check the build configuration
+        if cache_entry.configuration_hash != configuration_hash {
+            tracing::info!(
+                "found cached outputs with different build configuration, invalidating cache."
             );
             return Ok(None);
         }
@@ -524,6 +540,7 @@ impl BuildBackendMetadataSpec {
         command_dispatcher: CommandDispatcher,
         build_source_checkout: SourceCheckout,
         project_model_hash: Option<ProjectModelHash>,
+        configuration_hash: Option<ConfigurationHash>,
         backend: Backend,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
@@ -616,6 +633,7 @@ impl BuildBackendMetadataSpec {
             input_files: input_glob_files,
             build_source: build_source_checkout.pinned,
             project_model_hash,
+            configuration_hash,
             timestamp,
         })
     }

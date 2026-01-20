@@ -2,7 +2,7 @@ use super::common::{
     CacheError, CacheKey, CachedMetadata, MetadataCache, VersionedMetadata,
     WriteResult as CommonWriteResult,
 };
-use crate::input_hash::ProjectModelHash;
+use crate::input_hash::{ConfigurationHash, ProjectModelHash};
 use crate::{BuildEnvironment, PackageIdentifier, build::source_checkout_cache_key};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
@@ -134,6 +134,12 @@ pub struct CachedCondaMetadata {
     /// The hash of the project model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project_model_hash: Option<ProjectModelHash>,
+
+    /// The hash of the build configuration (from `[package.build.config]`).
+    /// This ensures that changes to the build configuration invalidate the
+    /// cache even if the project model hasn't changed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configuration_hash: Option<ConfigurationHash>,
 
     /// The pinned location of the source code. Although the specification of
     /// where to find the source is part of the `project_model_hash`, the
