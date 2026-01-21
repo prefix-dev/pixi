@@ -1,4 +1,4 @@
-use pixi_config;
+use pixi_config::{self, Config};
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_manifest::EnvironmentName;
@@ -47,6 +47,10 @@ pub struct Args {
     /// Only remove the pixi-build cache
     #[arg(long)]
     pub build: bool,
+
+    /// Only remove disassociated workspace registries
+    #[arg(long)]
+    pub workspaces_registry: bool,
 }
 
 /// Clean the cache of your system which are touched by pixi.
@@ -131,7 +135,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 explicit_env.name().fancy_display()
             );
         }
-    } else if !args.activation_cache & !args.build {
+    } else if !args.activation_cache & !args.build & !args.workspaces_registry {
         // Remove all pixi related work from the workspace.
         if !workspace
             .environments_dir()
@@ -151,6 +155,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             false,
         )
         .await?;
+        clean_workspaces().await?;
     } else {
         if args.activation_cache {
             remove_folder_with_progress(workspace.activation_env_cache_folder(), true).await?;
@@ -161,6 +166,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 true,
             )
             .await?;
+        }
+        if args.workspaces_registry {
+            clean_workspaces().await?;
         }
     }
     Ok(())
@@ -221,6 +229,49 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
     Ok(())
 }
 
+fn global_config_write_path() -> miette::Result<PathBuf> {
+    let mut global_locations = pixi_config::config_path_global();
+    let mut to = global_locations
+        .pop()
+        .expect("should have at least one global config path");
+
+    for p in global_locations {
+        if p.exists() {
+            to = p;
+            break;
+        }
+    }
+    Ok(to)
+}
+
+/// Clean disassociated workspaces from the workspace registry
+async fn clean_workspaces() -> miette::Result<()> {
+    let mut config = Config::load_global();
+    let to = global_config_write_path()?;
+    let mut workspaces = config.named_workspaces.clone();
+
+    workspaces.retain(|key, val| {
+        if val.exists() {
+            true
+        } else {
+            eprintln!(
+                "{} {}",
+                console::style("removed workspace").green(),
+                key
+            );
+            false
+        }
+    });
+    config.named_workspaces = workspaces;
+    config.save(&to)?;
+    eprintln!(
+        "{} {}",
+        console::style(console::Emoji("✔ ", "")).green(),
+        "Workspace registry cleaned"
+    );
+    Ok(())
+}
+
 async fn remove_folder_with_progress(
     folder: PathBuf,
     warning_non_existent: bool,
@@ -256,6 +307,7 @@ async fn remove_folder_with_progress(
     ));
     Ok(())
 }
+
 
 async fn remove_file(file: PathBuf, warning_non_existent: bool) -> miette::Result<()> {
     if !file.exists() {
