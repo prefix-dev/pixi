@@ -12,10 +12,8 @@ use tracing::instrument;
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     PackageIdentifier, SourceCheckoutError,
-    build::{
-        BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, PackageBuildInputHashBuilder,
-        SourceCodeLocation,
-    },
+    build::{BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, SourceCodeLocation},
+    input_hash::{ConfigurationHash, ProjectModelHash},
 };
 
 /// A query to retrieve information from the source build cache. This is
@@ -318,13 +316,6 @@ impl SourceBuildCacheStatusSpec {
             return Ok(CachedBuildStatus::UpToDate(cached_build));
         };
 
-        let Some(current_hash) = source_info.package_build_input_hash else {
-            tracing::debug!(
-                "package is stale because the package build input hash is missing or stale",
-            );
-            return Ok(CachedBuildStatus::Stale(cached_build));
-        };
-
         // Checkout the source for the package.
         let source_checkout = command_dispatcher
             .checkout_pinned_source(manifest_source.clone())
@@ -341,21 +332,29 @@ impl SourceBuildCacheStatusSpec {
             .await
             .map_err_with(|e| SourceBuildCacheStatusError::Discovery(Arc::new(e)))?;
 
-        // Compute a hash of the package configuration.
-        let package_build_input_hash = PackageBuildInputHashBuilder {
-            project_model: backend.init_params.project_model.as_ref(),
-            configuration: backend.init_params.configuration.as_ref(),
-            target_configuration: backend.init_params.target_configuration.as_ref(),
-        }
-        .finish();
+        // Compute hashes of the package configuration.
+        let project_model_hash = backend
+            .init_params
+            .project_model
+            .as_ref()
+            .map(ProjectModelHash::from);
+        let configuration_hash = ConfigurationHash::compute(
+            backend.init_params.configuration.as_ref(),
+            backend.init_params.target_configuration.as_ref(),
+        );
 
-        // Compare the hashes
-        if current_hash != package_build_input_hash {
-            tracing::debug!("package is stale because the package build input hash has changed");
+        // Compare the project model hash
+        if source_info.project_model_hash != project_model_hash {
+            tracing::debug!("package is stale because the project model hash has changed");
             return Ok(CachedBuildStatus::Stale(cached_build));
         }
 
-        // Compute the input hash of the build.
+        // Compare the configuration hash
+        if source_info.configuration_hash != configuration_hash {
+            tracing::debug!("package is stale because the configuration hash has changed");
+            return Ok(CachedBuildStatus::Stale(cached_build));
+        }
+
         Ok(CachedBuildStatus::UpToDate(cached_build))
     }
 
