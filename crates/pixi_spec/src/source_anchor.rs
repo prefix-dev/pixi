@@ -1,9 +1,7 @@
-use pixi_consts::consts::KNOWN_MANIFEST_FILES;
-use typed_path::{
-    Utf8Component, Utf8Encoding, Utf8Path, Utf8PathBuf, Utf8TypedPath, Utf8TypedPathBuf,
-};
 use crate::{GitSpec, PathSourceSpec, SourceLocationSpec, SourceSpec, Subdirectory, UrlSourceSpec};
+use pixi_consts::consts::KNOWN_MANIFEST_FILES;
 use pixi_path::normalize;
+use typed_path::Utf8TypedPath;
 
 /// `SourceAnchor` represents the resolved base location of a `SourceSpec`.
 /// It serves as a reference point for interpreting relative or recursive
