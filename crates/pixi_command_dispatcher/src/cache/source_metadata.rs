@@ -150,12 +150,12 @@ impl VersionedMetadata for CachedSourceMetadata {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(transparent)]
-pub struct CachedSourceMetadataId(u64);
+pub struct CachedSourceMetadataId(String);
 
 impl CachedSourceMetadataId {
     pub fn random() -> Self {
-        Self(rand::random())
+        Self(nanoid::nanoid!())
     }
 }

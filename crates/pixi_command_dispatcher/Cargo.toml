@@ -21,10 +21,10 @@ futures = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
+nanoid = { workspace = true }
 once_cell = { workspace = true }
 ordermap = { workspace = true }
 pin-project-lite = { workspace = true }
-rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_with = { workspace = true }

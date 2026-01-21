@@ -25,7 +25,9 @@ use crate::{
     InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
     build::{SourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
     cache::{
-        build_backend_metadata::{self, BuildBackendMetadataCacheShard, CachedCondaMetadata},
+        build_backend_metadata::{
+            self, BuildBackendMetadataCacheShard, CachedCondaMetadata, CachedCondaMetadataContent,
+        },
         common::MetadataCache,
     },
 };
@@ -219,23 +221,23 @@ impl BuildBackendMetadataSpec {
             .as_ref()
             .map(ProjectModelHash::from);
 
-        if !skip_cache {
-            if let Some(cache_entry) = Self::verify_cache_freshness(
-                cached_metadata,
+        if !skip_cache
+            && let Some(ref cache_entry) = cached_metadata
+            && Self::verify_cache_freshness(
+                cache_entry,
                 &build_source_checkout,
                 project_model_hash,
                 &self.variant_configuration,
             )
             .await?
-            {
-                tracing::debug!("Using cached source metadata for package",);
-                return Ok(BuildBackendMetadata {
-                    source: manifest_source_location.clone(),
-                    metadata: cache_entry,
-                    skip_cache,
-                });
-            }
-        } else {
+        {
+            tracing::debug!("Using cached source metadata for package",);
+            return Ok(BuildBackendMetadata {
+                source: manifest_source_location.clone(),
+                metadata: cache_entry.clone(),
+                skip_cache,
+            });
+        } else if skip_cache {
             let backend_name = match &discovered_backend.backend_spec {
                 BackendSpec::JsonRpc(spec) => &spec.name,
             };
@@ -292,6 +294,15 @@ impl BuildBackendMetadataSpec {
                 log_sink,
             )
             .await?;
+
+        // If the new metadata is content-equivalent to the previous cached metadata,
+        // reuse the old ID to avoid invalidating downstream caches (e.g., source metadata).
+        if let Some(ref previous) = cached_metadata
+            && metadata.is_content_equivalent(previous)
+        {
+            tracing::debug!("New metadata is content-equivalent to cached metadata, reusing ID");
+            metadata.id = previous.id.clone();
+        }
 
         metadata.cache_version = cache_version;
 
@@ -376,52 +387,51 @@ impl BuildBackendMetadataSpec {
         skip_cache
     }
 
+    /// Verifies if the cached metadata is still fresh.
+    ///
+    /// Returns `true` if the cache is fresh and can be used, `false` if stale.
     async fn verify_cache_freshness(
-        cache_entry: Option<CachedCondaMetadata>,
+        cache_entry: &CachedCondaMetadata,
         build_source_checkout: &SourceCheckout,
         project_model_hash: Option<ProjectModelHash>,
         requested_variants: &Option<BTreeMap<String, Vec<VariantValue>>>,
-    ) -> Result<Option<CachedCondaMetadata>, CommandDispatcherError<BuildBackendMetadataError>>
-    {
-        let Some(cache_entry) = cache_entry else {
-            return Ok(None);
-        };
-
+    ) -> Result<bool, CommandDispatcherError<BuildBackendMetadataError>> {
         // Check the project model
-        if cache_entry.project_model_hash != project_model_hash {
+        if cache_entry.content.project_model_hash != project_model_hash {
             tracing::info!(
                 "found cached outputs with different project model, invalidating cache."
             );
-            return Ok(None);
+            return Ok(false);
         }
 
         // Check if the source location changed.
-        if cache_entry.build_source != build_source_checkout.pinned {
+        if cache_entry.content.build_source != build_source_checkout.pinned {
             tracing::info!(
                 "found cached outputs with different source code location, invalidating cache."
             );
-            return Ok(None);
+            return Ok(false);
         }
 
         // Check if the build variants match
-        if Some(&cache_entry.build_variants) != requested_variants.as_ref() {
+        if Some(&cache_entry.content.build_variants) != requested_variants.as_ref() {
             tracing::info!("found cached outputs with different variants, invalidating cache.");
-            return Ok(None);
+            return Ok(false);
         }
 
         // If the build source is immutable, we don't check the contents of the files.
         if build_source_checkout.is_immutable() {
-            return Ok(Some(cache_entry));
+            return Ok(true);
         }
 
         let build_source_dir = build_source_checkout.path.as_dir_or_file_parent();
 
         // Check the files that were explicitly mentioned.
         for source_file_path in cache_entry
+            .content
             .input_files
             .iter()
             .map(|path| build_source_dir.join(path).into_std_path_buf())
-            .chain(cache_entry.build_variant_files.iter().cloned())
+            .chain(cache_entry.content.build_variant_files.iter().cloned())
         {
             match source_file_path.metadata().and_then(|m| m.modified()) {
                 Ok(modified_date) => {
@@ -430,7 +440,7 @@ impl BuildBackendMetadataSpec {
                             "found cached outputs but '{}' has been modified, invalidating cache.",
                             source_file_path.display()
                         );
-                        return Ok(None);
+                        return Ok(false);
                     }
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
@@ -438,7 +448,7 @@ impl BuildBackendMetadataSpec {
                         "found cached outputs but '{}' has been deleted, invalidating cache.",
                         source_file_path.display()
                     );
-                    return Ok(None);
+                    return Ok(false);
                 }
                 Err(err) => {
                     tracing::info!(
@@ -446,28 +456,28 @@ impl BuildBackendMetadataSpec {
                         source_file_path.display(),
                         err
                     );
-                    return Ok(None);
+                    return Ok(false);
                 }
             };
         }
 
-        let glob_set = GlobSet::create(cache_entry.input_globs.iter().map(String::as_str));
+        let glob_set = GlobSet::create(cache_entry.content.input_globs.iter().map(String::as_str));
         for matching_file in glob_set
             .collect_matching(build_source_dir.as_std_path())
             .map_err(BuildBackendMetadataError::from)
             .map_err(CommandDispatcherError::Failed)?
         {
             let path = matching_file.into_path();
-            if cache_entry.input_files.contains(&path) {
+            if cache_entry.content.input_files.contains(&path) {
                 tracing::info!(
                     "found cached outputs but a new matching file at '{}' has been detected, invalidating cache.",
                     path.display()
                 );
-                return Ok(None);
+                return Ok(false);
             }
         }
 
-        Ok(Some(cache_entry))
+        Ok(true)
     }
 
     /// Validates that outputs with the same name have unique variants.
@@ -609,14 +619,16 @@ impl BuildBackendMetadataSpec {
         Ok(CachedCondaMetadata {
             id: CachedCondaMetadataId::random(),
             cache_version: 0,
-            outputs: outputs.outputs,
-            build_variants: self.variant_configuration.unwrap_or_default(),
-            build_variant_files: self.variant_files.into_iter().flatten().collect(),
-            input_globs: outputs.input_globs.into_iter().collect(),
-            input_files: input_glob_files,
-            build_source: build_source_checkout.pinned,
-            project_model_hash,
             timestamp,
+            content: CachedCondaMetadataContent {
+                project_model_hash,
+                build_source: build_source_checkout.pinned,
+                build_variants: self.variant_configuration.unwrap_or_default(),
+                build_variant_files: self.variant_files.into_iter().flatten().collect(),
+                input_globs: outputs.input_globs.into_iter().collect(),
+                input_files: input_glob_files,
+                outputs: outputs.outputs,
+            },
         })
     }
 
