@@ -59,7 +59,7 @@ scripts = ["scripts/activate.sh"]
 RUSTC_WRAPPER = "sccache"
 
 [feature.backends-release.dependencies]
-rattler-build = ">=0.55.0,<0.56"
+rattler-build = { git = "https://github.com/prefix-dev/rattler-build.git", branch = "refactor" }
 sccache = ">=0.12,<0.13"
 
 [feature.backends-release.tasks]
@@ -71,8 +71,20 @@ description = "Generate attestation files for conda packages"
 
 [feature.backends-release.tasks.build-backend-packages]
 args = ["target_platform"]
-cmd = "rattler-build build --experimental --test native --channel https://prefix.dev/pixi-build-backends --channel https://prefix.dev/conda-forge --variant-config pixi-build-backends/recipe/variants.yaml --recipe pixi-build-backends/recipe/all-backends/recipe.yaml --target-platform {{ target_platform }}"
+cmd = """
+rm -rf output/bld/ && \
+  rattler-build build  \
+  --experimental \
+  --no-build-id \
+  --test native \
+  --channel-priority disabled \
+  --channel https://prefix.dev/conda-forge \
+  --variant-config pixi-build-backends/recipe/variants.yaml \
+  --recipe pixi-build-backends/recipe/all-backends/recipe.yaml \
+  --target-platform {{ target_platform }}
+"""
 description = "Build a backend packages"
+
 
 #
 # Feature for development tools and utilities

@@ -1,4 +1,7 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/prefix-dev/recipe-format/main/schema.json
+
+schema_version: 1
+
 context:
   api_version: "4"
   cmake_version: ${{ env.get('PIXI_BUILD_CMAKE_VERSION', default='0.1.0dev') }}
@@ -13,62 +16,66 @@ recipe:
   name: pixi-build-backends
   version: 0.0.0
 
-cache:
-  source:
-    path: ../../..
-  requirements:
-    build:
-      - ${{ compiler("rust") }}
-      - ${{ stdlib("c") }}
-      - cargo-bundle-licenses
-      - cargo-auditable
-    host:
-      - pkg-config
-      - libzlib
-      - liblzma
-      - if: unix
-        then: openssl
-
-  build:
-    script:
-      env:
-        CARGO_PROFILE_RELEASE_STRIP: symbols
-        CARGO_PROFILE_RELEASE_LTO: fat
-      content:
-        - if: osx and x86_64
-          then:
-            # use the default linker for osx-64 as we are hitting a bug with the conda-forge linker
-            # https://github.com/rust-lang/rust/issues/140686
-            - unset CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER
-        - if: unix
-          then:
-            - export OPENSSL_DIR="$PREFIX"
-            - export CARGO_TARGET_DIR=${{ SRC_DIR }}/../../target-cache
-        - if: win
-          then:
-            - set "CARGO_TARGET_DIR=${{ SRC_DIR }}/../../target-cache"
-        # Build all Rust backends at once
-        - cargo auditable build --locked --release --bins -p pixi-build-cmake -p pixi-build-mojo -p pixi-build-python -p pixi-build-rattler-build -p pixi-build-rust
-        # Install binaries to prefix
-        - if: unix
-          then:
-            - TARGET=${TARGET:-$(rustc -vV | grep "host:" | awk '{print $2}')}
-            - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-cmake $PREFIX/bin/pixi-build-cmake
-            - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-mojo $PREFIX/bin/pixi-build-mojo
-            - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-python $PREFIX/bin/pixi-build-python
-            - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-rattler-build $PREFIX/bin/pixi-build-rattler-build
-            - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-rust $PREFIX/bin/pixi-build-rust
-        - if: win
-          then:
-            - if not exist "%PREFIX%\bin" mkdir "%PREFIX%\bin"
-            - copy %CARGO_TARGET_DIR%\release\pixi-build-cmake.exe %PREFIX%\bin\
-            - copy %CARGO_TARGET_DIR%\release\pixi-build-mojo.exe %PREFIX%\bin\
-            - copy %CARGO_TARGET_DIR%\release\pixi-build-python.exe %PREFIX%\bin\
-            - copy %CARGO_TARGET_DIR%\release\pixi-build-rattler-build.exe %PREFIX%\bin\
-            - copy %CARGO_TARGET_DIR%\release\pixi-build-rust.exe %PREFIX%\bin\
-        - cargo-bundle-licenses --format yaml --output $PREFIX/THIRDPARTY.yml
-
 outputs:
+  # === Staging output for Rust backends (builds once, cached for all Rust backend packages) ===
+  - staging:
+      name: rust-backends-build
+    source:
+      - path: ../../..
+    requirements:
+      build:
+        - ${{ compiler("rust") }}
+        - ${{ stdlib("c") }}
+        - cargo-bundle-licenses
+        - cargo-auditable
+        - sccache
+      host:
+        - pkg-config
+        - libzlib
+        - liblzma
+        - if: unix
+          then: openssl
+    build:
+      script:
+        env:
+          CARGO_PROFILE_RELEASE_STRIP: symbols
+          CARGO_PROFILE_RELEASE_LTO: fat
+        content:
+          - if: osx and x86_64
+            then:
+              # use the default linker for osx-64 as we are hitting a bug with the conda-forge linker
+              # https://github.com/rust-lang/rust/issues/140686
+              - unset CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER
+          - if: unix
+            then:
+              - export RUSTC_WRAPPER=sccache
+              - export OPENSSL_DIR="$PREFIX"
+              - export CARGO_TARGET_DIR=${{ SRC_DIR }}/../../../target-cache-rust-backends
+          - if: win
+            then:
+              - set RUSTC_WRAPPER=sccache
+              - set "CARGO_TARGET_DIR=${{ SRC_DIR }}/../../../target-cache-rust-backends"
+          # Build all Rust backends at once
+          - cargo auditable build --locked --release --bins -p pixi-build-cmake -p pixi-build-mojo -p pixi-build-python -p pixi-build-rattler-build -p pixi-build-rust
+          # Install binaries to prefix
+          - if: unix
+            then:
+              - TARGET=${TARGET:-$(rustc -vV | grep "host:" | awk '{print $2}')}
+              - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-cmake $PREFIX/bin/pixi-build-cmake
+              - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-mojo $PREFIX/bin/pixi-build-mojo
+              - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-python $PREFIX/bin/pixi-build-python
+              - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-rattler-build $PREFIX/bin/pixi-build-rattler-build
+              - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-rust $PREFIX/bin/pixi-build-rust
+          - if: win
+            then:
+              - if not exist "%PREFIX%\bin" mkdir "%PREFIX%\bin"
+              - copy %CARGO_TARGET_DIR%\release\pixi-build-cmake.exe %PREFIX%\bin\
+              - copy %CARGO_TARGET_DIR%\release\pixi-build-mojo.exe %PREFIX%\bin\
+              - copy %CARGO_TARGET_DIR%\release\pixi-build-python.exe %PREFIX%\bin\
+              - copy %CARGO_TARGET_DIR%\release\pixi-build-rattler-build.exe %PREFIX%\bin\
+              - copy %CARGO_TARGET_DIR%\release\pixi-build-rust.exe %PREFIX%\bin\
+          - cargo-bundle-licenses --format yaml --output $PREFIX/THIRDPARTY.yml
+
   # === API Version (metadata only) ===
   - package:
       name: pixi-build-api-version
@@ -76,7 +83,9 @@ outputs:
 
     build:
       noarch: generic
-      script:
+
+    source:
+      - path: ../../..
 
     about:
       homepage: https://github.com/prefix-dev/pixi-build-backends
@@ -93,23 +102,22 @@ outputs:
   - package:
       name: pixi-build-cmake
       version: ${{ cmake_version }}
-
+    inherit: rust-backends-build
     build:
       files:
         - bin/pixi-build-cmake
         - bin/pixi-build-cmake.exe
         - THIRDPARTY.yml
-
+      script:
+        - cp ${{ PREFIX }}/THIRDPARTY.yml .
     requirements:
       run:
         - pixi-build-api-version >=4,<5
-
     tests:
       - script: pixi-build-cmake --help
       - package_contents:
           bin:
             - pixi-build-cmake
-
     about:
       homepage: https://github.com/prefix-dev/pixi-build-backends
       summary: A pixi build backend to build CMake based packages.
@@ -126,23 +134,23 @@ outputs:
   - package:
       name: pixi-build-mojo
       version: ${{ mojo_version }}
-
+    inherit: rust-backends-build
     build:
       files:
         - bin/pixi-build-mojo
         - bin/pixi-build-mojo.exe
+        - LICENSE
         - THIRDPARTY.yml
-
+      script:
+        - cp ${{ PREFIX }}/THIRDPARTY.yml .
     requirements:
       run:
         - pixi-build-api-version >=4,<5
-
     tests:
       - script: pixi-build-mojo --help
       - package_contents:
           bin:
             - pixi-build-mojo
-
     about:
       homepage: https://github.com/prefix-dev/pixi-build-backends
       summary: A pixi build backend to build Mojo packages.
@@ -159,23 +167,23 @@ outputs:
   - package:
       name: pixi-build-python
       version: ${{ python_backend_version }}
-
+    inherit: rust-backends-build
     build:
       files:
         - bin/pixi-build-python
         - bin/pixi-build-python.exe
+        - LICENSE
         - THIRDPARTY.yml
-
+      script:
+        - cp ${{ PREFIX }}/THIRDPARTY.yml .
     requirements:
       run:
         - pixi-build-api-version >=4,<5
-
     tests:
       - script: pixi-build-python --help
       - package_contents:
           bin:
             - pixi-build-python
-
     about:
       homepage: https://github.com/prefix-dev/pixi-build-backends
       summary: A pixi build backend to build Python packages.
@@ -193,23 +201,23 @@ outputs:
   - package:
       name: pixi-build-rattler-build
       version: ${{ rattler_build_version }}
-
+    inherit: rust-backends-build
     build:
       files:
         - bin/pixi-build-rattler-build
         - bin/pixi-build-rattler-build.exe
+        - LICENSE
         - THIRDPARTY.yml
-
+      script:
+        - cp ${{ PREFIX }}/THIRDPARTY.yml .
     requirements:
       run:
         - pixi-build-api-version >=4,<5
-
     tests:
       - script: pixi-build-rattler-build --help
       - package_contents:
           bin:
             - pixi-build-rattler-build
-
     about:
       homepage: https://github.com/prefix-dev/pixi-build-backends
       summary: A pixi build backend to build recipe.yaml files.
@@ -227,23 +235,23 @@ outputs:
   - package:
       name: pixi-build-rust
       version: ${{ rust_version }}
-
+    inherit: rust-backends-build
     build:
       files:
         - bin/pixi-build-rust
         - bin/pixi-build-rust.exe
+        - LICENSE
         - THIRDPARTY.yml
-
+      script:
+        - cp ${{ PREFIX }}/THIRDPARTY.yml .
     requirements:
       run:
         - pixi-build-api-version >=4,<5
-
     tests:
       - script: pixi-build-rust --help
       - package_contents:
           bin:
             - pixi-build-rust
-
     about:
       homepage: https://github.com/prefix-dev/pixi-build-backends
       summary: A pixi build backend to build Rust packages.
@@ -261,6 +269,9 @@ outputs:
   - package:
       name: py-pixi-build-backend
       version: ${{ py_pixi_build_backend_version }}
+
+    source:
+      - path: ../../..
 
     requirements:
       build:
@@ -285,8 +296,17 @@ outputs:
 
     build:
       script:
-        - cd pixi-build-backends/py-pixi-build-backend
-        - pip install . -vv --no-build-isolation
+        content:
+          - if: unix
+            then:
+              - export RUSTC_WRAPPER=sccache
+              - export CARGO_TARGET_DIR=$SRC_DIR/../../../target-cache-py-pixi-build-backends
+          - if: win
+            then:
+              - set RUSTC_WRAPPER=sccache
+              - set "CARGO_TARGET_DIR=%SRC_DIR%\..\..\..\target-cache-py-pixi-build-backends"
+          - cd pixi-build-backends/py-pixi-build-backend
+          - pip install . -vv --no-build-isolation
       python:
         version_independent: true
       files:
@@ -315,6 +335,9 @@ outputs:
   - package:
       name: pixi-build-ros
       version: ${{ ros_version }}
+
+    source:
+      - path: ../../..
 
     requirements:
       host:

@@ -29,6 +29,8 @@ jobs:
       contents: read
     env:
       REPO_NAME: "prefix-dev/pixi"
+      SCCACHE_GHA_ENABLED: "true"
+      ACTIONS_CACHE_SERVICE_V2: on
     strategy:
       matrix:
         include:
@@ -53,6 +55,12 @@ jobs:
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           environments: backends-release
+      - name: Configure sccache
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
       - name: Enable long paths (Windows)
         if: matrix.os == 'windows-latest'
         run: git config --global core.longpaths true
@@ -68,6 +76,10 @@ jobs:
           RATTLER_BUILD_COLOR: "always"
         run: |
           pixi run -e backends-release build-backend-packages ${{ matrix.target }}
+
+      - name: Show sccache stats
+        shell: bash
+        run: pixi run -e backends-release sccache --stop-server
 
       - uses: actions/attest@daf44fb950173508f38bd2406030372c1d1162b1 # v3.0.0
         id: attest
