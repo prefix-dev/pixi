@@ -35,7 +35,8 @@ tests: []
 about:
   homepage: "https://github.com/xtensor-stack/xtensor"
   license: BSD-3-Clause
-  license_file: LICENSE
+  license_file:
+    - LICENSE
   summary: The C++ tensor algebra library
   description: Multi dimensional arrays with broadcasting and lazy computing
   documentation: "https://xtensor.readthedocs.io"
