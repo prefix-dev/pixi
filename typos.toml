@@ -5,6 +5,7 @@ extend-exclude = [
   "**/*.snap",
   "tests/data/mapping_files/*",
   "examples/**/**.ipynb",
+  "robostack.yaml",
 ]
 ignore-hidden = false
 

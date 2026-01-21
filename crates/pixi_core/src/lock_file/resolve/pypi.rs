@@ -10,6 +10,8 @@ use std::{
     sync::Arc,
 };
 
+use once_cell::sync::OnceCell;
+
 use futures::FutureExt;
 
 use chrono::{DateTime, Utc};
@@ -18,7 +20,6 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
-use pixi_git::git::GitReference;
 use pixi_manifest::{
     EnvironmentName, SolveStrategy, SystemRequirements, pypi::pypi_options::PypiOptions,
 };
@@ -27,9 +28,10 @@ use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_uv_conversions::{
     ConversionError, as_uv_req, configure_insecure_hosts_for_tls_bypass,
-    convert_uv_requirements_to_pep508, into_pinned_git_spec, pypi_options_to_build_options,
-    pypi_options_to_index_locations, to_exclude_newer, to_index_strategy, to_normalize,
-    to_prerelease_mode, to_requirements, to_uv_normalize, to_uv_version, to_version_specifiers,
+    convert_uv_requirements_to_pep508, into_pinned_git_spec, into_uv_git_reference,
+    into_uv_git_sha, pypi_options_to_build_options, pypi_options_to_index_locations,
+    to_exclude_newer, to_index_strategy, to_normalize, to_prerelease_mode, to_requirements,
+    to_uv_normalize, to_uv_version, to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -41,9 +43,8 @@ use rattler_lock::{
 };
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
-use uv_client::{
-    BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder,
-};
+use uv_cache_key::RepositoryUrl;
+use uv_client::{Connectivity, FlatIndexClient, RegistryClient};
 use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
@@ -51,10 +52,8 @@ use uv_distribution_types::{
     IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
     SourceDist, ToUrlError,
 };
-use uv_git_types::GitUrl;
-use uv_pep508::VerbatimUrl;
+use uv_git::RepositoryReference;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
-use uv_redacted::DisplaySafeUrl;
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
@@ -233,6 +232,10 @@ pub enum SolveError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LookAhead(Box<dyn miette::Diagnostic + Send + Sync + 'static>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Locking(Box<dyn miette::Diagnostic + Send + Sync + 'static>),
 }
 
 /// Creates a custom `SolveError` from a `ResolveError`.
@@ -347,14 +350,49 @@ pub async fn resolve_pypi(
         tracing::info!("there are no python packages installed by conda");
     }
 
-    let mut requirements = dependencies
-        .into_iter()
-        .flat_map(|(name, req)| {
-            req.into_iter()
-                .map(move |r| as_uv_req(&r, name.as_ref(), project_root))
+    // Build a lookup map of original git references before consuming dependencies.
+    // This is used later to preserve branch/tag info in the lock file that uv normalizes away.
+    let original_git_references = dependencies
+        .iter()
+        .filter_map(|(name, specs)| {
+            specs.iter().find_map(|spec| {
+                spec.source
+                    .as_git()
+                    .and_then(|git_spec| git_spec.rev.clone())
+                    .map(|rev| (name.clone(), rev))
+            })
         })
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
+        .collect();
+
+    // Pre-populate the git resolver with locked git references.
+    // This ensures that when uv resolves git dependencies, it will find the cached commit
+    // and not panic in `url_to_precise` function.
+    for (package_data, _) in locked_pypi_packages {
+        if let Some(location) = package_data.location.as_url()
+            && LockedGitUrl::is_locked_git_url(location)
+        {
+            let locked_url = LockedGitUrl::new(location.clone());
+            if let Ok(pinned_git_spec) = locked_url.to_pinned_git_spec() {
+                // Convert pixi types to uv types and insert into the git resolver
+                // pixi_spec::GitReference -> pixi_git::git::GitReference -> uv_git_types::GitReference
+                let pixi_git_ref = pinned_git_spec.source.reference.clone().into();
+
+                let uv_reference = into_uv_git_reference(pixi_git_ref);
+                let uv_sha = into_uv_git_sha(pinned_git_spec.source.commit);
+
+                let display_safe_url = pinned_git_spec.git.clone().into();
+
+                let repository_url = RepositoryUrl::new(&display_safe_url);
+                let reference = RepositoryReference {
+                    url: repository_url,
+                    reference: uv_reference,
+                };
+
+                tracing::debug!("pre-populating git resolver: {:?} -> {}", reference, uv_sha);
+                context.shared_state.git().insert(reference, uv_sha);
+            }
+        }
+    }
 
     // Determine the python interpreter that is installed as part of the conda
     // packages.
@@ -370,6 +408,16 @@ pub async fn resolve_pypi(
 
     // Construct the marker environment for the target platform
     let marker_environment = determine_marker_environment(platform, python_record.as_ref())?;
+
+    let requirements = dependencies
+        .into_iter()
+        .flat_map(|(name, req)| {
+            req.into_iter()
+                .map(move |r| as_uv_req(&r, name.as_ref(), project_root))
+        })
+        .filter_ok(|uv_req| uv_req.evaluate_markers(Some(&marker_environment), &uv_req.extras))
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
 
     // Determine the tags for this particular solve.
     let tags = get_pypi_tags(platform, &system_requirements, python_record.as_ref())?;
@@ -406,24 +454,12 @@ pub async fn resolve_pypi(
         &index_locations,
     );
 
-    let base_client_builder = BaseClientBuilder::default()
-        .allow_insecure_host(allow_insecure_hosts)
-        .markers(&marker_environment)
-        .keyring(context.keyring_provider)
-        .connectivity(Connectivity::Online)
-        .native_tls(context.use_native_tls)
-        .extra_middleware(context.extra_middleware.clone());
-
-    let mut uv_client_builder =
-        RegistryClientBuilder::new(base_client_builder, context.cache.clone())
-            .index_locations(index_locations.clone())
-            .index_strategy(index_strategy);
-
-    for p in &context.proxies {
-        uv_client_builder = uv_client_builder.proxy(p.clone())
-    }
-
-    let registry_client = Arc::new(uv_client_builder.build());
+    let registry_client = context.build_registry_client(
+        allow_insecure_hosts,
+        &index_locations,
+        index_strategy,
+        Some(&marker_environment),
+    );
 
     let build_options = pypi_options_to_build_options(
         &pypi_options.no_build.clone().unwrap_or_default(),
@@ -519,6 +555,7 @@ pub async fn resolve_pypi(
     .with_concurrency(context.concurrency);
 
     let lazy_build_dispatch_dependencies = LazyBuildDispatchDependencies::default();
+    let last_error = Arc::new(OnceCell::new());
     let lazy_build_dispatch = LazyBuildDispatch::new(
         build_params,
         prefix_updater,
@@ -529,6 +566,7 @@ pub async fn resolve_pypi(
         &lazy_build_dispatch_dependencies,
         None,
         disallow_install_conda_prefix,
+        Arc::clone(&last_error),
     );
 
     // Constrain the conda packages to the specific python packages
@@ -572,9 +610,6 @@ pub async fn resolve_pypi(
 
         #[error(transparent)]
         GitUrlParse(#[from] uv_git_types::GitUrlParseError),
-
-        #[error("{0}")]
-        Other(miette::ErrReport),
     }
 
     // Create preferences from the locked pypi packages
@@ -597,69 +632,26 @@ pub async fn resolve_pypi(
                 origin: None,
             };
 
-            // When iterating over locked packages,
-            // instead of adding git requirements as preferences
-            // we enrich previous defined requirements in the `requirements` list
-            // as they have been pinned to a precise commit
-            // This will help the resolver to pick the commit that we already have locked
-            // instead of updating to a newer commit that also matches the requirement.
-            if let Some(location) = package_data.location.as_url() {
-                // now check if it's a git url
-                if LockedGitUrl::is_locked_git_url(location) {
-                    // we need to parse back `LockedGitUrl` in order to get the `PinnedGitSpec`
-                    // then we will precise commit to set for the `GitUrl`
-                    // that will be used in the `RequirementSource::Git` below
-                    let git_locked_url = LockedGitUrl::from(location.clone());
-                    let pinned_git_spec = git_locked_url
-                        .to_pinned_git_spec()
-                        .map_err(PixiPreferencesError::Other)?;
-                    // we need to create VerbatimUrl from the original location
-                    let verbatim_url = VerbatimUrl::from(location.clone());
-
-                    // but the display safe url should come from the `PinnedGitSpec` url
-                    // which don't have anymore git+ prefix
-                    let display_safe = DisplaySafeUrl::from(pinned_git_spec.git.clone());
-
-                    let git_oid =
-                        uv_git_types::GitOid::from_str(&pinned_git_spec.source.commit.to_string())?;
-
-                    let git_url = GitUrl::try_from(display_safe)?.with_precise(git_oid);
-
-                    let constraint_source = RequirementSource::Git {
-                        git: git_url,
-                        subdirectory: None,
-                        url: verbatim_url,
-                    };
-
-                    // find this requirements in dependencies and skip adding it as preference
-                    let req_from_dep = requirements.iter_mut().find(|r| r.name == requirement.name);
-                    if let Some(req) = req_from_dep {
-                        // we need to update the requirement source in the requirements list
-                        // to use the precise git commit
-                        // only if the requirements do not already have a source set with something specific
-                        if let RequirementSource::Git { git, .. } = &req.source {
-                                // only update if the git url does not already have a precise commit
-                                if git.precise().is_none() && !GitReference::looks_like_commit_hash(git.reference().as_rev()) {
-                                    tracing::debug!(
-                                        "updating requirement source to precise git commit for requirement: {:?}",
-                                        &req
-                                    );
-                                    req.source = constraint_source.clone();
-                                }
-
-                            }
-                    }
-                }
-                Ok(None)
-            } else {
-                let named = uv_requirements_txt::RequirementsTxtRequirement::Named(requirement);
-                let entry = uv_requirements_txt::RequirementEntry {
-                    requirement: named,
-                    hashes: Default::default(),
-                };
-
-                Ok(Preference::from_entry(entry)?)
+            // For git packages, we don't add them as preferences.
+            // because they are resolved based on the reference (branch/tag/rev) in the manifest.
+            // This matches how uv handles git dependencies - it doesn't try to pin them via preferences.
+            // The git resolver cache (pre-populated above) ensures the locked commit is preferred.
+            if let Some(location) = package_data.location.as_url()
+                && LockedGitUrl::is_locked_git_url(location)
+            {
+                // Skip git packages - they'll be resolved based on manifest reference
+                // with the cached commit from the git resolver
+                return Ok(None);
             }
+
+            // Create preference for registry and URL packages
+            let named = uv_requirements_txt::RequirementsTxtRequirement::Named(requirement);
+            let entry = uv_requirements_txt::RequirementEntry {
+                requirement: named,
+                hashes: Default::default(),
+            };
+
+            Ok(Preference::from_entry(entry)?)
         })
         .filter_map(|pref| pref.transpose())
         .collect::<Result<Vec<_>, PixiPreferencesError>>()
@@ -763,18 +755,45 @@ pub async fn resolve_pypi(
             UvReporterOptions::new().with_existing(pb.clone()),
         ));
 
-        resolver
+        let resolution = resolver
             .resolve()
             .await
-            .map_err(|e| create_solve_error(e, &conda_python_packages))
+            .map_err(|e| create_solve_error(e, &conda_python_packages))?;
+
+        let resolution = Resolution::from(resolution);
+
+        // Print the overridden package requests
+        print_overridden_requests(package_requests.borrow().deref());
+
+        // Print any diagnostics
+        for diagnostic in resolution.diagnostics() {
+            tracing::warn!("{}", diagnostic.message());
+        }
+
+        let locked_packages = lock_pypi_packages(
+            conda_python_packages,
+            &lazy_build_dispatch,
+            &registry_client,
+            resolution,
+            &context.capabilities,
+            context.concurrency.downloads,
+            project_root,
+            &original_git_references,
+        )
+        .await
+        .map_err(|e| SolveError::Locking(e.into()))?;
+
+        let conda_task = lazy_build_dispatch.conda_task;
+
+        Ok::<_, SolveError>((locked_packages, conda_task))
     });
 
     // We try to distinguish between build dispatch panics and any other panics that occur
-    let resolution = match resolution_future.catch_unwind().await {
+    let (locked_packages, conda_task) = match resolution_future.catch_unwind().await {
         Ok(result) => result?,
         Err(panic_payload) => {
-            // Try to get the stored initialization error from the lazy build dispatch
-            if let Some(stored_error) = lazy_build_dispatch.last_initialization_error() {
+            // Try to get the stored initialization error from the last_error holder
+            if let Some(stored_error) = last_error.get() {
                 return Err(SolveError::BuildDispatchPanic {
                     message: format!("{stored_error}"),
                 }
@@ -796,29 +815,6 @@ pub async fn resolve_pypi(
             }
         }
     };
-    let resolution = Resolution::from(resolution);
-
-    // Print the overridden package requests
-    print_overridden_requests(package_requests.borrow().deref());
-
-    // Print any diagnostics
-    for diagnostic in resolution.diagnostics() {
-        tracing::warn!("{}", diagnostic.message());
-    }
-
-    // Collect resolution into locked packages
-    let locked_packages = lock_pypi_packages(
-        conda_python_packages,
-        &lazy_build_dispatch,
-        &registry_client,
-        resolution,
-        &context.capabilities,
-        context.concurrency.downloads,
-        project_root,
-    )
-    .await?;
-
-    let conda_task = lazy_build_dispatch.conda_task;
 
     Ok((locked_packages, conda_task))
 }
@@ -937,6 +933,7 @@ fn get_url_or_path(
 }
 
 /// Create a vector of locked packages from a resolution
+#[allow(clippy::too_many_arguments)]
 async fn lock_pypi_packages(
     conda_python_packages: CondaPythonPackages,
     pixi_build_dispatch: &LazyBuildDispatch<'_>,
@@ -945,6 +942,7 @@ async fn lock_pypi_packages(
     index_capabilities: &IndexCapabilities,
     concurrent_downloads: usize,
     abs_project_root: &Path,
+    original_git_references: &HashMap<uv_normalize::PackageName, pixi_spec::GitReference>,
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     let database =
@@ -1064,8 +1062,15 @@ async fn lock_pypi_packages(
                             (direct_url.into(), hash, false)
                         }
                         SourceDist::Git(git) => {
+                            // Look up the original git reference from the manifest dependencies
+                            // to preserve branch/tag info that uv normalizes away
+                            let package_name = git.name.clone();
+                            let original_reference =
+                                original_git_references.get(&package_name).cloned();
+
                             // convert resolved source dist into a pinned git spec
-                            let pinned_git_spec = into_pinned_git_spec(git.clone());
+                            let pinned_git_spec =
+                                into_pinned_git_spec(git.clone(), original_reference);
                             (
                                 pinned_git_spec.into_locked_git_url().to_url().into(),
                                 hash,

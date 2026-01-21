@@ -5,6 +5,7 @@ use pixi_record::LockedGitUrl;
 use pixi_uv_conversions::{to_parsed_git_url, to_uv_version};
 use rattler_lock::{PypiPackageData, UrlOrPath};
 use url::Url;
+use uv_cache_info::CacheInfoError;
 use uv_distribution_types::{InstalledDist, InstalledDistKind};
 use uv_pypi_types::{ParsedGitUrl, ParsedUrlError};
 
@@ -23,8 +24,8 @@ pub enum NeedsReinstallError {
     ParsedUrl(#[from] ParsedUrlError),
     #[error("error converting to parsed git url {0}")]
     PixiGitUrl(String),
-    #[error("while checking freshness {0}")]
-    FreshnessError(std::io::Error),
+    #[error("while checking freshness: {0}")]
+    FreshnessError(#[from] CacheInfoError),
 }
 
 /// Check if a package needs to be reinstalled
@@ -115,9 +116,7 @@ pub(crate) fn need_reinstall(
                             if url == locked_url {
                                 // Okay so these are the same, but we need to check if the cache is newer
                                 // than the source directory
-                                if !check_url_freshness(&url, installed)
-                                    .map_err(NeedsReinstallError::FreshnessError)?
-                                {
+                                if !check_url_freshness(&url, installed)? {
                                     return Ok(ValidateCurrentInstall::Reinstall(
                                         NeedReinstall::SourceDirectoryNewerThanCache,
                                     ));
@@ -196,9 +195,7 @@ pub(crate) fn need_reinstall(
 
                     if locked_url == installed_url {
                         // Check cache freshness
-                        if !check_url_freshness(&locked_url, installed)
-                            .map_err(NeedsReinstallError::FreshnessError)?
-                        {
+                        if !check_url_freshness(&locked_url, installed)? {
                             return Ok(ValidateCurrentInstall::Reinstall(
                                 NeedReinstall::ArchiveDistNewerThanCache,
                             ));

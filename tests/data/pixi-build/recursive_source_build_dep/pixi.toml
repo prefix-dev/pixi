@@ -1,0 +1,13 @@
+[workspace]
+authors = ["Julian Hofer <julianhofer@gnome.org>"]
+channels = ["https://prefix.dev/conda-forge"]
+name = "recursive-source-build-dep"
+platforms = ["linux-64", "osx-arm64", "win-64"]
+preview = ["pixi-build"]
+version = "0.1.0"
+
+[tasks]
+start = "package-a"
+
+[dependencies]
+package_a = { path = "package_a" }

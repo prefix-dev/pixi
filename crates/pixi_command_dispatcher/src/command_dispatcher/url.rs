@@ -64,6 +64,7 @@ impl CommandDispatcher {
             url: pinned_url_spec.url.clone(),
             md5: pinned_url_spec.md5,
             sha256: Some(pinned_url_spec.sha256),
+            subdirectory: pinned_url_spec.subdirectory.clone(),
         };
         // Fetch the url in the background
         let fetch = self
@@ -71,13 +72,14 @@ impl CommandDispatcher {
             .await
             .map_err(|err| err.map(SourceCheckoutError::from))?;
 
-        // TODO: Similar to TODO above.
-        // let path = if let Some(subdir) = url_spec.source.subdirectory.as_ref() {
-        //     fetch.path().join(subdir)
-        // } else {
-        //     fetch.into_path()
-        // };
-        let path = fetch.into_path();
+        let path = if !pinned_url_spec.subdirectory.is_empty() {
+            fetch
+                .dir
+                .join(pinned_url_spec.subdirectory.as_path())
+                .into_assume_dir()
+        } else {
+            fetch.into_path()
+        };
 
         Ok(SourceCheckout {
             path: path.into(),

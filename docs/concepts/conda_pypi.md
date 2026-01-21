@@ -19,6 +19,7 @@ The simplified process is as follows:
 
 
 ## Tool Comparison
+
 Here is a non-exhaustive comparison of the features of conda and PyPI ecosystems.
 
 | Feature | Conda | PyPI |

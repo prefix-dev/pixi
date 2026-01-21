@@ -38,7 +38,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025b-h78e105d_0.conda
       - conda: .
       - conda: packages/cpp_math
-        subdir: linux-64
+        build: hb0f4dca_0
       osx-64:
       - conda: https://prefix.dev/conda-forge/osx-64/bzip2-1.0.8-hfdf4475_7.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.8.3-hbd8a1cb_0.conda
@@ -62,7 +62,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025b-h78e105d_0.conda
       - conda: .
       - conda: packages/cpp_math
-        subdir: osx-64
+        build: h0dc7051_0
       osx-arm64:
       - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-h99b78c6_7.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.8.3-hbd8a1cb_0.conda
@@ -87,7 +87,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025b-h78e105d_0.conda
       - conda: .
       - conda: packages/cpp_math
-        subdir: osx-arm64
+        build: h60d57d3_0
       win-64:
       - conda: https://prefix.dev/conda-forge/win-64/bzip2-1.0.8-h2466b09_7.conda
       - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2025.8.3-h4c7d964_0.conda
@@ -114,7 +114,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
       - conda: .
       - conda: packages/cpp_math
-        build: h9352c13_0
+        build: h659f713_0
 packages:
 - conda: https://prefix.dev/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
   sha256: fe51de6107f9edc7aa4f786a70f4a883943bc9d39b3bb7307c04c41410990726
@@ -193,42 +193,46 @@ packages:
 - conda: packages/cpp_math
   name: cpp_math
   version: 0.1.0
-  build: h9352c13_0
+  build: h0dc7051_0
+  subdir: osx-64
+  variants:
+    target_platform: osx-64
+  depends:
+  - libcxx >=21
+  - python_abi 3.12.* *_cp312
+- conda: packages/cpp_math
+  name: cpp_math
+  version: 0.1.0
+  build: h60d57d3_0
+  subdir: osx-arm64
+  variants:
+    target_platform: osx-arm64
+  depends:
+  - libcxx >=21
+  - python_abi 3.12.* *_cp312
+- conda: packages/cpp_math
+  name: cpp_math
+  version: 0.1.0
+  build: h659f713_0
   subdir: win-64
   variants:
-    cxx_compiler: vs2019
+    cxx_compiler: vs2022
+    target_platform: win-64
   depends:
-  - vc >=14.2,<15
-  - vc14_runtime >=14.29.30139
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
   - ucrt >=10.0.20348.0
   - python_abi 3.14.* *_cp314
 - conda: packages/cpp_math
   name: cpp_math
   version: 0.1.0
-  build: hbf21a9e_0
+  build: hb0f4dca_0
   subdir: linux-64
-  variants: {}
+  variants:
+    target_platform: linux-64
   depends:
   - libstdcxx >=15
   - libgcc >=15
-  - python_abi 3.12.* *_cp312
-- conda: packages/cpp_math
-  name: cpp_math
-  version: 0.1.0
-  build: hbf21a9e_0
-  subdir: osx-64
-  variants: {}
-  depends:
-  - libcxx >=21
-  - python_abi 3.12.* *_cp312
-- conda: packages/cpp_math
-  name: cpp_math
-  version: 0.1.0
-  build: hbf21a9e_0
-  subdir: osx-arm64
-  variants: {}
-  depends:
-  - libcxx >=21
   - python_abi 3.12.* *_cp312
 - conda: https://prefix.dev/conda-forge/osx-arm64/icu-75.1-hfee45f7_0.conda
   sha256: 9ba12c93406f3df5ab0a43db8a4b4ef67a5871dfd401010fbe29b218b2cbe620

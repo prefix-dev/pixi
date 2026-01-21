@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use pep508_rs::MarkerTree;
 use pixi_cli::cli_config::GitRev;
 use pixi_consts::consts;
 use pixi_core::{DependencyType, Workspace};
@@ -256,6 +257,7 @@ async fn add_functionality_os() {
 
 /// Test the `pixi add --pypi` functionality (using local mocks)
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_pypi_functionality() {
     use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 
@@ -544,7 +546,8 @@ index-url = "{index_url}"
                         source: PixiPypiSource::Registry {
                             version: VersionOrStar::from_str("==24.8.0").unwrap(),
                             index: None,
-                        }
+                        },
+                        env_markers: MarkerTree::default(),
                     }
                 );
             }

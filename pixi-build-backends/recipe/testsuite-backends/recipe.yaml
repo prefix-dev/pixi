@@ -1,0 +1,207 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/prefix-dev/recipe-format/main/schema.json
+context:
+  name: pixi-build-backends
+  version: 0.0.0
+
+recipe:
+  name: ${{ name }}
+  version: ${{ version }}
+
+cache:
+  # source:
+  #   path: ../..
+  requirements:
+    build:
+      - ${{ compiler("rust") }}
+      - ${{ stdlib("c") }}
+      - python
+    host:
+      - liblzma
+
+  build:
+    script:
+      - if: win
+        then: set "CARGO_TARGET_DIR=%RECIPE_DIR%\..\..\target/channel-build-cache"
+        else: export CARGO_TARGET_DIR=${RECIPE_DIR}/../../target/channel-build-cache
+      - if: win
+        then: if not exist "%CARGO_TARGET_DIR%" mkdir "%CARGO_TARGET_DIR%"
+        else: mkdir -p $CARGO_TARGET_DIR
+      - if: win
+        then: set "CARGO_HOME=%RECIPE_DIR%\..\..\target/channel-build-cache-home"
+        else: export CARGO_HOME=$(realpath ${RECIPE_DIR}/../../target/channel-build-cache-home)
+      - if: win
+        then: cd "%RECIPE_DIR%\..\.."
+        else: cd $RECIPE_DIR/../..
+      - cargo build --profile ci --locked --bins
+      - python scripts/copy-backends.py
+
+outputs:
+  - package:
+      name: pixi-build-api-version
+      version: 4
+
+    build:
+      script:
+
+  - package:
+      name: pixi-build-cmake
+
+    build:
+      files:
+        - bin/pixi-build-cmake
+        - bin/pixi-build-cmake.exe
+
+    requirements:
+      run:
+        - pixi-build-api-version >=4,<5
+
+    tests:
+      - script:
+          - pixi-build-cmake --help
+
+  - package:
+      name: pixi-build-mojo
+
+    build:
+      files:
+        - bin/pixi-build-mojo
+        - bin/pixi-build-mojo.exe
+
+    requirements:
+      run:
+        - pixi-build-api-version >=4,<5
+
+    tests:
+      - script:
+          - pixi-build-mojo --help
+
+  - package:
+      name: pixi-build-python
+
+    build:
+      files:
+        - bin/pixi-build-python
+        - bin/pixi-build-python.exe
+
+    requirements:
+      run:
+        - pixi-build-api-version >=4,<5
+
+    tests:
+      - script:
+          - pixi-build-python --help
+
+  - package:
+      name: pixi-build-rattler-build
+
+    build:
+      files:
+        - bin/pixi-build-rattler-build
+        - bin/pixi-build-rattler-build.exe
+
+    requirements:
+      run:
+        - pixi-build-api-version >=4,<5
+
+    tests:
+      - script:
+          - pixi-build-rattler-build --help
+
+  - package:
+      name: pixi-build-rust
+
+    build:
+      files:
+        - bin/pixi-build-rust
+        - bin/pixi-build-rust.exe
+
+    requirements:
+      run:
+        - pixi-build-api-version >=4,<5
+
+    tests:
+      - script:
+          - pixi-build-rust --help
+
+  - package:
+      name: pixi-build-ros
+
+    requirements:
+      host:
+        - python ${{ python_min }}.*
+        - hatchling
+        - pip
+      run:
+        - python >=${{ python_min }}
+        - rosdistro
+        - catkin_pkg
+        - pydantic
+        - pyyaml
+        - py-rattler
+        - typing-extensions
+        - py-pixi-build-backend
+    build:
+      script:
+        - if: win
+          then: cd "%RECIPE_DIR%\..\.."
+          else: cd $RECIPE_DIR/../..
+        - pip install backends/pixi-build-ros -vv --no-build-isolation
+      noarch: python
+      python:
+        entry_points:
+          - pixi-build-ros = pixi_build_ros.main:main
+      files:
+        exclude:
+          - python-scripts/*
+          - bin/*
+    tests:
+      - script: pixi-build-ros --help
+
+  - package:
+      name: py-pixi-build-backend
+
+    requirements:
+      build:
+        - if: build_platform != target_platform
+          then:
+            - python ${{ python_min }}.*
+            - cross-python_${{ target_platform }}
+            - maturin >=1.2.2,<2
+        - ${{ compiler('rust') }}
+        - ${{ stdlib('c') }}
+      host:
+        - python ${{ python_min }}.*
+        - python-abi3
+        - maturin >=1.2.2,<2
+        - pip
+      run:
+        - python >=${{ python_min }}
+        - pixi-build-api-version >=4,<5
+      ignore_run_exports:
+        from_package:
+          - cross-python_${{ target_platform }}
+
+    build:
+      script:
+        - if: win
+          then: set "CARGO_TARGET_DIR=%RECIPE_DIR%\..\..\target/channel-build-cache"
+          else: export CARGO_TARGET_DIR=${RECIPE_DIR}/../../target/channel-build-cache
+        - if: win
+          then: set "CARGO_HOME=%RECIPE_DIR%\..\..\target/channel-build-cache-home"
+          else: export CARGO_HOME=$(realpath ${RECIPE_DIR}/../../target/channel-build-cache-home)
+        - if: win
+          then: cd "%RECIPE_DIR%\..\..\py-pixi-build-backend"
+          else: cd $RECIPE_DIR/../../py-pixi-build-backend
+        - pip install . -vv --no-build-isolation --config-settings=build-args=--profile=ci  --config-settings=build-args=--locked
+      files:
+        exclude:
+          - python-scripts/*
+          - bin/*
+
+      python:
+        version_independent: true
+
+    tests:
+      - python:
+          imports:
+            - pixi_build_backend

@@ -22,7 +22,7 @@ use pixi_command_dispatcher::{
 };
 use pixi_config::default_channel_config;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
-use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
+use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec, Subdirectory, UrlSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
 use pixi_url::UrlError;
@@ -75,6 +75,22 @@ fn cargo_workspace_dir() -> &'static Path {
 /// Returns the path to the `tests/data/workspaces` directory in the repository.
 fn workspaces_dir() -> PathBuf {
     cargo_workspace_dir().join("tests/data/workspaces")
+}
+
+/// Recursively copies a directory from `src` to `dst`.
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if src_path.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
 }
 
 /// Returns the default build environment to use for tests.
@@ -137,7 +153,7 @@ pub async fn simple_test() {
                 GitSpec {
                     git: git_repo.url.parse().unwrap(),
                     rev: Some(GitReference::Rev(git_repo.commits[0].clone())),
-                    subdirectory: Some(String::from("recipe")),
+                    subdirectory: Subdirectory::try_from("recipe").unwrap(),
                 }
                 .into(),
             )]),
@@ -266,7 +282,7 @@ pub async fn instantiate_backend_without_compatible_api_version_cancels_duplicat
         dispatcher.instantiate_tool_environment(spec),
     );
 
-    // Exactly one result should be a failure and the other should be cancelled.
+    // Both results should be failures since errors are now cloned and sent to all channels.
     let is_cancelled = |r: &Result<
         _,
         CommandDispatcherError<pixi_command_dispatcher::InstantiateToolEnvironmentError>,
@@ -280,10 +296,13 @@ pub async fn instantiate_backend_without_compatible_api_version_cancels_duplicat
     let failed_count = usize::from(is_failed(&r1)) + usize::from(is_failed(&r2));
 
     assert_eq!(
-        cancelled_count, 1,
-        "expected exactly one request to be cancelled"
+        cancelled_count, 0,
+        "no requests should be cancelled - errors are cloned to all channels"
     );
-    assert_eq!(failed_count, 1, "expected exactly one request to fail");
+    assert_eq!(
+        failed_count, 2,
+        "both requests should fail with the same error"
+    );
 }
 
 /// Dropping the returned future should cancel the background task promptly.
@@ -429,15 +448,11 @@ pub async fn test_cycle() {
 /// package and any package that specifies it as a host dependency.
 #[tokio::test]
 pub async fn test_stale_host_dependency_triggers_rebuild() {
-    // Construct a command dispatcher with:
-    // - a root directory located in the `cycle` workspace
-    // - the default cache directories but with a temporary workspace cache
-    //   directory
-    // - the default tool platform and virtual packages
-    // - a backend override that uses a passthrough backend to avoid any actual
-    //   backend calls
-    let root_dir = workspaces_dir().join("host-dependency");
+    // Copy workspace to temp directory so we can modify files without affecting other tests
+    let source_dir = workspaces_dir().join("host-dependency");
     let tempdir = tempfile::tempdir().unwrap();
+    let root_dir = tempdir.path().join("workspace");
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
     let build_command_dispatcher = || {
@@ -559,22 +574,6 @@ pub async fn instantiate_backend_with_from_source() {
     let source_dir = workspaces_dir().join("source-backends");
     let tmp_dir = tempfile::tempdir().unwrap();
     let root_dir = tmp_dir.path().to_path_buf();
-
-    // Copy all files from source to temp
-    fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
-        fs_err::create_dir_all(dst)?;
-        for entry in fs_err::read_dir(src)? {
-            let entry = entry?;
-            let src_path = entry.path();
-            let dst_path = dst.join(entry.file_name());
-            if src_path.is_dir() {
-                copy_dir_recursive(&src_path, &dst_path)?;
-            } else {
-                fs_err::copy(&src_path, &dst_path)?;
-            }
-        }
-        Ok(())
-    }
     copy_dir_recursive(&source_dir, &root_dir).unwrap();
 
     // Update workspace pixi.toml to use local channel instead of conda-forge
@@ -1150,6 +1149,7 @@ pub async fn pin_and_checkout_url_reuses_cached_checkout() {
         url: "https://example.com/archive.tar.gz".parse().unwrap(),
         md5: None,
         sha256: Some(sha),
+        subdirectory: Subdirectory::default(),
     };
 
     let checkout = dispatcher
@@ -1183,11 +1183,13 @@ pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request()
         url: url.clone(),
         md5: None,
         sha256: None,
+        subdirectory: Subdirectory::default(),
     };
     let bad_spec = UrlSpec {
         url,
         md5: None,
         sha256: Some(Sha256::digest(b"pixi-url-bad-sha")),
+        subdirectory: Subdirectory::default(),
     };
 
     let (good, bad) = tokio::join!(
@@ -1220,6 +1222,7 @@ pub async fn pin_and_checkout_url_validates_cached_results() {
         url: url.clone(),
         md5: None,
         sha256: None,
+        subdirectory: Subdirectory::default(),
     };
 
     dispatcher
@@ -1231,6 +1234,7 @@ pub async fn pin_and_checkout_url_validates_cached_results() {
         url: url.clone(),
         md5: None,
         sha256: Some(Sha256::digest(b"pixi-url-bad-cache")),
+        subdirectory: Subdirectory::default(),
     };
 
     let err = dispatcher.checkout_url(bad_spec).await.unwrap_err();
@@ -1333,8 +1337,12 @@ pub async fn test_package_not_rebuilt_across_sessions_when_no_files_changed() {
 /// and verifies that file changes are detected and trigger a rebuild.
 #[tokio::test]
 pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
-    let root_dir = workspaces_dir().join("host-dependency");
+    // Copy workspace to temp directory so we can modify files without affecting other tests
+    let source_dir = workspaces_dir().join("host-dependency");
     let tempdir = tempfile::tempdir().unwrap();
+    let root_dir = tempdir.path().join("workspace");
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
+
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
@@ -1385,10 +1393,7 @@ pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
     drop(dispatcher);
 
     // Create a file that matches package-b's build glob pattern ("TOUCH*")
-    let _touch_file = tempfile::Builder::new()
-        .prefix("TOUCH")
-        .tempfile_in(root_dir.join("package-b"))
-        .unwrap();
+    fs_err::write(root_dir.join("package-b/TOUCH_FILE"), "trigger rebuild").unwrap();
 
     // Second session: reinstall after file modification
     let (reporter, events) = EventReporter::new();
@@ -1427,8 +1432,11 @@ pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
 /// without testing dependency chains or force rebuild flags.
 #[tokio::test]
 pub async fn test_package_rebuilt_when_source_file_modified() {
-    let root_dir = workspaces_dir().join("host-dependency");
+    // Copy workspace to temp directory so we can modify files without affecting other tests
+    let source_dir = workspaces_dir().join("host-dependency");
     let tempdir = tempfile::tempdir().unwrap();
+    let root_dir = tempdir.path().join("workspace");
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
@@ -1705,8 +1713,11 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
     use pixi_command_dispatcher::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
     use pixi_record::PinnedPathSpec;
 
-    let root_dir = workspaces_dir().join("host-dependency");
+    // Copy workspace to temp directory so we can modify files without affecting other tests
+    let source_dir = workspaces_dir().join("host-dependency");
     let tempdir = tempfile::tempdir().unwrap();
+    let root_dir = tempdir.path().join("workspace");
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
 
     let build_command_dispatcher = || {
@@ -1784,108 +1795,5 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
     assert_eq!(
         metadata_requests, 1,
         "Metadata should be re-fetched after source file modification"
-    );
-}
-
-/// Tests that cache status check works correctly when the source path points to a file
-/// (like `package.xml` or `pixi.toml`) rather than a directory.
-#[tokio::test]
-pub async fn test_source_build_cache_status_with_file_source() {
-    // Use the workspaces directory as root, with file-source as a subdirectory
-    let root_dir = workspaces_dir().join("host-dependency");
-
-    let (reporter, events) = EventReporter::new();
-
-    let tempdir = tempfile::tempdir().unwrap();
-    let (tool_platform, tool_virtual_packages) = tool_platform();
-    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
-
-    let build_command_dispatcher = || {
-        CommandDispatcher::builder()
-            .with_root_dir(to_abs_dir(root_dir.clone()))
-            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
-            .with_executor(Executor::Serial)
-            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
-            .with_backend_overrides(BackendOverride::from_memory(
-                PassthroughBackend::instantiator(),
-            ))
-            .with_reporter(reporter.clone())
-    };
-
-    // First pass: build and install the package
-    let dispatcher = build_command_dispatcher().finish();
-
-    let records = dispatcher
-        .solve_pixi_environment(PixiEnvironmentSpec {
-            dependencies: DependencyMap::from_iter([(
-                "package-a".parse().unwrap(),
-                PathSpec::new("package-a/pixi.toml").into(),
-            )]),
-            build_environment: build_env.clone(),
-            ..PixiEnvironmentSpec::default()
-        })
-        .await
-        .map_err(|e| format_diagnostic(&e))
-        .expect("solve should succeed");
-
-    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
-    dispatcher
-        .install_pixi_environment(InstallPixiEnvironmentSpec {
-            build_environment: build_env.clone(),
-            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
-        })
-        .await
-        .map_err(|e| format_diagnostic(&e))
-        .expect("install should succeed");
-
-    // Verify first pass triggered actual builds (BackendSourceBuildStarted indicates real build work)
-    let first_pass_builds: usize = events
-        .take()
-        .iter()
-        .filter(|event| {
-            matches!(
-                event,
-                event_reporter::Event::BackendSourceBuildStarted { .. }
-            )
-        })
-        .count();
-
-    assert_eq!(
-        first_pass_builds, 2,
-        "First pass should trigger builds for package-a and package-b"
-    );
-
-    // Drop dispatcher to flush caches (simulating program restart)
-    drop(dispatcher);
-
-    // Second pass: Check the cache status with a path pointing to the pixi.toml FILE
-    // (not the directory). This is the scenario from issue #5201 where
-    // paths like `package.xml` are used as the source.
-    let dispatcher = build_command_dispatcher().finish();
-
-    dispatcher
-        .install_pixi_environment(InstallPixiEnvironmentSpec {
-            build_environment: build_env.clone(),
-            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
-        })
-        .await
-        .map_err(|e| format_diagnostic(&e))
-        .expect("install should succeed");
-
-    // Verify second pass did NOT trigger actual rebuilds (cache hit)
-    let second_pass_builds: usize = events
-        .take()
-        .iter()
-        .filter(|event| {
-            matches!(
-                event,
-                event_reporter::Event::BackendSourceBuildStarted { .. }
-            )
-        })
-        .count();
-
-    assert_eq!(
-        second_pass_builds, 0,
-        "Second pass should not rebuild - cache should be valid"
     );
 }

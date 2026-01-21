@@ -340,7 +340,10 @@ impl Workspace {
             .await?;
 
         // Write the lock-file to disk
-        lock_file_derived_data.write_to_disk()?;
+
+        if options.lock_file_usage != LockFileUsage::DryRun {
+            lock_file_derived_data.write_to_disk()?;
+        }
 
         Ok((lock_file_derived_data, true))
     }
@@ -698,7 +701,7 @@ impl<'p> LockFileDerivedData<'p> {
                             .get(&data.name)
                             .and_then(|specs| specs.last())
                             .and_then(|spec| spec.editable())
-                            .unwrap_or(data.editable);
+                            .unwrap_or(false);
                         (data, env_data.clone())
                     })
                     .collect::<Vec<_>>();
@@ -1625,7 +1628,9 @@ impl<'p> UpdateContext<'p> {
                                 PixiRecord::Source(src) => {
                                     let name = src.package_record.name.clone();
                                     if targets.contains(name.as_source()) {
-                                        src.build_source.clone().map(|spec| (name, spec))
+                                        src.build_source
+                                            .clone()
+                                            .map(|spec| (name, spec.into_pinned()))
                                     } else {
                                         None
                                     }

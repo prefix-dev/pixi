@@ -222,8 +222,11 @@ enum PendingGitCheckout {
     /// The repository was checked out and the result is available.
     CheckedOut(Fetch),
 
-    /// A previous attempt failed
-    Errored,
+    /// A previous attempt failed, error is stored for future requests.
+    Errored(GitError),
+
+    /// The checkout was cancelled.
+    Cancelled,
 }
 
 // We store spec here to double-check that hashes are correct.
@@ -239,8 +242,11 @@ enum PendingUrlCheckout {
     /// The URL was checked out and the result is available.
     CheckedOut(UrlCheckout),
 
-    /// A previous attempt failed
-    Errored,
+    /// A previous attempt failed, error is stored for future requests.
+    Errored(UrlError),
+
+    /// The checkout was cancelled.
+    Cancelled,
 }
 
 /// Information about a pending conda environment solve. This is used by the
@@ -282,46 +288,33 @@ enum PendingDeduplicatingTask<T, E> {
         Option<CommandDispatcherContext>,
     ),
 
-    /// Task has completed successfully, result is cached
-    Result(T, Option<CommandDispatcherContext>),
+    /// Task has completed (either successfully or with an error), result is cached
+    Completed(Result<T, E>, Option<CommandDispatcherContext>),
 
-    /// Task has failed, future requests will also fail
-    Errored,
+    /// Task has been cancelled.
+    Cancelled,
 }
 
-impl<T: Clone, E> PendingDeduplicatingTask<T, E> {
+impl<T: Clone, E: Clone> PendingDeduplicatingTask<T, E> {
     /// The result was received and all pending tasks can be notified.
+    ///
+    /// Both success and error results are cloned and sent to all waiting channels.
     pub fn on_pending_result(&mut self, result: Result<T, CommandDispatcherError<E>>) {
         let Self::Pending(pending, context) = self else {
             unreachable!("cannot get a result for a task that is not pending");
         };
 
         let Some(result) = result.into_ok_or_failed() else {
-            *self = Self::Errored;
+            *self = Self::Cancelled;
             return;
         };
 
-        match result {
-            Ok(output) => {
-                for tx in pending.drain(..) {
-                    let _ = tx.send(Ok(output.clone()));
-                }
-
-                *self = Self::Result(output, *context);
-            }
-            Err(mut err) => {
-                // Only send the error to the first channel, drop the rest, which cancels them.
-                for tx in pending.drain(..) {
-                    match tx.send(Err(err)) {
-                        Ok(_) => return,
-                        Err(Err(failed_to_send)) => err = failed_to_send,
-                        Err(Ok(_)) => unreachable!(),
-                    }
-                }
-
-                *self = Self::Errored;
-            }
+        // Clone and send the result to all waiting channels
+        for tx in std::mem::take(pending) {
+            let _ = tx.send(result.clone());
         }
+
+        *self = Self::Completed(result, *context);
     }
 }
 
@@ -521,9 +514,9 @@ impl CommandDispatcherProcessor {
                     self.build_backend_metadata
                         .get(&id)
                         .and_then(|pending| match pending {
-                            PendingDeduplicatingTask::Pending(_, context) => Some(*context),
-                            PendingDeduplicatingTask::Result(_, context) => Some(*context),
-                            PendingDeduplicatingTask::Errored => None,
+                            PendingDeduplicatingTask::Pending(_, context)
+                            | PendingDeduplicatingTask::Completed(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Cancelled => None,
                         })?
                 }
                 CommandDispatcherContext::SourceMetadata(id) => {
@@ -539,9 +532,9 @@ impl CommandDispatcherProcessor {
                     self.source_metadata
                         .get(&id)
                         .and_then(|pending| match pending {
-                            PendingDeduplicatingTask::Pending(_, context) => Some(*context),
-                            PendingDeduplicatingTask::Result(_, context) => Some(*context),
-                            PendingDeduplicatingTask::Errored => None,
+                            PendingDeduplicatingTask::Pending(_, context)
+                            | PendingDeduplicatingTask::Completed(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Cancelled => None,
                         })?
                 }
                 CommandDispatcherContext::InstallPixiEnvironment(id) => {
@@ -562,9 +555,9 @@ impl CommandDispatcherProcessor {
                     self.instantiated_tool_envs
                         .get(&id)
                         .and_then(|pending| match pending {
-                            PendingDeduplicatingTask::Pending(_, context) => Some(*context),
-                            PendingDeduplicatingTask::Result(_, context) => Some(*context),
-                            PendingDeduplicatingTask::Errored => None,
+                            PendingDeduplicatingTask::Pending(_, context)
+                            | PendingDeduplicatingTask::Completed(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Cancelled => None,
                         })?
                 }
                 CommandDispatcherContext::SourceBuild(id) => {
@@ -580,9 +573,9 @@ impl CommandDispatcherProcessor {
                     self.source_build
                         .get(&id)
                         .and_then(|pending| match pending {
-                            PendingDeduplicatingTask::Pending(_, context) => Some(*context),
-                            PendingDeduplicatingTask::Result(_, context) => Some(*context),
-                            PendingDeduplicatingTask::Errored => None,
+                            PendingDeduplicatingTask::Pending(_, context)
+                            | PendingDeduplicatingTask::Completed(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Cancelled => None,
                         })?
                 }
                 CommandDispatcherContext::BackendSourceBuild(id) => {

@@ -41,10 +41,10 @@ impl CommandDispatcherProcessor {
         match self.build_backend_metadata.entry(source_metadata_id) {
             Entry::Occupied(mut entry) => match entry.get_mut() {
                 PendingDeduplicatingTask::Pending(pending, _) => pending.push(task.tx),
-                PendingDeduplicatingTask::Result(fetch, _) => {
-                    let _ = task.tx.send(Ok(fetch.clone()));
+                PendingDeduplicatingTask::Completed(result, _) => {
+                    let _ = task.tx.send(result.clone());
                 }
-                PendingDeduplicatingTask::Errored => {
+                PendingDeduplicatingTask::Cancelled => {
                     // Drop the sender, this will cause a cancellation on the other side.
                     drop(task.tx);
                 }

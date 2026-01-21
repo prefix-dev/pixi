@@ -3,17 +3,15 @@ use std::{
     hash::{Hash, Hasher},
     io::SeekFrom,
     path::PathBuf,
+    sync::Arc,
 };
 
 use crate::build::{SourceCodeLocation, source_checkout_cache_key};
+use crate::input_hash::{ConfigurationHash, ProjectModelHash};
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use ordermap::OrderMap;
-use pixi_build_discovery::{BackendInitializationParams, DiscoveredBackend};
-use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
 use pixi_path::{AbsPathBuf, AbsPresumedDirPath, AbsPresumedDirPathBuf, AbsPresumedFilePathBuf};
 use pixi_record::{PinnedSourceSpec, VariantValue};
-use pixi_stable_hash::{StableHashBuilder, json::StableJson, map::StableMap};
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -27,11 +25,11 @@ pub struct BuildCache {
     pub(crate) root: AbsPresumedDirPathBuf,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum BuildCacheError {
     /// An I/O error occurred while reading or writing the cache.
     #[error("an IO error occurred while {0} {1}")]
-    IoError(String, AbsPathBuf, #[source] std::io::Error),
+    IoError(String, AbsPathBuf, #[source] Arc<std::io::Error>),
 }
 
 /// Defines additional input besides the source files that are used to compute
@@ -157,7 +155,7 @@ impl BuildCache {
                 BuildCacheError::IoError(
                     "creating cache directory".to_string(),
                     cache_dir.clone(),
-                    e,
+                    Arc::new(e),
                 )
             })?
             .to_path_buf();
@@ -175,7 +173,7 @@ impl BuildCache {
                 BuildCacheError::IoError(
                     "opening cache file".to_string(),
                     cache_file_path.clone().into(),
-                    e,
+                    Arc::new(e),
                 )
             })?;
 
@@ -183,7 +181,7 @@ impl BuildCache {
             BuildCacheError::IoError(
                 "locking cache file".to_string(),
                 cache_file_path.clone().into(),
-                e.error,
+                Arc::new(e.error),
             )
         })?;
 
@@ -196,7 +194,7 @@ impl BuildCache {
                 BuildCacheError::IoError(
                     "reading cache file".to_string(),
                     cache_file_path.clone().into(),
-                    e,
+                    Arc::new(e),
                 )
             })?;
 
@@ -255,10 +253,15 @@ pub struct CachedBuildSourceInfo {
     #[serde(default)]
     pub host: BuildHostEnvironment,
 
-    /// A hash of the package build input. If this changes, the build should be
+    /// A hash of the project model. If this changes, the build should be
+    /// considered stale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_model_hash: Option<ProjectModelHash>,
+
+    /// A hash of the build configuration. If this changes, the build should be
     /// considered stale.
     #[serde(default)]
-    pub package_build_input_hash: Option<PackageBuildInputHash>,
+    pub configuration_hash: ConfigurationHash,
 }
 
 #[serde_as]
@@ -304,7 +307,7 @@ impl BuildCacheEntry {
             BuildCacheError::IoError(
                 "seeking to start of cache file".to_string(),
                 self.cache_file_path.clone().into(),
-                e,
+                Arc::new(e),
             )
         })?;
         let bytes = serde_json::to_vec(&metadata).expect("serialization to JSON should not fail");
@@ -312,7 +315,7 @@ impl BuildCacheEntry {
             BuildCacheError::IoError(
                 "writing metadata to cache file".to_string(),
                 self.cache_file_path.clone().into(),
-                e,
+                Arc::new(e),
             )
         })?;
         self.file
@@ -323,7 +326,7 @@ impl BuildCacheEntry {
                 BuildCacheError::IoError(
                     "setting length of cache file".to_string(),
                     self.cache_file_path.clone().into(),
-                    e,
+                    Arc::new(e),
                 )
             })?;
 
@@ -335,64 +338,5 @@ impl BuildCacheEntry {
         );
 
         Ok(metadata.record)
-    }
-}
-
-/// A builder for creating a stable hash of the package build input.
-///
-/// This is used to compute a singular hash that changes when a rebuild is
-/// warranted.
-pub struct PackageBuildInputHashBuilder<'a> {
-    /// The project model itself. Contains dependencies and more.
-    pub project_model: Option<&'a ProjectModelV1>,
-
-    /// The backend specific configuration
-    pub configuration: Option<&'a serde_json::Value>,
-
-    /// Target specific backend configuration
-    pub target_configuration: Option<&'a OrderMap<TargetSelectorV1, serde_json::Value>>,
-}
-
-impl PackageBuildInputHashBuilder<'_> {
-    pub fn finish(self) -> PackageBuildInputHash {
-        let mut hasher = Xxh3::new();
-        StableHashBuilder::new()
-            .field("project_model", &self.project_model)
-            .field("configuration", &self.configuration.map(StableJson::new))
-            .field(
-                "target_configuration",
-                &self.target_configuration.map(|config| {
-                    StableMap::new(config.iter().map(|(k, v)| (k, StableJson::new(v))))
-                }),
-            )
-            .finish(&mut hasher);
-        PackageBuildInputHash(hasher.finish())
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone, Copy, Hash)]
-#[repr(transparent)]
-pub struct PackageBuildInputHash(u64);
-
-impl<'a> From<&'a DiscoveredBackend> for PackageBuildInputHash {
-    fn from(value: &'a DiscoveredBackend) -> Self {
-        let BackendInitializationParams {
-            project_model,
-            configuration,
-            target_configuration,
-
-            // These fields are not relevant for the package build input hash
-            workspace_root: _,
-            build_source: _,
-            source_anchor: _,
-            manifest_path: _,
-        } = &value.init_params;
-
-        PackageBuildInputHashBuilder {
-            project_model: project_model.as_ref(),
-            configuration: configuration.as_ref(),
-            target_configuration: target_configuration.as_ref(),
-        }
-        .finish()
     }
 }

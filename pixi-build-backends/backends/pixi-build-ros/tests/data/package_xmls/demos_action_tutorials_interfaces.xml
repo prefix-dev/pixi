@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+    <name>action_tutorials_interfaces</name>
+    <version>0.33.5</version>
+    <description>Action tutorials action</description>
+
+    <maintainer email="aditya.pande@openrobotics.org">Aditya Pande</maintainer>
+    <maintainer email="audrow@openrobotics.org">Audrow Nash</maintainer>
+
+    <license>Apache License 2.0</license>
+
+    <author email="jacob@openrobotics.org">Jacob Perron</author>
+    <author email="mabel@openrobotics.org">Mabel Zhang</author>
+
+    <buildtool_depend>ament_cmake</buildtool_depend>
+    <buildtool_depend>rosidl_default_generators</buildtool_depend>
+
+    <exec_depend>rosidl_default_runtime</exec_depend>
+
+    <test_depend>ament_lint_auto</test_depend>
+    <test_depend>ament_lint_common</test_depend>
+
+    <member_of_group>rosidl_interface_packages</member_of_group>
+    <export>
+        <build_type>ament_cmake</build_type>
+    </export>
+</package>

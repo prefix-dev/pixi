@@ -27,7 +27,7 @@ This shift towards workspaces offers a more organized and efficient way to manag
 
 ??? tip "Activating Pixi environment in the current shell"
     For some advanced use-cases, you can activate the environment in the current shell.
-    This uses the `pixi shell-hook` which prints the activation script, which can be used to activate the environment in the current shell without `pixi` itself.
+    This uses the `pixi shell-hook` which prints the activation script, which can be used without `pixi` itself.
     ```shell
     ~/myenv > eval "$(pixi shell-hook)"
     ```
@@ -44,16 +44,19 @@ It manages more than one environment for more than one platform in a single work
 
 `conda` installs all environments in one global location.
 When this is important to you for filesystem reasons, you can use the [detached-environments](../reference/pixi_configuration.md#detached-environments) feature of pixi.
+
 ```shell
 pixi config set detached-environments true
 # or a specific location
 pixi config set detached-environments /path/to/envs
 ```
+
 This will make the installation of the environments go to the same folder.
 
 `pixi` does have the `pixi global` command to install tools on your machine. (See [global](../reference/cli/pixi/global.md))
 This is not a replacement for `conda` but works the same as [`pipx`](https://pipx.pypa.io/stable/) and [`condax`](https://mariusvniekerk.github.io/condax/).
 It creates a single isolated environment for the given requirement and installs the binaries into the global path.
+
 ```shell
 pixi global install bat
 bat pixi.toml
@@ -85,4 +88,5 @@ Encountering issues? Here are solutions to some common problems when being used 
 - `pixi global install pip`, pip doesn't work.
   `pip` is installed in the global isolated environment. Use `pixi add pip` in a workspace to install `pip` in the workspace environment and use that workspace.
 - `pixi global install <Any Library>` -> `import <Any Library>` -> `ModuleNotFoundError: No module named '<Any Library>'`
-   The library is installed in the global isolated environment. Use `pixi add <Any Library>` in a workspace to install the library in the workspace environment and use that workspace.
+   The library is installed in the global isolated environment. Use `pixi add <Any Library>` in a workspace
+   to install the library in the workspace environment and use that workspace.

@@ -1,6 +1,7 @@
 
 The `pixi.toml` is the workspace manifest, also known as the Pixi workspace configuration file.
-It specifies environments for a workspace, and the package dependency requirements for those environments. It can also specify tasks which can run in those environments, as well as many other configuration options.
+It specifies environments for a workspace, and the package dependency requirements for
+those environments. It can also specify tasks which can run in those environments, as well as many other configuration options.
 
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
@@ -286,7 +287,7 @@ requires-pixi = ">=0.40,<1.0"
 
 !!! note
     This option should be used to improve the reproducibility of building the workspace. A complicated
-    requirement spec may be an obstacle to setup the building environment.
+    requirement spec may be an obstacle to setup the build environment.
 
 
 ### `exclude-newer` (optional)
@@ -301,8 +302,9 @@ The date may be specified in the following formats:
 
 Both PyPi and conda packages are considered.
 
-!! note Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
-If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
+!!! note
+    Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
+    If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
 
 ### `build-variants` (optional)
 
@@ -445,7 +447,9 @@ More information in the [system requirements documentation](../workspace/system_
 ## The `pypi-options` table
 
 The `pypi-options` table is used to define options that are specific to PyPI registries.
-These options can be specified either at the root level, which will add it to the default options feature, or on feature level, which will create a union of these options when the features are included in the environment.
+These options can be specified either at the root level, which will add it to the default options feature,
+or on feature level, which will create a union of these options when the features are included in the
+environment.
 
 The options that can be defined are:
 
@@ -471,9 +475,11 @@ Often you might want to use an alternative or extra index for your workspace. Th
 
 - `index-url`: replaces the main index url. If this is not set the default index used is `https://pypi.org/simple`.
    **Only one** `index-url` can be defined per environment.
-- `extra-index-urls`: adds an extra index url. The urls are used in the order they are defined. And are preferred over the `index-url`. These are merged across features into an environment.
+- `extra-index-urls`: adds an extra index url. The urls are used in the order they are defined. And
+   are preferred over the `index-url`. These are merged across features into an environment.
 - `find-links`: which can either be a path `{path = './links'}` or a url `{url = 'https://example.com/links'}`.
-   This is similar to the `--find-links` option in `pip`. These are merged across features into an environment.
+   This is similar to the `--find-links` option in `pip`. These are merged across features into an
+   environment.
 
 An example:
 
@@ -491,6 +497,7 @@ There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/
 
 
 ### No Build Isolation
+
 Even though build isolation is a good default.
 One can choose to **not** isolate the build for a certain package name, this allows the build to access the `pixi` environment.
 This is convenient if you want to use `torch` or something similar for your build-process.
@@ -521,9 +528,13 @@ no-build-isolation = true
 ```
 
 !!! tip "Conda dependencies define the build environment"
-    To use `no-build-isolation` effectively, use conda dependencies to define the build environment. These are installed before the PyPI dependencies are resolved, this way these dependencies are available during the build process. In the example above adding `torch` as a PyPI dependency would be ineffective, as it would not yet be installed during the PyPI resolution phase.
+    To use `no-build-isolation` effectively, use conda dependencies to define the build environment.
+    These are installed before the PyPI dependencies are resolved, this way these dependencies are
+    available during the build process. In the example above adding `torch` as a PyPI dependency
+    would be ineffective, as it would not yet be installed during the PyPI resolution phase.
 
 ### No Build
+
 When enabled, resolving will not run arbitrary Python code. The cached wheels of already-built source distributions will be reused, but operations that require building distributions will exit with an error.
 
 Can be either set per package or globally.
@@ -540,7 +551,8 @@ no-build = ["package1", "package2"]
 
 When features are merged, the following priority is adhered:
 `no-build = true` > `no-build = ["package1", "package2"]` > `no-build = false`
-So, to expand: if `no-build = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
+So, to expand: if `no-build = true` is set for *any* feature in the environment, this
+will be used as the setting for the environment.
 
 
 ### No Binary
@@ -563,7 +575,8 @@ no-binary = ["package1", "package2"]
 
 When features are merged, the following priority is adhered:
 `no-binary = true` > `no-binary = ["package1", "package2"]` > `no-binary = false`
-So, to expand: if `no-binary = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
+So, to expand: if `no-binary = true` is set for *any* feature in the environment, this
+will be used as the setting for the environment.
 
 
 ### Index Strategy
@@ -928,7 +941,8 @@ clang = ">=16.0.6"
 ## The `feature` and `environments` tables
 
 The `feature` table allows you to define features that can be used to create different `[environments]`.
-The `[environments]` table allows you to define different environments. The design is explained in the [this design document](../workspace/multi_environment.md).
+The `[environments]` table allows you to define different environments. The design is
+explained in the [this design document](../workspace/multi_environment.md).
 
 ```toml title="Simplest example"
 [feature.test.dependencies]
@@ -1035,10 +1049,21 @@ test = {features = ["test"]}
 When an environment comprises several features (including the default feature):
 
 - The `activation` and `tasks` of the environment are the union of the `activation` and `tasks` of all its features.
-- The `dependencies` and `pypi-dependencies` of the environment are the union of the `dependencies` and `pypi-dependencies` of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.
-- The `system-requirements` of the environment is the union of the `system-requirements` of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.
-- The `channels` of the environment is the union of the `channels` of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
-- The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at workspace level (unless overridden in the feature). This means that it is usually a good idea to set the workspace `platforms` to all platforms it can support across its environments.
+- The `dependencies` and `pypi-dependencies` of the environment are the union of the
+  `dependencies` and `pypi-dependencies` of all its features. This means that if several features
+  define a requirement for the same package, both requirements will be combined. Beware of conflicting
+  requirements across features added to the same environment.
+- The `system-requirements` of the environment is the union of the `system-requirements`
+  of all its features. If multiple features specify a requirement for the same system package, the
+  highest version is chosen.
+- The `channels` of the environment is the union of the `channels` of all its features.
+  Channel priorities can be specified in each feature, to ensure channels are considered in the right
+  order in the environment.
+- The `platforms` of the environment is the intersection of the `platforms` of all its features.
+  Be aware that the platforms supported by a feature (including the default feature) will be considered
+  as the `platforms` defined at workspace level (unless overridden in the feature). This means that
+  it is usually a good idea to set the workspace `platforms` to all platforms it can support across
+  its environments.
 
 ## Global configuration
 
@@ -1177,6 +1202,7 @@ Each of these tables has a different purpose and is used to define the dependenc
 
 
 ### `build-dependencies`
+
 Build dependencies are required in the build environment and contain all tools that are not needed on the host of the package.
 
 Following packages are examples of typical build dependencies:
@@ -1214,6 +1240,7 @@ Following packages are typical examples for host dependencies:
 ```
 
 ### `run-dependencies`
+
 The `run-dependencies` are the packages that will be installed in the environment when the package is run.
 
 - Libraries

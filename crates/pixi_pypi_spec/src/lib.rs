@@ -10,8 +10,8 @@ use std::{
 };
 
 use pep440_rs::VersionSpecifiers;
-use pep508_rs::ExtraName;
-use pixi_spec::GitSpec;
+use pep508_rs::{ExtraName, MarkerTree};
+use pixi_spec::{GitSpec, Subdirectory};
 use serde::Serialize;
 use thiserror::Error;
 use url::Url;
@@ -49,8 +49,8 @@ pub enum PixiPypiSource {
     /// From a direct URL to a package archive.
     Url {
         url: Url,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        subdirectory: Option<String>,
+        #[serde(default, skip_serializing_if = "Subdirectory::is_empty")]
+        subdirectory: Subdirectory,
     },
 }
 
@@ -119,6 +119,16 @@ impl Default for PixiPypiSource {
     }
 }
 
+/// Serialize a `pep508_rs::MarkerTree` into a string representation
+fn serialize_markertree<S>(value: &MarkerTree, s: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    // `.expect()` succeeds because we don't serialize when
+    // `value.is_true()`, which is the default.
+    value.contents().expect("contents were null").serialize(s)
+}
+
 /// A complete PyPI dependency specification.
 ///
 /// This is the main type used throughout pixi for PyPI dependencies. It combines
@@ -131,6 +141,14 @@ pub struct PixiPypiSpec {
     /// Optional package extras to install.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extras: Vec<ExtraName>,
+    /// The environment markers that decide if/when this package gets installed
+    #[serde(
+        default,
+        // Needed because `pep508_rs::MarkerTree` doesn't implement `serde::Serialize`
+        serialize_with = "serialize_markertree",
+        skip_serializing_if = "MarkerTree::is_true"
+    )]
+    pub env_markers: MarkerTree,
     /// The source for this package.
     #[serde(flatten)]
     pub source: PixiPypiSource,
@@ -181,6 +199,7 @@ impl From<PixiPypiSource> for PixiPypiSpec {
         PixiPypiSpec {
             extras: Vec::new(),
             source,
+            env_markers: MarkerTree::default(),
         }
     }
 }
@@ -188,15 +207,20 @@ impl From<PixiPypiSource> for PixiPypiSpec {
 impl PixiPypiSpec {
     /// Creates a new spec with the given source and no extras.
     pub fn new(source: PixiPypiSource) -> Self {
-        PixiPypiSpec {
-            extras: Vec::new(),
-            source,
-        }
+        source.into()
     }
 
     /// Creates a new spec with the given source and extras.
-    pub fn with_extras(source: PixiPypiSource, extras: Vec<ExtraName>) -> Self {
-        PixiPypiSpec { extras, source }
+    pub fn with_extras_and_markers(
+        source: PixiPypiSource,
+        extras: Vec<ExtraName>,
+        env_markers: MarkerTree,
+    ) -> Self {
+        PixiPypiSpec {
+            extras,
+            source,
+            env_markers,
+        }
     }
 
     /// Returns a reference to the source.
@@ -253,6 +277,11 @@ impl PixiPypiSpec {
         &self.extras
     }
 
+    /// Returns the environment markers for this spec.
+    pub fn env_markers(&self) -> &MarkerTree {
+        &self.env_markers
+    }
+
     /// Returns the editability setting from the manifest.
     /// Only `Path` specs can be editable. Returns `None` for non-path specs
     /// or if editability is not explicitly specified.
@@ -293,6 +322,8 @@ impl PixiPypiSpec {
             updated.extras = self.extras.clone();
         }
 
+        updated.env_markers.or(requirement.marker.clone());
+
         Ok(updated)
     }
 }
@@ -305,7 +336,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pep508_rs::Requirement;
-    use pixi_spec::GitReference;
+    use pixi_spec::{GitReference, Subdirectory};
     use pixi_test_utils::format_parse_error;
     use pixi_toml::TomlDiagnostic;
     use serde_json::{Value, json};
@@ -321,7 +352,7 @@ mod tests {
             git: GitSpec {
                 git: Url::parse("https://github.com/example/repo").unwrap(),
                 rev: None,
-                subdirectory: None,
+                subdirectory: Default::default(),
             },
         });
         assert!(spec.is_source_dependency());
@@ -340,7 +371,7 @@ mod tests {
     fn test_is_source_dependency_for_url() {
         let spec = PixiPypiSpec::new(PixiPypiSource::Url {
             url: Url::parse("https://example.com/pkg.whl").unwrap(),
-            subdirectory: None,
+            subdirectory: Default::default(),
         });
         assert!(spec.is_source_dependency());
     }
@@ -359,24 +390,50 @@ mod tests {
         let extra = ExtraName::new("test".to_string()).unwrap();
 
         // Spec with extras
-        let spec = PixiPypiSpec::with_extras(
+        let spec = PixiPypiSpec::with_extras_and_markers(
             PixiPypiSource::Git {
                 git: GitSpec {
                     git: Url::parse("https://github.com/example/repo").unwrap(),
                     rev: None,
-                    subdirectory: None,
+                    subdirectory: Default::default(),
                 },
             },
             vec![extra.clone()],
+            MarkerTree::default(),
         );
         assert_eq!(spec.extras(), std::slice::from_ref(&extra));
 
-        // Spec without extras
+        // Spec without extras and markers
         let spec = PixiPypiSpec::new(PixiPypiSource::Registry {
             version: VersionOrStar::Star,
             index: None,
         });
         assert!(spec.extras().is_empty());
+    }
+
+    #[test]
+    fn test_env_markers_accessor() {
+        let markers = MarkerTree::from_str("python_version >= '3.12'").unwrap();
+        // Spec with markers
+        let spec = PixiPypiSpec::with_extras_and_markers(
+            PixiPypiSource::Git {
+                git: GitSpec {
+                    git: Url::parse("https://github.com/example/repo").unwrap(),
+                    rev: None,
+                    subdirectory: Default::default(),
+                },
+            },
+            vec![],
+            markers.clone(),
+        );
+        assert_eq!(spec.env_markers(), &markers);
+
+        // Spec without extras and markers
+        let spec = PixiPypiSpec::new(PixiPypiSource::Registry {
+            version: VersionOrStar::Star,
+            index: None,
+        });
+        assert!(spec.env_markers().is_true());
     }
 
     #[test]
@@ -447,12 +504,14 @@ mod tests {
         let spec: PixiPypiSpec = source.clone().into();
         assert_eq!(spec.source, source);
         assert!(spec.extras.is_empty());
+        assert!(spec.env_markers.is_true());
     }
 
     #[test]
     fn test_default_spec() {
         let spec = PixiPypiSpec::default();
         assert!(spec.extras.is_empty());
+        assert!(spec.env_markers.is_true());
         assert!(matches!(
             spec.source,
             PixiPypiSource::Registry {
@@ -469,7 +528,7 @@ mod tests {
         let pypi = PixiPypiSpec::try_from(req).unwrap();
         assert_eq!(
             pypi.to_string(),
-            "{ version = \"==1.0.0\", extras = [\"testing\"] }"
+            "{ version = \"==1.0.0\", extras = [\"testing\"], env-markers = \"os_name == 'posix'\" }"
         );
 
         let req = pep508_rs::Requirement::from_str("numpy").unwrap();
@@ -499,7 +558,7 @@ mod tests {
                 git: GitSpec {
                     git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
                     rev: Some(GitReference::DefaultBranch),
-                    subdirectory: None,
+                    subdirectory: Default::default(),
                 },
             })
         );
@@ -514,18 +573,22 @@ mod tests {
                     rev: Some(GitReference::Rev(
                         "b283011c6df4a9e034baca9aea19aa8e5a70e3ab".to_string()
                     )),
-                    subdirectory: None,
+                    subdirectory: Default::default(),
                 },
             })
         );
 
         let pypi: Requirement = "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl".parse().unwrap();
         let as_pypi_req: PixiPypiSpec = pypi.try_into().unwrap();
-        assert_eq!(as_pypi_req, PixiPypiSpec::new(PixiPypiSource::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), subdirectory: None }));
+        assert_eq!(as_pypi_req, PixiPypiSpec::new(PixiPypiSource::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), subdirectory: Default::default() }));
 
         let pypi: Requirement = "boltons[nichita] @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl".parse().unwrap();
         let as_pypi_req: PixiPypiSpec = pypi.try_into().unwrap();
-        assert_eq!(as_pypi_req, PixiPypiSpec::with_extras(PixiPypiSource::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), subdirectory: None }, vec![ExtraName::new("nichita".to_string()).unwrap()]));
+        assert_eq!(as_pypi_req, PixiPypiSpec::with_extras_and_markers(PixiPypiSource::Url { url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), subdirectory: Default::default() }, vec![ExtraName::new("nichita".to_string()).unwrap()], MarkerTree::default()));
+
+        let pypi: Requirement = "potato[habbasi]; sys_platform == 'linux'".parse().unwrap();
+        let as_pypi_req: PixiPypiSpec = pypi.try_into().unwrap();
+        assert_snapshot!(as_pypi_req);
 
         #[cfg(target_os = "windows")]
         let pypi: Requirement = "boltons @ file:///C:/path/to/boltons".parse().unwrap();
@@ -564,7 +627,7 @@ mod tests {
                 git: GitSpec {
                     git: Url::parse("ssh://git@github.com/python-attrs/attrs.git").unwrap(),
                     rev: Some(GitReference::Rev("main".to_string())),
-                    subdirectory: None
+                    subdirectory: Default::default()
                 },
             })
         );
@@ -580,7 +643,7 @@ mod tests {
                 git: GitSpec {
                     git: Url::parse("https://github.com/Deltares/Ribasim.git").unwrap(),
                     rev: Some(GitReference::DefaultBranch),
-                    subdirectory: Some("python/ribasim".to_string()),
+                    subdirectory: Subdirectory::try_from("python/ribasim").unwrap(),
                 },
             })
         );
@@ -601,6 +664,8 @@ mod tests {
             r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "rev" = "123456" }"#,
             r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "subdirectory" = "pyrattler" }"#,
             r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "extras" = ["test"] }"#,
+            r#"pkg = { version = "*", "env-markers" = "sys_platform == 'win32'" }"#,
+            r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "extras" = ["test"], "env-markers" = "sys_platform == 'linux'" }"#,
         ];
 
         #[derive(Serialize)]
@@ -639,6 +704,7 @@ mod tests {
             r#"pkg = "~/path/style""#,
             r#"pkg = "https://example.com""#,
             r#"pkg = "https://github.com/conda-forge/21cmfast-feedstock""#,
+            r#"pkg = { version = "*", "env-markers" = "potato == 'potato'" }"#,
         ];
 
         struct Snapshot {

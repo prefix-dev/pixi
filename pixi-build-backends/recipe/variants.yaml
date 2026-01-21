@@ -1,0 +1,52 @@
+# This is a semi distilled variant config from conda-forge.
+#
+# It adds sysroot (2.17) for linux, macosx_deployment_target for osx
+# and uses vs2022 for windows.
+#
+c_stdlib:
+  - if: linux
+    then: sysroot
+  - if: osx
+    then: macosx_deployment_target
+  - if: win
+    then: vs
+c_stdlib_version:
+  - if: linux
+    then: 2.17
+  - if: osx and x86_64
+    then: 10.13
+  - if: osx and arm64
+    then: 11.0
+c_compiler:
+  - if: linux
+    then: gcc
+  - if: osx
+    then: clang
+  - if: win
+    then: vs2022
+c_compiler_version:
+  - if: linux
+    then: 14
+  - if: osx
+    then: 19
+cxx_compiler:
+  - if: linux
+    then: gxx
+  - if: osx
+    then: clangxx
+  - if: win
+    then: vs2022
+cxx_compiler_version:
+  - if: linux
+    then: 14
+  - if: osx
+    then: 19
+
+python:
+  - 3.13
+python_min:
+  - 3.10
+
+# Pin the compiler used
+rust_compiler_version:
+  - 1.90.0

@@ -1,0 +1,48 @@
+[project]
+dependencies = [
+  "rosdistro",
+  "catkin_pkg",
+  "pytest",
+  "toml",
+  "pyyaml",
+  "pydantic",
+  "py_rattler",
+  #  TODO: publish to pypi
+  #  "py-pixi-build-backend",
+]
+name = "pixi-build-ros"
+version = "0.3.3"
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[project.scripts]
+pixi-build-ros = "pixi_build_ros.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pixi_build_ros"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"robostack.yaml" = "site-packages/pixi_build_ros/robostack.yaml"
+"templates" = "site-packages/pixi_build_ros/templates"
+
+[tool.hatch.build.targets.editable]
+packages = ["src/pixi_build_ros"]
+
+[tool.hatch.build.targets.editable.shared-data]
+"robostack.yaml" = "site-packages/pixi_build_ros/robostack.yaml"
+"templates" = "site-packages/pixi_build_ros/templates"
+
+[tool.ruff]
+fix = true
+line-length = 120
+target-version = "py310"
+
+[tool.mypy]
+disable_error_code = ["empty-body", "no-untyped-call"]
+enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
+files = ["src/pixi_build_ros"]
+ignore_missing_imports = true
+python_version = "3.10"
+strict = true

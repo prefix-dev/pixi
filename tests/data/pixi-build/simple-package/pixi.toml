@@ -2,6 +2,10 @@
 channels = ["https://prefix.dev/conda-forge"]
 preview = ["pixi-build"]
 
+[package]
+name = "simple-package"
+version = "0.1.0"
+
 [package.build.backend]
 name = "pixi-build-rattler-build"
 version = "*"

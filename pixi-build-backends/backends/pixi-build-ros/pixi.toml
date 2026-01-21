@@ -1,0 +1,110 @@
+[workspace]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+platforms = ["osx-arm64", "win-64", "linux-64", "linux-aarch64"]
+preview = ["pixi-build"]
+
+[activation.env]
+CARGO_TARGET_DIR = "target/pixi"
+
+[tasks]
+lint.depends-on = ["lint-ruff", "lint-mypy"]
+
+[target.linux-64.dependencies]
+clang = ">=21.1,<21.2"
+mold = ">=2.33.0,<3.0"
+patchelf = "==0.18.0"
+
+[target.linux-64.activation]
+scripts = ["../../../scripts/activate.sh"]
+
+[dependencies]
+py-pixi-build-backend = "*"
+py_rattler = ">=0.20,<0.21"
+pydantic = ">=2.8.2,<3"
+
+[pypi-dependencies]
+pixi-build-ros = { path = ".", editable = true }
+
+[environments]
+default = { features = ["test", "lint"], solve-group = "default" }
+lint = { features = ["lint"], no-default-feature = true }
+test = { features = ["test"], solve-group = "default" }
+
+
+[feature.test.tasks]
+build-pixi-release = "pixi run --manifest-path ../../../pixi.toml build-release"
+lint-mypy = "mypy"
+test = { cmd = "pytest tests", depends-on = [
+  "build-pixi-release",
+  "create-channel",
+] }
+test-ci = { cmd = "pytest tests", depends-on = ["create-channel"] }
+
+[feature.test.tasks.build-ros-channel]
+cmd = """
+rattler-build build \
+  --experimental \
+  --no-build-id \
+  --recipe ../../recipe/pixi-build-ros \
+  --variant-config ../../recipe/variants.yaml \
+  --channel https://prefix.dev/pixi-build-backends \
+  --channel https://prefix.dev/conda-forge \
+  --output-dir tests/integration/artifacts-channel
+"""
+description = "Build pixi-build-ros into local test channel"
+
+[feature.test.tasks.index-ros-channel]
+cmd = "rattler-index fs --force --write-shards false --write-zst false tests/integration/artifacts-channel"
+depends-on = ["build-ros-channel"]
+description = "Index the local ROS backend channel"
+
+[feature.test.tasks.create-channel]
+depends-on = ["build-ros-channel", "index-ros-channel"]
+description = "Build and index local ROS backend channel for integration tests"
+
+[feature.test.dependencies]
+mypy = ">=1.18.2,<2"
+pixi-pycharm = ">=0.0.8,<0.1"
+pytest = "*"
+rattler-build = ">=0.55.0,<0.56"
+rattler-index = ">=0.25.2,<0.26"
+syrupy = ">=5,<6"
+types-pyyaml = "*"
+# You can skip this as it's a long build, uncomment this when developing only in this package
+#py-pixi-build-backend = "*"
+py-pixi-build-backend = { path = "../../py-pixi-build-backend" }
+
+[feature.lint.dependencies]
+ruff = "*"
+
+[feature.lint.tasks]
+lint-ruff = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
+
+## Package section
+[package.build.backend]
+name = "pixi-build-python"
+version = "*"
+
+[package.build.config]
+extra-input-globs = ["!tests/**"]
+
+[package.host-dependencies]
+hatchling = "*"
+python = ">=3.10"
+
+[package.run-dependencies]
+catkin_pkg = "*"
+pixi-build-api-version = ">=4,<5"
+py_rattler = ">=0.15.0,<0.16"
+pydantic = ">=2.8.2,<3"
+python = ">=3.10"
+pyyaml = "*"
+rosdistro = "*"
+# should be added to `py-pixi-build-backend`
+typing-extensions = "*"
+# this depends has to match the test dependency, so switch comments if needed
+#py-pixi-build-backend = "*"
+py-pixi-build-backend = { path = "../../py-pixi-build-backend" }
