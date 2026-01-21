@@ -26,8 +26,3 @@ CARGO_WORKSPACE_DIR = { value = "", relative = true }
 
 [target.aarch64-unknown-linux-musl]
 linker = "aarch64-linux-gnu-gcc"
-
-[profile.dev]
-# Disabling debug info speeds up builds a bunch,
-# and we don't rely on it for debugging that much.
-debug = 0
