@@ -4,15 +4,11 @@ use std::path::PathBuf;
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_config::Config;
-
-use crate::cli_config::WorkspaceConfig;
+use pixi_core::WorkspaceLocator;
 
 /// Commands to manage the registry of workspaces.
 #[derive(Parser, Debug, Clone)]
 pub struct Args {
-    #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
-
     /// The subcommand to execute
     #[clap(subcommand)]
     pub command: Command,
@@ -21,12 +17,12 @@ pub struct Args {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct AddArgs {
     /// Name of the workspace to register.
-    #[clap(required = true)]
-    pub name: String,
+    #[arg(long, short)]
+    pub name: Option<String>,
 
     /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
-    #[clap(required = true)]
-    pub manifest_path: PathBuf,
+    #[arg(long, short)]
+    pub manifest_path: Option<PathBuf>,
 }
 
 #[derive(Parser, Debug, Default, Clone)]
@@ -78,14 +74,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
         Command::Add(add_args) => {
             let mut workspaces = config.named_workspaces.clone();
-            if workspaces.contains_key(&add_args.name) {
+
+            let workspace = WorkspaceLocator::for_cli()
+                .locate()?;
+
+            let target_name = add_args.name.unwrap_or_else(|| {
+                workspace.display_name().to_string()
+            });
+             let target_path = add_args.manifest_path.unwrap_or_else(|| {
+                workspace.root().to_path_buf()
+            });
+            
+            if workspaces.contains_key(&target_name) {
                 return Err(miette::diagnostic!(
                     "Workspace with name '{}' is already registered.",
-                    add_args.name,
+                    target_name,
                 )
                 .into());
             }
-            workspaces.insert(add_args.name, add_args.manifest_path);
+            workspaces.insert(target_name, target_path);
             config.named_workspaces = workspaces;
             config.save(&to)?;
             eprintln!(
