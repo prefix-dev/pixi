@@ -306,6 +306,52 @@ impl<'de> toml_span::Deserialize<'de> for TaskGroup {
     }
 }
 
+/// Helper enum to deserialize task groups from TOML.
+/// Supports both simple list syntax and full object form:
+/// ```toml
+/// # Simple list form
+/// [task-groups]
+/// ci = ["test", "lint"]
+///
+/// # Full object form
+/// [task-groups.dev]
+/// description = "Development tasks"
+/// tasks = ["build", "watch"]
+/// ```
+#[derive(Debug)]
+pub enum TomlTaskGroupList {
+    Map(TaskGroup),
+    Seq(Vec<TaskName>),
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlTaskGroupList {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        if value.as_array().is_some() {
+            Ok(TomlTaskGroupList::Seq(toml_span::Deserialize::deserialize(
+                value,
+            )?))
+        } else if value.as_table().is_some() {
+            Ok(TomlTaskGroupList::Map(toml_span::Deserialize::deserialize(
+                value,
+            )?))
+        } else {
+            Err(expected("either a map or a sequence", value.take(), value.span).into())
+        }
+    }
+}
+
+impl From<TomlTaskGroupList> for TaskGroup {
+    fn from(list: TomlTaskGroupList) -> Self {
+        match list {
+            TomlTaskGroupList::Map(group) => group,
+            TomlTaskGroupList::Seq(tasks) => TaskGroup {
+                description: None,
+                tasks,
+            },
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

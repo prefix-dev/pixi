@@ -27,7 +27,7 @@ use crate::{
     toml::{
         PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
         WorkspacePackageProperties, create_unsupported_selector_warning,
-        environment::TomlEnvironmentList, task::TomlTask,
+        environment::TomlEnvironmentList, task::TomlTask, task::TomlTaskGroupList,
     },
     utils::{PixiSpanned, package_map::UniquePackageMap},
     warning::Deprecation,
@@ -550,9 +550,14 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
                 }
             });
         let task_groups: Option<PixiSpanned<TaskGroups>> = th
-            .optional::<PixiSpanned<TomlIndexMap<String, TaskGroup>>>("task-groups")
+            .optional::<PixiSpanned<TomlIndexMap<String, TomlTaskGroupList>>>("task-groups")
             .map(|spanned| PixiSpanned {
-                value: spanned.value.into_inner(),
+                value: spanned
+                    .value
+                    .into_inner()
+                    .into_iter()
+                    .map(|(k, v)| (k, TaskGroup::from(v)))
+                    .collect(),
                 span: spanned.span,
             });
         let feature = th
@@ -1204,5 +1209,47 @@ mod test {
           ╰────
         "#
         );
+    }
+
+    #[test]
+    fn test_task_groups_mixed_syntax() {
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks]
+        test = "echo test"
+        lint = "echo lint"
+        build = "echo build"
+        watch = "echo watch"
+
+        [task-groups]
+        ci = ["test", "lint"]
+
+        [task-groups.dev]
+        description = "Development tasks"
+        tasks = ["build", "watch"]
+        "#,
+        )
+        .unwrap();
+
+        // Check ci group (simple list syntax)
+        let ci_group = manifest
+            .task_groups
+            .get("ci")
+            .expect("should have ci group");
+        assert_eq!(ci_group.description, None);
+        assert_eq!(ci_group.tasks.len(), 2);
+
+        // Check dev group (object syntax)
+        let dev_group = manifest
+            .task_groups
+            .get("dev")
+            .expect("should have dev group");
+        assert_eq!(dev_group.description, Some("Development tasks".to_string()));
+        assert_eq!(dev_group.tasks.len(), 2);
     }
 }

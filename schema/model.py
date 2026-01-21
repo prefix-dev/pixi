@@ -918,8 +918,9 @@ class BaseManifest(StrictBaseModel):
     tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the project"
     )
-    task_groups: dict[NonEmptyStr, TaskGroup] | None = Field(
-        None, description="Named groups of tasks with optional descriptions"
+    task_groups: dict[NonEmptyStr, TaskGroup | list[TaskName]] | None = Field(
+        None,
+        description="Named groups of tasks, defined as a full object or a list of task names.",
     )
     system_requirements: SystemRequirements | None = Field(
         None, description="The system requirements of the project"

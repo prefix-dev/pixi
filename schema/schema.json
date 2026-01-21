@@ -194,10 +194,22 @@
     },
     "task-groups": {
       "title": "Task-Groups",
-      "description": "Named groups of tasks with optional descriptions",
+      "description": "Named groups of tasks, defined as a full object or a list of task names.",
       "type": "object",
       "additionalProperties": {
-        "$ref": "#/$defs/TaskGroup"
+        "anyOf": [
+          {
+            "$ref": "#/$defs/TaskGroup"
+          },
+          {
+            "type": "array",
+            "items": {
+              "description": "A valid task name.",
+              "type": "string",
+              "pattern": "^[^\\s\\$]+$"
+            }
+          }
+        ]
       },
       "propertyNames": {
         "minLength": 1
