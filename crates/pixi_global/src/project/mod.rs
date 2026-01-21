@@ -42,7 +42,7 @@ use pixi_utils::{
 };
 use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
-    menuinst::MenuMode, package::ArchiveIdentifier,
+    menuinst::MenuMode, package::CondaArchiveIdentifier,
 };
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
@@ -1471,7 +1471,7 @@ impl Project {
             Either::Right(binary_spec) => match binary_spec {
                 BinarySpec::Path(PathBinarySpec { path }) => path
                     .file_name()
-                    .and_then(ArchiveIdentifier::try_from_filename)
+                    .and_then(CondaArchiveIdentifier::try_from_filename)
                     .and_then(|iden| PackageName::from_str(&iden.name).ok())
                     .ok_or(InferPackageNameError::UnsupportedSpecType),
                 _ => Err(InferPackageNameError::UnsupportedSpecType),
