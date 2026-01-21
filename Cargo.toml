@@ -221,6 +221,7 @@ uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-flags = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }

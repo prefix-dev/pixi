@@ -262,6 +262,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         pixi_records: &[PixiRecord],
         pypi_records: &[PyPIRecords],
     ) -> miette::Result<()> {
+        // Initialize UV flags from environment variables before any operations
+        initialize_uv_flags();
+
         let python_info =
             match on_python_interpreter_change(python_status, self.config.prefix, pypi_records)
                 .await?
@@ -1023,4 +1026,25 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         Ok(())
     }
+}
+
+/// Initialize UV flags from environment variables.
+///
+/// This function reads UV-related environment variables and initializes
+/// the global uv_flags state. It's safe to call multiple times as the
+/// global flag can only be initialized once.
+pub fn initialize_uv_flags() {
+    let mut flags = uv_flags::EnvironmentFlags::empty();
+
+    // Read SKIP_WHEEL_FILENAME_CHECK from environment
+    // Accept "1", "true", "yes" as truthy values (case-insensitive)
+    if let Ok(value) = std::env::var("UV_SKIP_WHEEL_FILENAME_CHECK") {
+        let is_enabled = matches!(value.to_lowercase().as_str(), "1" | "true" | "yes" | "on");
+        if is_enabled {
+            flags.insert(uv_flags::EnvironmentFlags::SKIP_WHEEL_FILENAME_CHECK);
+        }
+    }
+
+    // Initialize the global flags (ignore error if already initialized)
+    let _ = uv_flags::init(flags);
 }

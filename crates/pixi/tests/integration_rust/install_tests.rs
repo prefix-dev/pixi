@@ -1561,3 +1561,64 @@ async fn test_exclude_newer_pypi() {
         "boltons ==20.2.1".parse().unwrap()
     ));
 }
+
+/// Test that UV_SKIP_WHEEL_FILENAME_CHECK environment variable is respected
+/// when installing wheels with version mismatch between filename and metadata
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
+async fn test_uv_skip_wheel_filename_check() {
+    setup_tracing();
+
+    // Create a malformed wheel with version mismatch
+    // Filename says 1.0.0, but METADATA says 2.0.0
+    let wheels_dir = tempdir().unwrap();
+    crate::common::pypi_index::write_malformed_wheel(
+        wheels_dir.path(),
+        "1.0.0", // filename version
+        "2.0.0", // metadata version
+        "test-malformed",
+    )
+    .unwrap();
+
+    let current_platform = Platform::current();
+    let manifest = format!(
+        r#"
+    [project]
+    name = "test-malformed-wheel"
+    channels = ["https://prefix.dev/conda-forge"]
+    platforms = ["{current_platform}"]
+
+    [dependencies]
+    python = "3.12.*"
+
+    [pypi-dependencies]
+    test-malformed = {{ path = "{wheel_path}" }}
+    "#,
+        wheel_path = wheels_dir
+            .path()
+            .join("test_malformed-1.0.0-py3-none-any.whl")
+            .display()
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+
+    // Installation should succeed with UV_SKIP_WHEEL_FILENAME_CHECK=1
+    temp_env::async_with_vars([("UV_SKIP_WHEEL_FILENAME_CHECK", Some("1"))], async {
+        pixi.install()
+            .await
+            .expect("Installation should succeed with UV_SKIP_WHEEL_FILENAME_CHECK=1");
+    })
+    .await;
+
+    // Verify the package is installed
+    let prefix_path = pixi.default_env_path().unwrap();
+    let cache = uv_cache::Cache::temp().unwrap();
+    let env = create_uv_environment(&prefix_path, &cache);
+    assert!(
+        is_pypi_package_installed(&env, "test-malformed"),
+        "Package should be installed with UV_SKIP_WHEEL_FILENAME_CHECK=1"
+    );
+}

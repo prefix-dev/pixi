@@ -28,6 +28,7 @@ use crate::{
 };
 use async_once_cell::OnceCell as AsyncCell;
 use once_cell::sync::OnceCell;
+use pixi_install_pypi::initialize_uv_flags;
 use pixi_manifest::EnvironmentName;
 use pixi_manifest::pypi::pypi_options::NoBuildIsolation;
 use pixi_record::PixiRecord;
@@ -315,6 +316,8 @@ impl<'a> LazyBuildDispatch<'a> {
     async fn get_or_try_init(&self) -> Result<&BuildDispatch<'a>, LazyBuildDispatchError> {
         self.build_dispatch
             .get_or_try_init(async {
+                initialize_uv_flags();
+
                 // Disallow installing if the flag is set.
                 if self.disallow_install_conda_prefix {
                     return Err(LazyBuildDispatchError::InstallationRequiredButDisallowed);
