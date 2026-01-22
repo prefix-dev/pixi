@@ -99,12 +99,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 config.named_workspaces = workspaces;
                 config.save(&to)?;
                 eprintln!(
-                    "{} {}",
+                    "{} Workspace '{}' has been removed from the registry successfully.",
                     console::style(console::Emoji("✔ ", "")).green(),
-                    format!(
-                        "Workspace '{}' has been removed from the registry successfully.",
-                        &remove_args.name
-                    )
+                    &remove_args.name
                 );
             } else {
                 return Err(
@@ -125,9 +122,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             config.named_workspaces = workspaces;
             config.save(&to)?;
             eprintln!(
-                "{} {}",
+                "{} Workspace registry cleaned",
                 console::style(console::Emoji("✔ ", "")).green(),
-                "Workspace registry cleaned"
             );
         }
         None => {

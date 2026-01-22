@@ -3,11 +3,11 @@ use std::io::Write;
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
-use pixi_core::WorkspaceLocator;
 use pixi_config::Config;
+use pixi_core::WorkspaceLocator;
 
-use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
 use crate::workspace::register::global_config_write_path;
+use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
 
 /// Commands to manage workspace name.
 #[derive(Parser, Debug)]
@@ -57,7 +57,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let mut config = Config::load_global();
             let mut workspaces = config.named_workspaces.clone();
             let current_name = workspace.display_name().to_string();
-            
+
             workspace_ctx.set_name(&args.name).await?;
 
             if workspaces.contains_key(&current_name.clone()) {
@@ -67,7 +67,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 config.named_workspaces = workspaces;
                 config.save(&to)?;
             }
-        },
+        }
     }
 
     Ok(())

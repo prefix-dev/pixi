@@ -261,9 +261,8 @@ async fn clean_workspaces() -> miette::Result<()> {
     config.named_workspaces = workspaces;
     config.save(&to)?;
     eprintln!(
-        "{} {}",
+        "{} Workspace registry cleaned",
         console::style(console::Emoji("✔ ", "")).green(),
-        "Workspace registry cleaned"
     );
     Ok(())
 }
