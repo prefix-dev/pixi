@@ -718,6 +718,7 @@ impl PixiControl {
                 no_install_config: NoInstallConfig { no_install: false },
                 check: false,
                 json: false,
+                dry_run: false,
             },
         }
     }

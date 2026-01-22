@@ -703,7 +703,7 @@ impl Display for PackageContents {
 pub struct About {
     pub homepage: Option<Value<String>>,
     pub license: Option<Value<String>>,
-    pub license_file: Option<Value<String>>,
+    pub license_file: Option<Vec<Value<String>>>,
     pub summary: Option<Value<String>>,
     pub description: Option<Value<String>>,
     pub documentation: Option<Value<String>>,
@@ -717,7 +717,11 @@ impl Display for About {
             "About {{ homepage: {}, license: {}, license_file: {}, summary: {}, description: {}, documentation: {}, repository: {} }}",
             self.homepage.as_ref().into_iter().format(", "),
             self.license.as_ref().into_iter().format(", "),
-            self.license_file.as_ref().into_iter().format(", "),
+            self.license_file
+                .as_ref()
+                .into_iter()
+                .flatten()
+                .format(", "),
             self.summary.as_ref().into_iter().format(", "),
             self.description.as_ref().into_iter().format(", "),
             self.documentation.as_ref().into_iter().format(", "),
@@ -843,7 +847,7 @@ mod tests {
                     "https://github.com/xtensor-stack/xtensor".to_string(),
                 )),
                 license: Some("BSD-3-Clause".parse().unwrap()),
-                license_file: Some("LICENSE".parse().unwrap()),
+                license_file: Some(vec!["LICENSE".parse().unwrap()]),
                 summary: Some("The C++ tensor algebra library".parse().unwrap()),
                 description: Some(
                     "Multi dimensional arrays with broadcasting and lazy computing"
