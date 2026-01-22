@@ -22,6 +22,9 @@ outputs:
       name: rust-backends-build
     source:
       - path: ../../..
+        filter:
+          exclude:
+            - .git
     requirements:
       build:
         - ${{ compiler("rust") }}
