@@ -62,7 +62,7 @@ outputs:
           # Install binaries to prefix
           - if: unix
             then:
-              - TARGET=${TARGET:-$(rustc -vV | grep "host:" | awk '{print $2}')}
+              - TARGET=${CARGO_BUILD_TARGET:-$(rustc -vV | grep "host:" | awk '{print $2}')}
               - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-cmake $PREFIX/bin/pixi-build-cmake
               - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-mojo $PREFIX/bin/pixi-build-mojo
               - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-python $PREFIX/bin/pixi-build-python
