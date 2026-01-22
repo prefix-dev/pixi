@@ -173,7 +173,7 @@ pub struct PypiOptions {
     pub dependency_overrides: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
     /// Don't use pre-built wheels all or certain packages
     pub no_binary: Option<NoBinary>,
-    /// Skip wheel filename validation (allows installing wheels with version mismatches)
+    /// Skip wheel filename validation
     pub skip_wheel_filename_check: Option<bool>,
 }
 
@@ -686,6 +686,7 @@ mod tests {
             no_build: Default::default(),
             dependency_overrides: None,
             no_binary: Default::default(),
+            skip_wheel_filename_check: None,
         };
 
         // Create the second set of options
@@ -699,6 +700,7 @@ mod tests {
             no_build: Default::default(),
             dependency_overrides: None,
             no_binary: Default::default(),
+            skip_wheel_filename_check: None,
         };
 
         // Merge the two options
