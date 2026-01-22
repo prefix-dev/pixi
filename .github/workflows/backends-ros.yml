@@ -66,6 +66,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       TARGET_RELEASE: target/pixi/release
+      SCCACHE_GHA_ENABLED: "true"
+      ACTIONS_CACHE_SERVICE_V2: on
     steps:
       - uses: actions/checkout@v4
         with:
@@ -74,6 +76,13 @@ jobs:
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           manifest-path: pixi-build-backends/backends/pixi-build-ros/pixi.toml
+
+      - name: Configure sccache
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
       - name: Download pixi binary
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
@@ -102,3 +111,8 @@ jobs:
       - name: Run ROS integration tests
         working-directory: pixi-build-backends/backends/pixi-build-ros
         run: pixi run --locked pytest tests/integration -v
+
+      - name: Show sccache stats
+        shell: bash
+        working-directory: pixi-build-backends/backends/pixi-build-ros
+        run: pixi run sccache --stop-server
