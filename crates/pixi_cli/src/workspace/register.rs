@@ -40,6 +40,10 @@ pub struct ListArgs {
     json: bool,
 }
 
+#[derive(Parser, Debug, Default, Clone)]
+pub struct PruneArgs { }
+
+
 #[derive(Parser, Debug, Clone)]
 pub enum Command {
     /// List the registered workspaces.
@@ -48,6 +52,9 @@ pub enum Command {
     /// Remove a workspace from registry.
     #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
+    /// Prune disassociated workspaces from registry.
+    #[clap(visible_alias = "pr")]
+    Prune(PruneArgs),
 }
 
 fn global_config_write_path() -> miette::Result<PathBuf> {
@@ -105,6 +112,28 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     miette::diagnostic!("Workspace '{}' is not found.", remove_args.name,).into(),
                 );
             }
+        }
+        Some(Command::Prune(_)) => {
+            let mut workspaces = config.named_workspaces.clone();
+            workspaces.retain(|key, val| {
+                if val.exists() {
+                    true
+                } else {
+                    eprintln!(
+                        "{} {}",
+                        console::style("removed workspace").green(),
+                        key
+                    );
+                    false
+                }
+            });
+            config.named_workspaces = workspaces;
+            config.save(&to)?;
+            eprintln!(
+                "{} {}",
+                console::style(console::Emoji("✔ ", "")).green(),
+                "Workspace registry cleaned"
+            );
         }
         None => {
             let mut workspaces = config.named_workspaces.clone();
