@@ -437,7 +437,7 @@ def test_suggest_what_manifest_file_should_be(
             manifest_path,
         ],
         expected_exit_code=ExitCode.FAILURE,
-        stderr_contains="Ensure that the source directory contains a valid pixi.toml, pyproject.toml, recipe.yaml, package.xml or mojoproject.toml file.",
+        stderr_contains="Ensure that the source directory contains a valid manifest file: pixi.toml, pyproject.toml, mojoproject.toml, recipe.yaml, recipe.yml",
     )
 
 
