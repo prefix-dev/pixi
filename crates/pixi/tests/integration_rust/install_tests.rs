@@ -6,6 +6,7 @@ use std::{
     sync::LazyLock,
 };
 
+use dunce::canonicalize;
 use fs_err::tokio as tokio_fs;
 use pixi_cli::run::{self, Args};
 use pixi_cli::{
@@ -1584,11 +1585,15 @@ async fn test_uv_skip_wheel_filename_check() {
     .unwrap();
 
     let current_platform = Platform::current();
-    let wheel_path = wheels_dir
-        .path()
-        .join("test_malformed-1.0.0-py3-none-any.whl")
-        .display()
-        .to_string();
+    let wheel_path = canonicalize(
+        wheels_dir
+            .path()
+            .join("test_malformed-1.0.0-py3-none-any.whl"),
+    )
+    .expect("failed to canonicalize wheel path")
+    .display()
+    .to_string()
+    .replace('\\', "/"); // Convert Windows backslashes to forward slashes for TOML
 
     // Test 1: Environment variable UV_SKIP_WHEEL_FILENAME_CHECK=1
     let manifest_env_var = format!(
