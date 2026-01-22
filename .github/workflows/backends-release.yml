@@ -14,7 +14,7 @@ on:
       - "crates/pixi-build-mojo/**"
       - ".github/workflows/backends-release.yml"
   pull_request:
-    # types: [labeled]
+# types: [labeled]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
