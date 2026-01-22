@@ -173,6 +173,8 @@ pub struct PypiOptions {
     pub dependency_overrides: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
     /// Don't use pre-built wheels all or certain packages
     pub no_binary: Option<NoBinary>,
+    /// Skip wheel filename validation (allows installing wheels with version mismatches)
+    pub skip_wheel_filename_check: Option<bool>,
 }
 
 use crate::pypi::merge::{
@@ -191,6 +193,7 @@ impl PypiOptions {
         no_build: Option<NoBuild>,
         dependency_overrides: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
         no_binary: Option<NoBinary>,
+        skip_wheel_filename_check: Option<bool>,
     ) -> Self {
         Self {
             index_url: index,
@@ -202,6 +205,7 @@ impl PypiOptions {
             no_build,
             dependency_overrides,
             no_binary,
+            skip_wheel_filename_check,
         }
     }
 
@@ -257,6 +261,15 @@ impl PypiOptions {
                 }
             })?;
 
+        let skip_wheel_filename_check = merge_single_option(
+            &self.skip_wheel_filename_check,
+            &other.skip_wheel_filename_check,
+            |a, b| PypiOptionsMergeError::MultipleSkipWheelFilenameCheck {
+                first: *a,
+                second: *b,
+            },
+        )?;
+
         // Ordered lists, deduplicated
         let extra_indexes = merge_list_dedup(&self.extra_index_urls, &other.extra_index_urls);
         let flat_indexes = merge_list_dedup(&self.find_links, &other.find_links);
@@ -280,6 +293,7 @@ impl PypiOptions {
             no_build,
             dependency_overrides,
             no_binary,
+            skip_wheel_filename_check,
         })
     }
 }
@@ -395,6 +409,10 @@ pub enum PypiOptionsMergeError {
         "multiple prerelease modes are not supported, found both {first} and {second} across multiple pypi options"
     )]
     MultiplePrereleaseModes { first: String, second: String },
+    #[error(
+        "multiple skip-wheel-filename-check values are not supported, found both {first} and {second} across multiple pypi options"
+    )]
+    MultipleSkipWheelFilenameCheck { first: bool, second: bool },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -1562,7 +1562,7 @@ async fn test_exclude_newer_pypi() {
     ));
 }
 
-/// Test that UV_SKIP_WHEEL_FILENAME_CHECK environment variable is respected
+/// Test that UV_SKIP_WHEEL_FILENAME_CHECK environment variable and pypi-option are respected
 /// when installing wheels with version mismatch between filename and metadata
 #[tokio::test]
 #[cfg_attr(
@@ -1584,10 +1584,17 @@ async fn test_uv_skip_wheel_filename_check() {
     .unwrap();
 
     let current_platform = Platform::current();
-    let manifest = format!(
+    let wheel_path = wheels_dir
+        .path()
+        .join("test_malformed-1.0.0-py3-none-any.whl")
+        .display()
+        .to_string();
+
+    // Test 1: Environment variable UV_SKIP_WHEEL_FILENAME_CHECK=1
+    let manifest_env_var = format!(
         r#"
     [project]
-    name = "test-malformed-wheel"
+    name = "test-malformed-wheel-env"
     channels = ["https://prefix.dev/conda-forge"]
     platforms = ["{current_platform}"]
 
@@ -1596,14 +1603,11 @@ async fn test_uv_skip_wheel_filename_check() {
 
     [pypi-dependencies]
     test-malformed = {{ path = "{wheel_path}" }}
-    "#,
-        wheel_path = wheels_dir
-            .path()
-            .join("test_malformed-1.0.0-py3-none-any.whl")
-            .display()
+    "#
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    let pixi =
+        PixiControl::from_manifest(&manifest_env_var).expect("cannot instantiate pixi project");
 
     // Installation should succeed with UV_SKIP_WHEEL_FILENAME_CHECK=1
     temp_env::async_with_vars([("UV_SKIP_WHEEL_FILENAME_CHECK", Some("1"))], async {
@@ -1620,5 +1624,82 @@ async fn test_uv_skip_wheel_filename_check() {
     assert!(
         is_pypi_package_installed(&env, "test-malformed"),
         "Package should be installed with UV_SKIP_WHEEL_FILENAME_CHECK=1"
+    );
+
+    // Test 2: pypi-option skip-wheel-filename-check = true
+    let manifest_pypi_option = format!(
+        r#"
+    [project]
+    name = "test-malformed-wheel-option"
+    channels = ["https://prefix.dev/conda-forge"]
+    platforms = ["{current_platform}"]
+
+    [dependencies]
+    python = "3.12.*"
+
+    [pypi-options]
+    skip-wheel-filename-check = true
+
+    [pypi-dependencies]
+    test-malformed = {{ path = "{wheel_path}" }}
+    "#
+    );
+
+    let pixi_option =
+        PixiControl::from_manifest(&manifest_pypi_option).expect("cannot instantiate pixi project");
+
+    // Installation should succeed with pypi-option
+    pixi_option
+        .install()
+        .await
+        .expect("Installation should succeed with skip-wheel-filename-check = true");
+
+    // Verify the package is installed
+    let prefix_path = pixi_option.default_env_path().unwrap();
+    let cache = uv_cache::Cache::temp().unwrap();
+    let env = create_uv_environment(&prefix_path, &cache);
+    assert!(
+        is_pypi_package_installed(&env, "test-malformed"),
+        "Package should be installed with skip-wheel-filename-check = true"
+    );
+
+    // Test 3: Environment variable takes precedence over pypi-option
+    let manifest_precedence = format!(
+        r#"
+    [project]
+    name = "test-malformed-wheel-precedence"
+    channels = ["https://prefix.dev/conda-forge"]
+    platforms = ["{current_platform}"]
+
+    [dependencies]
+    python = "3.12.*"
+
+    [pypi-options]
+    skip-wheel-filename-check = false
+
+    [pypi-dependencies]
+    test-malformed = {{ path = "{wheel_path}" }}
+    "#
+    );
+
+    let pixi_precedence =
+        PixiControl::from_manifest(&manifest_precedence).expect("cannot instantiate pixi project");
+
+    // Installation should succeed because env var overrides pypi-option
+    temp_env::async_with_vars([("UV_SKIP_WHEEL_FILENAME_CHECK", Some("1"))], async {
+        pixi_precedence
+            .install()
+            .await
+            .expect("Installation should succeed when env var overrides pypi-option");
+    })
+    .await;
+
+    // Verify the package is installed
+    let prefix_path = pixi_precedence.default_env_path().unwrap();
+    let cache = uv_cache::Cache::temp().unwrap();
+    let env = create_uv_environment(&prefix_path, &cache);
+    assert!(
+        is_pypi_package_installed(&env, "test-malformed"),
+        "Package should be installed when env var takes precedence"
     );
 }

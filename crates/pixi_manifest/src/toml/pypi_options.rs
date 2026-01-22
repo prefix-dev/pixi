@@ -133,6 +133,8 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
 
         let no_binary = th.optional::<NoBinary>("no-binary");
 
+        let skip_wheel_filename_check = th.optional::<bool>("skip-wheel-filename-check");
+
         th.finalize(None)?;
 
         Ok(Self {
@@ -145,6 +147,7 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
             no_build,
             dependency_overrides,
             no_binary,
+            skip_wheel_filename_check,
         })
     }
 }

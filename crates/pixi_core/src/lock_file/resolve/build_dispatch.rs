@@ -316,7 +316,7 @@ impl<'a> LazyBuildDispatch<'a> {
     async fn get_or_try_init(&self) -> Result<&BuildDispatch<'a>, LazyBuildDispatchError> {
         self.build_dispatch
             .get_or_try_init(async {
-                initialize_uv_flags();
+                initialize_uv_flags(None);
 
                 // Disallow installing if the flag is set.
                 if self.disallow_install_conda_prefix {
