@@ -285,6 +285,7 @@ outputs:
             - maturin >=1.2.2,<2
         - ${{ compiler('rust') }}
         - ${{ stdlib('c') }}
+        - sccache
       host:
         - python ${{ python_min }}.*
         - python-abi3
