@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.63.2] - 2026-01-19
+#### ✨ Highlights
+
+This release brings important fixes for Pixi Build and PyPI support.
+
+
+#### Documentation
+
+- Update CHANGELOG.md to remove duplicated introduction by @ickc in [#5308](https://github.com/prefix-dev/pixi/pull/5308)
+- Describe git support for package source by @Hofer-Julian in [#5314](https://github.com/prefix-dev/pixi/pull/5314)
+
+
+#### Fixed
+
+- Dont check run-exports for source dependencies by @baszalmstra in [#5302](https://github.com/prefix-dev/pixi/pull/5302)
+- Loading of uv certificates by @tdejager in [#5313](https://github.com/prefix-dev/pixi/pull/5313)
+- Downstream tests by @Hofer-Julian in [#5316](https://github.com/prefix-dev/pixi/pull/5316)
+
+
+#### Refactor
+
+- The uv client to be created in a single place by @tdejager in [#5311](https://github.com/prefix-dev/pixi/pull/5311)
+
+
+#### New Contributors
+* @ickc made their first contribution in [#5308](https://github.com/prefix-dev/pixi/pull/5308)
+
 ### [0.63.1] - 2026-01-15
 #### ✨ Highlights
 

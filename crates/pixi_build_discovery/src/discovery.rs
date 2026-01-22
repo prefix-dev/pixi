@@ -9,7 +9,9 @@ use ordermap::OrderMap;
 use pixi_build_type_conversions::{to_project_model_v1, to_target_selector_v1};
 use pixi_build_types::{ProjectModel, TargetSelector};
 use pixi_config::Config;
-use pixi_consts::consts::{RATTLER_BUILD_DIRS, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES};
+use pixi_consts::consts::{
+    KNOWN_MANIFEST_FILES, RATTLER_BUILD_DIRS, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES,
+};
 use pixi_manifest::{
     DiscoveryStart, ExplicitManifestError, PackageManifest, PrioritizedChannel, WithProvenance,
     WorkspaceDiscoverer, WorkspaceDiscoveryError, WorkspaceManifest,
@@ -113,11 +115,9 @@ pub enum DiscoveryError {
     #[diagnostic(help("This is often caused by an internal error. Please report this issue."))]
     SpecConversionError(pixi_spec::SpecConversionError),
 
-    #[error("the source directory '{0}', does not contain a supported manifest")]
-    #[diagnostic(help(
-        "Ensure that the source directory contains a valid pixi.toml, pyproject.toml, recipe.yaml, package.xml or mojoproject.toml file."
-    ))]
-    FailedToDiscover(String),
+    #[error("the source directory '{path}', does not contain a supported manifest")]
+    #[diagnostic(help("{help}"))]
+    FailedToDiscover { path: String, help: String },
 
     #[error("the manifest path '{0}', does not have a parent directory")]
     NoParentDir(PathBuf),
@@ -159,7 +159,7 @@ impl DiscoveredBackend {
                 }
                 let source_dir = source_path
                     .parent()
-                    .expect("the recipe must live somewhere");
+                    .expect("the package.xml must live somewhere");
                 return Self::from_ros_package(
                     source_dir.to_path_buf(),
                     source_path,
@@ -182,9 +182,27 @@ impl DiscoveredBackend {
             return Ok(pixi);
         }
 
-        Err(DiscoveryError::FailedToDiscover(
-            source_path.to_string_lossy().to_string(),
-        ))
+        // Test whether we can discover as a ROS package.
+        let help_msg = if enabled_protocols.enable_pixi
+            && ROS_BACKEND_FILE_NAMES
+                .iter()
+                .any(|&f| source_path.join(f).is_file())
+        {
+            format!(
+                "ROS packages require you to specify the 'package.xml' file path directly, due to supporting more backends in the future. Or ensure that the source directory contains a valid manifest file: {}.",
+                KNOWN_MANIFEST_FILES.join(", ")
+            )
+        } else {
+            format!(
+                "Ensure that the source directory contains a valid manifest file: {}.",
+                KNOWN_MANIFEST_FILES.join(", ")
+            )
+        };
+
+        Err(DiscoveryError::FailedToDiscover {
+            path: source_path.to_string_lossy().to_string(),
+            help: help_msg,
+        })
     }
 
     /// Construct a new instance based on a specific `recipe.yaml` file in the
@@ -350,6 +368,11 @@ impl DiscoveredBackend {
                 )?));
             }
         }
+        tracing::trace!(
+            "No rattler-build manifests ({}) found in '{}'",
+            RATTLER_BUILD_FILE_NAMES.join(", "),
+            source_dir.display()
+        );
         Ok(None)
     }
 

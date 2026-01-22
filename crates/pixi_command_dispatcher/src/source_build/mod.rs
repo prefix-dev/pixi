@@ -34,9 +34,10 @@ use crate::{
     build::pin_compatible::PinCompatibleError,
     build::{
         BuildCacheError, BuildHostEnvironment, BuildHostPackage, CachedBuild,
-        CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, PackageBuildInputHash,
-        PixiRunExports, SourceCodeLocation, SourceRecordOrCheckout, WorkDirKey, move_file,
+        CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, PixiRunExports,
+        SourceCodeLocation, SourceRecordOrCheckout, WorkDirKey, move_file,
     },
+    input_hash::{ConfigurationHash, ProjectModelHash},
     package_identifier::PackageIdentifier,
 };
 
@@ -246,8 +247,16 @@ impl SourceBuildSpec {
             .await
             .map_err_with(|e| SourceBuildError::Discovery(Arc::new(e)))?;
 
-        // Compute the package input hash for caching purposes.
-        let package_build_input_hash = PackageBuildInputHash::from(discovered_backend.as_ref());
+        // Compute the hashes for caching purposes.
+        let project_model_hash = discovered_backend
+            .init_params
+            .project_model
+            .as_ref()
+            .map(ProjectModelHash::from);
+        let configuration_hash = ConfigurationHash::compute(
+            discovered_backend.init_params.configuration.as_ref(),
+            discovered_backend.init_params.target_configuration.as_ref(),
+        );
 
         // Determine the build source to use: either from lock file or workspace
 
@@ -363,7 +372,8 @@ impl SourceBuildSpec {
                 backend,
                 work_directory,
                 source_dir,
-                package_build_input_hash,
+                project_model_hash,
+                configuration_hash,
                 reporter,
                 log_sink,
             )
@@ -528,7 +538,8 @@ impl SourceBuildSpec {
         backend: Backend,
         work_directory: PathBuf,
         source_dir: PathBuf,
-        package_build_input_hash: PackageBuildInputHash,
+        project_model_hash: Option<ProjectModelHash>,
+        configuration_hash: ConfigurationHash,
         reporter: Option<Arc<dyn RunExportsReporter>>,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<BuiltPackage, CommandDispatcherError<SourceBuildError>> {
@@ -822,7 +833,8 @@ impl SourceBuildSpec {
                 host: BuildHostEnvironment {
                     packages: host_records,
                 },
-                package_build_input_hash: Some(package_build_input_hash),
+                project_model_hash,
+                configuration_hash,
             },
         })
     }

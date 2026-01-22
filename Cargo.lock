@@ -151,9 +151,9 @@ dependencies = [
 
 [[package]]
 name = "arborium"
-version = "2.5.0"
+version = "2.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afb0f3ba8f3bc4322ff8c97a0a2090a4bebf358406ea375c7a17d8954f2362a4"
+checksum = "72c7786491956470ff732a5cc5271973c0d35f2dfdd1c6a89554ffc436cb7f7d"
 dependencies = [
  "arborium-highlight",
  "arborium-theme",
@@ -164,9 +164,9 @@ dependencies = [
 
 [[package]]
 name = "arborium-highlight"
-version = "2.5.0"
+version = "2.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "975a3508e6b26b013345c7c203ee36c81d03f9d30ae4e55dec4b6079c205c6db"
+checksum = "710007e055b8e84e6c1a13b5371a1dba3dcc4062aa97328dd5d5db12834b6b09"
 dependencies = [
  "arborium-theme",
  "arborium-tree-sitter",
@@ -175,9 +175,9 @@ dependencies = [
 
 [[package]]
 name = "arborium-sysroot"
-version = "2.5.0"
+version = "2.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d83ed18d08e513f5d80bd0f7ed2b3a2369ddbb49d51d674025d94be8c2b9ed8"
+checksum = "0bb50cd4c0ca81b150c7febeda402defe3dbee3ed36adc547408b35067caf0c0"
 dependencies = [
  "cc",
  "dlmalloc",
@@ -185,15 +185,15 @@ dependencies = [
 
 [[package]]
 name = "arborium-theme"
-version = "2.5.0"
+version = "2.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09dbced2fec10201488d18dbac859f96d479dc089e3caa7f9f2710d199c08604"
+checksum = "59ab5a4ce30eab4ddbd778149c761007613d4a94f5bb55ffb716ba459e0e8f0b"
 
 [[package]]
 name = "arborium-toml"
-version = "2.5.0"
+version = "2.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5689b0396865e6b77ace1b1881a2fd207916125d0ba9cd31064f459b0165d202"
+checksum = "89011730c92cf930c58742c883c7bdc9094a2d5c98a81c7fb7979e7fddc69818"
 dependencies = [
  "arborium-sysroot",
  "cc",
@@ -202,9 +202,9 @@ dependencies = [
 
 [[package]]
 name = "arborium-tree-sitter"
-version = "2.5.0"
+version = "2.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f086fd94acc289a46b431a8c2a9eba075000e94837e17c647dae43551225d40f"
+checksum = "ddc35c735c83308af3eabb0c35103dd2dbcfc3bccf51d4660719843feb77707a"
 dependencies = [
  "arborium-sysroot",
  "cc",
@@ -2015,11 +2015,12 @@ dependencies = [
 
 [[package]]
 name = "deno_task_shell"
-version = "0.26.2"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6c8906a44dee412f17bf3ec79da41548612c5da3741fd0023c718408d6fe685"
+checksum = "078f9f536187d5bdf536104c139aeb49d23a3bbc2b6f23626fa04487bd819615"
 dependencies = [
  "anyhow",
+ "bitflags 2.10.0",
  "deno_path_util",
  "futures",
  "glob",
@@ -4423,9 +4424,9 @@ dependencies = [
 
 [[package]]
 name = "miette-arborium"
-version = "2.5.0"
+version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "778e011023c9185a2e63af9ba02d09736a0935596225f710f3e279101154c507"
+checksum = "a7b6fb7669d5ccb7efb6a3f6abf6461bd0020006636ccc598bc92af405412ad9"
 dependencies = [
  "arborium",
  "arborium-highlight",
@@ -5266,7 +5267,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.63.1"
+version = "0.63.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5565,6 +5566,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.17",
+ "tracing",
 ]
 
 [[package]]
@@ -6091,6 +6093,7 @@ dependencies = [
  "uv-distribution",
  "uv-distribution-filename",
  "uv-distribution-types",
+ "uv-flags",
  "uv-install-wheel",
  "uv-installer",
  "uv-normalize",
