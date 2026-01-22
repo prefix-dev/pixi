@@ -303,6 +303,7 @@ mod test {
                     })
                 )]),),
                 no_binary: Default::default(),
+                skip_wheel_filename_check: None,
             },
         );
     }
