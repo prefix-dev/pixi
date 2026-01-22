@@ -39,8 +39,6 @@ jobs:
             os: ubuntu-latest
           - target: linux-aarch64
             os: ubuntu-latest
-          - target: linux-ppc64le
-            os: ubuntu-latest
           - target: win-64
             os: windows-latest
           - target: osx-64
