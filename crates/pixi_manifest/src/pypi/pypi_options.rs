@@ -523,6 +523,7 @@ mod tests {
                 ),
             ])),
             no_binary: Default::default(),
+            skip_wheel_filename_check: Some(true),
         };
 
         // Create the second set of options
@@ -555,6 +556,7 @@ mod tests {
             ])),
 
             no_binary: Default::default(),
+            skip_wheel_filename_check: None,
         };
 
         // Merge the two options
@@ -652,6 +654,7 @@ mod tests {
             no_build: Default::default(),
             dependency_overrides: None,
             no_binary: Default::default(),
+            skip_wheel_filename_check: None,
         };
 
         // Create the second set of options
@@ -665,6 +668,7 @@ mod tests {
             no_build: Default::default(),
             dependency_overrides: None,
             no_binary: Default::default(),
+            skip_wheel_filename_check: None,
         };
 
         // Merge the two options
