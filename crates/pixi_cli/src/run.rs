@@ -26,7 +26,7 @@ use pixi_manifest::{FeaturesExt, TaskName};
 use pixi_progress::global_multi_progress;
 use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
-    SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env, PreferExecutable,
+    PreferExecutable, SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
 };
 use rattler_conda_types::Platform;
 use thiserror::Error;
@@ -191,7 +191,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if args.executable {
             PreferExecutable::Always
         } else {
-            PreferExecutable::Never
+            PreferExecutable::TaskFirst
         },
     )?;
     tracing::debug!("Task graph: {}", task_graph);

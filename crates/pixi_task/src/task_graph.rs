@@ -46,15 +46,15 @@ fn join_args_with_single_quotes<'a>(args: impl IntoIterator<Item = &'a str>) -> 
 /// Controls whether to prefer resolving commands as executables over Pixi tasks
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PreferExecutable {
-    /// Always try to resolve as a Pixi task first (default behavior)
-    Never,
+    /// Try to resolve as a Pixi task first, fall back to executable if no task found (default)
+    TaskFirst,
     /// Always treat as an executable, skip task resolution
     Always,
 }
 
 impl Default for PreferExecutable {
     fn default() -> Self {
-        Self::Never
+        Self::TaskFirst
     }
 }
 
@@ -229,7 +229,9 @@ impl<'p> TaskGraph<'p> {
             (args, true)
         };
 
-        if prefer_executable == PreferExecutable::Never && let Some(name) = args.first() {
+        if prefer_executable == PreferExecutable::TaskFirst
+            && let Some(name) = args.first()
+        {
             match search_envs.find_task(TaskName::from(name.clone()), FindTaskSource::CmdArgs, None)
             {
                 Err(FindTaskError::MissingTask(_)) => {}
@@ -634,7 +636,7 @@ mod test {
 
     use crate::{
         task_environment::SearchEnvironments,
-        task_graph::{TaskGraph, join_args_with_single_quotes, PreferExecutable},
+        task_graph::{PreferExecutable, TaskGraph, join_args_with_single_quotes},
     };
 
     fn commands_in_order(
@@ -654,7 +656,7 @@ mod test {
             &search_envs,
             run_args.iter().map(|arg| arg.to_string()).collect(),
             skip_deps,
-            PreferExecutable::Never,
+            PreferExecutable::TaskFirst,
         )
         .unwrap();
 
