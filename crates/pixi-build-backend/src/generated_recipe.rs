@@ -195,13 +195,13 @@ impl GeneratedRecipe {
             documentation: derive_value!(documentation).map(Value::Concrete),
             repository: derive_value!(repository).map(Value::Concrete),
             license_file: match model.license_file {
-                Some(v) => Some(Value::Concrete(v.display().to_string())),
+                Some(v) => Some(vec![Value::Concrete(v.display().to_string())]),
                 None => provider
                     .license_files()
                     .map_err(|e| {
                         GenerateRecipeError::MetadataProviderError(String::from("license-files"), e)
                     })?
-                    .map(|files| Value::Concrete(files.join(", "))),
+                    .map(|files| files.into_iter().map(Value::Concrete).collect()),
             },
             summary: provider
                 .summary()
