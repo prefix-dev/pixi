@@ -254,11 +254,7 @@ async fn clean_workspaces() -> miette::Result<()> {
         if val.exists() {
             true
         } else {
-            eprintln!(
-                "{} {}",
-                console::style("removed workspace").green(),
-                key
-            );
+            eprintln!("{} {}", console::style("removed workspace").green(), key);
             false
         }
     });
@@ -307,7 +303,6 @@ async fn remove_folder_with_progress(
     ));
     Ok(())
 }
-
 
 async fn remove_file(file: PathBuf, warning_non_existent: bool) -> miette::Result<()> {
     if !file.exists() {

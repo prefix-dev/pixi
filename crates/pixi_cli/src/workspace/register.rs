@@ -41,8 +41,7 @@ pub struct ListArgs {
 }
 
 #[derive(Parser, Debug, Default, Clone)]
-pub struct PruneArgs { }
-
+pub struct PruneArgs {}
 
 #[derive(Parser, Debug, Clone)]
 pub enum Command {
@@ -119,11 +118,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 if val.exists() {
                     true
                 } else {
-                    eprintln!(
-                        "{} {}",
-                        console::style("removed workspace").green(),
-                        key
-                    );
+                    eprintln!("{} {}", console::style("removed workspace").green(), key);
                     false
                 }
             });
@@ -143,13 +138,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .with_search_start(args.workspace_config.workspace_locator_start())
                 .locate()?;
 
-            let target_name = args.name.unwrap_or_else(|| {
-                workspace.display_name().to_string()
-            });
-             let target_path = args.path.unwrap_or_else(|| {
-                workspace.root().to_path_buf()
-            });
-            
+            let target_name = args
+                .name
+                .unwrap_or_else(|| workspace.display_name().to_string());
+            let target_path = args.path.unwrap_or_else(|| workspace.root().to_path_buf());
+
             if workspaces.contains_key(&target_name) {
                 return Err(miette::diagnostic!(
                     "Workspace with name '{}' is already registered.",

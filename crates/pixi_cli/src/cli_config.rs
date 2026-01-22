@@ -48,7 +48,9 @@ impl WorkspaceConfig {
             DiscoveryStart::ExplicitManifest(manifest_path.clone())
         } else if let Some(workspace) = &self.workspace {
             let config = Config::load_global();
-            let path = config.named_workspace(&workspace.to_string()).unwrap();
+            let path = config
+                .named_workspace(&workspace.to_string())
+                .expect("Unable to find workspace");
             DiscoveryStart::ExplicitManifest(path.clone())
         } else {
             DiscoveryStart::CurrentDir
