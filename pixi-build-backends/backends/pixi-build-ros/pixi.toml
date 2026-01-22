@@ -107,4 +107,4 @@ py-pixi-build-backend = { path = "../../py-pixi-build-backend" }
 
 [environments]
 lint = { features = ["lint"], no-default-feature = true }
-test = { features = ["test"], no-default-feature = true}
+test = { features = ["test"], no-default-feature = true }
