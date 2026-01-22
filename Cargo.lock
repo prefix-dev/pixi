@@ -6093,6 +6093,7 @@ dependencies = [
  "uv-distribution",
  "uv-distribution-filename",
  "uv-distribution-types",
+ "uv-flags",
  "uv-install-wheel",
  "uv-installer",
  "uv-normalize",
