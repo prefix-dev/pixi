@@ -115,4 +115,4 @@ jobs:
       - name: Show sccache stats
         shell: bash
         working-directory: pixi-build-backends/backends/pixi-build-ros
-        run: pixi run sccache --stop-server
+        run: pixi run --environment=test sccache --stop-server
