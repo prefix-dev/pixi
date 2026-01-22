@@ -56,7 +56,7 @@ pub enum Command {
     Prune(PruneArgs),
 }
 
-fn global_config_write_path() -> miette::Result<PathBuf> {
+pub fn global_config_write_path() -> miette::Result<PathBuf> {
     let mut global_locations = pixi_config::config_path_global();
     let mut to = global_locations
         .pop()
