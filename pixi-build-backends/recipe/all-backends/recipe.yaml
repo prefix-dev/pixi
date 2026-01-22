@@ -42,7 +42,6 @@ outputs:
       script:
         env:
           CARGO_PROFILE_RELEASE_STRIP: symbols
-          CARGO_PROFILE_RELEASE_LTO: fat
         content:
           - if: osx and x86_64
             then:
