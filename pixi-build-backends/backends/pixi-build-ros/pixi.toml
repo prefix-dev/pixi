@@ -42,6 +42,8 @@ cmd = """
 rattler-build build \
   --experimental \
   --no-build-id \
+  --up-to pixi-build-ros \
+  --channel-priority disabled \
   --recipe ../../recipe/all-backends/recipe.yaml \
   --channel https://prefix.dev/conda-forge \
   --variant-config ../../recipe/variants.yaml \
@@ -103,6 +105,5 @@ typing-extensions = "*"
 py-pixi-build-backend = { path = "../../py-pixi-build-backend" }
 
 [environments]
-default = { features = ["test", "lint"], solve-group = "default" }
 lint = { features = ["lint"], no-default-feature = true }
-test = { features = ["test"], solve-group = "default" }
+test = { features = ["test"], no-default-feature = true}
