@@ -194,7 +194,7 @@ Now you can build it again and run it with the following commands
 
 ```shell
 # Passing arguments to the build command to build with Ninja, add them to the manifest if you want to default to ninja.
-pixi run colcon build --cmake-args -G Ninja
+pixi run build --cmake-args -G Ninja
 pixi run ros2 run my_cpp_package my_cpp_node
 ```
 
