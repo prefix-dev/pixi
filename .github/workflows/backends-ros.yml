@@ -50,7 +50,7 @@ jobs:
       - name: Download pixi binary
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
         with:
-          name: pixi-linux-x86_64-${{ inputs.sha }}
+          name: ${{ matrix.artifact }}-${{ inputs.sha }}
           path: ${{ env.TARGET_RELEASE }}
 
       - name: Add pixi binary to PATH
