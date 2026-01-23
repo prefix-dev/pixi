@@ -14,7 +14,7 @@ use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec, PixiRecord, VariantVa
 use pixi_spec::{SourceAnchor, SourceLocationSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageRecord,
-    Platform, RepoDataRecord, prefix::Prefix,
+    Platform, RepoDataRecord, package::DistArchiveIdentifier, prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
 use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
@@ -174,10 +174,12 @@ impl SourceBuildSpec {
                         source = %self.source.manifest_source(),
                         package = ?cached_build.record.package_record.name,
                         build = %cached_build.record.package_record.build,
-                        output = %cached_build.record.file_name,
+                        output = %cached_build.record.identifier.to_file_name(),
                         "using cached up-to-date source build",
                     );
-                    let output_file = build_cache.cache_dir.join(&cached_build.record.file_name);
+                    let output_file = build_cache
+                        .cache_dir
+                        .join(cached_build.record.identifier.to_file_name());
                     return Ok(SourceBuildResult {
                         output_file,
                         record: cached_build.record.clone(),
@@ -197,11 +199,13 @@ impl SourceBuildSpec {
                     source = %self.source.manifest_source(),
                     package = ?cached_build.record.package_record.name,
                     build = %cached_build.record.package_record.build,
-                    output = %cached_build.record.file_name,
+                    output = %cached_build.record.identifier.to_file_name(),
                     "using cached new source build",
                 );
                 // dont matter if we force it , we can reuse the cache entry
-                let output_file = build_cache.cache_dir.join(&cached_build.record.file_name);
+                let output_file = build_cache
+                    .cache_dir
+                    .join(cached_build.record.identifier.to_file_name());
                 return Ok(SourceBuildResult {
                     output_file,
                     record: cached_build.record.clone(),
@@ -429,17 +433,19 @@ impl SourceBuildSpec {
         let (sha, index_json) = tokio::try_join!(read_sha256_fut, read_index_json_fut)?;
 
         // Construct the record from the index JSON and the SHA256 hash.
+        let file_name = built_source
+            .output_file
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy();
+        let identifier = DistArchiveIdentifier::try_from_filename(&file_name)
+            .expect("output file should have a valid archive filename");
         let record = RepoDataRecord {
             package_record: PackageRecord::from_index_json(index_json, None, Some(sha), None)
                 .map_err(|err| {
                     CommandDispatcherError::Failed(SourceBuildError::ConvertSubdir(Arc::new(err)))
                 })?,
-            file_name: built_source
-                .output_file
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string(),
+            identifier,
             url: Url::from_file_path(&built_source.output_file)
                 .expect("the output file should be a valid URL"),
             channel: None,
@@ -448,7 +454,7 @@ impl SourceBuildSpec {
             source = %source_for_logging,
             package = ?record.package_record.name,
             build = %record.package_record.build,
-            output = %record.file_name,
+            output = %record.identifier.to_file_name(),
             "built source package",
         );
 

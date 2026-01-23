@@ -2046,7 +2046,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
                     let (origin, anchor) = match record {
                         PixiRecord::Binary(record) => (
-                            Cow::Owned(record.file_name.to_string()),
+                            Cow::Owned(record.identifier.to_file_name()),
                             SourceAnchor::Workspace,
                         ),
                         PixiRecord::Source(record) => (

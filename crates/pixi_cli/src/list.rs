@@ -696,7 +696,7 @@ fn create_package_to_output<'a, 'b>(
     let (file_name, url) = match package {
         PackageExt::Conda(pkg) => match pkg {
             CondaPackageData::Binary(binary) => (
-                Some(binary.file_name.clone()),
+                Some(binary.file_name.to_file_name()),
                 Some(binary.location.to_string()),
             ),
             CondaPackageData::Source(source) => (None, Some(source.location.to_string())),

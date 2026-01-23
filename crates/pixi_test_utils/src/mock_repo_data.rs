@@ -3,9 +3,13 @@
 
 use chrono::{DateTime, Utc};
 use miette::IntoDiagnostic;
+use rattler_conda_types::package::ArchiveIdentifier;
 use rattler_conda_types::{
     ChannelInfo, PackageName, PackageRecord, PackageUrl, Platform, RepoData, VersionWithSource,
-    package::{CondaArchiveType, IndexJson, PathType, PathsEntry, PathsJson, RunExportsJson},
+    package::{
+        CondaArchiveType, DistArchiveIdentifier, IndexJson, PathType, PathsEntry, PathsJson,
+        RunExportsJson,
+    },
 };
 use std::{
     collections::HashSet,
@@ -72,9 +76,10 @@ impl MockRepoData {
             let mut conda_packages = Vec::new();
 
             for pkg in self.packages_by_platform(platform) {
-                let (file_name, package_record) = if pkg.materialize {
+                let identifier = pkg.identifier();
+                let package_record = if pkg.materialize {
                     // Create the actual .conda file and get the real hashes
-                    let package_path = subdir_path.join(pkg.file_name());
+                    let package_path = subdir_path.join(identifier.to_file_name());
                     let (sha256, md5, size) =
                         create_conda_package(pkg, &package_path).into_diagnostic()?;
 
@@ -84,14 +89,14 @@ impl MockRepoData {
                     updated_record.md5 = Some(md5);
                     updated_record.size = Some(size);
 
-                    (pkg.file_name(), updated_record)
+                    updated_record
                 } else {
-                    (pkg.file_name(), pkg.package_record.clone())
+                    pkg.package_record.clone()
                 };
 
                 match pkg.archive_type {
-                    CondaArchiveType::TarBz2 => tar_bz2_packages.push((file_name, package_record)),
-                    CondaArchiveType::Conda => conda_packages.push((file_name, package_record)),
+                    CondaArchiveType::TarBz2 => tar_bz2_packages.push((identifier, package_record)),
+                    CondaArchiveType::Conda => conda_packages.push((identifier, package_record)),
                 }
             }
 
@@ -207,14 +212,15 @@ impl Package {
     }
 
     /// Returns the file name for this package.
-    pub fn file_name(&self) -> String {
-        format!(
-            "{}-{}-{}{}",
-            self.package_record.name.as_normalized(),
-            self.package_record.version,
-            self.package_record.build,
-            self.archive_type.extension()
-        )
+    pub fn identifier(&self) -> DistArchiveIdentifier {
+        DistArchiveIdentifier {
+            identifier: ArchiveIdentifier {
+                name: self.package_record.name.as_source().to_string(),
+                version: self.package_record.version.to_string(),
+                build_string: self.package_record.build.clone(),
+            },
+            archive_type: self.archive_type.into(),
+        }
     }
 }
 

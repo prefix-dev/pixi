@@ -72,7 +72,7 @@ impl FromStr for MatchSpecOrPath {
             && let Some(archive) = CondaArchiveIdentifier::try_from_url(&url)
         {
             // This is a URL to a conda package
-            let name = PackageName::try_from(archive.name)
+            let name = PackageName::try_from(archive.identifier.name)
                 .map_err(|e| format!("invalid package name: {e}"))?;
 
             return Ok(Self::MatchSpec(Box::new(MatchSpec {
@@ -162,8 +162,8 @@ fn path_spec_to_match_spec(path_spec: PathSpec) -> Result<MatchSpec, String> {
     let archive = CondaArchiveIdentifier::try_from_url(&url)
         .ok_or_else(|| format!("failed to parse package archive from '{url}'"))?;
 
-    let name =
-        PackageName::try_from(archive.name).map_err(|e| format!("invalid package name: {e}"))?;
+    let name = PackageName::try_from(archive.identifier.name)
+        .map_err(|e| format!("invalid package name: {e}"))?;
 
     Ok(MatchSpec {
         name: Some(name.into()),
