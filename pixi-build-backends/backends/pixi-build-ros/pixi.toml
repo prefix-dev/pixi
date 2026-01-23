@@ -18,7 +18,6 @@ patchelf = "==0.18.0"
 
 [dependencies]
 py-pixi-build-backend = "*"
-py_rattler = ">=0.20,<0.21"
 pydantic = ">=2.8.2,<3"
 
 [pypi-dependencies]
@@ -27,37 +26,12 @@ pixi-build-ros = { path = ".", editable = true }
 [feature.test.tasks]
 build-pixi-release = "pixi run --manifest-path ../../../pixi.toml --environment rust-build build-release"
 lint-mypy = "mypy"
-test = { cmd = "pytest tests", depends-on = [
-  "build-pixi-release",
-  "create-channel",
-] }
-test-ci = { cmd = "pytest tests", depends-on = ["create-channel"] }
-
-[feature.test.tasks.build-ros-channel]
-cmd = """
-rattler-build build \
-  --experimental \
-  --no-build-id \
-  --up-to pixi-build-ros \
-  --channel-priority disabled \
-  --recipe ../../recipe/all-backends/recipe.yaml \
-  --channel https://prefix.dev/conda-forge \
-  --variant-config ../../recipe/variants.yaml \
-  --output-dir tests/integration/artifacts-channel
-"""
-description = "Build pixi-build-ros into local test channel"
-
-[feature.test.tasks.index-ros-channel]
-cmd = "rattler-index fs --force --write-shards false --write-zst false tests/integration/artifacts-channel"
-depends-on = ["build-ros-channel"]
-description = "Index the local ROS backend channel"
-
-[feature.test.tasks.create-channel]
-depends-on = ["build-ros-channel", "index-ros-channel"]
-description = "Build and index local ROS backend channel for integration tests"
+test = { cmd = "pytest tests" }
+test-ci = { cmd = "pytest tests" }
 
 [feature.test.dependencies]
 mypy = ">=1.18.2,<2"
+pixi-build-ros = { path = "." }
 pixi-pycharm = ">=0.0.8,<0.1"
 pytest = "*"
 rattler-build = { git = "https://github.com/prefix-dev/rattler-build.git", branch = "refactor" }
@@ -65,9 +39,10 @@ rattler-index = ">=0.25.2,<0.26"
 sccache = ">=0.12,<0.13"
 syrupy = ">=5,<6"
 types-pyyaml = "*"
-# You can skip this as it's a long build, uncomment this when developing only in this package
-#py-pixi-build-backend = "*"
-py-pixi-build-backend = { path = "../../py-pixi-build-backend" }
+
+[feature.test.activation.env]
+# We override the backend in the tests as it's a dependency for the test environment.
+PIXI_BUILD_BACKEND_OVERRIDE = "pixi-build-ros"
 
 [feature.lint.dependencies]
 ruff = "*"
@@ -90,7 +65,7 @@ python = ">=3.10"
 [package.run-dependencies]
 catkin_pkg = "*"
 pixi-build-api-version = ">=4,<5"
-py_rattler = ">=0.15.0,<0.16"
+py_rattler = ">=0.20,<0.21"
 pydantic = ">=2.8.2,<3"
 python = ">=3.10"
 pyyaml = "*"
