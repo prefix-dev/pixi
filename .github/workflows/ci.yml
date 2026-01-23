@@ -874,6 +874,10 @@ jobs:
     name: Backends - ROS
     # Run on when ros backend changed, on main branch, or when extra slow tests are requested
     if: ${{ needs.determine_changes.outputs.ros_backend == 'true' || github.ref == 'refs/heads/main' ||  contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
     needs:
       - build-binary-linux-x86_64
       - build-binary-macos-aarch64
