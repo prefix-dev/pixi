@@ -76,7 +76,10 @@ outputs:
               - copy %CARGO_TARGET_DIR%\release\pixi-build-python.exe %PREFIX%\bin\
               - copy %CARGO_TARGET_DIR%\release\pixi-build-rattler-build.exe %PREFIX%\bin\
               - copy %CARGO_TARGET_DIR%\release\pixi-build-rust.exe %PREFIX%\bin\
-          - cargo-bundle-licenses --format yaml --output $PREFIX/THIRDPARTY.yml
+          - if: unix
+            then: cargo-bundle-licenses --format yaml --output $PREFIX/THIRDPARTY.yml
+          - if: win
+            then: cargo-bundle-licenses --format yaml --output %PREFIX%\THIRDPARTY.yml
 
   # === API Version (metadata only) ===
   - package:
