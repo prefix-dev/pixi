@@ -2749,7 +2749,7 @@ hello = { cmd = "ros2 run my_package my_node", depends-on = ["build"] }
 To build a C++ node you need to add the `ament_cmake` and some other build dependencies to your manifest file.
 
 ```shell
-pixi add ros-humble-ament-cmake-auto compilers pkg-config cmake ninja
+pixi add ros-humble-ament-cmake-auto compilers pkg-config "cmake<4" ninja colcon-common-extensions
 ```
 
 Now you can create a C++ node with the following command
