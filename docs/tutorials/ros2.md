@@ -66,7 +66,7 @@ Now run the `turtlesim` example.
 pixi run ros2 run turtlesim turtlesim_node
 ```
 
-**Or** use the `shell` command to start an activated environment in your terminal.
+**Or** use the `shell` command to start a shell in the activated environment in your terminal.
 
 ```shell
 pixi shell
@@ -181,7 +181,7 @@ hello = { cmd = "ros2 run my_package my_node", depends-on = ["build"] }
 To build a C++ node you need to add the `ament_cmake` and some other build dependencies to your manifest file.
 
 ```shell
-pixi add ros-humble-ament-cmake-auto compilers pkg-config cmake ninja
+pixi add ros-humble-ament-cmake-auto compilers pkg-config "cmake<4" ninja colcon-common-extensions
 ```
 
 Now you can create a C++ node with the following command
@@ -222,8 +222,8 @@ Let's inspire the community together!
 
 ### What happens with `rosdep`?
 
-Currently, we don't support `rosdep` in a Pixi environment, so you'll have to add the packages using `pixi add`.
-`rosdep` will call `conda install` which isn't supported in a Pixi environment.
+Currently, we don't support `rosdep` in a Pixi environment, so you'll
+have to add the packages using `pixi add`. `rosdep` will call `conda install` which isn't supported in a Pixi environment.
 
 ### Where can I find more documentation on the `robostack-*` channels?
 

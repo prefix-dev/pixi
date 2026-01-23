@@ -8,8 +8,10 @@ use futures::{FutureExt, StreamExt};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_record::{PinnedSourceSpec, VariantValue};
-use pixi_spec::{SourceAnchor, SourceSpec};
-use rattler_conda_types::{ChannelConfig, ChannelUrl, MatchSpec, ParseStrictness};
+use pixi_spec::{SourceAnchor, SourceLocationSpec, SourceSpec};
+use rattler_conda_types::{
+    ChannelConfig, ChannelUrl, MatchSpec, PackageNameMatcher, ParseStrictness,
+};
 use thiserror::Error;
 
 use crate::{
@@ -43,7 +45,7 @@ pub struct CollectedSourceMetadata {
 }
 
 /// An error that can occur while collecting source metadata.
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Clone, Error, Diagnostic)]
 pub enum CollectSourceMetadataError {
     #[error("failed to extract metadata for package '{}'", .name.as_source())]
     SourceMetadataError {
@@ -103,7 +105,7 @@ impl SourceMetadataCollector {
         loop {
             // Create futures for all encountered specs.
             for (name, spec, chain) in specs.drain(..) {
-                if already_encountered_specs.insert(spec.clone()) {
+                if already_encountered_specs.insert((name.clone(), spec.location.clone())) {
                     source_futures.push(
                         self.collect_source_metadata(name, spec, chain)
                             .boxed_local(),
@@ -123,27 +125,23 @@ impl SourceMetadataCollector {
             // Process transitive dependencies
             for record in &source_metadata.cached_metadata.records {
                 chain.push(record.package_record.name.clone());
-                let anchor = SourceAnchor::from(SourceSpec::from(record.manifest_source.clone()));
+                let anchor =
+                    SourceAnchor::from(SourceLocationSpec::from(record.manifest_source.clone()));
                 for depend in &record.package_record.depends {
                     if let Ok(spec) = MatchSpec::from_str(depend, ParseStrictness::Lenient) {
-                        if let Some((name, source_spec)) =
-                            spec.name.as_ref().and_then(|name_matcher| {
-                                let name = name_matcher
-                                    .as_exact()
-                                    .expect("depends can only contain exact package names");
-                                record
-                                    .sources
-                                    .get(name.as_normalized())
-                                    .map(|source_spec| (name.clone(), source_spec.clone()))
-                            })
-                        {
+                        let (Some(PackageNameMatcher::Exact(name)), nameless_spec) =
+                            spec.clone().into_nameless()
+                        else {
+                            unimplemented!(
+                                "non exact packages names are not supported in {depend}"
+                            );
+                        };
+                        if let Some(source_location) = record.sources.get(name.as_normalized()) {
                             // We encountered a transitive source dependency.
-                            let resolved_location = anchor.resolve(source_spec.location);
+                            let resolved_location = anchor.resolve(source_location.clone());
                             specs.push((
                                 name,
-                                SourceSpec {
-                                    location: resolved_location,
-                                },
+                                SourceSpec::new(resolved_location, nameless_spec),
                                 chain.clone(),
                             ));
                         } else {

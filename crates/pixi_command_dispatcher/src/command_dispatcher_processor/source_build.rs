@@ -35,10 +35,10 @@ impl CommandDispatcherProcessor {
         match self.source_build.entry(source_build_id) {
             Entry::Occupied(mut entry) => match entry.get_mut() {
                 PendingDeduplicatingTask::Pending(pending, _) => pending.push(task.tx),
-                PendingDeduplicatingTask::Result(result, _) => {
-                    let _ = task.tx.send(Ok(result.clone()));
+                PendingDeduplicatingTask::Completed(result, _) => {
+                    let _ = task.tx.send(result.clone());
                 }
-                PendingDeduplicatingTask::Errored => {
+                PendingDeduplicatingTask::Cancelled => {
                     // Drop the sender, this will cause a cancellation on the other side.
                     drop(task.tx);
                 }
@@ -62,7 +62,12 @@ impl CommandDispatcherProcessor {
                         .insert(source_build_id, reporter_id);
                 }
 
-                self.queue_source_build_task(source_build_id, task.spec, task.cancellation_token);
+                self.queue_source_build_task(
+                    source_build_id,
+                    task.spec,
+                    task.cancellation_token,
+                    task.parent,
+                );
             }
         }
     }
@@ -73,6 +78,7 @@ impl CommandDispatcherProcessor {
         source_build_id: SourceBuildId,
         spec: SourceBuildSpec,
         cancellation_token: CancellationToken,
+        parent: Option<CommandDispatcherContext>,
     ) {
         let dispatcher_context = CommandDispatcherContext::SourceBuild(source_build_id);
         let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
@@ -91,6 +97,12 @@ impl CommandDispatcherProcessor {
             }
             run_exports_reporter = created;
         }
+
+        // Create a child cancellation token linked to parent's token (if any).
+        let cancellation_token = self.get_child_cancellation_token(parent, cancellation_token);
+
+        // Store the cancellation token for this context so child tasks can link to it.
+        self.store_cancellation_token(dispatcher_context, cancellation_token.clone());
 
         self.pending_futures.push(
             cancellation_token
@@ -115,7 +127,10 @@ impl CommandDispatcherProcessor {
         id: SourceBuildId,
         result: Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>>,
     ) {
-        self.parent_contexts.remove(&id.into());
+        let context = CommandDispatcherContext::SourceBuild(id);
+        self.parent_contexts.remove(&context);
+        self.remove_cancellation_token(context);
+
         if let Some((reporter, reporter_id)) = self
             .reporter
             .as_deref_mut()

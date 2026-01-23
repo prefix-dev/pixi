@@ -13,6 +13,7 @@ version = "0.1.0"
 fs-err = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
+typed-path = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

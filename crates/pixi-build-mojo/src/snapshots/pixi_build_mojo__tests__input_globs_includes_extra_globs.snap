@@ -1,0 +1,10 @@
+---
+source: crates/pixi-build-mojo/src/main.rs
+expression: result
+---
+Ok(
+    {
+        "**/*.{mojo,🔥}",
+        "**/.c",
+    },
+)

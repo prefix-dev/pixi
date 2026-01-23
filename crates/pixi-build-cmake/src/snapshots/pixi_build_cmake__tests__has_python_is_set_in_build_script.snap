@@ -1,0 +1,9 @@
+---
+source: crates/pixi-build-cmake/src/main.rs
+expression: generated_recipe.recipe.build
+---
+number: ~
+script:
+  content: "[content]"
+  env: {}
+  secrets: []

@@ -1,7 +1,3 @@
-[workspace]
-# We don't use any workspace settings at the moment,
-# but without it Cargo thinks this crate belongs to our top-level workspace
-
 [package]
 authors = ["pixi contributors <hi@prefix.dev>"]
 description = "Trampoline binary that is used to run binaries instaled by pixi global"

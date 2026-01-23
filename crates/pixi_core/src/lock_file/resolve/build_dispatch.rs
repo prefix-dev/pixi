@@ -18,6 +18,7 @@
 //! needed.
 use std::cell::Cell;
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::{collections::HashMap, path::Path};
 
 use crate::environment::{CondaPrefixUpdated, CondaPrefixUpdater};
@@ -27,6 +28,7 @@ use crate::{
 };
 use async_once_cell::OnceCell as AsyncCell;
 use once_cell::sync::OnceCell;
+use pixi_install_pypi::initialize_uv_flags;
 use pixi_manifest::EnvironmentName;
 use pixi_manifest::pypi::pypi_options::NoBuildIsolation;
 use pixi_record::PixiRecord;
@@ -218,6 +220,10 @@ pub struct LazyBuildDispatch<'a> {
     workspace_cache: WorkspaceCache,
 
     pub ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
+
+    /// Shared error holder for storing initialization errors that can be retrieved
+    /// after the LazyBuildDispatch is consumed (e.g., in catch_unwind scenarios)
+    pub last_error: Arc<OnceCell<LazyBuildDispatchError>>,
 }
 
 /// These are resources for the [`BuildDispatch`] that need to be lazily
@@ -242,8 +248,6 @@ pub struct LazyBuildDispatchDependencies {
     extra_build_variables: OnceCell<ExtraBuildVariables>,
     /// Package-specific configuration settings
     package_config_settings: OnceCell<PackageConfigSettings>,
-    /// The last initialization error that occurred
-    last_error: OnceCell<LazyBuildDispatchError>,
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
@@ -276,11 +280,6 @@ impl IsBuildBackendError for LazyBuildDispatchError {
 }
 
 impl<'a> LazyBuildDispatch<'a> {
-    /// Get the last initialization error if available
-    pub fn last_initialization_error(&self) -> Option<&LazyBuildDispatchError> {
-        self.lazy_deps.last_error.get()
-    }
-
     /// Create a new `PixiBuildDispatch` instance.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -293,6 +292,7 @@ impl<'a> LazyBuildDispatch<'a> {
         lazy_deps: &'a LazyBuildDispatchDependencies,
         ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
         disallow_install_conda_prefix: bool,
+        last_error: Arc<OnceCell<LazyBuildDispatchError>>,
     ) -> Self {
         Self {
             params,
@@ -307,6 +307,7 @@ impl<'a> LazyBuildDispatch<'a> {
             disallow_install_conda_prefix,
             workspace_cache: WorkspaceCache::default(),
             ignore_packages,
+            last_error,
         }
     }
 
@@ -315,6 +316,8 @@ impl<'a> LazyBuildDispatch<'a> {
     async fn get_or_try_init(&self) -> Result<&BuildDispatch<'a>, LazyBuildDispatchError> {
         self.build_dispatch
             .get_or_try_init(async {
+                initialize_uv_flags(None);
+
                 // Disallow installing if the flag is set.
                 if self.disallow_install_conda_prefix {
                     return Err(LazyBuildDispatchError::InstallationRequiredButDisallowed);
@@ -441,7 +444,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
             Ok(dispatch) => dispatch.interpreter().await,
             Err(e) => {
                 // Store the error for later retrieval
-                let _ = self.lazy_deps.last_error.set(e);
+                let _ = self.last_error.set(e);
                 panic!("could not initialize build dispatch correctly")
             }
         }

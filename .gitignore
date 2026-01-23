@@ -72,6 +72,12 @@ target/
 *.orig
 **/*.rs.bk
 
+# Backend build debug output
+crates/pixi-build-*/debug/
+
+# Backend test artifacts channel
+pixi-build-backends/backends/pixi-build-ros/tests/integration/artifacts-channel/
+
 # IDE and editor files
 .idea/
 .vscode/

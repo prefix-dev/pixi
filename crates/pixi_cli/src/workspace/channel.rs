@@ -58,15 +58,13 @@ pub struct ListArgs {
     pub urls: bool,
 }
 
-impl TryFrom<AddRemoveArgs> for ChannelOptions {
+impl TryFrom<&AddRemoveArgs> for ChannelOptions {
     type Error = miette::Report;
 
-    fn try_from(args: AddRemoveArgs) -> Result<Self, Self::Error> {
+    fn try_from(args: &AddRemoveArgs) -> Result<Self, Self::Error> {
         Ok(Self {
-            channel: args.channel,
-            priority: args.priority,
-            prepend: args.prepend,
-            feature: args.feature,
+            channels: args.channel.clone(),
+            feature: args.feature.clone(),
             no_install: args.no_install_config.no_install,
             lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
         })
@@ -95,7 +93,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
 
     match args.command {
-        Command::Add(add_args) => workspace_ctx.add_channel(add_args.try_into()?).await,
+        Command::Add(add_args) => {
+            let priority = add_args.priority;
+            let prepend = add_args.prepend;
+            workspace_ctx
+                .add_channel((&add_args).try_into()?, priority, prepend)
+                .await
+        }
         Command::List(args) => {
             let environments = workspace_ctx.list_channel().await;
             for (env_name, channels) in environments {
@@ -134,6 +138,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Ok(())
         }
-        Command::Remove(remove_args) => workspace_ctx.remove_channel(remove_args.try_into()?).await,
+        Command::Remove(remove_args) => {
+            let priority = remove_args.priority;
+            workspace_ctx
+                .remove_channel((&remove_args).try_into()?, priority)
+                .await
+        }
     }
 }

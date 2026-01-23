@@ -16,7 +16,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.62.2",
+    None => "0.63.2",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -112,6 +112,14 @@ pub const RATTLER_BUILD_FILE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
 pub const RATTLER_BUILD_DIRS: [&str; 2] = ["", "recipe"];
 pub const ROS_BACKEND_FILE_NAMES: [&str; 1] = ["package.xml"];
 
+pub static KNOWN_MANIFEST_FILES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+    let mut v = Vec::new();
+    v.push(WORKSPACE_MANIFEST);
+    v.push(PYPROJECT_MANIFEST);
+    v.push(MOJOPROJECT_MANIFEST);
+    v.extend(RATTLER_BUILD_FILE_NAMES);
+    v
+});
 pub static TASK_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().blue());
 pub static TASK_ERROR_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().red());
 pub static PLATFORM_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().yellow());

@@ -240,6 +240,7 @@ struct PackageToOutput {
     source: Option<String>,
     license: Option<String>,
     license_family: Option<String>,
+    is_explicit: bool,
     #[serde(skip_serializing_if = "serde_skip_is_editable")]
     is_editable: bool,
     md5: Option<String>,
@@ -258,16 +259,11 @@ struct PackageToOutput {
 }
 
 impl PackageToOutput {
-    /// Returns true if this package was explicitly requested
-    fn is_explicit(&self) -> bool {
-        self.requested_spec.is_some()
-    }
-
     /// Get a Cell for a field, with proper styling and alignment
     fn get_field_cell(&self, field: Field) -> Cell {
         let mut cell = match field {
             Field::Name => {
-                let content = if self.is_explicit() {
+                let content = if self.is_explicit {
                     let style = match self.kind {
                         KindPackage::Conda => consts::CONDA_PACKAGE_STYLE.clone().bold(),
                         KindPackage::Pypi => consts::PYPI_PACKAGE_STYLE.clone().bold(),
@@ -498,7 +494,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if args.explicit {
         packages_to_output = packages_to_output
             .into_iter()
-            .filter(|p| p.is_explicit())
+            .filter(|p| p.is_explicit)
             .collect::<Vec<_>>();
     }
 
@@ -708,6 +704,7 @@ fn create_package_to_output<'a, 'b>(
     };
 
     let requested_spec = requested_specs.get(&name).cloned();
+    let is_explicit = requested_spec.is_some();
 
     let is_editable = match package {
         PackageExt::Conda(_) => false,
@@ -739,6 +736,7 @@ fn create_package_to_output<'a, 'b>(
         source,
         license,
         license_family,
+        is_explicit,
         is_editable,
         md5,
         sha256,

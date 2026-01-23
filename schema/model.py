@@ -439,10 +439,13 @@ class TaskInlineTable(StrictBaseModel):
         description="A map of environment variables to values, used in the task, these will be overwritten by the shell.",
         examples=[{"key": "value"}, {"ARGUMENT": "value"}],
     )
+    default_environment: EnvironmentName | None = Field(
+        None,
+        description="A default environment to run the task",
+    )
     description: NonEmptyStr | None = Field(
         None,
         description="A short description of the task",
-        examples=["Build the project"],
     )
     clean_env: bool | None = Field(
         None,
@@ -719,6 +722,11 @@ class PyPIOptions(StrictBaseModel):
         None,
         description="The strategy to use when considering pre-release versions",
         examples=["disallow", "allow", "if-necessary", "explicit", "if-necessary-or-explicit"],
+    )
+    skip_wheel_filename_check: bool | None = Field(
+        None,
+        description="Skip wheel filename validation, allowing installation of wheels with version mismatches between filename and metadata",
+        examples=[True, False],
     )
 
 

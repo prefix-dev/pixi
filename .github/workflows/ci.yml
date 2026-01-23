@@ -97,10 +97,18 @@ jobs:
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
-          environments: lint
+          environments: lefthook
           cache-write: ${{ github.ref == 'refs/heads/main' }}
       - name: lint (if this step fails, please 'pixi run lint' locally and push the changes)
         run: pixi run lint
+      - name: Check if lint made any changes
+        run: |
+          if ! git diff --quiet; then
+            echo "Error: Linting made changes to the code"
+            echo "Please run 'pixi run lint' locally and commit the changes."
+            git diff
+            exit 1
+          fi
 
   # Check that all the code references are correct.
   check-rustdoc-links:
@@ -126,9 +134,6 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           persist-credentials: false
-      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
-        with:
-          cache-write: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           workspaces: ". -> target/pixi"
@@ -144,6 +149,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
+        with:
+          environments: "docs"
 
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
@@ -184,6 +191,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
+          environments: rust-test
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           workspaces: ". -> target/pixi"
@@ -208,6 +216,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
+          environments: rust-test
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           workspaces: ". -> target/pixi"
@@ -232,6 +241,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
+          environments: rust-test
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           workspaces: ". -> target/pixi"
@@ -259,6 +269,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
+          environments: rust-test
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           cache-directories: ${{ env.DEV_DRIVE }}/target
@@ -267,6 +278,7 @@ jobs:
       - name: Test pixi
         run: pixi run test-slow --retries 2
         env:
+          CARGO_PROFILE_DEV_DEBUG: 0 # Disable debuginfo only on windows because it takes a lot of space
           CARGO_TARGET_DIR: ${{ env.DEV_DRIVE }}/target
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
@@ -299,12 +311,14 @@ jobs:
           --locked
           --target x86_64-unknown-linux-musl
           --profile $CARGO_BUILD_PROFILE
-          --features self_update
+          --features pixi/self_update
       - name: "Upload binary"
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
-          path: ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
+          path: |
+            ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
+            ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*
           retention-days: 14
 
   build-binary-linux-riscv64gc:
@@ -359,12 +373,14 @@ jobs:
           cargo build
           --locked
           --profile $CARGO_BUILD_PROFILE
-          --features self_update
+          --features pixi/self_update
       - name: "Upload binary"
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
-          path: ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
+          path: |
+            ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
+            ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*
           retention-days: 14
 
   build-binary-macos-x86_64:
@@ -384,12 +400,14 @@ jobs:
           cargo build
           --locked
           --profile $CARGO_BUILD_PROFILE
-          --features self_update
+          --features pixi/self_update
       - name: "Upload binary"
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: pixi-macos-x86_64-${{ github.sha }}
-          path: ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
+          path: |
+            ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
+            ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*
           retention-days: 14
 
   build-binary-windows-x86_64:
@@ -416,12 +434,14 @@ jobs:
           cargo build
           --locked
           --profile $env:CARGO_BUILD_PROFILE
-          --features self_update
+          --features pixi/self_update
       - name: "Upload binary"
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
-          path: ${{ env.PIXI_WORKSPACE }}/target/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
+          path: |
+            ${{ env.PIXI_WORKSPACE }}/target/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
+            ${{ env.PIXI_WORKSPACE }}/target/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*.exe
           retention-days: 14
 
   build-binary-windows-aarch64:
@@ -452,12 +472,14 @@ jobs:
           --locked
           --target aarch64-pc-windows-msvc
           --profile $env:CARGO_BUILD_PROFILE
-          --features self_update
+          --features pixi/self_update
       - name: "Upload binary"
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: pixi-windows-aarch64-${{ github.sha }}
-          path: ${{ env.PIXI_WORKSPACE }}/target/aarch64-pc-windows-msvc/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
+          path: |
+            ${{ env.PIXI_WORKSPACE }}/target/aarch64-pc-windows-msvc/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
+            ${{ env.PIXI_WORKSPACE }}/target/aarch64-pc-windows-msvc/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*.exe
           retention-days: 14
 
   #
@@ -765,9 +787,12 @@ jobs:
         run: pixi install -vvv --locked
         working-directory: polarify
       - run: pixi info
+        working-directory: polarify
       - run: pixi list
+        working-directory: polarify
       - name: Run downstream polarify environment
         run: pixi run --locked echo "Running downstream polarify environment"
+        working-directory: polarify
 
   test-downstream-linux-x86_64:
     timeout-minutes: 15
@@ -828,9 +853,12 @@ jobs:
         run: pixi install -vvv --locked
         working-directory: polarify
       - run: pixi info
+        working-directory: polarify
       - run: pixi list
+        working-directory: polarify
       - name: Run downstream polarify environment
         run: pixi run --locked echo "Running downstream polarify environment"
+        working-directory: polarify
   #
   # Install a number of common wheels on some platforms
   #
@@ -864,6 +892,20 @@ jobs:
       sha: ${{ github.sha }}
       arch: macos-aarch64
       runs-on: macos-15
+
+  #
+  # Test pixi-build-ros backend
+  #
+
+  test-backends-ros:
+    name: Backends - ROS
+    needs:
+      - build-binary-linux-x86_64
+      - build-binary-macos-aarch64
+      - build-binary-windows-x86_64
+    uses: ./.github/workflows/backends-ros.yml
+    with:
+      sha: ${{ github.sha }}
 
   #
   # Test unix installer on some platforms
@@ -1005,106 +1047,3 @@ jobs:
       - name: "After Install"
         run: $USERPROFILE/.pixi/bin/pixi.exe --version
         shell: msys2 {0}
-
-  test-build-linux-x86_64:
-    timeout-minutes: 10
-    name: Test pixi-build Linux x86_64
-    runs-on: ubuntu-latest
-    needs: build-binary-linux-x86_64
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-        with:
-          repository: prefix-dev/pixi-build-testsuite
-          persist-credentials: false
-
-      - name: Set up pixi
-        uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
-        with:
-          cache-write: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Download pixi artifacts
-        run: pixi run download-artifacts --repo pixi --run-id ${{ github.run_id }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download pixi-build-backends artifacts
-        run: pixi run download-artifacts --repo pixi-build-backends
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup binary permissions
-        run: chmod a+x artifacts/pixi*
-
-      - name: Run integration tests
-        run: pixi run --locked test-slow
-
-  test-build-windows-x86_64:
-    timeout-minutes: 15
-    name: Test pixi-build Windows x86_64
-    runs-on: windows-latest
-    needs: build-binary-windows-x86_64
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-        with:
-          repository: prefix-dev/pixi-build-testsuite
-          persist-credentials: false
-
-      - name: Create Dev Drive
-        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
-
-      - name: Copy Git Repo to Dev Drive
-        run: Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
-
-      - name: Set up pixi
-        uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
-        with:
-          manifest-path: ${{ env.PIXI_WORKSPACE }}/pixi.toml
-          cache-write: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Download pixi artifacts
-        working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: pixi run download-artifacts --repo pixi --run-id ${{ github.run_id }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download pixi-build-backends artifacts
-        working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: pixi run download-artifacts --repo pixi-build-backends
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Run integration tests
-        run: pixi run --locked test-slow
-        working-directory: ${{ env.PIXI_WORKSPACE }}
-
-  test-build-macos-aarch64:
-    timeout-minutes: 10
-    name: Test pixi-build macOS aarch64
-    runs-on: macos-15
-    needs: build-binary-macos-aarch64
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-        with:
-          repository: prefix-dev/pixi-build-testsuite
-          persist-credentials: false
-
-      - name: Set up pixi
-        uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
-        with:
-          cache-write: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Download pixi artifacts
-        run: pixi run download-artifacts --repo pixi --run-id ${{ github.run_id }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download pixi-build-backends artifacts
-        run: pixi run download-artifacts --repo pixi-build-backends
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup binary permissions
-        run: chmod a+x artifacts/pixi*
-
-      - name: Run integration tests
-        run: pixi run --locked test-slow

@@ -718,6 +718,7 @@ impl PixiControl {
                 no_install_config: NoInstallConfig { no_install: false },
                 check: false,
                 json: false,
+                dry_run: false,
             },
         }
     }
@@ -767,6 +768,7 @@ impl TasksControl<'_> {
                 platform,
                 feature: feature_name.non_default().map(str::to_owned),
                 cwd: None,
+                default_environment: None,
                 env: Default::default(),
                 description: None,
                 clean_env: false,

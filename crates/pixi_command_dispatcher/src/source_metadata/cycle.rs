@@ -4,14 +4,14 @@ use itertools::Itertools;
 use rattler_conda_types::PackageName;
 
 /// Defines a package and in which dependency set the cycle occurred.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CycleEnvironment {
     Host,
     Build,
     Run,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Cycle {
     /// A list of package and in which environment the next package is used.
     /// Together, these form a cycle.

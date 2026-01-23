@@ -27,6 +27,7 @@ pixi_consts = { workspace = true }
 pixi_manifest = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = [
