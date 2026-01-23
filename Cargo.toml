@@ -243,7 +243,6 @@ rattler_upload = { version = "0.4.5", default-features = false, features = [
   "s3",
 ] }
 rattler_virtual_packages = { version = "2.3.0", default-features = false }
-rattler_config = { version = "0.2.25", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Rattler build crates
