@@ -67,7 +67,7 @@ pre-commit:
       root: pixi-build-backends/backends/pixi-build-ros
       glob: "*.{py,pyi}"
       stage_fixed: true
-      run: pixi {run} -e lint lint-ruff
+      run: pixi {run} -e lint lint
     - name: py-pixi-build-backend-fmt-rust
       root: pixi-build-backends/py-pixi-build-backend
       glob: "*.rs"
