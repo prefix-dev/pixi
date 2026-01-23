@@ -1281,8 +1281,8 @@ async fn test_multiple_prefix_update() {
         .finish();
 
     let python_repo_data_record = RepoDataRecord {
+        identifier: python_package.identifier(),
         package_record: python_package.package_record,
-        file_name: "python".to_owned(),
         url: Url::parse(url).unwrap(),
         channel: Some("https://repo.prefix.dev/conda-forge/".to_owned()),
     };
@@ -1295,8 +1295,8 @@ async fn test_multiple_prefix_update() {
         .finish();
 
     let wheel_repo_data_record = RepoDataRecord {
+        identifier: wheel_package.identifier(),
         package_record: wheel_package.package_record,
-        file_name: "wheel".to_owned(),
         url: Url::parse(
             "https://repo.prefix.dev/conda-forge/noarch/wheel-0.45.1-pyhd8ed1ab_1.conda",
         )
