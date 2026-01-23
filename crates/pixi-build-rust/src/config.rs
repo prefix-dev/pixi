@@ -11,7 +11,7 @@ pub struct RustBackendConfig {
     #[serde(default)]
     pub extra_args: Vec<String>,
     /// System environment variables
-    #[serde(default)]
+    #[serde(skip)]
     pub system_env: IndexMap<String, String>,
     /// Environment Variables
     #[serde(default)]
