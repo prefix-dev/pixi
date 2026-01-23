@@ -13,12 +13,8 @@ CARGO_TARGET_DIR = "target/pixi"
 lint.depends-on = ["lint-ruff", "lint-mypy"]
 
 [target.linux-64.dependencies]
-clang = ">=21.1,<21.2"
-mold = ">=2.33.0,<3.0"
 patchelf = "==0.18.0"
 
-[target.linux-64.activation]
-scripts = ["../../../scripts/activate.sh"]
 
 [dependencies]
 py-pixi-build-backend = "*"
