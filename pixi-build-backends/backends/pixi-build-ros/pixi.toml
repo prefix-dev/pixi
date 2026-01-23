@@ -29,7 +29,7 @@ pydantic = ">=2.8.2,<3"
 pixi-build-ros = { path = ".", editable = true }
 
 [feature.test.tasks]
-build-pixi-release = "pixi run --manifest-path ../../../pixi.toml build-release"
+build-pixi-release = "pixi run --manifest-path ../../../pixi.toml --environment rust-build build-release"
 lint-mypy = "mypy"
 test = { cmd = "pytest tests", depends-on = [
   "build-pixi-release",
