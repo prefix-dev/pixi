@@ -1,81 +1,50 @@
 [workspace]
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+channels = ["https://prefix.dev/conda-forge"]
 platforms = ["osx-arm64", "win-64", "linux-64", "linux-aarch64"]
 preview = ["pixi-build"]
+solve-strategy = "lowest-direct"
 
 [activation.env]
-CARGO_TARGET_DIR = "target/pixi"
-
-[tasks]
-lint.depends-on = ["lint-ruff", "lint-mypy"]
-
-[target.linux-64.dependencies]
-patchelf = "==0.18.0"
-
+# We override the backend in the tests as it's a dependency for the test environment.
+PIXI_BUILD_BACKEND_OVERRIDE = "pixi-build-ros"
 
 [dependencies]
-py-pixi-build-backend = "*"
-pydantic = ">=2.8.2,<3"
-
-[pypi-dependencies]
-pixi-build-ros = { path = ".", editable = true }
+pixi-build-ros.path = "."
+pixi-pycharm = ">=0.0.8,<0.1"
 
 [feature.test.tasks]
 build-pixi-release = "pixi run --manifest-path ../../../pixi.toml --environment rust-build build-release"
 lint-mypy = "mypy"
-test = { cmd = "pytest tests" }
-test-ci = { cmd = "pytest tests" }
+test = { cmd = "pytest tests/unit", description = "Run unit tests" }
+test-ci = { depends-on = ["test", "test-integration"] }
+test-integration = { cmd = "pytest tests/integration", default-environment = "integration-test" }
 
+# Unit testing and type checking
 [feature.test.dependencies]
 mypy = ">=1.18.2,<2"
-pixi-build-ros = { path = "." }
-pixi-pycharm = ">=0.0.8,<0.1"
-pytest = "*"
-rattler-build = { git = "https://github.com/prefix-dev/rattler-build.git", branch = "refactor" }
-rattler-index = ">=0.25.2,<0.26"
-sccache = ">=0.12,<0.13"
+pytest = ">=8,<9"
 syrupy = ">=5,<6"
-types-pyyaml = "*"
+types-pyyaml = ">=5.4"
 
-[feature.test.activation.env]
-# We override the backend in the tests as it's a dependency for the test environment.
-PIXI_BUILD_BACKEND_OVERRIDE = "pixi-build-ros"
+[feature.lint]
+dependencies.ruff = ">=0.14.13"
+tasks.lint = "ruff check --fix --exit-non-zero-on-fix --force-exclude --config pyproject.toml ."
 
-[feature.lint.dependencies]
-ruff = "*"
-
-[feature.lint.tasks]
-lint-ruff = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
-
-## Package section
+### Package section ###
 [package.build.backend]
 name = "pixi-build-python"
-version = "*"
+version = ">=0.4.5"
 
 [package.build.config]
 extra-input-globs = ["!tests/**"]
-
-[package.host-dependencies]
-hatchling = "*"
-python = ">=3.10"
+ignore-pypi-mapping = false
 
 [package.run-dependencies]
-catkin_pkg = "*"
-pixi-build-api-version = ">=4,<5"
-py_rattler = ">=0.20,<0.21"
-pydantic = ">=2.8.2,<3"
-python = ">=3.10"
-pyyaml = "*"
-rosdistro = "*"
 # should be added to `py-pixi-build-backend`
 typing-extensions = "*"
-# this depends has to match the test dependency, so switch comments if needed
-#py-pixi-build-backend = "*"
+# py-pixi-build-backend = "*"
 py-pixi-build-backend = { path = "../../py-pixi-build-backend" }
 
 [environments]
+default = ["test", "lint"]
 lint = { features = ["lint"], no-default-feature = true }
-test = { features = ["test"] }

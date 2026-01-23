@@ -2,15 +2,15 @@
 dependencies = [
   "rosdistro",
   "catkin_pkg",
-  "pytest",
   "toml",
   "pyyaml",
-  "pydantic",
-  "py_rattler",
+  "pydantic>=2.8.2,<3",
+  "py_rattler>=0.20,<0.21",
   #  TODO: publish to pypi
   #  "py-pixi-build-backend",
 ]
 name = "pixi-build-ros"
+requires-python = ">=3.10"
 version = "0.3.3"
 
 [build-system]

@@ -20,54 +20,24 @@ env:
   PYTHONIOENCODING: utf-8
 
 jobs:
-  test:
-    name: Test the pixi-build-ros package
-    runs-on: ubuntu-latest
-    env:
-      TARGET_RELEASE: target/pixi/release
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          persist-credentials: false
-      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
-        with:
-          manifest-path: pixi-build-backends/backends/pixi-build-ros/pixi.toml
-      - name: Download pixi binary
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
-        with:
-          name: pixi-linux-x86_64-${{ inputs.sha }}
-          path: ${{ env.TARGET_RELEASE }}
-      - name: Add pixi binary to PATH
-        run: |
-          chmod a+x ${{ github.workspace }}/${{ env.TARGET_RELEASE }}/pixi
-          echo "${{ github.workspace }}/${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
-      - name: Lint
-        run: |
-          cd pixi-build-backends/backends/pixi-build-ros
-          pixi run lint
-      - name: Run tests
-        run: |
-          cd pixi-build-backends/backends/pixi-build-ros
-          pixi run test-ci --color=yes
-
-  integration-test:
-    name: Integration tests
+  ros-backend:
+    name: ROS Backend Tests - ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             artifact: pixi-linux-x86_64
+            unit: true
           - os: macos-14
             artifact: pixi-macos-aarch64
+            unit: false
           - os: windows-latest
             artifact: pixi-windows-x86_64
+            unit: false
     runs-on: ${{ matrix.os }}
     env:
       TARGET_RELEASE: target/pixi/release
-      SCCACHE_GHA_ENABLED: "true"
-      ACTIONS_CACHE_SERVICE_V2: on
     steps:
       - uses: actions/checkout@v4
         with:
@@ -77,42 +47,30 @@ jobs:
         with:
           manifest-path: pixi-build-backends/backends/pixi-build-ros/pixi.toml
 
-      - name: Configure sccache
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
-        with:
-          script: |
-            core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-
       - name: Download pixi binary
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
         with:
-          name: ${{ matrix.artifact }}-${{ inputs.sha }}
+          name: pixi-linux-x86_64-${{ inputs.sha }}
           path: ${{ env.TARGET_RELEASE }}
 
-      - name: Add pixi binary to PATH (Unix)
-        if: runner.os != 'Windows'
+      - name: Add pixi binary to PATH
         run: |
           chmod a+x ${{ github.workspace }}/${{ env.TARGET_RELEASE }}/pixi
           echo "${{ github.workspace }}/${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
 
-      - name: Add pixi binary to PATH (Windows)
-        if: runner.os == 'Windows'
+      - name: Lint
+        if: matrix.unit == true
         run: |
-          echo "${{ github.workspace }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
+          cd pixi-build-backends/backends/pixi-build-ros
+          pixi run lint
 
-      - name: Verify pixi installation
-        run: pixi info
+      - name: ROS unit tests
+        if: matrix.unit == true
+        run: |
+          cd pixi-build-backends/backends/pixi-build-ros
+          pixi run test --color=yes
 
-      - name: Build ROS backend channel
-        working-directory: pixi-build-backends/backends/pixi-build-ros
-        run: pixi run --locked create-channel
-
-      - name: Run ROS integration tests
-        working-directory: pixi-build-backends/backends/pixi-build-ros
-        run: pixi run --locked pytest tests/integration -v
-
-      - name: Show sccache stats
-        shell: bash
-        working-directory: pixi-build-backends/backends/pixi-build-ros
-        run: pixi run --environment=test sccache --stop-server
+      - name: ROS integration tests
+        run: |
+          cd pixi-build-backends/backends/pixi-build-ros
+          pixi run test-integration --color=yes

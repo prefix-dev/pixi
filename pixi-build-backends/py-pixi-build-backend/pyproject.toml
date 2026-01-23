@@ -17,6 +17,7 @@ classifiers = [
   "Programming Language :: Rust",
   "Topic :: Software Development :: Build Tools",
 ]
+dependencies = ["typing-extensions"]
 description = "Python bindings for pixi-build-backends"
 dynamic = ["version"]
 keywords = ["build", "conda", "package", "python", "rust"]
