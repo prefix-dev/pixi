@@ -1648,6 +1648,15 @@
             "explicit",
             "if-necessary-or-explicit"
           ]
+        },
+        "skip-wheel-filename-check": {
+          "title": "Skip-Wheel-Filename-Check",
+          "description": "Skip wheel filename validation, allowing installation of wheels with version mismatches between filename and metadata",
+          "type": "boolean",
+          "examples": [
+            true,
+            false
+          ]
         }
       }
     },

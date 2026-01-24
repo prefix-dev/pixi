@@ -1,6 +1,6 @@
 use crate::{BinarySpec, Subdirectory};
 use itertools::Either;
-use rattler_conda_types::{NamelessMatchSpec, package::ArchiveIdentifier};
+use rattler_conda_types::{NamelessMatchSpec, package::CondaArchiveIdentifier};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -84,7 +84,7 @@ impl UrlSpec {
 
     /// Returns true if the URL points to a binary package.
     pub fn is_binary(&self) -> bool {
-        ArchiveIdentifier::try_from_url(&self.url).is_some()
+        CondaArchiveIdentifier::try_from_url(&self.url).is_some()
     }
 }
 

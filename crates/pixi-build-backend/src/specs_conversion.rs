@@ -230,6 +230,7 @@ fn binary_package_spec_to_package_dependency(
         url,
         license,
         condition: None,
+        track_features: None,
     })
 }
 

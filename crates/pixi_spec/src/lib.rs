@@ -470,6 +470,7 @@ impl SourceSpec {
             url: _,
             license,
             condition,
+            track_features: _,
         } = spec;
         Self {
             location,

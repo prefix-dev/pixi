@@ -14,7 +14,7 @@ use rattler_build::{
     variant_config::VariantConfig,
 };
 use rattler_conda_types::compression_level::CompressionLevel;
-use rattler_conda_types::{GenericVirtualPackage, NamedChannelOrUrl, package::ArchiveType};
+use rattler_conda_types::{GenericVirtualPackage, NamedChannelOrUrl, package::CondaArchiveType};
 use url::Url;
 
 use crate::{generated_recipe::GeneratedRecipe, utils::TemporaryRenderedRecipe};
@@ -147,7 +147,7 @@ pub async fn get_build_output(
                 timestamp,
                 subpackages: subpackages.clone(),
                 packaging_settings: PackagingSettings::from_args(
-                    ArchiveType::Conda,
+                    CondaArchiveType::Conda,
                     CompressionLevel::default(),
                 ),
                 store_recipe: false,
