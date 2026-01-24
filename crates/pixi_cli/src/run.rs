@@ -50,8 +50,9 @@ pub struct Args {
     /// environment, which can be an executable in the environment's PATH.
     pub task: Vec<String>,
 
-    /// Prefer running the command as an executable instead of a Pixi task
-    /// when both share the same name. Short: -x
+    /// Execute the command as an executable without resolving Pixi tasks.
+    ///
+    /// Useful when a task name and an executable have the same name.
     #[arg(long = "executable", short = 'x')]
     pub executable: bool,
 
