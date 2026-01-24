@@ -6,6 +6,7 @@ mod common;
 mod develop_dependencies_tests;
 mod global_tests;
 mod init_tests;
+mod inline_environment_tests;
 mod install_filter_tests;
 mod install_tests;
 mod lock_tests;

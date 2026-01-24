@@ -1080,6 +1080,55 @@ is equivalent to
 test = {features = ["test"]}
 ```
 
+#### Inline environment configuration
+
+Environments can also define dependencies, tasks, and other configuration directly, without requiring
+a separate feature definition. This is useful for environment-specific configuration that doesn't need
+to be reused across multiple environments.
+
+```toml title="Inline environment configuration"
+[environments.dev.dependencies]
+pytest = "*"
+
+[environments.dev.tasks]
+test = "pytest"
+```
+
+This is equivalent to creating a feature with the same name as the environment:
+
+```toml title="Equivalent explicit feature"
+[feature.dev.dependencies]
+pytest = "*"
+
+[feature.dev.tasks]
+test = "pytest"
+
+[environments]
+dev = ["dev"]
+```
+
+When inline configuration is used, a synthetic feature with the same name as the environment is
+automatically created and added to the environment's feature list. You can combine inline
+configuration with explicit feature references:
+
+```toml title="Combining inline config with explicit features"
+[feature.python.dependencies]
+python = "3.11.*"
+
+[environments.dev]
+features = ["python"]
+
+[environments.dev.dependencies]
+pytest = "*"
+```
+
+In this case, the `dev` environment will include both the `python` feature and the synthetic `dev`
+feature containing the pytest dependency.
+
+!!! note
+    You cannot define both a `[feature.X]` and inline configuration on `[environments.X]` with the
+    same name. If you need to share configuration across environments, define it as an explicit feature.
+
 When an environment comprises several features (including the default feature):
 
 - The `activation` and `tasks` of the environment are the union of the `activation` and `tasks` of all its features.

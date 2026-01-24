@@ -280,22 +280,85 @@ impl TomlManifest {
         // Add all named environments
         let mut features_used_by_environments = HashSet::new();
         for (name, env) in toml_environments {
-            // Decompose the TOML
+            // Decompose the TOML and handle inline feature config
             let (included_features, features_span, solve_group, no_default_feature) = match env {
-                TomlEnvironmentList::Map(env) => {
-                    let (features, features_span) = env.features.map_or_else(
+                TomlEnvironmentList::Map(mut env) => {
+                    let (explicit_features, features_span) = env.features.clone().map_or_else(
                         || (Vec::new(), None),
                         |Spanned { value, span }| (value, Some(span)),
                     );
+
+                    // Get solve_group and no_default_feature before potentially consuming env
+                    let solve_group = env.solve_group.clone();
+                    let no_default_feature = env.no_default_feature;
+
+                    // Handle inline environment config - create synthetic feature
+                    let synthetic_feature_name = if env.has_inline_config() {
+                        let synthetic_name = FeatureName::from(name.as_str());
+
+                        // Check for conflict with existing feature
+                        if features.contains_key(&synthetic_name) {
+                            return Err(TomlError::from(
+                                GenericError::new(format!(
+                                    "Cannot define inline config for environment '{}' because \
+                                     a feature with the same name already exists",
+                                    name
+                                ))
+                                .with_help(format!(
+                                    "Either rename the feature or move the config to \
+                                     [feature.{}.dependencies]",
+                                    name
+                                )),
+                            ));
+                        }
+
+                        // Extract warnings before conversion
+                        warnings.extend(env.take_warnings());
+
+                        // Convert inline config to Feature using existing logic
+                        if let Some(toml_feature) = env.into_toml_feature() {
+                            let WithWarnings {
+                                value: synthetic_feature,
+                                warnings: feature_warnings,
+                            } = toml_feature.into_feature(
+                                synthetic_name.clone(),
+                                preview,
+                                &workspace.value,
+                            )?;
+
+                            warnings.extend(feature_warnings);
+
+                            // Add synthetic feature to features map
+                            features.insert(synthetic_name.clone(), synthetic_feature);
+                            features_used_by_environments.insert(synthetic_name.to_string());
+
+                            Some(synthetic_name)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
+                    // Prepend synthetic feature to the feature list
+                    let mut final_features = Vec::new();
+                    if let Some(synthetic_name) = synthetic_feature_name {
+                        final_features.push(Spanned {
+                            value: synthetic_name.to_string(),
+                            span: toml_span::Span::default(),
+                        });
+                    }
+                    final_features.extend(explicit_features);
+
                     (
-                        features,
+                        final_features,
                         features_span,
-                        env.solve_group,
-                        env.no_default_feature,
+                        solve_group,
+                        no_default_feature,
                     )
                 }
-                TomlEnvironmentList::Seq(features) => {
-                    (features.value, Some(features.span), None, false)
+                TomlEnvironmentList::Seq(seq_features) => {
+                    (seq_features.value, Some(seq_features.span), None, false)
                 }
             };
 
@@ -1193,5 +1256,180 @@ mod test {
           ╰────
         "#
         );
+    }
+
+    #[test]
+    fn test_inline_environment_creates_synthetic_feature() {
+        let (workspace, _, _) = TomlManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [environments.dev.dependencies]
+        pytest = "*"
+        "#,
+        )
+        .unwrap()
+        .into_workspace_manifest(
+            ExternalWorkspaceProperties::default(),
+            PackageDefaults::default(),
+            None,
+        )
+        .unwrap();
+
+        // Verify synthetic feature was created
+        assert!(workspace.features.contains_key(&FeatureName::from("dev")));
+
+        // Verify environment references the synthetic feature
+        let dev_env_idx = workspace
+            .environments
+            .by_name
+            .get(&EnvironmentName::Named("dev".to_string()));
+        assert!(dev_env_idx.is_some());
+
+        // Verify the environment has the synthetic feature in its feature list
+        let dev_env = workspace.environments.environments[dev_env_idx.unwrap().0]
+            .as_ref()
+            .unwrap();
+        assert!(dev_env.features.contains(&"dev".to_string()));
+    }
+
+    #[test]
+    fn test_inline_environment_conflict_with_feature() {
+        let input = r#"
+        [workspace]
+        name = "test"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [feature.dev.dependencies]
+        foo = "*"
+
+        [environments.dev.dependencies]
+        bar = "*"
+        "#;
+
+        let manifest = TomlManifest::from_toml_str(input).unwrap();
+        let result = manifest.into_workspace_manifest(
+            ExternalWorkspaceProperties::default(),
+            PackageDefaults::default(),
+            None,
+        );
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("feature with the same name already exists"));
+    }
+
+    #[test]
+    fn test_inline_environment_with_explicit_features() {
+        let (workspace, _, _) = TomlManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [feature.python.dependencies]
+        python = "3.11.*"
+
+        [environments.dev]
+        features = ["python"]
+
+        [environments.dev.dependencies]
+        pytest = "*"
+        "#,
+        )
+        .unwrap()
+        .into_workspace_manifest(
+            ExternalWorkspaceProperties::default(),
+            PackageDefaults::default(),
+            None,
+        )
+        .unwrap();
+
+        // Verify both features exist
+        assert!(
+            workspace
+                .features
+                .contains_key(&FeatureName::from("python"))
+        );
+        assert!(workspace.features.contains_key(&FeatureName::from("dev")));
+
+        // Verify environment has both features (synthetic first, then explicit)
+        let dev_env_idx = workspace
+            .environments
+            .by_name
+            .get(&EnvironmentName::Named("dev".to_string()))
+            .unwrap();
+        let dev_env = workspace.environments.environments[dev_env_idx.0]
+            .as_ref()
+            .unwrap();
+        assert!(dev_env.features.contains(&"dev".to_string()));
+        assert!(dev_env.features.contains(&"python".to_string()));
+    }
+
+    #[test]
+    fn test_inline_environment_with_tasks() {
+        let (workspace, _, _) = TomlManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [environments.dev.dependencies]
+        pytest = "*"
+
+        [environments.dev.tasks]
+        test = "pytest"
+        "#,
+        )
+        .unwrap()
+        .into_workspace_manifest(
+            ExternalWorkspaceProperties::default(),
+            PackageDefaults::default(),
+            None,
+        )
+        .unwrap();
+
+        // Verify synthetic feature was created with the task
+        let dev_feature = workspace.features.get(&FeatureName::from("dev")).unwrap();
+        assert!(
+            dev_feature
+                .targets
+                .default()
+                .tasks
+                .contains_key(&TaskName::from("test"))
+        );
+    }
+
+    #[test]
+    fn test_inline_environment_pypi_dependencies() {
+        let (workspace, _, _) = TomlManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [environments.dev.pypi-dependencies]
+        requests = "*"
+        "#,
+        )
+        .unwrap()
+        .into_workspace_manifest(
+            ExternalWorkspaceProperties::default(),
+            PackageDefaults::default(),
+            None,
+        )
+        .unwrap();
+
+        // Verify synthetic feature was created with pypi dependencies
+        let dev_feature = workspace.features.get(&FeatureName::from("dev")).unwrap();
+        let pypi_deps = dev_feature.targets.default().pypi_dependencies.as_ref();
+        assert!(pypi_deps.is_some());
     }
 }
