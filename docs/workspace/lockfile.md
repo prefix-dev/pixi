@@ -58,9 +58,9 @@ You may want to have more control over the interplay between the manifest, the l
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](../reference/pixi_manifest.md). It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 
 
-## Commiting your lockfile
+## Committing your lockfile
 
-Reprodicibility is very important in a range of projects (e.g., deploying software services, working on research projects, data analysis). Reproducibility of environments helps with reproducibility of results - it ensures your developers, and deployment machines are all using the same packages.
+Reproducibility is very important in a range of projects (e.g., deploying software services, working on research projects, data analysis). Reproducibility of environments helps with reproducibility of results - it ensures your developers, and deployment machines are all using the same packages.
 
 You may be hesitant to commit a "large" file (`pixi.lock` files can reach over 30,000 lines for complex environments), but know that:
 - this file is only a few megabytes at most
@@ -105,10 +105,7 @@ See the following threads for more detailed discussion on this topic:
 - https://github.com/prefix-dev/pixi/issues/5325
 
 
-!!! Warning "TODO: Everything below here still WIP"
 
-
-### Developing libraries
 ### File structure
 
 The Pixi lock file describes the following:
@@ -201,25 +198,6 @@ version: 6
 
 Pixi is backward compatible with the lock file, but not forward compatible.
 This means that you can use an older lock file with a newer version of `pixi`, but not the other way around.
-
-## Your lock file is big
-
-The lock file can grow quite large, especially if you have a lot of packages installed.
-This is because the lock file contains all the information about the packages.
-
-1. We try to keep the lock file as small as possible.
-2. It's always smaller than a docker image.
-3. Downloading the lock file is always faster than downloading the incorrect packages.
-
-## You don't need a lock file because...
-
-If you can not think of a case where you would benefit from a fast reproducible environment, then you don't need a lock file.
-
-But take note of the following:
-
-- A lock file allows you to run the same environment on different machines, think CI systems.
-- It also allows you to go back to a working state if you have made a mistake.
-- It helps other users onboard to your workspace as they don't have to figure out the environment setup or solve dependency issues.
 
 
 
