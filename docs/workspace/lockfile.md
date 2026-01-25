@@ -2,9 +2,70 @@
 
 ## What is a lock file?
 
-A lock file locks the environment in a specific state.
+To explain this, we need to highlight the difference between the manifest and the lock file.
+
+The manifest lists the direct dependencies of your project.
+When you install your environment, this manifest goes through "dependency resolution": all the dependencies of your requested dependencies are found, et cetera all the way down.
+During the resolution process, its ensured that resolved versions are compatible with each other.
+
+A lock file lists the exact dependencies that were resolved during this resolution process - the packages, their versions, and other useful information useful for package management.
+
+A lock file improves reproducibility as it means the project environment can easily be recreated on the same machine using this relatively small file.
+Whether the lockfile can be recreated on other machines, however, depends on the package manager and whether they have cross platform support.
+For example - a common problem encountered is when a package manager installs a package for a specific operating system or CPU architecture that is incompatible with other OSs or hardware.
+
+!!! Warning "Do not edit the lock file"
+    A lock file is a machine only file, and should not be edited by hand.
+
+
+## Lock files in Pixi
+
+Pixi - like many other modern package managers - has native support for lock files. This file is named `pixi.lock` .
+
+During the creation of the lockfile, Pixi resolves the packages - for all environments, for all supported platforms.
+This greatly increases the reproducibility of your project making it easy to use on different OSs or CPU architectures - in fact, for a lot of cases, sharing a lockfile can be done instead of sharing a Docker container! This is super handy for running code in CI.
+
+The Pixi lock file is also human readable, so you can take a poke around to see which packages are listed - as well as track changes to the file (don't make edits to it - you did read the warning block above right?). 
+
+## Lock file changes
+
+Many Pixi commands will create a lock file if one doesn't already exist, or update it if needed. For example, when you install a package, Pixi goes through the following process:
+
+- User requests a package to be installed
+- Dependency resolution
+- Generating and writing of lock file
+- Install resulting packages
+
+Additionally - Pixi ensures that the lock file remains in sync with both your manifest, as well as your installed environment.
+If we detect that they aren't in sync, we will regenerate the lock file. You can read more about this in the [Lock file satisfiability](#Lock-file-satisfiability) section.
+
+The following commands will check and automatically update the lock file if needed:
+
+- `pixi install`
+- `pixi run`
+- `pixi shell`
+- `pixi shell-hook`
+- `pixi tree`
+- `pixi list`
+- `pixi add`
+- `pixi remove`
+
+If you want to remove the lock file, you can simply delete it - ready for it to be generated again with the latest package versions when one of the above commands are run.
+
+You may want to have more control over the interplay between the manifest, the lock file, and the created environment. There are additional command line options to help with this:
+
+- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](../reference/pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](../reference/pixi_manifest.md). It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+
+
+
+### File structure
+
+The Pixi lock file describes the following:
+
+- 
 Within Pixi a lock file is a description of the packages in an environment.
-The lock file contains two definitions:
+The lock file is :
 
 - The environments that are used in the workspace with their complete set of packages. e.g.:
 
@@ -53,57 +114,6 @@ The lock file contains two definitions:
       size: 14596811
       timestamp: 1708118065292
     ```
-
-## Why a lock file
-
-Pixi uses the lock file for the following reasons:
-
-- To save a working installation state, without copying the entire environment's data.
-- To ensure the workspace configuration is aligned with the environment.
-- To give the user a file that contains all the information about the environment.
-
-This gives you (and your collaborators) a way to really reproduce environment they are working in.
-Using tools such as docker suddenly becomes much less necessary.
-
-## When is a lock file generated?
-
-A lock file is generated when you install a package.
-More specifically, a lock file is generated from the solve step of the installation process.
-The solve will return a list of packages that are to be installed, and the lock file will be generated from this list.
-This diagram tries to explain the process:
-
-```mermaid
-graph TD
-    A[Install] --> B[Solve]
-    B --> C[Generate and write lock file]
-    C --> D[Install Packages]
-```
-
-## How to use a lock file
-
-!!! Warning "Do not edit the lock file"
-    A lock file is a machine only file, and should not be edited by hand.
-
-That said, the `pixi.lock` is human-readable, so it's easy to track the changes in the environment.
-We recommend you track the lock file in `git` or other version control systems.
-This will ensure that the environment is always reproducible and that you can always revert back to a working state, in case something goes wrong.
-The `pixi.lock` and the manifest file `pixi.toml`/`pyproject.toml` should always be in sync.
-
-Running the following commands will check and automatically update the lock file if you changed any dependencies:
-
-- `pixi install`
-- `pixi run`
-- `pixi shell`
-- `pixi shell-hook`
-- `pixi tree`
-- `pixi list`
-- `pixi add`
-- `pixi remove`
-
-All the commands that support the interaction with the lock file also include some lock file usage options:
-
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](../reference/pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](../reference/pixi_manifest.md). It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 
 !!! Note "Syncing the lock file with the manifest file"
     The lock file is always matched with the whole configuration in the manifest file.
@@ -161,15 +171,11 @@ But take note of the following:
 - It also allows you to go back to a working state if you have made a mistake.
 - It helps other users onboard to your workspace as they don't have to figure out the environment setup or solve dependency issues.
 
-## Removing the lock file
 
-If you want to remove the lock file, you can simply delete it.
 
-```bash
-rm pixi.lock
-```
+---
 
-This will remove the lock file, and the next time you run a command that requires the lock file, it will be generated again.
+Not sure what this means???
 
 !!! Warning "Note"
     This does remove the locked state of the environment, which will be updated to the latest version of all packages.
