@@ -2,7 +2,7 @@
 
 ## What is a lock file?
 
-To explain this, we need to highlight the difference between the manifest and the lock file.
+To answer this question, we need to highlight the difference between the manifest and the lock file.
 
 The manifest lists the direct dependencies of your project.
 When you install your environment, this manifest goes through "dependency resolution": all the dependencies of your requested dependencies are found, et cetera all the way down.
@@ -103,6 +103,9 @@ See the following threads for more detailed discussion on this topic:
 - [prefix.dev Discord: Should you commit the lockfile](https://discord.com/channels/1082332781146800168/1462778624212996209)
 - [Scientific Python Discord: lock files for libraries](https://discord.com/channels/786703927705862175/1450619697224487083)
 - https://github.com/prefix-dev/pixi/issues/5325
+
+
+!!! Warning "TODO: Everything below here still WIP"
 
 
 ### Developing libraries
