@@ -58,7 +58,54 @@ You may want to have more control over the interplay between the manifest, the l
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](../reference/pixi_manifest.md). It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 
 
+## Commiting your lockfile
 
+Reprodicibility is very important in a range of projects (e.g., deploying software services, working on research projects, data analysis). Reproducibility of environments helps with reproducibility of results - it ensures your developers, and deployment machines are all using the same packages.
+
+You may be hesitant to commit a "large" file (`pixi.lock` files can reach over 30,000 lines for complex environments), but know that:
+- this file is only a few megabytes at most
+- lock file merges are managed reasonably well by Git 
+
+There is, however, a class of projects where you may not want to commit your lock file as there are other considerations at play.
+Namely, this is when developing _libraries_.
+
+---
+
+Libraries have an evolving nature and need to be tested against environments covering a wide range of package versions to ensure compatibility.
+This includes an environment with the latest available versions of packages.
+
+### Libraries: Committing the lockfile
+
+If you commit the lock file in your library project, you will want to also consider the following:
+- **Upgrading the lockfile:** How often do you want to upgrade the lockfile used by your developers? Do you want to do these upgrades in the main repo history?
+- **Custom CI workflow to test against latest versions:** Do you want to have a workflow to test against the latest dependency versions? If so - you likely want to have the following CI workflow on a cron schedule:
+	- Remove the `pixi.lock` before running the `setup-pixi` action
+	- Run your tests
+	- If the tests fail:
+		- See how the generated `pixi.lock` differs from that in `main` by using `pixi-diff` and `pixi-diff-to-markdown`
+		- Automatically file an issue so that its tracked in the project repo
+
+You can see how these considerations above have been explored by the following projects:
+- [Scipy](LINK)
+- 
+
+### Libraries: Git-ignoring the lockfile
+
+If you don't commit the lockfile, you end up with a simplified setup where the lockfile is generated separately for all developers, and for CI.
+
+In CI, you can avoid the need to solve on every workflow run by caching this lockfile so that its shared between CI on the same day by using - for example - the [Parcels-code/pixi-lock](https://github.com/parcels-code/pixi-lock) action.
+
+This simplified setup forgoes reproducibility between machines, and implicitly 
+
+---
+
+See the following threads for more detailed discussion on this topic:
+- [prefix.dev Discord: Should you commit the lockfile](https://discord.com/channels/1082332781146800168/1462778624212996209)
+- [Scientific Python Discord: lock files for libraries](https://discord.com/channels/786703927705862175/1450619697224487083)
+- https://github.com/prefix-dev/pixi/issues/5325
+
+
+### Developing libraries
 ### File structure
 
 The Pixi lock file describes the following:
