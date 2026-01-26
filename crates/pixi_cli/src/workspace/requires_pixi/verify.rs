@@ -28,7 +28,7 @@ pub async fn execute(workspace: Workspace) -> miette::Result<()> {
                     eprintln!();
                     eprintln!(
                         "Please update pixi using your system package manager or reinstall it.\n\
-             See: https://pixi.sh/install"
+             See: https://pixi.sh/latest/installation/"
                     );
                 }
 
