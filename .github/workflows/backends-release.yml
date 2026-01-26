@@ -26,7 +26,7 @@ jobs:
     outputs:
       matrix: ${{ steps.set_version.outputs.matrix }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           persist-credentials: false
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
@@ -65,7 +65,7 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.bins.os }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           persist-credentials: false
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
@@ -152,7 +152,7 @@ jobs:
         target: [linux-64, linux-aarch64, linux-ppc64le, win-64, osx-64, osx-arm64]
     steps:
       - name: Download conda package artifacts for ${{ matrix.target }}
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: conda-packages-*-${{ matrix.target }}
           path: conda-artifacts-${{ matrix.target }}
@@ -168,11 +168,11 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.inputs.push_to_channel == 'true' && github.repository == 'prefix-dev/pixi' }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           persist-credentials: false
       - name: Download all conda packages
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: conda-packages-*
           path: conda-packages
