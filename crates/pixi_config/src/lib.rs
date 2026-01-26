@@ -1,24 +1,69 @@
-use clap::{ArgAction, Parser};
-use itertools::Itertools;
-use miette::{miette, Context, IntoDiagnostic};
-use pixi_consts::consts;
-use rattler_conda_types::{
-    version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
-    ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
-};
-use rattler_networking::s3_middleware;
-use rattler_repodata_gateway::{Gateway, SourceConfig};
-use reqwest_middleware::ClientWithMiddleware;
-use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use std::{
     collections::{BTreeSet as Set, HashMap},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
+    sync::LazyLock,
+};
+
+use clap::{ArgAction, Parser};
+use itertools::Itertools;
+use miette::{Context, IntoDiagnostic, miette};
+use pixi_consts::consts;
+use rattler_conda_types::{
+    ChannelConfig, NamedChannelOrUrl, Platform, Version, VersionBumpType, VersionSpec,
+    compression_level::CompressionLevel,
+    package::CondaArchiveType,
+    version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
+};
+use rattler_networking::s3_middleware;
+use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig};
+use reqwest::{NoProxy, Proxy};
+use serde::{
+    Deserialize, Serialize,
+    de::{Error, IntoDeserializer},
 };
 use url::Url;
 
 const EXPERIMENTAL: &str = "experimental";
+
+/// Controls which root certificates to use for TLS connections.
+///
+/// - `Webpki`: Use bundled Mozilla root certificates (portable, works everywhere)
+/// - `Native`: Use the system's certificate store (includes corporate CAs)
+/// - `All`: Use both webpki and native certificates (union of both sources)
+///
+/// Note: This setting only has an effect when pixi is built with the `rustls-tls` feature.
+/// When built with `native-tls`, system certificates are always used regardless of this setting.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TlsRootCerts {
+    /// Use bundled Mozilla root certificates
+    Webpki,
+    /// Use the system's native certificate store
+    Native,
+    /// Use both webpki and native certificates
+    #[default]
+    All,
+}
+
+impl FromStr for TlsRootCerts {
+    type Err = serde::de::value::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::deserialize(s.into_deserializer())
+    }
+}
+
+impl std::fmt::Display for TlsRootCerts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TlsRootCerts::Webpki => write!(f, "webpki"),
+            TlsRootCerts::Native => write!(f, "native"),
+            TlsRootCerts::All => write!(f, "all"),
+        }
+    }
+}
 
 pub fn default_channel_config() -> ChannelConfig {
     ChannelConfig::default_with_root_dir(
@@ -54,6 +99,25 @@ pub fn get_default_author() -> Option<(String, String)> {
 
     Some((name?, email.unwrap_or_else(|| "".into())))
 }
+
+// detect proxy env vars like curl: https://curl.se/docs/manpage.html
+static ENV_HTTP_PROXY: LazyLock<Option<String>> = LazyLock::new(|| {
+    ["http_proxy", "all_proxy", "ALL_PROXY"]
+        .iter()
+        .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()))
+});
+static ENV_HTTPS_PROXY: LazyLock<Option<String>> = LazyLock::new(|| {
+    ["https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"]
+        .iter()
+        .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()))
+});
+static ENV_NO_PROXY: LazyLock<Option<String>> = LazyLock::new(|| {
+    ["no_proxy", "NO_PROXY"]
+        .iter()
+        .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()))
+});
+static USE_PROXY_FROM_ENV: LazyLock<bool> =
+    LazyLock::new(|| (*ENV_HTTPS_PROXY).is_some() || (*ENV_HTTP_PROXY).is_some());
 
 /// Get pixi home directory, default to `$HOME/.pixi`
 ///
@@ -94,25 +158,41 @@ pub fn get_cache_dir() -> miette::Result<PathBuf> {
 }
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCli {
-    /// Do not verify the TLS certificate of the server.
-    #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    tls_no_verify: bool,
-
     /// Path to the file containing the authentication token.
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     auth_file: Option<PathBuf>,
+
+    /// Max concurrent network requests, default is `50`
+    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    concurrent_downloads: Option<usize>,
+
+    /// Max concurrent solves, default is the number of CPUs
+    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    concurrent_solves: Option<usize>,
+
+    /// Set pinning strategy
+    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS, value_enum)]
+    pinning_strategy: Option<PinningStrategy>,
 
     /// Specifies whether to use the keyring to look up credentials for PyPI.
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     pypi_keyring_provider: Option<KeyringProvider>,
 
-    /// Max concurrent solves, default is the number of CPUs
+    /// Run post-link scripts (insecure)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    pub concurrent_solves: Option<usize>,
+    run_post_link_scripts: bool,
 
-    /// Max concurrent network requests, default is `50`
+    /// Do not verify the TLS certificate of the server.
+    #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    tls_no_verify: bool,
+
+    /// Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both).
+    #[arg(long, env = "PIXI_TLS_ROOT_CERTS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    tls_root_certs: Option<TlsRootCerts>,
+
+    /// Use environment activation cache (experimental)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    pub concurrent_downloads: Option<usize>,
+    use_environment_activation_cache: bool,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -182,38 +262,27 @@ impl RepodataConfig {
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCliActivation {
-    /// Do not use the environment activation cache. (default: true except in experimental mode)
+    /// Do not use the environment activation cache. (default: true except in
+    /// experimental mode)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     force_activate: bool,
 
     /// Do not source the autocompletion scripts from the environment.
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    no_completion: Option<bool>,
+    no_completions: bool,
 }
 
 impl ConfigCliActivation {
     pub fn merge_config(self, config: Config) -> Config {
         let mut config = config;
         config.shell.force_activate = Some(self.force_activate);
-        if let Some(no_completion) = self.no_completion {
-            config.shell.source_completion_scripts = Some(!no_completion);
+        if self.no_completions {
+            config.shell.source_completion_scripts = Some(false);
         }
         config
     }
 }
 
-impl From<ConfigCliActivation> for Config {
-    fn from(cli: ConfigCliActivation) -> Self {
-        Self {
-            shell: ShellConfig {
-                force_activate: Some(cli.force_activate),
-                source_completion_scripts: None,
-                change_ps1: None,
-            },
-            ..Default::default()
-        }
-    }
-}
 #[derive(Clone, Default, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct RepodataChannelConfig {
@@ -255,7 +324,7 @@ impl RepodataChannelConfig {
 impl From<RepodataChannelConfig> for SourceConfig {
     fn from(value: RepodataChannelConfig) -> Self {
         SourceConfig {
-            jlap_enabled: !value.disable_jlap.unwrap_or(false),
+            jlap_enabled: !value.disable_jlap.unwrap_or(true),
             zstd_enabled: !value.disable_zstd.unwrap_or(false),
             bz2_enabled: !value.disable_bzip2.unwrap_or(false),
             sharded_enabled: !value.disable_sharded.unwrap_or(false),
@@ -311,6 +380,7 @@ pub enum DetachedEnvironments {
     Boolean(bool),
     Path(PathBuf),
 }
+
 impl DetachedEnvironments {
     pub fn is_false(&self) -> bool {
         matches!(self, DetachedEnvironments::Boolean(false))
@@ -319,16 +389,60 @@ impl DetachedEnvironments {
     // Get the path to the detached-environments directory. None means the default
     // directory.
     pub fn path(&self) -> miette::Result<Option<PathBuf>> {
-        match self {
+        let resolved_self = self.resolve_path()?;
+        match resolved_self {
             DetachedEnvironments::Path(p) => Ok(Some(p.clone())),
-            DetachedEnvironments::Boolean(b) if *b => {
+            DetachedEnvironments::Boolean(b) if b => {
                 let path = get_cache_dir()?.join(consts::ENVIRONMENTS_DIR);
                 Ok(Some(path))
             }
             _ => Ok(None),
         }
     }
+
+    /// If `self` is the `DetachedEnvironments::Path` variant, expands `~`
+    /// to the absolute path to the home directory, otherwise clone the boolean
+    /// variant.
+    pub fn resolve_path(&self) -> miette::Result<Self> {
+        match self {
+            DetachedEnvironments::Boolean(_) => Ok(self.clone()),
+            DetachedEnvironments::Path(p) => {
+                let mut path = p.clone();
+                // If the path starts with ~, expand it to the home directory
+                if path.to_string_lossy().starts_with("~") {
+                    let home_dir = dirs::home_dir().ok_or_else(|| {
+                        miette!(
+                            "Could not resolve home directory for '~' in path {}",
+                            path.display()
+                        )
+                    })?;
+                    // Safe unwrap as we checked if it starts with ~
+                    path = home_dir.join(path.strip_prefix("~").unwrap());
+                }
+                Ok(DetachedEnvironments::Path(path))
+            }
+        }
+    }
+
+    pub fn validate(&self) -> miette::Result<()> {
+        // Resolve the path variant (if present) prior to validating it.
+        let resolved_self = self.resolve_path()?;
+
+        match resolved_self {
+            DetachedEnvironments::Boolean(_) => {}
+            DetachedEnvironments::Path(path) => {
+                if !path.is_absolute() {
+                    return Err(miette!(
+                        "The `detached-environments` path must be an absolute path: {}",
+                        path.display()
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
 }
+
 impl Default for DetachedEnvironments {
     fn default() -> Self {
         DetachedEnvironments::Boolean(false)
@@ -339,7 +453,8 @@ impl Default for DetachedEnvironments {
 #[serde(rename_all = "kebab-case")]
 pub struct ExperimentalConfig {
     /// The option to opt into the environment activation cache feature.
-    /// This is an experimental feature and may be removed in the future or made default.
+    /// This is an experimental feature and may be removed in the future or made
+    /// default.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_environment_activation_cache: Option<bool>,
@@ -362,7 +477,8 @@ impl ExperimentalConfig {
     }
 }
 
-// Making the default values part of pixi_config to allow for printing the default settings in the future.
+// Making the default values part of pixi_config to allow for printing the
+// default settings in the future.
 /// The default maximum number of concurrent solves that can be run at once.
 /// Defaulting to the number of CPUs available.
 fn default_max_concurrent_solves() -> usize {
@@ -380,12 +496,14 @@ fn default_max_concurrent_downloads() -> usize {
 #[serde(rename_all = "kebab-case")]
 pub struct ConcurrencyConfig {
     /// The maximum number of concurrent solves that can be run at once.
-    // Needing to set this default next to the default of the full struct to avoid serde defaulting to 0 of partial struct was omitted.
+    // Needing to set this default next to the default of the full struct to avoid serde defaulting
+    // to 0 of partial struct was omitted.
     #[serde(default = "default_max_concurrent_solves")]
     pub solves: usize,
 
     /// The maximum number of concurrent HTTP requests to make.
-    // Needing to set this default next to the default of the full struct to avoid serde defaulting to 0 of partial struct was omitted.
+    // Needing to set this default next to the default of the full struct to avoid serde defaulting
+    // to 0 of partial struct was omitted.
     #[serde(default = "default_max_concurrent_downloads")]
     pub downloads: usize,
 }
@@ -464,23 +582,23 @@ impl PyPIConfig {
 }
 
 /// The strategy for that will be used for pinning a version of a package.
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, Copy, clap::ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum PinningStrategy {
-    /// Default semver strategy e.g. "1.2.3" becomes ">=1.2.3, <2" but "0.1.0"
-    /// becomes ">=0.1.0, <0.2"
+    /// Default semver strategy e.g. `1.2.3` becomes `>=1.2.3, <2` but `0.1.0`
+    /// becomes `>=0.1.0, <0.2`
     #[default]
     Semver,
-    /// Pin the latest minor e.g. "1.2.3" becomes ">=1.2.3, <1.3"
+    /// Pin the latest minor e.g. `1.2.3` becomes `>=1.2.3, <1.3`
     Minor,
-    /// Pin the latest major e.g. "1.2.3" becomes ">=1.2.3, <2"
+    /// Pin the latest major e.g. `1.2.3` becomes `>=1.2.3, <2`
     Major,
-    /// Pin to the latest version or higher. e.g. "1.2.3" becomes ">=1.2.3"
+    /// Pin to the latest version or higher. e.g. `1.2.3` becomes `>=1.2.3`
     LatestUp,
-    /// Pin the version chosen by the solver. e.g. "1.2.3" becomes "==1.2.3"
+    /// Pin the version chosen by the solver. e.g. `1.2.3` becomes `==1.2.3`
     // Adding "Version" to the name for future extendability.
     ExactVersion,
-    /// No pinning, keep the requirement empty. e.g. "1.2.3" becomes "*"
+    /// No pinning, keep the requirement empty. e.g. `1.2.3` becomes `*`
     // Calling it no-pin to make it simple to type, as other option was pin-unconstrained.
     NoPin,
 }
@@ -572,6 +690,23 @@ impl PinningStrategy {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum RunPostLinkScripts {
+    /// Run the post link scripts, we call this insecure as it may run arbitrary
+    /// code.
+    Insecure,
+    /// Do not run the post link scripts
+    #[default]
+    False,
+}
+impl FromStr for RunPostLinkScripts {
+    type Err = serde::de::value::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::deserialize(s.into_deserializer())
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
@@ -592,6 +727,11 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tls_no_verify: Option<bool>,
 
+    /// Which TLS root certificates to use for HTTPS connections.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tls_root_certs: Option<TlsRootCerts>,
+
     #[serde(default)]
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub mirrors: HashMap<Url, Vec<Url>>,
@@ -606,7 +746,7 @@ pub struct Config {
     pub loaded_from: Vec<PathBuf>,
 
     #[serde(skip, default = "default_channel_config")]
-    channel_config: ChannelConfig,
+    pub channel_config: ChannelConfig,
 
     /// Configuration for repodata fetching.
     #[serde(alias = "repodata_config")] // BREAK: remove to stop supporting snake_case alias
@@ -646,6 +786,31 @@ pub struct Config {
     #[serde(skip_serializing_if = "ConcurrencyConfig::is_default")]
     pub concurrency: ConcurrencyConfig,
 
+    /// Run the post link scripts
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_post_link_scripts: Option<RunPostLinkScripts>,
+
+    /// Https/Http proxy configuration for pixi
+    #[serde(default)]
+    #[serde(skip_serializing_if = "ProxyConfig::is_default")]
+    pub proxy_config: ProxyConfig,
+
+    /// Build configuration for pixi and rattler-build
+    #[serde(default)]
+    #[serde(skip_serializing_if = "BuildConfig::is_default")]
+    pub build: BuildConfig,
+
+    /// The platform to use when installing tools.
+    ///
+    /// When running on certain platforms, you might want to install build
+    /// backends and other tools for a different platform than the current one.
+    /// Using this field, you can specify the platform that is used to install
+    /// these types of tools.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_platform: Option<Platform>,
+
     //////////////////////
     // Deprecated fields //
     //////////////////////
@@ -665,6 +830,7 @@ impl Default for Config {
             default_channels: Vec::new(),
             authentication_override_file: None,
             tls_no_verify: None,
+            tls_root_certs: None,
             mirrors: HashMap::new(),
             loaded_from: Vec::new(),
             channel_config: default_channel_config(),
@@ -676,6 +842,10 @@ impl Default for Config {
             shell: ShellConfig::default(),
             experimental: ExperimentalConfig::default(),
             concurrency: ConcurrencyConfig::default(),
+            run_post_link_scripts: None,
+            proxy_config: ProxyConfig::default(),
+            build: BuildConfig::default(),
+            tool_platform: None,
 
             // Deprecated fields
             change_ps1: None,
@@ -688,6 +858,7 @@ impl From<ConfigCli> for Config {
     fn from(cli: ConfigCli) -> Self {
         Self {
             tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
+            tls_root_certs: cli.tls_root_certs,
             authentication_override_file: cli.auth_file,
             pypi_config: cli
                 .pypi_keyring_provider
@@ -702,6 +873,20 @@ impl From<ConfigCli> for Config {
                     .concurrent_downloads
                     .unwrap_or(ConcurrencyConfig::default().downloads),
             },
+            tool_platform: None,
+            run_post_link_scripts: if cli.run_post_link_scripts {
+                Some(RunPostLinkScripts::Insecure)
+            } else {
+                None
+            },
+            experimental: ExperimentalConfig {
+                use_environment_activation_cache: if cli.use_environment_activation_cache {
+                    Some(true)
+                } else {
+                    None
+                },
+            },
+            pinning_strategy: cli.pinning_strategy,
             ..Default::default()
         }
     }
@@ -778,6 +963,159 @@ impl ShellConfig {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ProxyConfig {
+    /// https proxy.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub https: Option<Url>,
+    /// http proxy.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub http: Option<Url>,
+    /// A list of no proxy pattern
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub non_proxy_hosts: Vec<String>,
+}
+
+impl ProxyConfig {
+    pub fn is_default(&self) -> bool {
+        self.https.is_none() && self.https.is_none() && self.non_proxy_hosts.is_empty()
+    }
+    pub fn merge(&self, other: Self) -> Self {
+        Self {
+            https: other.https.as_ref().or(self.https.as_ref()).cloned(),
+            http: other.http.as_ref().or(self.http.as_ref()).cloned(),
+            non_proxy_hosts: if other.is_default() {
+                self.non_proxy_hosts.clone()
+            } else {
+                other.non_proxy_hosts.clone()
+            },
+        }
+    }
+}
+
+/// Container for the package format and compression level
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct PackageFormatAndCompression {
+    /// The archive type that is selected
+    pub archive_type: CondaArchiveType,
+    /// The compression level that is selected
+    pub compression_level: CompressionLevel,
+}
+
+// deserializer for the package format and compression level
+impl<'de> Deserialize<'de> for PackageFormatAndCompression {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let s = s.as_str();
+        PackageFormatAndCompression::from_str(s).map_err(D::Error::custom)
+    }
+}
+
+impl FromStr for PackageFormatAndCompression {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut split = s.split(':');
+        let package_format = split.next().ok_or("invalid")?;
+
+        let compression = split.next().unwrap_or("default");
+
+        // remove all non-alphanumeric characters
+        let package_format = package_format
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .collect::<String>();
+
+        let archive_type = match package_format.to_lowercase().as_str() {
+            "tarbz2" => CondaArchiveType::TarBz2,
+            "conda" => CondaArchiveType::Conda,
+            _ => return Err(format!("Unknown package format: {package_format}")),
+        };
+
+        let compression_level = match compression {
+            "max" | "highest" => CompressionLevel::Highest,
+            "default" | "normal" => CompressionLevel::Default,
+            "fast" | "lowest" | "min" => CompressionLevel::Lowest,
+            number if number.parse::<i32>().is_ok() => {
+                let number = number.parse::<i32>().unwrap_or_default();
+                match archive_type {
+                    CondaArchiveType::TarBz2 => {
+                        if !(1..=9).contains(&number) {
+                            return Err("Compression level for .tar.bz2 must be between 1 and 9"
+                                .to_string());
+                        }
+                    }
+                    CondaArchiveType::Conda => {
+                        if !(-7..=22).contains(&number) {
+                            return Err(
+                                "Compression level for conda packages (zstd) must be between -7 and 22".to_string()
+                            );
+                        }
+                    }
+                }
+                CompressionLevel::Numeric(number)
+            }
+            _ => return Err(format!("Unknown compression level: {compression}")),
+        };
+
+        Ok(PackageFormatAndCompression {
+            archive_type,
+            compression_level,
+        })
+    }
+}
+
+impl Serialize for PackageFormatAndCompression {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let package_format = match self.archive_type {
+            CondaArchiveType::TarBz2 => "tarbz2",
+            CondaArchiveType::Conda => "conda",
+        };
+        let compression_level = match self.compression_level {
+            CompressionLevel::Default => "default",
+            CompressionLevel::Highest => "max",
+            CompressionLevel::Lowest => "min",
+            CompressionLevel::Numeric(level) => &level.to_string(),
+        };
+
+        serializer.serialize_str(format!("{package_format}:{compression_level}").as_str())
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct BuildConfig {
+    /// package format and compression level
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub package_format: Option<PackageFormatAndCompression>,
+}
+
+impl BuildConfig {
+    pub fn is_default(&self) -> bool {
+        self.package_format.is_none()
+    }
+    pub fn merge(&self, other: Self) -> Self {
+        Self {
+            package_format: other
+                .package_format
+                .as_ref()
+                .or(self.package_format.as_ref())
+                .cloned(),
+        }
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigError {
     #[error("no file was found at {0}")]
@@ -804,6 +1142,13 @@ impl Config {
 
         // Enable sharded repodata by default.
         config.repodata_config.default.disable_sharded = Some(false);
+
+        // HACK: Use win-64 as the default tool platform if currently running on
+        // win-arm64. This is a workaround for the fact that we don't have a
+        // good win-arm64 toolchain yet.
+        if Platform::current() == Platform::WinArm64 {
+            config.tool_platform = Some(Platform::Win64);
+        }
 
         config
     }
@@ -834,7 +1179,8 @@ impl Config {
         fn create_deprecation_warning(old: &str, new: &str, source_path: Option<&Path>) {
             let msg = format!(
                 "Please replace '{}' with '{}', the field is deprecated and will be removed in a future release.",
-                console::style(old).red(), console::style(new).green()
+                console::style(old).red(),
+                console::style(new).green()
             );
             match source_path {
                 Some(path) => {
@@ -874,7 +1220,7 @@ impl Config {
                 if e.kind() == std::io::ErrorKind::NotFound
                     || e.kind() == std::io::ErrorKind::NotADirectory =>
             {
-                return Err(ConfigError::FileNotFound(path.to_path_buf()))
+                return Err(ConfigError::FileNotFound(path.to_path_buf()));
             }
             Err(e) => return Err(ConfigError::ReadError(e)),
         };
@@ -898,11 +1244,30 @@ impl Config {
         }
 
         config.loaded_from.push(path.to_path_buf());
-        tracing::info!("Loaded config from: {}", path.display());
+        tracing::debug!("Loaded config from: {}", path.display());
 
         config
             .validate()
             .map_err(|e| ConfigError::ValidationError(e, path.to_path_buf()))?;
+
+        // check proxy config
+        if config.proxy_config.https.is_none() && config.proxy_config.http.is_none() {
+            if !config.proxy_config.non_proxy_hosts.is_empty() {
+                tracing::warn!(
+                    "proxy-config.non-proxy-hosts is not empty but will be ignored, as no https or http config is set."
+                )
+            }
+        } else if *USE_PROXY_FROM_ENV {
+            let config_no_proxy = Some(config.proxy_config.non_proxy_hosts.iter().join(","))
+                .filter(|v| !v.is_empty());
+            if (*ENV_HTTPS_PROXY).as_deref() != config.proxy_config.https.as_ref().map(Url::as_str)
+                || (*ENV_HTTP_PROXY).as_deref()
+                    != config.proxy_config.http.as_ref().map(Url::as_str)
+                || *ENV_NO_PROXY != config_no_proxy
+            {
+                tracing::info!("proxy configs are overridden by proxy environment vars.")
+            }
+        }
 
         Ok(config)
     }
@@ -939,18 +1304,8 @@ impl Config {
     /// Validate the config file.
     pub fn validate(&self) -> miette::Result<()> {
         // Validate the detached environments directory is set correctly
-        if let Some(detached_environments) = self.detached_environments.clone() {
-            match detached_environments {
-                DetachedEnvironments::Boolean(_) => {}
-                DetachedEnvironments::Path(path) => {
-                    if !path.is_absolute() {
-                        return Err(miette!(
-                            "The `detached-environments` path must be an absolute path: {}",
-                            path.display()
-                        ));
-                    }
-                }
-            }
+        if let Some(detached_environments) = self.detached_environments.as_ref() {
+            detached_environments.validate()?
         }
 
         Ok(())
@@ -1016,37 +1371,48 @@ impl Config {
     // Get all possible keys of the configuration
     pub fn get_keys(&self) -> &[&str] {
         &[
-            "default-channels",
             "authentication-override-file",
-            "tls-no-verify",
-            "mirrors",
+            "concurrency",
+            "concurrency.downloads",
+            "concurrency.solves",
+            "default-channels",
             "detached-environments",
+            "experimental",
+            "experimental.use-environment-activation-cache",
+            "mirrors",
             "pinning-strategy",
-            "max-concurrent-solves",
-            "repodata-config",
-            "repodata-config.disable-jlap",
-            "repodata-config.disable-bzip2",
-            "repodata-config.disable-zstd",
-            "repodata-config.disable-sharded",
+            "proxy-config",
+            "proxy-config.http",
+            "proxy-config.https",
+            "proxy-config.non-proxy-hosts",
             "pypi-config",
-            "pypi-config.index-url",
+            "pypi-config.allow-insecure-host",
             "pypi-config.extra-index-urls",
+            "pypi-config.index-url",
             "pypi-config.keyring-provider",
-            "shell",
-            "shell.force-activate",
-            "shell.source-completion-scripts",
-            "shell.change-ps1",
+            "repodata-config",
+            "repodata-config.disable-bzip2",
+            "repodata-config.disable-jlap",
+            "repodata-config.disable-sharded",
+            "repodata-config.disable-zstd",
+            "run-post-link-scripts",
             "s3-options",
             "s3-options.<bucket>",
             "s3-options.<bucket>.endpoint-url",
-            "s3-options.<bucket>.region",
             "s3-options.<bucket>.force-path-style",
-            "experimental.use-environment-activation-cache",
+            "s3-options.<bucket>.region",
+            "shell",
+            "shell.change-ps1",
+            "shell.force-activate",
+            "shell.source-completion-scripts",
+            "tls-no-verify",
+            "tls-root-certs",
+            "tool-platform",
         ]
     }
 
-    /// Merge the given config into the current one.
-    /// The given config will have higher priority
+    /// Merge the `other` config into `self`.
+    /// The `other` config will have higher priority
     #[must_use]
     pub fn merge_config(mut self, mut other: Config) -> Self {
         self.mirrors.extend(other.mirrors);
@@ -1059,14 +1425,18 @@ impl Config {
                 other.default_channels
             },
             tls_no_verify: other.tls_no_verify.or(self.tls_no_verify),
+            tls_root_certs: other.tls_root_certs.or(self.tls_root_certs),
             authentication_override_file: other
                 .authentication_override_file
                 .or(self.authentication_override_file),
             // Extended self.mirrors with other.mirrors
             mirrors: self.mirrors,
             loaded_from: other.loaded_from,
-            // currently this is always the default so just use the other value
-            channel_config: other.channel_config,
+            channel_config: if other.channel_config == default_channel_config() {
+                self.channel_config
+            } else {
+                other.channel_config
+            },
             repodata_config: self.repodata_config.merge(other.repodata_config),
             pypi_config: self.pypi_config.merge(other.pypi_config),
             s3_options: {
@@ -1081,6 +1451,11 @@ impl Config {
             experimental: self.experimental.merge(other.experimental),
             // Make other take precedence over self to allow for setting the value through the CLI
             concurrency: self.concurrency.merge(other.concurrency),
+            run_post_link_scripts: other.run_post_link_scripts.or(self.run_post_link_scripts),
+
+            proxy_config: self.proxy_config.merge(other.proxy_config),
+            build: self.build.merge(other.build),
+            tool_platform: self.tool_platform.or(other.tool_platform),
 
             // Deprecated fields that we can ignore as we handle them inside `shell.` field
             change_ps1: None,
@@ -1101,6 +1476,11 @@ impl Config {
     /// Retrieve the value for the tls_no_verify field (defaults to false).
     pub fn tls_no_verify(&self) -> bool {
         self.tls_no_verify.unwrap_or(false)
+    }
+
+    /// Retrieve the value for the tls_root_certs field (defaults to Webpki).
+    pub fn tls_root_certs(&self) -> TlsRootCerts {
+        self.tls_root_certs.unwrap_or_default()
     }
 
     /// Retrieve the value for the change_ps1 field (defaults to true).
@@ -1157,6 +1537,48 @@ impl Config {
         self.concurrency.downloads
     }
 
+    /// The platform to use to install tools.
+    pub fn tool_platform(&self) -> Platform {
+        self.tool_platform.unwrap_or(Platform::current())
+    }
+
+    pub fn get_proxies(&self) -> reqwest::Result<Vec<Proxy>> {
+        if (self.proxy_config.https.is_none() && self.proxy_config.http.is_none())
+            || *USE_PROXY_FROM_ENV
+        {
+            return Ok(vec![]);
+        }
+
+        let config_no_proxy =
+            Some(self.proxy_config.non_proxy_hosts.iter().join(",")).filter(|v| !v.is_empty());
+
+        let mut result: Vec<Proxy> = Vec::new();
+        let config_no_proxy: Option<NoProxy> =
+            config_no_proxy.as_deref().and_then(NoProxy::from_string);
+
+        if self.proxy_config.https == self.proxy_config.http {
+            result.push(
+                Proxy::all(
+                    self.proxy_config
+                        .https
+                        .as_ref()
+                        .expect("must be some")
+                        .as_str(),
+                )?
+                .no_proxy(config_no_proxy),
+            );
+        } else {
+            if let Some(url) = &self.proxy_config.http {
+                result.push(Proxy::http(url.as_str())?.no_proxy(config_no_proxy.clone()));
+            }
+            if let Some(url) = &self.proxy_config.https {
+                result.push(Proxy::https(url.as_str())?.no_proxy(config_no_proxy));
+            }
+        }
+
+        Ok(result)
+    }
+
     /// Modify this config with the given key and value
     ///
     /// # Note
@@ -1185,6 +1607,12 @@ impl Config {
             "tls-no-verify" => {
                 self.tls_no_verify = value.map(|v| v.parse()).transpose().into_diagnostic()?;
             }
+            "tls-root-certs" => {
+                self.tls_root_certs = value
+                    .map(|v| TlsRootCerts::from_str(v.as_str()))
+                    .transpose()
+                    .into_diagnostic()?;
+            }
             "mirrors" => {
                 self.mirrors = value
                     .map(|v| serde_json::de::from_str(&v))
@@ -1193,11 +1621,15 @@ impl Config {
                     .unwrap_or_default();
             }
             "detached-environments" => {
-                self.detached_environments = value.map(|v| match v.as_str() {
-                    "true" => DetachedEnvironments::Boolean(true),
-                    "false" => DetachedEnvironments::Boolean(false),
-                    _ => DetachedEnvironments::Path(PathBuf::from(v)),
-                });
+                self.detached_environments = value
+                    .map(|v| {
+                        Ok::<_, miette::Report>(match v.as_str() {
+                            "true" => DetachedEnvironments::Boolean(true),
+                            "false" => DetachedEnvironments::Boolean(false),
+                            _ => DetachedEnvironments::Path(PathBuf::from(v)).resolve_path()?,
+                        })
+                    })
+                    .transpose()?;
             }
             "pinning-strategy" => {
                 self.pinning_strategy = value
@@ -1206,10 +1638,21 @@ impl Config {
                     .into_diagnostic()?
             }
             "change-ps1" => {
-                return Err(miette::miette!("The `change-ps1` field is deprecated. Please use the `shell.change-ps1` field instead."));
+                return Err(miette::miette!(
+                    "The `change-ps1` field is deprecated. Please use the `shell.change-ps1` field instead."
+                ));
             }
             "force-activate" => {
-                return Err(miette::miette!("The `force-activate` field is deprecated. Please use the `shell.force-activate` field instead."));
+                return Err(miette::miette!(
+                    "The `force-activate` field is deprecated. Please use the `shell.force-activate` field instead."
+                ));
+            }
+            "tool-platform" => {
+                self.tool_platform = value
+                    .as_deref()
+                    .map(Platform::from_str)
+                    .transpose()
+                    .into_diagnostic()?;
             }
             key if key.starts_with("repodata-config") => {
                 if key == "repodata-config" {
@@ -1279,6 +1722,13 @@ impl Config {
                                 _ => Err(miette::miette!("invalid keyring provider")),
                             })
                             .transpose()?;
+                    }
+                    "allow-insecure-host" => {
+                        self.pypi_config.allow_insecure_host = value
+                            .map(|v| serde_json::de::from_str(&v))
+                            .transpose()
+                            .into_diagnostic()?
+                            .unwrap_or_default();
                     }
                     _ => return Err(err),
                 }
@@ -1421,6 +1871,53 @@ impl Config {
                     _ => return Err(err),
                 }
             }
+            key if key.starts_with("run-post-link-scripts") => {
+                if let Some(value) = value {
+                    self.run_post_link_scripts = Some(
+                        value
+                            .parse()
+                            .into_diagnostic()
+                            .wrap_err("failed to parse run-post-link-scripts")?,
+                    );
+                }
+                return Ok(());
+            }
+            key if key.starts_with("proxy-config") => {
+                if key == "proxy-config" {
+                    if let Some(value) = value {
+                        self.proxy_config = serde_json::de::from_str(&value).into_diagnostic()?;
+                    } else {
+                        self.proxy_config = ProxyConfig::default();
+                    }
+                    return Ok(());
+                } else if !key.starts_with("proxy-config.") {
+                    return Err(err);
+                }
+
+                let subkey = key.strip_prefix("proxy-config.").unwrap();
+                match subkey {
+                    "https" => {
+                        self.proxy_config.https = value
+                            .map(|v| Url::parse(&v))
+                            .transpose()
+                            .into_diagnostic()?;
+                    }
+                    "http" => {
+                        self.proxy_config.http = value
+                            .map(|v| Url::parse(&v))
+                            .transpose()
+                            .into_diagnostic()?;
+                    }
+                    "non-proxy-hosts" => {
+                        self.proxy_config.non_proxy_hosts = value
+                            .map(|v| serde_json::de::from_str(&v))
+                            .transpose()
+                            .into_diagnostic()?
+                            .unwrap_or_default();
+                    }
+                    _ => return Err(err),
+                }
+            }
             _ => return Err(err),
         }
 
@@ -1444,8 +1941,8 @@ impl Config {
             .wrap_err(format!("failed to write config to '{}'", to.display()))
     }
 
-    /// Constructs a [`Gateway`] using a [`ClientWithMiddleware`]
-    pub fn gateway(&self, client: ClientWithMiddleware) -> Gateway {
+    /// Constructs a [`GatewayBuilder`] with preconfigured settings.
+    pub fn gateway(&self) -> GatewayBuilder {
         // Determine the cache directory and fall back to sane defaults otherwise.
         let cache_dir = get_cache_dir().unwrap_or_else(|e| {
             tracing::error!("failed to determine repodata cache directory: {e}");
@@ -1454,11 +1951,9 @@ impl Config {
 
         // Construct the gateway
         Gateway::builder()
-            .with_client(client)
             .with_cache_dir(cache_dir.join(consts::CONDA_REPODATA_CACHE_DIR))
             .with_channel_config(self.into())
             .with_max_concurrent_requests(self.max_concurrent_downloads())
-            .finish()
     }
 
     pub fn compute_s3_config(&self) -> HashMap<String, s3_middleware::S3Config> {
@@ -1477,6 +1972,12 @@ impl Config {
             })
             .collect()
     }
+
+    /// Retrieve the value for the run_post_link_scripts field or default to
+    /// false.
+    pub fn run_post_link_scripts(&self) -> RunPostLinkScripts {
+        self.run_post_link_scripts.clone().unwrap_or_default()
+    }
 }
 
 /// Returns the path to the system-level pixi config file.
@@ -1494,6 +1995,14 @@ pub fn config_path_system() -> PathBuf {
 /// Returns the path(s) to the global pixi config file.
 pub fn config_path_global() -> Vec<PathBuf> {
     vec![
+        // On macos, add the XDG_CONFIG_HOME directory as well, although it's not a standard and
+        // not set by default.
+        #[cfg(target_os = "macos")]
+        std::env::var("XDG_CONFIG_HOME").ok().map(|d| {
+            PathBuf::from(d)
+                .join(consts::CONFIG_DIR)
+                .join(consts::CONFIG_FILE)
+        }),
         dirs::config_dir().map(|d| d.join(consts::CONFIG_DIR).join(consts::CONFIG_FILE)),
         pixi_home().map(|d| d.join(consts::CONFIG_FILE)),
     ]
@@ -1513,6 +2022,7 @@ mod tests {
         let toml = format!(
             r#"default-channels = ["conda-forge"]
 tls-no-verify = true
+tls-root-certs = "native"
 detached-environments = "{}"
 pinning-strategy = "no-pin"
 concurrency.solves = 5
@@ -1526,6 +2036,7 @@ UNUSED = "unused"
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
         );
         assert_eq!(config.tls_no_verify, Some(true));
+        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Native));
         assert_eq!(
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
@@ -1552,42 +2063,120 @@ UNUSED = "unused"
     #[case("latest-up", PinningStrategy::LatestUp)]
     #[case("no-pin", PinningStrategy::NoPin)]
     fn test_config_parse_pinning_strategy(#[case] input: &str, #[case] expected: PinningStrategy) {
-        let toml = format!("pinning-strategy = \"{}\"", input);
+        let toml = format!("pinning-strategy = \"{input}\"");
         let (config, _) = Config::from_toml(&toml, None).unwrap();
         assert_eq!(config.pinning_strategy, Some(expected));
     }
 
+    /// Assert that usage of `~` in `detached_environments` is correctly expanded
+    /// to the absolute path to the home directory.
+    #[test]
+    fn test_detached_environments_resolve_home_dir() {
+        let home_dir = dirs::home_dir().expect("Failed to resolve home directory");
+        let toml = r#"detached-environments = "~/my/envs""#;
+
+        let expected_detached_envs_path = home_dir.join("my/envs");
+
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        let actual_detached_envs_path = config.detached_environments().path().unwrap().unwrap();
+
+        assert_eq!(actual_detached_envs_path, expected_detached_envs_path);
+    }
+
+    /// Assert that an absolute path in `detached_environments` is preserved.
+    #[test]
+    fn test_detached_environments_abs_path() {
+        let toml = r#"detached-environments = "/home/me/envs""#;
+
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        let actual_detached_envs_path = config.detached_environments().path().unwrap().unwrap();
+        let expected_detached_envs_path = PathBuf::from("/home/me/envs");
+        assert_eq!(actual_detached_envs_path, expected_detached_envs_path);
+    }
+
+    /// Assert that en error is thrown if a relative path is used in `detached_environments`.
+    #[test]
+    fn test_detached_environments_relative_path() {
+        let toml = r#"detached-environments = "./relative_path/""#;
+
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        let result = config.validate();
+        assert!(result.is_err());
+        let error_message = result.unwrap_err().to_string();
+        assert_eq!(
+            error_message,
+            "The `detached-environments` path must be an absolute path: ./relative_path/"
+        );
+    }
+
+    /// Assert that a boolean in `detached_environments` is preserved.
+    #[test]
+    fn test_detached_environments_bool() {
+        let toml = r#"detached-environments = true"#;
+
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+
+        assert_eq!(
+            config.detached_environments(),
+            DetachedEnvironments::Boolean(true)
+        );
+    }
+
     #[test]
     fn test_config_from_cli() {
+        // Test with all CLI options enabled
         let cli = ConfigCli {
             tls_no_verify: true,
+            tls_root_certs: Some(TlsRootCerts::Native),
             auth_file: None,
             pypi_keyring_provider: Some(KeyringProvider::Subprocess),
-            concurrent_solves: None,
-            concurrent_downloads: None,
+            concurrent_solves: Some(8),
+            concurrent_downloads: Some(100),
+            run_post_link_scripts: true,
+            use_environment_activation_cache: true,
+            pinning_strategy: Some(PinningStrategy::Semver),
         };
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
+        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Native));
         assert_eq!(
             config.pypi_config().keyring_provider,
             Some(KeyringProvider::Subprocess)
         );
+        assert_eq!(config.concurrency.solves, 8);
+        assert_eq!(config.concurrency.downloads, 100);
+        assert_eq!(
+            config.run_post_link_scripts,
+            Some(RunPostLinkScripts::Insecure)
+        );
+        assert_eq!(
+            config.experimental.use_environment_activation_cache,
+            Some(true)
+        );
+        assert_eq!(config.pinning_strategy, Some(PinningStrategy::Semver));
 
         let cli = ConfigCli {
             tls_no_verify: false,
+            tls_root_certs: None,
             auth_file: Some(PathBuf::from("path.json")),
             pypi_keyring_provider: None,
             concurrent_solves: None,
             concurrent_downloads: None,
+            run_post_link_scripts: false,
+            use_environment_activation_cache: false,
+            pinning_strategy: None,
         };
 
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, None);
+        assert_eq!(config.tls_root_certs, None);
         assert_eq!(
             config.authentication_override_file,
             Some(PathBuf::from("path.json"))
         );
-        assert!(!config.experimental.use_environment_activation_cache());
+        assert_eq!(config.run_post_link_scripts, None);
+        assert_eq!(config.experimental.use_environment_activation_cache, None);
+        assert_eq!(config.pinning_strategy, None);
     }
 
     #[test]
@@ -1654,11 +2243,13 @@ UNUSED = "unused"
         "#;
         let result = Config::from_toml(toml, None);
         assert!(result.is_err());
-        assert!(result
-            .err()
-            .unwrap()
-            .to_string()
-            .contains("missing field `force-path-style`"));
+        assert!(
+            result
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("missing field `force-path-style`")
+        );
     }
 
     #[test]
@@ -1677,6 +2268,7 @@ UNUSED = "unused"
             default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
+            tls_root_certs: Some(TlsRootCerts::Native),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
             concurrency: ConcurrencyConfig {
                 solves: 5,
@@ -1725,6 +2317,10 @@ UNUSED = "unused"
                     RepodataChannelConfig::default(),
                 )]),
             },
+            run_post_link_scripts: Some(RunPostLinkScripts::Insecure),
+            proxy_config: ProxyConfig::default(),
+            build: BuildConfig::default(),
+            tool_platform: None,
             // Deprecated keys
             change_ps1: None,
             force_activate: None,
@@ -1808,10 +2404,12 @@ UNUSED = "unused"
         assert_eq!(config.max_concurrent_solves(), 5);
         assert!(config.s3_options.contains_key("bucket1"));
         assert!(config.s3_options.contains_key("bucket2"));
-        assert!(config.s3_options["bucket2"]
-            .endpoint_url
-            .to_string()
-            .contains("my-new-s3-host"));
+        assert!(
+            config.s3_options["bucket2"]
+                .endpoint_url
+                .to_string()
+                .contains("my-new-s3-host")
+        );
 
         let d = Path::new(&env!("CARGO_MANIFEST_DIR"))
             .join("tests")
@@ -1829,7 +2427,7 @@ UNUSED = "unused"
         merged = merged.merge_config(config_2);
         assert!(merged.s3_options.contains_key("bucket1"));
 
-        let debug = format!("{:#?}", merged);
+        let debug = format!("{merged:#?}");
         let debug = debug.replace("\\\\", "/");
         // replace the path with a placeholder
         let debug = debug.replace(&d.to_str().unwrap().replace('\\', "/"), "path");
@@ -2012,12 +2610,183 @@ UNUSED = "unused"
 
         config.set("s3-options.my-bucket", Some(r#"{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}"#.to_string())).unwrap();
         let s3_options = config.s3_options.get("my-bucket").unwrap();
-        assert!(s3_options
-            .endpoint_url
-            .to_string()
-            .contains("http://localhost:9000"));
+        assert!(
+            s3_options
+                .endpoint_url
+                .to_string()
+                .contains("http://localhost:9000")
+        );
         assert!(s3_options.force_path_style);
         assert_eq!(s3_options.region, "auto");
+
+        // Test tool-platform
+        config
+            .set("tool-platform", Some("linux-64".to_string()))
+            .unwrap();
+        assert_eq!(config.tool_platform, Some(Platform::Linux64));
+
+        // Test run-post-link-scripts
+        config
+            .set("run-post-link-scripts", Some("insecure".to_string()))
+            .unwrap();
+        assert_eq!(
+            config.run_post_link_scripts,
+            Some(RunPostLinkScripts::Insecure)
+        );
+
+        // Test shell.force-activate
+        config
+            .set("shell.force-activate", Some("true".to_string()))
+            .unwrap();
+        assert_eq!(config.shell.force_activate, Some(true));
+
+        // Test shell.source-completion-scripts
+        config
+            .set("shell.source-completion-scripts", Some("false".to_string()))
+            .unwrap();
+        assert_eq!(config.shell.source_completion_scripts, Some(false));
+
+        // Test experimental.use-environment-activation-cache
+        config
+            .set(
+                "experimental.use-environment-activation-cache",
+                Some("true".to_string()),
+            )
+            .unwrap();
+        assert_eq!(
+            config.experimental.use_environment_activation_cache,
+            Some(true)
+        );
+
+        // Test more repodata-config options
+        config
+            .set("repodata-config.disable-bzip2", Some("true".to_string()))
+            .unwrap();
+        let repodata_config = config.repodata_config();
+        assert_eq!(repodata_config.default.disable_bzip2, Some(true));
+
+        config
+            .set("repodata-config.disable-zstd", Some("false".to_string()))
+            .unwrap();
+        let repodata_config = config.repodata_config();
+        assert_eq!(repodata_config.default.disable_zstd, Some(false));
+
+        config
+            .set("repodata-config.disable-sharded", Some("true".to_string()))
+            .unwrap();
+        let repodata_config = config.repodata_config();
+        assert_eq!(repodata_config.default.disable_sharded, Some(true));
+
+        // Test pypi-config.allow-insecure-host
+        config
+            .set(
+                "pypi-config.allow-insecure-host",
+                Some(r#"["pypi.example.com"]"#.to_string()),
+            )
+            .unwrap();
+        assert_eq!(config.pypi_config().allow_insecure_host.len(), 1);
+
+        // Test proxy-config
+        config
+            .set(
+                "proxy-config.http",
+                Some("http://proxy.example.com:8080".to_string()),
+            )
+            .unwrap();
+        assert_eq!(
+            config.proxy_config.http,
+            Some(Url::parse("http://proxy.example.com:8080").unwrap())
+        );
+
+        config
+            .set(
+                "proxy-config.https",
+                Some("https://proxy.example.com:8080".to_string()),
+            )
+            .unwrap();
+        assert_eq!(
+            config.proxy_config.https,
+            Some(Url::parse("https://proxy.example.com:8080").unwrap())
+        );
+
+        config
+            .set(
+                "proxy-config.non-proxy-hosts",
+                Some(r#"["localhost", "127.0.0.1"]"#.to_string()),
+            )
+            .unwrap();
+        assert_eq!(config.proxy_config.non_proxy_hosts.len(), 2);
+
+        // Test s3-options with individual keys
+        config
+            .set(
+                "s3-options.test-bucket.endpoint-url",
+                Some("http://localhost:9000".to_string()),
+            )
+            .unwrap();
+        config
+            .set(
+                "s3-options.test-bucket.region",
+                Some("us-east-1".to_string()),
+            )
+            .unwrap();
+        config
+            .set(
+                "s3-options.test-bucket.force-path-style",
+                Some("false".to_string()),
+            )
+            .unwrap();
+
+        // Test concurrency configuration
+        config
+            .set("concurrency.solves", Some("5".to_string()))
+            .unwrap();
+        assert_eq!(config.concurrency.solves, 5);
+
+        config
+            .set("concurrency.downloads", Some("25".to_string()))
+            .unwrap();
+        assert_eq!(config.concurrency.downloads, 25);
+
+        // Test max-concurrent-solves (legacy accessor)
+        assert_eq!(config.max_concurrent_solves(), 5);
+        assert_eq!(config.max_concurrent_downloads(), 25);
+
+        // Test tls-no-verify
+        config
+            .set("tls-no-verify", Some("true".to_string()))
+            .unwrap();
+        assert_eq!(config.tls_no_verify, Some(true));
+
+        // Test tls-root-certs
+        config
+            .set("tls-root-certs", Some("native".to_string()))
+            .unwrap();
+        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Native));
+
+        // Test mirrors
+        config
+            .set(
+                "mirrors",
+                Some(r#"{"https://conda.anaconda.org/conda-forge": ["https://prefix.dev/conda-forge"]}"#.to_string()),
+            )
+            .unwrap();
+        assert_eq!(config.mirrors.len(), 1);
+
+        // Test detached-environments
+        config
+            .set("detached-environments", Some("/custom/path".to_string()))
+            .unwrap();
+        assert!(matches!(
+            config.detached_environments,
+            Some(DetachedEnvironments::Path(_))
+        ));
+
+        // Test pinning-strategy
+        config
+            .set("pinning-strategy", Some("semver".to_string()))
+            .unwrap();
+        assert_eq!(config.pinning_strategy, Some(PinningStrategy::Semver));
 
         config.set("unknown-key", None).unwrap_err();
     }
@@ -2144,5 +2913,116 @@ UNUSED = "unused"
         assert_eq!(anaconda_config.disable_bzip2, Some(false));
         assert_eq!(anaconda_config.disable_zstd, Some(false));
         assert_eq!(anaconda_config.disable_sharded, None);
+    }
+
+    #[test]
+    fn test_proxy_config_parse() {
+        let toml = r#"
+            [proxy-config]
+            https = "http://proxy-for-https"
+            http = "http://proxy-for-http"
+            non-proxy-hosts = [ "a.com" ]
+        "#;
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        assert_eq!(
+            config.proxy_config.https,
+            Some(Url::parse("http://proxy-for-https").unwrap())
+        );
+        assert_eq!(
+            config.proxy_config.http,
+            Some(Url::parse("http://proxy-for-http").unwrap())
+        );
+        assert_eq!(config.proxy_config.non_proxy_hosts.len(), 1);
+        assert_eq!(config.proxy_config.non_proxy_hosts[0], "a.com");
+    }
+
+    use std::str::FromStr;
+
+    use rattler_conda_types::{compression_level::CompressionLevel, package::CondaArchiveType};
+
+    use super::PackageFormatAndCompression;
+
+    #[test]
+    fn test_parse_packaging() {
+        let package_format = PackageFormatAndCompression::from_str("tar-bz2").unwrap();
+        assert_eq!(
+            package_format,
+            PackageFormatAndCompression {
+                archive_type: CondaArchiveType::TarBz2,
+                compression_level: CompressionLevel::Default
+            }
+        );
+
+        let package_format = PackageFormatAndCompression::from_str("conda").unwrap();
+        assert_eq!(
+            package_format,
+            PackageFormatAndCompression {
+                archive_type: CondaArchiveType::Conda,
+                compression_level: CompressionLevel::Default
+            }
+        );
+
+        let package_format = PackageFormatAndCompression::from_str("tar-bz2:1").unwrap();
+        assert_eq!(
+            package_format,
+            PackageFormatAndCompression {
+                archive_type: CondaArchiveType::TarBz2,
+                compression_level: CompressionLevel::Numeric(1)
+            }
+        );
+
+        let package_format = PackageFormatAndCompression::from_str(".tar.bz2:max").unwrap();
+        assert_eq!(
+            package_format,
+            PackageFormatAndCompression {
+                archive_type: CondaArchiveType::TarBz2,
+                compression_level: CompressionLevel::Highest
+            }
+        );
+
+        let package_format = PackageFormatAndCompression::from_str("tarbz2:5").unwrap();
+        assert_eq!(
+            package_format,
+            PackageFormatAndCompression {
+                archive_type: CondaArchiveType::TarBz2,
+                compression_level: CompressionLevel::Numeric(5)
+            }
+        );
+
+        let package_format = PackageFormatAndCompression::from_str("conda:1").unwrap();
+        assert_eq!(
+            package_format,
+            PackageFormatAndCompression {
+                archive_type: CondaArchiveType::Conda,
+                compression_level: CompressionLevel::Numeric(1)
+            }
+        );
+
+        let package_format = PackageFormatAndCompression::from_str("conda:max").unwrap();
+        assert_eq!(
+            package_format,
+            PackageFormatAndCompression {
+                archive_type: CondaArchiveType::Conda,
+                compression_level: CompressionLevel::Highest
+            }
+        );
+
+        let package_format = PackageFormatAndCompression::from_str("conda:-5").unwrap();
+        assert_eq!(
+            package_format,
+            PackageFormatAndCompression {
+                archive_type: CondaArchiveType::Conda,
+                compression_level: CompressionLevel::Numeric(-5)
+            }
+        );
+
+        let package_format = PackageFormatAndCompression::from_str("conda:fast").unwrap();
+        assert_eq!(
+            package_format,
+            PackageFormatAndCompression {
+                archive_type: CondaArchiveType::Conda,
+                compression_level: CompressionLevel::Lowest
+            }
+        );
     }
 }

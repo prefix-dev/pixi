@@ -1,12 +1,13 @@
-import pytest
 import os
 import pathlib
+import pytest
 import subprocess
-from read_wheels import Package, read_wheel_file
-import time
-from record_results import record_result
-from helpers import add_system_requirements, log_called_process_error, run
 import sys
+import time
+
+from .read_wheels import Package, read_wheel_file
+from .record_results import record_result
+from .helpers import add_system_requirements, log_called_process_error, run
 
 
 @pytest.mark.flaky(reruns=5, reruns_delay=1, condition=sys.platform.startswith("win32"))
@@ -46,8 +47,8 @@ def test_wheel(
 
         # Add for another platform, if specified
         for platform in package.spec.target_iter():
-            assert isinstance(package.spec.target, str)
-            run_args.extend(["--platform", package.spec.target])
+            assert isinstance(platform, str)
+            run_args.extend(["--platform", platform])
 
         run(run_args)
         # Record the success of the test

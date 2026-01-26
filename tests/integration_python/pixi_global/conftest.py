@@ -1,17 +1,18 @@
-import pytest
 from pathlib import Path
 
-
-@pytest.fixture
-def trampoline_channel_1(channels: Path) -> str:
-    return channels.joinpath("trampoline_1").as_uri()
+import pytest
 
 
 @pytest.fixture
-def trampoline_channel_2(channels: Path) -> str:
-    return channels.joinpath("trampoline_2").as_uri()
+def trampoline_channel(channels: Path) -> str:
+    return channels.joinpath("trampoline_channel").as_uri()
 
 
 @pytest.fixture
 def trampoline_path_channel(channels: Path) -> str:
     return channels.joinpath("trampoline_path_channel").as_uri()
+
+
+@pytest.fixture
+def global_prefix_ignore_channel(channels: Path) -> str:
+    return channels.joinpath("global_prefix_ignore_channel").as_uri()

@@ -8,12 +8,13 @@ use pep440_rs::{Version, VersionSpecifiers};
 use pep508_rs::Requirement;
 use pixi_toml::{DeserializeAs, Same, TomlFromStr, TomlIndexMap, TomlWith};
 use pyproject_toml::{
-    BuildSystem, Contact, DependencyGroupSpecifier, DependencyGroups, License, Project, ReadMe,
+    self, BuildSystem, Contact, DependencyGroupSpecifier, DependencyGroups, License, Project,
+    ReadMe,
 };
 use toml_span::{
-    de_helpers::{expected, TableHelper},
-    value::ValueInner,
     DeserError, Deserialize, Error, ErrorKind, Spanned, Value,
+    de_helpers::{TableHelper, expected},
+    value::ValueInner,
 };
 
 use crate::pyproject::{PyProjectManifest, Tool, ToolPoetry};
@@ -23,6 +24,19 @@ pub struct PyProjectToml {
     pub project: Option<TomlProject>,
     pub build_system: Option<TomlBuildSystem>,
     pub dependency_groups: Option<Spanned<TomlDependencyGroups>>,
+}
+
+impl PyProjectToml {
+    pub fn into_inner(self) -> pyproject_toml::PyProjectToml {
+        pyproject_toml::PyProjectToml {
+            project: self.project.map(TomlProject::into_inner),
+            build_system: self.build_system.map(TomlBuildSystem::into_inner),
+            dependency_groups: self
+                .dependency_groups
+                .map(Spanned::take)
+                .map(TomlDependencyGroups::into_inner),
+        }
+    }
 }
 
 impl<'de> toml_span::Deserialize<'de> for PyProjectToml {

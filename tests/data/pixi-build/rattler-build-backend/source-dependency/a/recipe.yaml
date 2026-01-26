@@ -1,0 +1,13 @@
+package:
+  name: a
+  version: 0.1.0
+
+build:
+  script:
+    - if: win
+      then:
+        - if not exist "%PREFIX%" mkdir "%PREFIX%"
+        - echo hello from package a! > "%PREFIX%\hi"
+      else:
+        - mkdir -p $PREFIX
+        - echo "hello from package a!" > $PREFIX/hi

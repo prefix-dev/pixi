@@ -1,11 +1,6 @@
 name: Update Trampoline Binaries
 
 on:
-  push:
-    paths:
-      - "trampoline/**"
-      - ".github/workflows/trampoline.yaml"
-      - "src/global/trampoline.rs"
   workflow_dispatch:
   pull_request:
     paths:
@@ -14,8 +9,7 @@ on:
       - "src/global/trampoline.rs"
 
 permissions:
-  contents: write # Allow write permissions for contents (like pushing to the repo)
-  pull-requests: write
+  contents: read
 
 jobs:
   build:
@@ -36,13 +30,21 @@ jobs:
             target: powerpc64le-unknown-linux-gnu
             os: ubuntu-latest
 
+          - name: "Linux-riscv64"
+            target: riscv64gc-unknown-linux-gnu
+            os: ubuntu-latest
+
+          - name: "Linux-loong64"
+            target: loongarch64-unknown-linux-gnu
+            os: ubuntu-latest
+
           - name: "macOS-x86"
             target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-15-intel
 
           - name: "macOS-arm"
             target: aarch64-apple-darwin
-            os: macos-14
+            os: macos-15
 
           - name: "Windows"
             target: x86_64-pc-windows-msvc
@@ -54,25 +56,27 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           fetch-depth: 0 # Fetch full history so we have branch information
+          persist-credentials: false
 
       - name: Set up Rust
-        uses: taiki-e/setup-cross-toolchain-action@v1
+        uses: taiki-e/setup-cross-toolchain-action@d30d20f04a3b09718e138524795d0d6ab7703dcb # v1
         with:
           target: ${{ matrix.target }}
 
       - name: Set up pixi
-        uses: prefix-dev/setup-pixi@v0.8.3
+        uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
         with:
           environments: trampoline
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build trampoline binary
         run: pixi run build-trampoline --target ${{ matrix.target }}
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: trampoline-${{ matrix.target }}
           path: trampoline/binaries/pixi-trampoline-${{ matrix.target }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}.zst
@@ -80,12 +84,16 @@ jobs:
   aggregate:
     runs-on: ubuntu-latest
     needs: build # This ensures the aggregation job runs after the build jobs
+    permissions:
+      contents: write # Allow write permissions for contents (like pushing to the repo)
+      pull-requests: write
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Download all binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           path: trampoline/binaries/
           merge-multiple: true
@@ -94,7 +102,7 @@ jobs:
         run: ls -R trampoline/binaries/
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: trampolines
           path: trampoline/binaries/

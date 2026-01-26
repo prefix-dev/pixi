@@ -7,10 +7,10 @@ use url::Url;
 #[derive(Debug, Clone)]
 pub struct Package {
     /// The name of the project
-    pub name: String,
+    pub name: Option<String>,
 
     /// The version of the project
-    pub version: Version,
+    pub version: Option<Version>,
 
     /// An optional project description
     pub description: Option<String>,
@@ -35,4 +35,22 @@ pub struct Package {
 
     /// URL of the project documentation
     pub documentation: Option<Url>,
+}
+
+impl Package {
+    /// Creates a new package with the given name and version.
+    pub fn new(name: Option<String>, version: Option<Version>) -> Self {
+        Self {
+            name,
+            version,
+            description: None,
+            authors: None,
+            license: None,
+            license_file: None,
+            readme: None,
+            homepage: None,
+            repository: None,
+            documentation: None,
+        }
+    }
 }

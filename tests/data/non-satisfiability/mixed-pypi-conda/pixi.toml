@@ -1,0 +1,13 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+name = "installation-order"
+platforms = ["win-64"]
+
+[dependencies]
+python = "3.13.*"
+# flask = "*"
+
+[pypi-dependencies]
+sdist = "*"
+#boltons = ">=25.0"
+boltons = "<25.0"

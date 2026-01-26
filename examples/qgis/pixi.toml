@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors = ["Ruben Arts <ruben@prefix.dev>"]
 channels = ["conda-forge"]
 description = "QGIS example with earthquake data"

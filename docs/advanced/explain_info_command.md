@@ -1,4 +1,3 @@
-
 `pixi info` prints out useful information to debug a situation or to get an overview of your machine/workspace.
 This information can also be retrieved in `json` format using the `--json` flag, which can be useful for programmatically reading it.
 

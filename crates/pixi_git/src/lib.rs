@@ -1,6 +1,8 @@
 /// Derived from `uv-git` implementation
 /// Source: https://github.com/astral-sh/uv/blob/4b8cc3e29e4c2a6417479135beaa9783b05195d3/crates/uv-git/src/lib.rs
 /// This module expose types and functions to interact with Git repositories.
+use std::sync::Arc;
+
 use ::url::Url;
 use git::{GitBinaryError, GitReference};
 use sha::{GitSha, OidParseError};
@@ -14,6 +16,12 @@ pub mod url;
 
 /// The query parameter used to specify the type of reference in a Git URL.
 pub const GIT_URL_QUERY_REV_TYPE: &str = "rev_type";
+
+/// The warning message used in reporter for SSH cloning.
+/// This is intended to help user understand that they need to set their SSH passphrase
+/// before cloning a repository using SSH, otherwise the process can hang.
+/// Original issue: <https://github.com/prefix-dev/pixi/issues/3709>
+pub const GIT_SSH_CLONING_WARNING_MSG: &str = "Heads-up: use `ssh-add` if this hangs.";
 
 /// A URL reference to a Git repository.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord)]
@@ -168,13 +176,13 @@ pub trait Reporter: Send + Sync {
     fn on_checkout_complete(&self, url: &Url, rev: &str, index: usize);
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum GitError {
     #[error(transparent)]
     GitBinary(#[from] GitBinaryError),
 
     #[error(transparent)]
-    Io(#[from] std::io::Error),
+    Io(Arc<std::io::Error>),
 
     #[error(transparent)]
     FromUtf8(#[from] std::string::FromUtf8Error),
@@ -192,11 +200,35 @@ pub enum GitError {
     GitUrlFormat(String, String),
 
     #[error(transparent)]
-    ReqwestMiddleware(#[from] reqwest_middleware::Error),
+    ReqwestMiddleware(Arc<reqwest_middleware::Error>),
 
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Reqwest(Arc<reqwest::Error>),
 
     #[error(transparent)]
-    Join(#[from] tokio::task::JoinError),
+    Join(Arc<tokio::task::JoinError>),
+}
+
+impl From<std::io::Error> for GitError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(Arc::new(err))
+    }
+}
+
+impl From<reqwest_middleware::Error> for GitError {
+    fn from(err: reqwest_middleware::Error) -> Self {
+        Self::ReqwestMiddleware(Arc::new(err))
+    }
+}
+
+impl From<reqwest::Error> for GitError {
+    fn from(err: reqwest::Error) -> Self {
+        Self::Reqwest(Arc::new(err))
+    }
+}
+
+impl From<tokio::task::JoinError> for GitError {
+    fn from(err: tokio::task::JoinError) -> Self {
+        Self::Join(Arc::new(err))
+    }
 }

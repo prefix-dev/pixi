@@ -1,4 +1,4 @@
-[project]
+[workspace]
 name = "lots_of_channels"
 platforms = []
 #  --8<-- [start:project_channels_long]

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.42.1/schema/manifest/schema.json",
+  "$id": "https://pixi.sh/v0.63.2/schema/manifest/schema.json",
   "title": "`pixi.toml` manifest file",
   "description": "The configuration for a [`pixi`](https://pixi.sh) project.",
   "type": "object",
@@ -10,7 +10,7 @@
       "title": "Schema",
       "description": "The schema identifier for the project's configuration",
       "type": "string",
-      "default": "https://pixi.sh/v0.42.1/schema/manifest/schema.json",
+      "default": "https://pixi.sh/v0.63.2/schema/manifest/schema.json",
       "format": "uri-reference"
     },
     "activation": {
@@ -31,6 +31,9 @@
             "$ref": "#/$defs/MatchspecTable"
           }
         ]
+      },
+      "propertyNames": {
+        "minLength": 1
       }
     },
     "dependencies": {
@@ -47,6 +50,20 @@
             "$ref": "#/$defs/MatchspecTable"
           }
         ]
+      },
+      "propertyNames": {
+        "minLength": 1
+      }
+    },
+    "dev": {
+      "title": "Dev",
+      "description": "Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/SourceSpecTable"
+      },
+      "propertyNames": {
+        "minLength": 1
       }
     },
     "environments": {
@@ -76,6 +93,9 @@
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/Feature"
+      },
+      "propertyNames": {
+        "minLength": 1
       }
     },
     "host-dependencies": {
@@ -92,6 +112,9 @@
             "$ref": "#/$defs/MatchspecTable"
           }
         ]
+      },
+      "propertyNames": {
+        "minLength": 1
       },
       "examples": [
         {
@@ -136,6 +159,9 @@
             "$ref": "#/$defs/PyPIUrlRequirement"
           }
         ]
+      },
+      "propertyNames": {
+        "minLength": 1
       }
     },
     "pypi-options": {
@@ -152,6 +178,9 @@
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/Target"
+      },
+      "propertyNames": {
+        "minLength": 1
       },
       "examples": [
         {
@@ -174,17 +203,27 @@
               "$ref": "#/$defs/TaskInlineTable"
             },
             {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/DependsOn"
+              }
+            },
+            {
               "type": "string",
               "minLength": 1
             }
           ]
         }
+      },
+      "propertyNames": {
+        "description": "A valid task name."
       }
     },
     "tool": {
       "title": "Tool",
       "description": "Third-party tool configurations, ignored by pixi",
-      "type": "object"
+      "type": "object",
+      "additionalProperties": true
     },
     "workspace": {
       "$ref": "#/$defs/Workspace",
@@ -221,6 +260,9 @@
           "type": "object",
           "additionalProperties": {
             "type": "string",
+            "minLength": 1
+          },
+          "propertyNames": {
             "minLength": 1
           },
           "examples": [
@@ -269,6 +311,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "backend": {
@@ -296,10 +341,45 @@
             ]
           }
         },
-        "configuration": {
-          "title": "Configuration",
+        "config": {
+          "title": "Config",
           "description": "The configuration of the build backend",
-          "type": "object"
+          "type": "object",
+          "additionalProperties": true
+        },
+        "source": {
+          "$ref": "#/$defs/SourceLocation",
+          "description": "The source from which to build the package",
+          "examples": [
+            {
+              "path": "project"
+            },
+            {
+              "git": "https://github.com/user/repo.git",
+              "rev": "bd62770509b8afd792e98d20f8b458e2a7f19ec2",
+              "subdirectory": "subproject/src"
+            }
+          ]
+        },
+        "target": {
+          "title": "Target",
+          "description": "Target-specific build configuration for different platforms",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/BuildTarget"
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "linux-64": {
+                "config": {
+                  "key": "value"
+                }
+              }
+            }
+          ]
         }
       }
     },
@@ -308,6 +388,25 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "additional-dependencies": {
+          "title": "Additional-Dependencies",
+          "description": "Additional dependencies to install alongside the build backend",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
         "branch": {
           "title": "Branch",
           "description": "A git branch to use",
@@ -334,8 +433,29 @@
           "examples": [
             "conda-forge",
             "pytorch",
-            "https://repo.prefix.dev/conda-forge"
+            "https://prefix.dev/conda-forge"
           ]
+        },
+        "channels": {
+          "title": "Channels",
+          "description": "The `conda` channels that are used to fetch the build backend from",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "string",
+                "format": "uri",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/ChannelInlineTable"
+              }
+            ]
+          }
         },
         "file-name": {
           "title": "File-Name",
@@ -346,6 +466,12 @@
         "git": {
           "title": "Git",
           "description": "The git URL to the repo",
+          "type": "string",
+          "minLength": 1
+        },
+        "license": {
+          "title": "License",
+          "description": "The license of the package",
           "type": "string",
           "minLength": 1
         },
@@ -411,6 +537,20 @@
         }
       }
     },
+    "BuildTarget": {
+      "title": "BuildTarget",
+      "description": "Target-specific build configuration for different platforms",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "title": "Config",
+          "description": "Target-specific configuration for the build backend",
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
     "ChannelInlineTable": {
       "title": "ChannelInlineTable",
       "description": "A precise description of a `conda` channel, with an optional priority.",
@@ -450,6 +590,60 @@
         "disabled",
         "strict"
       ]
+    },
+    "DependsOn": {
+      "title": "DependsOn",
+      "description": "The dependencies of a task.",
+      "type": "object",
+      "required": [
+        "task"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "title": "Args",
+          "description": "The (positional or named) arguments to pass to the task",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "description": "A single item task name/value object",
+                "type": "object",
+                "patternProperties": {
+                  "^[a-zA-Z_][a-zA-Z\\d_]*$": {
+                    "type": "string"
+                  }
+                },
+                "maxProperties": 1,
+                "minProperties": 1,
+                "propertyNames": {
+                  "description": "A valid task argument name; may not be any of: pixi",
+                  "not": {
+                    "enum": [
+                      "pixi"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "environment": {
+          "title": "Environment",
+          "description": "The environment to use for the task",
+          "type": "string",
+          "pattern": "^[a-z\\d\\-]+$"
+        },
+        "task": {
+          "title": "Task",
+          "description": "the name of the task to depend on",
+          "type": "string",
+          "pattern": "^[^\\s\\$]+$"
+        }
+      }
     },
     "Environment": {
       "title": "Environment",
@@ -504,11 +698,14 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
-          "description": "The type of channel priority that is used in the solve.- 'strict': only take the package from the channel it exist in first.- 'disabled': group all dependencies together as if there is no channel difference.",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
           "examples": [
             "strict",
             "disabled"
@@ -549,6 +746,20 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "dev": {
+          "title": "Dev",
+          "description": "Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/SourceSpecTable"
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "host-dependencies": {
@@ -565,6 +776,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           },
           "examples": [
             {
@@ -609,11 +823,23 @@
                 "$ref": "#/$defs/PyPIUrlRequirement"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "pypi-options": {
           "$ref": "#/$defs/PyPIOptions",
           "description": "Options related to PyPI indexes for this feature"
+        },
+        "solve-strategy": {
+          "$ref": "#/$defs/SolveStrategy",
+          "description": "The strategy that is used in the solve.\n- 'highest': solve all packages to the highest compatible version.\n- 'lowest': solve all packages to the lowest compatible version.\n- 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.",
+          "examples": [
+            "lowest",
+            "lowest-direct",
+            "highest"
+          ]
         },
         "system-requirements": {
           "$ref": "#/$defs/SystemRequirements",
@@ -625,6 +851,9 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/Target"
+          },
+          "propertyNames": {
+            "minLength": 1
           },
           "examples": [
             {
@@ -647,11 +876,20 @@
                   "$ref": "#/$defs/TaskInlineTable"
                 },
                 {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/DependsOn"
+                  }
+                },
+                {
                   "type": "string",
                   "minLength": 1
                 }
               ]
             }
+          },
+          "propertyNames": {
+            "description": "A valid task name."
           }
         }
       }
@@ -752,7 +990,7 @@
           "examples": [
             "conda-forge",
             "pytorch",
-            "https://repo.prefix.dev/conda-forge"
+            "https://prefix.dev/conda-forge"
           ]
         },
         "file-name": {
@@ -764,6 +1002,12 @@
         "git": {
           "title": "Git",
           "description": "The git URL to the repo",
+          "type": "string",
+          "minLength": 1
+        },
+        "license": {
+          "title": "License",
+          "description": "The license of the package",
           "type": "string",
           "minLength": 1
         },
@@ -834,14 +1078,26 @@
       "properties": {
         "authors": {
           "title": "Authors",
-          "description": "The authors of the project",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
+          "description": "The authors of the project. Can be a list of strings or { workspace = true } to inherit from workspace",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            {
+              "$ref": "#/$defs/WorkspaceInheritance"
+            }
+          ],
           "examples": [
-            "John Doe <j.doe@prefix.dev>"
+            [
+              "John Doe <j.doe@prefix.dev>"
+            ],
+            {
+              "workspace": true
+            }
           ]
         },
         "build": {
@@ -862,27 +1118,51 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "description": {
           "title": "Description",
-          "description": "A short description of the project",
-          "type": "string",
-          "minLength": 1
+          "description": "A short description of the project. Can be a string or { workspace = true } to inherit from workspace",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/WorkspaceInheritance"
+            }
+          ]
         },
         "documentation": {
           "title": "Documentation",
-          "description": "The URL of the documentation of the project",
-          "type": "string",
-          "format": "uri",
-          "minLength": 1
+          "description": "The URL of the documentation of the project. Can be a URL or { workspace = true } to inherit from workspace",
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uri",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/WorkspaceInheritance"
+            }
+          ]
         },
         "homepage": {
           "title": "Homepage",
-          "description": "The URL of the homepage of the project",
-          "type": "string",
-          "format": "uri",
-          "minLength": 1
+          "description": "The URL of the homepage of the project. Can be a URL or { workspace = true } to inherit from workspace",
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uri",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/WorkspaceInheritance"
+            }
+          ]
         },
         "host-dependencies": {
           "title": "Host-Dependencies",
@@ -899,6 +1179,9 @@
               }
             ]
           },
+          "propertyNames": {
+            "minLength": 1
+          },
           "examples": [
             {
               "python": ">=3.8"
@@ -907,34 +1190,69 @@
         },
         "license": {
           "title": "License",
-          "description": "The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier.",
-          "type": "string",
-          "minLength": 1
+          "description": "The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier. Can be a string or { workspace = true } to inherit from workspace",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/WorkspaceInheritance"
+            }
+          ]
         },
         "license-file": {
           "title": "License-File",
-          "description": "The path to the license file of the project",
-          "type": "string",
-          "pattern": "^[^\\\\]+$"
+          "description": "The path to the license file of the project. Can be a path or { workspace = true } to inherit from workspace",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[^\\\\]+$"
+            },
+            {
+              "$ref": "#/$defs/WorkspaceInheritance"
+            }
+          ]
         },
         "name": {
           "title": "Name",
-          "description": "The name of the package",
-          "type": "string",
-          "minLength": 1
+          "description": "The name of the package. Can be a string or { workspace = true } to inherit from workspace",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/WorkspaceInheritance"
+            }
+          ]
         },
         "readme": {
           "title": "Readme",
-          "description": "The path to the readme file of the project",
-          "type": "string",
-          "pattern": "^[^\\\\]+$"
+          "description": "The path to the readme file of the project. Can be a path or { workspace = true } to inherit from workspace",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[^\\\\]+$"
+            },
+            {
+              "$ref": "#/$defs/WorkspaceInheritance"
+            }
+          ]
         },
         "repository": {
           "title": "Repository",
-          "description": "The URL of the repository of the project",
-          "type": "string",
-          "format": "uri",
-          "minLength": 1
+          "description": "The URL of the repository of the project. Can be a URL or { workspace = true } to inherit from workspace",
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uri",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/WorkspaceInheritance"
+            }
+          ]
         },
         "run-dependencies": {
           "title": "Run-Dependencies",
@@ -950,6 +1268,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "target": {
@@ -958,6 +1279,9 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/Target"
+          },
+          "propertyNames": {
+            "minLength": 1
           },
           "examples": [
             {
@@ -971,11 +1295,21 @@
         },
         "version": {
           "title": "Version",
-          "description": "The version of the project; we advise use of [SemVer](https://semver.org)",
-          "type": "string",
-          "minLength": 1,
+          "description": "The version of the project; we advise use of [SemVer](https://semver.org). Can be a string or { workspace = true } to inherit from workspace",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/WorkspaceInheritance"
+            }
+          ],
           "examples": [
-            "1.2.3"
+            "1.2.3",
+            {
+              "workspace": true
+            }
           ]
         }
       }
@@ -1115,6 +1449,45 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "dependency-overrides": {
+          "title": "Dependency-Overrides",
+          "description": "A list of PyPI dependencies that override the resolved dependencies",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/PyPIVersion"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitBranchRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitTagRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitRevRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIPathRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIUrlRequirement"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "numpy": ">=1.21.0"
+            }
+          ]
+        },
         "extra-index-urls": {
           "title": "Extra-Index-Urls",
           "description": "Additional PyPI registries that should be used as extra indexes",
@@ -1154,12 +1527,15 @@
           "description": "The strategy to use when resolving packages from multiple indexes",
           "anyOf": [
             {
+              "type": "string",
               "const": "first-index"
             },
             {
+              "type": "string",
               "const": "unsafe-first-match"
             },
             {
+              "type": "string",
               "const": "unsafe-best-match"
             }
           ],
@@ -1176,6 +1552,26 @@
           "minLength": 1,
           "examples": [
             "https://pypi.org/simple"
+          ]
+        },
+        "no-binary": {
+          "title": "No-Binary",
+          "description": "Don't use pre-built wheels for these packages",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          ],
+          "examples": [
+            "true",
+            "false"
           ]
         },
         "no-build": {
@@ -1201,15 +1597,65 @@
         "no-build-isolation": {
           "title": "No-Build-Isolation",
           "description": "Packages that should NOT be isolated during the build process",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          ],
           "examples": [
             [
               "numpy"
-            ]
+            ],
+            true
+          ]
+        },
+        "prerelease-mode": {
+          "title": "Prerelease-Mode",
+          "description": "The strategy to use when considering pre-release versions",
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "disallow"
+            },
+            {
+              "type": "string",
+              "const": "allow"
+            },
+            {
+              "type": "string",
+              "const": "if-necessary"
+            },
+            {
+              "type": "string",
+              "const": "explicit"
+            },
+            {
+              "type": "string",
+              "const": "if-necessary-or-explicit"
+            }
+          ],
+          "examples": [
+            "disallow",
+            "allow",
+            "if-necessary",
+            "explicit",
+            "if-necessary-or-explicit"
+          ]
+        },
+        "skip-wheel-filename-check": {
+          "title": "Skip-Wheel-Filename-Check",
+          "description": "Skip wheel filename validation, allowing installation of wheels with version mismatches between filename and metadata",
+          "type": "boolean",
+          "examples": [
+            true,
+            false
           ]
         }
       }
@@ -1333,6 +1779,122 @@
         }
       }
     },
+    "SolveStrategy": {
+      "title": "SolveStrategy",
+      "description": "The strategy used to solve packages.",
+      "type": "string",
+      "enum": [
+        "highest",
+        "lowest",
+        "lowest-direct"
+      ]
+    },
+    "SourceLocation": {
+      "title": "SourceLocation",
+      "description": "The location of a package's source code.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "title": "Branch",
+          "description": "A git branch to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "git": {
+          "title": "Git",
+          "description": "The git URL to the source repo",
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "title": "Path",
+          "description": "The path to the source",
+          "type": "string",
+          "minLength": 1
+        },
+        "rev": {
+          "title": "Rev",
+          "description": "A git SHA revision to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "subdirectory": {
+          "title": "Subdirectory",
+          "description": "A subdirectory to use in the repo",
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "title": "Tag",
+          "description": "A git tag to use",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "SourceSpecTable": {
+      "title": "SourceSpecTable",
+      "description": "A precise description of a source package location.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "title": "Branch",
+          "description": "A git branch to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "git": {
+          "title": "Git",
+          "description": "The git URL to the source repo",
+          "type": "string",
+          "minLength": 1
+        },
+        "md5": {
+          "title": "Md5",
+          "description": "The md5 hash of the source package",
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{32}$"
+        },
+        "path": {
+          "title": "Path",
+          "description": "The path to the source package",
+          "type": "string",
+          "minLength": 1
+        },
+        "rev": {
+          "title": "Rev",
+          "description": "A git SHA revision to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "title": "Sha256",
+          "description": "The sha256 hash of the source package",
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "subdirectory": {
+          "title": "Subdirectory",
+          "description": "A subdirectory to use in the repo",
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "title": "Tag",
+          "description": "A git tag to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "title": "Url",
+          "description": "The URL to the source package",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "SystemRequirements": {
       "title": "SystemRequirements",
       "description": "Platform-specific requirements",
@@ -1380,7 +1942,7 @@
           "anyOf": [
             {
               "type": "number",
-              "exclusiveMinimum": 0.0
+              "exclusiveMinimum": 0
             },
             {
               "type": "string",
@@ -1394,7 +1956,7 @@
           "anyOf": [
             {
               "type": "number",
-              "exclusiveMinimum": 0.0
+              "exclusiveMinimum": 0
             },
             {
               "type": "string",
@@ -1444,6 +2006,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "dependencies": {
@@ -1460,6 +2025,20 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "dev": {
+          "title": "Dev",
+          "description": "Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/SourceSpecTable"
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "host-dependencies": {
@@ -1476,6 +2055,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           },
           "examples": [
             {
@@ -1512,6 +2094,9 @@
                 "$ref": "#/$defs/PyPIUrlRequirement"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "tasks": {
@@ -1525,12 +2110,48 @@
                   "$ref": "#/$defs/TaskInlineTable"
                 },
                 {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/DependsOn"
+                  }
+                },
+                {
                   "type": "string",
                   "minLength": 1
                 }
               ]
             }
+          },
+          "propertyNames": {
+            "description": "A valid task name."
           }
+        }
+      }
+    },
+    "TaskArgs": {
+      "title": "TaskArgs",
+      "description": "The arguments of a task.",
+      "type": "object",
+      "required": [
+        "arg"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "arg": {
+          "title": "Arg",
+          "description": "The name of the argument",
+          "type": "string",
+          "not": {
+            "enum": [
+              "pixi"
+            ]
+          },
+          "pattern": "^[a-zA-Z_][a-zA-Z\\d_]*$"
+        },
+        "default": {
+          "title": "Default",
+          "description": "The default value of the argument",
+          "type": "string"
         }
       }
     },
@@ -1540,6 +2161,41 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "args": {
+          "title": "Args",
+          "description": "The arguments to a task",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TaskArgs"
+              },
+              {
+                "description": "A valid task argument name; may not be any of: pixi",
+                "type": "string",
+                "not": {
+                  "enum": [
+                    "pixi"
+                  ]
+                },
+                "pattern": "^[a-zA-Z_][a-zA-Z\\d_]*$"
+              }
+            ]
+          },
+          "examples": [
+            [
+              "arg1",
+              "arg2"
+            ],
+            [
+              "arg",
+              {
+                "arg": "arg2",
+                "default": "2"
+              }
+            ]
+          ]
+        },
         "clean-env": {
           "title": "Clean-Env",
           "description": "Whether to run in a clean environment, removing all environment variables except those defined in `env` and by pixi itself.",
@@ -1568,6 +2224,12 @@
           "type": "string",
           "pattern": "^[^\\\\]+$"
         },
+        "default-environment": {
+          "title": "Default-Environment",
+          "description": "A default environment to run the task",
+          "type": "string",
+          "pattern": "^[a-z\\d\\-]+$"
+        },
         "depends-on": {
           "title": "Depends-On",
           "description": "The tasks that this task depends on. Environment variables will **not** be expanded.",
@@ -1575,10 +2237,20 @@
             {
               "type": "array",
               "items": {
-                "description": "A valid task name.",
-                "type": "string",
-                "pattern": "^[^\\s\\$]+$"
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DependsOn"
+                  },
+                  {
+                    "description": "A valid task name.",
+                    "type": "string",
+                    "pattern": "^[^\\s\\$]+$"
+                  }
+                ]
               }
+            },
+            {
+              "$ref": "#/$defs/DependsOn"
             },
             {
               "description": "A valid task name.",
@@ -1610,10 +2282,7 @@
           "title": "Description",
           "description": "A short description of the task",
           "type": "string",
-          "minLength": 1,
-          "examples": [
-            "Build the project"
-          ]
+          "minLength": 1
         },
         "env": {
           "title": "Env",
@@ -1621,6 +2290,9 @@
           "type": "object",
           "additionalProperties": {
             "type": "string",
+            "minLength": 1
+          },
+          "propertyNames": {
             "minLength": 1
           },
           "examples": [
@@ -1657,7 +2329,7 @@
       "description": "The project's metadata information.",
       "type": "object",
       "required": [
-        "platforms"
+        "channels"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1682,11 +2354,23 @@
             "items": {
               "type": "string"
             }
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "build-variants-files": {
+          "title": "Build-Variants-Files",
+          "description": "Ordered list of variant definition files.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[^\\\\]+$"
           }
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
-          "description": "The type of channel priority that is used in the solve.- 'strict': only take the package from the channel it exist in first.- 'disabled': group all dependencies together as if there is no channel difference.",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
           "examples": [
             "strict",
             "disabled"
@@ -1744,6 +2428,16 @@
           "format": "uri",
           "minLength": 1
         },
+        "exclude-newer": {
+          "title": "Exclude-Newer",
+          "description": "Exclude any package newer than this date",
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}([T ]\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2}))?$",
+          "examples": [
+            "2023-11-03",
+            "2023-11-03T03:33:12Z"
+          ]
+        },
         "homepage": {
           "title": "Homepage",
           "description": "The URL of the homepage of the project",
@@ -1787,6 +2481,7 @@
                 "anyOf": [
                   {
                     "description": "Enables building of source records",
+                    "type": "string",
                     "const": "pixi-build"
                   },
                   {
@@ -1817,12 +2512,41 @@
           "format": "uri",
           "minLength": 1
         },
+        "requires-pixi": {
+          "title": "Requires-Pixi",
+          "description": "The required version spec for pixi itself to resolve and build the project.",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            ">=0.40"
+          ]
+        },
         "s3-options": {
           "title": "S3-Options",
           "description": "Options related to S3 for this project",
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/S3Options"
+          }
+        },
+        "solve-strategy": {
+          "$ref": "#/$defs/SolveStrategy",
+          "description": "The strategy that is used in the solve.\n- 'highest': solve all packages to the highest compatible version.\n- 'lowest': solve all packages to the lowest compatible version.\n- 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.",
+          "examples": [
+            "lowest",
+            "lowest-direct",
+            "highest"
+          ]
+        },
+        "target": {
+          "title": "Target",
+          "description": "The workspace targets",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/WorkspaceTarget"
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "version": {
@@ -1833,6 +2557,45 @@
           "examples": [
             "1.2.3"
           ]
+        }
+      }
+    },
+    "WorkspaceInheritance": {
+      "title": "WorkspaceInheritance",
+      "description": "Indicates that a field should inherit its value from the workspace.",
+      "type": "object",
+      "required": [
+        "workspace"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "workspace": {
+          "title": "Workspace",
+          "description": "Must be true to inherit from workspace",
+          "type": "boolean",
+          "const": true
+        }
+      }
+    },
+    "WorkspaceTarget": {
+      "title": "WorkspaceTarget",
+      "description": "Target-specific configuration for a workspace",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build-variants": {
+          "title": "Build-Variants",
+          "description": "The build variants for this workspace target",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
         }
       }
     }

@@ -13,20 +13,33 @@
     setting the environment variable 'PIXI_HOME'.
 .PARAMETER NoPathUpdate
     If specified, the script will not update the PATH environment variable.
+.PARAMETER PixiRepourl
+    Specifies Pixi's repo url.
+    The default value is 'https://github.com/prefix-dev/pixi'. You can also specify it by
+    setting the environment variable 'PIXI_REPOURL'.
 .LINK
     https://pixi.sh
 .LINK
     https://github.com/prefix-dev/pixi
 .NOTES
-    Version: v0.42.1
+    Version: v0.63.2
 #>
 param (
     [string] $PixiVersion = 'latest',
     [string] $PixiHome = "$Env:USERPROFILE\.pixi",
-    [switch] $NoPathUpdate
+    [switch] $NoPathUpdate,
+    [string] $PixiRepourl = 'https://github.com/prefix-dev/pixi'
 )
 
 Set-StrictMode -Version Latest
+
+function Mask-Credentials {
+    param(
+        [string] $Url
+    )
+    # Replace username:password@ pattern with ***:***@
+    return $Url -replace '://[^:@/]+:[^@/]+@', '://***:***@'
+}
 
 function Publish-Env {
     if (-not ("Win32.NativeMethods" -as [Type])) {
@@ -145,8 +158,11 @@ if ($Env:PIXI_NO_PATH_UPDATE) {
     $NoPathUpdate = $true
 }
 
+if ($Env:PIXI_REPOURL) {
+    $PixiRepourl = $Env:PIXI_REPOURL -replace '/$', ''
+}
+
 # Repository name
-$REPO = 'prefix-dev/pixi'
 $ARCH = Get-TargetTriple
 
 if (-not @("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc") -contains $ARCH) {
@@ -155,20 +171,20 @@ if (-not @("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc") -contains $ARCH)
 
 $BINARY = "pixi-$ARCH"
 
-if ($PixiVersion -eq 'latest') {
-    $DOWNLOAD_URL = "https://github.com/$REPO/releases/latest/download/$BINARY.zip"
+if ($Env:PIXI_DOWNLOAD_URL) {
+    $DOWNLOAD_URL = $Env:PIXI_DOWNLOAD_URL
+} elseif ($PixiVersion -eq 'latest') {
+    $DOWNLOAD_URL = "$PixiRepourl/releases/latest/download/$BINARY.zip"
 } else {
     # Check if version is incorrectly specified without prefix 'v', and prepend 'v' in this case
-    if ($PixiVersion -notmatch '^v') {
-        $PixiVersion = "v$PixiVersion"
-    }
-    $DOWNLOAD_URL = "https://github.com/$REPO/releases/download/$PixiVersion/$BINARY.zip"
+    $PixiVersion = "v" + ($PixiVersion -replace '^v', '')
+    $DOWNLOAD_URL = "$PixiRepourl/releases/download/$PixiVersion/$BINARY.zip"
 }
 
 $BinDir = Join-Path $PixiHome 'bin'
 
 Write-Host "This script will automatically download and install Pixi ($PixiVersion) for you."
-Write-Host "Getting it from this url: $DOWNLOAD_URL"
+Write-Host "Getting it from this url: $(Mask-Credentials $DOWNLOAD_URL)"
 Write-Host "The binary will be installed into '$BinDir'"
 
 $TEMP_FILE = [System.IO.Path]::GetTempFileName()
@@ -187,7 +203,7 @@ try {
     # Extract pixi from the downloaded zip file
     Expand-Archive -Path $ZIP_FILE -DestinationPath $BinDir -Force
 } catch {
-    Write-Host "Error: '$DOWNLOAD_URL' is not available or failed to download"
+    Write-Host "Error: '$(Mask-Credentials $DOWNLOAD_URL)' is not available or failed to download"
     exit 1
 } finally {
     Remove-Item -Path $ZIP_FILE

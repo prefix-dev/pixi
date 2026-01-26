@@ -1,7 +1,0 @@
----
-source: crates/pixi_build_frontend/tests/diagnostics.rs
-expression: "serde_json::to_string_pretty(&init_params.configuration).unwrap()"
----
-{
-  "hello": "world"
-}

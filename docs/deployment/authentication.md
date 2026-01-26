@@ -1,4 +1,3 @@
-
 You can authenticate Pixi with a server like prefix.dev, a private quetz instance or anaconda.org.
 Different servers use different authentication methods.
 In this documentation page, we detail how you can authenticate against the different servers and where the authentication information is stored.
@@ -152,7 +151,7 @@ To install keyring you can use `pixi global install`:
     ```
 === "Azure DevOps Artifacts"
     ```shell
-    pixi global install keyring --with keyring.artifacts
+    pixi global install keyring --with keyrings.artifacts
     ```
 === "AWS CodeArtifact"
     ```shell
@@ -161,7 +160,7 @@ To install keyring you can use `pixi global install`:
 
 For other registries, you will need to adapt these instructions to add the right keyring backend.
 
-#### Configuring your project to use keyring
+#### Configuring your workspace to use keyring
 
 === "Basic Auth"
     Use keyring to store your credentials e.g:
@@ -194,7 +193,7 @@ For other registries, you will need to adapt these instructions to add the right
         ```
 
 === "Azure DevOps Artifacts"
-    After following the [`keyring.artifacts` instructions](https://github.com/jslorrma/keyrings.artifacts?tab=readme-ov-file#usage) and making sure that keyring works correctly, add the following configuration to your Pixi manifest:
+    After following the [`keyrings.artifacts` instructions](https://github.com/jslorrma/keyrings.artifacts?tab=readme-ov-file#usage) and making sure that keyring works correctly, add the following configuration to your Pixi manifest:
 
     ```toml
     [pypi-options]
@@ -214,7 +213,7 @@ For other registries, you will need to adapt these instructions to add the right
 Either configure your [Global Config](../reference/pixi_configuration.md#pypi-config), or use the flag `--pypi-keyring-provider` which can either be set to `subprocess` (activated) or `disabled`:
 
 ```shell
-# From an existing pixi project
+# From an existing pixi workspace
 pixi install --pypi-keyring-provider subprocess
 ```
 

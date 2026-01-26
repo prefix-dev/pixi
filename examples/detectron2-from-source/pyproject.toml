@@ -12,12 +12,13 @@ version = "0.1.0"
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
-[tool.pixi.project]
-channels = ["conda-forge"]
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
 platforms = ["osx-arm64", "osx-64", "linux-64"]
 
 [tool.pixi.dependencies]
 cxx-compiler = "1.7.*"
+libgfortran = ">=15.1.0,<16"
 ninja = ">=1, <=2"
 pytorch = ">=2.4.0, <=3.0.0"
 setuptools = ">=72, <=73"

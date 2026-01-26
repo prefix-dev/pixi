@@ -1,6 +1,23 @@
+import os
 from pathlib import Path
 
 import pytest
+
+from .common import CONDA_FORGE_CHANNEL, exec_extension
+
+
+@pytest.fixture(autouse=True)
+def clean_pixi_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Remove all PIXI_ prefixed environment variables before each test.
+
+    Since tests are run via `pixi run`, the environment contains PIXI_ variables
+    (like PIXI_IN_SHELL, PIXI_PROJECT_ROOT, etc.) that can interfere with the
+    pixi commands being tested. This fixture ensures each test starts with a
+    clean environment.
+    """
+    for key in list(os.environ.keys()):
+        if key.startswith("PIXI_"):
+            monkeypatch.delenv(key, raising=False)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -15,14 +32,17 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 @pytest.fixture
 def pixi(request: pytest.FixtureRequest) -> Path:
     pixi_build = request.config.getoption("--pixi-build")
-    return Path(__file__).parent.joinpath(f"../../target/pixi/{pixi_build}/pixi")
+    pixi_path = Path(__file__).parent.joinpath(f"../../target/pixi/{pixi_build}/pixi")
+    return Path(exec_extension(str(pixi_path)))
 
 
 @pytest.fixture
 def tmp_pixi_workspace(tmp_path: Path) -> Path:
-    pixi_config = """
+    """Ensure to use a common config independent of the developers machine"""
+
+    pixi_config = f"""
 # Reset to defaults
-default-channels = ["conda-forge"]
+default-channels = ["{CONDA_FORGE_CHANNEL}"]
 shell.change-ps1 = true
 tls-no-verify = false
 detached-environments = false
@@ -50,6 +70,27 @@ def test_data() -> Path:
 
 
 @pytest.fixture
+def pypi_data(test_data: Path) -> Path:
+    """
+    Returns the pixi pypi test data
+    """
+    return test_data.joinpath("pypi")
+
+
+@pytest.fixture
+def pixi_tomls(test_data: Path) -> Path:
+    """
+    Returns the pixi pypi test data
+    """
+    return test_data.joinpath("pixi_tomls")
+
+
+@pytest.fixture
+def mock_projects(test_data: Path) -> Path:
+    return test_data.joinpath("mock-projects")
+
+
+@pytest.fixture
 def channels(test_data: Path) -> Path:
     return test_data.joinpath("channels", "channels")
 
@@ -67,6 +108,11 @@ def dummy_channel_2(channels: Path) -> str:
 @pytest.fixture
 def multiple_versions_channel_1(channels: Path) -> str:
     return channels.joinpath("multiple_versions_channel_1").as_uri()
+
+
+@pytest.fixture
+def target_specific_channel_1(channels: Path) -> str:
+    return channels.joinpath("target_specific_channel_1").as_uri()
 
 
 @pytest.fixture
@@ -89,5 +135,29 @@ def shortcuts_channel_1(channels: Path) -> str:
     return channels.joinpath("shortcuts_channel_1").as_uri()
 
 
+@pytest.fixture
+def post_link_script_channel(channels: Path) -> str:
+    return channels.joinpath("post_link_script_channel").as_uri()
+
+
+@pytest.fixture
+def deno_channel(channels: Path) -> str:
+    return channels.joinpath("deno_channel").as_uri()
+
+
+@pytest.fixture
+def completions_channel_1(channels: Path) -> str:
+    return channels.joinpath("completions_channel_1").as_uri()
+
+
+@pytest.fixture
 def doc_pixi_workspaces() -> Path:
     return Path(__file__).parents[2].joinpath("docs", "source_files", "pixi_workspaces")
+
+
+@pytest.fixture
+def external_commands_dir(tmp_path: Path) -> Path:
+    """Create a temporary directory for external pixi commands"""
+    commands_dir = tmp_path / "external_commands"
+    commands_dir.mkdir()
+    return commands_dir

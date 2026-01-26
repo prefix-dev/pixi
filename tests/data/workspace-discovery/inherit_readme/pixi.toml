@@ -1,0 +1,4 @@
+[workspace]
+channels = ["https://prefix.dev/pixi-build-backends"]
+preview = ["pixi-build"]
+readme = "README.md"

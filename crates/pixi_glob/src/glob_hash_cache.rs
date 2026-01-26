@@ -2,7 +2,9 @@
 //! so it's purpose is to re-use computed hashes across multiple calls to the same glob hash computation for the same set of input files.
 //! The input files are deemed not to change between calls.
 use std::{
+    collections::BTreeSet,
     convert::identity,
+    hash::Hash,
     path::PathBuf,
     sync::{Arc, Weak},
 };
@@ -16,9 +18,22 @@ use super::{GlobHash, GlobHashError};
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct GlobHashKey {
     /// The root directory of the glob patterns.
-    pub root: PathBuf,
+    root: PathBuf,
     /// The glob patterns.
-    pub globs: Vec<String>,
+    globs: BTreeSet<String>,
+}
+
+impl GlobHashKey {
+    /// Creates a new `GlobHashKey` from the given root directory and glob patterns.
+    pub fn new(root: impl Into<PathBuf>, globs: BTreeSet<String>) -> Self {
+        let mut root = root.into();
+        // Ensure that `root` points to a directory, not a file.
+        if root.is_file() {
+            root = root.parent().expect("Root must be a directory").to_owned();
+        }
+
+        Self { root, globs }
+    }
 }
 
 #[derive(Debug)]
@@ -44,11 +59,7 @@ impl GlobHashCache {
     /// cache, it will return the cached value. If the hash is not in the
     /// cache, it will compute the hash (deduplicating any request) and return
     /// it.
-    pub async fn compute_hash(
-        &self,
-        key: impl Into<GlobHashKey>,
-    ) -> Result<GlobHash, GlobHashError> {
-        let key = key.into();
+    pub async fn compute_hash(&self, key: GlobHashKey) -> Result<GlobHash, GlobHashError> {
         match self.cache.entry(key.clone()) {
             Entry::Vacant(entry) => {
                 // Construct a channel over which we will be sending the result and store it in
@@ -106,5 +117,10 @@ impl GlobHashCache {
                 }
             }
         }
+    }
+
+    /// Clears all memoized glob hashes. In-flight computations are unaffected.
+    pub fn clear(&self) {
+        self.cache.clear();
     }
 }

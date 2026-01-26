@@ -31,6 +31,12 @@ impl Default for Preview {
     }
 }
 
+impl FromIterator<KnownPreviewFeature> for Preview {
+    fn from_iter<T: IntoIterator<Item = KnownPreviewFeature>>(iter: T) -> Self {
+        Self::Features(iter.into_iter().collect())
+    }
+}
+
 impl Preview {
     /// Returns true if all preview features are enabled
     pub fn all_enabled(&self) -> bool {
@@ -44,7 +50,7 @@ impl Preview {
     pub fn is_enabled(&self, feature: KnownPreviewFeature) -> bool {
         match self {
             Preview::AllEnabled(_) => true,
-            Preview::Features(features) => features.iter().any(|f| *f == feature),
+            Preview::Features(features) => features.contains(&feature),
         }
     }
 }

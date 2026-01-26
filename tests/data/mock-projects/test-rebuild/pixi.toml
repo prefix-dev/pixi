@@ -1,0 +1,24 @@
+[workspace]
+authors = ["Julian Hofer <julianhofer@gnome.org>"]
+channels = ["https://prefix.dev/conda-forge"]
+name = "test-rebuild"
+platforms = ["linux-64", "osx-arm64", "win-64"]
+preview = ["pixi-build"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = ">=3.13.2,<3.14"
+
+[pypi-dependencies]
+pypi_package = { path = "pypi_package" }
+
+[feature.dev.dependencies]
+python = ">=3.13.2,<3.14"
+
+[feature.dev.pypi-dependencies]
+pypi_package_dev = { path = "pypi_package_dev" }
+
+[environments]
+dev = { features = ["dev"], no-default-feature = true }

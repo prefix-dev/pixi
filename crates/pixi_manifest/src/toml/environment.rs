@@ -1,4 +1,4 @@
-use toml_span::{de_helpers::expected, DeserError, Spanned, Value};
+use toml_span::{DeserError, Spanned, Value, de_helpers::expected};
 
 /// Helper struct to deserialize the environment from TOML.
 /// The environment description can only hold these values.
@@ -59,12 +59,12 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironmentList {
 
 #[cfg(test)]
 mod test {
+    use super::*;
+    use crate::toml::FromTomlStr;
     use assert_matches::assert_matches;
     use insta::assert_snapshot;
-    use toml_span::{de_helpers::TableHelper, DeserError, Value};
-
-    use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+    use pixi_test_utils::format_parse_error;
+    use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
     #[derive(Debug)]
     struct TopLevel {

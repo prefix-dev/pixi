@@ -2,9 +2,10 @@ use miette::Diagnostic;
 use pixi_default_versions::{default_glibc_version, default_mac_os_version};
 use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
 use rattler_conda_types::MatchSpec;
-use rattler_conda_types::{Arch, PackageRecord, Platform};
+use rattler_conda_types::{Arch, PackageName, PackageRecord, Platform};
 use rattler_virtual_packages::VirtualPackage;
 use regex::Regex;
+use std::str::FromStr;
 use std::sync::OnceLock;
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -187,7 +188,9 @@ fn get_arch_tags(platform: Platform) -> Result<uv_platform_tags::Arch, PyPITagEr
         Some(Arch::ArmV7l) => Ok(uv_platform_tags::Arch::Armv7L),
         Some(Arch::Ppc64le) => Ok(uv_platform_tags::Arch::Powerpc64Le),
         Some(Arch::Ppc64) => Ok(uv_platform_tags::Arch::Powerpc64),
+        Some(Arch::Riscv64) => Ok(uv_platform_tags::Arch::Riscv64),
         Some(Arch::S390X) => Ok(uv_platform_tags::Arch::S390X),
+        Some(Arch::LoongArch64) => Ok(uv_platform_tags::Arch::LoongArch64),
         Some(unsupported_arch) => Err(PyPITagError::FailedToDetermineArchTags(unsupported_arch)),
     }
 }
@@ -229,12 +232,14 @@ fn gil_disabled(python_record: &PackageRecord) -> Result<bool, PyPITagError> {
         .map(|dep| MatchSpec::from_str(dep, rattler_conda_types::ParseStrictness::Lenient))
         .collect::<Result<Vec<MatchSpec>, _>>()?;
 
+    let python_abi =
+        PackageName::from_str("python_abi").expect("python_abi is a valid package name");
     Ok(deps.iter().any(|spec| {
         spec.name
             .as_ref()
-            .is_some_and(|name| name.as_source() == "python_abi")
+            .is_some_and(|name| name.matches(&python_abi))
             && spec.build.as_ref().is_some_and(|build| {
-                let raw_str = format!("{}", build);
+                let raw_str = format!("{build}");
                 regex.is_match(&raw_str)
             })
     }))

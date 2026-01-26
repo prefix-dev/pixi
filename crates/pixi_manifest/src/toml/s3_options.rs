@@ -1,7 +1,7 @@
 use crate::S3Options;
 
 use pixi_toml::TomlFromStr;
-use toml_span::{de_helpers::TableHelper, DeserError, Value};
+use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
 impl<'de> toml_span::Deserialize<'de> for S3Options {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {

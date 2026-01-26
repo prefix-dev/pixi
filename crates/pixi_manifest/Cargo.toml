@@ -9,18 +9,32 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
+chrono = { workspace = true }
+console = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
+miette = { workspace = true, features = ["fancy-no-backtrace"] }
+minijinja = { workspace = true, features = ["builtins"] }
+once_cell.workspace = true
 pathdiff = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_consts = { workspace = true }
-pixi_git = { workspace = true }
+pixi_pypi_spec = { workspace = true }
 pixi_spec = { workspace = true }
+pixi_spec_containers = { workspace = true }
 pixi_toml = { workspace = true }
+# Python specific dependencies, may require patches!
+pyproject-toml = { workspace = true }
+# Rattler crates
+rattler_conda_types = { workspace = true }
+# These rattler crates are optionally used in the build system
+rattler_lock = { workspace = true, optional = true }
+rattler_solve = { workspace = true, default-features = false }
+rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde-value = { workspace = true }
@@ -33,27 +47,12 @@ toml_edit = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 
-# Python specific dependencies, may require patches!
-pyproject-toml = { workspace = true }
-
-# Rattler crates
-rattler_conda_types = { workspace = true }
-rattler_virtual_packages = { workspace = true }
-
-# These rattler crates are optionally used in the build system
-rattler_lock = { workspace = true, optional = true }
-rattler_solve = { workspace = true, optional = true }
-
-# TODO: Remove these dependencies
-console = { workspace = true }
-miette = { workspace = true, features = ["fancy-no-backtrace"] }
-
 [dev-dependencies]
 assert_matches = { workspace = true }
 fancy_display = { workspace = true }
-glob = "0.3.2"
 insta = { workspace = true, features = ["yaml"] }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
+pixi_test_utils = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true, features = ["preserve_order"] }
 tempfile = { workspace = true }

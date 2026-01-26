@@ -1,19 +1,25 @@
 use std::collections::HashSet;
 
+use chrono::{DateTime, Utc};
 use indexmap::IndexSet;
+use miette::Diagnostic;
+use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
 };
 
 use crate::{
-    has_features_iter::HasFeaturesIter, has_manifest_ref::HasWorkspaceManifest,
-    pypi::pypi_options::PypiOptions, workspace::ChannelPriority, CondaDependencies,
-    PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
+    CondaDependencies, PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
+    dependencies::CondaDevDependencies,
+    has_features_iter::HasFeaturesIter,
+    has_manifest_ref::HasWorkspaceManifest,
+    pypi::pypi_options::PypiOptions,
+    workspace::{ChannelPriority, SolveStrategy},
 };
 
 /// ChannelPriorityCombination error, thrown when multiple channel priorities
 /// are set
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Diagnostic)]
 #[error("Multiple channel priorities are not allowed in a single environment")]
 pub struct ChannelPriorityCombinationError;
 
@@ -63,7 +69,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             .collect()
     }
 
-    /// Returns the channel priority, error on multiple values, return None if
+    /// Returns the channel priority, error on multiple, different values, return None if
     /// no value is set.
     ///
     /// When using multiple channel priorities over different features we should
@@ -72,13 +78,35 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         let mut channel_priority = None;
         for feature in self.features() {
             if let Some(priority) = feature.channel_priority {
-                if channel_priority == Some(priority) {
+                // If we already have a priority and it's different, error
+                if channel_priority.is_some() && channel_priority != Some(priority) {
                     return Err(ChannelPriorityCombinationError);
                 }
                 channel_priority = Some(priority);
             }
         }
         Ok(channel_priority)
+    }
+
+    /// Returns whether packages should be excluded newer than a certain date.
+    fn exclude_newer(&self) -> Option<DateTime<Utc>> {
+        self.workspace_manifest()
+            .workspace
+            .exclude_newer
+            .map(Into::into)
+    }
+
+    /// Returns the strategy for solving packages.
+    ///
+    /// The chosen strategy is the first explicitly declared one in a feature
+    /// as they are provided by the [`HasFeaturesIter::features`] iterator.
+    ///
+    /// If no feature declares a strategy, the default value of [`SolveStrategy`] is used.
+    fn solve_strategy(&self) -> SolveStrategy {
+        self.features()
+            .flat_map(|feature| feature.solve_strategy)
+            .next()
+            .unwrap_or_default()
     }
 
     /// Returns the platforms that this collection is compatible with.
@@ -136,9 +164,11 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// requirements are returned. The different requirements per package
     /// are sorted in the same order as the features they came from.
     fn pypi_dependencies(&self, platform: Option<Platform>) -> PyPiDependencies {
-        self.features()
+        let deps: Vec<_> = self
+            .features()
             .filter_map(|f| f.pypi_dependencies(platform))
-            .into()
+            .collect();
+        DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
     }
 
     /// Returns the dependencies to install for this collection.
@@ -151,9 +181,11 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// If the `platform` is `None` no platform specific dependencies are taken
     /// into consideration.
     fn dependencies(&self, kind: SpecType, platform: Option<Platform>) -> CondaDependencies {
-        self.features()
+        let deps: Vec<_> = self
+            .features()
             .filter_map(|f| f.dependencies(kind, platform))
-            .into()
+            .collect();
+        DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
     }
 
     /// Returns the combined dependencies to install for this collection.
@@ -169,9 +201,25 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// If the `platform` is `None` no platform specific dependencies are taken
     /// into consideration.
     fn combined_dependencies(&self, platform: Option<Platform>) -> CondaDependencies {
-        self.features()
+        let deps: Vec<_> = self
+            .features()
             .filter_map(|f| f.combined_dependencies(platform))
-            .into()
+            .collect();
+        DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
+    }
+
+    /// Returns the combined dev dependencies to install for this collection.
+    ///
+    /// Dev dependencies from all features in the group are collected and
+    /// merged. If multiple features define the same dev dependency, the
+    /// last one wins (later features override earlier ones).
+    fn combined_dev_dependencies(&self, platform: Option<Platform>) -> CondaDevDependencies {
+        let deps: Vec<_> = self
+            .features()
+            .filter_map(|f| f.dev_dependencies(platform))
+            .collect();
+
+        DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
     }
 
     /// Returns the pypi options for this collection.

@@ -1,0 +1,8 @@
+[package]
+name = "simple"
+version = "0.1.0"
+
+[package.build.backend]
+channels = ["https://prefix.dev/pixi-build-backends"]
+name = "pixi_build_backend"
+version = "*"

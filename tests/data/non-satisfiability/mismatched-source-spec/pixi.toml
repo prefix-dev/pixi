@@ -1,0 +1,9 @@
+[workspace]
+channels = ["conda-forge"]
+name = "source-dependency"
+platforms = ["win-64"]
+preview = ["pixi-build"]
+version = "0.1.0"
+
+[dependencies]
+child-package = { git = "https://example.doc/example-org/example-repo" }

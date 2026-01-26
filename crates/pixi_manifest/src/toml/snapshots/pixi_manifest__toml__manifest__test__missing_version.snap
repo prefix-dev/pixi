@@ -1,12 +1,11 @@
 ---
 source: crates/pixi_manifest/src/toml/manifest.rs
-expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foo\"\n        channels = []\n        platforms = []\n        preview = [\"pixi-build\"]\n\n        [package]\n\n        [package.build]\n        backend = { name = \"foobar\", version = \"*\" }\n        \"#,)"
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foo\"\n        channels = []\n        platforms = []\n        preview = [\"pixi-build\"]\n\n        [package]\n        name = { workspace = true }\n\n        [package.build]\n        backend = { name = \"foobar\", version = \"*\" }\n        \"#,)"
 ---
   × missing field 'version' in table
     ╭─[pixi.toml:8:9]
   7 │
-  8 │         [package]
-    ·         ──────────
-  9 │
- 10 │         [package.build]
+  8 │ ╭─▶         [package]
+  9 │ ╰─▶         name = { workspace = true }
+ 10 │
     ╰────

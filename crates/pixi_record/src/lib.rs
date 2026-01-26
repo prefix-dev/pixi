@@ -1,31 +1,81 @@
+mod dev_source_record;
 mod pinned_source;
 mod source_record;
+
+pub use dev_source_record::DevSourceRecord;
+
+use std::path::Path;
 
 pub use pinned_source::{
     LockedGitUrl, MutablePinnedSourceSpec, ParseError, PinnedGitCheckout, PinnedGitSpec,
     PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec, SourceMismatchError,
 };
-use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord, RepoDataRecord};
+pub use pixi_variant::VariantValue;
+use rattler_conda_types::{
+    MatchSpec, Matches, NamelessMatchSpec, PackageName, PackageRecord, RepoDataRecord,
+};
 use rattler_lock::{CondaPackageData, ConversionError, UrlOrPath};
-pub use source_record::{InputHash, SourceRecord};
+use serde::Serialize;
+pub use source_record::{PinnedBuildSourceSpec, SourceRecord};
 use thiserror::Error;
 
 /// A record of a conda package that is either something installable from a
 /// binary file or something that still requires building.
 ///
 /// This is basically a superset of a regular [`RepoDataRecord`].
-#[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(untagged)]
 pub enum PixiRecord {
     Binary(RepoDataRecord),
     Source(SourceRecord),
 }
 impl PixiRecord {
+    /// The name of the package
+    pub fn name(&self) -> &PackageName {
+        &self.package_record().name
+    }
+
     /// Metadata information of the package.
     pub fn package_record(&self) -> &PackageRecord {
         match self {
             PixiRecord::Binary(record) => &record.package_record,
             PixiRecord::Source(record) => &record.package_record,
         }
+    }
+
+    /// Convert to CondaPackageData with paths made relative to workspace_root.
+    /// This should be used when writing to the lock file.
+    pub fn into_conda_package_data(self, workspace_root: &Path) -> CondaPackageData {
+        match self {
+            PixiRecord::Binary(record) => record.into(),
+            PixiRecord::Source(record) => {
+                CondaPackageData::Source(record.into_conda_source_data(workspace_root))
+            }
+        }
+    }
+
+    /// Create PixiRecord from CondaPackageData with paths resolved relative to workspace_root.
+    /// This should be used when reading from the lock file.
+    pub fn from_conda_package_data(
+        data: CondaPackageData,
+        workspace_root: &std::path::Path,
+    ) -> Result<Self, ParseLockFileError> {
+        let record = match data {
+            CondaPackageData::Binary(value) => {
+                let location = value.location.clone();
+                PixiRecord::Binary(value.try_into().map_err(|err| match err {
+                    ConversionError::Missing(field) => ParseLockFileError::Missing(location, field),
+                    ConversionError::LocationToUrlConversionError(err) => {
+                        ParseLockFileError::InvalidRecordUrl(location, err)
+                    }
+                })?)
+            }
+            CondaPackageData::Source(value) => {
+                PixiRecord::Source(SourceRecord::from_conda_source_data(value, workspace_root)?)
+            }
+        };
+        Ok(record)
     }
 
     /// Returns a reference to the binary record if it is a binary record.
@@ -41,6 +91,14 @@ impl PixiRecord {
         match self {
             PixiRecord::Binary(record) => Some(record),
             PixiRecord::Source(_) => None,
+        }
+    }
+
+    /// Converts this instance into a source record if it is a source
+    pub fn into_source(self) -> Option<SourceRecord> {
+        match self {
+            PixiRecord::Binary(_) => None,
+            PixiRecord::Source(record) => Some(record),
         }
     }
 
@@ -84,35 +142,6 @@ pub enum ParseLockFileError {
 
     #[error(transparent)]
     PinnedSourceSpecError(#[from] pinned_source::ParseError),
-}
-
-impl TryFrom<CondaPackageData> for PixiRecord {
-    type Error = ParseLockFileError;
-
-    fn try_from(value: CondaPackageData) -> Result<Self, Self::Error> {
-        let record = match value {
-            CondaPackageData::Binary(value) => {
-                let location = value.location.clone();
-                PixiRecord::Binary(value.try_into().map_err(|err| match err {
-                    ConversionError::Missing(field) => ParseLockFileError::Missing(location, field),
-                    ConversionError::LocationToUrlConversionError(err) => {
-                        ParseLockFileError::InvalidRecordUrl(location, err)
-                    }
-                })?)
-            }
-            CondaPackageData::Source(value) => PixiRecord::Source(value.try_into()?),
-        };
-        Ok(record)
-    }
-}
-
-impl From<PixiRecord> for CondaPackageData {
-    fn from(value: PixiRecord) -> Self {
-        match value {
-            PixiRecord::Binary(record) => record.into(),
-            PixiRecord::Source(record) => record.into(),
-        }
-    }
 }
 
 impl Matches<PixiRecord> for NamelessMatchSpec {

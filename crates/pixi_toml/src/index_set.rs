@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use indexmap::IndexSet;
 use itertools::Itertools;
-use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Value};
+use toml_span::{DeserError, Value, de_helpers::expected, value::ValueInner};
 
 use crate::DeserializeAs;
 

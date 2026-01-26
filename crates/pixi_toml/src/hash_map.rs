@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-use toml_span::{de_helpers::expected, value::ValueInner, DeserError, ErrorKind, Value};
+use toml_span::{DeserError, ErrorKind, Value, de_helpers::expected, value::ValueInner};
 
 use crate::{DeserializeAs, FromKey, Same};
 

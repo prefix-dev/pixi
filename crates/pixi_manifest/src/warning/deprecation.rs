@@ -16,13 +16,10 @@ pub struct Deprecation {
 impl Deprecation {
     pub fn renamed_field(old_name: &str, new_name: &str, span: Span) -> Self {
         Self {
-            message: format!(
-                "The `{}` field is deprecated. Use `{}` instead.",
-                old_name, new_name
-            )
-            .into(),
+            message: format!("The `{old_name}` field is deprecated. Use `{new_name}` instead.")
+                .into(),
             labels: vec![LabeledSpan::new_primary_with_span(
-                Some(format!("replace this with '{}'", new_name)),
+                Some(format!("replace this with '{new_name}'")),
                 SourceSpan::new(span.start.into(), span.end - span.start),
             )],
             help: None,

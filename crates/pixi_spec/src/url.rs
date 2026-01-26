@@ -1,14 +1,16 @@
-use crate::BinarySpec;
+use crate::{BinarySpec, Subdirectory};
 use itertools::Either;
-use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
+use rattler_conda_types::{NamelessMatchSpec, package::CondaArchiveIdentifier};
 use rattler_digest::{Md5Hash, Sha256Hash};
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::fmt::Display;
 use url::Url;
 
 /// A specification of a package from a URL. This is used to represent both
 /// source and binary packages.
 #[serde_as]
-#[derive(Debug, Clone, Hash, Eq, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct UrlSpec {
     /// The URL of the package
     pub url: Url,
@@ -22,6 +24,10 @@ pub struct UrlSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Sha256>>")]
     pub sha256: Option<Sha256Hash>,
+
+    /// The subdirectory of the package inside the archive
+    #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
+    pub subdirectory: Subdirectory,
 }
 
 impl UrlSpec {
@@ -52,6 +58,7 @@ impl UrlSpec {
                 url: self.url,
                 md5: self.md5,
                 sha256: self.sha256,
+                subdirectory: self.subdirectory,
             })
         }
     }
@@ -70,27 +77,66 @@ impl UrlSpec {
                 url: self.url,
                 md5: self.md5,
                 sha256: self.sha256,
+                subdirectory: self.subdirectory,
             })
         }
     }
 
     /// Returns true if the URL points to a binary package.
     pub fn is_binary(&self) -> bool {
-        ArchiveIdentifier::try_from_url(&self.url).is_some()
+        CondaArchiveIdentifier::try_from_url(&self.url).is_some()
+    }
+}
+
+impl Display for UrlSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.url)?;
+        if let Some(md5) = &self.md5 {
+            write!(f, " md5={md5:x}")?;
+        }
+        if let Some(sha256) = &self.sha256 {
+            write!(f, " sha256={sha256:x}")?;
+        }
+        Ok(())
     }
 }
 
 /// A specification of a source archive from a URL.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[serde_as]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct UrlSourceSpec {
     /// The URL of the package
     pub url: Url,
 
     /// The md5 hash of the archive
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Md5>>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub md5: Option<Md5Hash>,
 
     /// The sha256 hash of the archive
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Sha256>>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sha256: Option<Sha256Hash>,
+
+    /// The subdirectory of the package inside the archive
+    #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
+    pub subdirectory: Subdirectory,
+}
+
+impl Display for UrlSourceSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.url)?;
+        if let Some(md5) = &self.md5 {
+            write!(f, " md5={md5:x}")?;
+        }
+        if let Some(sha256) = &self.sha256 {
+            write!(f, " sha256={sha256:x}")?;
+        }
+        if !self.subdirectory.is_empty() {
+            write!(f, " subdirectory={}", self.subdirectory)?;
+        }
+        Ok(())
+    }
 }
 
 impl From<UrlSourceSpec> for UrlSpec {
@@ -99,12 +145,13 @@ impl From<UrlSourceSpec> for UrlSpec {
             url: value.url,
             md5: value.md5,
             sha256: value.sha256,
+            subdirectory: value.subdirectory,
         }
     }
 }
 
 /// A specification of a source archive from a URL.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize)]
 pub struct UrlBinarySpec {
     /// The URL of the package
     pub url: Url,
@@ -122,6 +169,8 @@ impl From<UrlBinarySpec> for UrlSpec {
             url: value.url,
             md5: value.md5,
             sha256: value.sha256,
+            // A binary url spec is already a conda package so it cannot have a subdirectory
+            subdirectory: Subdirectory::default(),
         }
     }
 }

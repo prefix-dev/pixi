@@ -1,5 +1,3 @@
-# Tutorial: Develop a Rust package using `pixi`
-
 In this tutorial, we will show you how to develop a Rust package using `pixi`.
 The tutorial is written to be executed from top to bottom, missing steps might result in errors.
 
@@ -12,7 +10,7 @@ The benefit would be within a rust workflow that you lock both rust and the C/Sy
 - You need to have `pixi` installed. If you haven't installed it yet, you can follow the instructions in the [installation guide](../index.md).
   The crux of this tutorial is to show you only need pixi!
 
-## Create a Pixi project.
+## Create a Pixi workspace
 
 ```shell
 pixi init my_rust_project
@@ -28,7 +26,7 @@ my_rust_project
 └── pixi.toml
 ```
 
-The `pixi.toml` file is the manifest file for your project. It should look like this:
+The `pixi.toml` file is the manifest file for your workspace. It should look like this:
 
 ```toml  title="pixi.toml"
 [workspace]
@@ -48,7 +46,7 @@ platforms = ["linux-64"] # (1)!
 
 ## Add Rust dependencies
 
-To use a Pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
+To use a Pixi workspace you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your workspace without any issues.
 ```shell
 pixi add rust
 ```
@@ -57,14 +55,14 @@ This will add the `rust` package to your `pixi.toml` file under `[dependencies]`
 Which includes the `rust` toolchain, and `cargo`.
 
 ## Add a `cargo` project
-Now that you have rust installed, you can create a `cargo` project in your `pixi` project.
+Now that you have rust installed, you can create a `cargo` project in your `pixi` workspace.
 ```shell
 pixi run cargo init
 ```
 
-`pixi run` is pixi's way to run commands in the `pixi` environment, it will make sure that the environment is set up correctly for the command to run.
+`pixi run` is pixi's way to run commands in an environment. It will make sure that the environment is activated for the command to run.
 It runs its own cross-platform shell, if you want more information checkout the [`tasks` documentation](../workspace/advanced_tasks.md).
-You can also activate the environment in your own shell by running `pixi shell`, after that you don't need `pixi run ...` anymore.
+You can also activate the environment in a shell by running `pixi shell`, after that you don't need `pixi run ...` anymore.
 
 Now we can build a `cargo` project using `pixi`.
 ```shell
@@ -107,7 +105,7 @@ Cargo is not a binary package manager, but a source-based package manager.
 This means that you need to have the Rust compiler installed on your system to use it.
 And possibly other dependencies that are not included in the `cargo` package manager.
 For example, you might need to install `openssl` or `libssl-dev` on your system to build a package.
-This is the case for `pixi` as well, but `pixi` will install these dependencies in your project folder, so you don't have to worry about them.
+This is the case for `pixi` as well, but `pixi` will install these dependencies in your workspace folder, so you don't have to worry about them.
 
 Add the following dependencies to your cargo project:
 ```shell
@@ -126,7 +124,7 @@ compilation process.
 Make sure you also have the development packages of openssl installed.
 For example, `libssl-dev` on Ubuntu or `openssl-devel` on Fedora.
 
-If you're in a situation where you think the directory *should* be found
+If you are in a situation where you think the directory *should* be found
 automatically, please open a bug at https://github.com/sfackler/rust-openssl
 and include information about your system as well as this message.
 
@@ -135,7 +133,7 @@ $TARGET = x86_64-unknown-linux-gnu
 openssl-sys = 0.9.102
 
 
-It looks like you're compiling on Linux and also targeting Linux. Currently this
+It looks like you are compiling on Linux and also targeting Linux. Currently this
 requires the `pkg-config` utility to find OpenSSL but unfortunately `pkg-config`
 could not be found. If you have OpenSSL installed you can likely fix this by
 installing `pkg-config`.

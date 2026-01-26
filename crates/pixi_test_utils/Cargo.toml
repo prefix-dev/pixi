@@ -1,0 +1,22 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_test_utils"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+chrono = { workspace = true }
+fs-err = { workspace = true }
+itertools = { workspace = true }
+miette = { workspace = true, features = ["fancy-no-backtrace"] }
+rattler_conda_types = { workspace = true }
+rattler_digest = { workspace = true }
+rattler_package_streaming = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
+url = { workspace = true }

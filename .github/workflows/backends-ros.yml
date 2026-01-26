@@ -1,0 +1,104 @@
+name: Backends - ROS
+
+on:
+  workflow_call:
+    inputs:
+      sha:
+        type: string
+        description: "The commit sha for artifact lookup"
+        required: true
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  test:
+    name: Test the pixi-build-ros package
+    runs-on: ubuntu-latest
+    env:
+      TARGET_RELEASE: target/pixi/release
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
+        with:
+          manifest-path: pixi-build-backends/backends/pixi-build-ros/pixi.toml
+      - name: Download pixi binary
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: pixi-linux-x86_64-${{ inputs.sha }}
+          path: ${{ env.TARGET_RELEASE }}
+      - name: Add pixi binary to PATH
+        run: |
+          chmod a+x ${{ github.workspace }}/${{ env.TARGET_RELEASE }}/pixi
+          echo "${{ github.workspace }}/${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
+      - name: Lint
+        run: |
+          cd pixi-build-backends/backends/pixi-build-ros
+          pixi run lint
+      - name: Run tests
+        run: |
+          cd pixi-build-backends/backends/pixi-build-ros
+          pixi run test-ci --color=yes
+
+  integration-test:
+    name: Integration tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: pixi-linux-x86_64
+          - os: macos-14
+            artifact: pixi-macos-aarch64
+          - os: windows-latest
+            artifact: pixi-windows-x86_64
+    runs-on: ${{ matrix.os }}
+    env:
+      TARGET_RELEASE: target/pixi/release
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
+        with:
+          manifest-path: pixi-build-backends/backends/pixi-build-ros/pixi.toml
+
+      - name: Download pixi binary
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ matrix.artifact }}-${{ inputs.sha }}
+          path: ${{ env.TARGET_RELEASE }}
+
+      - name: Add pixi binary to PATH (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          chmod a+x ${{ github.workspace }}/${{ env.TARGET_RELEASE }}/pixi
+          echo "${{ github.workspace }}/${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
+
+      - name: Add pixi binary to PATH (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          echo "${{ github.workspace }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
+
+      - name: Verify pixi installation
+        run: pixi info
+
+      - name: Build ROS backend channel
+        working-directory: pixi-build-backends/backends/pixi-build-ros
+        run: pixi run --locked create-channel
+
+      - name: Run ROS integration tests
+        working-directory: pixi-build-backends/backends/pixi-build-ros
+        run: pixi run --locked pytest tests/integration -v

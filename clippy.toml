@@ -2,8 +2,8 @@
 # This can cause false negatives for custom collections that use raw pointers internally.
 # See https://rust-lang.github.io/rust-clippy/master/index.html#/mutable_key_type
 ignore-interior-mutability = [
-  "pixi::workspace::environment::Environment",
-  "pixi::workspace::solve_group::SolveGroup",
+  "pixi_core::workspace::environment::Environment",
+  "pixi_core::workspace::solve_group::SolveGroup",
 ]
 
 disallowed-methods = [

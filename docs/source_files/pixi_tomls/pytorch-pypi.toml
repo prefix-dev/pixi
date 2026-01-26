@@ -1,5 +1,5 @@
 # --8<-- [start:minimal]
-[project]
+[workspace]
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-pypi"
 platforms = ["osx-arm64", "linux-64", "win-64"]

@@ -1,10 +1,10 @@
-use toml_span::{de_helpers::TableHelper, DeserError, Value};
+use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
 use crate::{
+    KnownPreviewFeature, Preview, SpecType, TomlError,
     target::PackageTarget,
     toml::target::combine_target_dependencies,
-    utils::{package_map::UniquePackageMap, PixiSpanned},
-    KnownPreviewFeature, Preview, SpecType, TomlError,
+    utils::{PixiSpanned, package_map::UniquePackageMap},
 };
 
 #[derive(Debug)]

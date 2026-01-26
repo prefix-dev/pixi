@@ -21,9 +21,6 @@ pub fn default_mac_os_version(platform: Platform) -> Version {
     match platform {
         Platform::OsxArm64 => "13.0".parse().unwrap(),
         Platform::Osx64 => "13.0".parse().unwrap(),
-        _ => panic!(
-            "default_mac_os_version() called with non-osx platform: {}",
-            platform
-        ),
+        _ => panic!("default_mac_os_version() called with non-osx platform: {platform}"),
     }
 }

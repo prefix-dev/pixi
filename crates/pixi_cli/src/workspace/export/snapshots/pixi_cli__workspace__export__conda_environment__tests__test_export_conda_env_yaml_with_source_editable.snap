@@ -1,0 +1,18 @@
+---
+source: src/cli/workspace/export/conda_environment.rs
+expression: env_yaml.unwrap().to_yaml_string()
+---
+name: default
+channels:
+- conda-forge
+- nodefaults
+dependencies:
+- python *
+- pip
+- pip:
+  - rich~=13.7
+  - flask @ git+https://github.com/pallets/flask
+  - httpx @ git+https://github.com/encode/httpx.git@c7c13f18a5af4c64c649881b2fe8dbd72a519c32
+  - -e ./minimal-project
+  - click @ https://github.com/pallets/click/releases/download/8.1.7/click-8.1.7-py3-none-any.whl
+  - pytest @ git+https://github.com/pytest-dev/pytest.git

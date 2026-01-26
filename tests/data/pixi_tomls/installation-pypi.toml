@@ -1,0 +1,15 @@
+[workspace]
+authors = ["Tim de Jager <tim@prefix.dev>"]
+channels = ["https://prefix.dev/conda-forge"]
+name = "installation-order"
+platforms = ["osx-arm64", "win-64", "linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = "3.13.*"
+
+[pypi-dependencies]
+foobar = { path = "./foobar-0.1.1-py3-none-any.whl" }
+minimal = { path = "./minimal-0.1.0-py2.py3-none-any.whl" }

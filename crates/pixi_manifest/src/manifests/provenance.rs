@@ -56,12 +56,21 @@ impl ManifestProvenance {
         match self.kind {
             ManifestKind::Pixi => Ok(ManifestSource::PixiToml(contents)),
             ManifestKind::Pyproject => Ok(ManifestSource::PyProjectToml(contents)),
+            ManifestKind::MojoProject => Ok(ManifestSource::MojoProjectToml(contents)),
         }
     }
 
     /// Returns the absolute path to the manifest file.
+    ///
+    /// This method canonicalizes the parent directory but preserves the original
+    /// filename, which allows symlinked manifest files to be treated correctly.
     pub fn absolute_path(&self) -> PathBuf {
-        dunce::canonicalize(self.path.clone()).unwrap_or(self.path.to_path_buf())
+        match (self.path.parent(), self.path.file_name()) {
+            (Some(parent), Some(file_name)) => dunce::canonicalize(parent)
+                .map(|canonical_parent| canonical_parent.join(file_name))
+                .unwrap_or_else(|_| self.path.to_path_buf()),
+            _ => self.path.to_path_buf(),
+        }
     }
 }
 
@@ -75,6 +84,7 @@ impl From<ManifestKind> for ManifestProvenance {
 pub enum ManifestKind {
     Pixi,
     Pyproject,
+    MojoProject,
 }
 
 impl ManifestKind {
@@ -83,6 +93,7 @@ impl ManifestKind {
         match path.file_name().and_then(OsStr::to_str)? {
             consts::WORKSPACE_MANIFEST => Some(Self::Pixi),
             consts::PYPROJECT_MANIFEST => Some(Self::Pyproject),
+            consts::MOJOPROJECT_MANIFEST => Some(Self::MojoProject),
             _ => None,
         }
     }
@@ -92,6 +103,7 @@ impl ManifestKind {
         match self {
             ManifestKind::Pixi => consts::WORKSPACE_MANIFEST,
             ManifestKind::Pyproject => consts::PYPROJECT_MANIFEST,
+            ManifestKind::MojoProject => consts::MOJOPROJECT_MANIFEST,
         }
     }
 
@@ -136,5 +148,72 @@ pub trait AssociateProvenance: Sized {
 impl<T> AssociateProvenance for T {
     fn with_provenance(self, provenance: ManifestProvenance) -> WithProvenance<Self> {
         WithProvenance::new(self, provenance)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn absolute_path_canonicalizes_parent_only() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let dotfiles_dir = temp_dir.path().join("dotfiles");
+        let home_dir = temp_dir.path().join("home");
+        fs_err::create_dir_all(&dotfiles_dir).unwrap();
+        fs_err::create_dir_all(&home_dir).unwrap();
+
+        // Real manifest lives inside the dotfiles directory.
+        let real_manifest = dotfiles_dir.join("pixi.toml");
+        fs_err::write(&real_manifest, "[workspace]\nname = \"test\"\n").unwrap();
+
+        // Home directory contains a symlink that points at the real manifest.
+        let symlink_manifest = home_dir.join("pixi.toml");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&real_manifest, &symlink_manifest).unwrap();
+
+        let canonical_real_path = dunce::canonicalize(&real_manifest).unwrap();
+        let cases = [
+            (
+                "real file",
+                real_manifest.clone(),
+                dotfiles_dir.clone(),
+                true,
+            ),
+            (
+                "symlinked file",
+                symlink_manifest.clone(),
+                home_dir.clone(),
+                false,
+            ),
+        ];
+
+        for (label, manifest_path, expected_parent, should_match_real) in cases {
+            let provenance = ManifestProvenance::new(manifest_path.clone(), ManifestKind::Pixi);
+            let absolute = provenance.absolute_path();
+
+            assert_eq!(
+                absolute.file_name(),
+                manifest_path.file_name(),
+                "filename changed for {label}"
+            );
+            assert_eq!(
+                absolute.parent().unwrap(),
+                dunce::canonicalize(&expected_parent).unwrap(),
+                "parent directory mismatch for {label}"
+            );
+
+            if should_match_real {
+                assert_eq!(
+                    absolute, canonical_real_path,
+                    "real file should resolve exactly"
+                );
+            } else {
+                assert_ne!(
+                    absolute, canonical_real_path,
+                    "symlink should not resolve to the real file path"
+                );
+            }
+        }
     }
 }

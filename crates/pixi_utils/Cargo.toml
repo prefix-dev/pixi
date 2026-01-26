@@ -12,14 +12,16 @@ version = "0.1.0"
 [features]
 default = ["rustls-tls"]
 native-tls = [
+  "pixi_auth/native-tls",
+  "rattler_networking/native-tls",
   "reqwest/native-tls",
   "reqwest/native-tls-alpn",
-  "rattler_networking/native-tls",
 ]
 rustls-tls = [
+  "pixi_auth/rustls-tls",
+  "rattler_networking/rustls-tls",
   "reqwest/rustls-tls",
   "reqwest/rustls-tls-native-roots",
-  "rattler_networking/rustls-tls",
 ]
 
 
@@ -27,16 +29,27 @@ rustls-tls = [
 async-fd-lock = { workspace = true }
 fs-err = { workspace = true }
 indicatif = { workspace = true }
+is_executable = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pep508_rs = { workspace = true }
+pixi_auth = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
+pixi_variant = { workspace = true }
 rattler_conda_types = { workspace = true }
-rattler_networking = { workspace = true, features = ["gcs", "s3"] }
+rattler_networking = { workspace = true, features = [
+  "gcs",
+  "s3",
+  "netrc-rs",
+  "system-integration",
+] }
+rattler_shell = { workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
 reqwest-retry = { workspace = true }
+retry-policies = { workspace = true }
+rlimit = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
@@ -46,6 +59,7 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = { workspace = true }
+uv-configuration = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }

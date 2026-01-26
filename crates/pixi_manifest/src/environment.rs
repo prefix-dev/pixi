@@ -13,7 +13,9 @@ use thiserror::Error;
 use crate::{consts::DEFAULT_ENVIRONMENT_NAME, solve_group::SolveGroupIdx};
 
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
-#[error("Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers and dashes")]
+#[error(
+    "Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers and dashes"
+)]
 pub struct ParseEnvironmentNameError {
     /// The string that was attempted to be parsed.
     pub attempted_parse: String,
@@ -63,13 +65,13 @@ impl EnvironmentName {
     ) -> Result<Self, ParseEnvironmentNameError> {
         if let Some(arg_name) = arg_name {
             return EnvironmentName::from_str(&arg_name);
-        } else if std::env::var("PIXI_IN_SHELL").is_ok() {
-            if let Ok(env_var_name) = std::env::var("PIXI_ENVIRONMENT_NAME") {
-                if env_var_name == DEFAULT_ENVIRONMENT_NAME {
-                    return Ok(EnvironmentName::Default);
-                }
-                return Ok(EnvironmentName::Named(env_var_name));
+        } else if std::env::var("PIXI_IN_SHELL").is_ok()
+            && let Ok(env_var_name) = std::env::var("PIXI_ENVIRONMENT_NAME")
+        {
+            if env_var_name == DEFAULT_ENVIRONMENT_NAME {
+                return Ok(EnvironmentName::Default);
             }
+            return Ok(EnvironmentName::Named(env_var_name));
         }
         Ok(EnvironmentName::Default)
     }
@@ -84,8 +86,8 @@ impl Borrow<str> for EnvironmentName {
 impl fmt::Display for EnvironmentName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EnvironmentName::Default => write!(f, "{}", DEFAULT_ENVIRONMENT_NAME),
-            EnvironmentName::Named(name) => write!(f, "{}", name),
+            EnvironmentName::Default => write!(f, "{DEFAULT_ENVIRONMENT_NAME}"),
+            EnvironmentName::Named(name) => write!(f, "{name}"),
         }
     }
 }
@@ -130,7 +132,7 @@ impl<'de> Deserialize<'de> for EnvironmentName {
 ///
 /// Individual features cannot be used directly, instead they are grouped
 /// together into environments. Environments are then locked and installed.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Environment {
     /// The name of the environment
     pub name: EnvironmentName,

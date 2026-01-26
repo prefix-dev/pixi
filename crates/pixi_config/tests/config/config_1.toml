@@ -11,3 +11,6 @@ region = "us-east-1"
 
 [mirrors]
 "https://conda.anaconda.org/conda-forge" = ["whatever://config_1"]
+
+[build]
+package-format = "conda:max"

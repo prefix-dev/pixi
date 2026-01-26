@@ -1,25 +1,28 @@
 use std::collections::HashMap;
 
 use indexmap::IndexMap;
-use pixi_spec::PixiSpec;
+use pixi_spec::{PixiSpec, SourceSpec, TomlLocationSpec};
+use pixi_spec_containers::DependencyMap;
 use pixi_toml::{TomlHashMap, TomlIndexMap};
-use toml_span::{de_helpers::TableHelper, DeserError, Value};
+use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
 use crate::{
+    Activation, KnownPreviewFeature, SpecType, TargetSelector, Task, TaskName, TomlError, Warning,
+    WithWarnings, WorkspaceTarget,
     error::GenericError,
-    pypi::PyPiPackageName,
     toml::{preview::TomlPreview, task::TomlTask},
-    utils::{package_map::UniquePackageMap, PixiSpanned},
-    Activation, KnownPreviewFeature, PyPiRequirement, SpecType, TargetSelector, Task, TaskName,
-    TomlError, Warning, WithWarnings, WorkspaceTarget,
+    utils::{PixiSpanned, package_map::UniquePackageMap},
 };
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
+use rattler_conda_types::PackageName;
 
 #[derive(Debug, Default)]
 pub struct TomlTarget {
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
+    pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
+    pub dev_dependencies: Option<IndexMap<PackageName, TomlLocationSpec>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -48,7 +51,7 @@ impl TomlTarget {
                         .with_span_label("host-dependencies specified here")
                         .with_help(match target {
                             None => "Did you mean [package.host-dependencies]?".to_string(),
-                            Some(selector) => format!("Did you mean [package.target.{}.host-dependencies]?", selector),
+                            Some(selector) => format!("Did you mean [package.target.{selector}.host-dependencies]?"),
                         })
                         .with_opt_label("pixi-build is enabled here", preview.get_span(KnownPreviewFeature::PixiBuild))));
             }
@@ -60,12 +63,32 @@ impl TomlTarget {
                         .with_span_label("build-dependencies specified here")
                         .with_help(match target {
                             None => "Did you mean [package.build-dependencies]?".to_string(),
-                            Some(selector) => format!("Did you mean [package.target.{}.build-dependencies]?", selector),
+                            Some(selector) => format!("Did you mean [package.target.{selector}.build-dependencies]?"),
                         })
                         .with_opt_label("pixi-build is enabled here", preview.get_span(KnownPreviewFeature::PixiBuild))
                 ));
             }
         }
+
+        // Convert dev dependencies from TomlLocationSpec to SourceSpec
+        let dev_dependencies = self
+            .dev_dependencies
+            .map(|dev_map| {
+                dev_map
+                    .into_iter()
+                    .map(|(name, toml_loc)| {
+                        toml_loc
+                            .into_source_location_spec()
+                            .map(|location| (name, SourceSpec::from(location)))
+                    })
+                    .collect::<Result<IndexMap<_, _>, _>>()
+            })
+            .transpose()
+            .map_err(|e| {
+                TomlError::Generic(GenericError::new(format!(
+                    "failed to parse dev dependency: {e}",
+                )))
+            })?;
 
         Ok(WithWarnings {
             value: WorkspaceTarget {
@@ -77,7 +100,14 @@ impl TomlTarget {
                     ],
                     pixi_build_enabled,
                 )?,
-                pypi_dependencies: self.pypi_dependencies,
+                pypi_dependencies: self.pypi_dependencies.map(|index_map| {
+                    // Convert IndexMap to DependencyMap
+                    index_map.into_iter().collect()
+                }),
+                dev_dependencies: dev_dependencies.map(|index_map| {
+                    // Convert IndexMap to DependencyMap
+                    index_map.into_iter().collect()
+                }),
                 activation: self.activation,
                 tasks: self.tasks,
             },
@@ -90,13 +120,18 @@ impl TomlTarget {
 pub(super) fn combine_target_dependencies(
     iter: impl IntoIterator<Item = (SpecType, Option<PixiSpanned<UniquePackageMap>>)>,
     is_pixi_build_enabled: bool,
-) -> Result<HashMap<SpecType, IndexMap<rattler_conda_types::PackageName, PixiSpec>>, TomlError> {
+) -> Result<HashMap<SpecType, DependencyMap<PackageName, PixiSpec>>, TomlError> {
     iter.into_iter()
         .filter_map(|(ty, deps)| {
             deps.map(|deps| {
                 deps.value
                     .into_inner(is_pixi_build_enabled)
-                    .map(|deps| (ty, deps))
+                    .map(|index_map| {
+                        // Convert IndexMap to DependencyMap
+                        let dep_map: DependencyMap<PackageName, PixiSpec> =
+                            index_map.into_iter().collect();
+                        (ty, dep_map)
+                    })
             })
         })
         .collect()
@@ -112,6 +147,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlTarget {
         let build_dependencies = th.optional("build-dependencies");
         let pypi_dependencies = th
             .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
+            .map(TomlIndexMap::into_inner);
+        let dev = th
+            .optional::<TomlIndexMap<_, _>>("dev")
             .map(TomlIndexMap::into_inner);
         let activation = th.optional("activation");
         let tasks = th
@@ -136,6 +174,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTarget {
             host_dependencies,
             build_dependencies,
             pypi_dependencies,
+            dev_dependencies: dev,
             activation,
             tasks,
             warnings,

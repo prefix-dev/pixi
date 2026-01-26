@@ -1,3 +1,5 @@
+use rattler_networking::LazyClient;
+use reqwest::StatusCode;
 /// Derived from `uv-git` implementation
 /// Source: https://github.com/astral-sh/uv/blob/4b8cc3e29e4c2a6417479135beaa9783b05195d3/crates/uv-git/src/git.rs
 /// This module represents all necessary git types and operations to interact with git repositories.
@@ -12,14 +14,11 @@ use std::{
     str::FromStr,
     sync::LazyLock,
 };
-
-use reqwest::StatusCode;
-use reqwest_middleware::ClientWithMiddleware;
 use url::Url;
 
 use crate::{
-    sha::{GitOid, GitSha},
     GitError,
+    sha::{GitOid, GitSha},
 };
 
 /// A file indicates that if present, `git reset` has been done and a repo
@@ -53,8 +52,18 @@ enum RefspecStrategy {
 
 /// A reference to commit or commit-ish.
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+    Default,
 )]
+#[serde(rename_all = "kebab-case")]
 pub enum GitReference {
     /// A specific branch.
     Branch(String),
@@ -71,6 +80,7 @@ pub enum GitReference {
     /// From a specific revision, using a full 40-character commit hash.
     FullCommit(String),
     /// The default branch of the repository, the reference named `HEAD`.
+    #[default]
     DefaultBranch,
 }
 
@@ -169,6 +179,10 @@ impl GitReference {
     pub fn looks_like_full_commit_hash(rev: &str) -> bool {
         rev.len() == 40 && rev.chars().all(|ch| ch.is_ascii_hexdigit())
     }
+
+    pub fn is_default(&self) -> bool {
+        matches!(self, Self::DefaultBranch)
+    }
 }
 
 impl Display for GitReference {
@@ -208,7 +222,7 @@ impl GitRemote {
         db: Option<GitDatabase>,
         reference: &GitReference,
         locked_rev: Option<GitOid>,
-        client: &ClientWithMiddleware,
+        client: &LazyClient,
     ) -> Result<(GitDatabase, GitOid), GitError> {
         let locked_ref = locked_rev.map(|oid| GitReference::FullCommit(oid.to_string()));
         let reference = locked_ref.as_ref().unwrap_or(reference);
@@ -463,7 +477,7 @@ pub(crate) fn fetch(
     repo: &mut GitRepository,
     remote_url: &str,
     reference: &GitReference,
-    client: &ClientWithMiddleware,
+    client: &LazyClient,
 ) -> Result<(), GitError> {
     let oid_to_fetch = match github_fast_path(repo, remote_url, reference, client) {
         Ok(FastPathRev::UpToDate) => return Ok(()),
@@ -655,7 +669,7 @@ fn github_fast_path(
     repo: &mut GitRepository,
     url: &str,
     reference: &GitReference,
-    client: &ClientWithMiddleware,
+    client: &LazyClient,
 ) -> Result<FastPathRev, GitError> {
     let url = Url::parse(url)?;
     if !is_github(&url) {
@@ -689,10 +703,10 @@ fn github_fast_path(
             // but is not a short hash of the found object, it's probably a
             // branch and we also need to get a hash from GitHub, in case
             // the branch has moved.
-            if let Some(ref local_object) = local_object {
-                if is_short_hash_of(rev, *local_object) {
-                    return Ok(FastPathRev::UpToDate);
-                }
+            if let Some(ref local_object) = local_object
+                && is_short_hash_of(rev, *local_object)
+            {
+                return Ok(FastPathRev::UpToDate);
             }
             rev
         }
@@ -739,7 +753,7 @@ fn github_fast_path(
 
     runtime.block_on(async move {
         tracing::debug!("Attempting GitHub fast path for: {url}");
-        let mut request = client.get(&url);
+        let mut request = client.client().get(&url);
         request = request.header("Accept", "application/vnd.github.3.sha");
         request = request.header("User-Agent", "pixi");
         if let Some(local_object) = local_object {

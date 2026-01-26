@@ -35,7 +35,7 @@ for index_path in indexes_path.iterdir():
     shutil.rmtree(index)
     index.mkdir(exist_ok=True)
 
-    projects = {}
+    projects: dict[str, list[Path]] = {}
     for wheel in wheels:
         project = wheel.name.split("-")[0]
         wheel_list = projects[project] = projects.get(project, [])

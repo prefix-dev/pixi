@@ -1,11 +1,16 @@
 from pathlib import Path
-import shutil
+
 import pytest
 
-from ..common import verify_cli_command
+from .common import (
+    CURRENT_PLATFORM,
+    copy_manifest,
+    copytree_with_local_backend,
+    verify_cli_command,
+)
 
 
-@pytest.mark.extra_slow
+@pytest.mark.slow
 def test_build_git_source_deps(pixi: Path, tmp_pixi_workspace: Path, build_data: Path) -> None:
     """
     This one tries to build the rich example project
@@ -13,8 +18,7 @@ def test_build_git_source_deps(pixi: Path, tmp_pixi_workspace: Path, build_data:
 
     project = build_data / "rich_example"
     target_git_dir = tmp_pixi_workspace / "git_project"
-    shutil.copytree(project, target_git_dir)
-    shutil.rmtree(target_git_dir.joinpath(".pixi"), ignore_errors=True)
+    copytree_with_local_backend(project, target_git_dir)
 
     # init it as a git repo and commit all files
     verify_cli_command(["git", "init"], cwd=target_git_dir)
@@ -32,9 +36,7 @@ def test_build_git_source_deps(pixi: Path, tmp_pixi_workspace: Path, build_data:
 
     minimal_workspace = tmp_pixi_workspace / "minimal_workspace"
     minimal_workspace.mkdir()
-    shutil.copyfile(
-        build_data / "manifests" / "workspace_git.toml", minimal_workspace / "pixi.toml"
-    )
+    copy_manifest(build_data / "manifests" / "workspace_git.toml", minimal_workspace / "pixi.toml")
 
     # edit the minimal_workspace to include the git_project
     workspace_manifest = minimal_workspace / "pixi.toml"
@@ -45,16 +47,50 @@ def test_build_git_source_deps(pixi: Path, tmp_pixi_workspace: Path, build_data:
         workspace_manifest.read_text().replace("file:///", target_git_url)
     )
 
+    workspace_manifest.write_text(
+        workspace_manifest.read_text().replace("CURRENT_PLATFORM", CURRENT_PLATFORM)
+    )
+
     # build it
-    verify_cli_command([pixi, "install", "--manifest-path", minimal_workspace / "pixi.toml"])
+    verify_cli_command([pixi, "install", "-v", "--manifest-path", minimal_workspace / "pixi.toml"])
 
     # verify that we indeed recorded the git url with it's commit
     pixi_lock_file = minimal_workspace / "pixi.lock"
 
     assert f"conda: git+{target_git_url}#{commit_hash}" in pixi_lock_file.read_text()
 
+    # now we update source code so we can verify that
+    # both pixi-git will discover a new commit
+    # and pixi build will rebuild it
 
-@pytest.mark.extra_slow
+    rich_example = target_git_dir / "src" / "rich_example" / "__init__.py"
+    rich_example.write_text(rich_example.read_text().replace("John Doe", "John Doe Jr."))
+    # commit the change
+    verify_cli_command(["git", "add", "."], cwd=target_git_dir)
+    verify_cli_command(["git", "commit", "-m", "update John Doe"], cwd=target_git_dir)
+
+    # extract updated commit hash that we will use
+    new_commit_hash = verify_cli_command(
+        ["git", "rev-parse", "HEAD"], cwd=target_git_dir
+    ).stdout.strip()
+
+    # build it again
+    verify_cli_command([pixi, "update", "-v", "--manifest-path", minimal_workspace / "pixi.toml"])
+
+    # verify that we indeed recorded the git url with it's commit
+    pixi_lock_file = minimal_workspace / "pixi.lock"
+
+    assert f"conda: git+{target_git_url}#{new_commit_hash}" in pixi_lock_file.read_text()
+
+    # run the *built* script to verify that new name is used
+    verify_cli_command(
+        [pixi, "run", "rich-example-main", "--manifest-path", minimal_workspace / "pixi.toml"],
+        stdout_contains="John Doe Jr.",
+        cwd=minimal_workspace,
+    )
+
+
+@pytest.mark.slow
 def test_build_git_source_deps_from_branch(
     pixi: Path, tmp_pixi_workspace: Path, build_data: Path
 ) -> None:
@@ -64,8 +100,7 @@ def test_build_git_source_deps_from_branch(
 
     project = build_data / "rich_example"
     target_git_dir = tmp_pixi_workspace / "git_project"
-    shutil.rmtree(project.joinpath(".pixi"), ignore_errors=True)
-    shutil.copytree(project, target_git_dir)
+    copytree_with_local_backend(project, target_git_dir)
 
     # init it as a git repo and commit all files to a test-branch
     verify_cli_command(["git", "init"], cwd=target_git_dir)
@@ -85,9 +120,7 @@ def test_build_git_source_deps_from_branch(
 
     minimal_workspace = tmp_pixi_workspace / "minimal_workspace"
     minimal_workspace.mkdir()
-    shutil.copyfile(
-        build_data / "manifests" / "workspace_git.toml", minimal_workspace / "pixi.toml"
-    )
+    copy_manifest(build_data / "manifests" / "workspace_git.toml", minimal_workspace / "pixi.toml")
 
     # edit the minimal_workspace to include the git_project
     workspace_manifest = minimal_workspace / "pixi.toml"
@@ -97,9 +130,14 @@ def test_build_git_source_deps_from_branch(
     # Replace the rich_example entry using string manipulation
     original = '[dependencies]\nrich_example = { "git" = "file:///" }'
     replacement = '[dependencies]\nrich_example = { "git" = "file:///", "branch" = "test-branch"}'
+
     workspace_manifest.write_text(workspace_manifest.read_text().replace(original, replacement))
     workspace_manifest.write_text(
         workspace_manifest.read_text().replace("file:///", target_git_url)
+    )
+
+    workspace_manifest.write_text(
+        workspace_manifest.read_text().replace("CURRENT_PLATFORM", CURRENT_PLATFORM)
     )
 
     # build it
@@ -115,7 +153,7 @@ def test_build_git_source_deps_from_branch(
     )
 
 
-@pytest.mark.extra_slow
+@pytest.mark.slow
 def test_build_git_source_deps_from_rev(
     pixi: Path, tmp_pixi_workspace: Path, build_data: Path
 ) -> None:
@@ -125,8 +163,7 @@ def test_build_git_source_deps_from_rev(
 
     project = build_data / "rich_example"
     target_git_dir = tmp_pixi_workspace / "git_project"
-    shutil.copytree(project, target_git_dir)
-    shutil.rmtree(target_git_dir.joinpath(".pixi"), ignore_errors=True)
+    copytree_with_local_backend(project, target_git_dir)
 
     # init it as a git repo and commit all files to a test-branch
     verify_cli_command(["git", "init"], cwd=target_git_dir)
@@ -144,9 +181,7 @@ def test_build_git_source_deps_from_rev(
 
     minimal_workspace = tmp_pixi_workspace / "minimal_workspace"
     minimal_workspace.mkdir()
-    shutil.copyfile(
-        build_data / "manifests" / "workspace_git.toml", minimal_workspace / "pixi.toml"
-    )
+    copy_manifest(build_data / "manifests" / "workspace_git.toml", minimal_workspace / "pixi.toml")
 
     # edit the minimal_workspace to include the git_project
     workspace_manifest = minimal_workspace / "pixi.toml"
@@ -164,6 +199,9 @@ def test_build_git_source_deps_from_rev(
     workspace_manifest.write_text(workspace_manifest.read_text().replace(original, replacement))
     workspace_manifest.write_text(
         workspace_manifest.read_text().replace("file:///", target_git_url)
+    )
+    workspace_manifest.write_text(
+        workspace_manifest.read_text().replace("CURRENT_PLATFORM", CURRENT_PLATFORM)
     )
 
     # build it
@@ -189,8 +227,7 @@ def test_build_git_source_deps_from_tag(
 
     project = build_data / "rich_example"
     target_git_dir = tmp_pixi_workspace / "git_project"
-    shutil.rmtree(project.joinpath(".pixi"), ignore_errors=True)
-    shutil.copytree(project, target_git_dir)
+    copytree_with_local_backend(project, target_git_dir)
 
     # init it as a git repo and commit all files to a tag called v1.0.0
     verify_cli_command(["git", "init"], cwd=target_git_dir)
@@ -200,7 +237,7 @@ def test_build_git_source_deps_from_tag(
 
     verify_cli_command(["git", "add", "."], cwd=target_git_dir)
     verify_cli_command(["git", "commit", "-m", "initial commit"], cwd=target_git_dir)
-    verify_cli_command(["git", "tag", "v1.0.0"], cwd=target_git_dir)
+    verify_cli_command(["git", "tag", "v1.0.0", "-m 'my version 1.0.0"], cwd=target_git_dir)
 
     # extract exact commit hash that we will use
     commit_hash = verify_cli_command(
@@ -209,9 +246,7 @@ def test_build_git_source_deps_from_tag(
 
     minimal_workspace = tmp_pixi_workspace / "minimal_workspace"
     minimal_workspace.mkdir()
-    shutil.copyfile(
-        build_data / "manifests" / "workspace_git.toml", minimal_workspace / "pixi.toml"
-    )
+    copy_manifest(build_data / "manifests" / "workspace_git.toml", minimal_workspace / "pixi.toml")
 
     # edit the minimal_workspace to include the git_project
     workspace_manifest = minimal_workspace / "pixi.toml"
@@ -223,6 +258,10 @@ def test_build_git_source_deps_from_tag(
     workspace_manifest.write_text(workspace_manifest.read_text().replace(original, replacement))
     workspace_manifest.write_text(
         workspace_manifest.read_text().replace("file:///", target_git_dir.as_uri())
+    )
+
+    workspace_manifest.write_text(
+        workspace_manifest.read_text().replace("CURRENT_PLATFORM", CURRENT_PLATFORM)
     )
 
     # build it

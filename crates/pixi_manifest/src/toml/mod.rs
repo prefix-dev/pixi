@@ -1,4 +1,5 @@
-mod build_system;
+mod build_backend;
+mod build_target;
 mod channel;
 mod document;
 mod environment;
@@ -18,7 +19,7 @@ mod workspace;
 
 use std::{borrow::Cow, ops::Range};
 
-pub use build_system::TomlPackageBuild;
+pub use build_backend::TomlPackageBuild;
 pub use channel::TomlPrioritizedChannel;
 pub use document::TomlDocument;
 pub use environment::{TomlEnvironment, TomlEnvironmentList};
@@ -27,7 +28,7 @@ use itertools::Itertools;
 pub use manifest::ExternalWorkspaceProperties;
 pub use manifest::TomlManifest;
 use miette::LabeledSpan;
-pub use package::{ExternalPackageProperties, PackageError, TomlPackage};
+pub use package::{PackageDefaults, PackageError, TomlPackage, WorkspacePackageProperties};
 pub use platform::TomlPlatform;
 pub use preview::TomlPreview;
 pub use pyproject::PyProjectToml;
@@ -36,7 +37,7 @@ pub use target::TomlTarget;
 use toml_span::{DeserError, Span};
 pub use workspace::TomlWorkspace;
 
-use crate::{error::GenericError, utils::PixiSpanned, TargetSelector, TomlError};
+use crate::{TargetSelector, TomlError, error::GenericError, utils::PixiSpanned};
 
 pub trait FromTomlStr {
     fn from_toml_str(source: &str) -> Result<Self, TomlError>
@@ -66,7 +67,7 @@ fn create_unsupported_selector_warning(
     matching_platforms: &[Platform],
 ) -> GenericError {
     let (feature_or_workspace, span) = match platform_span {
-        PlatformSpan::Feature(name, span) => (Cow::Owned(format!("feature '{}'", name)), span),
+        PlatformSpan::Feature(name, span) => (Cow::Owned(format!("feature '{name}'")), span),
         PlatformSpan::Workspace(span) => (Cow::Borrowed("workspace"), span),
     };
 
@@ -78,8 +79,7 @@ fn create_unsupported_selector_warning(
     .with_span_label("target selector specified here")
     .with_label(LabeledSpan::new_with_span(
         Some(format!(
-            "the platforms supported by the {} are defined here",
-            feature_or_workspace
+            "the platforms supported by the {feature_or_workspace} are defined here"
         )),
         Range::<usize>::from(span),
     ))

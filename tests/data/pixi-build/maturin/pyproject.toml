@@ -1,0 +1,16 @@
+[build-system]
+build-backend = "maturin"
+requires = ["maturin>=1.9,<2.0"]
+
+[project]
+classifiers = [
+  "Programming Language :: Rust",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dynamic = ["version"]
+name = "fast_math"
+requires-python = ">=3.8"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]

@@ -22,3 +22,23 @@ outputs:
             - echo "export TRAMPOLINE_V2_TEST_ENV='teapot_v2'" > $PREFIX/etc/conda/activate.d/activate-trampoline.sh
             - mv check_env_2.sh $PREFIX/bin/dummy-trampoline
             - chmod +x $PREFIX/bin/dummy-trampoline
+
+  - package:
+      name: dummy-trampoline-2
+      version: 0.2.0
+    source:
+      path: .
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - mkdir -p $PREFIX/etc/conda/activate.d
+            - echo "set TRAMPOLINE_V2_TEST_ENV=teapot_v2" > $PREFIX/etc/conda/activate.d/activate-trampoline.bat
+            - mv check_env_2.bat $PREFIX/bin/dummy-trampoline-2.bat
+          else:
+            - mkdir -p $PREFIX/etc/conda/activate.d
+            - echo "export TRAMPOLINE_V2_TEST_ENV='teapot_v2'" > $PREFIX/etc/conda/activate.d/activate-trampoline.sh
+            - mv check_env_2.sh $PREFIX/bin/dummy-trampoline-2
+            - chmod +x $PREFIX/bin/dummy-trampoline-2

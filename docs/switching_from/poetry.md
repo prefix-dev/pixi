@@ -1,4 +1,3 @@
-# Transitioning from `poetry` to `pixi`
 Welcome to the guide designed to ease your transition from `poetry` to `pixi`.
 This document compares key commands and concepts between these tools, highlighting `pixi`'s unique approach to managing environments and packages.
 With `pixi`, you'll experience a workspace-based workflow similar to `poetry` while including the `conda` ecosystem and allowing for easy sharing of your work.
@@ -20,7 +19,7 @@ On top of the PyPI ecosystem, `pixi` adds the power of the conda ecosystem, allo
 | Defining dependencies      | `[tool.poetry.dependencies]`                                      | `[tool.pixi.dependencies]` for conda, `[tool.pixi.pypi-dependencies]` or `[project.dependencies]` for PyPI dependencies                           |
 | Dependency definition      | - `numpy = "^1.2.3"`<br/>- `numpy = "~1.2.3"`<br/>- `numpy = "*"` | - `numpy = ">=1.2.3 <2.0.0"`<br/>- `numpy = ">=1.2.3 <1.3.0"`<br/>- `numpy = "*"`                                                                 |
 | Lock file                  | `poetry.lock`                                                     | `pixi.lock`                                                                                                                                       |
-| Environment directory       | `~/.cache/pypoetry/virtualenvs/myenv`                             | `./.pixi` Defaults to the project folder, move this using the [`detached-environments`](../reference/pixi_configuration.md#detached-environments) |
+| Environment directory       | `~/.cache/pypoetry/virtualenvs/myenv`                             | `./.pixi` Defaults to the workspace directory, move this using the [`detached-environments`](../reference/pixi_configuration.md#detached-environments) |
 
 ## Support both `poetry` and `pixi` in my workspace
 You can allow users to use `poetry` and `pixi` in the same workspace, they will not touch each other's parts of the configuration or system.

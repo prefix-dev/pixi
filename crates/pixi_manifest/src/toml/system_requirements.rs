@@ -3,12 +3,12 @@ use std::str::FromStr;
 use pixi_toml::TomlFromStr;
 use rattler_conda_types::Version;
 use toml_span::{
-    de_helpers::{expected, TableHelper},
-    value::ValueInner,
     DeserError, Error, ErrorKind, Value,
+    de_helpers::{TableHelper, expected},
+    value::ValueInner,
 };
 
-use crate::{system_requirements::LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements};
+use crate::{LibCSystemRequirement, SystemRequirements, system_requirements::LibCFamilyAndVersion};
 
 impl<'de> toml_span::Deserialize<'de> for SystemRequirements {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
@@ -68,11 +68,11 @@ impl<'de> toml_span::Deserialize<'de> for LibCSystemRequirement {
 
 #[cfg(test)]
 mod test {
-    use insta::assert_snapshot;
-    use rattler_virtual_packages::{Cuda, LibC, Linux, Osx, VirtualPackage};
-
     use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+    use crate::toml::FromTomlStr;
+    use insta::assert_snapshot;
+    use pixi_test_utils::format_parse_error;
+    use rattler_virtual_packages::{Cuda, LibC, Linux, Osx, VirtualPackage};
 
     #[test]
     fn system_requirements_works() {

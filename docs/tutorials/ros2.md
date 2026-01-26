@@ -1,5 +1,3 @@
-# Tutorial: Develop a ROS 2 package with `pixi`
-
 In this tutorial, we will show you how to develop a ROS 2 package using `pixi`.
 The tutorial is written to be executed from top to bottom, missing steps might result in errors.
 
@@ -15,7 +13,7 @@ The audience for this tutorial is developers who are familiar with ROS 2 and how
 ## Create a Pixi workspace
 
 ```shell
-pixi init my_ros2_project -c robostack-staging -c conda-forge
+pixi init my_ros2_project -c robostack-humble -c conda-forge
 cd my_ros2_project
 ```
 
@@ -28,7 +26,7 @@ my_ros2_project
 └── pixi.toml
 ```
 
-The `pixi.toml` file is the manifest file for your project. It should look like this:
+The `pixi.toml` file is the manifest file for your workspace. It should look like this:
 
 ```toml title="pixi.toml"
 [workspace]
@@ -36,7 +34,7 @@ name = "my_ros2_project"
 version = "0.1.0"
 description = "Add a short description here"
 authors = ["User Name <user.name@email.url>"]
-channels = ["robostack-staging", "conda-forge"]
+channels = ["robostack-humble", "conda-forge"]
 # Your project can support multiple platforms, the current platform will be automatically added.
 platforms = ["linux-64"]
 
@@ -51,7 +49,7 @@ For the rest of the fields, you can fill them in as you see fit.
 
 ## Add ROS 2 dependencies
 
-To use a Pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
+To use a Pixi workspace you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your workspace without any issues.
 
 Let's start with the `turtlesim` example
 
@@ -60,7 +58,7 @@ pixi add ros-humble-desktop ros-humble-turtlesim
 ```
 
 This will add the `ros-humble-desktop` and `ros-humble-turtlesim` packages to your manifest.
-Depending on your internet speed this might take a minute, as it will also install ROS in your project folder (`.pixi`).
+Depending on your internet speed this might take a minute, as it will also install ROS in your workspace folder (`.pixi`).
 
 Now run the `turtlesim` example.
 
@@ -68,7 +66,7 @@ Now run the `turtlesim` example.
 pixi run ros2 run turtlesim turtlesim_node
 ```
 
-**Or** use the `shell` command to start an activated environment in your terminal.
+**Or** use the `shell` command to start a shell in the activated environment in your terminal.
 
 ```shell
 pixi shell
@@ -125,7 +123,7 @@ Normally this would be the script you add to your `.bashrc` but instead you tell
     ```
 
 ??? tip "Multi platform support"
-    You can add multiple activation scripts for different platforms, so you can support multiple platforms with one project.
+    You can add multiple activation scripts for different platforms, so you can support multiple platforms with one workspace.
     Use the following example to add support for both Linux and Windows, using the [target](../workspace/multi_platform_configuration.md#activation) syntax.
 
     ```toml
@@ -167,7 +165,7 @@ pixi run hello
     Tasks are a powerful feature in pixi.
 
     - You can add [`depends-on`](../workspace/advanced_tasks.md#depends-on) to the tasks to create a task chain.
-    - You can add [`cwd`](../workspace/advanced_tasks.md#working-directory) to the tasks to run the task in a different directory from the root of the project.
+    - You can add [`cwd`](../workspace/advanced_tasks.md#working-directory) to the tasks to run the task in a different directory from the root of the workspace.
     - You can add [`inputs` and `outputs`](../workspace/advanced_tasks.md#caching) to the tasks to create a task that only runs when the inputs are changed.
     - You can use the [`target`](../reference/pixi_manifest.md#the-target-table) syntax to run specific tasks on specific machines.
 
@@ -183,7 +181,7 @@ hello = { cmd = "ros2 run my_package my_node", depends-on = ["build"] }
 To build a C++ node you need to add the `ament_cmake` and some other build dependencies to your manifest file.
 
 ```shell
-pixi add ros-humble-ament-cmake-auto compilers pkg-config cmake ninja
+pixi add ros-humble-ament-cmake-auto compilers pkg-config "cmake<4" ninja colcon-common-extensions
 ```
 
 Now you can create a C++ node with the following command
@@ -208,11 +206,13 @@ pixi run ros2 run my_cpp_package my_cpp_node
     ```
 
 ## Conclusion
+
 In this tutorial, we showed you how to create a Python & CMake ROS2 project using `pixi`.
 We also showed you how to **add dependencies** to your project using `pixi`, and how to **run your project** using `pixi run`.
 This way you can make sure that your project is **reproducible** on all your machines that have `pixi` installed.
 
 ## Show Off Your Work!
+
 Finished with your project?
 We'd love to see what you've created!
 Share your work on social media using the hashtag #pixi and tag us @prefix_dev.
@@ -222,9 +222,13 @@ Let's inspire the community together!
 
 ### What happens with `rosdep`?
 
-Currently, we don't support `rosdep` in a Pixi environment, so you'll have to add the packages using `pixi add`.
-`rosdep` will call `conda install` which isn't supported in a Pixi environment.
+Currently, we don't support `rosdep` in a Pixi environment, so you'll
+have to add the packages using `pixi add`. `rosdep` will call `conda install` which isn't supported in a Pixi environment.
 
+### Where can I find more documentation on the `robostack-*` channels?
+
+You can find more documentation on RoboStack channels in the [RoboStack documentation](https://robostack.github.io/).
 
 ### Community examples
+
 ROS 2 Humble on macOS,[Simulating differential drive using Gazebo](https://medium.com/@davisogunsina/ros-2-macos-support-installing-and-running-ros-2-on-macos-79039d1d3655).

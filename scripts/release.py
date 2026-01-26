@@ -1,6 +1,7 @@
 import subprocess
 import re
 import os
+import shutil
 from pathlib import Path
 import atexit
 from enum import Enum
@@ -62,12 +63,11 @@ def get_release_version() -> str:
 
 
 def get_pixi() -> Path:
-    pixi_bin = Path().home().joinpath(".pixi/bin/pixi").resolve()
-
-    if pixi_bin.is_file() and pixi_bin.exists():
-        return pixi_bin
+    pixi_bin = shutil.which("pixi")
+    if pixi_bin:
+        return Path(pixi_bin)
     else:
-        raise ValueError(f"The path {pixi_bin} doesn't exist.")
+        raise ValueError("pixi not found in PATH")
 
 
 def print_summary() -> None:
@@ -80,12 +80,18 @@ atexit.register(print_summary)
 
 
 def main() -> None:
+    # Unset all PIXI_ prefixed environment variables to ensure a clean environment
+    for key in list(os.environ.keys()):
+        if key.startswith("PIXI_"):
+            del os.environ[key]
+
     steps = [
         "Start release process",
         "Check main branch and CI status",
         "Set release version",
         "Create and switch to release branch",
         "Bump all versions",
+        "Update cargo lockfile",
         "Update changelog",
         "Lint changes",
         "Commit changes",
@@ -108,24 +114,29 @@ def main() -> None:
             colored_print("Invalid input. Please enter a number.", Colors.YELLOW)
 
     pixi = get_pixi()
+
+    step = 1
     try:
         if start_step <= 1:
-            colored_print("Making a release of pixi", Colors.YELLOW)
+            colored_print(f"{step}. Making a release of pixi", Colors.YELLOW)
             status.append("Started release process")
+            step += 1
 
         if start_step <= 2:
             colored_input(
-                "Make sure main is up-to-date and CI passes. Press Enter to continue...",
+                f"{step}. Make sure main is up-to-date and CI passes. Press Enter to continue...",
                 Colors.MAGENTA,
             )
             status.append("Checked main branch and CI status")
+            step += 1
 
         release_version = get_release_version()
         os.environ["RELEASE_VERSION"] = release_version
         status.append(f"Release version set to {release_version}")
+        step += 1
 
         if start_step <= 4:
-            colored_print("\nCreating a new branch for the release...", Colors.YELLOW)
+            colored_print(f"\n{step}. Creating a new branch for the release...", Colors.YELLOW)
             run_command(["git", "checkout", "main"])
             run_command(["git", "pull", "upstream", "main"])
             branch = f"bump/prepare-v{release_version}"
@@ -135,16 +146,26 @@ def main() -> None:
                 run_command(["git", "branch", "--delete", branch])
             run_command(["git", "switch", "--create", branch])
             status.append(f"Created and switched to branch {branch}")
+            step += 1
 
         if start_step <= 5:
-            colored_print("\nBumping all versions...", Colors.YELLOW)
+            colored_print(f"\n{step}. Bumping all versions...", Colors.YELLOW)
             run_command([pixi, "run", "bump"])
             status.append("Bumped all versions")
+            step += 1
 
         if start_step <= 6:
+            colored_print(f"\n{step}. Update Cargo pixi lockfile...", Colors.YELLOW)
+            run_command([pixi, "run", "cargo update pixi"])
+            status.append("Updated all lockfile")
+            step += 1
+
+        if start_step <= 7:
             while True:
                 response = (
-                    colored_input("Should we bump the changelog? (yes/no): ", Colors.MAGENTA)
+                    colored_input(
+                        f"{step}. Should we bump the changelog? (yes/no): ", Colors.MAGENTA
+                    )
                     .strip()
                     .lower()
                 )
@@ -159,29 +180,36 @@ def main() -> None:
                 Colors.MAGENTA,
             )
             status.append("Updated the changelog")
-
-        if start_step <= 7:
-            colored_print("\nLinting the changes...", Colors.YELLOW)
-            run_command([pixi, "run", "lint"])
+            step += 1
 
         if start_step <= 8:
-            colored_print("\nCommitting the changes...", Colors.YELLOW)
-            run_command(["git", "commit", "-am", f"chore: version to {release_version}"])
-            status.append("Committed the changes")
+            colored_print(f"\n{step}. Linting the changes...", Colors.YELLOW)
+            run_command([pixi, "run", "lint"])
+            step += 1
 
         if start_step <= 9:
-            colored_print("\nPushing the changes...", Colors.YELLOW)
-            run_command(["git", "push", "origin"])
-            status.append("Pushed the changes")
+            colored_print(f"\n{step}. Committing the changes...", Colors.YELLOW)
+            run_command(["git", "commit", "-am", f"chore: version to {release_version}"])
+            status.append("Committed the changes")
+            step += 1
 
         if start_step <= 10:
-            colored_print("\nRelease prep PR", Colors.YELLOW)
+            colored_print(f"\n{step}. Pushing the changes...", Colors.YELLOW)
+            run_command(
+                ["git", "push", "--set-upstream", "origin", f"bump/prepare-v{release_version}"]
+            )
+            status.append("Pushed the changes")
+            step += 1
+
+        if start_step <= 11:
+            colored_print(f"\n{step}. Release prep PR", Colors.YELLOW)
             colored_input(
                 "Create a PR to check off the change with the peers. Press Enter to continue...",
                 Colors.MAGENTA,
             )
             colored_input("Merge that PR. Press Enter to continue...", Colors.MAGENTA)
             status.append("Created and merged the release prep PR")
+            step += 1
 
         colored_print(
             f"\nStart a release build for 'v{release_version}' by starting the workflow manually in https://github.com/prefix-dev/pixi/actions/workflows/release.yml",

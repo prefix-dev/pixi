@@ -18,6 +18,7 @@ Config {
     tls_no_verify: Some(
         false,
     ),
+    tls_root_certs: None,
     mirrors: {
         Url {
             scheme: "https",
@@ -133,6 +134,21 @@ Config {
         solves: 1,
         downloads: 50,
     },
+    run_post_link_scripts: None,
+    proxy_config: ProxyConfig {
+        https: None,
+        http: None,
+        non_proxy_hosts: [],
+    },
+    build: BuildConfig {
+        package_format: Some(
+            PackageFormatAndCompression {
+                archive_type: Conda,
+                compression_level: Highest,
+            },
+        ),
+    },
+    tool_platform: None,
     change_ps1: None,
     force_activate: None,
 }

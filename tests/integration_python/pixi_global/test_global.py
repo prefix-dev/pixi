@@ -1,18 +1,21 @@
-from pathlib import Path
+import os
+import platform
+import shutil
 import tomllib
+from pathlib import Path
 
 import pytest
 import tomli_w
-from ..common import verify_cli_command, ExitCode, exec_extension, bat_extension
-import platform
+
+from ..common import ExitCode, bat_extension, exec_extension, verify_cli_command
 
 MANIFEST_VERSION = 1
 
 
 @pytest.mark.slow
-def test_sync_injected_python_lib_is_found(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_sync_injected_python_lib_is_found(pixi: Path, tmp_path: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = """
@@ -23,7 +26,7 @@ def test_sync_injected_python_lib_is_found(pixi: Path, tmp_pixi_workspace: Path)
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
-    python_injected = tmp_pixi_workspace / "bin" / exec_extension("python-injected")
+    python_injected = tmp_path / "bin" / exec_extension("python-injected")
 
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], env=env)
@@ -69,9 +72,9 @@ def test_sync_injected_python_lib_is_found(pixi: Path, tmp_pixi_workspace: Path)
 
 
 @pytest.mark.slow
-def test_sync_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_sync_platform(pixi: Path, tmp_path: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = """
@@ -97,9 +100,9 @@ def test_sync_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
-def test_sync_change_expose(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_sync_change_expose(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""
@@ -113,14 +116,14 @@ def test_sync_change_expose(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
 
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], env=env)
     assert dummy_a.is_file()
 
     # Add another expose
-    dummy_in_disguise = tmp_pixi_workspace / "bin" / exec_extension("dummy-in-disguise")
+    dummy_in_disguise = tmp_path / "bin" / exec_extension("dummy-in-disguise")
     parsed_toml["envs"]["test"]["exposed"]["dummy-in-disguise"] = "dummy-a"
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], env=env)
@@ -133,9 +136,9 @@ def test_sync_change_expose(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_
     assert not dummy_in_disguise.is_file()
 
 
-def test_sync_prune(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_sync_prune(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""
@@ -146,7 +149,7 @@ def test_sync_prune(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) 
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
 
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], env=env)
@@ -161,11 +164,9 @@ def test_sync_prune(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) 
     assert not dummy_a.is_file()
 
 
-def test_sync_manually_remove_binary(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_sync_manually_remove_binary(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""
@@ -178,7 +179,7 @@ def test_sync_manually_remove_binary(
     "dummy-a" = "dummy-a"
     """
     manifest.write_text(toml)
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
 
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], env=env)
@@ -194,10 +195,10 @@ def test_sync_manually_remove_binary(
 
 @pytest.mark.slow
 def test_sync_migrate(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str, dummy_channel_2: str
+    pixi: Path, tmp_path: Path, dummy_channel_1: str, dummy_channel_2: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""\
@@ -233,11 +234,9 @@ exposed = {{ xz = "xz" }}
     assert tomllib.loads(migrated_manifest) == tomllib.loads(original_manifest)
 
 
-def test_sync_duplicated_expose_error(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_sync_duplicated_expose_error(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""
@@ -262,11 +261,9 @@ exposed = {{ dummy-1 = "dummy-b" }}
     )
 
 
-def test_sync_failures_are_collected(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_sync_failures_are_collected(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""
@@ -288,7 +285,7 @@ dependencies = {{ dummy-a = "*" }}
 exposed = {{ dummy-a = "dummy-a" }}
     """
     manifest.write_text(toml)
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
 
     verify_cli_command(
         [pixi, "global", "sync"],
@@ -299,9 +296,9 @@ exposed = {{ dummy-a = "dummy-a" }}
     assert dummy_a.is_file()
 
 
-def test_expose_basic(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""
@@ -310,17 +307,13 @@ def test_expose_basic(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
     dependencies = {{ dummy-a = "*" }}
     """
     manifest.write_text(toml)
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
-    dummy1 = tmp_pixi_workspace / "bin" / exec_extension("dummy1")
-    dummy3 = tmp_pixi_workspace / "bin" / exec_extension("dummy3")
-    nested_dummy = tmp_pixi_workspace / "bin" / exec_extension("dummy")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy1 = tmp_path / "bin" / exec_extension("dummy1")
+    dummy3 = tmp_path / "bin" / exec_extension("dummy3")
+    nested_dummy = tmp_path / "bin" / exec_extension("dummy")
 
     # Add dummy-a with simple syntax
-    verify_cli_command(
-        [pixi, "global", "expose", "add", "--environment=test", "dummy-a"],
-        ExitCode.SUCCESS,
-        env=env,
-    )
+    verify_cli_command([pixi, "global", "expose", "add", "--environment=test", "dummy-a"], env=env)
     assert dummy_a.is_file()
 
     # Add dummy1 and dummy3 and nested/dummy
@@ -360,9 +353,9 @@ def test_expose_basic(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
     assert not dummy3.is_file()
 
 
-def test_expose_revert_working(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_expose_revert_working(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     original_toml = f"""
@@ -384,11 +377,9 @@ def test_expose_revert_working(pixi: Path, tmp_pixi_workspace: Path, dummy_chann
     assert manifest.read_text() == original_toml
 
 
-def test_expose_preserves_table_format(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_expose_preserves_table_format(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     original_toml = f"""
@@ -405,19 +396,17 @@ dummy-a = "dummy-a"
 
     verify_cli_command(
         [pixi, "global", "expose", "add", "--environment=test", "dummy-aa=dummy-a"],
-        ExitCode.SUCCESS,
         env=env,
     )
-    print(manifest.read_text())
     # The tables in the manifest have been preserved
     assert manifest.read_text() == original_toml + 'dummy-aa = "dummy-a"\n'
 
 
 def test_expose_duplicated_expose_allow_for_same_env(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""
@@ -458,10 +447,10 @@ exposed = {{ dummy-2 = "dummy-a" }}
 
 
 def test_install_duplicated_expose_allow_for_same_env(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
 
@@ -515,11 +504,9 @@ def test_install_duplicated_expose_allow_for_same_env(
     assert parsed_toml["envs"]["dummy-a"]["exposed"]["dummy"] == "dummy-aa"
 
 
-def test_install_adapts_manifest(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_install_adapts_manifest(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     original_toml = f"""
@@ -545,11 +532,9 @@ def test_install_adapts_manifest(
     assert f"version = {MANIFEST_VERSION}" in manifest.read_text()
 
 
-def test_existing_manifest_gets_version(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_existing_manifest_gets_version(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifest = manifests.joinpath("pixi-global.toml")
 
     verify_cli_command(
@@ -578,15 +563,15 @@ exposed = {{ dummy-a = "dummy-a", dummy-aa = "dummy-aa" }}
     assert actual_manifest == expected_manifest
 
 
-def test_install_with_basic(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_install_with_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifest = manifests.joinpath("pixi-global.toml")
 
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
-    dummy_aa = tmp_pixi_workspace / "bin" / exec_extension("dummy-aa")
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
-    dummy_c = tmp_pixi_workspace / "bin" / exec_extension("dummy-c")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+    dummy_c = tmp_path / "bin" / exec_extension("dummy-c")
 
     # Should fail, since two environments are created
     verify_cli_command(
@@ -642,15 +627,15 @@ exposed = {{ dummy-a = "dummy-a", dummy-aa = "dummy-aa" }}
 
 
 def test_install_with_environment_no_expose(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifest = manifests.joinpath("pixi-global.toml")
 
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
-    dummy_aa = tmp_pixi_workspace / "bin" / exec_extension("dummy-aa")
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
 
     verify_cli_command(
         [
@@ -687,15 +672,15 @@ exposed = {{ dummy-a = "dummy-a", dummy-aa = "dummy-aa" }}
 
 
 def test_install_with_environment_and_expose(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifest = manifests.joinpath("pixi-global.toml")
 
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
-    dummy_aa = tmp_pixi_workspace / "bin" / exec_extension("dummy-aa")
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
 
     verify_cli_command(
         [
@@ -732,10 +717,10 @@ exposed = {{ dummy-b = "dummy-b" }}
     assert dummy_b.is_file()
 
 
-def test_install_twice(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_install_twice(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
 
     # Install dummy-b
     verify_cli_command(
@@ -769,14 +754,14 @@ def test_install_twice(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: st
 
 
 def test_install_twice_with_same_env_name_as_expose(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
 ) -> None:
     # This test is to ensure that when the environment name is the same as the expose name, exposes are printed correctly
     # and we also ensure that when custom name for environment is used,
     # we output state for it
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("customdummyb")
+    dummy_b = tmp_path / "bin" / exec_extension("customdummyb")
 
     # Install dummy-b
     verify_cli_command(
@@ -818,12 +803,12 @@ def test_install_twice_with_same_env_name_as_expose(
 
 
 def test_install_force_reinstall_removes_original_environment(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
-    dummy_c = tmp_pixi_workspace / "bin" / exec_extension("dummy-c")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+    dummy_c = tmp_path / "bin" / exec_extension("dummy-c")
 
     env_name = "test_env"
 
@@ -882,11 +867,11 @@ def test_install_force_reinstall_removes_original_environment(
 
 
 def test_install_with_different_channel_and_force_reinstall(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str, dummy_channel_2: str
+    pixi: Path, tmp_path: Path, dummy_channel_1: str, dummy_channel_2: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
 
     # Install dummy-b
     verify_cli_command(
@@ -906,7 +891,7 @@ def test_install_with_different_channel_and_force_reinstall(
     # Modify dummy-b channel and try to install it again
     # Even though we changed the channels, it will claim the environment is up-to-date
 
-    manifests = tmp_pixi_workspace / "manifests" / "pixi-global.toml"
+    manifests = tmp_path / "manifests" / "pixi-global.toml"
     parsed_toml = tomllib.loads(manifests.read_text())
 
     parsed_toml["envs"]["dummy-b"]["channels"] = [dummy_channel_2]
@@ -943,10 +928,10 @@ def test_install_with_different_channel_and_force_reinstall(
     )
 
 
-def test_install_underscore(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_install_underscore(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_e = tmp_pixi_workspace / "bin" / exec_extension("dummy_e")
+    dummy_e = tmp_path / "bin" / exec_extension("dummy_e")
 
     # Install package `dummy_e`
     # It should be installed in environment `dummy-e`
@@ -977,15 +962,13 @@ def test_install_underscore(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_
     assert not dummy_e.is_file()
 
 
-def test_install_multiple_packages(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_install_multiple_packages(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
-    dummy_aa = tmp_pixi_workspace / "bin" / exec_extension("dummy-aa")
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
-    dummy_c = tmp_pixi_workspace / "bin" / exec_extension("dummy-c")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+    dummy_c = tmp_path / "bin" / exec_extension("dummy-c")
 
     # Install dummy-a and dummy-b, even though dummy-c is a dependency of dummy-b, it should not be exposed
     # All of dummy-a's and dummy-b's executables should be exposed though: 'dummy-a', 'dummy-aa' and 'dummy-b'
@@ -1007,14 +990,12 @@ def test_install_multiple_packages(
     assert not dummy_c.is_file()
 
 
-def test_install_expose_single_package(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_install_expose_single_package(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
-    dummy_aa = tmp_pixi_workspace / "bin" / exec_extension("dummy-aa")
-    dummy_c = tmp_pixi_workspace / "bin" / exec_extension("dummy-c")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
+    dummy_c = tmp_path / "bin" / exec_extension("dummy-c")
 
     # Install dummy-a, even though dummy-c is a dependency, it should not be exposed
     # All of dummy-a's executables should be exposed though: 'dummy-a' and 'dummy-aa'
@@ -1075,13 +1056,11 @@ def test_install_expose_single_package(
     assert dummy_c.is_file()
 
 
-def test_install_expose_multiple_packages(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_install_expose_multiple_packages(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
 
     # Expose doesn't work with multiple environments
     verify_cli_command(
@@ -1123,14 +1102,12 @@ def test_install_expose_multiple_packages(
     assert not dummy_b.is_file()
 
 
-def test_install_only_reverts_failing(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_install_only_reverts_failing(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
-    dummy_x = tmp_pixi_workspace / "bin" / exec_extension("dummy-x")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+    dummy_x = tmp_path / "bin" / exec_extension("dummy-x")
 
     # dummy-x is not part of dummy_channel_1
     verify_cli_command(
@@ -1146,9 +1123,39 @@ def test_install_only_reverts_failing(
     assert not dummy_x.is_file()
 
 
+def test_install_continues_past_failing_env(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+
+    # Order matters: fail in the middle (dummy-x), ensure it continues to install later packages
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-a",
+            "dummy-x",  # does not exist in dummy_channel_1
+            "dummy-b",
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="No candidates were found for dummy-x",
+    )
+
+    # Both valid packages are installed despite the error in between
+    assert dummy_a.is_file()
+    assert dummy_b.is_file()
+
+
 @pytest.mark.slow
-def test_install_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_install_platform(pixi: Path, tmp_path: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
     # Exists on win-64
     verify_cli_command(
         [
@@ -1183,11 +1190,11 @@ def test_install_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 
 def test_install_channels(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str, dummy_channel_2: str
+    pixi: Path, tmp_path: Path, dummy_channel_1: str, dummy_channel_2: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
-    dummy_x = tmp_pixi_workspace / "bin" / exec_extension("dummy-x")
+    env = {"PIXI_HOME": str(tmp_path)}
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+    dummy_x = tmp_path / "bin" / exec_extension("dummy-x")
 
     # Install dummy-b from dummy-channel-1
     verify_cli_command(
@@ -1236,10 +1243,8 @@ def test_install_channels(
     assert dummy_x.is_file()
 
 
-def test_install_multi_env_install(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_install_multi_env_install(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
 
     # Install dummy-a and dummy-b from dummy-channel-1 this will fail if both environment contains the same package as spec.
     verify_cli_command(
@@ -1257,13 +1262,11 @@ def test_install_multi_env_install(
 
 
 @pytest.mark.skipif(platform.system() == "Windows", reason="Not reliable on Windows")
-def test_pixi_install_cleanup(
-    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_pixi_install_cleanup(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    package0_1_0 = tmp_pixi_workspace / "bin" / exec_extension("package0.1.0")
-    package0_2_0 = tmp_pixi_workspace / "bin" / exec_extension("package0.2.0")
+    package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
+    package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
 
     verify_cli_command(
         [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package==0.1.0"],
@@ -1283,9 +1286,9 @@ def test_pixi_install_cleanup(
     assert package0_2_0.is_file()
 
 
-def test_list(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_list(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
 
     # Verify empty list
@@ -1317,11 +1320,9 @@ def test_list(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> Non
     )
 
 
-def test_list_env_no_dependencies(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_list_env_no_dependencies(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""
@@ -1339,9 +1340,9 @@ def test_list_env_no_dependencies(
     )
 
 
-def test_list_with_filter(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_list_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
 
     # Install dummy-a and dummy-b from dummy-channel-1
@@ -1379,10 +1380,10 @@ def test_list_with_filter(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1:
 # Test that we correctly uninstall the required packages
 # - Checking that the binaries are removed
 # - Checking that the non-requested to remove binaries are still there
-def test_uninstall(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_uninstall(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     original_toml = f"""
@@ -1412,10 +1413,10 @@ exposed = {{ dummy-c = "dummy-c" }}
         ],
         env=env,
     )
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
-    dummy_aa = tmp_pixi_workspace / "bin" / exec_extension("dummy-aa")
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
-    dummy_c = tmp_pixi_workspace / "bin" / exec_extension("dummy-c")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_aa = tmp_path / "bin" / exec_extension("dummy-aa")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+    dummy_c = tmp_path / "bin" / exec_extension("dummy-c")
     assert dummy_a.is_file()
     assert dummy_aa.is_file()
     assert dummy_b.is_file()
@@ -1432,9 +1433,9 @@ exposed = {{ dummy-c = "dummy-c" }}
     assert dummy_b.is_file()
     assert dummy_c.is_file()
     # Verify only the dummy-a environment is removed
-    assert tmp_pixi_workspace.joinpath("envs", "dummy-b").is_dir()
-    assert tmp_pixi_workspace.joinpath("envs", "dummy-c").is_dir()
-    assert not tmp_pixi_workspace.joinpath("envs", "dummy-a").is_dir()
+    assert tmp_path.joinpath("envs", "dummy-b").is_dir()
+    assert tmp_path.joinpath("envs", "dummy-c").is_dir()
+    assert not tmp_path.joinpath("envs", "dummy-a").is_dir()
 
     # Remove dummy-b manually from manifest
     modified_toml = f"""
@@ -1499,13 +1500,11 @@ exposed = {{ dummy-c = "dummy-c" }}
     assert dummy_c.is_file()
 
 
-def test_uninstall_only_reverts_failing(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_uninstall_only_reverts_failing(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
 
     verify_cli_command(
         [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a", "dummy-b"],
@@ -1522,15 +1521,47 @@ def test_uninstall_only_reverts_failing(
 
     # dummy-a has been removed but dummy-b is still there
     assert not dummy_a.is_file()
-    assert not tmp_pixi_workspace.joinpath("envs", "dummy-a").is_dir()
+    assert not tmp_path.joinpath("envs", "dummy-a").is_dir()
     assert dummy_b.is_file()
-    assert tmp_pixi_workspace.joinpath("envs", "dummy-b").is_dir()
+    assert tmp_path.joinpath("envs", "dummy-b").is_dir()
+
+
+def test_uninstall_continues_past_missing_env(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+
+    # Install two environments
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a", "dummy-b"],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert dummy_b.is_file()
+
+    # Uninstall with a missing environment in between; should continue and remove both existing ones
+    missing_env = "does-not-exist"
+    verify_cli_command(
+        [pixi, "global", "uninstall", "dummy-a", missing_env, "dummy-b"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains=f"Environment {missing_env} doesn't exist",
+    )
+
+    # Both existing environments are removed despite the error in between
+    assert not dummy_a.is_file()
+    assert not tmp_path.joinpath("envs", "dummy-a").is_dir()
+    assert not dummy_b.is_file()
+    assert not tmp_path.joinpath("envs", "dummy-b").is_dir()
 
 
 def test_global_update_single_package(
-    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
     # Test update with no environments
     verify_cli_command(
         [pixi, "global", "update"],
@@ -1543,16 +1574,16 @@ def test_global_update_single_package(
         env=env,
     )
     # Replace the version with a "*"
-    manifest = tmp_pixi_workspace.joinpath("manifests", "pixi-global.toml")
+    manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
     manifest.write_text(manifest.read_text().replace("==0.1.0", "*"))
     verify_cli_command(
         [pixi, "global", "update", "package"],
         env=env,
         stderr_contains=["Updated", "package", "0.1.0", "0.2.0"],
     )
-    package = tmp_pixi_workspace / "bin" / exec_extension("package")
-    package0_1_0 = tmp_pixi_workspace / "bin" / exec_extension("package0.1.0")
-    package0_2_0 = tmp_pixi_workspace / "bin" / exec_extension("package0.2.0")
+    package = tmp_path / "bin" / exec_extension("package")
+    package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
+    package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
 
     # After update be left with only the binary that was in both versions.
     assert package.is_file()
@@ -1563,11 +1594,11 @@ def test_global_update_single_package(
 
 def test_global_update_single_package_with_transient_dependency(
     pixi: Path,
-    tmp_pixi_workspace: Path,
+    tmp_path: Path,
     non_self_expose_channel_1: str,
     non_self_expose_channel_2: str,
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
     # Test update of a single package
     verify_cli_command(
@@ -1575,7 +1606,7 @@ def test_global_update_single_package_with_transient_dependency(
         env=env,
     )
     # Replace the version with a "*"
-    manifest = tmp_pixi_workspace.joinpath("manifests", "pixi-global.toml")
+    manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
     manifest.write_text(manifest.read_text().replace("==0.1.0", "*"))
     manifest_dict = tomllib.loads(manifest.read_text())
     manifest_dict["envs"]["jupyter"]["channels"] = [non_self_expose_channel_2]
@@ -1589,12 +1620,12 @@ def test_global_update_single_package_with_transient_dependency(
 
 
 def test_global_update_doesnt_remove_exposed_key_of_transient_dependencies(
-    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: Path
+    pixi: Path, tmp_path: Path, multiple_versions_channel_1: Path
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    package3 = tmp_pixi_workspace / "bin" / exec_extension("package3")
-    package4 = tmp_pixi_workspace / "bin" / exec_extension("package4")
+    package3 = tmp_path / "bin" / exec_extension("package3")
+    package4 = tmp_path / "bin" / exec_extension("package4")
 
     # Install package4 which depends on package3
     verify_cli_command(
@@ -1614,7 +1645,7 @@ def test_global_update_doesnt_remove_exposed_key_of_transient_dependencies(
     assert package4.is_file()
 
     # Replace the version with a "*"
-    manifest = tmp_pixi_workspace.joinpath("manifests", "pixi-global.toml")
+    manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
     manifest.write_text(manifest.read_text().replace("==0.1.0", "*"))
 
     # Update environment
@@ -1630,9 +1661,9 @@ def test_global_update_doesnt_remove_exposed_key_of_transient_dependencies(
 
 
 def test_global_update_all_packages(
-    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
     verify_cli_command(
         [
@@ -1647,17 +1678,17 @@ def test_global_update_all_packages(
         env=env,
     )
 
-    package = tmp_pixi_workspace / "bin" / exec_extension("package")
-    package0_1_0 = tmp_pixi_workspace / "bin" / exec_extension("package0.1.0")
-    package0_2_0 = tmp_pixi_workspace / "bin" / exec_extension("package0.2.0")
-    package2 = tmp_pixi_workspace / "bin" / exec_extension("package2")
+    package = tmp_path / "bin" / exec_extension("package")
+    package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
+    package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
+    package2 = tmp_path / "bin" / exec_extension("package2")
     assert package2.is_file()
     assert package.is_file()
     assert package0_1_0.is_file()
     assert not package0_2_0.is_file()
 
     # Replace the version with a "*"
-    manifest = tmp_pixi_workspace.joinpath("manifests", "pixi-global.toml")
+    manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
     manifest.write_text(manifest.read_text().replace("==0.1.0", "*"))
 
     verify_cli_command(
@@ -1678,14 +1709,14 @@ def test_global_update_all_packages(
     assert "package" in manifest_content
 
     # Check content of package2 file to be updated
-    bin_file_package2 = tmp_pixi_workspace / "envs" / "package2" / "bin" / bat_extension("package2")
+    bin_file_package2 = tmp_path / "envs" / "package2" / "bin" / bat_extension("package2")
     assert "0.2.0" in bin_file_package2.read_text()
 
 
 def test_global_update_multiple_packages_in_one_env(
-    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
     verify_cli_command(
         [
@@ -1702,17 +1733,17 @@ def test_global_update_multiple_packages_in_one_env(
         env=env,
     )
 
-    package = tmp_pixi_workspace / "bin" / exec_extension("package")
-    package0_1_0 = tmp_pixi_workspace / "bin" / exec_extension("package0.1.0")
-    package0_2_0 = tmp_pixi_workspace / "bin" / exec_extension("package0.2.0")
-    package2 = tmp_pixi_workspace / "bin" / exec_extension("package2")
+    package = tmp_path / "bin" / exec_extension("package")
+    package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
+    package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
+    package2 = tmp_path / "bin" / exec_extension("package2")
     assert package2.is_file()
     assert package.is_file()
     assert package0_1_0.is_file()
     assert not package0_2_0.is_file()
 
     # Replace the version with a "*"
-    manifest = tmp_pixi_workspace.joinpath("manifests", "pixi-global.toml")
+    manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
     manifest.write_text(manifest.read_text().replace("==0.1.0", "*"))
 
     verify_cli_command(
@@ -1735,19 +1766,15 @@ def test_global_update_multiple_packages_in_one_env(
     assert "package" in manifest_content
 
     # Check content of package2 file to be updated
-    bin_file_package2 = (
-        tmp_pixi_workspace / "envs" / "my-packages" / "bin" / bat_extension("package2")
-    )
+    bin_file_package2 = tmp_path / "envs" / "my-packages" / "bin" / bat_extension("package2")
     assert "0.2.0" in bin_file_package2.read_text()
 
 
-def test_pixi_update_cleanup(
-    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_pixi_update_cleanup(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    package0_1_0 = tmp_pixi_workspace / "bin" / exec_extension("package0.1.0")
-    package0_2_0 = tmp_pixi_workspace / "bin" / exec_extension("package0.2.0")
+    package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
+    package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
 
     verify_cli_command(
         [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package==0.1.0"],
@@ -1756,7 +1783,7 @@ def test_pixi_update_cleanup(
     assert package0_1_0.is_file()
     assert not package0_2_0.is_file()
 
-    manifest = tmp_pixi_workspace.joinpath("manifests", "pixi-global.toml")
+    manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
 
     # We change the matchspec to '*'
     # Syncing shouldn't do anything
@@ -1780,12 +1807,12 @@ def test_pixi_update_cleanup(
 
 
 def test_pixi_update_subset_expose(
-    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    package0_1_0 = tmp_pixi_workspace / "bin" / exec_extension("package0.1.0")
-    package0_2_0 = tmp_pixi_workspace / "bin" / exec_extension("package0.2.0")
+    package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
+    package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
 
     verify_cli_command(
         [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package==0.1.0"],
@@ -1794,7 +1821,7 @@ def test_pixi_update_subset_expose(
     assert package0_1_0.is_file()
     assert not package0_2_0.is_file()
 
-    manifest = tmp_pixi_workspace.joinpath("manifests", "pixi-global.toml")
+    manifest = tmp_path.joinpath("manifests", "pixi-global.toml")
 
     # We change the matchspec to '*'
     # So we expect to new binary to not be exposed,
@@ -1822,22 +1849,20 @@ def test_pixi_update_subset_expose(
     assert "exposed" not in parsed_toml["envs"]["package"]
 
 
-def test_auto_self_expose(
-    pixi: Path, tmp_pixi_workspace: Path, non_self_expose_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_auto_self_expose(pixi: Path, tmp_path: Path, non_self_expose_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
 
     # Install jupyter and expose it as 'jupyter'
     verify_cli_command(
         [pixi, "global", "install", "--channel", non_self_expose_channel_1, "jupyter"],
         env=env,
     )
-    jupyter = tmp_pixi_workspace / "bin" / exec_extension("jupyter")
+    jupyter = tmp_path / "bin" / exec_extension("jupyter")
     assert jupyter.is_file()
 
 
-def test_add(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_add(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
 
     # Can't add package to environment that doesn't exist
     verify_cli_command(
@@ -1851,7 +1876,7 @@ def test_add(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None
         [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a"],
         env=env,
     )
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
     assert dummy_a.is_file()
 
     verify_cli_command(
@@ -1860,7 +1885,7 @@ def test_add(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None
         stderr_contains="Added package dummy-b",
     )
     # Make sure it doesn't expose a binary from this package
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
     assert not dummy_b.is_file()
 
     verify_cli_command(
@@ -1878,12 +1903,12 @@ def test_add(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None
         stderr_contains=["Exposed executable dummy-b from environment dummy-a"],
     )
     # Make sure it now exposes the binary
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
     assert dummy_b.is_file()
 
 
-def test_remove_dependency(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
 
     verify_cli_command(
         [
@@ -1903,8 +1928,8 @@ def test_remove_dependency(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1
             "exposes: dummy-a, dummy-aa, dummy-b",
         ],
     )
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
     assert dummy_a.is_file()
     assert dummy_b.is_file()
 
@@ -1958,3 +1983,416 @@ def test_remove_dependency(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1
         env=env,
         stderr_contains="Environment dummy-a doesn't exist",
     )
+
+
+def test_update_env_not_installed(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    [envs.test.dependencies]
+    dummy-a = "*"
+    [envs.test.exposed]
+    dummy-a = "bin/dummy-a"
+    """
+    manifest.write_text(original_toml)
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+
+    # If the environment isn't installed already,
+    # `pixi global update` will install it first
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    # The tables in the manifest have been preserved
+    assert manifest.read_text() == original_toml
+
+
+@pytest.mark.parametrize(
+    ("delete_exposed_on_second", "delete_env_on_second"),
+    [(True, False), (False, True), (False, False)],
+)
+def test_update_custom_exposed_twice(
+    pixi: Path,
+    tmp_path: Path,
+    dummy_channel_1: str,
+    delete_exposed_on_second: bool,
+    delete_env_on_second: bool,
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    [envs.test.dependencies]
+    dummy-a = "*"
+    [envs.test.exposed]
+    dummy-a = "bin/dummy-a"
+    """
+    manifest.write_text(original_toml)
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+
+    # Test first update
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert manifest.read_text() == original_toml
+
+    # Test second update
+    if delete_exposed_on_second:
+        dummy_a.unlink()
+    if delete_env_on_second:
+        shutil.rmtree(tmp_path / "envs")
+
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert manifest.read_text() == original_toml
+
+
+def test_update_remove_old_env(
+    pixi: Path,
+    tmp_path: Path,
+    dummy_channel_1: str,
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    [envs.test.dependencies]
+    dummy-a = "*"
+    [envs.test.exposed]
+    dummy-a = "bin/dummy-a"
+    """
+    manifest.write_text(original_toml)
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+
+    # Test first update
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert manifest.read_text() == original_toml
+
+    # Test remove env from manifest and then update
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    """
+    manifest.write_text(original_toml)
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+    )
+    assert not dummy_a.is_file()
+    assert manifest.read_text() == original_toml
+
+
+def test_tree(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+
+    # Install dummy-a and dummy-b from dummy-channel-1
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-b==0.1.0",
+            "dummy-a==0.1.0",
+        ],
+        env=env,
+    )
+
+    # Verify tree with dummy-b environment
+    verify_cli_command(
+        [pixi, "global", "tree", "--environment", "dummy-b"],
+        env=env,
+        stdout_contains=["dummy-b", "0.1.0"],
+    )
+
+    # Verify tree with dummy-a environment
+    verify_cli_command(
+        [pixi, "global", "tree", "--environment", "dummy-a"],
+        env=env,
+        stdout_contains=["dummy-a", "0.1.0"],
+    )
+
+
+def test_tree_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+
+    # Install dummy-a and dummy-b from dummy-channel-1
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            "dummy",
+            "dummy-b==0.1.0",
+            "dummy-a==0.1.0",
+        ],
+        env=env,
+    )
+
+    # Verify tree with regex filter for dummy environment
+    verify_cli_command(
+        [pixi, "global", "tree", "--environment", "dummy", "dummy-a"],
+        env=env,
+        stdout_contains=["dummy-a", "0.1.0"],
+        stdout_excludes=["dummy-b"],
+    )
+
+    # Verify tree with regex filter for dummy-b
+    verify_cli_command(
+        [pixi, "global", "tree", "--environment", "dummy", "dummy-b"],
+        env=env,
+        stdout_contains=["dummy-b", "0.1.0"],
+        stdout_excludes=["dummy-a"],
+    )
+
+
+def test_tree_nonexistent_environment(pixi: Path, tmp_path: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    # Try to show tree for non-existent environment
+    verify_cli_command(
+        [pixi, "global", "tree", "--environment", "nonexistent"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="Environment not found",
+    )
+
+
+def test_tree_invert(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+
+    # Install dummy-a which has dummy-c as a dependency
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-a==0.1.0",
+        ],
+        env=env,
+    )
+
+    # Verify inverted tree showing what depends on dummy-c
+    verify_cli_command(
+        [pixi, "global", "tree", "--environment", "dummy-a", "--invert", "dummy-c"],
+        env=env,
+        stdout_contains=["dummy-c", "dummy-a 0.1.0"],
+    )
+
+
+class TestCondaFile:
+    @pytest.mark.parametrize("path_arg", [True, False])
+    def test_install_conda_file(
+        self, pixi: Path, tmp_path: Path, shortcuts_channel_1: str, path_arg: bool
+    ) -> None:
+        """Test directly installing a `.conda` file with `pixi global`"""
+        env = {"PIXI_HOME": str(tmp_path), "PIXI_CACHE_DIR": str(tmp_path / "foo")}
+        cwd = tmp_path
+
+        conda_file = tmp_path / "pixi-editor-1.0.0-h4616a5c_0.conda"
+        shutil.copyfile(
+            Path.from_uri(shortcuts_channel_1) / "noarch" / "pixi-editor-1.0.0-h4616a5c_0.conda",
+            conda_file,
+        )
+
+        def check_install(conda_file_path: Path, cwd: Path):
+            if path_arg:
+                verify_cli_command(
+                    [pixi, "global", "install", "--path", conda_file_path], env=env, cwd=cwd
+                )
+            else:
+                verify_cli_command(
+                    [pixi, "global", "install", conda_file_path],
+                    env=env,
+                    expected_exit_code=ExitCode.FAILURE,
+                    stderr_contains="please pass `--path`",
+                    cwd=cwd,
+                )
+
+        # check absolute path
+        check_install(conda_file, cwd)
+
+        # check relative path in same dir
+        cwd = conda_file.parent
+        relative_conda_file = conda_file.relative_to(cwd, walk_up=True)
+        check_install(relative_conda_file, cwd)
+
+        # check relative path in subdir
+        cwd = conda_file.parent.parent
+        relative_conda_file = conda_file.relative_to(cwd, walk_up=True)
+        check_install(relative_conda_file, cwd)
+
+        # check relative path in a 'cousin' relative directory
+        cwd = tmp_path
+        relative_conda_file = conda_file.relative_to(cwd, walk_up=True)
+        check_install(relative_conda_file, cwd)
+
+    def test_update_sync_conda_file(
+        self, pixi: Path, tmp_path: Path, shortcuts_channel_1: str
+    ) -> None:
+        """Test that `pixi global {update, sync}` work and use the existing file."""
+        env = {"PIXI_HOME": str(tmp_path), "PIXI_CACHE_DIR": str(tmp_path / "foo")}
+        cwd = tmp_path
+
+        package_name = "pixi-editor"
+        conda_file = tmp_path / "pixi-editor-1.0.0-h4616a5c_0.conda"
+        shutil.copyfile(
+            Path.from_uri(shortcuts_channel_1) / "noarch" / "pixi-editor-1.0.0-h4616a5c_0.conda",
+            conda_file,
+        )
+
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "install",
+                "--path",
+                conda_file,
+            ],
+            env=env,
+            cwd=cwd,
+        )
+
+        # update with file still there
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "update",
+                "pixi-editor",
+            ],
+            env=env,
+            cwd=cwd,
+            stderr_contains="Environment pixi-editor was already up-to-date.",
+        )
+
+        # sync with file still there
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "sync",
+            ],
+            env=env,
+            cwd=cwd,
+            stderr_contains="Nothing to do",
+        )
+
+        os.remove(conda_file)
+
+        # update with file gone
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "update",
+                "pixi-editor",
+            ],
+            env=env,
+            cwd=cwd,
+            stderr_contains="Environment pixi-editor was already up-to-date.",
+        )
+
+        # sync with file gone
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "sync",
+            ],
+            env=env,
+            cwd=cwd,
+            stderr_contains="Nothing to do",
+        )
+
+        # remove the environment
+        # XXX: should this fail instead?
+        shutil.rmtree(tmp_path / "envs" / package_name)
+
+        # update with environment removed
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "update",
+                "pixi-editor",
+            ],
+            env=env,
+            cwd=cwd,
+        )
+
+        # sync with environment removed
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "sync",
+            ],
+            env=env,
+            cwd=cwd,
+        )
+
+
+def test_install_nonexistent_package_no_empty_dir(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    """Test that installing a non-existent package doesn't leave an empty directory."""
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    envs_dir = tmp_path / "envs"
+
+    # Try to install a package that doesn't exist
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "this-package-does-not-exist",
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="No candidates were found",
+    )
+
+    # Verify no empty directory was left behind
+    # The envs directory should either not exist or not contain the failed environment
+    if envs_dir.exists():
+        assert not (envs_dir / "this-package-does-not-exist").exists(), (
+            "Empty directory was left behind for failed package installation"
+        )

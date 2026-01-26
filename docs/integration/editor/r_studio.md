@@ -1,5 +1,3 @@
-# Developing R scripts in RStudio
-
 You can use `pixi` to manage your R dependencies. The conda-forge channel contains a wide range of R packages that can be installed using `pixi`.
 
 ## Installing R packages
