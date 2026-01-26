@@ -31,6 +31,9 @@ set = "export VAR=hello && echo $VAR"
 copy = "cp pixi.toml pixi_backup.toml"
 clean = "rm pixi_backup.toml"
 move = "mv pixi.toml backup.toml"
+
+# Setting a default environment for the task
+test = { cmd = "pytest", default-environment = "test" }
 ```
 
 ## Depends on
@@ -180,6 +183,29 @@ pixi.toml
 ```toml
 [tasks]
 bar = { cmd = "python bar.py", cwd = "scripts" }
+```
+
+## Default environment
+
+You can set the default Pixi [environment](../../tutorials/multi_environment/#adding-an-environment) used by a task using the `default-environment` field:
+
+pixi.toml
+
+```toml
+[feature.test.dependencies]
+pytest = "*"
+
+[environments]
+test = ["test"]  # An environment covering the "test" feature
+
+[tasks]
+test = { cmd = "pytest", default-environment = "test" }
+```
+
+The default environment can be overridden as usual with the `--environment` argument:
+
+```shell
+pixi run -e other_environment test
 ```
 
 ## Task Arguments

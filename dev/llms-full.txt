@@ -3406,6 +3406,9 @@ set = "export VAR=hello && echo $VAR"
 copy = "cp pixi.toml pixi_backup.toml"
 clean = "rm pixi_backup.toml"
 move = "mv pixi.toml backup.toml"
+
+# Setting a default environment for the task
+test = { cmd = "pytest", default-environment = "test" }
 ```
 
 ## Depends on
@@ -3555,6 +3558,29 @@ pixi.toml
 ```toml
 [tasks]
 bar = { cmd = "python bar.py", cwd = "scripts" }
+```
+
+## Default environment
+
+You can set the default Pixi [environment](../../tutorials/multi_environment/#adding-an-environment) used by a task using the `default-environment` field:
+
+pixi.toml
+
+```toml
+[feature.test.dependencies]
+pytest = "*"
+
+[environments]
+test = ["test"]  # An environment covering the "test" feature
+
+[tasks]
+test = { cmd = "pytest", default-environment = "test" }
+```
+
+The default environment can be overridden as usual with the `--environment` argument:
+
+```shell
+pixi run -e other_environment test
 ```
 
 ## Task Arguments
@@ -12902,14 +12928,15 @@ Tasks are a way to automate certain custom commands in your workspace. For examp
 ```toml
 [tasks]
 simple = "echo This is a simple task"
-cmd = { cmd="echo Same as a simple task but now more verbose"}
-depending = { cmd="echo run after simple", depends-on="simple"}
-alias = { depends-on=["depending"]}
-download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
-build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
-run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
+cmd = { cmd="echo Same as a simple task but now more verbose" }
+depending = { cmd="echo run after simple", depends-on="simple" }
+alias = { depends-on=["depending"] }
+download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"] }
+build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"] }
+run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }} # Set an environment variable
 format = { cmd="black $INIT_CWD" } # runs black where you run pixi run format
-clean-env = { cmd = "python isolated.py", clean-env = true} # Only on Unix!
+clean-env = { cmd="python isolated.py", clean-env=true } # Only on Unix!
+test = { cmd="pytest", default-environment="test" }  # Set a default pixi environment
 ```
 
 You can modify this table using [`pixi task`](../cli/pixi/task/).

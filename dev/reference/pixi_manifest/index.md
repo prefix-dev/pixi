@@ -378,14 +378,15 @@ Tasks are a way to automate certain custom commands in your workspace. For examp
 ```toml
 [tasks]
 simple = "echo This is a simple task"
-cmd = { cmd="echo Same as a simple task but now more verbose"}
-depending = { cmd="echo run after simple", depends-on="simple"}
-alias = { depends-on=["depending"]}
-download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
-build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
-run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
+cmd = { cmd="echo Same as a simple task but now more verbose" }
+depending = { cmd="echo run after simple", depends-on="simple" }
+alias = { depends-on=["depending"] }
+download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"] }
+build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"] }
+run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }} # Set an environment variable
 format = { cmd="black $INIT_CWD" } # runs black where you run pixi run format
-clean-env = { cmd = "python isolated.py", clean-env = true} # Only on Unix!
+clean-env = { cmd="python isolated.py", clean-env=true } # Only on Unix!
+test = { cmd="pytest", default-environment="test" }  # Set a default pixi environment
 ```
 
 You can modify this table using [`pixi task`](../cli/pixi/task/).
