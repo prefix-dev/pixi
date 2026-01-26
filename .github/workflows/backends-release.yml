@@ -88,7 +88,7 @@ jobs:
         run: |
           pixi run -e backends-release build-recipe-ci $RUNNER_TEMP pixi-build-backends/recipe/${{ matrix.bins.bin }}/recipe.yaml ${{ matrix.bins.target }}
 
-      - uses: actions/attest@daf44fb950173508f38bd2406030372c1d1162b1 # v3.0.0
+      - uses: actions/attest@7667f588f2f73a90cea6c7ac70e78266c4f76616 # v3.1.0
         id: attest
         with:
           subject-path: "${{ runner.temp }}/**/*.conda"
