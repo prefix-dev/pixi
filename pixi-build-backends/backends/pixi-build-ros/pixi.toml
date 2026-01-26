@@ -22,7 +22,7 @@ scripts = ["../../../scripts/activate.sh"]
 
 [dependencies]
 py-pixi-build-backend = "*"
-py_rattler = ">=0.20,<0.21"
+py_rattler = ">=0.21,<0.22"
 pydantic = ">=2.8.2,<3"
 
 [pypi-dependencies]
@@ -70,7 +70,7 @@ mypy = ">=1.18.2,<2"
 pixi-pycharm = ">=0.0.8,<0.1"
 pytest = "*"
 rattler-build = ">=0.55.0,<0.56"
-rattler-index = ">=0.25.2,<0.26"
+rattler-index = ">=0.27.6,<0.28"
 syrupy = ">=5,<6"
 types-pyyaml = "*"
 # You can skip this as it's a long build, uncomment this when developing only in this package
