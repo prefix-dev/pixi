@@ -26,8 +26,8 @@ jobs:
     timeout-minutes: 40
     permissions:
       id-token: write
-      attestations: write
       contents: read
+      attestations: write
     env:
       REPO_NAME: "prefix-dev/pixi"
       SCCACHE_GHA_ENABLED: "true"
@@ -80,8 +80,10 @@ jobs:
         shell: bash
         run: pixi run -e backends-release sccache --stop-server
 
+      # Skip attestations on PRs from forks since they can't get an ID token
       - uses: actions/attest@daf44fb950173508f38bd2406030372c1d1162b1 # v3.0.0
         id: attest
+        if: github.event.pull_request.head.repo.full_name == github.repository
         with:
           subject-path: "${{ runner.temp }}/**/*.conda"
           predicate-type: "https://schemas.conda.org/attestations-publish-1.schema.json"
@@ -89,6 +91,7 @@ jobs:
 
       - name: Generate attestations for conda packages
         shell: bash
+        if: github.event.pull_request.head.repo.full_name == github.repository
         run: pixi run -e backends-release generate-attestations "${{ runner.temp }}" "${{ steps.attest.outputs.bundle-path }}"
 
       - name: Upload build artifacts
