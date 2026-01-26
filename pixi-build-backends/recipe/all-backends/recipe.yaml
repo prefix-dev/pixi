@@ -365,7 +365,7 @@ outputs:
         - win
         - osx
       script:
-        - pip install pixi-build-backends/backends/pixi-build-ros -vv --no-build-isolation
+        - ${{ PYTHON }} -m pip install pixi-build-backends/backends/pixi-build-ros -vv --no-build-isolation
       noarch: python
       python:
         entry_points:
