@@ -326,7 +326,11 @@ pub async fn sanity_check_workspace(project: &Workspace) -> miette::Result<()> {
         );
     }
 
-    ensure_pixi_directory_and_gitignore(project.pixi_dir().as_path()).await?;
+    ensure_pixi_directory_and_gitignore(
+        project.pixi_dir().as_path(),
+        project.environments_dir().as_path(),
+    )
+    .await?;
 
     Ok(())
 }
@@ -414,17 +418,19 @@ async fn best_effort_write_file_if_missing(
     Ok(())
 }
 
-/// Ensure that the `.pixi/` directory exists and contains a `.gitignore`, `.condapackageignore`,
-/// and `CACHEDIR.TAG` file.
+/// Ensure that the `.pixi/` directory exists and contains a `.gitignore` and `.condapackageignore`
+/// file. Also ensures that the environments directory contains a `CACHEDIR.TAG` file.
 /// If the directory doesn't exist, create it.
 /// If the `.gitignore` file doesn't exist, create it with a '*' pattern.
 /// Also creates a `.condapackageignore` file to exclude the `.pixi` directory
 /// from builds.
-/// If the `CACHEDIR.TAG` file doesn't exist, create it with the appropriate content.
-async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<()> {
+async fn ensure_pixi_directory_and_gitignore(
+    pixi_dir: &Path,
+    environments_dir: &Path,
+) -> miette::Result<()> {
     let gitignore_path = pixi_dir.join(".gitignore");
     let condapackageignore_path = pixi_dir.join(".condapackageignore");
-    let cachedir_tag_path = pixi_dir.join("CACHEDIR.TAG");
+    let cachedir_tag_path = environments_dir.join("CACHEDIR.TAG");
 
     // Create the `.pixi/` directory if it doesn't exist
     if !pixi_dir.exists() {
@@ -434,6 +440,17 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
             .wrap_err(format!(
                 "Failed to create .pixi/ directory at {}",
                 pixi_dir.display()
+            ))?;
+    }
+
+    // Create the environments directory if it doesn't exist
+    if !environments_dir.exists() {
+        tokio::fs::create_dir_all(&environments_dir)
+            .await
+            .into_diagnostic()
+            .wrap_err(format!(
+                "Failed to create environments directory at {}",
+                environments_dir.display()
             ))?;
     }
 
