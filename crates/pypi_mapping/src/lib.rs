@@ -247,7 +247,7 @@ impl MappingClient {
             let reporter = reporter.clone();
             let custom_mappings = &custom_mappings;
             let cache_metrics = &metrics;
-            let file_name = record.file_name.clone();
+            let file_name = record.identifier.to_file_name();
             let derive_purls_future = async move {
                 if let Some(reporter) = reporter.as_deref() {
                     reporter.download_started(record, total_records);

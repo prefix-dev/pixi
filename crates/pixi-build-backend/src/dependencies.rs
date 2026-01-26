@@ -200,6 +200,7 @@ fn can_apply_variant(spec: &MatchSpec) -> Option<&PackageName> {
             license: None,
             url: None,
             condition: None,
+            track_features: None,
         } => name.as_exact(),
         _ => None,
     }

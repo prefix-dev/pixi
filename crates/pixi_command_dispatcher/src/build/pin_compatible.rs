@@ -362,6 +362,7 @@ mod tests {
 
     // Helper to create a test PixiRecord
     fn create_test_record(name: &str, version: &str, build: &str) -> PixiRecord {
+        use rattler_conda_types::package::DistArchiveIdentifier;
         use rattler_conda_types::{NoArchType, PackageRecord, Platform, RepoDataRecord};
         use std::collections::BTreeMap;
         use url::Url;
@@ -395,7 +396,11 @@ mod tests {
 
         PixiRecord::Binary(RepoDataRecord {
             package_record,
-            file_name: format!("{}-{}-{}.conda", name, version, build),
+            identifier: DistArchiveIdentifier::try_from_filename(&format!(
+                "{}-{}-{}.conda",
+                name, version, build
+            ))
+            .expect("valid conda filename"),
             url: Url::parse("https://conda.anaconda.org/conda-forge/linux-64/test.conda").unwrap(),
             channel: Some("conda-forge".to_string()),
         })

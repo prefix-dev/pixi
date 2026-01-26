@@ -39,7 +39,9 @@ use rattler_build::{
     types::{PackageIdentifier, PackagingSettings},
     variant_config::{ParseErrors, VariantConfig},
 };
-use rattler_conda_types::{Platform, compression_level::CompressionLevel, package::ArchiveType};
+use rattler_conda_types::{
+    Platform, compression_level::CompressionLevel, package::CondaArchiveType,
+};
 use tracing::warn;
 pub struct RattlerBuildBackendInstantiator {
     logging_output_handler: LoggingOutputHandler,
@@ -366,7 +368,7 @@ impl Protocol for RattlerBuildBackend {
                 timestamp: chrono::Utc::now(),
                 subpackages: BTreeMap::new(),
                 packaging_settings: PackagingSettings::from_args(
-                    ArchiveType::Conda,
+                    CondaArchiveType::Conda,
                     CompressionLevel::default(),
                 ),
                 store_recipe: false,
