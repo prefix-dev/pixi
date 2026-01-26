@@ -11,7 +11,7 @@ dependencies = [
   #  "py-pixi-build-backend",
 ]
 name = "pixi-build-ros"
-version = "0.3.3"
+version = "0.3.4"
 
 [build-system]
 build-backend = "hatchling.build"
