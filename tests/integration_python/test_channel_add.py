@@ -6,6 +6,8 @@ from .common import verify_cli_command
 def test_channel_add_doesnt_update_packages(
     pixi: Path,
     tmp_pixi_workspace: Path,
+    multiple_versions_channel_1: str,
+    dummy_channel_1: str,
 ) -> None:
     """Test that adding channels does not cause the lockfile to be fully invalidated and packages to be updated.
 
@@ -15,14 +17,14 @@ def test_channel_add_doesnt_update_packages(
     lockfile does not need to be completely regenerated.
     """
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    toml = """
+    toml = f"""
     [workspace]
     name = "test"
-    channels = ["conda-forge"]
+    channels = ["{multiple_versions_channel_1}"]
     platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 
     [dependencies]
-    crane = "==0.20.0"
+    package = "==0.1.0"
     """
     manifest.write_text(toml)
 
@@ -32,16 +34,16 @@ def test_channel_add_doesnt_update_packages(
     )
 
     # Update the dependency to allow updates to be possible
-    toml = toml.replace("==0.20.0", "*")
+    toml = toml.replace("==0.1.0", "*")
     manifest.write_text(toml)
 
     # Add another channel
     verify_cli_command(
-        [pixi, "workspace", "channel", "add", "bioconda", "--manifest-path", manifest],
+        [pixi, "workspace", "channel", "add", dummy_channel_1, "--manifest-path", manifest],
     )
 
-    # Verify that crane has not been updated
+    # Verify that the package has not been updated
     verify_cli_command(
-        [pixi, "list", "crane", "--manifest-path", manifest],
-        stdout_contains=["crane", "0.20.0"],
+        [pixi, "list", "package", "--manifest-path", manifest],
+        stdout_contains=["package", "0.1.0"],
     )
