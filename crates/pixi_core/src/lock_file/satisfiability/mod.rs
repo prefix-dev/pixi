@@ -63,6 +63,9 @@ pub enum EnvironmentUnsat {
     #[error("the channels in the lock-file do not match the environments channels")]
     ChannelsMismatch,
 
+    #[error("channels were extended with additional lower-priority channels")]
+    ChannelsExtended,
+
     #[error("platform(s) '{platforms}' present in the lock-file but not in the environment", platforms = .0.iter().map(|p| p.as_str()).join(", ")
     )]
     AdditionalPlatformsInLockFile(HashSet<Platform>),
@@ -517,7 +520,18 @@ pub fn verify_environment_satisfiability(
                 .into_base_url(&config)
         })
         .try_collect()?;
-    if !channels.eq(&locked_channels) {
+
+    // Check if channels match or were only extended (appended).
+    // If locked_channels is a prefix of channels, only lower-priority channels were added,
+    // which doesn't affect existing package selections due to channel priority semantics.
+    if channels.starts_with(&locked_channels) {
+        if channels.len() > locked_channels.len() {
+            // Channels were extended - lock file needs update but packages are still valid
+            return Err(EnvironmentUnsat::ChannelsExtended);
+        }
+        // Exact match - channels are identical, no error
+    } else {
+        // Channels were removed, reordered, or prepended - need full re-solve
         return Err(EnvironmentUnsat::ChannelsMismatch);
     }
 
