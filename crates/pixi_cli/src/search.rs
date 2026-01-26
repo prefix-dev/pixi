@@ -248,7 +248,7 @@ fn print_package_info<W: Write>(
         out,
         "{:19} {:19}",
         console::style("File Name"),
-        console::style(package.file_name)
+        console::style(package.identifier.to_file_name())
     )?;
 
     writeln!(

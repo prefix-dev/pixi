@@ -39,7 +39,7 @@ jobs:
     env:
       TARGET_RELEASE: target/pixi/release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -48,7 +48,7 @@ jobs:
           manifest-path: pixi-build-backends/backends/pixi-build-ros/pixi.toml
 
       - name: Download pixi binary
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: ${{ matrix.artifact }}-${{ inputs.sha }}
           path: ${{ env.TARGET_RELEASE }}

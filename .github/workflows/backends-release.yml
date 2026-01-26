@@ -48,7 +48,7 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           persist-credentials: false
       - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
@@ -80,8 +80,7 @@ jobs:
         shell: bash
         run: pixi run -e backends-release sccache --stop-server
 
-      # Skip attestations on PRs from forks since they can't get an ID token
-      - uses: actions/attest@daf44fb950173508f38bd2406030372c1d1162b1 # v3.0.0
+      - uses: actions/attest@7667f588f2f73a90cea6c7ac70e78266c4f76616 # v3.1.0
         id: attest
         if: github.event.pull_request.head.repo.full_name == github.repository
         with:
@@ -125,11 +124,11 @@ jobs:
       attestations: write
       contents: read
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           persist-credentials: false
       - name: Download all conda packages
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: conda-packages-*
           path: conda-packages

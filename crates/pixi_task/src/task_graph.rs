@@ -43,6 +43,16 @@ fn join_args_with_single_quotes<'a>(args: impl IntoIterator<Item = &'a str>) -> 
         .join(" ")
 }
 
+/// Controls whether to prefer resolving commands as executables over Pixi tasks
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PreferExecutable {
+    /// Try to resolve as a Pixi task first, fall back to executable if no task found
+    #[default]
+    TaskFirst,
+    /// Always treat as an executable, skip task resolution
+    Always,
+}
+
 /// A task ID is a unique identifier for a [`TaskNode`] in a [`TaskGraph`].
 ///
 /// To get a task from a [`TaskGraph`], you can use the [`TaskId`] as an index.
@@ -189,11 +199,18 @@ impl<'p> TaskGraph<'p> {
     }
 
     /// Constructs a new [`TaskGraph`] from a list of command line arguments.
+    ///
+    /// When `prefer_executable` is [`PreferExecutable::Always`], the first
+    /// argument will not be resolved as a Pixi task even if a task with that
+    /// name exists. Instead, the arguments are treated as a custom command to
+    /// execute within the environment, allowing running executables that
+    /// collide with task names.
     pub fn from_cmd_args<D: TaskDisambiguation<'p>>(
         project: &'p Workspace,
         search_envs: &SearchEnvironments<'p, D>,
         args: Vec<String>,
         skip_deps: bool,
+        prefer_executable: PreferExecutable,
     ) -> Result<Self, TaskGraphError> {
         // Split 'args' into arguments if it's a single string, supporting commands
         // like: `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or
@@ -208,7 +225,9 @@ impl<'p> TaskGraph<'p> {
             (args, true)
         };
 
-        if let Some(name) = args.first() {
+        if prefer_executable == PreferExecutable::TaskFirst
+            && let Some(name) = args.first()
+        {
             match search_envs.find_task(TaskName::from(name.clone()), FindTaskSource::CmdArgs, None)
             {
                 Err(FindTaskError::MissingTask(_)) => {}
@@ -613,7 +632,7 @@ mod test {
 
     use crate::{
         task_environment::SearchEnvironments,
-        task_graph::{TaskGraph, join_args_with_single_quotes},
+        task_graph::{PreferExecutable, TaskGraph, join_args_with_single_quotes},
     };
 
     fn commands_in_order(
@@ -622,6 +641,7 @@ mod test {
         platform: Option<Platform>,
         environment_name: Option<EnvironmentName>,
         skip_deps: bool,
+        prefer_executable: PreferExecutable,
     ) -> Vec<String> {
         let project = Workspace::from_str(Path::new("pixi.toml"), project_str).unwrap();
 
@@ -633,6 +653,7 @@ mod test {
             &search_envs,
             run_args.iter().map(|arg| arg.to_string()).collect(),
             skip_deps,
+            prefer_executable,
         )
         .unwrap();
 
@@ -670,7 +691,8 @@ mod test {
                 &["top", "--test"],
                 None,
                 None,
-                false
+                false,
+                PreferExecutable::TaskFirst,
             ),
             vec!["echo root", "echo task1", "echo task2", "echo top '--test'"]
         );
@@ -694,7 +716,8 @@ mod test {
                 &["top"],
                 None,
                 None,
-                false
+                false,
+                PreferExecutable::TaskFirst,
             ),
             vec!["echo root", "echo task1", "echo task2", "echo top"]
         );
@@ -720,7 +743,8 @@ mod test {
                 &["top"],
                 Some(Platform::Linux64),
                 None,
-                false
+                false,
+                PreferExecutable::TaskFirst,
             ),
             vec!["echo linux", "echo task1", "echo task2", "echo top",]
         );
@@ -739,7 +763,8 @@ mod test {
                 &["echo bla"],
                 None,
                 None,
-                false
+                false,
+                PreferExecutable::TaskFirst,
             ),
             vec![r#"echo bla"#]
         );
@@ -764,7 +789,8 @@ mod test {
                 &["build"],
                 None,
                 None,
-                false
+                false,
+                PreferExecutable::TaskFirst,
             ),
             vec![r#"echo build"#]
         );
@@ -792,7 +818,8 @@ mod test {
                 &["start"],
                 None,
                 None,
-                false
+                false,
+                PreferExecutable::TaskFirst,
             ),
             vec![r#"hello world"#]
         );
@@ -824,7 +851,8 @@ mod test {
                 &["start"],
                 None,
                 Some(EnvironmentName::Named("cuda".to_string())),
-                false
+                false,
+                PreferExecutable::TaskFirst,
             ),
             vec![r#"python train.py --cuda"#, r#"python test.py --cuda"#]
         );
@@ -854,7 +882,8 @@ mod test {
                 &["foobar"],
                 None,
                 None,
-                false
+                false,
+                PreferExecutable::TaskFirst,
             ),
             vec![r#"echo foo"#, r#"echo bar"#]
         );
@@ -886,6 +915,7 @@ mod test {
             None,
             None,
             false,
+            PreferExecutable::TaskFirst,
         );
     }
 
@@ -902,11 +932,25 @@ mod test {
         bar = { cmd = "echo bar", depends-on = ["foo"] }
     "#;
         assert_eq!(
-            commands_in_order(project, &["bar"], None, None, true),
+            commands_in_order(
+                project,
+                &["bar"],
+                None,
+                None,
+                true,
+                PreferExecutable::TaskFirst
+            ),
             vec![r#"echo bar"#]
         );
         assert_eq!(
-            commands_in_order(project, &["bar"], None, None, false),
+            commands_in_order(
+                project,
+                &["bar"],
+                None,
+                None,
+                false,
+                PreferExecutable::TaskFirst
+            ),
             vec!["echo foo", "echo bar"]
         );
     }
@@ -930,5 +974,39 @@ mod test {
         let quote_args = ["echo", "it's"];
         let quote_result = join_args_with_single_quotes(quote_args.iter().copied());
         assert_eq!(quote_result, r#"'echo' 'it'"'"'s'"#);
+    }
+
+    #[test]
+    fn test_prefer_executable_always() {
+        let project = r#"
+        [project]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks]
+        foo = "echo from-task"
+        "#;
+
+        let project =
+            Workspace::from_str(Path::new("pixi.toml"), project).expect("valid workspace");
+
+        let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
+
+        let graph = TaskGraph::from_cmd_args(
+            &project,
+            &search_envs,
+            vec!["foo".to_string()],
+            false,
+            PreferExecutable::Always,
+        )
+        .expect("graph should be created");
+
+        // When PreferExecutable::Always is used, we should not resolve the command
+        // as a task, even if a task with that name exists.
+        let order = graph.topological_order();
+        assert_eq!(order.len(), 1);
+        let task = &graph[order[0]];
+        assert!(task.name.is_none());
     }
 }

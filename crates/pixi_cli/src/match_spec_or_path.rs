@@ -6,7 +6,9 @@ use std::{
 
 use dunce::canonicalize;
 use pixi_spec::PathSpec;
-use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, package::ArchiveIdentifier};
+use rattler_conda_types::{
+    MatchSpec, PackageName, ParseStrictness, package::CondaArchiveIdentifier,
+};
 
 /// Represents either a regular conda MatchSpec or a filesystem path to a conda artifact.
 #[derive(Debug, Clone)]
@@ -67,10 +69,10 @@ impl FromStr for MatchSpecOrPath {
         // Check if this is a URL pointing to a conda package
         // Rattler's MatchSpec parser doesn't recognize URLs with schemes, so we handle them here
         if let Ok(url) = url::Url::parse(value)
-            && let Some(archive) = ArchiveIdentifier::try_from_url(&url)
+            && let Some(archive) = CondaArchiveIdentifier::try_from_url(&url)
         {
             // This is a URL to a conda package
-            let name = PackageName::try_from(archive.name)
+            let name = PackageName::try_from(archive.identifier.name)
                 .map_err(|e| format!("invalid package name: {e}"))?;
 
             return Ok(Self::MatchSpec(Box::new(MatchSpec {
@@ -157,11 +159,11 @@ fn path_spec_to_match_spec(path_spec: PathSpec) -> Result<MatchSpec, String> {
         .map_err(|_| format!("failed to convert '{}' into a file:// url", path.display()))?;
 
     // Extract package name from the archive
-    let archive = ArchiveIdentifier::try_from_url(&url)
+    let archive = CondaArchiveIdentifier::try_from_url(&url)
         .ok_or_else(|| format!("failed to parse package archive from '{url}'"))?;
 
-    let name =
-        PackageName::try_from(archive.name).map_err(|e| format!("invalid package name: {e}"))?;
+    let name = PackageName::try_from(archive.identifier.name)
+        .map_err(|e| format!("invalid package name: {e}"))?;
 
     Ok(MatchSpec {
         name: Some(name.into()),
