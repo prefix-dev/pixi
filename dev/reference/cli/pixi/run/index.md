@@ -18,6 +18,7 @@ pixi run [OPTIONS] [TASK]...
 
 ## Options
 
+- [`--executable (-x)`](#arg---executable) : Execute the command as an executable without resolving Pixi tasks
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to run the task in
 - [`--clean-env`](#arg---clean-env) : Use a clean environment to run the task
 - [`--skip-deps`](#arg---skip-deps) : Don't run the dependencies of the task ('depends-on' field in the task definition)
