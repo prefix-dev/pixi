@@ -46,6 +46,7 @@ pub const CACHED_PACKAGES: &str = "pkgs";
 pub const CACHED_BUILD_BACKEND_METADATA: &str = "metadata";
 pub const CACHED_SOURCE_METADATA: &str = "source_metadata";
 pub const CACHED_SOURCE_BUILDS: &str = "pkgs";
+pub const DEFAULT_GLOBAL_WORKSPACE_DIR: &str = "workspaces";
 
 /// The directory relative to the .pixi folder that stores build related caches.
 pub const WORKSPACE_CACHE_DIR: &str = "build";
