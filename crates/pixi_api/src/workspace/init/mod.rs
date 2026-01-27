@@ -28,9 +28,21 @@ pub use options::{GitAttributes, InitOptions, ManifestFormat};
 
 pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::Result<Workspace> {
     let env = Environment::new();
+
+    // Determine the directory to use: if a name is provided, use global workspace directory;
+    // otherwise use the provided path.
+    let dir = if let Some(name) = &options.name {
+        pixi_home()
+            .ok_or_else(|| miette::miette!("Could not determine PIXI_HOME"))?
+            .join(consts::DEFAULT_GLOBAL_WORKSPACE)
+            .join(name)
+    } else {
+        options.path.clone()
+    };
+
     // Fail silently if the directory already exists or cannot be created.
-    fs_err::create_dir_all(&options.path).into_diagnostic()?;
-    let dir = dunce::canonicalize(options.path).into_diagnostic()?;
+    fs_err::create_dir_all(&dir).into_diagnostic()?;
+    let dir = dunce::canonicalize(dir).into_diagnostic()?;
     let pixi_manifest_path = dir.join(consts::WORKSPACE_MANIFEST);
     let pyproject_manifest_path = dir.join(consts::PYPROJECT_MANIFEST);
     let mojoproject_manifest_path = dir.join(consts::MOJOPROJECT_MANIFEST);
@@ -285,28 +297,6 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
             );
             save_manifest_file(interface, &path, rv).await?;
             Workspace::from_path(&path)?
-        }
-    };
-
-    // add workspace to global registry if a name is provided
-    if let Some(name) = &options.name {
-        let mut registry_config = Config::load_global();
-        let mut workspaces = registry_config.named_workspaces.clone();
-        if workspaces.contains_key(name) {
-            interface
-                .warning(&format!(
-                    "Workspace with name '{}' is already registered in the global registry. Not registering this environment. Please run `pixi registry add <name> .` with a unique name to register this environment.",
-                    name
-                ))
-                .await;
-        } else {
-            workspaces.insert(name.clone(), workspace.workspace.provenance.path.clone());
-            registry_config.named_workspaces = workspaces;
-            let global_config_path = pixi_config::config_path_global();
-            let write_path = global_config_path
-                .last()
-                .ok_or_else(|| miette::miette!("Could not determine global config path."))?;
-            registry_config.save(write_path)?;
         }
     };
 
