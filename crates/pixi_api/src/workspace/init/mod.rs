@@ -34,7 +34,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
     let dir = if let Some(name) = &options.name {
         pixi_home()
             .ok_or_else(|| miette::miette!("Could not determine PIXI_HOME"))?
-            .join(consts::DEFAULT_GLOBAL_WORKSPACE)
+            .join(consts::DEFAULT_GLOBAL_WORKSPACE_DIR)
             .join(name)
     } else {
         options.path.clone()

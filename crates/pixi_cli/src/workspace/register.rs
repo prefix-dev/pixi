@@ -1,10 +1,12 @@
+use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 
 use crate::cli_config::WorkspaceConfig;
 use clap::Parser;
 use miette::IntoDiagnostic;
-use pixi_config::Config;
+use pixi_config::pixi_home;
+use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 
 /// Commands to manage the registry of workspaces. Default command will add a new workspace
@@ -51,9 +53,9 @@ pub enum Command {
     /// Remove a workspace from registry.
     #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
-    /// Prune disassociated workspaces from registry.
-    #[clap(visible_alias = "pr")]
-    Prune(PruneArgs),
+    // Prune disassociated workspaces from registry.
+    // #[clap(visible_alias = "pr")]
+    // Prune(PruneArgs),
 }
 
 pub fn global_config_write_path() -> miette::Result<PathBuf> {
@@ -71,13 +73,32 @@ pub fn global_config_write_path() -> miette::Result<PathBuf> {
     Ok(to)
 }
 
-pub async fn execute(args: Args) -> miette::Result<()> {
-    let mut config = Config::load_global();
-    let to = global_config_write_path()?;
+pub fn get_global_workspaces_map() -> miette::Result<HashMap<String, PathBuf>> {
+    let global_workspaces_dir = pixi_home()
+        .ok_or_else(|| miette::miette!("Could not determine PIXI_HOME"))?
+        .join(consts::DEFAULT_GLOBAL_WORKSPACE_DIR);
 
+    let mut workspaces = HashMap::new();
+
+    if global_workspaces_dir.exists() {
+        for entry in std::fs::read_dir(&global_workspaces_dir).into_diagnostic()? {
+            let entry = entry.into_diagnostic()?;
+            let path = entry.path().join("pixi.toml");
+            if path.is_file() {
+                let space = entry.file_name().into_string().unwrap();
+                let full_path = std::fs::canonicalize(path).into_diagnostic()?;
+                workspaces.insert(space, full_path);
+            }
+        }
+    }
+
+    Ok(workspaces)
+}
+
+pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
         Some(Command::List(args)) => {
-            let workspaces = config.named_workspaces;
+            let workspaces = get_global_workspaces_map()?;
             let out = if args.json {
                 serde_json::to_string_pretty(&workspaces).into_diagnostic()?
             } else {
@@ -93,11 +114,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .into_diagnostic()?;
         }
         Some(Command::Remove(remove_args)) => {
-            let mut workspaces = config.named_workspaces.clone();
-            if workspaces.contains_key(&remove_args.name) {
-                workspaces.remove(&remove_args.name);
-                config.named_workspaces = workspaces;
-                config.save(&to)?;
+            let workspace_dir = pixi_home()
+                .ok_or_else(|| miette::miette!("Could not determine PIXI_HOME"))?
+                .join(consts::DEFAULT_GLOBAL_WORKSPACE_DIR)
+                .join(&remove_args.name);
+
+            if workspace_dir.exists() {
+                std::fs::remove_dir_all(workspace_dir).into_diagnostic()?;
                 eprintln!(
                     "{} Workspace '{}' has been removed from the registry successfully.",
                     console::style(console::Emoji("✔ ", "")).green(),
@@ -109,26 +132,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 );
             }
         }
-        Some(Command::Prune(_)) => {
-            let mut workspaces = config.named_workspaces.clone();
-            workspaces.retain(|key, val| {
-                if val.exists() {
-                    true
-                } else {
-                    eprintln!("{} {}", console::style("removed workspace").green(), key);
-                    false
-                }
-            });
-            config.named_workspaces = workspaces;
-            config.save(&to)?;
-            eprintln!(
-                "{} Workspace registry cleaned",
-                console::style(console::Emoji("✔ ", "")).green(),
-            );
-        }
+        // Some(Command::Prune(_)) => {
+        //     let mut workspaces = config.named_workspaces.clone();
+        //     workspaces.retain(|key, val| {
+        //         if val.exists() {
+        //             true
+        //         } else {
+        //             eprintln!("{} {}", console::style("removed workspace").green(), key);
+        //             false
+        //         }
+        //     });
+        //     config.named_workspaces = workspaces;
+        //     config.save(&to)?;
+        //     eprintln!(
+        //         "{} Workspace registry cleaned",
+        //         console::style(console::Emoji("✔ ", "")).green(),
+        //     );
+        // }
         None => {
-            let mut workspaces = config.named_workspaces.clone();
-
             let workspace = WorkspaceLocator::for_cli()
                 .with_closest_package(false)
                 .with_search_start(args.workspace_config.workspace_locator_start())
@@ -139,16 +160,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .unwrap_or_else(|| workspace.display_name().to_string());
             let target_path = args.path.unwrap_or_else(|| workspace.root().to_path_buf());
 
-            if workspaces.contains_key(&target_name) {
-                return Err(miette::diagnostic!(
-                    "Workspace with name '{}' is already registered.",
-                    target_name,
-                )
-                .into());
-            }
-            workspaces.insert(target_name, target_path);
-            config.named_workspaces = workspaces;
-            config.save(&to)?;
+            let workspace_dir = pixi_home()
+                .ok_or_else(|| miette::miette!("Could not determine PIXI_HOME"))?
+                .join(consts::DEFAULT_GLOBAL_WORKSPACE_DIR)
+                .join(&target_name);
+
+            std::os::unix::fs::symlink(&target_path, &workspace_dir).into_diagnostic()?;
+
             eprintln!(
                 "{} {}",
                 console::style(console::Emoji("✔ ", "")).green(),
