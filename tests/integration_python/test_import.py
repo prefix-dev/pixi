@@ -107,7 +107,7 @@ class TestCondaEnv:
         )
 
         # check that no environments are installed
-        assert not os.path.isdir(tmp_pixi_workspace / ".pixi/envs")
+        assert not os.path.isdir(tmp_pixi_workspace / ".pixi/envs/default")
 
         parsed_manifest = tomllib.loads(manifest_path.read_text())
         assert "python" in parsed_manifest["feature"]["simple-env"]["dependencies"]
