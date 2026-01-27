@@ -3,10 +3,8 @@ use std::io::Write;
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
-use pixi_config::Config;
 use pixi_core::WorkspaceLocator;
 
-use crate::workspace::register::global_config_write_path;
 use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
 
 /// Commands to manage workspace name.
@@ -43,7 +41,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
+    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
 
     match args.command {
         Command::Get => writeln!(std::io::stdout(), "{}", workspace_ctx.name().await)
@@ -53,21 +51,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 }
             })
             .into_diagnostic()?,
-        Command::Set(args) => {
-            let mut config = Config::load_global();
-            let mut workspaces = config.named_workspaces.clone();
-            let current_name = workspace.display_name().to_string();
-
-            workspace_ctx.set_name(&args.name).await?;
-
-            if workspaces.contains_key(&current_name.clone()) {
-                let to = global_config_write_path()?;
-                workspaces.remove(&current_name.clone());
-                workspaces.insert(args.name, workspace.root().to_path_buf());
-                config.named_workspaces = workspaces;
-                config.save(&to)?;
-            }
-        }
+        Command::Set(args) => workspace_ctx.set_name(&args.name).await?,
     }
 
     Ok(())
