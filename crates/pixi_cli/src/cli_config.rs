@@ -275,12 +275,12 @@ pub struct DependencyConfig {
 
     /// The specified dependencies are host dependencies. Conflicts with `build`
     /// and `pypi`
-    #[arg(long, conflicts_with_all = ["build", "pypi"], hide = true)]
+    #[arg(long, conflicts_with_all = ["build", "pypi"])]
     pub host: bool,
 
     /// The specified dependencies are build dependencies. Conflicts with `host`
     /// and `pypi`
-    #[arg(long, conflicts_with_all = ["host", "pypi"], hide = true)]
+    #[arg(long, conflicts_with_all = ["host", "pypi"])]
     pub build: bool,
 
     /// The specified dependencies are pypi dependencies. Conflicts with `host`
