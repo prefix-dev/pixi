@@ -60,11 +60,10 @@ You may want to have more control over the interplay between the manifest, the l
 
 ## Committing your lockfile
 
-Reproducibility is very important in a range of projects (e.g., deploying software services, working on research projects, data analysis). Reproducibility of environments helps with reproducibility of results - it ensures your developers, and deployment machines are all using the same packages.
+Reproducibility is very important in a range of projects (e.g., deploying software services, working on research projects, data analysis).
+Reproducibility of environments helps with reproducibility of results - it ensures your developers, and deployment machines are all using the same packages.
 
-You may be hesitant to commit a "large" file (`pixi.lock` files can reach over 30,000 lines for complex environments), but know that:
-- this file is only a few megabytes at most
-- lock file merges are managed reasonably well by Git 
+You may be hesitant to commit a "large" file (`pixi.lock` files can be thousands of lines for complex environments), but know that the raw size of this file is still relatively small, and that lock file merges are managed reasonably well by Git.
 
 There is, however, a class of projects where you may not want to commit your lock file as there are other considerations at play.
 Namely, this is when developing _libraries_.
