@@ -65,6 +65,8 @@ struct RawPyPiRequirement {
     // Path Only
     pub path: Option<PathBuf>,
     pub editable: Option<bool>,
+    /// If true, only dependencies are resolved, not the package itself.
+    pub r#virtual: Option<bool>,
 
     // Git only
     pub git: Option<Url>,
@@ -131,6 +133,7 @@ impl RawPyPiRequirement {
                 PixiPypiSource::Path {
                     path,
                     editable: self.editable,
+                    r#virtual: self.r#virtual,
                 },
                 self.extras,
                 self.marker,
@@ -192,6 +195,7 @@ impl<'de> toml_span::Deserialize<'de> for RawPyPiRequirement {
             .optional::<TomlFromStr<_>>("path")
             .map(TomlFromStr::into_inner);
         let editable = th.optional("editable");
+        let r#virtual = th.optional("virtual");
 
         let git = th
             .optional::<TomlFromStr<_>>("git")
@@ -224,6 +228,7 @@ impl<'de> toml_span::Deserialize<'de> for RawPyPiRequirement {
             extras,
             path,
             editable,
+            r#virtual,
             git,
             branch,
             tag,
@@ -377,7 +382,11 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                 insert_markers(&mut table, markers);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
-            PixiPypiSource::Path { path, editable } => {
+            PixiPypiSource::Path {
+                path,
+                editable,
+                r#virtual,
+            } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
                 table.insert(
                     "path",
@@ -388,6 +397,12 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                 if editable == &Some(true) {
                     table.insert(
                         "editable",
+                        toml_edit::Value::Boolean(toml_edit::Formatted::new(true)),
+                    );
+                }
+                if r#virtual == &Some(true) {
+                    table.insert(
+                        "virtual",
                         toml_edit::Value::Boolean(toml_edit::Formatted::new(true)),
                     );
                 }
@@ -608,6 +623,7 @@ mod test {
             &PixiPypiSpec::new(PixiPypiSource::Path {
                 path: PathBuf::from("../numpy-test"),
                 editable: None,
+                r#virtual: None,
             }),
         );
     }
@@ -623,6 +639,7 @@ mod test {
             &PixiPypiSpec::new(PixiPypiSource::Path {
                 path: PathBuf::from("../numpy-test"),
                 editable: Some(true),
+                r#virtual: None,
             })
         );
     }
@@ -631,13 +648,43 @@ mod test {
     fn test_deserialize_fail_on_unknown() {
         let input = r#"foo = { borked = "bork"}"#;
         assert_snapshot!(format_parse_error(input, from_toml_str::<TomlIndexMap::<pep508_rs::PackageName, PixiPypiSpec>>(input).unwrap_err()), @r#"
-         × Unexpected keys, expected only 'version', 'extras', 'path', 'editable', 'git', 'branch', 'tag', 'rev', 'url', 'subdirectory', 'index', 'env-markers'
+         × Unexpected keys, expected only 'version', 'extras', 'path', 'editable', 'virtual', 'git', 'branch', 'tag', 'rev', 'url', 'subdirectory', 'index', 'env-markers'
           ╭─[pixi.toml:1:9]
         1 │ foo = { borked = "bork"}
           ·         ───┬──
           ·            ╰── 'borked' was not expected here
           ╰────
         "#);
+    }
+
+    #[test]
+    fn test_deserialize_pypi_from_path_virtual() {
+        let requirement = from_toml_str::<TomlIndexMap<pep508_rs::PackageName, PixiPypiSpec>>(
+            r#"foo = { path = ".", virtual = true }"#,
+        )
+        .unwrap()
+        .into_inner();
+        assert_eq!(
+            requirement.first().unwrap().1,
+            &PixiPypiSpec::new(PixiPypiSource::Path {
+                path: PathBuf::from("."),
+                editable: None,
+                r#virtual: Some(true),
+            })
+        );
+    }
+
+    #[test]
+    fn test_serialize_pypi_with_virtual() {
+        let spec = PixiPypiSpec::new(PixiPypiSource::Path {
+            path: PathBuf::from("./my-package"),
+            editable: None,
+            r#virtual: Some(true),
+        });
+        let value: toml_edit::Value = spec.into();
+        let toml_str = value.to_string();
+        assert!(toml_str.contains("virtual = true"));
+        assert!(toml_str.contains("path = \"./my-package\""));
     }
 
     #[test]

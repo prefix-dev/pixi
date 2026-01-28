@@ -6,7 +6,7 @@ use std::{
 
 use miette::{IntoDiagnostic, Report, WrapErr};
 use pep440_rs::VersionSpecifiers;
-use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
+use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use pyproject_toml::{self, Contact, ResolveError};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
@@ -175,6 +175,9 @@ impl PyProjectManifest {
         let mut groups = resolved.optional_dependencies;
         groups.extend(resolved.dependency_groups);
 
+        // Capture the project name for virtual package detection
+        let project_name = pyproject.project.as_ref().map(|p| p.name.clone());
+
         // Convert the TOML document into a pixi manifest.
         // TODO:  would be nice to add license, license-file, readme, homepage,
         // repository, documentation, regarding the above, the types are a bit
@@ -256,6 +259,47 @@ impl PyProjectManifest {
             }
         }
 
+        // Check if the project should be treated as virtual (has project name but no
+        // self-reference in dependencies). If so, add a virtual path dependency
+        // pointing to the project root.
+        if let Some(ref name) = project_name {
+            // Check if the project should be treated as virtual (has project name but no
+            // self-reference in dependencies)
+            if should_be_virtual(Some(name), |pkg_name| {
+                workspace_manifest
+                    .default_feature()
+                    .targets
+                    .default()
+                    .pypi_dependencies
+                    .as_ref()
+                    .map(|deps| deps.contains_key(pkg_name))
+                    .unwrap_or(false)
+            }) {
+                // Add a virtual path dependency for the project itself
+                let package_name = PypiPackageName::from_str(name).unwrap();
+                let virtual_spec = PixiPypiSpec::new(PixiPypiSource::Path {
+                    path: PathBuf::from("."),
+                    editable: None,
+                    r#virtual: Some(true),
+                });
+
+                let target = workspace_manifest
+                    .default_feature_mut()
+                    .targets
+                    .default_mut();
+                target.add_pypi_dependency(
+                    package_name,
+                    virtual_spec,
+                    InternalDependencyBehavior::Overwrite,
+                );
+
+                tracing::debug!(
+                    "Added implicit virtual dependency for pyproject.toml project '{}'",
+                    name
+                );
+            }
+        }
+
         Ok((workspace_manifest, package_manifest, warnings))
     }
 }
@@ -309,6 +353,36 @@ fn version_or_url_to_spec(
             Ok(VersionSpec::from_str(version_string, Lenient)?.into())
         }
         None => Ok(PixiSpec::default()),
+    }
+}
+
+/// Determines if the pyproject.toml project should be treated as virtual.
+///
+/// Returns `true` if:
+/// 1. There is a `[project]` section with a name
+/// 2. There is NO self-reference in pypi dependencies
+///
+/// When a project is virtual, only its dependencies are resolved and installed,
+/// but the project itself is not built/installed.
+///
+/// The `has_pypi_dep` function is called with the normalized project name to check
+/// if there's already a self-reference in the dependencies.
+pub fn should_be_virtual(
+    project_name: Option<&str>,
+    has_pypi_dep: impl Fn(&PypiPackageName) -> bool,
+) -> bool {
+    if let Some(name) = project_name {
+        // Try to normalize the project name for comparison
+        if let Ok(normalized) = PypiPackageName::from_str(name) {
+            // Check if there's a self-reference in the dependencies
+            !has_pypi_dep(&normalized)
+        } else {
+            // If we can't normalize the name, be conservative and don't treat as virtual
+            false
+        }
+    } else {
+        // No project name means we can't determine if it's virtual
+        false
     }
 }
 
@@ -603,5 +677,116 @@ mod tests {
                 .any(|spec| spec.contains("extras = [\"security\"]")),
             "expected to find the security extra defined on the including extra"
         );
+    }
+
+    #[test]
+    fn test_should_be_virtual() {
+        use std::collections::HashSet;
+
+        // Test 1: No project name - should not be virtual
+        assert!(!super::should_be_virtual(None, |_| false));
+        assert!(!super::should_be_virtual(None, |_| true));
+
+        // Test 2: Has project name but self-reference exists - should not be virtual
+        let deps_with_self_ref: HashSet<PypiPackageName> =
+            [PypiPackageName::from_str("my-project").unwrap()]
+                .into_iter()
+                .collect();
+        assert!(!super::should_be_virtual(Some("my-project"), |name| {
+            deps_with_self_ref.contains(name)
+        }));
+
+        // Test 3: Has project name and no self-reference - should be virtual
+        let deps_without_self_ref: HashSet<PypiPackageName> =
+            [PypiPackageName::from_str("other-package").unwrap()]
+                .into_iter()
+                .collect();
+        assert!(super::should_be_virtual(Some("my-project"), |name| {
+            deps_without_self_ref.contains(name)
+        }));
+
+        // Test 4: Empty dependencies with project name - should be virtual
+        assert!(super::should_be_virtual(Some("my-project"), |_| false));
+
+        // Test 5: Package name normalization (underscores vs hyphens)
+        let deps_with_normalized: HashSet<PypiPackageName> =
+            [PypiPackageName::from_str("my_project").unwrap()]
+                .into_iter()
+                .collect();
+        // "my-project" normalizes to "my_project" so this should find the self-reference
+        assert!(!super::should_be_virtual(Some("my-project"), |name| {
+            deps_with_normalized.contains(name)
+        }));
+    }
+
+    #[test]
+    fn test_implicit_virtual_dependency_added() {
+        const PYPROJECT_NO_SELF_REF: &str = r#"
+            [project]
+            name = "my-app"
+            dependencies = ["requests"]
+
+            [tool.pixi.workspace]
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+            "#;
+
+        let manifest = super::PyProjectManifest::from_toml_str(PYPROJECT_NO_SELF_REF).unwrap();
+        let (workspace_manifest, _, _) = manifest.into_workspace_manifest(None).unwrap();
+
+        // Check that the implicit virtual dependency was added
+        let deps = workspace_manifest
+            .default_feature()
+            .targets
+            .default()
+            .pypi_dependencies
+            .as_ref()
+            .expect("pypi dependencies should exist");
+
+        let my_app_specs = deps
+            .get(&PypiPackageName::from_str("my-app").unwrap())
+            .expect("my-app should be added as an implicit virtual dependency");
+
+        // Should have exactly one spec
+        assert_eq!(my_app_specs.len(), 1);
+
+        // Get the first spec and check it's virtual
+        let spec = my_app_specs.iter().next().unwrap();
+        assert_eq!(spec.r#virtual(), Some(true));
+        assert_eq!(spec.source().as_path(), Some(&std::path::PathBuf::from(".")));
+    }
+
+    #[test]
+    fn test_explicit_self_reference_not_overridden() {
+        const PYPROJECT_WITH_SELF_REF: &str = r#"
+            [project]
+            name = "my-app"
+            dependencies = ["my-app", "requests"]
+
+            [tool.pixi.workspace]
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+            "#;
+
+        let manifest = super::PyProjectManifest::from_toml_str(PYPROJECT_WITH_SELF_REF).unwrap();
+        let (workspace_manifest, _, _) = manifest.into_workspace_manifest(None).unwrap();
+
+        // Check that the self-reference is preserved and not virtual
+        let deps = workspace_manifest
+            .default_feature()
+            .targets
+            .default()
+            .pypi_dependencies
+            .as_ref()
+            .expect("pypi dependencies should exist");
+
+        let my_app_specs = deps
+            .get(&PypiPackageName::from_str("my-app").unwrap())
+            .expect("my-app should exist in dependencies");
+
+        // Should have the original spec (from project.dependencies)
+        let spec = my_app_specs.iter().next().unwrap();
+        // The explicit self-reference from project.dependencies is a registry spec, not virtual
+        assert_eq!(spec.r#virtual(), None);
     }
 }

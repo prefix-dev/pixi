@@ -45,6 +45,9 @@ pub enum PixiPypiSource {
         path: PathBuf,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         editable: Option<bool>,
+        /// If true, only the dependencies are resolved, not the package itself.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        r#virtual: Option<bool>,
     },
     /// From a direct URL to a package archive.
     Url {
@@ -91,6 +94,15 @@ impl PixiPypiSource {
     pub fn editable(&self) -> Option<bool> {
         match self {
             PixiPypiSource::Path { editable, .. } => *editable,
+            _ => None,
+        }
+    }
+
+    /// Returns the virtual setting if this is a Path source.
+    /// When true, only dependencies are resolved, not the package itself.
+    pub fn r#virtual(&self) -> Option<bool> {
+        match self {
+            PixiPypiSource::Path { r#virtual, .. } => *r#virtual,
             _ => None,
         }
     }
@@ -294,6 +306,13 @@ impl PixiPypiSpec {
         self.source.index()
     }
 
+    /// Returns the virtual setting from the manifest.
+    /// Only `Path` specs can be virtual. Returns `None` for non-path specs
+    /// or if virtual is not explicitly specified.
+    pub fn r#virtual(&self) -> Option<bool> {
+        self.source.r#virtual()
+    }
+
     /// Updates this spec with a new PEP 508 requirement, preserving pixi-specific
     /// fields (`index`, `extras`) from self.
     ///
@@ -363,6 +382,7 @@ mod tests {
         let spec = PixiPypiSpec::new(PixiPypiSource::Path {
             path: PathBuf::from("./local"),
             editable: None,
+            r#virtual: None,
         });
         assert!(spec.is_source_dependency());
     }
@@ -441,6 +461,7 @@ mod tests {
         let spec = PixiPypiSpec::new(PixiPypiSource::Path {
             path: PathBuf::from("./local"),
             editable: Some(true),
+            r#virtual: None,
         });
 
         assert!(matches!(spec.source(), PixiPypiSource::Path { .. }));
@@ -467,6 +488,7 @@ mod tests {
         let spec = PixiPypiSpec::new(PixiPypiSource::Path {
             path: PathBuf::from("./local"),
             editable: None,
+            r#virtual: None,
         });
         assert!(spec.as_version().is_none());
     }
@@ -491,6 +513,7 @@ mod tests {
         let spec = PixiPypiSpec::new(PixiPypiSource::Path {
             path: PathBuf::from("./local"),
             editable: None,
+            r#virtual: None,
         });
         assert!(spec.index().is_none());
     }
@@ -500,6 +523,7 @@ mod tests {
         let source = PixiPypiSource::Path {
             path: PathBuf::from("./local"),
             editable: Some(true),
+            r#virtual: None,
         };
         let spec: PixiPypiSpec = source.clone().into();
         assert_eq!(spec.source, source);
@@ -519,6 +543,40 @@ mod tests {
                 index: None
             }
         ));
+    }
+
+    #[test]
+    fn test_virtual_accessor() {
+        // Virtual path dependency
+        let spec = PixiPypiSpec::new(PixiPypiSource::Path {
+            path: PathBuf::from("."),
+            editable: None,
+            r#virtual: Some(true),
+        });
+        assert_eq!(spec.r#virtual(), Some(true));
+
+        // Non-virtual path dependency
+        let spec = PixiPypiSpec::new(PixiPypiSource::Path {
+            path: PathBuf::from("."),
+            editable: None,
+            r#virtual: Some(false),
+        });
+        assert_eq!(spec.r#virtual(), Some(false));
+
+        // Path without virtual specified
+        let spec = PixiPypiSpec::new(PixiPypiSource::Path {
+            path: PathBuf::from("."),
+            editable: None,
+            r#virtual: None,
+        });
+        assert_eq!(spec.r#virtual(), None);
+
+        // Non-path source returns None
+        let spec = PixiPypiSpec::new(PixiPypiSource::Registry {
+            version: VersionOrStar::Star,
+            index: None,
+        });
+        assert_eq!(spec.r#virtual(), None);
     }
 
     #[test]
@@ -603,6 +661,7 @@ mod tests {
             PixiPypiSpec::new(PixiPypiSource::Path {
                 path: PathBuf::from("C:/path/to/boltons"),
                 editable: None,
+                r#virtual: None,
             })
         );
         #[cfg(not(target_os = "windows"))]
@@ -611,6 +670,7 @@ mod tests {
             PixiPypiSpec::new(PixiPypiSource::Path {
                 path: PathBuf::from("/path/to/boltons"),
                 editable: None,
+                r#virtual: None,
             })
         );
     }
