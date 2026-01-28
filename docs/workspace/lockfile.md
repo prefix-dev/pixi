@@ -86,8 +86,8 @@ If you commit the lock file in your library project, you will want to also consi
 		- Automatically file an issue so that its tracked in the project repo
 
 You can see how these considerations above have been explored by the following projects:
-- [Scipy](LINK)
-- 
+- Scipy (being explored - will update with PR link once available. [Issue](https://github.com/scipy/scipy/issues/23637))
+
 
 ### Libraries: Git-ignoring the lockfile
 
