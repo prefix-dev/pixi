@@ -95,7 +95,9 @@ If you don't commit the lockfile, you end up with a simplified setup where the l
 
 In CI, you can avoid the need to solve on every workflow run by caching this lockfile so that its shared between CI on the same day by using - for example - the [Parcels-code/pixi-lock](https://github.com/parcels-code/pixi-lock) action.
 
-This simplified setup forgoes reproducibility between machines, and implicitly 
+This simplified setup forgoes reproducibility between machines.
+
+In both approaches, the test suite is used to determine whether the library is working as expected.
 
 ---
 
