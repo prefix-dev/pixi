@@ -170,14 +170,6 @@ Pixi is backward compatible with the lock file, but not forward compatible.
 This means that you can use an older lock file with a newer version of `pixi`, but not the other way around.
 
 
-!!! Note "Syncing the lock file with the manifest file"
-    The lock file is always matched with the whole configuration in the manifest file.
-    This means that if you change the manifest file, the lock file will be updated.
-    ```mermaid
-    flowchart TD
-        C[manifest] --> A[lock file] --> B[environment]
-    ```
-
 ## Lock file satisfiability
 
 The lock file is a description of the environment, and it should always be satisfiable.
@@ -196,11 +188,3 @@ Steps to check if the lock file is satisfiable:
 
 If you want to get more details checkout the [actual code](https://github.com/prefix-dev/pixi/blob/main/src/lock_file/satisfiability/mod.rs) as this is a simplification of the actual code.
 
-
-
----
-
-Not sure what this means???
-
-!!! Warning "Note"
-    This does remove the locked state of the environment, which will be updated to the latest version of all packages.
