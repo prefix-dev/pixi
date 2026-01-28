@@ -6,9 +6,9 @@ To answer this question, we need to highlight the difference between the manifes
 
 The manifest lists the direct dependencies of your project.
 When you install your environment, this manifest goes through "dependency resolution": all the dependencies of your requested dependencies are found, et cetera all the way down.
-During the resolution process, its ensured that resolved versions are compatible with each other.
+During the resolution process, it is ensured that resolved versions are compatible with each other.
 
-A lock file lists the exact dependencies that were resolved during this resolution process - the packages, their versions, and other useful information useful for package management.
+A lock file lists the exact dependencies that were resolved during this resolution process - the packages, their versions, and other metadata useful for package management.
 
 A lock file improves reproducibility as it means the project environment can easily be recreated on the same machine using this relatively small file.
 Whether the lockfile can be recreated on other machines, however, depends on the package manager and whether they have cross platform support.
@@ -38,7 +38,7 @@ Many Pixi commands will create a lock file if one doesn't already exist, or upda
 4. Install resulting packages
 
 Additionally - Pixi ensures that the lock file remains in sync with both your manifest, as well as your installed environment.
-If we detect that they aren't in sync, we will regenerate the lock file. You can read more about this in the [Lock file satisfiability](#Lock-file-satisfiability) section.
+If we detect that they aren't in sync, we will regenerate the lock file. You can read more about this in the [Lock file satisfiability](#lock-file-satisfiability) section.
 
 The following commands will check and automatically update the lock file if needed:
 
