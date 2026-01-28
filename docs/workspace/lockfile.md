@@ -22,8 +22,9 @@ For example - a common problem encountered is when a package manager installs a 
 
 Pixi - like many other modern package managers - has native support for lock files. This file is named `pixi.lock` .
 
-During the creation of the lockfile, Pixi resolves the packages - for all environments, for all supported platforms.
-This greatly increases the reproducibility of your project making it easy to use on different OSs or CPU architectures - in fact, for a lot of cases, sharing a lockfile can be done instead of sharing a Docker container! This is super handy for running code in CI.
+During the creation of the lockfile, Pixi resolves the packages - for all environments and platforms listed in the manifest.
+This greatly increases the reproducibility of your project making it easy to use on different OSs or CPU architectures - in fact, for a lot of cases, sharing a lockfile can be done instead of sharing a Docker container!
+This is also super handy for running code in CI.
 
 The Pixi lock file is also human readable, so you can take a poke around to see which packages are listed - as well as track changes to the file (don't make edits to it - you did read the warning block above right?). 
 
@@ -31,10 +32,10 @@ The Pixi lock file is also human readable, so you can take a poke around to see 
 
 Many Pixi commands will create a lock file if one doesn't already exist, or update it if needed. For example, when you install a package, Pixi goes through the following process:
 
-- User requests a package to be installed
-- Dependency resolution
-- Generating and writing of lock file
-- Install resulting packages
+1. User requests a package to be installed
+2. Dependency resolution
+3. Generating and writing of lock file
+4. Install resulting packages
 
 Additionally - Pixi ensures that the lock file remains in sync with both your manifest, as well as your installed environment.
 If we detect that they aren't in sync, we will regenerate the lock file. You can read more about this in the [Lock file satisfiability](#Lock-file-satisfiability) section.
@@ -107,13 +108,10 @@ See the following threads for more detailed discussion on this topic:
 
 ### File structure
 
-The Pixi lock file describes the following:
+The Pixi lock file is structured into two parts.
 
-- 
-Within Pixi a lock file is a description of the packages in an environment.
-The lock file is :
 
-- The environments that are used in the workspace with their complete set of packages. e.g.:
+- The environments that are used in the workspace - listing the packages contained. e.g.:
 
   ```yaml
   environments:
@@ -160,6 +158,17 @@ The lock file is :
       size: 14596811
       timestamp: 1708118065292
     ```
+### The version of the lock file
+
+The lock file also has a version number, this is to ensure that the lock file is compatible with the local version of `pixi`.
+
+```yaml
+version: 6
+```
+
+Pixi is backward compatible with the lock file, but not forward compatible.
+This means that you can use an older lock file with a newer version of `pixi`, but not the other way around.
+
 
 !!! Note "Syncing the lock file with the manifest file"
     The lock file is always matched with the whole configuration in the manifest file.
@@ -186,17 +195,6 @@ Steps to check if the lock file is satisfiable:
 - There is only a single entry for every package in the lock file.
 
 If you want to get more details checkout the [actual code](https://github.com/prefix-dev/pixi/blob/main/src/lock_file/satisfiability/mod.rs) as this is a simplification of the actual code.
-
-## The version of the lock file
-
-The lock file has a version number, this is to ensure that the lock file is compatible with the local version of `pixi`.
-
-```yaml
-version: 6
-```
-
-Pixi is backward compatible with the lock file, but not forward compatible.
-This means that you can use an older lock file with a newer version of `pixi`, but not the other way around.
 
 
 
