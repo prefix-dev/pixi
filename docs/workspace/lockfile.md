@@ -15,8 +15,7 @@ Whether the lockfile can be recreated on other machines, however, depends on the
 For example - a common problem encountered is when a package manager installs a package for a specific operating system or CPU architecture that is incompatible with other OSs or hardware.
 
 !!! Warning "Do not edit the lock file"
-    A lock file is a machine only file, and should not be edited by hand.
-
+    A lock file is built for machines, and made human readable for easy inspection. It's not meant to be edited by hand.
 
 ## Lock files in Pixi
 
@@ -38,7 +37,7 @@ Many Pixi commands will create a lock file if one doesn't already exist, or upda
 4. Install resulting packages
 
 Additionally - Pixi ensures that the lock file remains in sync with both your manifest, as well as your installed environment.
-If we detect that they aren't in sync, we will regenerate the lock file. You can read more about this in the [Lock file satisfiability](#lock-file-satisfiability) section.
+If it detects that they aren't in sync, it will regenerate the lock file. You can read more about this in the [Lock file satisfiability](#lock-file-satisfiability) section.
 
 The following commands will check and automatically update the lock file if needed:
 
