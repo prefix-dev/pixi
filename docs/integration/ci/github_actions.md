@@ -35,6 +35,8 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
           dependencies:
             patterns:
               - "*"
+        cooldown:
+          default-days: 7
     ```
 
     1.  or `daily`, `weekly`
