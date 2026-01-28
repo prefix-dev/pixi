@@ -77,7 +77,7 @@ This includes an environment with the latest available versions of packages.
 ### Libraries: Committing the lockfile
 
 If you commit the lock file in your library project, you will want to also consider the following:
-- **Upgrading the lockfile:** How often do you want to upgrade the lockfile used by your developers? Do you want to do these upgrades in the main repo history?
+- **Upgrading the lockfile:** How often do you want to upgrade the lockfile used by your developers? Do you want to do these upgrades in the main repo history? Do you want to manage this lockfile via (e.g.,) [the Renovate Bot](https://docs.renovatebot.com/modules/manager/pixi/) or via a custom CI job?
 - **Custom CI workflow to test against latest versions:** Do you want to have a workflow to test against the latest dependency versions? If so - you likely want to have the following CI workflow on a cron schedule:
 	- Remove the `pixi.lock` before running the `setup-pixi` action
 	- Run your tests
