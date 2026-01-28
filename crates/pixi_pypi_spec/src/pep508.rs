@@ -93,6 +93,7 @@ impl TryFrom<pep508_rs::Requirement> for PixiPypiSpec {
                             PixiPypiSource::Path {
                                 path: file,
                                 editable: None,
+                                r#virtual: None,
                             },
                             req.extras,
                             req.marker,

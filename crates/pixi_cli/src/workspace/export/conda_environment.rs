@@ -71,7 +71,7 @@ fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> 
 
             git_string
         }
-        PixiPypiSource::Path { path, editable } => {
+        PixiPypiSource::Path { path, editable, .. } => {
             if editable.is_some() {
                 format!(
                     "-e {path}{extras}",

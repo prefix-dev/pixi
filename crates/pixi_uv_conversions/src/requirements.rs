@@ -156,7 +156,11 @@ pub fn as_uv_req(
                 },
             }
         }
-        PixiPypiSource::Path { path, editable } => {
+        PixiPypiSource::Path {
+            path,
+            editable,
+            r#virtual,
+        } => {
             let joined = project_root.join(path);
             let canonicalized =
                 dunce::canonicalize(&joined).map_err(|e| AsPep508Error::CanonicalizeError {
@@ -179,9 +183,9 @@ pub fn as_uv_req(
                     // "conflicting URLs" errors from the uv resolver.
                     editable: Some(false),
                     url: verbatim,
-                    // TODO: we could see if we ever need this
-                    // AFAICS it would be useful for constrainging dependencies
-                    r#virtual: Some(false),
+                    // Pass through the virtual flag from the manifest.
+                    // When true, only the dependencies are resolved, not the package itself.
+                    r#virtual: Some(r#virtual.unwrap_or(false)),
                 }
             } else if *editable == Some(true) {
                 {
