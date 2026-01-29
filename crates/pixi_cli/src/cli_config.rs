@@ -50,7 +50,7 @@ impl WorkspaceConfig {
             let path = pixi_home()
                 .expect("Unable to pixi home")
                 .join(consts::DEFAULT_GLOBAL_WORKSPACE_DIR)
-                .join(&workspace);
+                .join(workspace);
             DiscoveryStart::ExplicitManifest(path.clone())
         } else {
             DiscoveryStart::CurrentDir

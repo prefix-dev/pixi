@@ -81,12 +81,15 @@ pub fn get_global_workspaces_map() -> miette::Result<HashMap<String, PathBuf>> {
     let mut workspaces = HashMap::new();
 
     if global_workspaces_dir.exists() {
-        for entry in std::fs::read_dir(&global_workspaces_dir).into_diagnostic()? {
+        for entry in fs_err::read_dir(&global_workspaces_dir).into_diagnostic()? {
             let entry = entry.into_diagnostic()?;
             let path = entry.path().join("pixi.toml");
             if path.is_file() {
-                let space = entry.file_name().into_string().unwrap();
-                let full_path = std::fs::canonicalize(path).into_diagnostic()?;
+                let space = entry
+                    .file_name()
+                    .into_string()
+                    .expect("Unable to find workspaces");
+                let full_path = path.canonicalize().into_diagnostic()?;
                 workspaces.insert(space, full_path);
             }
         }
@@ -120,7 +123,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .join(&remove_args.name);
 
             if workspace_dir.exists() {
-                std::fs::remove_dir_all(workspace_dir).into_diagnostic()?;
+                fs_err::remove_dir_all(workspace_dir).into_diagnostic()?;
                 eprintln!(
                     "{} Workspace '{}' has been removed from the registry successfully.",
                     console::style(console::Emoji("✔ ", "")).green(),
@@ -165,7 +168,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .join(consts::DEFAULT_GLOBAL_WORKSPACE_DIR)
                 .join(&target_name);
 
-            std::os::unix::fs::symlink(&target_path, &workspace_dir).into_diagnostic()?;
+            fs_err::tokio::symlink(&target_path, &workspace_dir)
+                .await
+                .into_diagnostic()?;
 
             eprintln!(
                 "{} {}",
