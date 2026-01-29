@@ -190,6 +190,13 @@ async fn find_unsatisfiable_targets<'p>(
                             .insert(platform);
                     }
                 }
+                EnvironmentUnsat::ChannelsExtended => {
+                    // Channels were only extended (appended) with lower-priority channels.
+                    // Due to channel priority semantics, existing packages are still valid
+                    // since they came from higher-priority channels. We just need to update
+                    // the lock file's channel list without re-solving.
+                    // Don't add to disregard_locked_content.
+                }
                 EnvironmentUnsat::ChannelsMismatch
                 | EnvironmentUnsat::InvalidChannel(_)
                 | EnvironmentUnsat::ChannelPriorityMismatch { .. }
