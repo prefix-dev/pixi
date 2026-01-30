@@ -63,7 +63,7 @@ pre-commit:
     - name: typos
       stage_fixed: true
       run: pixi {run} -e lint typos
-    - name: pixi-build-ros-ruff
+    - name: pixi-build-ros-lint
       root: pixi-build-backends/backends/pixi-build-ros
       glob: "*.{py,pyi}"
       stage_fixed: true
