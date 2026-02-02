@@ -32,6 +32,7 @@ fn read_configuration(current_exe: &Path) -> miette::Result<Configuration> {
             .join(TRAMPOLINE_CONFIGURATION)
             .join(format!("{}.json", executable_from_path(current_exe),));
         let configuration_file = File::open(&configuration_path)
+            .map(std::io::BufReader::new)
             .into_diagnostic()
             .wrap_err(format!("Couldn't open {:?}", configuration_path))?;
         let configuration: Configuration =

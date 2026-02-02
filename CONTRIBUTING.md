@@ -73,7 +73,7 @@ options:
 ```
 
 ## Get your code ready for a PR
-We use [`leftook`](https://lefthook.dev/) to run all the formatters and linters that we use.
+We use [`lefthook`](https://lefthook.dev/) to run all the formatters and linters that we use.
 You can run `pixi run pre-commit-install` to automatically run the formatters and linters before you commit.
 This also installs a pre-push hook which runs `cargo clippy` —
 use `pixi run pre-commit-install-minimal` instead to opt out of this hook.
