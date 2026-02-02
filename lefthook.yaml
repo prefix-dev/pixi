@@ -91,5 +91,6 @@ pre-push:
       glob: "Cargo.lock,Cargo.toml"
       stage_fixed: true
       run: pixi {run} -e lint cargo-deny
-    - name: check-openssl
-      run: pixi {run} -e lint check-openssl
+    - name: check-native-tls
+      glob: "**/Cargo.toml"
+      run: ./scripts/check-native-tls.sh
