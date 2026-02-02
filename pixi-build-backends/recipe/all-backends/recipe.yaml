@@ -362,7 +362,7 @@ outputs:
 
     build:
       skip:
-        - not (linux and x86_64)
+        - not linux-64
       script:
         - ${{ PYTHON }} -m pip install pixi-build-backends/backends/pixi-build-ros -vv --no-build-isolation
       noarch: python
