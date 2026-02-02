@@ -109,7 +109,11 @@ impl GenerateRecipe for RustGenerator {
 
         let config_env = config.env.clone();
 
-        let system_env_vars = std::env::vars().collect::<HashMap<String, String>>();
+        let system_env_vars = config
+            .system_env
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<HashMap<_, _>>();
 
         let all_env_vars = config_env
             .clone()
@@ -385,6 +389,7 @@ mod tests {
                 &project_model,
                 &RustBackendConfig {
                     env: env.clone(),
+                    system_env: Default::default(),
                     ignore_cargo_manifest: Some(true),
                     ..Default::default()
                 },
@@ -419,19 +424,17 @@ mod tests {
         });
 
         let env = IndexMap::from([("SCCACHE_BUCKET".to_string(), "my-bucket".to_string())]);
-
-        // Set environment variables manually
-        // SAFETY: We're in a test and controlling the environment for this test only
-        unsafe {
-            std::env::set_var("SCCACHE_SYSTEM", "SOME_VALUE");
-            std::env::set_var("SCCACHE_BUCKET", "system-bucket");
-        }
+        let system_env = IndexMap::from([
+            ("SCCACHE_SYSTEM".to_string(), "SOME_VALUE".to_string()),
+            ("SCCACHE_BUCKET".to_string(), "system-bucket".to_string()),
+        ]);
 
         let generated_recipe = RustGenerator::default()
             .generate_recipe(
                 &project_model,
                 &RustBackendConfig {
                     env,
+                    system_env,
                     ignore_cargo_manifest: Some(true),
                     ..Default::default()
                 },
