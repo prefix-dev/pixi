@@ -2,7 +2,7 @@ In this tutorial, we will show you how to create a simple Python project with Pi
 
 ## Why is this useful?
 
-Pixi builds upon the conda ecosystem, which allows you to create a Python environment with all the dependencies you need. This is especially useful when you are working with multiple Python interpreters and bindings to C and C++ libraries. For example, GDAL from PyPI does not have binary C dependencies, but the conda package does. On the other hand, some packages are only available through PyPI, which `pixi` can also install for you. Best of both world, let's give it a go!
+Pixi builds upon the conda ecosystem, which allows you to create a Python environment with all the dependencies you need. This is especially useful when you are working with multiple Python interpreters and bindings to C and C++ libraries. For example, GDAL from PyPI does not have binary C dependencies, but the conda package does. On the other hand, some packages are only available through PyPI, which `pixi` can also install for you. Best of both worlds, let's give it a go!
 
 ## `pixi.toml` and `pyproject.toml`
 
