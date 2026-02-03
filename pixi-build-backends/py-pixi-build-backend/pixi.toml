@@ -19,7 +19,7 @@ version = "*"
 compilers = ["rust"]
 
 [package.build-dependencies]
-rust = ">=1.90.0,<1.91"
+rust = ">=1.91.0,<1.92"
 
 [package.host-dependencies]
 maturin = "*"
@@ -35,7 +35,7 @@ PIP_REQUIRE_VIRTUALENV = "false"
 maturin = "~=1.10.2"
 pip = "~=25.3.0"
 python = "*"
-rust = ">=1.90.0,<1.91"
+rust = ">=1.91.0,<1.92"
 
 [feature.build.target.linux-64.dependencies]
 patchelf = "~=0.18.0"
@@ -56,7 +56,7 @@ ruff = ">=0.14,<0.15"
 
 [feature.dev.dependencies]
 # Development tools (IDE support)
-rust-src = ">=1.90.0,<1.91"
+rust-src = ">=1.91.0,<1.92"
 
 [tasks]
 build = "maturin develop"

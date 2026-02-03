@@ -1,0 +1,20 @@
+[package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+name = "reqwest-middleware"
+publish = false
+version = "0.4.2"
+
+[lib]
+name = "reqwest_middleware"
+
+[dependencies]
+astral_reqwest_middleware = { package = "astral-reqwest-middleware", version = "0.4.2", default-features = false }
+
+[features]
+charset = ["astral_reqwest_middleware/charset"]
+default = []
+http2 = ["astral_reqwest_middleware/http2"]
+json = ["astral_reqwest_middleware/json"]
+multipart = ["astral_reqwest_middleware/multipart"]
+rustls-tls = ["astral_reqwest_middleware/rustls-tls"]

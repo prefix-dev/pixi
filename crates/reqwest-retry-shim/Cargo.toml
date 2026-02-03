@@ -1,0 +1,16 @@
+[package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+name = "reqwest-retry"
+publish = false
+version = "0.8.0"
+
+[lib]
+name = "reqwest_retry"
+
+[dependencies]
+astral_reqwest_retry = { package = "astral-reqwest-retry", version = "0.8.0", default-features = false }
+
+[features]
+default = ["tracing"]
+tracing = ["astral_reqwest_retry/tracing"]

@@ -34,7 +34,6 @@ use rattler_conda_types::Platform;
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rayon::prelude::*;
 use utils::elapsed;
-use uv_auth::store_credentials_from_url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient};
 use uv_configuration::{BuildOptions, Constraints, IndexStrategy};
 use uv_dispatch::BuildDispatch;
@@ -769,7 +768,10 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         // Before hitting the network let's make sure the credentials are available to
         // uv
         for url in setup.index_locations.indexes().map(|index| index.url()) {
-            let success = store_credentials_from_url(url.url());
+            let success = setup
+                .registry_client
+                .credentials_cache()
+                .store_credentials_from_url(url.url());
             tracing::debug!("Stored credentials for {}: {}", url, success);
         }
 
@@ -833,7 +835,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &setup.build_options,
             &self.context_config.uv_context.hash_strategy,
             setup.exclude_newer.clone(),
-            self.context_config.uv_context.source_strategy,
+            self.context_config.uv_context.source_strategy.clone(),
             self.context_config.uv_context.workspace_cache.clone(),
             self.context_config.uv_context.concurrency,
             self.context_config.uv_context.preview,
