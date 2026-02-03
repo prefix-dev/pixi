@@ -3,7 +3,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ## Usage
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     pixi-version: v0.63.2
     cache: true
@@ -14,7 +14,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 
 Pin your action versions
 
-Since pixi is not yet stable, the API of this action may change between minor versions. Please pin the versions of this action to a specific version (i.e., `prefix-dev/setup-pixi@v0.9.2`) to avoid breaking changes. You can automatically update the version of this action by using [Dependabot](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot).
+Since pixi is not yet stable, the API of this action may change between minor versions. Please pin the versions of this action to a specific version (i.e., `prefix-dev/setup-pixi@v0.9.4`) to avoid breaking changes. You can automatically update the version of this action by using [Dependabot](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot).
 
 Put the following in your `.github/dependabot.yml` file to enable Dependabot for your GitHub Actions:
 
@@ -31,6 +31,8 @@ updates:
       dependencies:
         patterns:
           - "*"
+    cooldown:
+      default-days: 7
 ```
 
 1. or `daily`, `weekly`
@@ -54,7 +56,7 @@ Only save caches on `main`
 In order to not exceed the [10 GB cache size limit](https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows#usage-limits-and-eviction-policy) as fast, you might want to restrict when the cache is saved. This can be done by setting the `cache-write` argument.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     cache: true
     cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
@@ -97,7 +99,7 @@ test:
       environment: [py311, py312]
   steps:
   - uses: actions/checkout@v4
-  - uses: prefix-dev/setup-pixi@v0.9.2
+  - uses: prefix-dev/setup-pixi@v0.9.4
     with:
       environments: ${{ matrix.environment }}
 ```
@@ -107,7 +109,7 @@ test:
 The following example will install both the `py311` and the `py312` environment on the runner.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     environments: >- # (1)!
       py311
@@ -132,7 +134,7 @@ If you don't specify any environment, the `default` environment will be installe
 You can specify `pixi global install` commands by setting the `global-environments` input argument. This will create one environment per line, and install them. This is useful in particular to install executables that are needed for `pixi install` to work properly. For instance, the `keyring`, or `gcloud` executables. The following example shows how to install both in separate global environments. By default, global environments are not cached. You can enable caching by setting the `global-cache` input to `true`.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     global-environments: |
       google-cloud-sdk
@@ -163,7 +165,7 @@ Please only store sensitive information using [GitHub secrets](https://docs.gith
 Specify the token using the `auth-token` input argument. This form of authentication (bearer token in the request headers) is mainly used at [prefix.dev](https://prefix.dev).
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -174,7 +176,7 @@ Specify the token using the `auth-token` input argument. This form of authentica
 Specify the username and password using the `auth-username` and `auth-password` input arguments. This form of authentication (HTTP Basic Auth) is used in some enterprise environments with [artifactory](https://jfrog.com/artifactory) for example.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     auth-host: custom-artifactory.com
     auth-username: ${{ secrets.PIXI_USERNAME }}
@@ -186,7 +188,7 @@ Specify the username and password using the `auth-username` and `auth-password` 
 Specify the conda-token using the `conda-token` input argument. This form of authentication (token is encoded in URL: `https://my-quetz-instance.com/t/<token>/get/custom-channel`) is used at [anaconda.org](https://anaconda.org) or with [quetz instances](https://github.com/mamba-org/quetz).
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     auth-host: anaconda.org # (1)!
     auth-conda-token: ${{ secrets.CONDA_TOKEN }}
@@ -199,7 +201,7 @@ Specify the conda-token using the `conda-token` input argument. This form of aut
 Specify the S3 key pair using the `auth-access-key-id` and `auth-secret-access-key` input arguments. You can also specify the session token using the `auth-session-token` input argument.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     auth-host: s3://my-s3-bucket
     auth-s3-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
@@ -216,7 +218,7 @@ See the [S3 section](../../../deployment/s3/) for more information about S3 auth
 You can specify whether to use keyring to look up credentials for PyPI.
 
 ```text
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     pypi-keyring-provider: subprocess # one of 'subprocess', 'disabled'
 ```
@@ -287,7 +289,7 @@ See [here](../../../reference/cli/pixi/exec/) for more information about `pixi e
 Instead of using a custom shell wrapper, you can also make all pixi-installed binaries available to subsequent steps by "activating" the installed environment in the currently running job. To this end, `setup-pixi` adds all environment variables set when executing `pixi run` to `$GITHUB_ENV` and, similarly, adds all path modifications to `$GITHUB_PATH`. As a result, all installed binaries can be accessed without having to call `pixi run`.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     activate-environment: true
 ```
@@ -295,7 +297,7 @@ Instead of using a custom shell wrapper, you can also make all pixi-installed bi
 If you are installing multiple environments, you will need to specify the name of the environment that you want to be activated.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     environments: >-
       py311
@@ -310,7 +312,7 @@ Activating an environment may be more useful than using a custom shell wrapper a
 You can specify whether `setup-pixi` should run `pixi install --frozen` or `pixi install --locked` depending on the `frozen` or the `locked` input argument. See the [official documentation](../../../reference/cli/pixi/install/#update-options) for more information about the `--frozen` and `--locked` flags.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     locked: true
     # or
@@ -336,7 +338,7 @@ For more information about debug logging in GitHub Actions, see [the official do
 The second type is the debug logging of the pixi executable. This can be specified by setting the `log-level` input.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     log-level: vvv # (1)!
 ```
@@ -361,7 +363,7 @@ If nothing is specified, `post-cleanup` will default to `true`.
 On self-hosted runners, you also might want to alter the default pixi install location to a temporary location. You can use `pixi-bin-path: ${{ runner.temp }}/bin/pixi` to do this.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     post-cleanup: true
     pixi-bin-path: ${{ runner.temp }}/bin/pixi # (1)!
@@ -376,9 +378,39 @@ You can also use a preinstalled local version of pixi on the runner by not setti
 `setup-pixi` will automatically pick up the `pyproject.toml` if it contains a `[tool.pixi.workspace]` section and no `pixi.toml`. This can be overwritten by setting the `manifest-path` input argument.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     manifest-path: pyproject.toml
+```
+
+### Working directory for monorepos
+
+If you're working with a monorepo where your pixi project is in a subdirectory, you can use the `working-directory` input to specify where pixi should look for manifest files (`pixi.toml` or `pyproject.toml`).
+
+```text
+- uses: prefix-dev/setup-pixi@v0.9.4
+  with:
+    working-directory: ./packages/my-project
+```
+
+This will make pixi look for `pixi.toml` or `pyproject.toml` in the `./packages/my-project` directory instead of the repository root. All pixi commands will be executed from this working directory.
+
+Also in other steps
+
+The `working-directory` input only affects commands run by `setup-pixi` itself. For subsequent `run:` steps, you need to set the working directory separately:
+
+```text
+- run: pixi run test
+  working-directory: ./packages/my-project
+```
+
+You can combine `working-directory` with `manifest-path` if needed:
+
+```text
+- uses: prefix-dev/setup-pixi@v0.9.4
+  with:
+    working-directory: ./packages/my-project
+    manifest-path: custom-pixi.toml
 ```
 
 ### Only install pixi
@@ -386,7 +418,7 @@ You can also use a preinstalled local version of pixi on the runner by not setti
 If you only want to install pixi and not install the current workspace, you can use the `run-install` option.
 
 ```text
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     run-install: false
 ```
@@ -396,7 +428,7 @@ If you only want to install pixi and not install the current workspace, you can 
 You can also download pixi from a custom URL by setting the `pixi-url` input argument. Optionally, you can combine this with the `pixi-url-headers` input argument to supply additional headers for the download request, such as a bearer token.
 
 ```text
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     pixi-url: https://pixi-mirror.example.com/releases/download/v0.48.0/pixi-x86_64-unknown-linux-musl
     pixi-url-headers: '{"Authorization": "Bearer ${{ secrets.PIXI_MIRROR_BEARER_TOKEN }}"}'
@@ -411,7 +443,7 @@ The `pixi-url` input argument can also be a [Handlebars](https://handlebarsjs.co
 By default, `pixi-url` is equivalent to the following template:
 
 ```text
-- uses: prefix-dev/setup-pixi@v0.9.2
+- uses: prefix-dev/setup-pixi@v0.9.4
   with:
     pixi-url: |
       {{#if latest~}}
