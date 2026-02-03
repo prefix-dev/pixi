@@ -47,6 +47,7 @@ __wrap__() {
 
     case "${ARCH-}" in
     arm64 | aarch64) ARCH="aarch64" ;;
+    riscv64) ARCH="riscv64gc" ;;
     esac
 
     BINARY="pixi-${ARCH}-${PLATFORM}"
