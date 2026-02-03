@@ -86,3 +86,5 @@ To further customize the look and feel of your badge, you can add `&style=<custo
 - [geovista](https://github.com/bjlittle/geovista): Cartographic rendering and mesh analytics powered by [PyVista](https://github.com/pyvista/pyvista) 🌍
 
 - [SciPy](https://github.com/scipy/scipy): Fundamental algorithms for scientific computing in Python.
+
+- [Snakedown](https://github.com/savente93/snakedown) A fast and intuitive python API reference generator so you can host your docs with your favourite static site generator.

@@ -196,7 +196,7 @@ pixi.toml
 pytest = "*"
 
 [environments]
-test = ["test"]  # An environment covering the "test" feature
+test = ["test"] # An environment covering the "test" feature
 
 [tasks]
 test = { cmd = "pytest", default-environment = "test" }
