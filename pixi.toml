@@ -392,7 +392,7 @@ build-trampoline = { cmd = "python trampoline/build-trampoline.py", description 
 #
 [environments]
 backends-release = { features = ["backends-release", "python"] }
-dev = { features = ["rust", "compilers", "python", "dev"] }
+default = { features = ["rust", "compilers", "python", "python-test-deps", "dev"] }
 dist = { features = ["dist"] }
 docs = { features = ["rust", "compilers", "python", "docs"] }
 lefthook = { features = ["lefthook"] }
