@@ -208,6 +208,12 @@ fn build_env_yaml(
             ));
     }
 
+    // Add environment variables from activation
+    let activation_vars = environment.activation_env(Some(*platform));
+    if !activation_vars.is_empty() {
+        env_yaml.variables = activation_vars;
+    }
+
     Ok(env_yaml)
 }
 
