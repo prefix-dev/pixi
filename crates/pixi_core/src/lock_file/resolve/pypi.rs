@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     iter::once,
     ops::Deref,
     panic,
@@ -45,7 +45,7 @@ use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient};
-use uv_configuration::{Constraints, Overrides};
+use uv_configuration::{Constraints, Excludes, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
     BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy,
@@ -551,7 +551,7 @@ pub async fn resolve_pypi(
     // mostly with build isolation. In that case we want to use fresh
     // non-tampered requests.
     .with_shared_state(context.shared_state.fork())
-    .with_source_strategy(context.source_strategy)
+    .with_source_strategy(context.source_strategy.clone())
     .with_concurrency(context.concurrency);
 
     let lazy_build_dispatch_dependencies = LazyBuildDispatchDependencies::default();
@@ -694,9 +694,10 @@ pub async fn resolve_pypi(
             requirements,
             constraints,
             overrides,
+            Excludes::default(),
             Preferences::from_iter(preferences, &resolver_env),
             None,
-            Default::default(),
+            BTreeSet::new(),
             uv_resolver::Exclusions::default(),
             lookaheads,
         );

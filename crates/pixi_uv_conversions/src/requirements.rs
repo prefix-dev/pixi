@@ -132,6 +132,7 @@ pub fn as_uv_req(
                         .and_then(|s| s.map(uv_git_types::GitOid::from_str))
                         .transpose()
                         .expect("could not parse sha"),
+                    uv_git_types::GitLfs::from_env(),
                 )?,
                 subdirectory: if subdirectory.is_empty() {
                     None
@@ -371,7 +372,9 @@ mod tests {
             git: uv_git_types::GitUrl::from_fields(
                 DisplaySafeUrl::parse("ssh://git@github.com/user/test.git").unwrap(),
                 uv_git_types::GitReference::BranchOrTagOrCommit("d099af3b1028b00c232d8eda28a997984ae5848b".to_string()),
-                Some(uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap())).unwrap(),
+                Some(uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
+                uv_git_types::GitLfs::from_env(),
+            ).unwrap(),
             subdirectory: Default::default(),
             url: VerbatimUrl::from_url(DisplaySafeUrl::parse("git+ssh://git@github.com/user/test.git@d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
         };
@@ -403,6 +406,7 @@ mod tests {
                     uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b")
                         .unwrap(),
                 ),
+                uv_git_types::GitLfs::from_env(),
             )
             .unwrap(),
             subdirectory: Default::default(),

@@ -58,11 +58,18 @@ pub fn get_pypi_tags(
     system_requirements: &SystemRequirements,
     python_record: &PackageRecord,
 ) -> Result<uv_platform_tags::Tags, PyPITagError> {
+    let is_cross = platform != Platform::current();
     let platform = get_platform_tags(platform, system_requirements)?;
     let python_version = get_python_version(python_record)?;
     let implementation_name = get_implementation_name(python_record)?;
     let gil_disabled = gil_disabled(python_record)?;
-    create_tags(platform, python_version, implementation_name, gil_disabled)
+    create_tags(
+        platform,
+        python_version,
+        implementation_name,
+        gil_disabled,
+        is_cross,
+    )
 }
 
 /// Create a uv platform tag for the specified platform
@@ -251,6 +258,7 @@ fn create_tags(
     python_version: (u8, u8),
     implementation_name: &str,
     gil_disabled: bool,
+    is_cross: bool,
 ) -> Result<uv_platform_tags::Tags, PyPITagError> {
     uv_platform_tags::Tags::from_env(
         &platform,
@@ -260,6 +268,7 @@ fn create_tags(
         python_version,
         true,
         gil_disabled,
+        is_cross,
     )
     .map_err(PyPITagError::FailedToDetermineWheelTags)
 }
@@ -360,6 +369,7 @@ pub fn get_tags_from_machine(
         get_python_version(python_record)?,
         get_implementation_name(python_record)?,
         gil_disabled(python_record)?,
+        false,
     )
 }
 

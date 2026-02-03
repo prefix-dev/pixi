@@ -157,8 +157,11 @@ impl<'a> InstallSubset<'a> {
         let all_packages: Vec<_> = packages.into_iter().collect();
 
         // Check if any packages do not match
-        let mut non_matched_targets: HashSet<_> =
-            self.target_packages.iter().map(AsRef::as_ref).collect();
+        let mut non_matched_targets: HashSet<&str> = self
+            .target_packages
+            .iter()
+            .map(|name| name.as_str())
+            .collect();
         for package in &all_packages {
             if non_matched_targets.contains(package.name()) {
                 non_matched_targets.remove(package.name());

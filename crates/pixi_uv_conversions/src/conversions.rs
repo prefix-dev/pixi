@@ -362,6 +362,7 @@ pub fn to_parsed_git_url(
             },
             into_uv_git_reference(git_source.reference.into()),
             Some(into_uv_git_sha(git_source.commit)),
+            uv_git_types::GitLfs::from_env(),
         )
         .into_diagnostic()?,
         if git_source.subdirectory.is_empty() {

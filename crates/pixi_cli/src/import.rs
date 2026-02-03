@@ -10,7 +10,6 @@ use pixi_uv_conversions::convert_uv_requirements_to_pep508;
 use rattler_conda_types::Platform;
 
 use tracing::warn;
-use uv_client::BaseClientBuilder;
 use uv_requirements_txt::RequirementsTxt;
 
 use miette::{Diagnostic, IntoDiagnostic, Result};
@@ -198,13 +197,9 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
             (conda_deps, pypi_deps)
         }
         ProcessedInput::PypiTxt => {
-            let reqs_txt = RequirementsTxt::parse(
-                &input_file,
-                workspace.workspace().root(),
-                &BaseClientBuilder::default(),
-            )
-            .await
-            .into_diagnostic()?;
+            let reqs_txt = RequirementsTxt::parse(&input_file, workspace.workspace().root())
+                .await
+                .into_diagnostic()?;
             let pypi_deps = convert_uv_requirements_txt_to_pep508(reqs_txt)?;
 
             (vec![], pypi_deps)
