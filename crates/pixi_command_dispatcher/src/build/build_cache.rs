@@ -10,8 +10,9 @@ use crate::build::{SourceCodeLocation, source_checkout_cache_key};
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use itertools::Itertools;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPath, AbsPresumedDirPathBuf, AbsPresumedFilePathBuf};
-use pixi_record::{PinnedSourceSpec, VariantValue};
+use pixi_record::{CanonicalSpec, VariantValue};
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -125,7 +126,7 @@ impl BuildCache {
     /// cache entry. Drop the entry as soon as possible to release the lock.
     pub async fn entry(
         &self,
-        source: &PinnedSourceSpec,
+        source: &CanonicalSpec,
         input: &BuildInput,
     ) -> Result<(Option<CachedBuild>, BuildCacheEntry), BuildCacheError> {
         let input_key = input.hash_key();
@@ -138,8 +139,8 @@ impl BuildCache {
             host_platform = %input.host_platform,
             build = %input.build,
             channel_urls = ?input.channel_urls,
-            host_virtual_packages = ?input.host_virtual_packages,
-            build_virtual_packages = ?input.build_virtual_packages,
+            host_virtual_packages = %input.host_virtual_packages.iter().format(","),
+            build_virtual_packages = %input.build_virtual_packages.iter().format(","),
             variants = ?input.variants,
             "opening source build cache entry",
         );

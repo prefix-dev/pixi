@@ -6,7 +6,7 @@ use crate::{BuildEnvironment, build::source_checkout_cache_key, cache::common::V
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_path::AbsPathBuf;
-use pixi_record::{PinnedSourceSpec, SourceRecord};
+use pixi_record::{CanonicalSpec, PinnedSourceSpec, SourceRecord};
 use rattler_conda_types::{ChannelUrl, PackageName};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -78,10 +78,6 @@ impl MetadataCache for SourceMetadataCache {
         self.root.as_std_path()
     }
 
-    fn cache_file_name(&self) -> &'static str {
-        "source_metadata.json"
-    }
-
     const CACHE_SUFFIX: &'static str = "v0";
 }
 
@@ -102,9 +98,9 @@ impl CacheKey for SourceMetadataCacheShard {
 
         self.enabled_protocols.hash(&mut hasher);
 
-        let source_dir = source_checkout_cache_key(&self.pinned_source);
+        let source_dir = source_checkout_cache_key(&CanonicalSpec::from(&self.pinned_source));
         format!(
-            "{source_dir}/{}/{}-{}",
+            "{source_dir}/{}-{}-{}",
             self.package.as_normalized(),
             self.build_environment.host_platform,
             URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())

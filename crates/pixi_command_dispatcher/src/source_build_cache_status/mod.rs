@@ -4,7 +4,7 @@ use itertools::chain;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_glob::GlobSet;
-use pixi_record::{PinnedSourceSpec, VariantValue};
+use pixi_record::{CanonicalSpec, PinnedSourceSpec, VariantValue};
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use tokio::sync::Mutex;
 use tracing::instrument;
@@ -138,7 +138,7 @@ impl SourceBuildCacheStatusSpec {
         };
         let (cached_build, build_cache_entry) = command_dispatcher
             .build_cache()
-            .entry(self.source.manifest_source(), &build_input)
+            .entry(&CanonicalSpec::from(self.source.manifest_source()), &build_input)
             .await
             .map_err(SourceBuildCacheStatusError::BuildCache)
             .map_err(CommandDispatcherError::Failed)?;
