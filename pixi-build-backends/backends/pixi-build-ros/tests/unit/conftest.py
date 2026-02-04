@@ -13,7 +13,7 @@ from pixi_build_ros.utils import (
 @pytest.fixture
 def test_data_dir() -> Path:
     """Fixture to provide the path to the test data directory."""
-    return Path(__file__).parent / "data"
+    return Path(__file__).parent.parent / "data"
 
 
 @pytest.fixture
@@ -23,9 +23,14 @@ def package_xmls(test_data_dir) -> Path:
 
 
 @pytest.fixture
-def package_map() -> dict[str, PackageMapEntry]:
+def robostack_file() -> Path:
+    """Fixture to provide the path to the robostack package map file."""
+    return Path(__file__).parent.parent.parent / "robostack.yaml"
+
+
+@pytest.fixture
+def package_map(robostack_file: Path) -> dict[str, PackageMapEntry]:
     """Load the package map"""
-    robostack_file = Path(__file__).parent.parent / "robostack.yaml"
     return load_package_map_data([PackageMappingSource.from_file(robostack_file)])
 
 
