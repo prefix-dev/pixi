@@ -5,13 +5,12 @@ use std::{
 
 use clap::Parser;
 use indexmap::IndexMap;
-use itertools::Itertools;
 use miette::{IntoDiagnostic, Report};
 use pixi_api::{DefaultContext, WorkspaceContext};
 use pixi_config::default_channel_config;
 use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
 use pixi_progress::await_in_progress;
-use rattler_conda_types::{MatchSpec, ParseStrictness, Platform, RepoDataRecord};
+use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use tracing::{debug, error};
 use url::Url;
 
@@ -40,9 +39,13 @@ pub struct Args {
     #[arg(short, long, default_value_t = Platform::current())]
     pub platform: Platform,
 
-    /// Limit the number of search results
+    /// Limit the number of search results (versions per package)
     #[clap(short, long)]
     pub limit: Option<usize>,
+
+    /// Number of packages to show detailed information for
+    #[clap(short = 'n', long = "limit-packages", default_value = "3")]
+    pub limit_packages: usize,
 }
 
 pub async fn execute_impl<W: Write>(
@@ -71,88 +74,89 @@ pub async fn execute_impl<W: Write>(
     let channels = args.channels.resolve_from_project(workspace.as_ref())?;
     eprintln!(
         "Using channels: {}",
-        channels.iter().map(|c| c.name()).format(", ")
+        channels.iter().map(|c| c.name()).collect::<Vec<_>>().join(", ")
     );
 
-    let match_spec = MatchSpec::from_str(&args.package, ParseStrictness::Lenient).into_diagnostic();
-
-    let packages = if let Ok(match_spec) = match_spec {
-        // Search by exact name
-        let packages = if let Some(workspace) = workspace {
-            await_in_progress("search exact package...", |_| async {
-                let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
-                workspace_ctx
-                    .search_exact(match_spec, channels, args.platform)
-                    .await
-            })
-            .await?
-        } else {
-            await_in_progress("search exact package...", |_| async {
-                let default_ctx = DefaultContext::new(CliInterface {});
-                default_ctx
-                    .search_exact(match_spec, channels, args.platform)
-                    .await
-            })
-            .await?
-        };
-
-        if let Some(packages) = packages.as_ref() {
-            let newest_package = packages.last();
-            if let Some(newest_package) = newest_package {
-                let other_versions = packages
-                    .iter()
-                    .filter(|p| p.package_record != newest_package.package_record)
-                    .collect::<Vec<_>>();
-                if let Err(e) = print_package_info(newest_package, &other_versions, out)
-                    && e.kind() != std::io::ErrorKind::BrokenPipe
-                {
-                    return Err(e).into_diagnostic();
-                }
-            }
-        }
-
-        packages
-    } else if args.package.contains('*') {
-        // Search packages by wildcard
-        let packages = if let Some(workspace) = workspace {
-            await_in_progress("search packages...", |_| async {
-                let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
-                workspace_ctx
-                    .search_wildcard(&args.package, channels, args.platform)
-                    .await
-            })
-            .await?
-        } else {
-            await_in_progress("search packages...", |_| async {
-                let default_ctx = DefaultContext::new(CliInterface {});
-                default_ctx
-                    .search_wildcard(&args.package, channels, args.platform)
-                    .await
-            })
-            .await?
-        };
-
-        if let Some(packages) = packages.as_ref()
-            && let Err(e) = print_matching_packages(packages, out, args.limit)
-            && e.kind() != std::io::ErrorKind::BrokenPipe
-        {
-            return Err(e).into_diagnostic();
-        }
-
-        packages
+    let packages = if let Some(workspace) = workspace {
+        await_in_progress("searching packages...", |_| async {
+            WorkspaceContext::new(CliInterface {}, workspace)
+                .search(&args.package, channels, args.platform)
+                .await
+        })
+        .await?
     } else {
-        return Err(miette::miette!(
-            "Invalid package specification: {}",
-            args.package
-        ));
+        await_in_progress("searching packages...", |_| async {
+            DefaultContext::new(CliInterface {})
+                .search(&args.package, channels, args.platform)
+                .await
+        })
+        .await?
     };
 
-    Ok(packages)
+    // Print search results with detailed info for first N packages
+    if let Err(e) = print_search_results(&packages, out, args.limit_packages, args.limit)
+        && e.kind() != std::io::ErrorKind::BrokenPipe
+    {
+        return Err(e).into_diagnostic();
+    }
+
+    Ok(Some(packages))
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let mut out = io::stdout();
     execute_impl(args, &mut out).await?;
+    Ok(())
+}
+
+fn print_search_results<W: Write>(
+    packages: &[RepoDataRecord],
+    out: &mut W,
+    limit_packages: usize,
+    limit_versions: Option<usize>,
+) -> io::Result<()> {
+    // Group packages by name
+    let mut by_name: IndexMap<&PackageName, Vec<&RepoDataRecord>> = IndexMap::new();
+    for pkg in packages {
+        by_name
+            .entry(&pkg.package_record.name)
+            .or_default()
+            .push(pkg);
+    }
+
+    // Show detailed info for first N packages
+    for (i, (_, records)) in by_name.iter().take(limit_packages).enumerate() {
+        if i > 0 {
+            writeln!(out, "\n{}", "=".repeat(60))?;
+        }
+        let newest = records
+            .last()
+            .expect("records is non-empty since packages is non-empty");
+        let others: Vec<_> = records.iter().rev().skip(1).cloned().collect();
+        print_package_info(newest, &others, out)?;
+    }
+
+    // Show compact table for remaining packages
+    if by_name.len() > limit_packages {
+        writeln!(out, "\n{}", "=".repeat(60))?;
+        writeln!(
+            out,
+            "\nAdditional matching packages ({}):\n",
+            by_name.len() - limit_packages
+        )?;
+
+        let remaining: Vec<_> = by_name
+            .iter()
+            .skip(limit_packages)
+            .map(|(_, records)| {
+                *records
+                    .last()
+                    .expect("records is non-empty since packages is non-empty")
+            })
+            .collect();
+        print_matching_packages(&remaining, out, limit_versions)?;
+    }
+
     Ok(())
 }
 
@@ -358,7 +362,7 @@ fn print_package_info<W: Write>(
 }
 
 fn print_matching_packages<W: Write>(
-    packages: &[RepoDataRecord],
+    packages: &[&RepoDataRecord],
     out: &mut W,
     limit: Option<usize>,
 ) -> io::Result<()> {

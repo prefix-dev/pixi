@@ -29,24 +29,14 @@ impl<I: Interface> DefaultContext<I> {
         }
     }
 
-    /// Returns all matching package versions sorted by version
-    pub async fn search_exact(
+    /// Search for packages matching a pattern (supports glob patterns like python*)
+    pub async fn search(
         &self,
-        match_spec: MatchSpec,
+        pattern: &str,
         channels: IndexSet<Channel>,
         platform: Platform,
-    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-        crate::workspace::search::search_exact(None, match_spec, channels, platform).await
-    }
-
-    /// Returns all matching packages with their latest versions
-    pub async fn search_wildcard(
-        &self,
-        search: &str,
-        channels: IndexSet<Channel>,
-        platform: Platform,
-    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-        crate::workspace::search::search_wildcard(None, search, channels, platform).await
+    ) -> miette::Result<Vec<RepoDataRecord>> {
+        crate::workspace::search::search(None, pattern, channels, platform).await
     }
 }
 
@@ -402,29 +392,13 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
-    pub async fn search_exact(
+    /// Search for packages matching a pattern (supports glob patterns like python*)
+    pub async fn search(
         &self,
-        match_spec: MatchSpec,
+        pattern: &str,
         channels: IndexSet<Channel>,
         platform: Platform,
-    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-        crate::workspace::search::search_exact(
-            Some(&self.workspace),
-            match_spec,
-            channels,
-            platform,
-        )
-        .await
-    }
-
-    /// Returns all matching packages with their latest versions
-    pub async fn search_wildcard(
-        &self,
-        search: &str,
-        channels: IndexSet<Channel>,
-        platform: Platform,
-    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-        crate::workspace::search::search_wildcard(Some(&self.workspace), search, channels, platform)
-            .await
+    ) -> miette::Result<Vec<RepoDataRecord>> {
+        crate::workspace::search::search(Some(&self.workspace), pattern, channels, platform).await
     }
 }
