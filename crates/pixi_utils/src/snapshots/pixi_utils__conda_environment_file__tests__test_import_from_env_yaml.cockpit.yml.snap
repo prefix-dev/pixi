@@ -27,6 +27,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -50,6 +51,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -81,6 +83,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -112,6 +115,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -143,6 +147,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -174,6 +179,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -205,6 +211,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -236,6 +243,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -267,6 +275,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -298,6 +307,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -329,6 +339,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -360,6 +371,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -391,6 +403,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -422,6 +435,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -453,6 +467,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -484,6 +499,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -515,6 +531,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -546,6 +563,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -577,6 +595,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -618,6 +637,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
@@ -649,6 +669,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 url: None,
                 license: None,
                 condition: None,
+                track_features: None,
             },
         ],
         [

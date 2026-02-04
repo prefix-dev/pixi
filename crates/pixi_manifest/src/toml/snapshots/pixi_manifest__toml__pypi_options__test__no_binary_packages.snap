@@ -22,4 +22,5 @@ PypiOptions {
             },
         ),
     ),
+    skip_wheel_filename_check: None,
 }

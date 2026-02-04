@@ -122,3 +122,39 @@ fn test_direct_package_xml() {
         assert_discover_snapshot ! ( & path);
     });
 }
+
+#[test]
+fn test_ros_discovery_priority() {
+    // Test that ROS packages are discovered after rattler-build recipes
+    // Create a test case with both package.xml and recipe.yaml
+    let path = dunce::canonicalize(discovery_directory().join("ros-priority")).unwrap();
+    let file_path = Path::new(file!()).parent().unwrap();
+    let channel_config = ChannelConfig::default_with_root_dir(file_path.to_owned());
+
+    match DiscoveredBackend::discover(&path, &channel_config, &EnabledProtocols::default()) {
+        Ok(backend) => {
+            // Should discover rattler-build backend, not ROS
+            insta::with_settings!({
+                filters => vec![
+                    (path.to_string_lossy().replace(r"\", r"\\").as_str(), "file://<ROOT>"),
+                    (r"\\", r"/"),
+                ],
+            }, {
+                assert_yaml_snapshot!(backend, {
+                    "[\"init-params\"][\"manifest-path\"]" => insta::dynamic_redaction(|value, _path| {
+                        redact_path(value.as_str().unwrap())
+                    }),
+                    "[\"init-params\"][\"workspace-root\"]" => insta::dynamic_redaction(|value, _path| {
+                        redact_path(value.as_str().unwrap())
+                    }),
+                    "[\"init-params\"][\"source-anchor\"]" => insta::dynamic_redaction(|value, _path| {
+                        redact_path(value.as_str().unwrap())
+                    }),
+                });
+            });
+        }
+        Err(err) => {
+            assert_snapshot!(pixi_test_utils::format_diagnostic(&err));
+        }
+    }
+}

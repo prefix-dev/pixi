@@ -132,6 +132,7 @@ impl BinarySpecExt for pbt::BinaryPackageSpec {
             extras: None,
             namespace: None,
             condition: None,
+            track_features: None,
         }
     }
 }

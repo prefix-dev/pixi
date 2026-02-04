@@ -12,4 +12,5 @@ PypiOptions {
     no_build: None,
     dependency_overrides: None,
     no_binary: None,
+    skip_wheel_filename_check: None,
 }

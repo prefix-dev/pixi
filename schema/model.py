@@ -736,6 +736,11 @@ class PyPIOptions(StrictBaseModel):
         description="The strategy to use when considering pre-release versions",
         examples=["disallow", "allow", "if-necessary", "explicit", "if-necessary-or-explicit"],
     )
+    skip_wheel_filename_check: bool | None = Field(
+        None,
+        description="Skip wheel filename validation, allowing installation of wheels with version mismatches between filename and metadata",
+        examples=[True, False],
+    )
 
 
 #######################

@@ -185,8 +185,8 @@ async fn test_purl_are_missing_for_non_conda_forge() {
     let foo_bar_package = Package::build("foo-bar-car", "2").finish();
 
     let mut repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "foo-bar-car".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
         channel: Some("dummy-channel".to_owned()),
     };
@@ -221,8 +221,8 @@ async fn test_purl_are_generated_using_custom_mapping() {
     let foo_bar_package = Package::build("foo-bar-car", "2").finish();
 
     let mut repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "foo-bar-car".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
@@ -269,8 +269,8 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
     let foo_bar_package = Package::build("pandoc", "2").finish();
 
     let mut repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "pandoc".to_owned(),
         url: Url::parse("https://haskell.org/pandoc/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
@@ -310,15 +310,15 @@ async fn test_dont_record_not_present_package_as_purl() {
     let boltons_package = Package::build("boltons", "99999").finish();
 
     let mut repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "pixi-something-new-for-test".to_owned(),
         url: Url::parse("https://pypi.org/simple/something-new/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/osx-arm64/brotli-python-1.1.0-py311ha891d26_1.conda".to_owned()),
     };
 
     let mut boltons_repo_data_record = RepoDataRecord {
+        identifier: boltons_package.identifier(),
         package_record: boltons_package.package_record,
-        file_name: "boltons".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
@@ -421,15 +421,15 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     let boltons_package = Package::build("boltons", "2").finish();
 
     let repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "pixi-something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
     let boltons_repo_data_record = RepoDataRecord {
+        identifier: boltons_package.identifier(),
         package_record: boltons_package.package_record,
-        file_name: "boltons".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
@@ -500,8 +500,8 @@ async fn test_custom_mapping_channel_with_suffix() {
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
 
     let repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "pixi-something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge".to_owned()),
     };
@@ -557,8 +557,8 @@ async fn test_repo_data_record_channel_with_suffix() {
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
 
     let repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "pixi-something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
@@ -613,8 +613,8 @@ async fn test_path_channel() {
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
 
     let repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "pixi-something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
         channel: Some("file:///home/user/staged-recipes/build_artifacts".to_owned()),
     };
@@ -691,8 +691,8 @@ async fn test_file_url_as_mapping_location() {
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
 
     let repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "pixi-something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
@@ -753,8 +753,8 @@ async fn test_disabled_mapping() {
     let boltons_package = Package::build("boltons", "2").finish();
 
     let boltons_repo_data_record = RepoDataRecord {
+        identifier: boltons_package.identifier(),
         package_record: boltons_package.package_record,
-        file_name: "boltons".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
@@ -1021,8 +1021,8 @@ async fn test_missing_mapping_file_error_includes_path() {
     let foo_bar_package = Package::build("foo-bar-car", "2").finish();
 
     let mut repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "foo-bar-car".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };

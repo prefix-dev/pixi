@@ -42,7 +42,7 @@ use pixi_utils::{
 };
 use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
-    menuinst::MenuMode, package::ArchiveIdentifier,
+    menuinst::MenuMode, package::CondaArchiveIdentifier,
 };
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
@@ -1471,8 +1471,8 @@ impl Project {
             Either::Right(binary_spec) => match binary_spec {
                 BinarySpec::Path(PathBinarySpec { path }) => path
                     .file_name()
-                    .and_then(ArchiveIdentifier::try_from_filename)
-                    .and_then(|iden| PackageName::from_str(&iden.name).ok())
+                    .and_then(CondaArchiveIdentifier::try_from_filename)
+                    .and_then(|iden| PackageName::from_str(&iden.identifier.name).ok())
                     .ok_or(InferPackageNameError::UnsupportedSpecType),
                 _ => Err(InferPackageNameError::UnsupportedSpecType),
             },
@@ -1504,6 +1504,7 @@ mod tests {
     use itertools::Itertools;
     use rattler_conda_types::{
         NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
+        package::DistArchiveIdentifier,
     };
     use tempfile::tempdir;
     use url::Url;
@@ -1744,7 +1745,8 @@ mod tests {
 
         let repodata_record = RepoDataRecord {
             package_record: package_record.clone(),
-            file_name: "doesnt_matter.conda".to_string(),
+            identifier: DistArchiveIdentifier::try_from_filename("doesnt_matter-0-0.conda")
+                .expect("valid filename"),
             url: Url::from_str("https://also_doesnt_matter").unwrap(),
             channel: Some(format!(
                 "{}{}",
@@ -1767,7 +1769,8 @@ mod tests {
         // Test with different from default channel alias
         let repodata_record = RepoDataRecord {
             package_record: package_record.clone(),
-            file_name: "doesnt_matter.conda".to_string(),
+            identifier: DistArchiveIdentifier::try_from_filename("doesnt_matter-0-0.conda")
+                .expect("valid filename"),
             url: Url::from_str("https://also_doesnt_matter").unwrap(),
             channel: Some("https://test-channel.com/idk".to_string()),
         };

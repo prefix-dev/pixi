@@ -11,6 +11,7 @@ use pixi_spec::{BinarySpec, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord, Version,
+    package::{ArchiveIdentifier, CondaArchiveType, DistArchiveIdentifier},
 };
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{ChannelPriority, SolveStrategy, SolverImpl};
@@ -193,12 +194,14 @@ impl SolveCondaEnvironmentSpec {
                     let repodata_record = RepoDataRecord {
                         package_record: record.package_record.clone(),
                         url: url.clone(),
-                        file_name: format!(
-                            "{}-{}-{}.source",
-                            record.package_record.name.as_normalized(),
-                            &record.package_record.version,
-                            &record.package_record.build
-                        ),
+                        identifier: DistArchiveIdentifier {
+                            identifier: ArchiveIdentifier {
+                                name: record.package_record.name.as_normalized().to_string(),
+                                version: record.package_record.version.to_string(),
+                                build_string: format!("{}_source", record.package_record.build),
+                            },
+                            archive_type: CondaArchiveType::Conda.into(),
+                        },
                         channel: None,
                     };
                     let mut record = record.clone();
@@ -258,7 +261,14 @@ impl SolveCondaEnvironmentSpec {
                         )
                     },
                     url: url.clone(),
-                    file_name: format!("{prefixed_name}-0-{build_string}.devsource"),
+                    identifier: DistArchiveIdentifier {
+                        identifier: ArchiveIdentifier {
+                            name: prefixed_name.clone(),
+                            version: "0".to_string(),
+                            build_string: format!("{build_string}_devsource"),
+                        },
+                        archive_type: CondaArchiveType::Conda.into(),
+                    },
                     channel: None,
                 };
                 url_to_dev_source.insert(url, (dev_source, repodata_record));
