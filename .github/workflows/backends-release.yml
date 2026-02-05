@@ -30,7 +30,6 @@ jobs:
     permissions:
       id-token: write
       contents: read
-      attestations: write
     env:
       REPO_NAME: "prefix-dev/pixi"
       SCCACHE_GHA_ENABLED: "true"
@@ -83,26 +82,11 @@ jobs:
         shell: bash
         run: pixi run -e backends-release sccache --stop-server
 
-      - uses: actions/attest@7667f588f2f73a90cea6c7ac70e78266c4f76616 # v3.1.0
-        id: attest
-        if: ${{ github.ref == 'refs/heads/main' }}
-        with:
-          subject-path: "output/**/*.conda"
-          predicate-type: "https://schemas.conda.org/attestations-publish-1.schema.json"
-          predicate: "{\"targetChannel\": \"https://prefix.dev/pixi-build-backends\"}"
-
-      - name: Generate attestations for conda packages
-        shell: bash
-        if: ${{ github.ref == 'refs/heads/main' }}
-        run: pixi run -e backends-release generate-attestations output "${{ steps.attest.outputs.bundle-path }}"
-
       - name: Upload build artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: conda-packages-${{ matrix.target }}
-          path: |
-            output/**/*.conda
-            output/**/*.sig
+          path: output/**/*.conda
 
       - name: Kill any lingering processes (Windows)
         if: runner.os == 'Windows'
@@ -124,7 +108,6 @@ jobs:
     if: github.repository == 'prefix-dev/pixi'
     permissions:
       id-token: write
-      attestations: write
       contents: read
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
@@ -141,17 +124,4 @@ jobs:
         with:
           environments: backends-release
       - name: Upload packages
-        shell: bash
-        run: |
-          for file in conda-packages/**/*.conda; do
-            echo "Uploading ${file}"
-            # Find corresponding attestation file
-            ATTESTATION_FILE="${file%.conda}.sig"
-            if [ -f "$ATTESTATION_FILE" ]; then
-              echo "Found attestation: $ATTESTATION_FILE"
-              pixi run -e backends-release rattler-build upload prefix --skip-existing -c pixi-build-backends "$file" --attestation "$ATTESTATION_FILE"
-            else
-              echo "Warning: No attestation found for $file"
-              pixi run -e backends-release rattler-build upload prefix --skip-existing -c pixi-build-backends "$file"
-            fi
-          done
+        run: pixi run -e backends-release upload-packages conda-packages
