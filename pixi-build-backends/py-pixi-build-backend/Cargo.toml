@@ -1,3 +1,6 @@
+[workspace]
+# Empty workspace to allow building this crate in isolation.
+
 [package]
 edition = "2024"
 name = "py-pixi-build-backend"

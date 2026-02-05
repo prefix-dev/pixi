@@ -54,6 +54,7 @@ jobs:
       code: ${{ steps.changed.outputs.code_any_changed }}
       unix_installer: ${{ steps.unix_installer_changed.outputs.code_any_changed }}
       win_installer: ${{ steps.win_installer_changed.outputs.code_any_changed }}
+      ros_backend: ${{ steps.ros_backend_changed.outputs.code_any_changed }}
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
@@ -86,6 +87,13 @@ jobs:
           files_yaml: |
             code:
               - "install/install.ps1"
+
+      - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
+        id: ros_backend_changed
+        with:
+          files_yaml: |
+            code:
+              - "pixi-build-backends/backends/pixi-build-ros/**"
 
   lint:
     name: "lint"
@@ -899,10 +907,17 @@ jobs:
 
   test-backends-ros:
     name: Backends - ROS
+    # Run on when ros backend changed, on main branch, or when extra slow tests are requested
+    if: ${{ needs.determine_changes.outputs.ros_backend == 'true' || github.ref == 'refs/heads/main' ||  contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
     needs:
       - build-binary-linux-x86_64
       - build-binary-macos-aarch64
       - build-binary-windows-x86_64
+      - determine_changes
     uses: ./.github/workflows/backends-ros.yml
     with:
       sha: ${{ github.sha }}

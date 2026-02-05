@@ -170,7 +170,6 @@ class ROSGenerator(GenerateRecipeProtocol):  # type: ignore[misc]  # MetadataPro
         # Test the build script before running to early out.
         # TODO: returned script.content list is not a list of strings, a container for that
         # so it cant be compared directly with the list yet
-        # assert generated_recipe.recipe.build.script.content == build_script_lines, f"Script content {generated_recipe.recipe.build.script.content}, build script lines {build_script_lines}"
         return generated_recipe
 
     def extract_input_globs_from_build(self, config: dict[str, Any], workdir: Path, editable: bool) -> list[str]:
