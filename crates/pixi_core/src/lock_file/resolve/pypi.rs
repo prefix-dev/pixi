@@ -1105,8 +1105,15 @@ async fn lock_pypi_packages(
                             (url_or_path, hash, false)
                         }
                         SourceDist::Directory(dir) => {
-                            // Compute the hash of the package based on the source tree.
-                            let hash = if dir.install_path.is_dir() {
+                            // Don't compute hash for the workspace's own package (path = ".")
+                            // to avoid lockfile invalidation when only metadata (like version,
+                            // authors) changes but dependencies remain the same.
+                            // See: https://github.com/prefix-dev/pixi/discussions/3627
+                            let is_workspace_package = dir.install_path.is_dir()
+                                && dunce::canonicalize(&dir.install_path).ok()
+                                    == dunce::canonicalize(abs_project_root).ok();
+
+                            let hash = if dir.install_path.is_dir() && !is_workspace_package {
                                 Some(
                                     PypiSourceTreeHashable::from_directory(&dir.install_path)
                                         .into_diagnostic()
