@@ -161,6 +161,41 @@ pub(crate) fn source_checkout_cache_key(source: &CanonicalSourceLocation) -> Str
     }
 }
 
+/// Constructs a name for a cache directory for the manifest- and build source code location
+pub(crate) fn manifest_and_source_cache_key(
+    manifest_source: &CanonicalSourceLocation,
+    build_source: &CanonicalSourceLocation,
+) -> String {
+    match manifest_source {
+        CanonicalSourceLocation::Url(url) => {
+            let mut hasher = Xxh3::new();
+            url.sha256.hash(&mut hasher);
+            build_source.hash(&mut hasher);
+            let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
+            format!("{}-{unique_key}", pretty_url_name(&url.url))
+        }
+        CanonicalSourceLocation::Git(git) => {
+            let name = pretty_url_name(git.repository.as_url());
+            let mut hasher = Xxh3::new();
+            git.hash(&mut hasher);
+            build_source.hash(&mut hasher);
+            let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
+            format!("{name}-{unique_key}")
+        }
+        CanonicalSourceLocation::Path(path) => {
+            let mut hasher = Xxh3::new();
+            path.path.hash(&mut hasher);
+            build_source.hash(&mut hasher);
+            let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
+            if let Some(file_name) = path.path.file_name() {
+                format!("{file_name}-{unique_key}")
+            } else {
+                unique_key
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use indexmap::IndexMap;

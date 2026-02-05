@@ -123,7 +123,7 @@ impl SourceMetadataCollector {
             let (source_metadata, mut chain) = source_metadata?;
 
             // Process transitive dependencies
-            for record in &source_metadata.cached_metadata.records {
+            for record in &source_metadata.records {
                 chain.push(record.package_record.name.clone());
                 let anchor =
                     SourceAnchor::from(SourceLocationSpec::from(record.manifest_source.clone()));
