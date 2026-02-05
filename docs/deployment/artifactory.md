@@ -10,6 +10,14 @@ This guide explains how to configure pixi to use Artifactory as a private conda 
 In your Artifactory instance, create a repository with the "Conda" package type.
 The repository URL will be in the format: `https://my-org.jfrog.io/artifactory/<repository-name>/`
 
+Artifactory supports different repository types:
+
+- **Local repositories**: Store your own private packages
+- **Remote repositories**: Cache and mirror upstream channels like conda-forge. This reduces external bandwidth, speeds up downloads, and provides availability even when upstream channels are down.
+- **Virtual repositories** (not recommended): Combine multiple local and remote repositories under a single URL
+
+A common setup is to create a remote repository that mirrors conda-forge, then combine it with a local repository for internal packages using a virtual repository.
+
 ![Artifactory repository overview](../assets/artifactory-repository-overview.png)
 
 ### 2. Generate an access token
@@ -82,7 +90,21 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 python = ">=3.11"
 # This will come from your Artifactory channel if available there
 my-internal-package = "*"
-# These will come from conda-forge
+# These will come from conda-forge (due to channel priority)
 numpy = ">=1.24"
 pandas = ">=2.0"
 ```
+
+### Forcing a specific channel
+
+If you want to ensure a package always comes from a specific channel regardless of priority, use the `channel` key:
+
+```toml
+[dependencies]
+# Always use numpy from conda-forge, even if it exists in Artifactory
+numpy = { version = ">=1.24", channel = "conda-forge" }
+# Always use internal-lib from Artifactory
+internal-lib = { version = "*", channel = "https://my-org.jfrog.io/artifactory/internal-packages" }
+```
+
+This is useful when you want to override the default channel priority for specific packages.
