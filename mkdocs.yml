@@ -159,9 +159,9 @@ nav:
   - Distributing:
       - Pixi Pack: deployment/pixi_pack.md
       - Authentication: deployment/authentication.md
-      - JFrog Artifactory: deployment/artifactory.md
       - Container: deployment/container.md
       - S3: deployment/s3.md
+      - JFrog Artifactory: deployment/artifactory.md
   - Integration:
       - Editor:
           - VSCode: integration/editor/vscode.md
