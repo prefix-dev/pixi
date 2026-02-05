@@ -194,10 +194,13 @@ pub async fn simple_test() {
     let output = event_tree.to_string();
     let output = regex::Regex::new(r"file:///[^@]+/multi-output-recipe/")
         .unwrap()
-        .replace_all(&output, "file://[LOCAL_GIT_REPO]/");
-    let output = regex::Regex::new(r"@[a-f0-9]{40}")
+        .replace_all(&output, "file://[LOCAL_GIT_REPO]");
+    let output = regex::Regex::new(r"rev=[a-z0-9]+")
         .unwrap()
-        .replace_all(&output, "@[GIT_HASH]");
+        .replace_all(&output, "rev=[GIT_REF]");
+    let output = regex::Regex::new(r"#[a-f0-9]{40}")
+        .unwrap()
+        .replace_all(&output, "#[GIT_HASH]");
     insta::assert_snapshot!(output);
 }
 
