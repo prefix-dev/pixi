@@ -31,7 +31,6 @@ outputs:
         - ${{ stdlib("c") }}
         - cargo-bundle-licenses
         - cargo-auditable
-        - sccache
       host:
         - pkg-config
         - libzlib
@@ -114,7 +113,11 @@ outputs:
         - bin/pixi-build-cmake.exe
         - THIRDPARTY.yml
       script:
-        - cp ${{ PREFIX }}/THIRDPARTY.yml .
+        - if: unix
+          then:
+            - mv ${{ PREFIX }}/THIRDPARTY.yml ${{ SRC_DIR }}/THIRDPARTY.yml
+          else:
+            - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
         - pixi-build-api-version >=4,<5
@@ -147,7 +150,11 @@ outputs:
         - LICENSE
         - THIRDPARTY.yml
       script:
-        - cp ${{ PREFIX }}/THIRDPARTY.yml .
+        - if: unix
+          then:
+            - mv ${{ PREFIX }}/THIRDPARTY.yml ${{ SRC_DIR }}/THIRDPARTY.yml
+          else:
+            - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
         - pixi-build-api-version >=4,<5
@@ -180,7 +187,11 @@ outputs:
         - LICENSE
         - THIRDPARTY.yml
       script:
-        - cp ${{ PREFIX }}/THIRDPARTY.yml .
+        - if: unix
+          then:
+            - mv ${{ PREFIX }}/THIRDPARTY.yml ${{ SRC_DIR }}/THIRDPARTY.yml
+          else:
+            - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
         - pixi-build-api-version >=4,<5
@@ -214,7 +225,11 @@ outputs:
         - LICENSE
         - THIRDPARTY.yml
       script:
-        - cp ${{ PREFIX }}/THIRDPARTY.yml .
+        - if: unix
+          then:
+            - mv ${{ PREFIX }}/THIRDPARTY.yml ${{ SRC_DIR }}/THIRDPARTY.yml
+          else:
+            - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
         - pixi-build-api-version >=4,<5
@@ -248,7 +263,11 @@ outputs:
         - LICENSE
         - THIRDPARTY.yml
       script:
-        - cp ${{ PREFIX }}/THIRDPARTY.yml .
+        - if: unix
+          then:
+            - mv ${{ PREFIX }}/THIRDPARTY.yml ${{ SRC_DIR }}/THIRDPARTY.yml
+          else:
+            - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
         - pixi-build-api-version >=4,<5
@@ -287,7 +306,6 @@ outputs:
             - maturin >=1.2.2,<2
         - ${{ compiler('rust') }}
         - ${{ stdlib('c') }}
-        - sccache
       host:
         - python ${{ python_min }}.*
         - python-abi3

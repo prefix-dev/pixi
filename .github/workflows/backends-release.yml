@@ -14,7 +14,10 @@ on:
       - "crates/pixi-build-mojo/**"
       - ".github/workflows/backends-release.yml"
   pull_request:
-# types: [labeled]
+    types:
+      - labeled
+      - synchronize
+      - opened
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
@@ -22,7 +25,7 @@ concurrency:
 
 jobs:
   build:
-    # if: github.event_name != 'pull_request' || github.event.label.name == 'release:backends'
+    if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'release:backends')}}
     timeout-minutes: 40
     permissions:
       id-token: write

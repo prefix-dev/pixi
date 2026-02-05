@@ -60,7 +60,7 @@ RUSTC_WRAPPER = "sccache"
 
 [feature.backends-release.dependencies]
 rattler-build = { git = "https://github.com/prefix-dev/rattler-build.git", branch = "refactor" }
-sccache = ">=0.12,<0.13"
+sccache = ">=0.13.0,<0.14"
 
 [feature.backends-release.tasks]
 generate-versions = { cmd = "python pixi-build-backends/scripts/generate-versions.py", description = "Generate version env vars for CI" }
