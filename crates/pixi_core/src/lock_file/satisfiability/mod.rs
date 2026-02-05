@@ -23,16 +23,18 @@ use pixi_manifest::{
     pypi::pypi_options::{NoBuild, PrereleaseMode},
 };
 use pixi_record::{
-    DevSourceRecord, LockedGitUrl, ParseLockFileError, PinnedSourceSpec, PixiRecord,
-    SourceMismatchError, SourceRecord, VariantValue,
+    DevSourceRecord, LockedGitUrl, ParseLockFileError, PinnedBuildSourceSpec, PinnedSourceSpec,
+    PixiRecord, SourceMismatchError, SourceRecord, VariantValue,
 };
-use pixi_spec::{PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError};
+use pixi_spec::{
+    PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError, Subdirectory,
+};
 use pixi_utils::variants::VariantConfig;
 use pixi_uv_conversions::{
     AsPep508Error, as_uv_req, into_pixi_reference, pep508_requirement_to_uv_requirement,
     to_normalize, to_uv_specifiers, to_uv_version,
 };
-use pypi_modifiers::pypi_marker_env::determine_marker_environment;
+use pypi_modifiers::{Tags, pypi_marker_env::determine_marker_environment};
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, PackageName,
     PackageRecord, ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
@@ -44,7 +46,7 @@ use rattler_lock::{
 use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
-use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
+use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
 use uv_distribution_types::{RequirementSource, RequiresPython};
 use uv_git_types::GitReference;
 use uv_pypi_types::ParsedUrlError;
@@ -60,6 +62,9 @@ use crate::workspace::{
 pub enum EnvironmentUnsat {
     #[error("the channels in the lock-file do not match the environments channels")]
     ChannelsMismatch,
+
+    #[error("channels were extended with additional lower-priority channels")]
+    ChannelsExtended,
 
     #[error("platform(s) '{platforms}' present in the lock-file but not in the environment", platforms = .0.iter().map(|p| p.as_str()).join(", ")
     )]
@@ -106,6 +111,10 @@ pub enum EnvironmentUnsat {
         locked_mode: PrereleaseMode,
         expected_mode: PrereleaseMode,
     },
+    #[error(
+        "the lock-file was solved with system requirements incompatible with the tags on wheel ({wheel})"
+    )]
+    PypiWheelTagsMismatch { wheel: String },
 
     #[error(transparent)]
     ExcludeNewerMismatch(#[from] ExcludeNewerMismatch),
@@ -424,8 +433,8 @@ pub enum PlatformUnsat {
     )]
     PackageBuildSourceMismatch(String, SourceMismatchError),
 
-    #[error("the locked metadata of '{0}' package changed (see trace logs for details)")]
-    SourcePackageMetadataChanged(String),
+    #[error("the metadata of source package '{0}' changed: {1}")]
+    SourcePackageMetadataChanged(String, String),
 
     #[error("the source location '{0}' changed from '{1}' to '{2}'")]
     SourceBuildLocationChanged(String, String, String),
@@ -511,7 +520,18 @@ pub fn verify_environment_satisfiability(
                 .into_base_url(&config)
         })
         .try_collect()?;
-    if !channels.eq(&locked_channels) {
+
+    // Check if channels match or were only extended (appended).
+    // If locked_channels is a prefix of channels, only lower-priority channels were added,
+    // which doesn't affect existing package selections due to channel priority semantics.
+    if channels.starts_with(&locked_channels) {
+        if channels.len() > locked_channels.len() {
+            // Channels were extended - lock file needs update but packages are still valid
+            return Err(EnvironmentUnsat::ChannelsExtended);
+        }
+        // Exact match - channels are identical, no error
+    } else {
+        // Channels were removed, reordered, or prepended - need full re-solve
         return Err(EnvironmentUnsat::ChannelsMismatch);
     }
 
@@ -531,6 +551,7 @@ pub fn verify_environment_satisfiability(
     // 1. Check if the PyPI indexes are present and match
     // 2. Check if we have a no-build option set, that we only have binary packages,
     //    or an editable source
+    // 3. Check that wheel tags still are possible with current system requirements
     if !environment.pypi_dependencies(None).is_empty() {
         let group_pypi_options = grouped_env.pypi_options();
         let indexes = rattler_lock::PypiIndexes::from(group_pypi_options.clone());
@@ -538,10 +559,15 @@ pub fn verify_environment_satisfiability(
         // Check if the indexes in the lock file match our current configuration.
         verify_pypi_indexes(locked_environment, indexes)?;
 
-        // Check that if `no-build` is set, we only have binary packages
-        // or that the package that we disallow are not built from source
-        if let Some(no_build) = group_pypi_options.no_build.as_ref() {
-            verify_pypi_no_build(no_build, locked_environment)?;
+        let no_build_check = PypiNoBuildCheck::new(group_pypi_options.no_build.as_ref());
+        let pypi_wheel_tags_check = PypiWheelTagsCheck::new(environment, &locked_environment);
+
+        // Actually check all pypi packages in one iteration
+        for (platform, package_it) in locked_environment.pypi_packages_by_platform() {
+            for (package_data, _) in package_it {
+                no_build_check.check(package_data)?;
+                pypi_wheel_tags_check.check(platform, package_data)?;
+            }
         }
     }
 
@@ -596,99 +622,169 @@ pub fn verify_environment_satisfiability(
     Ok(())
 }
 
-fn verify_pypi_no_build(
-    no_build: &NoBuild,
-    locked_environment: rattler_lock::Environment<'_>,
-) -> Result<(), EnvironmentUnsat> {
-    // Check if we are disallowing all source packages or only a subset
-    #[derive(Eq, PartialEq)]
-    enum Check {
-        All,
-        Packages(HashSet<pep508_rs::PackageName>),
-    }
+struct PypiWheelTagsCheck {
+    platform_wheel_tags: HashMap<Platform, Tags>,
+}
 
-    let check = match no_build {
-        // Ok, so we are allowed to build any source package
-        NoBuild::None => return Ok(()),
-        // We are not allowed to build any source package
-        NoBuild::All => Check::All,
-        // We are not allowed to build a subset of source packages
-        NoBuild::Packages(hash_set) => {
-            let packages = hash_set
-                .iter()
-                .filter_map(|name| pep508_rs::PackageName::new(name.to_string()).ok())
-                .collect();
-            Check::Packages(packages)
+impl PypiWheelTagsCheck {
+    pub fn new(
+        environment: &Environment,
+        locked_environment: &rattler_lock::Environment<'_>,
+    ) -> Self {
+        let platform_wheel_tags = {
+            let system_requirements = environment.system_requirements();
+            locked_environment
+                .packages_by_platform()
+                .flat_map(|(platform, packages)| packages.map(move |package| (platform, package)))
+                .filter_map(|(platform, package)| match package {
+                    LockedPackageRef::Conda(rattler_lock::CondaPackageData::Binary(package)) => {
+                        Some((platform, package))
+                    }
+                    _ => None,
+                })
+                .filter(move |(_, package)| {
+                    pypi_modifiers::pypi_tags::is_python_record(&package.package_record)
+                })
+                .filter_map(|(platform, package)| {
+                    pypi_modifiers::pypi_tags::get_pypi_tags(
+                        platform,
+                        &system_requirements,
+                        &package.package_record,
+                    )
+                    .ok()
+                    .map(|tags| (platform, tags))
+                })
+                .collect::<HashMap<_, _>>()
+        };
+
+        PypiWheelTagsCheck {
+            platform_wheel_tags,
         }
-    };
-
-    // Small helper function to get the dist extension from a url
-    fn pypi_dist_extension_from_url(url: &Url) -> Result<DistExtension, ExtensionError> {
-        // Take the file name from the url
-        let path = url
-            .path_segments()
-            .and_then(|mut s| s.next_back())
-            .unwrap_or_default();
-        // Convert the path to a dist extension
-        DistExtension::from_path(Path::new(path))
     }
 
-    // Determine if we do not accept non-wheels for all packages or only for a
-    // subset Check all the currently locked packages if we are making any
-    // violations
-    for (_, packages) in locked_environment.pypi_packages_by_platform() {
-        for (package, _) in packages {
-            let extension = match &package.location {
-                // Get the extension from the url
-                UrlOrPath::Url(url) => {
-                    if url.scheme().starts_with("git+") {
-                        // Just choose some source extension, does not really matter, cause it is
-                        // actually a directory, this is just for the check
-                        Ok(DistExtension::Source(SourceDistExtension::TarGz))
-                    } else {
-                        pypi_dist_extension_from_url(url)
-                    }
-                }
-                UrlOrPath::Path(path) => {
-                    let path = Path::new(path.as_str());
-                    if path.is_dir() {
-                        // Editables are allowed with no-build
-                        if package.editable {
-                            continue;
-                        } else {
-                            // Non-editable source packages might not be allowed
-                            Ok(DistExtension::Source(SourceDistExtension::TarGz))
-                        }
-                    } else {
-                        // Could be a reference to a wheel or sdist
-                        DistExtension::from_path(path)
-                    }
-                }
-            }?;
+    pub fn check(
+        &self,
+        platform: Platform,
+        package_data: &PypiPackageData,
+    ) -> Result<(), EnvironmentUnsat> {
+        let Some(package_file_name) = package_data.location.file_name() else {
+            return Ok(());
+        };
+        let Some(platform_tags) = self.platform_wheel_tags.get(&platform) else {
+            return Ok(());
+        };
+        let Ok(wheel) = WheelFilename::from_str(package_file_name) else {
+            return Ok(());
+        };
+        if !wheel.is_compatible(platform_tags) {
+            Err(EnvironmentUnsat::PypiWheelTagsMismatch {
+                wheel: wheel.name.to_string(),
+            })
+        } else {
+            Ok(())
+        }
+    }
+}
 
-            match extension {
-                // Wheels are fine
-                DistExtension::Wheel => continue,
-                // Check if we have a source package that we are not allowed to build
-                // it could be that we are only disallowing for certain source packages
-                DistExtension::Source(_) => match check {
-                    Check::All => {
-                        return Err(EnvironmentUnsat::NoBuildWithNonBinaryPackages(
-                            package.name.to_string(),
-                        ));
-                    }
-                    Check::Packages(ref hash_set) => {
-                        if hash_set.contains(&package.name) {
-                            return Err(EnvironmentUnsat::NoBuildWithNonBinaryPackages(
-                                package.name.to_string(),
-                            ));
-                        }
-                    }
-                },
+// Check if we are disallowing all source packages or only a subset
+#[derive(Eq, PartialEq)]
+enum Check {
+    All,
+    Packages(HashSet<pep508_rs::PackageName>),
+}
+
+pub struct PypiNoBuildCheck {
+    check: Option<Check>,
+}
+
+impl PypiNoBuildCheck {
+    pub fn new(no_build: Option<&NoBuild>) -> Self {
+        let check = match no_build {
+            // Ok, so we are allowed to build any source package
+            Some(NoBuild::None) | None => None,
+            // We are not allowed to build any source package
+            Some(NoBuild::All) => Some(Check::All),
+            // We are not allowed to build a subset of source packages
+            Some(NoBuild::Packages(hash_set)) => {
+                let packages = hash_set
+                    .iter()
+                    .filter_map(|name| pep508_rs::PackageName::new(name.to_string()).ok())
+                    .collect();
+                Some(Check::Packages(packages))
             }
+        };
+
+        Self { check }
+    }
+
+    pub fn check(&self, package_data: &PypiPackageData) -> Result<(), EnvironmentUnsat> {
+        let Some(check) = &self.check else {
+            return Ok(());
+        };
+
+        // Determine if we do not accept non-wheels for all packages or only for a
+        // subset Check all the currently locked packages if we are making any
+        // violations
+        // Small helper function to get the dist extension from a url
+        fn pypi_dist_extension_from_url(url: &Url) -> Result<DistExtension, ExtensionError> {
+            // Take the file name from the url
+            let path = url
+                .path_segments()
+                .and_then(|mut s| s.next_back())
+                .unwrap_or_default();
+            // Convert the path to a dist extension
+            DistExtension::from_path(Path::new(path))
+        }
+
+        let extension = match &package_data.location {
+            // Get the extension from the url
+            UrlOrPath::Url(url) => {
+                if url.scheme().starts_with("git+") {
+                    // Just choose some source extension, does not really matter, cause it is
+                    // actually a directory, this is just for the check
+                    Ok(DistExtension::Source(SourceDistExtension::TarGz))
+                } else {
+                    pypi_dist_extension_from_url(url)
+                }
+            }
+            UrlOrPath::Path(path) => {
+                let path = Path::new(path.as_str());
+                if path.is_dir() {
+                    // Editables are allowed with no-build
+                    if package_data.editable {
+                        return Ok(());
+                    } else {
+                        // Non-editable source packages might not be allowed
+                        Ok(DistExtension::Source(SourceDistExtension::TarGz))
+                    }
+                } else {
+                    // Could be a reference to a wheel or sdist
+                    DistExtension::from_path(path)
+                }
+            }
+        }?;
+
+        match extension {
+            // Wheels are fine
+            DistExtension::Wheel => Ok(()),
+            // Check if we have a source package that we are not allowed to build
+            // it could be that we are only disallowing for certain source packages
+            DistExtension::Source(_) => match check {
+                Check::All => Err(EnvironmentUnsat::NoBuildWithNonBinaryPackages(
+                    package_data.name.to_string(),
+                )),
+                Check::Packages(hash_set) => {
+                    if hash_set.contains(&package_data.name) {
+                        Err(EnvironmentUnsat::NoBuildWithNonBinaryPackages(
+                            package_data.name.to_string(),
+                        ))
+                    } else {
+                        Ok(())
+                    }
+                }
+            },
         }
     }
-    Ok(())
 }
 
 fn verify_pypi_indexes(
@@ -815,7 +911,7 @@ pub async fn verify_platform_satisfiability(
 pub enum Dependency {
     Input(PackageName, PixiSpec, Cow<'static, str>),
     Conda(MatchSpec, Cow<'static, str>),
-    CondaSource(PackageName, MatchSpec, SourceSpec, Cow<'static, str>),
+    CondaSource(PackageName, SourceSpec, Cow<'static, str>),
     PyPi(uv_distribution_types::Requirement, Cow<'static, str>),
 }
 
@@ -826,16 +922,16 @@ impl Dependency {
         match self {
             Dependency::Input(name, _, _) => Some(name.clone()),
             Dependency::Conda(spec, _) => spec.name.as_ref().and_then(|m| m.as_exact().cloned()),
-            Dependency::CondaSource(name, _, _, _) => Some(name.clone()),
+            Dependency::CondaSource(name, _, _) => Some(name.clone()),
             Dependency::PyPi(_, _) => None,
         }
     }
 }
 
-/// Check satatisfiability of a pypi requirement against a locked pypi package
+/// Check satisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url
 /// references
-pub(crate) fn pypi_satifisfies_editable(
+pub(crate) fn pypi_satisfies_editable(
     spec: &uv_distribution_types::Requirement,
     locked_data: &PypiPackageData,
     project_root: &Path,
@@ -855,7 +951,7 @@ pub(crate) fn pypi_satifisfies_editable(
         }
         RequirementSource::Directory { install_path, .. } => match &locked_data.location {
             // If we have an url requirement locked, but the editable is requested, this does not
-            // satifsfy
+            // satisfy
             UrlOrPath::Url(url) => Err(Box::new(PlatformUnsat::EditablePackageIsUrl(
                 spec.name.clone(),
                 url.to_string(),
@@ -868,14 +964,14 @@ pub(crate) fn pypi_satifisfies_editable(
                     Cow::Owned(project_root.join(Path::new(path.as_str())))
                 };
                 // Absolute paths can have symbolic links, so we canonicalize
-                let canocalized_path = dunce::canonicalize(&absolute_path).map_err(|e| {
+                let canonicalized_path = dunce::canonicalize(&absolute_path).map_err(|e| {
                     Box::new(PlatformUnsat::FailedToCanonicalizePath(
                         absolute_path.to_path_buf(),
                         e,
                     ))
                 })?;
 
-                if canocalized_path != install_path.as_ref() {
+                if canonicalized_path != install_path.as_ref() {
                     return Err(Box::new(PlatformUnsat::EditablePackagePathMismatch(
                         spec.name.clone(),
                         absolute_path.into_owned(),
@@ -888,10 +984,10 @@ pub(crate) fn pypi_satifisfies_editable(
     }
 }
 
-/// Check satatisfiability of a pypi requirement against a locked pypi package
+/// Check satisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url
 /// references
-pub(crate) fn pypi_satifisfies_requirement(
+pub(crate) fn pypi_satisfies_requirement(
     spec: &uv_distribution_types::Requirement,
     locked_data: &PypiPackageData,
     project_root: &Path,
@@ -970,28 +1066,51 @@ pub(crate) fn pypi_satifisfies_requirement(
                             }
                             .into());
                         }
-                        // If the spec does not specify a revision than any will do
-                        // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
+                        // If the spec uses DefaultBranch, we need to check what the lock has
+                        // DefaultBranch in it
+                        // otherwise any explicit ref in lock is not satisfiable
                         if *reference == GitReference::DefaultBranch {
-                            return Ok(());
+                            match &pinned_git_spec.source.reference {
+                                // Any explicit reference in lock is not satisfiable
+                                // when manifest has DefaultBranch (user removed the explicit ref)
+                                pixi_spec::GitReference::Branch(_)
+                                | pixi_spec::GitReference::Tag(_)
+                                | pixi_spec::GitReference::Rev(_) => {
+                                    return Err(PlatformUnsat::LockedPyPIGitRefMismatch {
+                                        name: spec.name.clone().to_string(),
+                                        expected_ref: reference.to_string(),
+                                        found_ref: pinned_git_spec.source.reference.to_string(),
+                                    }
+                                    .into());
+                                }
+                                // Only DefaultBranch in lock is satisfiable
+                                pixi_spec::GitReference::DefaultBranch => {
+                                    return Ok(());
+                                }
+                            }
                         }
 
-                        if pinned_git_spec.source.subdirectory
-                            != subdirectory
-                                .as_ref()
-                                .map(|s| s.to_string_lossy().to_string())
-                        {
+                        // Normalize the input requirement subdirectory the same way we do in our
+                        // lock-file. We convert to string to ensure we have a valid fallback if
+                        // `Subdirectory` validation fails.
+                        let spec_subdir_str = subdirectory
+                            .as_deref()
+                            .and_then(|s| Subdirectory::normalize(s).ok())
+                            .map_or_else(
+                                || {
+                                    subdirectory
+                                        .as_ref()
+                                        .map(|s| s.to_string_lossy().to_string())
+                                },
+                                |s| Some(s.to_string_lossy().to_string()),
+                            );
+                        let lock_subdir_str =
+                            pinned_git_spec.source.subdirectory.to_option_string();
+                        if lock_subdir_str != spec_subdir_str {
                             return Err(PlatformUnsat::LockedPyPIGitSubdirectoryMismatch {
                                 name: spec.name.clone().to_string(),
-                                spec_subdirectory: subdirectory
-                                    .as_ref()
-                                    .map_or_else(String::default, |s| {
-                                        s.to_string_lossy().to_string()
-                                    }),
-                                lock_subdirectory: pinned_git_spec
-                                    .source
-                                    .subdirectory
-                                    .unwrap_or_default(),
+                                spec_subdirectory: spec_subdir_str.unwrap_or_default(),
+                                lock_subdirectory: lock_subdir_str.unwrap_or_default(),
                             }
                             .into());
                         }
@@ -1100,7 +1219,10 @@ async fn verify_source_metadata(
                     package: source_record.package_record.name.clone(),
                     backend_metadata: BuildBackendMetadataSpec {
                         manifest_source: source_record.manifest_source.clone(),
-                        preferred_build_source: source_record.build_source.clone(),
+                        preferred_build_source: source_record
+                            .build_source
+                            .clone()
+                            .map(PinnedBuildSourceSpec::into_pinned),
                         channel_config,
                         channels: channel_urls,
                         build_environment: BuildEnvironment {
@@ -1219,12 +1341,13 @@ async fn verify_source_metadata(
                     package_name
                 );
 
-                if !package_records_are_equal(
+                if let Err(reason) = package_records_are_equal(
                     &current_record.package_record,
                     &source_record.package_record,
                 ) {
                     return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
                         package_name.to_string(),
+                        reason,
                     )));
                 }
 
@@ -1241,9 +1364,11 @@ async fn verify_source_metadata(
     Ok(())
 }
 
-/// Returns true if the package records are considered equal.
-fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> bool {
-    // Use destructuring to ensure we get compiler errors if these types change significantly.
+/// Returns `Ok(())` if the package records are considered equal, or an error
+/// message describing which field differs.
+fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> Result<(), String> {
+    // Use destructuring to ensure we get compiler errors if these types change
+    // significantly.
     let PackageRecord {
         arch: _,
         build: a_build,
@@ -1262,7 +1387,9 @@ fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> bool {
         platform: _,
         purls: a_purls,
         python_site_packages_path: a_python_site_packages_path,
-        run_exports: a_run_exports,
+        // run_exports are not compared because they are used during the solve
+        // but not stored in the lock-file for source packages.
+        run_exports: _,
         sha256: _,
         size: _,
         subdir: a_subdir,
@@ -1288,7 +1415,9 @@ fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> bool {
         platform: _,
         purls: b_purls,
         python_site_packages_path: b_python_site_packages_path,
-        run_exports: b_run_exports,
+        // run_exports are not compared because they are used during the solve
+        // but not stored in the lock-file for source packages.
+        run_exports: _,
         sha256: _,
         size: _,
         subdir: b_subdir,
@@ -1297,27 +1426,83 @@ fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> bool {
         version: b_version,
     } = &b;
 
-    a_build == b_build
-        && a_build_number == b_build_number
-        && a_constrains == b_constrains
-        && a_depends == b_depends
-        && a_extra_depends == b_extra_depends
-        && a_features == b_features
-        && a_license == b_license
-        && a_license_family == b_license_family
-        && a_name == b_name
-        && a_noarch == b_noarch
-        && a_purls == b_purls
-        && a_python_site_packages_path == b_python_site_packages_path
-        && match (a_run_exports, b_run_exports) {
-            (Some(a_run_exports), Some(b_run_exports)) => a_run_exports == b_run_exports,
-            (Some(a_run_exports), None) => a_run_exports.is_empty(),
-            (None, Some(b_run_exports)) => b_run_exports.is_empty(),
-            (None, None) => true,
-        }
-        && a_subdir == b_subdir
-        && a_track_features == b_track_features
-        && a_version == b_version
+    if a_name != b_name {
+        return Err(format!(
+            "the package name changed (\"{}\" != \"{}\")",
+            a_name.as_source(),
+            b_name.as_source()
+        ));
+    }
+    if a_version != b_version {
+        return Err(format!(
+            "the version changed (\"{a_version}\" != \"{b_version}\")"
+        ));
+    }
+    if a_build != b_build {
+        return Err(format!(
+            "the build string changed (\"{a_build}\" != \"{b_build}\")"
+        ));
+    }
+    if a_build_number != b_build_number {
+        return Err(format!(
+            "the build number changed ({a_build_number} != {b_build_number})"
+        ));
+    }
+    if a_subdir != b_subdir {
+        return Err(format!(
+            "the subdir changed (\"{a_subdir}\" != \"{b_subdir}\")"
+        ));
+    }
+    if a_noarch != b_noarch {
+        return Err(format!(
+            "the noarch type changed ({a_noarch:?} != {b_noarch:?})"
+        ));
+    }
+    if a_depends != b_depends {
+        return Err(format!(
+            "the dependencies changed ({a_depends:?} != {b_depends:?})"
+        ));
+    }
+    if a_constrains != b_constrains {
+        return Err(format!(
+            "the constraints changed ({a_constrains:?} != {b_constrains:?})"
+        ));
+    }
+    if a_extra_depends != b_extra_depends {
+        return Err(format!(
+            "the extra dependencies changed ({a_extra_depends:?} != {b_extra_depends:?})"
+        ));
+    }
+    if a_features != b_features {
+        return Err(format!(
+            "the features changed ({a_features:?} != {b_features:?})"
+        ));
+    }
+    if a_track_features != b_track_features {
+        return Err(format!(
+            "the track_features changed ({a_track_features:?} != {b_track_features:?})"
+        ));
+    }
+    if a_license != b_license {
+        return Err(format!(
+            "the license changed ({a_license:?} != {b_license:?})"
+        ));
+    }
+    if a_license_family != b_license_family {
+        return Err(format!(
+            "the license_family changed ({a_license_family:?} != {b_license_family:?})"
+        ));
+    }
+    if a_purls != b_purls {
+        return Err(format!("the purls changed ({a_purls:?} != {b_purls:?})"));
+    }
+    if a_python_site_packages_path != b_python_site_packages_path {
+        return Err(format!(
+            "the python_site_packages_path changed ({a_python_site_packages_path:?} != {b_python_site_packages_path:?})"
+        ));
+    }
+
+    Ok(())
 }
 
 fn format_source_record(r: &SourceRecord) -> String {
@@ -1347,7 +1532,13 @@ pub async fn resolve_dev_dependencies(
     build_environment: &BuildEnvironment,
     variants: &std::collections::BTreeMap<String, Vec<VariantValue>>,
     variant_files: &[PathBuf],
-) -> Result<Vec<Dependency>, PlatformUnsat> {
+) -> Result<Vec<Dependency>, Box<PlatformUnsat>> {
+    // Collect all dev source package names to filter out interdependencies
+    let dev_source_names: HashSet<PackageName> = dev_dependencies
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
+
     let futures = dev_dependencies
         .into_iter()
         .map(|(package_name, source_spec)| {
@@ -1357,6 +1548,7 @@ pub async fn resolve_dev_dependencies(
             let build_environment = build_environment.clone();
             let variants = variants.clone();
             let variant_files = variant_files.to_vec();
+            let dev_source_names = dev_source_names.clone();
 
             resolve_single_dev_dependency(
                 package_name,
@@ -1367,6 +1559,7 @@ pub async fn resolve_dev_dependencies(
                 build_environment,
                 variants,
                 variant_files,
+                dev_source_names,
             )
         })
         .collect::<futures::stream::FuturesUnordered<_>>();
@@ -1375,7 +1568,7 @@ pub async fn resolve_dev_dependencies(
 
     let mut resolved_dependencies = Vec::new();
     for result in results {
-        resolved_dependencies.extend(result?);
+        resolved_dependencies.extend(result.map_err(Box::new)?);
     }
 
     Ok(resolved_dependencies)
@@ -1392,6 +1585,7 @@ async fn resolve_single_dev_dependency(
     build_environment: BuildEnvironment,
     variants: std::collections::BTreeMap<String, Vec<VariantValue>>,
     variant_files: Vec<PathBuf>,
+    dev_source_names: HashSet<PackageName>,
 ) -> Result<Vec<Dependency>, PlatformUnsat> {
     let pinned_source = command_dispatcher
         .pin_and_checkout(source_spec.location)
@@ -1421,26 +1615,25 @@ async fn resolve_single_dev_dependency(
 
     let mut dependencies = Vec::new();
 
-    // Process source dependencies
-    for (dev_name, dep) in dev_source.into_specs() {
-        let anchored_source = SourceAnchor::Workspace.resolve(dep.clone().location);
-
-        let spec = MatchSpec::from_str(dev_name.as_source(), Lenient).map_err(|e| {
-            PlatformUnsat::FailedToParseMatchSpec(dev_name.as_source().to_string(), e)
-        })?;
+    // Process source dependencies, filtering out dependencies that are also dev sources
+    for (dep_name, dep) in dev_source
+        .into_specs()
+        .filter(|(name, _)| !dev_source_names.contains(name))
+    {
+        let anchored_source = dep.resolve(&SourceAnchor::Workspace);
 
         dependencies.push(Dependency::CondaSource(
-            dev_name.clone(),
-            spec,
-            SourceSpec {
-                location: anchored_source,
-            },
-            Cow::Owned(format!("{} @ {}", dev_name.as_source(), dep)),
+            dep_name.clone(),
+            anchored_source,
+            Cow::Owned(package_name.as_source().to_string()),
         ));
     }
 
-    // Process binary dependencies
-    for (dev_name, binary_spec) in dev_bin.into_specs() {
+    // Process binary dependencies, filtering out dependencies that are also dev sources
+    for (dep_name, binary_spec) in dev_bin
+        .into_specs()
+        .filter(|(name, _)| !dev_source_names.contains(name))
+    {
         // Convert BinarySpec to NamelessMatchSpec
         let nameless_spec = binary_spec
             .try_into_nameless_match_spec(&channel_config)
@@ -1457,16 +1650,16 @@ async fn resolve_single_dev_dependency(
                     SpecConversionError::MissingName => ParseMatchSpecError::MissingPackageName,
                 };
                 PlatformUnsat::FailedToParseMatchSpec(
-                    dev_name.as_source().to_string(),
+                    dep_name.as_source().to_string(),
                     parse_channel_err,
                 )
             })?;
 
-        let spec = MatchSpec::from_nameless(nameless_spec, Some(dev_name.clone().into()));
+        let spec = MatchSpec::from_nameless(nameless_spec, Some(dep_name.clone().into()));
 
         dependencies.push(Dependency::Conda(
             spec,
-            Cow::Owned(dev_name.as_source().to_string()),
+            Cow::Owned(package_name.as_source().to_string()),
         ));
     }
 
@@ -1512,22 +1705,56 @@ pub(crate) async fn verify_package_platform_satisfiability(
         })
         .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
 
+    // Find the python interpreter from the list of conda packages. Note that this
+    // refers to the locked python interpreter, it might not match the specs
+    // from the environment. That is ok because we will find that out when we
+    // check all the records.
+    let python_interpreter_record = locked_pixi_records.python_interpreter_record();
+
+    // Determine the marker environment from the python interpreter package.
+    let marker_environment = python_interpreter_record
+        .map(|interpreter| determine_marker_environment(platform, &interpreter.package_record))
+        .transpose()
+        .map_err(|err| {
+            Box::new(PlatformUnsat::FailedToDetermineMarkerEnvironment(
+                err.into(),
+            ))
+        });
+
+    let pypi_dependencies = environment.pypi_dependencies(Some(platform));
+
+    // We cannot determine the marker environment, for example if installing
+    // `wasm32` dependencies. However, it also doesn't really matter if we don't
+    // have any pypi requirements.
+    let marker_environment = match marker_environment {
+        Err(err) => {
+            if !pypi_dependencies.is_empty() {
+                return Err(err);
+            } else {
+                None
+            }
+        }
+        Ok(marker_environment) => marker_environment,
+    };
+
     // Transform from PyPiPackage name into UV Requirement type
-    let pypi_requirements = environment
-        .pypi_dependencies(Some(platform))
+    let pypi_requirements = pypi_dependencies
         .iter()
         .flat_map(|(name, reqs)| {
-            reqs.iter().map(move |req| {
-                Ok::<Dependency, Box<PlatformUnsat>>(Dependency::PyPi(
-                    as_uv_req(req, name.as_source(), project_root).map_err(|e| {
-                        Box::new(PlatformUnsat::AsPep508Error(
-                            name.as_normalized().clone(),
-                            e,
-                        ))
-                    })?,
-                    "<environment>".into(),
-                ))
-            })
+            reqs.iter()
+                .map(|req| as_uv_req(req, name.as_source(), project_root))
+                .filter_ok(|req| req.evaluate_markers(marker_environment.as_ref(), &req.extras))
+                .map(move |req| {
+                    Ok::<Dependency, Box<PlatformUnsat>>(Dependency::PyPi(
+                        req.map_err(|e| {
+                            Box::new(PlatformUnsat::AsPep508Error(
+                                name.as_normalized().clone(),
+                                e,
+                            ))
+                        })?,
+                        "<environment>".into(),
+                    ))
+                })
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -1599,11 +1826,8 @@ pub(crate) async fn verify_package_platform_satisfiability(
         platform,
     );
 
-    let (resolved_dev_dependencies, source_metadata_result) =
-        futures::join!(dev_deps_future, source_metadata_future);
-
-    let resolved_dev_dependencies = resolved_dev_dependencies?;
-    source_metadata_result?;
+    let (resolved_dev_dependencies, _source_metadata_result) =
+        futures::try_join!(dev_deps_future, source_metadata_future)?;
 
     if (environment_dependencies.is_empty() && resolved_dev_dependencies.is_empty())
         && !locked_pixi_records.is_empty()
@@ -1611,43 +1835,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
         return Err(Box::new(PlatformUnsat::TooManyCondaPackages(Vec::new())));
     }
 
-    // Find the python interpreter from the list of conda packages. Note that this
-    // refers to the locked python interpreter, it might not match the specs
-    // from the environment. That is ok because we will find that out when we
-    // check all the records.
-    let python_interpreter_record = locked_pixi_records.python_interpreter_record();
-
-    // Determine the marker environment from the python interpreter package.
-    let marker_environment = python_interpreter_record
-        .map(|interpreter| determine_marker_environment(platform, &interpreter.package_record))
-        .transpose()
-        .map_err(|err| {
-            Box::new(PlatformUnsat::FailedToDetermineMarkerEnvironment(
-                err.into(),
-            ))
-        });
-
-    // We cannot determine the marker environment, for example if installing
-    // `wasm32` dependencies. However, it also doesn't really matter if we don't
-    // have any pypi requirements.
-    let marker_environment = match marker_environment {
-        Err(err) => {
-            if !pypi_requirements.is_empty() {
-                return Err(err);
-            } else {
-                None
-            }
-        }
-        Ok(marker_environment) => marker_environment,
-    };
-
     // Determine the pypi packages provided by the locked conda packages.
     let locked_conda_pypi_packages = locked_pixi_records
         .by_pypi_name()
         .map_err(From::from)
         .map_err(Box::new)?;
 
-    // Keep a list of all conda packages that we have already visisted
+    // Keep a list of all conda packages that we have already visited
     let mut conda_packages_visited = HashSet::new();
     let mut pypi_packages_visited = HashSet::new();
     let mut pypi_requirements_visited = pypi_requirements
@@ -1683,7 +1877,6 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             name,
                             source_spec,
                             source,
-                            None,
                         )?
                     }
                     Either::Right(binary_spec) => {
@@ -1737,14 +1930,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     None => continue,
                 }
             }
-            Dependency::CondaSource(name, spec, source_spec, source) => {
+            Dependency::CondaSource(name, source_spec, source) => {
                 expected_conda_source_dependencies.insert(name.clone());
                 FoundPackage::Conda(find_matching_source_package(
                     locked_pixi_records,
                     name,
                     source_spec,
                     source,
-                    Some(spec),
                 )?)
             }
             Dependency::PyPi(requirement, source) => {
@@ -1811,14 +2003,14 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
                             if requirement.is_editable() {
                                 if let Err(err) =
-                                    pypi_satifisfies_editable(&requirement, &record.0, project_root)
+                                    pypi_satisfies_editable(&requirement, &record.0, project_root)
                                 {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
 
                                 FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras.to_vec())
                             } else {
-                                if let Err(err) = pypi_satifisfies_requirement(
+                                if let Err(err) = pypi_satisfies_requirement(
                                     &requirement,
                                     &record.0,
                                     project_root,
@@ -1864,10 +2056,11 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 for depends in &record.package_record().depends {
                     let spec = MatchSpec::from_str(depends.as_str(), Lenient)
                         .map_err(|e| PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e))?;
+                    let (name, spec) = spec.into_nameless();
 
                     let (origin, anchor) = match record {
                         PixiRecord::Binary(record) => (
-                            Cow::Owned(record.file_name.to_string()),
+                            Cow::Owned(record.identifier.to_file_name()),
                             SourceAnchor::Workspace,
                         ),
                         PixiRecord::Source(record) => (
@@ -1876,13 +2069,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                 record.package_record.name.as_source(),
                                 &record.manifest_source
                             )),
-                            SourceSpec::from(record.manifest_source.clone()).into(),
+                            SourceLocationSpec::from(record.manifest_source.clone()).into(),
                         ),
                     };
 
                     if let Some((source, package_name)) = record
                         .as_source()
-                        .and_then(|record| Some((record, spec.name.as_ref()?)))
+                        .and_then(|record| Some((record, name.as_ref()?)))
                         .and_then(|(record, package_name_matcher)| {
                             let package_name = package_name_matcher
                                 .as_exact()
@@ -1893,18 +2086,18 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             ))
                         })
                     {
-                        let anchored_location = anchor.resolve(source.location.clone());
-                        let anchored_source = SourceSpec {
-                            location: anchored_location,
-                        };
+                        let anchored_location = anchor.resolve(source.clone());
+                        let source_spec = SourceSpec::new(anchored_location, spec);
                         conda_queue.push(Dependency::CondaSource(
                             package_name.clone(),
-                            spec,
-                            anchored_source,
+                            source_spec,
                             origin,
                         ));
                     } else {
-                        conda_queue.push(Dependency::Conda(spec, origin));
+                        conda_queue.push(Dependency::Conda(
+                            MatchSpec::from_nameless(spec, name),
+                            origin,
+                        ));
                     }
                 }
             }
@@ -2175,7 +2368,6 @@ fn find_matching_source_package(
     name: PackageName,
     source_spec: SourceSpec,
     source: Cow<str>,
-    match_spec: Option<MatchSpec>,
 ) -> Result<CondaPackageIdx, Box<PlatformUnsat>> {
     // Find the package that matches the source spec.
     let Some((idx, package)) = locked_pixi_records
@@ -2199,14 +2391,13 @@ fn find_matching_source_package(
 
     source_package
         .manifest_source
-        .satisfies(&source_spec)
+        .satisfies(&source_spec.location)
         .map_err(|e| PlatformUnsat::SourcePackageMismatch(name.as_source().to_string(), e))?;
 
-    if let Some(match_spec) = match_spec
-        && !match_spec.matches(package)
-    {
+    let match_spec = source_spec.to_nameless_match_spec();
+    if !match_spec.matches(package) {
         return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-            Box::new(match_spec),
+            Box::new(MatchSpec::from_nameless(match_spec, Some(name.into()))),
             source.into_owned(),
         )));
     }
@@ -2307,7 +2498,10 @@ fn verify_build_source_matches_manifest(
         ))
     };
 
-    match (manifest_source_location, lockfile_source_location) {
+    match (
+        manifest_source_location,
+        lockfile_source_location.map(PinnedBuildSourceSpec::into_pinned),
+    ) {
         (None, None) => ok,
         (Some(SourceLocationSpec::Url(murl_spec)), Some(PinnedSourceSpec::Url(lurl_spec))) => {
             lurl_spec.satisfies(&murl_spec).map_err(sat_err)
@@ -2318,8 +2512,8 @@ fn verify_build_source_matches_manifest(
         ) => {
             // Ignore subdirectory for comparison, they should not
             // trigger lockfile invalidation.
-            mgit_spec.subdirectory = None;
-            lgit_spec.source.subdirectory = None;
+            mgit_spec.subdirectory = Default::default();
+            lgit_spec.source.subdirectory = Default::default();
 
             // Ensure that we always compare references.
             if mgit_spec.rev.is_none() {
@@ -2523,7 +2717,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     #[traced_test]
-    async fn test_failing_satisiability(
+    async fn test_failing_satisfiability(
         #[files("../../tests/data/non-satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
@@ -2579,7 +2773,7 @@ mod tests {
         let project_root = PathBuf::from_str("/").unwrap();
         // This will not satisfy because the rev length is different, even being
         // resolved to the same one
-        pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap_err();
+        pypi_satisfies_requirement(&spec, &locked_data, &project_root).unwrap_err();
 
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
@@ -2601,19 +2795,42 @@ mod tests {
         .unwrap();
         let project_root = PathBuf::from_str("/").unwrap();
         // This will satisfy
-        pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap();
+        pypi_satisfies_requirement(&spec, &locked_data, &project_root).unwrap();
         let non_matching_spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd").unwrap(),
         )
         .unwrap();
-        // This should not
-        pypi_satifisfies_requirement(&non_matching_spec, &locked_data, &project_root).unwrap_err();
-        // Removing the rev from the Requirement should satisfy any revision
-        let spec = pep508_requirement_to_uv_requirement(
+        pypi_satisfies_requirement(&non_matching_spec, &locked_data, &project_root).unwrap_err();
+
+        // Removing the rev from the Requirement should NOT satisfy when lock has
+        // explicit Rev. This ensures that when a user removes an explicit ref
+        // from the manifest, the lock file gets re-resolved.
+        let spec_without_rev = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap(),
         )
         .unwrap();
-        pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap();
+        pypi_satisfies_requirement(&spec_without_rev, &locked_data, &project_root).unwrap_err();
+
+        // When lock has DefaultBranch (no explicit ref), removing rev from manifest
+        // should satisfy
+        let locked_data_default_branch = PypiPackageData {
+            name: "mypkg".parse().unwrap(),
+            version: Version::from_str("0.1.0").unwrap(),
+            // No ?rev= query param, only the fragment with commit hash
+            location: "git+https://github.com/mypkg.git#29932f3915935d773dc8d52c292cadd81c81071d"
+                .parse()
+                .expect("failed to parse url"),
+            hash: None,
+            requires_dist: vec![],
+            requires_python: None,
+            editable: false,
+        };
+        pypi_satisfies_requirement(
+            &spec_without_rev,
+            &locked_data_default_branch,
+            &project_root,
+        )
+        .unwrap();
     }
 
     // Currently this test is missing from `good_satisfiability`, so we test the
@@ -2638,7 +2855,7 @@ mod tests {
         let spec = pep508_requirement_to_uv_requirement(spec).unwrap();
 
         // This should satisfy:
-        pypi_satifisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
     }
 
     // Validate uv documentation to avoid breaking change in pixi

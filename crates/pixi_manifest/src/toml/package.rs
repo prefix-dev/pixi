@@ -363,7 +363,8 @@ impl TomlPackage {
             );
         }
 
-        // Check file existence for resolved paths with 3-tier hierarchy
+        // Check file existence for resolved paths with 3-tier hierarchy.
+        // If root_directory is None, validation is skipped.
         fn check_resolved_file(
             root_directory: Option<&Path>,
             field: Option<WorkspaceInheritableField<Spanned<PathBuf>>>,
@@ -402,14 +403,33 @@ impl TomlPackage {
             }
         }
 
+        // Determine the directory to use for file validation based on build.source:
+        // - If build.source is a git or URL source, pass None to skip validation (files are remote)
+        // - If build.source is a path source, resolve the path and validate against that directory
+        // - If build.source is not set, validate against the manifest directory
+        let file_validation_dir: Option<PathBuf> =
+            match (&build_result.value.source, root_directory) {
+                // Git or URL source: skip validation (files are in remote location)
+                (Some(pixi_spec::SourceLocationSpec::Git(_)), _)
+                | (Some(pixi_spec::SourceLocationSpec::Url(_)), _) => None,
+                // Path source: resolve the path and use that directory for validation
+                (Some(pixi_spec::SourceLocationSpec::Path(path_spec)), Some(root_dir)) => {
+                    path_spec.resolve(root_dir).ok()
+                }
+                // No source: use the manifest directory
+                (None, Some(root_dir)) => Some(root_dir.to_path_buf()),
+                // No root directory provided: skip validation
+                (_, None) => None,
+            };
+
         let license_file = check_resolved_file(
-            root_directory,
+            file_validation_dir.as_deref(),
             self.license_file,
             workspace.license_file,
             package_defaults.license_file,
         )?;
         let readme = check_resolved_file(
-            root_directory,
+            file_validation_dir.as_deref(),
             self.readme,
             workspace.readme,
             package_defaults.readme,
@@ -473,8 +493,10 @@ fn workspace_cannot_be_false() -> GenericError {
 #[cfg(test)]
 mod test {
     use assert_matches::assert_matches;
+    use fs_err as fs;
     use insta::assert_snapshot;
     use pixi_test_utils::format_parse_error;
+    use tempfile::TempDir;
 
     use super::*;
     use crate::toml::FromTomlStr;
@@ -830,13 +852,13 @@ mod test {
         let input = r#"
         name = "package-name"
         version = "1.0.0"
-        
+
         [build.config]
         test = "test_normal"
-        
+
         [build.target.unix.config]
         test = "test_unix"
-        
+
         [build]
         backend = { name = "bla", version = "1.0" }
         "#;
@@ -856,13 +878,13 @@ mod test {
         let input = r#"
         name = "package-name"
         version = "1.0.0"
-        
+
         [build.configuration]
         test = "test_normal"
-        
+
         [build.target.unix.configuration]
         test = "test_unix"
-        
+
         [build]
         backend = { name = "bla", version = "1.0" }
         "#;
@@ -880,5 +902,216 @@ mod test {
 
         assert!(!parsed_deprecated.warnings.is_empty());
         assert_eq!(parsed.value.build, parsed_deprecated.value.build);
+    }
+
+    #[test]
+    fn test_license_file_validation_skipped_for_git_source() {
+        // When build.source is a git source, license-file validation should be skipped
+        // because the file will be in the checked-out source directory, not the manifest directory.
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+        license-file = "LICENSE.txt"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        source = { git = "https://github.com/example/repo", rev = "abc123" }
+        "#;
+        let path = Path::new("");
+        // This should NOT fail even though LICENSE.txt doesn't exist,
+        // because the source is a git repository.
+        let result = TomlPackage::from_toml_str(input).and_then(|w| {
+            w.into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                Some(path),
+            )
+        });
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
+    }
+
+    #[test]
+    fn test_license_file_validation_skipped_for_url_source() {
+        // When build.source is a URL source, license-file validation should be skipped
+        // because the file will be in the downloaded/extracted source directory.
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+        license-file = "LICENSE.txt"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        source = { url = "https://example.com/archive.tar.gz" }
+        "#;
+        let path = Path::new("");
+        // This should NOT fail even though LICENSE.txt doesn't exist,
+        // because the source is a URL.
+        let result = TomlPackage::from_toml_str(input).and_then(|w| {
+            w.into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                Some(path),
+            )
+        });
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
+    }
+
+    #[test]
+    fn test_readme_validation_skipped_for_git_source() {
+        // When build.source is a git source, readme validation should be skipped
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+        readme = "README.md"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        source = { git = "https://github.com/example/repo", branch = "main" }
+        "#;
+        let path = Path::new("");
+        // This should NOT fail even though README.md doesn't exist
+        let result = TomlPackage::from_toml_str(input).and_then(|w| {
+            w.into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                Some(path),
+            )
+        });
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
+    }
+
+    #[test]
+    fn test_license_file_validation_fails_for_path_source_missing_file() {
+        // When build.source is a path source, license-file validation should still run
+        // and fail if the file doesn't exist in the source directory
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+        license-file = "LICENSE.txt"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        source = { path = "../some/path" }
+        "#;
+        let path = Path::new("");
+        // This should fail because LICENSE.txt doesn't exist and source is a path
+        let result = TomlPackage::from_toml_str(input).and_then(|w| {
+            w.into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                Some(path),
+            )
+        });
+        assert!(result.is_err(), "Expected failure for path source");
+    }
+
+    #[test]
+    fn test_license_file_validation_succeeds_without_build_source() {
+        // When no build.source is specified, license-file should be validated
+        // against the manifest directory
+        let temp_dir = TempDir::new().unwrap();
+        let license_path = temp_dir.path().join("LICENSE.txt");
+        fs::write(&license_path, "MIT License").unwrap();
+
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+        license-file = "LICENSE.txt"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+
+        let result = TomlPackage::from_toml_str(input).and_then(|w| {
+            w.into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                Some(temp_dir.path()),
+            )
+        });
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
+
+        // Verify the license_file path is set correctly
+        let manifest = result.unwrap().value;
+        assert!(manifest.package.license_file.is_some());
+    }
+
+    #[test]
+    fn test_license_file_validation_succeeds_with_path_source() {
+        // When build.source is a path, license-file should be validated
+        // against the resolved path source directory
+        // Create manifest directory
+        let manifest_dir = TempDir::new().unwrap();
+
+        // Create source directory with license file
+        let source_dir = TempDir::new().unwrap();
+        let license_path = source_dir.path().join("LICENSE.txt");
+        fs::write(&license_path, "MIT License").unwrap();
+
+        // Use the source directory path in the manifest.
+        // Replace backslashes with forward slashes for Windows compatibility in TOML strings.
+        let source_path = source_dir.path().to_string_lossy().replace('\\', "/");
+        let input = format!(
+            r#"
+        name = "bla"
+        version = "1.0"
+        license-file = "LICENSE.txt"
+
+        [build]
+        backend = {{ name = "bla", version = "1.0" }}
+        source = {{ path = "{source_path}" }}
+        "#
+        );
+
+        let result = TomlPackage::from_toml_str(&input).and_then(|w| {
+            w.into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                Some(manifest_dir.path()),
+            )
+        });
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
+
+        // Verify the license_file path is set correctly
+        let manifest = result.unwrap().value;
+        assert!(manifest.package.license_file.is_some());
+    }
+
+    #[test]
+    fn test_readme_validation_succeeds_without_build_source() {
+        // When no build.source is specified, readme should be validated
+        // against the manifest directory
+        let temp_dir = TempDir::new().unwrap();
+        let readme_path = temp_dir.path().join("README.md");
+        fs::write(&readme_path, "# My Package").unwrap();
+
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+        readme = "README.md"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+
+        let result = TomlPackage::from_toml_str(input).and_then(|w| {
+            w.into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                Some(temp_dir.path()),
+            )
+        });
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
+
+        // Verify the readme path is set correctly
+        let manifest = result.unwrap().value;
+        assert!(manifest.package.readme.is_some());
     }
 }

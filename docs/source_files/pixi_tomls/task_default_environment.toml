@@ -1,0 +1,14 @@
+[workspace]
+channels = ["conda-forge"]
+name = "task-default-environment"
+
+# --8<-- [start:default-environment]
+[feature.test.dependencies]
+pytest = "*"
+
+[environments]
+test = ["test"] # An environment covering the "test" feature
+
+[tasks]
+test = { cmd = "pytest", default-environment = "test" }
+# --8<-- [end:default-environment]

@@ -50,8 +50,9 @@ fn format_pip_extras(extras: &[ExtraName]) -> String {
 
 fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> String {
     let extras = &requirement.extras;
+    let markers = &requirement.env_markers;
 
-    match &requirement.source {
+    let mut dependency = match &requirement.source {
         PixiPypiSource::Git { git: git_url } => {
             let mut git_string = format!(
                 "{name}{extras} @ git+{url}",
@@ -64,8 +65,8 @@ fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> 
                 git_string.push_str(&format!("@{rev}"));
             }
 
-            if let Some(ref subdirectory) = git_url.subdirectory {
-                git_string.push_str(&format!("#subdirectory={subdirectory}"));
+            if !git_url.subdirectory.is_empty() {
+                git_string.push_str(&format!("#subdirectory={}", git_url.subdirectory));
             }
 
             git_string
@@ -93,7 +94,7 @@ fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> 
                 url = url,
             );
 
-            if let Some(subdirectory) = subdirectory {
+            if !subdirectory.is_empty() {
                 url_string.push_str(&format!("#subdirectory={subdirectory}"));
             }
 
@@ -115,7 +116,14 @@ fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> 
                 extras = format_pip_extras(extras)
             ),
         },
+    };
+
+    let marker_str = markers.try_to_string();
+    if let Some(marker_str) = marker_str {
+        dependency.push_str(&format!("; {marker_str}"));
     }
+
+    dependency
 }
 
 fn build_env_yaml(
@@ -198,6 +206,12 @@ fn build_env_yaml(
                 "pip".to_string(),
                 pip_dependencies.into_iter().collect_vec(),
             ));
+    }
+
+    // Add environment variables from activation
+    let activation_vars = environment.activation_env(Some(*platform));
+    if !activation_vars.is_empty() {
+        env_yaml.variables = activation_vars;
     }
 
     Ok(env_yaml)
@@ -444,7 +458,7 @@ mod tests {
         let args = Args {
             output_path: None,
             platform: Some(Platform::Osx64),
-            environment: None,
+            environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
             name: None,
         };

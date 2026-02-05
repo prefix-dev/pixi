@@ -1,0 +1,76 @@
+name: Backends - ROS
+
+on:
+  workflow_call:
+    inputs:
+      sha:
+        type: string
+        description: "The commit sha for artifact lookup"
+        required: true
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  ros-backend:
+    name: ROS Backend Tests - ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: pixi-linux-x86_64
+            unit: true
+          - os: macos-14
+            artifact: pixi-macos-aarch64
+            unit: false
+          - os: windows-latest
+            artifact: pixi-windows-x86_64
+            unit: false
+    runs-on: ${{ matrix.os }}
+    env:
+      TARGET_RELEASE: target/pixi/release
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
+        with:
+          manifest-path: pixi-build-backends/backends/pixi-build-ros/pixi.toml
+
+      - name: Download pixi binary
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ matrix.artifact }}-${{ inputs.sha }}
+          path: ${{ env.TARGET_RELEASE }}
+
+      - name: Add pixi binary to PATH
+        run: |
+          chmod a+x ${{ github.workspace }}/${{ env.TARGET_RELEASE }}/pixi
+          echo "${{ github.workspace }}/${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
+
+      - name: Lint
+        if: matrix.unit == true
+        run: |
+          cd pixi-build-backends/backends/pixi-build-ros
+          pixi run lint
+
+      - name: ROS unit tests
+        if: matrix.unit == true
+        run: |
+          cd pixi-build-backends/backends/pixi-build-ros
+          pixi run test --color=yes
+
+      - name: ROS integration tests
+        run: |
+          cd pixi-build-backends/backends/pixi-build-ros
+          pixi run test-integration --color=yes

@@ -80,6 +80,11 @@ atexit.register(print_summary)
 
 
 def main() -> None:
+    # Unset all PIXI_ prefixed environment variables to ensure a clean environment
+    for key in list(os.environ.keys()):
+        if key.startswith("PIXI_"):
+            del os.environ[key]
+
     steps = [
         "Start release process",
         "Check main branch and CI status",

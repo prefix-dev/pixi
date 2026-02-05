@@ -1,0 +1,38 @@
+{
+  "name": "minimal-package",
+  "version": "1.0.0",
+  "description": null,
+  "authors": null,
+  "license": null,
+  "license_file": null,
+  "readme": null,
+  "homepage": null,
+  "repository": null,
+  "documentation": null,
+  "targets": {
+    "defaultTarget": {
+      "hostDependencies": {},
+      "buildDependencies": {},
+      "runDependencies": {
+        "python": {
+          "binary": {
+            "version": ">=3.8"
+          }
+        }
+      }
+    },
+    "targets": {
+      "Linux": {
+        "hostDependencies": {
+            "rich": {
+                "binary": {
+                "version": ">=10.0"
+                }
+            }
+        },
+        "buildDependencies": {},
+        "runDependencies": {}
+      }
+    }
+  }
+}

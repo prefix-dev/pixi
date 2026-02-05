@@ -340,7 +340,10 @@ impl Workspace {
             .await?;
 
         // Write the lock-file to disk
-        lock_file_derived_data.write_to_disk()?;
+
+        if options.lock_file_usage != LockFileUsage::DryRun {
+            lock_file_derived_data.write_to_disk()?;
+        }
 
         Ok((lock_file_derived_data, true))
     }
@@ -698,7 +701,7 @@ impl<'p> LockFileDerivedData<'p> {
                             .get(&data.name)
                             .and_then(|specs| specs.last())
                             .and_then(|spec| spec.editable())
-                            .unwrap_or(data.editable);
+                            .unwrap_or(false);
                         (data, env_data.clone())
                     })
                     .collect::<Vec<_>>();
@@ -769,6 +772,8 @@ impl<'p> LockFileDerivedData<'p> {
                     let pypi_indexes = self.locked_env(environment)?.pypi_indexes().cloned();
                     let index_strategy = environment.pypi_options().index_strategy.clone();
                     let exclude_newer = environment.exclude_newer();
+                    let skip_wheel_filename_check =
+                        environment.pypi_options().skip_wheel_filename_check;
 
                     let config = PyPIUpdateConfig {
                         environment_name: environment.name(),
@@ -784,6 +789,7 @@ impl<'p> LockFileDerivedData<'p> {
                         no_binary: &no_binary,
                         index_strategy: index_strategy.as_ref(),
                         exclude_newer: exclude_newer.as_ref(),
+                        skip_wheel_filename_check,
                     };
 
                     let lazy_env_vars = LazyPixiEnvironmentVars {
@@ -1625,7 +1631,9 @@ impl<'p> UpdateContext<'p> {
                                 PixiRecord::Source(src) => {
                                     let name = src.package_record.name.clone();
                                     if targets.contains(name.as_source()) {
-                                        src.build_source.clone().map(|spec| (name, spec))
+                                        src.build_source
+                                            .clone()
+                                            .map(|spec| (name, spec.into_pinned()))
                                     } else {
                                         None
                                     }

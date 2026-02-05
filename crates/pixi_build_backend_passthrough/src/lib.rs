@@ -19,8 +19,8 @@ use pixi_build_frontend::{
     json_rpc::CommunicationError,
 };
 use pixi_build_types::{
-    BackendCapabilities, BinaryPackageSpecV1, NamedSpecV1, PackageSpecV1, ProjectModelV1,
-    SourcePackageName, TargetSelectorV1, TargetV1, TargetsV1, VariantValue, VersionedProjectModel,
+    BackendCapabilities, BinaryPackageSpec, ConstraintSpec, NamedSpec, PackageSpec, ProjectModel,
+    SourcePackageName, Target, TargetSelector, Targets, VariantValue,
     procedures::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{
@@ -52,13 +52,15 @@ pub enum BackendEvent {
 /// backend is useful for testing and debugging purposes, as it does not perform
 /// any actual building or processing of the project model.
 pub struct PassthroughBackend {
-    project_model: ProjectModelV1,
+    project_model: ProjectModel,
     config: PassthroughBackendConfig,
     source_dir: PathBuf,
     index_json: IndexJson,
     /// Run exports configuration for simulating package run_exports.
     /// Maps package names to their run_exports definitions.
     run_exports: BTreeMap<String, RunExportsJson>,
+    /// Run exports read from the package file (when config.package is specified).
+    package_run_exports: Option<RunExportsJson>,
 }
 
 impl PassthroughBackend {
@@ -74,7 +76,6 @@ impl InMemoryBackend for PassthroughBackend {
         BackendCapabilities {
             provides_conda_outputs: Some(true),
             provides_conda_build_v1: Some(true),
-            ..BackendCapabilities::default()
         }
     }
 
@@ -93,6 +94,7 @@ impl InMemoryBackend for PassthroughBackend {
             &self.index_json,
             &params,
             &self.run_exports,
+            self.package_run_exports.as_ref(),
         );
 
         Ok(CondaOutputsResult {
@@ -250,15 +252,18 @@ fn create_conda_package_on_the_fly(
     Ok(())
 }
 
-/// Generates all variant outputs for a package based on the variant configuration.
+/// Generates all variant outputs for a package based on the variant
+/// configuration.
 ///
-/// If any dependency has a "*" version requirement and there's a variant configuration
-/// for that package, multiple outputs will be generated - one for each variant combination.
+/// If any dependency has a "*" version requirement and there's a variant
+/// configuration for that package, multiple outputs will be generated - one for
+/// each variant combination.
 fn generate_variant_outputs(
-    project_model: &ProjectModelV1,
+    project_model: &ProjectModel,
     index_json: &IndexJson,
     params: &CondaOutputsParams,
     run_exports: &BTreeMap<String, RunExportsJson>,
+    package_run_exports: Option<&RunExportsJson>,
 ) -> Vec<CondaOutput> {
     // Check if we have variant configurations and dependencies with "*"
     let variant_keys = find_variant_keys(project_model, params);
@@ -271,6 +276,7 @@ fn generate_variant_outputs(
             params,
             BTreeMap::new(),
             run_exports,
+            package_run_exports,
         )];
     }
 
@@ -294,6 +300,7 @@ fn generate_variant_outputs(
             params,
             BTreeMap::new(),
             run_exports,
+            package_run_exports,
         )];
     }
 
@@ -303,12 +310,22 @@ fn generate_variant_outputs(
     // Create an output for each variant combination
     combinations
         .into_iter()
-        .map(|variant| create_output(project_model, index_json, params, variant, run_exports))
+        .map(|variant| {
+            create_output(
+                project_model,
+                index_json,
+                params,
+                variant,
+                run_exports,
+                package_run_exports,
+            )
+        })
         .collect()
 }
 
-/// Finds all dependency names that have "*" requirements and have variant configurations.
-fn find_variant_keys(project_model: &ProjectModelV1, params: &CondaOutputsParams) -> Vec<String> {
+/// Finds all dependency names that have "*" requirements and have variant
+/// configurations.
+fn find_variant_keys(project_model: &ProjectModel, params: &CondaOutputsParams) -> Vec<String> {
     let Some(targets) = &project_model.targets else {
         return Vec::new();
     };
@@ -320,7 +337,7 @@ fn find_variant_keys(project_model: &ProjectModelV1, params: &CondaOutputsParams
     let mut variant_keys = BTreeSet::new();
 
     // Helper to check dependencies in a target
-    let mut check_deps = |deps: Option<&OrderMap<SourcePackageName, PackageSpecV1>>| {
+    let mut check_deps = |deps: Option<&OrderMap<SourcePackageName, PackageSpec>>| {
         if let Some(deps) = deps {
             for (name, spec) in deps {
                 // Check if this dependency has a "*" requirement
@@ -357,13 +374,13 @@ fn find_variant_keys(project_model: &ProjectModelV1, params: &CondaOutputsParams
 }
 
 /// Checks if a package spec has a "*" version requirement.
-fn is_star_requirement(spec: &PackageSpecV1) -> bool {
-    let PackageSpecV1::Binary(boxed) = spec else {
+fn is_star_requirement(spec: &PackageSpec) -> bool {
+    let PackageSpec::Binary(boxed) = spec else {
         return false;
     };
 
-    match boxed.as_ref() {
-        BinaryPackageSpecV1 {
+    match boxed {
+        BinaryPackageSpec {
             version,
             build: None,
             build_number: None,
@@ -462,11 +479,12 @@ fn compute_variant_hash(variant: &BTreeMap<String, VariantValue>) -> String {
 
 /// Creates a single output with the given variant configuration.
 fn create_output(
-    project_model: &ProjectModelV1,
+    project_model: &ProjectModel,
     index_json: &IndexJson,
     params: &CondaOutputsParams,
     mut variant: BTreeMap<String, VariantValue>,
     run_exports_config: &BTreeMap<String, RunExportsJson>,
+    package_run_exports: Option<&RunExportsJson>,
 ) -> CondaOutput {
     let subdir = index_json
         .subdir
@@ -550,13 +568,15 @@ fn create_output(
             variant,
         },
         ignore_run_exports: Default::default(),
-        run_exports: Default::default(),
+        run_exports: package_run_exports
+            .map(convert_run_exports_json)
+            .unwrap_or_default(),
         input_globs: None,
     }
 }
 
-fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, PackageSpecV1>>>(
-    targets: &Option<TargetsV1>,
+fn extract_dependencies<F: Fn(&Target) -> Option<&OrderMap<SourcePackageName, PackageSpec>>>(
+    targets: &Option<Targets>,
     extract: F,
     platform: Platform,
     variant: &BTreeMap<String, VariantValue>,
@@ -582,7 +602,7 @@ fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, 
                     let resolved_spec = if is_star_requirement(spec) {
                         if let Some(variant_value) = variant.get(name.as_str()) {
                             // Replace with a version spec using the variant value
-                            PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1 {
+                            PackageSpec::Binary(BinaryPackageSpec {
                                 version: Some(
                                     rattler_conda_types::VersionSpec::from_str(
                                         variant_value.to_string().as_str(),
@@ -591,7 +611,7 @@ fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, 
                                     .unwrap(),
                                 ),
                                 ..Default::default()
-                            }))
+                            })
                         } else {
                             spec.clone()
                         }
@@ -599,7 +619,7 @@ fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, 
                         spec.clone()
                     };
 
-                    NamedSpecV1 {
+                    NamedSpec {
                         name: name.clone(),
                         spec: resolved_spec,
                     }
@@ -620,7 +640,7 @@ fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, 
 fn resolve_run_export_spec(
     run_export_str: &str,
     variant: &BTreeMap<String, VariantValue>,
-) -> Option<NamedSpecV1<PackageSpecV1>> {
+) -> Option<NamedSpec<PackageSpec>> {
     // Parse the run_export string as a MatchSpec
     let match_spec = rattler_conda_types::MatchSpec::from_str(
         run_export_str,
@@ -657,24 +677,93 @@ fn resolve_run_export_spec(
         match_spec.version.clone()
     };
 
-    Some(NamedSpecV1 {
+    Some(NamedSpec {
         name: SourcePackageName::from(name),
-        spec: PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1 {
+        spec: PackageSpec::Binary(BinaryPackageSpec {
             version: version_spec,
             ..Default::default()
-        })),
+        }),
     })
 }
 
-/// Returns true if the given [`TargetSelectorV1`] matches the specified
+/// Converts a `RunExportsJson` (from a conda package) to `CondaOutputRunExports`.
+fn convert_run_exports_json(
+    run_exports: &RunExportsJson,
+) -> pixi_build_types::procedures::conda_outputs::CondaOutputRunExports {
+    fn convert_specs(specs: &[String]) -> Vec<NamedSpec<PackageSpec>> {
+        specs
+            .iter()
+            .filter_map(|spec_str| {
+                let match_spec = rattler_conda_types::MatchSpec::from_str(
+                    spec_str,
+                    rattler_conda_types::ParseStrictness::Lenient,
+                )
+                .ok()?;
+
+                let name = match_spec
+                    .name
+                    .as_ref()?
+                    .as_exact()?
+                    .as_source()
+                    .to_string();
+
+                Some(NamedSpec {
+                    name: SourcePackageName::from(name),
+                    spec: PackageSpec::Binary(BinaryPackageSpec {
+                        version: match_spec.version.clone(),
+                        ..Default::default()
+                    }),
+                })
+            })
+            .collect()
+    }
+
+    fn convert_constraint_specs(specs: &[String]) -> Vec<NamedSpec<ConstraintSpec>> {
+        specs
+            .iter()
+            .filter_map(|spec_str| {
+                let match_spec = rattler_conda_types::MatchSpec::from_str(
+                    spec_str,
+                    rattler_conda_types::ParseStrictness::Lenient,
+                )
+                .ok()?;
+
+                let name = match_spec
+                    .name
+                    .as_ref()?
+                    .as_exact()?
+                    .as_source()
+                    .to_string();
+
+                Some(NamedSpec {
+                    name: SourcePackageName::from(name),
+                    spec: ConstraintSpec::Binary(BinaryPackageSpec {
+                        version: match_spec.version.clone(),
+                        ..Default::default()
+                    }),
+                })
+            })
+            .collect()
+    }
+
+    pixi_build_types::procedures::conda_outputs::CondaOutputRunExports {
+        weak: convert_specs(&run_exports.weak),
+        strong: convert_specs(&run_exports.strong),
+        noarch: convert_specs(&run_exports.noarch),
+        weak_constrains: convert_constraint_specs(&run_exports.weak_constrains),
+        strong_constrains: convert_constraint_specs(&run_exports.strong_constrains),
+    }
+}
+
+/// Returns true if the given [`TargetSelector`] matches the specified
 /// `platform`.
-fn matches_target_selector(selector: &TargetSelectorV1, platform: Platform) -> bool {
+fn matches_target_selector(selector: &TargetSelector, platform: Platform) -> bool {
     match selector {
-        TargetSelectorV1::Unix => platform.is_unix(),
-        TargetSelectorV1::Linux => platform.is_linux(),
-        TargetSelectorV1::Win => platform.is_windows(),
-        TargetSelectorV1::MacOs => platform.is_osx(),
-        TargetSelectorV1::Platform(target_platform) => target_platform == platform.as_str(),
+        TargetSelector::Unix => platform.is_unix(),
+        TargetSelector::Linux => platform.is_linux(),
+        TargetSelector::Win => platform.is_windows(),
+        TargetSelector::MacOs => platform.is_osx(),
+        TargetSelector::Platform(target_platform) => target_platform == platform.as_str(),
     }
 }
 
@@ -707,10 +796,10 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
         params: InitializeParams,
     ) -> Result<Self::Backend, Box<CommunicationError>> {
         let project_model = match params.project_model {
-            Some(VersionedProjectModel::V1(project_model)) => project_model,
-            _ => {
+            Some(project_model) => project_model,
+            None => {
                 return Err(Box::new(CommunicationError::BackendError(
-                    BackendError::new("Passthrough backend only supports project model v1"),
+                    BackendError::new("Passthrough backend requires a project model"),
                 )));
             }
         };
@@ -721,27 +810,32 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
         };
 
         // Read the package file if it is specified, or create IndexJson for on_the_fly mode
-        let source_dir = params.source_dir.expect("Missing source directory");
-        let index_json = match &config.package {
+        let source_dir = params.source_directory.expect("Missing source directory");
+        let (index_json, package_run_exports) = match &config.package {
             Some(path) => {
                 let path = source_dir.join(path);
-                match rattler_package_streaming::seek::read_package_file(&path) {
-                    Err(err) => {
-                        return Err(Box::new(
-                            BackendError::new(format!(
-                                "failed to read '{}' file: {}",
-                                path.display(),
-                                err
-                            ))
-                            .into(),
-                        ));
-                    }
-                    Ok(index_json) => index_json,
-                }
+                let index_json: IndexJson =
+                    match rattler_package_streaming::seek::read_package_file(&path) {
+                        Err(err) => {
+                            return Err(Box::new(
+                                BackendError::new(format!(
+                                    "failed to read index.json from '{}': {}",
+                                    path.display(),
+                                    err
+                                ))
+                                .into(),
+                            ));
+                        }
+                        Ok(index_json) => index_json,
+                    };
+                // Also read run_exports.json from the package (optional, may not exist)
+                let run_exports: Option<RunExportsJson> =
+                    rattler_package_streaming::seek::read_package_file(&path).ok();
+                (index_json, run_exports)
             }
             None => {
                 // Create IndexJson from project model for on-the-fly package generation
-                IndexJson {
+                let index_json = IndexJson {
                     arch: None,
                     build: String::new(),
                     build_number: 0,
@@ -768,7 +862,8 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                         .clone()
                         .unwrap_or_else(|| Version::major(0))
                         .into(),
-                }
+                };
+                (index_json, None)
             }
         };
 
@@ -778,6 +873,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
             source_dir,
             index_json,
             run_exports: self.run_exports.clone(),
+            package_run_exports,
         })
     }
 
@@ -870,8 +966,9 @@ pub struct ObservableBackend<T: InMemoryBackend> {
 }
 
 impl<T: InMemoryBackend> ObservableBackend<T> {
-    /// Creates a new instantiator for an ObservableBackend wrapping the given backend.
-    /// Returns both the instantiator and a BackendObserver for collecting events.
+    /// Creates a new instantiator for an ObservableBackend wrapping the given
+    /// backend. Returns both the instantiator and a BackendObserver for
+    /// collecting events.
     pub fn instantiator<I>(
         inner_instantiator: I,
     ) -> (
@@ -961,33 +1058,34 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use pixi_build_types::{BinaryPackageSpecV1, PackageSpecV1};
+    use pixi_build_types::{BinaryPackageSpec, PackageSpec};
     use rattler_conda_types::{ParseStrictness, VersionSpec};
+
+    use super::*;
 
     #[test]
     fn test_is_star_requirement_with_star() {
-        let spec = PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1 {
+        let spec = PackageSpec::Binary(BinaryPackageSpec {
             version: Some(VersionSpec::from_str("*", ParseStrictness::Lenient).unwrap()),
             ..Default::default()
-        }));
+        });
 
         assert!(is_star_requirement(&spec));
     }
 
     #[test]
     fn test_is_star_requirement_with_version() {
-        let spec = PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1 {
+        let spec = PackageSpec::Binary(BinaryPackageSpec {
             version: Some(VersionSpec::from_str(">=1.0", ParseStrictness::Lenient).unwrap()),
             ..Default::default()
-        }));
+        });
 
         assert!(!is_star_requirement(&spec));
     }
 
     #[test]
     fn test_is_star_requirement_with_no_version() {
-        let spec = PackageSpecV1::Binary(Box::default());
+        let spec = PackageSpec::Binary(BinaryPackageSpec::default());
 
         assert!(is_star_requirement(&spec));
     }

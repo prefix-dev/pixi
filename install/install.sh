@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-# Version: v0.62.2
+# Version: v0.63.2
 
 __wrap__() {
     # Function to mask username and password in URLs for safe printing
@@ -47,6 +47,7 @@ __wrap__() {
 
     case "${ARCH-}" in
     arm64 | aarch64) ARCH="aarch64" ;;
+    riscv64) ARCH="riscv64gc" ;;
     esac
 
     BINARY="pixi-${ARCH}-${PLATFORM}"
@@ -221,7 +222,8 @@ __wrap__() {
             ;;
 
         fish)
-            LINE="fish_add_path ${PIXI_BIN_DIR}"
+            # Use 'set -gx PATH' for compatibility with Fish < 3.2.0 (which lacks fish_add_path)
+            LINE="set -gx PATH \"${PIXI_BIN_DIR}\" \$PATH"
             update_shell ~/.config/fish/config.fish "$LINE"
             ;;
 

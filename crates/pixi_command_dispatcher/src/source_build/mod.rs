@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -10,11 +10,11 @@ use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_path::AbsPath;
-use pixi_record::{PinnedSourceSpec, PixiRecord, VariantValue};
-use pixi_spec::{SourceAnchor, SourceLocationSpec, SourceSpec};
+use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec, PixiRecord, VariantValue};
+use pixi_spec::{SourceAnchor, SourceLocationSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageRecord,
-    Platform, RepoDataRecord, prefix::Prefix,
+    Platform, RepoDataRecord, package::DistArchiveIdentifier, prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
 use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
@@ -31,11 +31,13 @@ use crate::{
     InstantiateBackendError, InstantiateBackendSpec, PixiEnvironmentSpec,
     SolvePixiEnvironmentError, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec,
     SourceCheckoutError,
+    build::pin_compatible::PinCompatibleError,
     build::{
         BuildCacheError, BuildHostEnvironment, BuildHostPackage, CachedBuild,
-        CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, PackageBuildInputHash,
-        PixiRunExports, SourceCodeLocation, SourceRecordOrCheckout, WorkDirKey, move_file,
+        CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, PixiRunExports,
+        SourceCodeLocation, SourceRecordOrCheckout, WorkDirKey, move_file,
     },
+    input_hash::{ConfigurationHash, ProjectModelHash},
     package_identifier::PackageIdentifier,
 };
 
@@ -173,10 +175,12 @@ impl SourceBuildSpec {
                         source = %self.source.manifest_source(),
                         package = ?cached_build.record.package_record.name,
                         build = %cached_build.record.package_record.build,
-                        output = %cached_build.record.file_name,
+                        output = %cached_build.record.identifier.to_file_name(),
                         "using cached up-to-date source build",
                     );
-                    let output_file = build_cache.cache_dir.join(&cached_build.record.file_name);
+                    let output_file = build_cache
+                        .cache_dir
+                        .join(cached_build.record.identifier.to_file_name());
                     return Ok(SourceBuildResult {
                         output_file,
                         record: cached_build.record.clone(),
@@ -196,11 +200,13 @@ impl SourceBuildSpec {
                     source = %self.source.manifest_source(),
                     package = ?cached_build.record.package_record.name,
                     build = %cached_build.record.package_record.build,
-                    output = %cached_build.record.file_name,
+                    output = %cached_build.record.identifier.to_file_name(),
                     "using cached new source build",
                 );
                 // dont matter if we force it , we can reuse the cache entry
-                let output_file = build_cache.cache_dir.join(&cached_build.record.file_name);
+                let output_file = build_cache
+                    .cache_dir
+                    .join(cached_build.record.identifier.to_file_name());
                 return Ok(SourceBuildResult {
                     output_file,
                     record: cached_build.record.clone(),
@@ -243,10 +249,18 @@ impl SourceBuildSpec {
                 self.enabled_protocols.clone(),
             )
             .await
-            .map_err_with(SourceBuildError::Discovery)?;
+            .map_err_with(|e| SourceBuildError::Discovery(Arc::new(e)))?;
 
-        // Compute the package input hash for caching purposes.
-        let package_build_input_hash = PackageBuildInputHash::from(discovered_backend.as_ref());
+        // Compute the hashes for caching purposes.
+        let project_model_hash = discovered_backend
+            .init_params
+            .project_model
+            .as_ref()
+            .map(ProjectModelHash::from);
+        let configuration_hash = ConfigurationHash::compute(
+            discovered_backend.init_params.configuration.as_ref(),
+            discovered_backend.init_params.target_configuration.as_ref(),
+        );
 
         // Determine the build source to use: either from lock file or workspace
 
@@ -254,9 +268,9 @@ impl SourceBuildSpec {
         // manifest so we check out the correct directory.
         let mut build_source = self.source.build_source().cloned();
         if let (Some(PinnedSourceSpec::Git(pinned_git)), Some(SourceLocationSpec::Git(git_spec))) = (
-            build_source.as_mut(),
+            build_source.as_mut().map(PinnedBuildSourceSpec::pinned_mut),
             discovered_backend.init_params.build_source.clone(),
-        ) && pinned_git.source.subdirectory.is_none()
+        ) && pinned_git.source.subdirectory.is_empty()
         {
             pinned_git.source.subdirectory = git_spec.subdirectory.clone();
         }
@@ -267,14 +281,14 @@ impl SourceBuildSpec {
         // 3. Manifest source. Just assume that source is located at the same directory as the manifest.
         let build_source_checkout = if let Some(pinned_build_source) = build_source {
             &command_dispatcher
-                .checkout_pinned_source(pinned_build_source)
+                .checkout_pinned_source(pinned_build_source.into_pinned())
                 .await
                 .map_err_with(SourceBuildError::SourceCheckout)?
         } else if let Some(manifest_build_source) =
             discovered_backend.init_params.build_source.clone()
         {
             let manifest_source_anchor =
-                SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
+                SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
             let resolved_build_source = manifest_source_anchor.resolve(manifest_build_source);
             &command_dispatcher
                 .pin_and_checkout(resolved_build_source)
@@ -290,7 +304,7 @@ impl SourceBuildSpec {
                 backend_spec: discovered_backend
                     .backend_spec
                     .clone()
-                    .resolve(SourceAnchor::from(SourceSpec::from(
+                    .resolve(SourceAnchor::from(SourceLocationSpec::from(
                         manifest_source.clone(),
                     ))),
                 build_source_dir: build_source_checkout
@@ -345,7 +359,7 @@ impl SourceBuildSpec {
             && let Err(err) = fs_err::remove_dir_all(&work_directory)
         {
             return Err(CommandDispatcherError::Failed(
-                SourceBuildError::CleanWorkingDirectory(work_directory, err),
+                SourceBuildError::CleanWorkingDirectory(work_directory, Arc::new(err)),
             ));
         }
 
@@ -362,7 +376,8 @@ impl SourceBuildSpec {
                 backend,
                 work_directory,
                 source_dir,
-                package_build_input_hash,
+                project_model_hash,
+                configuration_hash,
                 reporter,
                 log_sink,
             )
@@ -370,13 +385,13 @@ impl SourceBuildSpec {
 
         // Create the output directory if it does not exist.
         fs_err::create_dir_all(&output_directory).map_err(|err| {
-            CommandDispatcherError::Failed(SourceBuildError::CreateOutputDirectory(err))
+            CommandDispatcherError::Failed(SourceBuildError::CreateOutputDirectory(Arc::new(err)))
         })?;
 
         // At this point, the directory should exist, so we can canonicalize the path.
         let output_directory = fs_err::canonicalize(&output_directory)
             .map_err(CommandDispatcherError::Failed)
-            .map_err_with(SourceBuildError::CreateOutputDirectory)?;
+            .map_err_with(|e| SourceBuildError::CreateOutputDirectory(Arc::new(e)))?;
 
         // The output file should also exist.
         tracing::debug!(
@@ -416,8 +431,9 @@ impl SourceBuildSpec {
         // this during the build?
         let output_file = built_source.output_file.clone();
         let read_index_json_fut = simple_spawn_blocking::tokio::run_blocking_task(move || {
-            rattler_package_streaming::seek::read_package_file(&output_file)
-                .map_err(|err| CommandDispatcherError::Failed(SourceBuildError::ReadIndexJson(err)))
+            rattler_package_streaming::seek::read_package_file(&output_file).map_err(|err| {
+                CommandDispatcherError::Failed(SourceBuildError::ReadIndexJson(Arc::new(err)))
+            })
         });
 
         // Read the SHA256 hash of the package file.
@@ -427,17 +443,19 @@ impl SourceBuildSpec {
         let (sha, index_json) = tokio::try_join!(read_sha256_fut, read_index_json_fut)?;
 
         // Construct the record from the index JSON and the SHA256 hash.
+        let file_name = built_source
+            .output_file
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy();
+        let identifier = DistArchiveIdentifier::try_from_filename(&file_name)
+            .expect("output file should have a valid archive filename");
         let record = RepoDataRecord {
             package_record: PackageRecord::from_index_json(index_json, None, Some(sha), None)
                 .map_err(|err| {
-                    CommandDispatcherError::Failed(SourceBuildError::ConvertSubdir(err))
+                    CommandDispatcherError::Failed(SourceBuildError::ConvertSubdir(Arc::new(err)))
                 })?,
-            file_name: built_source
-                .output_file
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string(),
+            identifier,
             url: Url::from_file_path(&built_source.output_file)
                 .expect("the output file should be a valid URL"),
             channel: None,
@@ -446,7 +464,7 @@ impl SourceBuildSpec {
             source = %source_for_logging,
             package = ?record.package_record.name,
             build = %record.package_record.build,
-            output = %record.file_name,
+            output = %record.identifier.to_file_name(),
             "built source package",
         );
 
@@ -526,13 +544,14 @@ impl SourceBuildSpec {
         backend: Backend,
         work_directory: PathBuf,
         source_dir: PathBuf,
-        package_build_input_hash: PackageBuildInputHash,
+        project_model_hash: Option<ProjectModelHash>,
+        configuration_hash: ConfigurationHash,
         reporter: Option<Arc<dyn RunExportsReporter>>,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<BuiltPackage, CommandDispatcherError<SourceBuildError>> {
         let manifest_source = self.source.manifest_source().clone();
 
-        let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
+        let source_anchor = SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
         let host_platform = self.build_environment.host_platform;
         let build_platform = self.build_environment.build_platform;
         let editable = self.editable();
@@ -569,7 +588,7 @@ impl SourceBuildSpec {
                 },
             )
             .await
-            .map_err(BackendSourceBuildError::BuildError)
+            .map_err(BackendSourceBuildError::from)
             .map_err(SourceBuildError::from)
             .map_err(CommandDispatcherError::Failed)?;
 
@@ -608,10 +627,11 @@ impl SourceBuildSpec {
         let directories = Directories::new(&work_directory, host_platform);
 
         // Solve the build environment.
+        let mut compatibility_map = HashMap::new();
         let build_dependencies = output
             .build_dependencies
             .as_ref()
-            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone())))
+            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone()), &compatibility_map))
             .transpose()
             .map_err(SourceBuildError::from)
             .map_err(CommandDispatcherError::Failed)?
@@ -636,14 +656,22 @@ impl SourceBuildSpec {
                 reporter.clone(),
             )
             .await
-            .map_err(|err| SourceBuildError::RunExportsExtraction(String::from("build"), err))
+            .map_err(|err| {
+                SourceBuildError::RunExportsExtraction(String::from("build"), Arc::new(err))
+            })
             .map_err(CommandDispatcherError::Failed)?;
+
+        compatibility_map.extend(
+            build_records
+                .iter()
+                .map(|record| (record.package_record().name.clone(), record)),
+        );
 
         // Solve the host environment for the output.
         let host_dependencies = output
             .host_dependencies
             .as_ref()
-            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone())))
+            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone()), &compatibility_map))
             .transpose()
             .map_err(SourceBuildError::from)
             .map_err(CommandDispatcherError::Failed)?
@@ -668,7 +696,9 @@ impl SourceBuildSpec {
                 reporter,
             )
             .await
-            .map_err(|err| SourceBuildError::RunExportsExtraction(String::from("host"), err))
+            .map_err(|err| {
+                SourceBuildError::RunExportsExtraction(String::from("host"), Arc::new(err))
+            })
             .map_err(CommandDispatcherError::Failed)?;
 
         // Install the build environment
@@ -681,7 +711,9 @@ impl SourceBuildSpec {
                         name: format!("{} (build)", self.package.name.as_source()),
                         records: build_records.clone(),
                         prefix: Prefix::create(&directories.build_prefix)
-                            .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
+                            .map_err(|e| {
+                                SourceBuildError::CreateBuildEnvironmentDirectory(Arc::new(e))
+                            })
                             .map_err(CommandDispatcherError::Failed)?,
                         installed: None,
                         ignore_packages: None,
@@ -694,14 +726,13 @@ impl SourceBuildSpec {
                         enabled_protocols: self.enabled_protocols.clone(),
                     })
                     .await
-                    .map_err_with(Box::new)
-                    .map_err_with(SourceBuildError::InstallBuildEnvironment)?,
+                    .map_err_with(|e| SourceBuildError::InstallBuildEnvironment(Arc::new(e)))?,
             )
         };
 
         // We always create the host prefix so that $PREFIX exists during the build.
         let host_prefix_directory = Prefix::create(&directories.host_prefix)
-            .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
+            .map_err(|e| SourceBuildError::CreateBuildEnvironmentDirectory(Arc::new(e)))
             .map_err(CommandDispatcherError::Failed)?;
 
         // Install the host environment.
@@ -725,18 +756,23 @@ impl SourceBuildSpec {
                         enabled_protocols: self.enabled_protocols,
                     })
                     .await
-                    .map_err_with(Box::new)
-                    .map_err_with(SourceBuildError::InstallBuildEnvironment)?,
+                    .map_err_with(|e| SourceBuildError::InstallHostEnvironment(Arc::new(e)))?,
             )
         };
 
         // Ensure the work directory exists.
         fs_err::create_dir_all(&work_directory).map_err(|err| {
-            CommandDispatcherError::Failed(SourceBuildError::CreateWorkDirectory(err))
+            CommandDispatcherError::Failed(SourceBuildError::CreateWorkDirectory(Arc::new(err)))
         })?;
 
+        compatibility_map.extend(
+            host_records
+                .iter()
+                .map(|record| (record.package_record().name.clone(), record)),
+        );
+
         // Gather the dependencies for the output.
-        let dependencies = Dependencies::new(&output.run_dependencies, None)
+        let dependencies = Dependencies::new(&output.run_dependencies, None, &compatibility_map)
             .map_err(SourceBuildError::from)
             .map_err(CommandDispatcherError::Failed)?
             .extend_with_run_exports_from_build_and_host(
@@ -746,9 +782,10 @@ impl SourceBuildSpec {
             );
 
         // Convert the run exports
-        let run_exports = PixiRunExports::try_from_protocol(&output.run_exports)
-            .map_err(SourceBuildError::from)
-            .map_err(CommandDispatcherError::Failed)?;
+        let run_exports =
+            PixiRunExports::try_from_protocol(&output.run_exports, &compatibility_map)
+                .map_err(SourceBuildError::from)
+                .map_err(CommandDispatcherError::Failed)?;
 
         // Extract the repodata records from the build and host environments.
         let build_records = Self::extract_prefix_repodata(build_records, build_prefix);
@@ -802,7 +839,8 @@ impl SourceBuildSpec {
                 host: BuildHostEnvironment {
                     packages: host_records,
                 },
-                package_build_input_hash: Some(package_build_input_hash),
+                project_model_hash,
+                configuration_hash,
             },
         })
     }
@@ -894,13 +932,14 @@ async fn compute_package_sha256(
 ) -> Result<Sha256Hash, CommandDispatcherError<SourceBuildError>> {
     let path = package_path.to_path_buf();
     simple_spawn_blocking::tokio::run_blocking_task(move || {
-        rattler_digest::compute_file_digest::<rattler_digest::Sha256>(&path)
-            .map_err(|e| CommandDispatcherError::Failed(SourceBuildError::CalculateSha256(path, e)))
+        rattler_digest::compute_file_digest::<rattler_digest::Sha256>(&path).map_err(|e| {
+            CommandDispatcherError::Failed(SourceBuildError::CalculateSha256(path, Arc::new(e)))
+        })
     })
     .await
 }
 
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Clone, Error, Diagnostic)]
 pub enum SourceBuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -910,14 +949,14 @@ pub enum SourceBuildError {
     BuildCache(#[from] BuildCacheError),
 
     #[error("failed to amend run exports for {0} environment")]
-    RunExportsExtraction(String, #[source] RunExportExtractorError),
+    RunExportsExtraction(String, #[source] Arc<RunExportExtractorError>),
 
     #[error(transparent)]
-    CreateWorkDirectory(std::io::Error),
+    CreateWorkDirectory(Arc<std::io::Error>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Discovery(#[from] pixi_build_discovery::DiscoveryError),
+    Discovery(Arc<pixi_build_discovery::DiscoveryError>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -938,16 +977,16 @@ pub enum SourceBuildError {
     ),
 
     #[error("failed to create the build environment directory")]
-    CreateBuildEnvironmentDirectory(#[source] std::io::Error),
+    CreateBuildEnvironmentDirectory(#[source] Arc<std::io::Error>),
 
     #[error("failed to create the host environment directory")]
-    CreateHostEnvironmentDirectory(#[source] std::io::Error),
+    CreateHostEnvironmentDirectory(#[source] Arc<std::io::Error>),
 
     #[error("failed to install the build environment")]
-    InstallBuildEnvironment(#[source] Box<InstallPixiEnvironmentError>),
+    InstallBuildEnvironment(#[source] Arc<InstallPixiEnvironmentError>),
 
     #[error("failed to install the host environment")]
-    InstallHostEnvironment(#[source] Box<InstallPixiEnvironmentError>),
+    InstallHostEnvironment(#[source] Arc<InstallPixiEnvironmentError>),
 
     #[error(
         "The build backend does not provide the requested output: {subdir}/{name}={version}={build}."
@@ -964,40 +1003,64 @@ pub enum SourceBuildError {
     )]
     MissingOutputFile(PathBuf),
 
-    #[error("backend returned a dependency on an invalid package name: {0}")]
-    InvalidPackageName(String, #[source] InvalidPackageNameError),
+    #[error("backend returned a dependency on an invalid package name")]
+    InvalidPackageName(#[source] Arc<InvalidPackageNameError>),
+
+    #[error(transparent)]
+    PinCompatibleError(#[from] PinCompatibleError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
     BackendBuildError(#[from] BackendSourceBuildError),
 
     #[error("failed to clean the working directory: {0}")]
-    CleanWorkingDirectory(PathBuf, #[source] std::io::Error),
+    CleanWorkingDirectory(PathBuf, #[source] Arc<std::io::Error>),
 
     #[error("moving the built package from {0} to the output directory {1} failed")]
     Move(PathBuf, PathBuf, #[source] MoveError),
 
     #[error("failed to create the output directory")]
-    CreateOutputDirectory(#[source] std::io::Error),
+    CreateOutputDirectory(#[source] Arc<std::io::Error>),
 
     #[error("failed to read metadata from the output package")]
-    ReadIndexJson(#[source] rattler_package_streaming::ExtractError),
+    ReadIndexJson(#[source] Arc<rattler_package_streaming::ExtractError>),
 
     #[error("failed to calculate sha256 hash of {}", .0.display())]
-    CalculateSha256(std::path::PathBuf, #[source] std::io::Error),
+    CalculateSha256(std::path::PathBuf, #[source] Arc<std::io::Error>),
 
     #[error("the package does not contain a valid subdir")]
-    ConvertSubdir(#[source] ConvertSubdirError),
+    ConvertSubdir(#[source] Arc<ConvertSubdirError>),
 
     #[error(transparent)]
-    GlobSet(#[from] pixi_glob::GlobSetError),
+    GlobSet(Arc<pixi_glob::GlobSetError>),
+}
+
+impl From<InvalidPackageNameError> for SourceBuildError {
+    fn from(err: InvalidPackageNameError) -> Self {
+        Self::InvalidPackageName(Arc::new(err))
+    }
+}
+
+impl From<pixi_glob::GlobSetError> for SourceBuildError {
+    fn from(err: pixi_glob::GlobSetError) -> Self {
+        Self::GlobSet(Arc::new(err))
+    }
+}
+
+impl From<pixi_build_discovery::DiscoveryError> for SourceBuildError {
+    fn from(err: pixi_build_discovery::DiscoveryError) -> Self {
+        Self::Discovery(Arc::new(err))
+    }
 }
 
 impl From<DependenciesError> for SourceBuildError {
     fn from(value: DependenciesError) -> Self {
         match value {
-            DependenciesError::InvalidPackageName(name, error) => {
-                SourceBuildError::InvalidPackageName(name, error)
+            DependenciesError::InvalidPackageName(error) => {
+                SourceBuildError::InvalidPackageName(error)
+            }
+            DependenciesError::PinCompatibleError(error) => {
+                SourceBuildError::PinCompatibleError(error)
             }
         }
     }

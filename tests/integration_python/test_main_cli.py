@@ -366,6 +366,7 @@ def test_concurrency_flags(
     )
 
 
+@pytest.mark.slow
 def test_cli_config_options(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:
@@ -1023,6 +1024,7 @@ def test_pixi_task_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
                                 "depends_on": [],
                                 "args": [{"name": "name", "default": "World"}],
                                 "cwd": None,
+                                "default_environment": None,
                                 "env": None,
                                 "clean_env": False,
                                 "inputs": None,

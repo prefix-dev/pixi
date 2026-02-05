@@ -51,6 +51,8 @@ use std::ops::Deref;
 use std::path::{Component, Path, PathBuf};
 use thiserror::Error;
 
+pub mod normalize;
+
 /// Error type for path validation failures.
 #[derive(Debug, Error)]
 pub enum PathError {

@@ -36,10 +36,10 @@ impl CommandDispatcherProcessor {
                 PendingDeduplicatingTask::Pending(pending, _) => {
                     pending.push(task.tx);
                 }
-                PendingDeduplicatingTask::Result(result, _) => {
-                    let _ = task.tx.send(Ok(result.clone()));
+                PendingDeduplicatingTask::Completed(result, _) => {
+                    let _ = task.tx.send(result.clone());
                 }
-                PendingDeduplicatingTask::Errored => {
+                PendingDeduplicatingTask::Cancelled => {
                     // Drop the sender, this will cause a cancellation on the other side.
                     drop(task.tx);
                 }
@@ -72,11 +72,18 @@ impl CommandDispatcherProcessor {
                     reporter.on_started(reporter_id)
                 }
 
-                let command_queue = self.create_task_command_dispatcher(
-                    CommandDispatcherContext::InstantiateToolEnv(id),
-                );
+                let dispatcher_context = CommandDispatcherContext::InstantiateToolEnv(id);
+
+                // Create a child cancellation token linked to parent's token (if any).
+                let cancellation_token =
+                    self.get_child_cancellation_token(task.parent, task.cancellation_token);
+
+                // Store the cancellation token for this context so child tasks can link to it.
+                self.store_cancellation_token(dispatcher_context, cancellation_token.clone());
+
+                let command_queue = self.create_task_command_dispatcher(dispatcher_context);
                 self.pending_futures.push(
-                    task.cancellation_token
+                    cancellation_token
                         .run_until_cancelled_owned(task.spec.instantiate(command_queue))
                         .map(move |result| {
                             TaskResult::InstantiateToolEnv(
@@ -103,7 +110,10 @@ impl CommandDispatcherProcessor {
             CommandDispatcherError<InstantiateToolEnvironmentError>,
         >,
     ) {
-        self.parent_contexts.remove(&id.into());
+        let context = CommandDispatcherContext::InstantiateToolEnv(id);
+        self.parent_contexts.remove(&context);
+        self.remove_cancellation_token(context);
+
         if let Some((reporter, reporter_id)) = self
             .reporter
             .as_deref_mut()

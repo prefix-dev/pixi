@@ -31,6 +31,9 @@ set = "export VAR=hello && echo $VAR"
 copy = "cp pixi.toml pixi_backup.toml"
 clean = "rm pixi_backup.toml"
 move = "mv pixi.toml backup.toml"
+
+# Setting a default environment for the task
+test = { cmd = "pytest", default-environment = "test" }
 ```
 
 ## Depends on
@@ -120,9 +123,12 @@ When you run the main task, Pixi ensures each dependent task uses its specified 
 pixi run test-all
 ```
 
-The environment specified for a task dependency takes precedence over the environment specified via the CLI `--environment` flag. This means even if you run `pixi run test-all --environment py312`, the first dependency will still run in the `py311` environment as specified in the TOML file.
+The environment specified for a task dependency takes precedence over the environment specified via
+the CLI `--environment` flag. This means even if you run `pixi run test-all --environment py312`,
+the first dependency will still run in the `py311` environment as specified in the TOML file.
 
-In the example above, the `test-all` task runs the `test` task in both Python 3.11 and 3.12 environments, allowing you to verify compatibility across different Python versions with a single command.
+In the example above, the `test-all` task runs the `test` task in both Python 3.11 and 3.12 environments,
+allowing you to verify compatibility across different Python versions with a single command.
 
 ## Working directory
 
@@ -152,6 +158,18 @@ This will add the following line to [manifest file](../reference/pixi_manifest.m
 ```toml title="pixi.toml"
 [tasks]
 bar = { cmd = "python bar.py", cwd = "scripts" }
+```
+
+## Default environment
+
+You can set the default Pixi [environment](../tutorials/multi_environment.md#adding-an-environment) used by a task using the `default-environment` field:
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_default_environment.toml:default-environment"
+```
+
+The default environment can be overridden as usual with the `--environment` argument:
+```shell
+pixi run -e other_environment test
 ```
 
 ## Task Arguments
@@ -390,7 +408,7 @@ Notes on environment variables in tasks:
     If you previously relied on a certain priority which no longer applies, you may need to change your
     task definitions.
 
-    For the specific case of overriding `task.env` with outside environment variables, this behaviour can
+    For the specific case of overriding `task.env` with outside environment variables, this behavior can
     now be recreated using [task arguments](#task-arguments). For example, if you were previously using
     a setup like:
 
@@ -405,7 +423,7 @@ Notes on environment variables in tasks:
     world
     ```
 
-    you can now recreate this behaviour like:
+    you can now recreate this behavior like:
 
     ```toml title="pixi.toml"
     [tasks]
@@ -419,6 +437,7 @@ Notes on environment variables in tasks:
     ```
 
 ## Clean environment
+
 You can make sure the environment of a task is "Pixi only".
 Here Pixi will only include the minimal required environment variables for your platform to run the command in.
 The environment will contain all variables set by the conda environment like `"CONDA_PREFIX"`.

@@ -1,0 +1,71 @@
+[workspace]
+# Empty workspace to allow building this crate in isolation.
+
+[package]
+edition = "2024"
+name = "py-pixi-build-backend"
+version = "0.4.1"
+
+[lib]
+crate-type = ["cdylib"]
+name = "pixi_build_backend"
+
+[features]
+default = ["rustls-tls"]
+native-tls = ["pixi-build-backend/native-tls", "rattler-build/native-tls"]
+rustls-tls = ["pixi-build-backend/rustls-tls", "rattler-build/rustls-tls"]
+
+[dependencies]
+# PyO3 for Python bindings
+pyo3 = { version = "0.26", features = [
+  "extension-module",
+  "abi3-py38",
+  "serde",
+  "py-clone",
+  "experimental-async",
+] }
+pyo3-async-runtimes = { version = "0.26.0", features = ["tokio-runtime"] }
+
+# Core pixi-build dependencies (local crates)
+pixi-build-backend = { path = "../../crates/pixi-build-backend" }
+recipe-stage0 = { path = "../../crates/recipe-stage0" }
+
+# Pixi types
+pixi_build_types = { path = "../../crates/pixi_build_types" }
+
+# Async support
+async-trait = "0.1"
+
+# Core serialization and async support
+rattler_conda_types = { version = "0.43.1", default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "rt"] }
+
+# Rattler-build
+rattler-build = { git = "https://github.com/prefix-dev/rattler-build", branch = "main", default-features = false }
+
+# Error handling
+miette = "7.5.0"
+thiserror = "2.0.12"
+
+# Utilities
+fs-err = "3.1.0"
+indexmap = "2.7.1"
+paste = "1.0.15"
+pythonize = "0.26"
+
+[build-dependencies]
+pyo3-build-config = "0.26"
+
+[profile.ci]
+codegen-units = 16
+inherits = "release"
+lto = false
+opt-level = 0
+strip = false
+
+[patch.crates-io]
+# This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
+reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }

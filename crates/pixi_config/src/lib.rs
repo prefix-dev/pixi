@@ -13,7 +13,7 @@ use pixi_consts::consts;
 use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, Platform, Version, VersionBumpType, VersionSpec,
     compression_level::CompressionLevel,
-    package::ArchiveType,
+    package::CondaArchiveType,
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
 };
 use rattler_networking::s3_middleware;
@@ -39,11 +39,11 @@ const EXPERIMENTAL: &str = "experimental";
 #[serde(rename_all = "lowercase")]
 pub enum TlsRootCerts {
     /// Use bundled Mozilla root certificates
-    #[default]
     Webpki,
     /// Use the system's native certificate store
     Native,
     /// Use both webpki and native certificates
+    #[default]
     All,
 }
 
@@ -1001,7 +1001,7 @@ impl ProxyConfig {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct PackageFormatAndCompression {
     /// The archive type that is selected
-    pub archive_type: ArchiveType,
+    pub archive_type: CondaArchiveType,
     /// The compression level that is selected
     pub compression_level: CompressionLevel,
 }
@@ -1034,8 +1034,8 @@ impl FromStr for PackageFormatAndCompression {
             .collect::<String>();
 
         let archive_type = match package_format.to_lowercase().as_str() {
-            "tarbz2" => ArchiveType::TarBz2,
-            "conda" => ArchiveType::Conda,
+            "tarbz2" => CondaArchiveType::TarBz2,
+            "conda" => CondaArchiveType::Conda,
             _ => return Err(format!("Unknown package format: {package_format}")),
         };
 
@@ -1046,13 +1046,13 @@ impl FromStr for PackageFormatAndCompression {
             number if number.parse::<i32>().is_ok() => {
                 let number = number.parse::<i32>().unwrap_or_default();
                 match archive_type {
-                    ArchiveType::TarBz2 => {
+                    CondaArchiveType::TarBz2 => {
                         if !(1..=9).contains(&number) {
                             return Err("Compression level for .tar.bz2 must be between 1 and 9"
                                 .to_string());
                         }
                     }
-                    ArchiveType::Conda => {
+                    CondaArchiveType::Conda => {
                         if !(-7..=22).contains(&number) {
                             return Err(
                                 "Compression level for conda packages (zstd) must be between -7 and 22".to_string()
@@ -1078,8 +1078,8 @@ impl Serialize for PackageFormatAndCompression {
         S: serde::Serializer,
     {
         let package_format = match self.archive_type {
-            ArchiveType::TarBz2 => "tarbz2",
-            ArchiveType::Conda => "conda",
+            CondaArchiveType::TarBz2 => "tarbz2",
+            CondaArchiveType::Conda => "conda",
         };
         let compression_level = match self.compression_level {
             CompressionLevel::Default => "default",
@@ -2791,14 +2791,6 @@ UNUSED = "unused"
         config.set("unknown-key", None).unwrap_err();
     }
 
-    #[test]
-    fn test_tls_root_certs_default() {
-        let config = Config::default();
-        // Default should be Webpki (bundled Mozilla roots)
-        assert_eq!(config.tls_root_certs(), TlsRootCerts::Webpki);
-        assert_eq!(config.tls_root_certs, None);
-    }
-
     #[rstest]
     #[case("pinning-strategy", None, None)]
     #[case("pinning-strategy", Some("semver".to_string()), Some(PinningStrategy::Semver))]
@@ -2946,7 +2938,7 @@ UNUSED = "unused"
 
     use std::str::FromStr;
 
-    use rattler_conda_types::{compression_level::CompressionLevel, package::ArchiveType};
+    use rattler_conda_types::{compression_level::CompressionLevel, package::CondaArchiveType};
 
     use super::PackageFormatAndCompression;
 
@@ -2956,7 +2948,7 @@ UNUSED = "unused"
         assert_eq!(
             package_format,
             PackageFormatAndCompression {
-                archive_type: ArchiveType::TarBz2,
+                archive_type: CondaArchiveType::TarBz2,
                 compression_level: CompressionLevel::Default
             }
         );
@@ -2965,7 +2957,7 @@ UNUSED = "unused"
         assert_eq!(
             package_format,
             PackageFormatAndCompression {
-                archive_type: ArchiveType::Conda,
+                archive_type: CondaArchiveType::Conda,
                 compression_level: CompressionLevel::Default
             }
         );
@@ -2974,7 +2966,7 @@ UNUSED = "unused"
         assert_eq!(
             package_format,
             PackageFormatAndCompression {
-                archive_type: ArchiveType::TarBz2,
+                archive_type: CondaArchiveType::TarBz2,
                 compression_level: CompressionLevel::Numeric(1)
             }
         );
@@ -2983,7 +2975,7 @@ UNUSED = "unused"
         assert_eq!(
             package_format,
             PackageFormatAndCompression {
-                archive_type: ArchiveType::TarBz2,
+                archive_type: CondaArchiveType::TarBz2,
                 compression_level: CompressionLevel::Highest
             }
         );
@@ -2992,7 +2984,7 @@ UNUSED = "unused"
         assert_eq!(
             package_format,
             PackageFormatAndCompression {
-                archive_type: ArchiveType::TarBz2,
+                archive_type: CondaArchiveType::TarBz2,
                 compression_level: CompressionLevel::Numeric(5)
             }
         );
@@ -3001,7 +2993,7 @@ UNUSED = "unused"
         assert_eq!(
             package_format,
             PackageFormatAndCompression {
-                archive_type: ArchiveType::Conda,
+                archive_type: CondaArchiveType::Conda,
                 compression_level: CompressionLevel::Numeric(1)
             }
         );
@@ -3010,7 +3002,7 @@ UNUSED = "unused"
         assert_eq!(
             package_format,
             PackageFormatAndCompression {
-                archive_type: ArchiveType::Conda,
+                archive_type: CondaArchiveType::Conda,
                 compression_level: CompressionLevel::Highest
             }
         );
@@ -3019,7 +3011,7 @@ UNUSED = "unused"
         assert_eq!(
             package_format,
             PackageFormatAndCompression {
-                archive_type: ArchiveType::Conda,
+                archive_type: CondaArchiveType::Conda,
                 compression_level: CompressionLevel::Numeric(-5)
             }
         );
@@ -3028,7 +3020,7 @@ UNUSED = "unused"
         assert_eq!(
             package_format,
             PackageFormatAndCompression {
-                archive_type: ArchiveType::Conda,
+                archive_type: CondaArchiveType::Conda,
                 compression_level: CompressionLevel::Lowest
             }
         );

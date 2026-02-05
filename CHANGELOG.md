@@ -5,6 +5,99 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.63.2] - 2026-01-19
+#### ✨ Highlights
+
+This release brings important fixes for Pixi Build and PyPI support.
+
+
+#### Documentation
+
+- Update CHANGELOG.md to remove duplicated introduction by @ickc in [#5308](https://github.com/prefix-dev/pixi/pull/5308)
+- Describe git support for package source by @Hofer-Julian in [#5314](https://github.com/prefix-dev/pixi/pull/5314)
+
+
+#### Fixed
+
+- Dont check run-exports for source dependencies by @baszalmstra in [#5302](https://github.com/prefix-dev/pixi/pull/5302)
+- Loading of uv certificates by @tdejager in [#5313](https://github.com/prefix-dev/pixi/pull/5313)
+- Downstream tests by @Hofer-Julian in [#5316](https://github.com/prefix-dev/pixi/pull/5316)
+
+
+#### Refactor
+
+- The uv client to be created in a single place by @tdejager in [#5311](https://github.com/prefix-dev/pixi/pull/5311)
+
+
+#### New Contributors
+* @ickc made their first contribution in [#5308](https://github.com/prefix-dev/pixi/pull/5308)
+
+### [0.63.1] - 2026-01-15
+#### ✨ Highlights
+
+Yes, a patch release the day after looks like we messed up the last release, but we really just wanted to get these fixes out 🙃
+
+
+#### Fixed
+
+- An issue with source-interdependencies and dev packages by @wolfv in [#5292](https://github.com/prefix-dev/pixi/pull/5292)
+- Retain `build.source` spec in lock-file for relative paths by @baszalmstra in [#5247](https://github.com/prefix-dev/pixi/pull/5247)
+
+
+
+### [0.63.0] - 2026-01-14
+#### ✨ Highlights
+
+Pixi now supports [PEP508 environment markers](https://peps.python.org/pep-0508/#environment-markers) for PyPI dependencies. Tasks can specify a `default_environment`, making it easier to run tasks without explicitly selecting an environment. Error messages become more readable with syntax highlighting in error reports.
+
+As usual this release also includes a lot of bug fixes.
+This version introduces a breaking chance in the communication protocol between build backends and pixi. New versions of the build backends that support this protocol have been released but if you pin your build backends to an older version you might encounter an error. Updating the version constraints of your build backend will fix this.
+#### Added
+
+- `default_environment` option for specifying the default environment for a task by @prady0t in [#5164](https://github.com/prefix-dev/pixi/pull/5164)
+- Add set_channels() to WorkspaceContext by @haecker-felix in [#5172](https://github.com/prefix-dev/pixi/pull/5172)
+- Expose PIXI_VERSION const by @haecker-felix in [#5232](https://github.com/prefix-dev/pixi/pull/5232)
+- Add arborium syntax highlighting to miette error reporting by @Hofer-Julian in [#5231](https://github.com/prefix-dev/pixi/pull/5231)
+- Source records nameless match spec by @baszalmstra in [#5103](https://github.com/prefix-dev/pixi/pull/5103)
+- Fix installation reading editable from the lock incorrectly by @tdejager in [#5249](https://github.com/prefix-dev/pixi/pull/5249)
+- Support PEP508 environment markers by @hameerabbasi in [#5241](https://github.com/prefix-dev/pixi/pull/5241)
+
+
+#### Documentation
+
+- Add section on pinned package conflicts in conda and PyPI integration by @maurosilber in [#5217](https://github.com/prefix-dev/pixi/pull/5217)
+- Explain the matchspec and source spec by @ruben-arts in [#5224](https://github.com/prefix-dev/pixi/pull/5224)
+- Improve system requirements documentation clarity by @Hofer-Julian in [#5264](https://github.com/prefix-dev/pixi/pull/5264)
+
+
+#### Fixed
+
+- Hover color on footer links by @ruben-arts in [#5189](https://github.com/prefix-dev/pixi/pull/5189)
+- `pixi lock` backend override by @nichmor in [#5179](https://github.com/prefix-dev/pixi/pull/5179)
+- Reporter context retrieval by @ruben-arts in [#5202](https://github.com/prefix-dev/pixi/pull/5202)
+- Stale metadata when pointing to file by @nichmor in [#5203](https://github.com/prefix-dev/pixi/pull/5203)
+- Improve python version specifier handling in pypi.rs by @ruben-arts in [#5211](https://github.com/prefix-dev/pixi/pull/5211)
+- Correct admonition on pixi_manifest page by @claudiushaag in [#5252](https://github.com/prefix-dev/pixi/pull/5252)
+- Fix freeze and update examples by @baszalmstra in [#5255](https://github.com/prefix-dev/pixi/pull/5255)
+- Use latest versions of build backends by @baszalmstra in [#5258](https://github.com/prefix-dev/pixi/pull/5258)
+- Move retry middleware to the front by @pavelzw in [#5257](https://github.com/prefix-dev/pixi/pull/5257)
+- Use new uv caching mechanism to determine freshness by @tdejager in [#5254](https://github.com/prefix-dev/pixi/pull/5254)
+- Change `TlsRootCerts` to select `All` by default by @tdejager in [#5244](https://github.com/prefix-dev/pixi/pull/5244)
+- Recognize incompatible python wheels by @hunger in [#5273](https://github.com/prefix-dev/pixi/pull/5273)
+- Preserve branch reference by @nichmor in [#5215](https://github.com/prefix-dev/pixi/pull/5215)
+- Operation was cancelled error by @baszalmstra in [#5287](https://github.com/prefix-dev/pixi/pull/5287)
+- Comparison of None in git source subdir vs empty string by @wolfv in [#5269](https://github.com/prefix-dev/pixi/pull/5269)
+
+
+#### Style
+
+- Docs/ polish by @hunger in [#5234](https://github.com/prefix-dev/pixi/pull/5234)
+
+
+#### New Contributors
+* @hunger made their first contribution in [#5273](https://github.com/prefix-dev/pixi/pull/5273)
+* @claudiushaag made their first contribution in [#5252](https://github.com/prefix-dev/pixi/pull/5252)
+
 ### [0.62.2] - 2025-12-22
 #### ✨ Highlights
 This is a small patch release fixing issues with source packages and caching.
@@ -93,13 +186,6 @@ This release removes the input hashes from the lockfile for source dependencies 
 #### New Contributors
 * @prady0t made their first contribution in [#5112](https://github.com/prefix-dev/pixi/pull/5112)
 * @TheSkyentist made their first contribution in [#5126](https://github.com/prefix-dev/pixi/pull/5126)
-
-# Changelog
-
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### [0.61.0] - 2025-12-09
 #### ✨ Highlights

@@ -26,7 +26,7 @@ use pixi_manifest::{FeaturesExt, TaskName};
 use pixi_progress::global_multi_progress;
 use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
-    SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
+    PreferExecutable, SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
 };
 use rattler_conda_types::Platform;
 use thiserror::Error;
@@ -49,6 +49,12 @@ pub struct Args {
     /// The pixi task or a task shell command you want to run in the workspace's
     /// environment, which can be an executable in the environment's PATH.
     pub task: Vec<String>,
+
+    /// Execute the command as an executable without resolving Pixi tasks.
+    ///
+    /// Useful when a task name and an executable have the same name.
+    #[arg(long = "executable", short = 'x')]
+    pub executable: bool,
 
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
@@ -178,9 +184,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         SearchEnvironments::from_opt_env(&workspace, explicit_environment.clone(), search_platform)
             .with_disambiguate_fn(disambiguate_task_interactive);
 
-    let task_graph =
-        TaskGraph::from_cmd_args(&workspace, &search_environment, args.task, args.skip_deps)?;
-
+    let task_graph = TaskGraph::from_cmd_args(
+        &workspace,
+        &search_environment,
+        args.task,
+        args.skip_deps,
+        if args.executable {
+            PreferExecutable::Always
+        } else {
+            PreferExecutable::TaskFirst
+        },
+    )?;
     tracing::debug!("Task graph: {}", task_graph);
 
     // Print dry-run message if dry-run mode is enabled
@@ -442,6 +456,19 @@ async fn execute_task(
 fn disambiguate_task_interactive<'p>(
     problem: &AmbiguousTask<'p>,
 ) -> Option<TaskAndEnvironment<'p>> {
+    // If any of the candidate tasks declares a `default-environment` that
+    // corresponds to one of the candidate environments, prefer that
+    // environment automatically.
+    if let Some(idx) = problem.environments.iter().position(|(env, task)| {
+        if let Some(default_env_name) = task.default_environment() {
+            default_env_name == env.name()
+        } else {
+            false
+        }
+    }) {
+        return Some(problem.environments[idx].clone());
+    }
+
     let environment_names = problem
         .environments
         .iter()
