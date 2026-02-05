@@ -198,7 +198,7 @@ pub async fn simple_test() {
     let output = regex::Regex::new(r"rev=[a-z0-9]+")
         .unwrap()
         .replace_all(&output, "rev=[GIT_REF]");
-    let output = regex::Regex::new(r"#[a-f0-9]{40}")
+    let output = regex::Regex::new(r"[#@][a-f0-9]{40}")
         .unwrap()
         .replace_all(&output, "#[GIT_HASH]");
     insta::assert_snapshot!(output);

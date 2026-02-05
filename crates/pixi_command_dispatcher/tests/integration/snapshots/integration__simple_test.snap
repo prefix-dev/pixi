@@ -3,7 +3,7 @@ source: crates/pixi_command_dispatcher/tests/integration/main.rs
 expression: output
 ---
 Pixi solve (foobar-desktop)
-├── Git Checkout (file://[LOCAL_GIT_REPO]@7d54a632b7c2a08188a053988f118d7963b09e29)
+├── Git Checkout (file://[LOCAL_GIT_REPO]#[GIT_HASH])
 ├── Source metadata (foobar-desktop @ git+file://[LOCAL_GIT_REPO]?subdirectory=recipe&rev=[GIT_REF]#[GIT_HASH])
 │       └── Instantiate tool environment (pixi-build-rattler-build)
 │           ├── Pixi solve (pixi-build-rattler-build)
