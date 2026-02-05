@@ -85,7 +85,7 @@ jobs:
 
       - uses: actions/attest@7667f588f2f73a90cea6c7ac70e78266c4f76616 # v3.1.0
         id: attest
-        if: github.event.pull_request.head.repo.full_name == github.repository
+        if: ${{ github.ref == 'refs/heads/main' }}
         with:
           subject-path: "output/**/*.conda"
           predicate-type: "https://schemas.conda.org/attestations-publish-1.schema.json"
@@ -93,7 +93,7 @@ jobs:
 
       - name: Generate attestations for conda packages
         shell: bash
-        if: github.event.pull_request.head.repo.full_name == github.repository
+        if: ${{ github.ref == 'refs/heads/main' }}
         run: pixi run -e backends-release generate-attestations output "${{ steps.attest.outputs.bundle-path }}"
 
       - name: Upload build artifacts
@@ -149,9 +149,9 @@ jobs:
             ATTESTATION_FILE="${file%.conda}.sig"
             if [ -f "$ATTESTATION_FILE" ]; then
               echo "Found attestation: $ATTESTATION_FILE"
-              pixi run -e backends-release rattler-build upload prefix -c pixi-build-backends "$file" --attestation "$ATTESTATION_FILE"
+              pixi run -e backends-release rattler-build upload prefix --skip-existing -c pixi-build-backends "$file" --attestation "$ATTESTATION_FILE"
             else
               echo "Warning: No attestation found for $file"
-              pixi run -e backends-release rattler-build upload prefix -c pixi-build-backends "$file"
+              pixi run -e backends-release rattler-build upload prefix --skip-existing -c pixi-build-backends "$file"
             fi
           done
