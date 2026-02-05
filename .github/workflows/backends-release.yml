@@ -26,7 +26,7 @@ concurrency:
 jobs:
   build:
     if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'release:backends')}}
-    timeout-minutes: 40
+    timeout-minutes: 80
     permissions:
       id-token: write
       contents: read
@@ -87,22 +87,22 @@ jobs:
         id: attest
         if: github.event.pull_request.head.repo.full_name == github.repository
         with:
-          subject-path: "${{ runner.temp }}/**/*.conda"
+          subject-path: "output/**/*.conda"
           predicate-type: "https://schemas.conda.org/attestations-publish-1.schema.json"
           predicate: "{\"targetChannel\": \"https://prefix.dev/pixi-build-backends\"}"
 
       - name: Generate attestations for conda packages
         shell: bash
         if: github.event.pull_request.head.repo.full_name == github.repository
-        run: pixi run -e backends-release generate-attestations "${{ runner.temp }}" "${{ steps.attest.outputs.bundle-path }}"
+        run: pixi run -e backends-release generate-attestations output "${{ steps.attest.outputs.bundle-path }}"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: conda-packages-${{ matrix.target }}
           path: |
-            ${{ runner.temp }}/**/*.conda
-            ${{ runner.temp }}/**/*.sig
+            output/**/*.conda
+            output/**/*.sig
 
       - name: Kill any lingering processes (Windows)
         if: runner.os == 'Windows'

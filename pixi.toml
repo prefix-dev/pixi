@@ -65,8 +65,8 @@ sccache = ">=0.13.0,<0.14"
 [feature.backends-release.tasks]
 generate-versions = { cmd = "python pixi-build-backends/scripts/generate-versions.py", description = "Generate version env vars for CI" }
 [feature.backends-release.tasks.generate-attestations]
-args = ["attestation_bundle"]
-cmd = "python pixi-build-backends/scripts/generate-attestations.py {{ attestation_bundle }}"
+args = ["output_dir", "attestation_bundle"]
+cmd = "python pixi-build-backends/scripts/generate-attestations.py {{ attestation_bundle }} --output-dir {{ output_dir }}"
 description = "Generate attestation files for conda packages"
 
 [feature.backends-release.tasks.build-backend-packages]
