@@ -171,6 +171,8 @@ impl SourceMetadataSpec {
             }
         }
 
+        tracing::error!("{:?}", &source_location);
+
         Ok(SourceMetadata {
             cached_metadata: cached_source_metadata,
             source: source_location,

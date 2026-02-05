@@ -25,19 +25,19 @@ use crate::{PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec};
 /// comparison, not the branch/tag/rev reference.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum CanonicalSpec {
+pub enum CanonicalSourceLocation {
     /// A canonical url source.
-    Url(CanonicalUrlSpec),
+    Url(CanonicalUrl),
     /// A canonical git source.
-    Git(CanonicalGitSpec),
+    Git(CanonicalGit),
     /// A canonical path source.
-    Path(CanonicalPathSpec),
+    Path(CanonicalPath),
 }
 
 /// A canonical representation of a URL source.
 #[serde_as]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct CanonicalUrlSpec {
+pub struct CanonicalUrl {
     /// The URL of the archive.
     pub url: Url,
     /// The sha256 hash of the archive.
@@ -54,7 +54,7 @@ pub struct CanonicalUrlSpec {
 /// subdirectory. The git reference (branch/tag/rev) is deliberately excluded
 /// as it doesn't affect the actual content.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct CanonicalGitSpec {
+pub struct CanonicalGit {
     /// The normalized repository URL.
     pub repository: RepositoryUrl,
     /// The commit hash.
@@ -67,7 +67,7 @@ pub struct CanonicalGitSpec {
 /// A canonical representation of a path source.
 #[serde_as]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct CanonicalPathSpec {
+pub struct CanonicalPath {
     /// The path to the source.
     #[serde_as(
         serialize_as = "serde_with::DisplayFromStr",
@@ -76,23 +76,23 @@ pub struct CanonicalPathSpec {
     pub path: Utf8TypedPathBuf,
 }
 
-impl From<&PinnedSourceSpec> for CanonicalSpec {
+impl From<&PinnedSourceSpec> for CanonicalSourceLocation {
     fn from(spec: &PinnedSourceSpec) -> Self {
         match spec {
-            PinnedSourceSpec::Url(url) => CanonicalSpec::Url(url.into()),
-            PinnedSourceSpec::Git(git) => CanonicalSpec::Git(git.into()),
-            PinnedSourceSpec::Path(path) => CanonicalSpec::Path(path.into()),
+            PinnedSourceSpec::Url(url) => CanonicalSourceLocation::Url(url.into()),
+            PinnedSourceSpec::Git(git) => CanonicalSourceLocation::Git(git.into()),
+            PinnedSourceSpec::Path(path) => CanonicalSourceLocation::Path(path.into()),
         }
     }
 }
 
-impl From<PinnedSourceSpec> for CanonicalSpec {
+impl From<PinnedSourceSpec> for CanonicalSourceLocation {
     fn from(spec: PinnedSourceSpec) -> Self {
-        CanonicalSpec::from(&spec)
+        CanonicalSourceLocation::from(&spec)
     }
 }
 
-impl From<&PinnedUrlSpec> for CanonicalUrlSpec {
+impl From<&PinnedUrlSpec> for CanonicalUrl {
     fn from(spec: &PinnedUrlSpec) -> Self {
         Self {
             url: spec.url.clone(),
@@ -102,7 +102,7 @@ impl From<&PinnedUrlSpec> for CanonicalUrlSpec {
     }
 }
 
-impl From<&PinnedGitSpec> for CanonicalGitSpec {
+impl From<&PinnedGitSpec> for CanonicalGit {
     fn from(spec: &PinnedGitSpec) -> Self {
         Self {
             repository: RepositoryUrl::new(&spec.git),
@@ -112,7 +112,7 @@ impl From<&PinnedGitSpec> for CanonicalGitSpec {
     }
 }
 
-impl From<&PinnedPathSpec> for CanonicalPathSpec {
+impl From<&PinnedPathSpec> for CanonicalPath {
     fn from(spec: &PinnedPathSpec) -> Self {
         Self {
             path: spec.path.clone(),
@@ -120,17 +120,17 @@ impl From<&PinnedPathSpec> for CanonicalPathSpec {
     }
 }
 
-impl Display for CanonicalSpec {
+impl Display for CanonicalSourceLocation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            CanonicalSpec::Url(spec) => Display::fmt(spec, f),
-            CanonicalSpec::Git(spec) => Display::fmt(spec, f),
-            CanonicalSpec::Path(spec) => Display::fmt(spec, f),
+            CanonicalSourceLocation::Url(spec) => Display::fmt(spec, f),
+            CanonicalSourceLocation::Git(spec) => Display::fmt(spec, f),
+            CanonicalSourceLocation::Path(spec) => Display::fmt(spec, f),
         }
     }
 }
 
-impl Display for CanonicalUrlSpec {
+impl Display for CanonicalUrl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut url = self.url.clone();
         url.query_pairs_mut()
@@ -143,7 +143,7 @@ impl Display for CanonicalUrlSpec {
     }
 }
 
-impl Display for CanonicalGitSpec {
+impl Display for CanonicalGit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut url = self.repository.as_url().clone();
         if !self.subdirectory.is_empty() {
@@ -155,7 +155,7 @@ impl Display for CanonicalGitSpec {
     }
 }
 
-impl Display for CanonicalPathSpec {
+impl Display for CanonicalPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.path, f)
     }
@@ -171,7 +171,7 @@ mod tests {
 
     use crate::{PinnedGitCheckout, PinnedGitSpec, PinnedSourceSpec};
 
-    use super::CanonicalSpec;
+    use super::CanonicalSourceLocation;
 
     #[test]
     fn test_git_same_commit_different_reference() {
@@ -194,8 +194,8 @@ mod tests {
             },
         });
 
-        let canonical1 = CanonicalSpec::from(&spec1);
-        let canonical2 = CanonicalSpec::from(&spec2);
+        let canonical1 = CanonicalSourceLocation::from(&spec1);
+        let canonical2 = CanonicalSourceLocation::from(&spec2);
 
         assert_eq!(canonical1, canonical2);
     }
@@ -220,8 +220,8 @@ mod tests {
             },
         });
 
-        let canonical1 = CanonicalSpec::from(&spec1);
-        let canonical2 = CanonicalSpec::from(&spec2);
+        let canonical1 = CanonicalSourceLocation::from(&spec1);
+        let canonical2 = CanonicalSourceLocation::from(&spec2);
 
         assert_ne!(canonical1, canonical2);
     }
@@ -247,8 +247,8 @@ mod tests {
             },
         });
 
-        let canonical1 = CanonicalSpec::from(&spec1);
-        let canonical2 = CanonicalSpec::from(&spec2);
+        let canonical1 = CanonicalSourceLocation::from(&spec1);
+        let canonical2 = CanonicalSourceLocation::from(&spec2);
 
         assert_eq!(canonical1, canonical2);
     }
@@ -273,8 +273,8 @@ mod tests {
             },
         });
 
-        let canonical1 = CanonicalSpec::from(&spec1);
-        let canonical2 = CanonicalSpec::from(&spec2);
+        let canonical1 = CanonicalSourceLocation::from(&spec1);
+        let canonical2 = CanonicalSourceLocation::from(&spec2);
 
         assert_ne!(canonical1, canonical2);
     }

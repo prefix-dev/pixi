@@ -20,7 +20,7 @@ pub use dependencies::{
     Dependencies, DependenciesError, DependencySource, KnownEnvironment, PixiRunExports, WithSource,
 };
 pub(crate) use move_file::{MoveError, move_file};
-use pixi_record::{CanonicalSpec, PinnedBuildSourceSpec, PinnedSourceSpec};
+use pixi_record::{CanonicalSourceLocation, PinnedBuildSourceSpec, PinnedSourceSpec};
 use serde::{Deserialize, Serialize};
 use url::Url;
 pub use work_dir_key::{SourceRecordOrCheckout, WorkDirKey};
@@ -136,19 +136,19 @@ fn pretty_url_name(url: &Url) -> String {
 ///
 /// For path sources, only the path is used as there can only be one entry on
 /// disk anyway.
-pub(crate) fn source_checkout_cache_key(source: &CanonicalSpec) -> String {
+pub(crate) fn source_checkout_cache_key(source: &CanonicalSourceLocation) -> String {
     match source {
-        CanonicalSpec::Url(url) => {
+        CanonicalSourceLocation::Url(url) => {
             format!("{}-{:x}", pretty_url_name(&url.url), url.sha256)
         }
-        CanonicalSpec::Git(git) => {
+        CanonicalSourceLocation::Git(git) => {
             let name = pretty_url_name(git.repository.as_url());
             let mut hasher = Xxh3::new();
             git.hash(&mut hasher);
             let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
             format!("{name}-{unique_key}")
         }
-        CanonicalSpec::Path(path) => {
+        CanonicalSourceLocation::Path(path) => {
             let mut hasher = Xxh3::new();
             path.path.hash(&mut hasher);
             let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());

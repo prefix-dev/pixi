@@ -406,7 +406,7 @@ impl PinnedGitSpec {
     pub fn into_locked_git_url(&self) -> LockedGitUrl {
         let mut url = self.git.clone();
 
-        // // Redact the credentials.
+        // Redact the credentials.
         redact_credentials(&mut url);
 
         // Clear out any existing state.

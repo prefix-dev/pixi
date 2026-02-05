@@ -8,7 +8,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_path::AbsPathBuf;
-use pixi_record::{CanonicalSpec, PinnedSourceSpec, VariantValue};
+use pixi_record::{CanonicalSourceLocation, PinnedSourceSpec, VariantValue};
 use rattler_conda_types::ChannelUrl;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, BinaryHeap};
@@ -98,7 +98,7 @@ impl CacheKey for BuildBackendMetadataCacheShard {
         host_virtual_packages.hash(&mut hasher);
 
         self.enabled_protocols.hash(&mut hasher);
-        let source_dir = source_checkout_cache_key(&CanonicalSpec::from(&self.pinned_source));
+        let source_dir = source_checkout_cache_key(&CanonicalSourceLocation::from(&self.pinned_source));
         format!(
             "{source_dir}/{}-{}",
             self.build_environment.host_platform,
@@ -140,7 +140,7 @@ pub struct CachedCondaMetadata {
     /// The pinned location of the source code. Although the specification of
     /// where to find the source is part of the `project_model_hash`, the
     /// resolved location is not.
-    pub build_source: PinnedSourceSpec,
+    pub build_source: CanonicalSourceLocation,
 
     /// The build variants that were used to generate this metadata.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]

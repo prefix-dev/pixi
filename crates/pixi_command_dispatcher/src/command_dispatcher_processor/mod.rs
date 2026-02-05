@@ -14,7 +14,7 @@ use crate::{
     CommandDispatcherError, CommandDispatcherErrorResultExt, DevSourceMetadata,
     DevSourceMetadataError, DevSourceMetadataSpec, InstallPixiEnvironmentResult, Reporter,
     SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
-    SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceBuildError, SourceBuildResult,
+    SourceBuildCacheStatusError, SourceBuildError, SourceBuildResult,
     SourceBuildSpec, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
@@ -37,6 +37,7 @@ use pixi_record::PixiRecord;
 use pixi_spec::UrlSpec;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
+use crate::source_build_cache_status::SourceBuildCacheKey;
 
 mod backend_source_build;
 mod build_backend_metadata;
@@ -136,7 +137,7 @@ pub(crate) struct CommandDispatcherProcessor {
         SourceBuildCacheStatusId,
         PendingDeduplicatingTask<Arc<SourceBuildCacheEntry>, SourceBuildCacheStatusError>,
     >,
-    source_build_cache_status_ids: HashMap<SourceBuildCacheStatusSpec, SourceBuildCacheStatusId>,
+    source_build_cache_status_ids: HashMap<SourceBuildCacheKey, SourceBuildCacheStatusId>,
 
     /// Dev source metadata requests that are currently being processed.
     dev_source_metadata: HashMap<

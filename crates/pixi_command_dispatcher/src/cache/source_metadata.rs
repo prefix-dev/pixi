@@ -6,7 +6,7 @@ use crate::{BuildEnvironment, build::source_checkout_cache_key, cache::common::V
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_path::AbsPathBuf;
-use pixi_record::{CanonicalSpec, PinnedSourceSpec, SourceRecord};
+use pixi_record::{CanonicalSourceLocation, PinnedSourceSpec, SourceRecord};
 use rattler_conda_types::{ChannelUrl, PackageName};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -98,7 +98,7 @@ impl CacheKey for SourceMetadataCacheShard {
 
         self.enabled_protocols.hash(&mut hasher);
 
-        let source_dir = source_checkout_cache_key(&CanonicalSpec::from(&self.pinned_source));
+        let source_dir = source_checkout_cache_key(&CanonicalSourceLocation::from(&self.pinned_source));
         format!(
             "{source_dir}/{}-{}-{}",
             self.package.as_normalized(),

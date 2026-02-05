@@ -3,7 +3,7 @@ mod dev_source_record;
 mod pinned_source;
 mod source_record;
 
-pub use canonical_spec::{CanonicalGitSpec, CanonicalPathSpec, CanonicalSpec, CanonicalUrlSpec};
+pub use canonical_spec::{CanonicalGit, CanonicalPath, CanonicalSourceLocation, CanonicalUrl};
 pub use dev_source_record::DevSourceRecord;
 
 use std::path::Path;

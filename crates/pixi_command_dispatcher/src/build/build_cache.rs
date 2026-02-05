@@ -12,7 +12,7 @@ use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use itertools::Itertools;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPath, AbsPresumedDirPathBuf, AbsPresumedFilePathBuf};
-use pixi_record::{CanonicalSpec, VariantValue};
+use pixi_record::{CanonicalSourceLocation, VariantValue};
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -35,7 +35,13 @@ pub enum BuildCacheError {
 
 /// Defines additional input besides the source files that are used to compute
 /// the metadata of a source checkout.
+///
+/// Specs
+#[derive(Hash, Clone, Eq, PartialEq)]
 pub struct BuildInput {
+    /// The location of the source for the build
+    pub build_source: CanonicalSourceLocation,
+
     /// The URL channels used in the build.
     pub channel_urls: Vec<ChannelUrl>,
 
@@ -55,10 +61,10 @@ pub struct BuildInput {
     pub host_platform: Platform,
 
     /// The virtual packages of the target host
-    pub host_virtual_packages: Vec<GenericVirtualPackage>,
+    pub host_virtual_packages: BTreeSet<GenericVirtualPackage>,
 
     /// The virtual packages used to build the package
-    pub build_virtual_packages: Vec<GenericVirtualPackage>,
+    pub build_virtual_packages: BTreeSet<GenericVirtualPackage>,
 
     /// The specific variant values for this build. Different variants result
     /// in different cache keys to ensure they are cached separately.
@@ -71,6 +77,7 @@ impl BuildInput {
     /// is to make it easier to identify the cache files.
     pub fn hash_key(&self) -> String {
         let BuildInput {
+            build_source,
             channel_urls,
             name,
             version,
@@ -84,17 +91,12 @@ impl BuildInput {
 
         // Hash some of the keys
         let mut hasher = Xxh3::new();
+        build_source.hash(&mut hasher);
         build.hash(&mut hasher);
         channel_urls.hash(&mut hasher);
         host_platform.hash(&mut hasher);
-
-        let mut sorted_host_virtual_packages = host_virtual_packages.clone();
-        sorted_host_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));
-        sorted_host_virtual_packages.hash(&mut hasher);
-
-        let mut sorted_build_virtual_packages = build_virtual_packages.clone();
-        sorted_build_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));
-        sorted_build_virtual_packages.hash(&mut hasher);
+        host_virtual_packages.hash(&mut hasher);
+        build_virtual_packages.hash(&mut hasher);
 
         // Include variants in the hash to ensure different variant values
         // get different cache keys. BTreeMap is already sorted by key, so we
@@ -126,12 +128,12 @@ impl BuildCache {
     /// cache entry. Drop the entry as soon as possible to release the lock.
     pub async fn entry(
         &self,
-        source: &CanonicalSpec,
+        manifest_source: &CanonicalSourceLocation,
         input: &BuildInput,
     ) -> Result<(Option<CachedBuild>, BuildCacheEntry), BuildCacheError> {
         let input_key = input.hash_key();
         tracing::debug!(
-            source = %source,
+            manifest_source = %manifest_source,
             input_key = %input_key,
             name = %input.name,
             version = %input.version,
@@ -148,7 +150,7 @@ impl BuildCache {
         // Ensure the cache directory exists
         let cache_dir = self
             .root
-            .join(source_checkout_cache_key(source))
+            .join(source_checkout_cache_key(manifest_source))
             .join(&input_key);
         let cache_dir = cache_dir
             .create_dir_all()
@@ -202,7 +204,7 @@ impl BuildCache {
         let metadata: Option<CachedBuild> = serde_json::from_str(&cache_file_contents).ok();
         if let Some(existing) = metadata.as_ref() {
             tracing::debug!(
-                source = %source,
+                manifest_source = %manifest_source,
                 input_key = %input_key,
                 package = ?existing.record.package_record.name,
                 build = %existing.record.package_record.build,
@@ -210,7 +212,7 @@ impl BuildCache {
             );
         } else {
             tracing::debug!(
-                source = %source,
+                manifest_source = %manifest_source,
                 input_key = %input_key,
                 "no cached build metadata found",
             );

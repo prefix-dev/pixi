@@ -5,7 +5,7 @@ use pixi_build_discovery::{CommandSpec, EnabledProtocols};
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_glob::GlobSet;
-use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec, VariantValue};
+use pixi_record::{CanonicalSourceLocation, PinnedBuildSourceSpec, PinnedSourceSpec, VariantValue};
 use pixi_spec::{SourceAnchor, SourceLocationSpec};
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use std::time::SystemTime;
@@ -412,7 +412,7 @@ impl BuildBackendMetadataSpec {
         }
 
         // Check if the source location changed.
-        if cache_entry.build_source != build_source_checkout.pinned {
+        if cache_entry.build_source != CanonicalSourceLocation::from(&build_source_checkout.pinned) {
             tracing::info!(
                 "found cached outputs with different source code location, invalidating cache."
             );
@@ -631,7 +631,7 @@ impl BuildBackendMetadataSpec {
             build_variant_files: self.variant_files.into_iter().flatten().collect(),
             input_globs: outputs.input_globs.into_iter().collect(),
             input_files: input_glob_files,
-            build_source: build_source_checkout.pinned,
+            build_source: build_source_checkout.pinned.into(),
             project_model_hash,
             configuration_hash,
             timestamp,
