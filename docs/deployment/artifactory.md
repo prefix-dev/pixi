@@ -49,7 +49,7 @@ To authenticate with Artifactory, you need to generate an access token:
 Use the `pixi auth login` command to authenticate with your Artifactory instance:
 
 ```shell
-pixi auth login --token <artifactory-token> my-org.jfrog.io
+pixi auth login --token <artifactory-token> https://my-org.jfrog.io
 ```
 
 This stores the token securely using your system's credential manager. See [Authentication](authentication.md) for more details on credential storage.
@@ -108,3 +108,27 @@ internal-lib = { version = "*", channel = "https://my-org.jfrog.io/artifactory/i
 ```
 
 This is useful when you want to override the default channel priority for specific packages.
+
+## GitHub Actions with OIDC
+
+For CI/CD pipelines, you can authenticate with Artifactory using OIDC (OpenID Connect) instead of storing long-lived tokens as secrets. This is more secure as tokens are short-lived and automatically rotated.
+
+```yaml
+- name: Log in to Artifactory
+  uses: jfrog/setup-jfrog-cli@279b1f629f43dd5bc658d8361ac4802a7ef8d2d5 # v4.9.1
+  id: artifactory
+  env:
+    JF_URL: https://my-org.jfrog.io
+  with:
+    disable-job-summary: true
+    oidc-provider-name: ${{ vars.ARTIFACTORY_OIDC_PROVIDER }}
+    oidc-audience: ${{ vars.ARTIFACTORY_OIDC_AUDIENCE }}
+
+- name: Set up Pixi
+  uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
+  with:
+    auth-host: https://my-org.jfrog.io
+    auth-token: ${{ steps.artifactory.outputs.oidc-token }}
+```
+
+This requires configuring an OIDC provider in your Artifactory instance that trusts GitHub Actions. See JFrog's documentation on [OIDC integration](https://jfrog.com/help/r/jfrog-platform-administration-documentation/configure-an-oidc-integration) for setup instructions.
