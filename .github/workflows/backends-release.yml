@@ -82,6 +82,10 @@ jobs:
         shell: bash
         run: pixi run -e backends-release sccache --stop-server
 
+      - name: Remove build cache
+        shell: bash
+        run: rm -rf output/build_cache
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
