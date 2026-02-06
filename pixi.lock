@@ -27,7 +27,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/openssl-3.6.1-h35e630c_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/python-3.14.2-h32b2ec7_101_cp314.conda
       - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
-      - conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#ca200c7399c99f3649e4669a3f6c11b076001afd
+      - conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#5cf0bbaf1413268dc91fd7f5b51ffc148881cd09
         build: hb0f4dca_0
       - conda: https://prefix.dev/conda-forge/linux-64/readline-8.3-h853b02a_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/sccache-0.13.0-he64ecbb_0.conda
@@ -54,7 +54,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/openssl-3.6.1-h546c87b_1.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/python-3.14.2-hb06a95a_101_cp314.conda
       - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
-      - conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#ca200c7399c99f3649e4669a3f6c11b076001afd
+      - conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#5cf0bbaf1413268dc91fd7f5b51ffc148881cd09
         build: he8cfe8b_0
       - conda: https://prefix.dev/conda-forge/linux-aarch64/readline-8.3-hb682ff5_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/sccache-0.13.0-hb434046_0.conda
@@ -74,8 +74,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-64/openssl-3.6.1-hb6871ef_1.conda
       - conda: https://prefix.dev/conda-forge/osx-64/python-3.14.2-hf88997e_101_cp314.conda
       - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
-      - conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#ca200c7399c99f3649e4669a3f6c11b076001afd
-        build: h0dc7051_0
+      - conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#5cf0bbaf1413268dc91fd7f5b51ffc148881cd09
+        build: h6a584cb_0
       - conda: https://prefix.dev/conda-forge/osx-64/readline-8.3-h68b038d_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/sccache-0.13.0-h4728fb8_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/tk-8.6.13-h7142dee_3.conda
@@ -95,8 +95,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/openssl-3.6.1-hd24854e_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/python-3.14.2-h40d2674_101_cp314.conda
       - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
-      - conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#ca200c7399c99f3649e4669a3f6c11b076001afd
-        build: h60d57d3_0
+      - conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#5cf0bbaf1413268dc91fd7f5b51ffc148881cd09
+        build: h4d7035c_0
       - conda: https://prefix.dev/conda-forge/osx-arm64/readline-8.3-h46df422_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/sccache-0.13.0-h6fdd925_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/tk-8.6.13-h010d191_3.conda
@@ -114,8 +114,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/openssl-3.6.1-hf411b9b_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/python-3.14.2-h4b44e0e_101_cp314.conda
       - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
-      - conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#ca200c7399c99f3649e4669a3f6c11b076001afd
-        build: h9490d1a_0
+      - conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#5cf0bbaf1413268dc91fd7f5b51ffc148881cd09
+        build: he01afda_0
       - conda: https://prefix.dev/conda-forge/win-64/sccache-0.13.0-h18a1a76_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/tk-8.6.13-h6ed50ae_3.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
@@ -13883,55 +13883,66 @@ packages:
   license_family: MIT
   size: 11137
   timestamp: 1747237061448
-- conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#ca200c7399c99f3649e4669a3f6c11b076001afd
+- conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#5cf0bbaf1413268dc91fd7f5b51ffc148881cd09
   name: rattler-build
   version: 0.0.0dev
-  build: h0dc7051_0
-  subdir: osx-64
-  variants:
-    target_platform: osx-64
-  constrains:
-  - __osx >=10.13
-  channel: null
-  license: BSD-3-Clause
-- conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#ca200c7399c99f3649e4669a3f6c11b076001afd
-  name: rattler-build
-  version: 0.0.0dev
-  build: h60d57d3_0
+  build: h4d7035c_0
   subdir: osx-arm64
   variants:
+    c_compiler_version: '19'
     target_platform: osx-arm64
   constrains:
   - __osx >=11.0
   channel: null
   license: BSD-3-Clause
-- conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#ca200c7399c99f3649e4669a3f6c11b076001afd
+- conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#5cf0bbaf1413268dc91fd7f5b51ffc148881cd09
   name: rattler-build
   version: 0.0.0dev
-  build: h9490d1a_0
-  subdir: win-64
+  build: h6a584cb_0
+  subdir: osx-64
   variants:
-    target_platform: win-64
+    c_compiler_version: '19'
+    target_platform: osx-64
+  constrains:
+  - __osx >=10.13
   channel: null
   license: BSD-3-Clause
-- conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#ca200c7399c99f3649e4669a3f6c11b076001afd
+- conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#5cf0bbaf1413268dc91fd7f5b51ffc148881cd09
   name: rattler-build
   version: 0.0.0dev
   build: hb0f4dca_0
   subdir: linux-64
   variants:
     target_platform: linux-64
+  depends:
+  - libgcc >=15
   constrains:
   - __glibc >=2.17
   channel: null
   license: BSD-3-Clause
-- conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#ca200c7399c99f3649e4669a3f6c11b076001afd
+- conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#5cf0bbaf1413268dc91fd7f5b51ffc148881cd09
+  name: rattler-build
+  version: 0.0.0dev
+  build: he01afda_0
+  subdir: win-64
+  variants:
+    c_compiler: vs2022
+    target_platform: win-64
+  depends:
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  channel: null
+  license: BSD-3-Clause
+- conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#5cf0bbaf1413268dc91fd7f5b51ffc148881cd09
   name: rattler-build
   version: 0.0.0dev
   build: he8cfe8b_0
   subdir: linux-aarch64
   variants:
     target_platform: linux-aarch64
+  depends:
+  - libgcc >=15
   constrains:
   - __glibc >=2.17
   channel: null
