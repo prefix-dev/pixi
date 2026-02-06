@@ -29,7 +29,8 @@
   about:
     homepage: null
     license: BSD-3-Clause
-    license_file: LICENSE
+    license_file:
+    - LICENSE
     summary: null
     description: null
     documentation: null

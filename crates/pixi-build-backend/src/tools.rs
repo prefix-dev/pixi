@@ -20,7 +20,7 @@ use rattler_build::{
     variant_config::{DiscoveredOutput, ParseErrors, VariantConfig, VariantConfigError},
 };
 use rattler_conda_types::compression_level::CompressionLevel;
-use rattler_conda_types::{GenericVirtualPackage, Platform, package::ArchiveType};
+use rattler_conda_types::{GenericVirtualPackage, Platform, package::CondaArchiveType};
 use rattler_virtual_packages::VirtualPackageOverrides;
 use url::Url;
 
@@ -285,7 +285,7 @@ impl RattlerBuild {
                     timestamp: chrono::Utc::now(),
                     subpackages: subpackages.clone(),
                     packaging_settings: PackagingSettings::from_args(
-                        ArchiveType::Conda,
+                        CondaArchiveType::Conda,
                         CompressionLevel::default(),
                     ),
                     store_recipe: false,

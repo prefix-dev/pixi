@@ -401,14 +401,15 @@ Pixi's tasks are run in a Pixi environment using `pixi run` and are executed usi
 ```toml
 [tasks]
 simple = "echo This is a simple task"
-cmd = { cmd="echo Same as a simple task but now more verbose"}
-depending = { cmd="echo run after simple", depends-on="simple"}
-alias = { depends-on=["depending"]}
-download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
-build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
-run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
+cmd = { cmd="echo Same as a simple task but now more verbose" }
+depending = { cmd="echo run after simple", depends-on="simple" }
+alias = { depends-on=["depending"] }
+download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"] }
+build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"] }
+run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }} # Set an environment variable
 format = { cmd="black $INIT_CWD" } # runs black where you run pixi run format
-clean-env = { cmd = "python isolated.py", clean-env = true} # Only on Unix!
+clean-env = { cmd="python isolated.py", clean-env=true } # Only on Unix!
+test = { cmd="pytest", default-environment="test" }  # Set a default pixi environment
 ```
 
 You can modify this table using [`pixi task`](cli/pixi/task.md).
@@ -461,6 +462,7 @@ The options that can be defined are:
 - `no-binary`: don't use pre-build wheels.
 - `index-strategy`: allows for specifying the index strategy to use.
 - `prerelease-mode`: controls whether pre-release versions are allowed during dependency resolution.
+- `skip-wheel-filename-check`: allows installing wheels with version mismatches between filename and metadata.
 
 These options are explained in the sections below. Most of these options are taken directly or with slight modifications from the [uv settings](https://docs.astral.sh/uv/reference/settings/). If any are missing that you need feel free to create an issue [requesting](https://github.com/prefix-dev/pixi/issues) them.
 
@@ -619,6 +621,39 @@ Example:
 ```toml
 [pypi-options]
 prerelease-mode = "allow"  # Allow all pre-release versions
+```
+
+### Skip Wheel Filename Check
+
+By default, `uv` validates that wheel filenames match the package metadata (name and version) inside the wheel. This validation ensures that wheels are correctly named and helps prevent installation of malformed packages.
+
+However, in some cases you may need to install wheels where the filename version doesn't match the metadata version. The `skip-wheel-filename-check` option allows you to disable this validation.
+
+!!! warning "One skip-wheel-filename-check per environment"
+    Only one `skip-wheel-filename-check` can be defined per environment or solve-group, otherwise, an error will be shown.
+
+#### Possible values:
+
+- **`false`** (default): Perform wheel filename validation. Installation will fail if filename and metadata don't match.
+- **`true`**: Skip wheel filename validation. Allow installing wheels with mismatched filename and metadata versions.
+
+#### Precedence
+
+The `UV_SKIP_WHEEL_FILENAME_CHECK` environment variable takes precedence over the `skip-wheel-filename-check` pypi-option. This allows for temporary overrides without modifying the manifest.
+
+
+Example:
+```toml
+[pypi-options]
+# Allow installing malformed wheels
+skip-wheel-filename-check = true 
+```
+
+Or set per feature:
+```toml
+[feature.special.pypi-options]
+# Only for this feature's environment
+skip-wheel-filename-check = true
 ```
 
 ## The `dependencies` table(s)

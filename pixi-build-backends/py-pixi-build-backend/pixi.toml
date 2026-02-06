@@ -13,20 +13,17 @@ version = "0.4.2"
 
 [package.build.backend]
 name = "pixi-build-python"
-version = "*"
+version = ">=0.4.5"
 
 [package.build.config]
 compilers = ["rust"]
+ignore-pypi-mapping = false
 
 [package.build-dependencies]
 rust = ">=1.90.0,<1.91"
 
-[package.host-dependencies]
-maturin = "*"
-
 [package.run-dependencies]
 pixi-build-api-version = ">=4,<5"
-typing-extensions = "*"
 
 [activation.env]
 PIP_REQUIRE_VIRTUALENV = "false"

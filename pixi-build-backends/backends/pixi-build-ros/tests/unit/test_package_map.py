@@ -9,9 +9,8 @@ from pixi_build_ros.ros_generator import ROSGenerator, ROSBackendConfig
 from pixi_build_ros.utils import load_package_map_data, PackageMappingSource
 
 
-def test_package_loading(test_data_dir: Path):
+def test_package_loading(test_data_dir: Path, robostack_file: Path):
     """Load the package map with overwrites."""
-    robostack_file = Path(__file__).parent.parent / "robostack.yaml"
     other_package_map = test_data_dir / "other_package_map.yaml"
     result = load_package_map_data(
         [
@@ -26,9 +25,8 @@ def test_package_loading(test_data_dir: Path):
     assert "zlib" in result, "Should still be present"
 
 
-def test_package_loading_with_inline_mappings(test_data_dir: Path, distro_noetic: Distro):
+def test_package_loading_with_inline_mappings(test_data_dir: Path, distro_noetic: Distro, robostack_file: Path):
     """Load package map data from a mix of files and inline entries."""
-    robostack_file = Path(__file__).parent.parent / "robostack.yaml"
     inline_entries = {
         "inline-package": {"conda": ["inline-conda"]},
         "inline-ros": {"ros": ["inline-ros"]},

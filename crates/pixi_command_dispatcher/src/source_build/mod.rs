@@ -14,7 +14,7 @@ use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec, PixiRecord, VariantVa
 use pixi_spec::{SourceAnchor, SourceLocationSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageRecord,
-    Platform, RepoDataRecord, prefix::Prefix,
+    Platform, RepoDataRecord, package::DistArchiveIdentifier, prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
 use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
@@ -34,9 +34,10 @@ use crate::{
     build::pin_compatible::PinCompatibleError,
     build::{
         BuildCacheError, BuildHostEnvironment, BuildHostPackage, CachedBuild,
-        CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, PackageBuildInputHash,
-        PixiRunExports, SourceCodeLocation, SourceRecordOrCheckout, WorkDirKey, move_file,
+        CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, PixiRunExports,
+        SourceCodeLocation, SourceRecordOrCheckout, WorkDirKey, move_file,
     },
+    input_hash::{ConfigurationHash, ProjectModelHash},
     package_identifier::PackageIdentifier,
 };
 
@@ -174,10 +175,12 @@ impl SourceBuildSpec {
                         source = %self.source.manifest_source(),
                         package = ?cached_build.record.package_record.name,
                         build = %cached_build.record.package_record.build,
-                        output = %cached_build.record.file_name,
+                        output = %cached_build.record.identifier.to_file_name(),
                         "using cached up-to-date source build",
                     );
-                    let output_file = build_cache.cache_dir.join(&cached_build.record.file_name);
+                    let output_file = build_cache
+                        .cache_dir
+                        .join(cached_build.record.identifier.to_file_name());
                     return Ok(SourceBuildResult {
                         output_file,
                         record: cached_build.record.clone(),
@@ -197,11 +200,13 @@ impl SourceBuildSpec {
                     source = %self.source.manifest_source(),
                     package = ?cached_build.record.package_record.name,
                     build = %cached_build.record.package_record.build,
-                    output = %cached_build.record.file_name,
+                    output = %cached_build.record.identifier.to_file_name(),
                     "using cached new source build",
                 );
                 // dont matter if we force it , we can reuse the cache entry
-                let output_file = build_cache.cache_dir.join(&cached_build.record.file_name);
+                let output_file = build_cache
+                    .cache_dir
+                    .join(cached_build.record.identifier.to_file_name());
                 return Ok(SourceBuildResult {
                     output_file,
                     record: cached_build.record.clone(),
@@ -246,8 +251,16 @@ impl SourceBuildSpec {
             .await
             .map_err_with(|e| SourceBuildError::Discovery(Arc::new(e)))?;
 
-        // Compute the package input hash for caching purposes.
-        let package_build_input_hash = PackageBuildInputHash::from(discovered_backend.as_ref());
+        // Compute the hashes for caching purposes.
+        let project_model_hash = discovered_backend
+            .init_params
+            .project_model
+            .as_ref()
+            .map(ProjectModelHash::from);
+        let configuration_hash = ConfigurationHash::compute(
+            discovered_backend.init_params.configuration.as_ref(),
+            discovered_backend.init_params.target_configuration.as_ref(),
+        );
 
         // Determine the build source to use: either from lock file or workspace
 
@@ -363,7 +376,8 @@ impl SourceBuildSpec {
                 backend,
                 work_directory,
                 source_dir,
-                package_build_input_hash,
+                project_model_hash,
+                configuration_hash,
                 reporter,
                 log_sink,
             )
@@ -429,17 +443,19 @@ impl SourceBuildSpec {
         let (sha, index_json) = tokio::try_join!(read_sha256_fut, read_index_json_fut)?;
 
         // Construct the record from the index JSON and the SHA256 hash.
+        let file_name = built_source
+            .output_file
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy();
+        let identifier = DistArchiveIdentifier::try_from_filename(&file_name)
+            .expect("output file should have a valid archive filename");
         let record = RepoDataRecord {
             package_record: PackageRecord::from_index_json(index_json, None, Some(sha), None)
                 .map_err(|err| {
                     CommandDispatcherError::Failed(SourceBuildError::ConvertSubdir(Arc::new(err)))
                 })?,
-            file_name: built_source
-                .output_file
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string(),
+            identifier,
             url: Url::from_file_path(&built_source.output_file)
                 .expect("the output file should be a valid URL"),
             channel: None,
@@ -448,7 +464,7 @@ impl SourceBuildSpec {
             source = %source_for_logging,
             package = ?record.package_record.name,
             build = %record.package_record.build,
-            output = %record.file_name,
+            output = %record.identifier.to_file_name(),
             "built source package",
         );
 
@@ -528,7 +544,8 @@ impl SourceBuildSpec {
         backend: Backend,
         work_directory: PathBuf,
         source_dir: PathBuf,
-        package_build_input_hash: PackageBuildInputHash,
+        project_model_hash: Option<ProjectModelHash>,
+        configuration_hash: ConfigurationHash,
         reporter: Option<Arc<dyn RunExportsReporter>>,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<BuiltPackage, CommandDispatcherError<SourceBuildError>> {
@@ -822,7 +839,8 @@ impl SourceBuildSpec {
                 host: BuildHostEnvironment {
                     packages: host_records,
                 },
-                package_build_input_hash: Some(package_build_input_hash),
+                project_model_hash,
+                configuration_hash,
             },
         })
     }

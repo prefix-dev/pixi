@@ -4,12 +4,15 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct RustBackendConfig {
     /// Extra args to pass for cargo
     #[serde(default)]
     pub extra_args: Vec<String>,
+    /// System environment variables
+    #[serde(skip)]
+    pub system_env: IndexMap<String, String>,
     /// Environment Variables
     #[serde(default)]
     pub env: IndexMap<String, String>,
@@ -28,7 +31,38 @@ pub struct RustBackendConfig {
     pub compilers: Option<Vec<String>>,
 }
 
+impl Default for RustBackendConfig {
+    fn default() -> Self {
+        Self::new_with_system_environment()
+    }
+}
+
+fn collect_system_env() -> IndexMap<String, String> {
+    std::env::vars().collect()
+}
+
 impl RustBackendConfig {
+    /// Create a new `RustBackendConfiguration` with the current system environment.
+    pub fn new_with_system_environment() -> Self {
+        Self {
+            system_env: collect_system_env(),
+            ..Self::new_with_clean_environment()
+        }
+    }
+
+    /// Create a new `RustBackendConfiguration` with an empty system environment.
+    pub fn new_with_clean_environment() -> Self {
+        Self {
+            system_env: Default::default(),
+            extra_args: Default::default(),
+            env: Default::default(),
+            debug_dir: Default::default(),
+            extra_input_globs: Default::default(),
+            ignore_cargo_manifest: Default::default(),
+            compilers: Default::default(),
+        }
+    }
+
     /// Creates a new [`RustBackendConfig`] with default values and
     /// `ignore_cargo_manifest` set to `true`.
     #[cfg(test)]
@@ -62,6 +96,7 @@ impl BackendConfig for RustBackendConfig {
             } else {
                 target_config.extra_args.clone()
             },
+            system_env: collect_system_env(),
             env: {
                 let mut merged_env = self.env.clone();
                 merged_env.extend(target_config.env.clone());
@@ -123,6 +158,7 @@ mod tests {
         let base_config = RustBackendConfig {
             extra_args: vec!["--base-arg".to_string()],
             env: base_env,
+            system_env: Default::default(),
             debug_dir: Some(PathBuf::from("/base/debug")),
             extra_input_globs: vec!["*.base".to_string()],
             ignore_cargo_manifest: None,
@@ -136,6 +172,7 @@ mod tests {
         let target_config = RustBackendConfig {
             extra_args: vec!["--target-arg".to_string()],
             env: target_env,
+            system_env: Default::default(),
             debug_dir: None,
             extra_input_globs: vec!["*.target".to_string()],
             ignore_cargo_manifest: Some(true),
@@ -181,6 +218,7 @@ mod tests {
         let base_config = RustBackendConfig {
             extra_args: vec!["--base-arg".to_string()],
             env: base_env,
+            system_env: Default::default(),
             debug_dir: Some(PathBuf::from("/base/debug")),
             extra_input_globs: vec!["*.base".to_string()],
             ignore_cargo_manifest: None,

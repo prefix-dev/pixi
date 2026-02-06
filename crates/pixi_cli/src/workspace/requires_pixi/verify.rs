@@ -16,6 +16,22 @@ pub async fn execute(workspace: Workspace) -> miette::Result<()> {
                     console::style(console::Emoji("× ", "")).red(),
                     e
                 );
+
+                #[cfg(feature = "self_update")]
+                {
+                    eprintln!();
+                    eprintln!("Try running:\n  pixi self-update");
+                }
+
+                #[cfg(not(feature = "self_update"))]
+                {
+                    eprintln!();
+                    eprintln!(
+                        "Please update pixi using your system package manager or reinstall it.\n\
+             See: https://pixi.sh/latest/installation/"
+                    );
+                }
+
                 std::process::exit(4);
             } else {
                 Err(e.into())

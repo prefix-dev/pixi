@@ -54,13 +54,14 @@ jobs:
       code: ${{ steps.changed.outputs.code_any_changed }}
       unix_installer: ${{ steps.unix_installer_changed.outputs.code_any_changed }}
       win_installer: ${{ steps.win_installer_changed.outputs.code_any_changed }}
+      ros_backend: ${{ steps.ros_backend_changed.outputs.code_any_changed }}
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
+      - uses: step-security/changed-files@60967b822d3001fa82242f8d6b4ed46bc3600a68 # v47
         id: changed
         with:
           files_yaml: |
@@ -73,19 +74,26 @@ jobs:
               - "!assets/**"
               - "!**/*.md"
 
-      - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
+      - uses: step-security/changed-files@60967b822d3001fa82242f8d6b4ed46bc3600a68 # v47
         id: unix_installer_changed
         with:
           files_yaml: |
             code:
               - "install/install.sh"
 
-      - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
+      - uses: step-security/changed-files@60967b822d3001fa82242f8d6b4ed46bc3600a68 # v47
         id: win_installer_changed
         with:
           files_yaml: |
             code:
               - "install/install.ps1"
+
+      - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
+        id: ros_backend_changed
+        with:
+          files_yaml: |
+            code:
+              - "pixi-build-backends/backends/pixi-build-ros/**"
 
   lint:
     name: "lint"
@@ -278,6 +286,7 @@ jobs:
       - name: Test pixi
         run: pixi run test-slow --retries 2
         env:
+          CARGO_PROFILE_DEV_DEBUG: 0 # Disable debuginfo only on windows because it takes a lot of space
           CARGO_TARGET_DIR: ${{ env.DEV_DRIVE }}/target
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
@@ -318,6 +327,41 @@ jobs:
           path: |
             ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
             ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*
+          retention-days: 14
+
+  build-binary-linux-riscv64gc:
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    name: "build binary | linux riscv64gc"
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+      - uses: rui314/setup-mold@725a8794d15fc7563f59595bd9556495c0564878 # v1
+      - name: "Setup cross-compilation toolchain"
+        run: |
+          sudo apt update
+          sudo apt install -y gcc-riscv64-linux-gnu
+          rustup target add riscv64gc-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: "Build"
+        env:
+          CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER: riscv64-linux-gnu-gcc
+          CC_riscv64gc_unknown_linux_gnu: riscv64-linux-gnu-gcc
+        run: >
+          cargo build
+          --locked
+          --target riscv64gc-unknown-linux-gnu
+          --profile $CARGO_BUILD_PROFILE
+          --features self_update
+      - name: "Upload binary"
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: pixi-linux-riscv64gc-${{ github.sha }}
+          path: ./target/riscv64gc-unknown-linux-gnu/${{ env.CARGO_BUILD_PROFILE }}/pixi
           retention-days: 14
 
   build-binary-macos-aarch64:
@@ -863,10 +907,17 @@ jobs:
 
   test-backends-ros:
     name: Backends - ROS
+    # Run on when ros backend changed, on main branch, or when extra slow tests are requested
+    if: ${{ needs.determine_changes.outputs.ros_backend == 'true' || github.ref == 'refs/heads/main' ||  contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
     needs:
       - build-binary-linux-x86_64
       - build-binary-macos-aarch64
       - build-binary-windows-x86_64
+      - determine_changes
     uses: ./.github/workflows/backends-ros.yml
     with:
       sha: ${{ github.sha }}
