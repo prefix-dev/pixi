@@ -3679,7 +3679,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-backend"
-version = "0.1.5"
+version = "0.1.7"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3881,7 +3881,7 @@ dependencies = [
 
 [[package]]
 name = "py-pixi-build-backend"
-version = "0.4.1"
+version = "0.4.3"
 dependencies = [
  "async-trait",
  "fs-err",
