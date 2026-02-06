@@ -81,7 +81,7 @@ pub struct SourceRecord {
     pub build_source: Option<PinnedBuildSourceSpec>,
 
     /// The variants that uniquely identify the way this package was built.
-    pub variants: Option<BTreeMap<String, VariantValue>>,
+    pub variants: BTreeMap<String, VariantValue>,
 
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
@@ -141,7 +141,9 @@ impl SourceRecord {
                 .collect(),
             variants: self
                 .variants
-                .map(|variants| variants.into_iter().map(|(k, v)| (k, v.into())).collect()),
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
         }
     }
 
@@ -210,12 +212,11 @@ impl SourceRecord {
                 .into_iter()
                 .map(|(k, v)| (k, SourceLocationSpec::from(v)))
                 .collect(),
-            variants: data.variants.map(|variants| {
-                variants
-                    .into_iter()
-                    .map(|(k, v)| (k, VariantValue::from(v)))
-                    .collect()
-            }),
+            variants: data
+                .variants
+                .into_iter()
+                .map(|(k, v)| (k, VariantValue::from(v)))
+                .collect(),
         })
     }
 
@@ -227,17 +228,11 @@ impl SourceRecord {
             return false;
         }
 
-        match (&self.variants, &other.variants) {
-            (Some(variants), Some(other_variants)) => {
-                // If both records have variants, we use that to identify them.
-                variants == other_variants
-            }
-            _ => {
-                self.package_record.build == other.package_record.build
-                    && self.package_record.version == other.package_record.version
-                    && self.package_record.subdir == other.package_record.subdir
-            }
+        if self.variants.is_empty() || other.variants.is_empty() {
+            return true;
         }
+
+        self.variants == other.variants
     }
 }
 
@@ -313,7 +308,8 @@ mod tests {
 
         // Load the lock file from the snapshot content (skip insta frontmatter).
         let lock_source = lock_source_from_snapshot();
-        let lock_file = LockFile::from_str(&lock_source).expect("failed to load lock file fixture");
+        let lock_file = LockFile::from_str_with_base_directory(&lock_source, None)
+            .expect("failed to load lock file fixture");
 
         // Extract Conda source packages from the lock file.
         let environment = lock_file

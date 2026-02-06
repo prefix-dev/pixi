@@ -736,7 +736,7 @@ impl PypiNoBuildCheck {
             DistExtension::from_path(Path::new(path))
         }
 
-        let extension = match &package_data.location {
+        let extension = match &*package_data.location {
             // Get the extension from the url
             UrlOrPath::Url(url) => {
                 if url.scheme().starts_with("git+") {
@@ -949,7 +949,7 @@ pub(crate) fn pypi_satisfies_editable(
                 "editable requirement cannot be from registry, url, git or path (non-directory)"
             )
         }
-        RequirementSource::Directory { install_path, .. } => match &locked_data.location {
+        RequirementSource::Directory { install_path, .. } => match &*locked_data.location {
             // If we have an url requirement locked, but the editable is requested, this does not
             // satisfy
             UrlOrPath::Url(url) => Err(Box::new(PlatformUnsat::EditablePackageIsUrl(
@@ -1019,7 +1019,7 @@ pub(crate) fn pypi_satisfies_requirement(
             }
         }
         RequirementSource::Url { url: spec_url, .. } => {
-            if let UrlOrPath::Url(locked_url) = &locked_data.location {
+            if let UrlOrPath::Url(locked_url) = &*locked_data.location {
                 // Url may not start with git, and must start with direct+
                 if locked_url.as_str().starts_with("git+")
                     || !locked_url.as_str().starts_with("direct+")
@@ -1050,7 +1050,7 @@ pub(crate) fn pypi_satisfies_requirement(
         } => {
             let repository = git.repository();
             let reference = git.reference();
-            match &locked_data.location {
+            match &*locked_data.location {
                 UrlOrPath::Url(url) => {
                     if let Ok(pinned_git_spec) = LockedGitUrl::new(url.clone()).to_pinned_git_spec()
                     {
@@ -1144,9 +1144,11 @@ pub(crate) fn pypi_satisfies_requirement(
         }
         RequirementSource::Path { install_path, .. }
         | RequirementSource::Directory { install_path, .. } => {
-            if let UrlOrPath::Path(locked_path) = &locked_data.location {
+            if let UrlOrPath::Path(locked_path) = &*locked_data.location {
+                eprintln!("Path from lock: {locked_path:?}");
                 let install_path =
                     Utf8TypedPathBuf::from(install_path.to_string_lossy().to_string());
+                eprintln!("Path from install: {install_path:?}");
                 let project_root =
                     Utf8TypedPathBuf::from(project_root.to_string_lossy().to_string());
                 // Join relative paths with the project root
@@ -1155,6 +1157,7 @@ pub(crate) fn pypi_satisfies_requirement(
                 } else {
                     project_root.join(locked_path.to_path()).normalize()
                 };
+                eprintln!("Path from lock (always absolute): {locked_path:?}");
                 if locked_path.to_path() != install_path {
                     return Err(PlatformUnsat::LockedPyPIPathMismatch {
                         name: spec.name.clone().to_string(),
@@ -1506,20 +1509,19 @@ fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> Result<(),
 }
 
 fn format_source_record(r: &SourceRecord) -> String {
-    let variants = r.variants.as_ref().map(|v| {
-        format!(
-            "[{}]",
-            v.iter()
-                .format_with(", ", |(k, v), f| f(&format_args!("{k}={v}")))
-        )
-    });
+    let variants = format!(
+        "[{}]",
+        r.variants
+            .iter()
+            .format_with(", ", |(k, v), f| f(&format_args!("{k}={v}")))
+    );
     format!(
         "{}/{}={}={} {}",
         &r.package_record.subdir,
         r.package_record.name.as_source(),
         &r.package_record.version,
         &r.package_record.build,
-        variants.unwrap_or_default()
+        variants,
     )
 }
 
@@ -2112,7 +2114,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 if pypi_packages_visited.insert(idx) {
                     // If this is path based package we need to check if the source tree hash still
                     // matches. and if it is a directory
-                    if let UrlOrPath::Path(path) = &record.0.location {
+                    if let UrlOrPath::Path(path) = &*record.0.location {
                         let absolute_path = if path.is_absolute() {
                             Cow::Borrowed(Path::new(path.as_str()))
                         } else {
@@ -2543,7 +2545,7 @@ mod tests {
     use pixi_build_backend_passthrough::PassthroughBackend;
     use pixi_build_frontend::BackendOverride;
     use pixi_command_dispatcher::CacheDirs;
-    use rattler_lock::LockFile;
+    use rattler_lock::{LockFile, Verbatim};
     use rstest::rstest;
     use tracing_test::traced_test;
 
@@ -2835,13 +2837,17 @@ mod tests {
 
     // Currently this test is missing from `good_satisfiability`, so we test the
     // specific windows case here this should work an all supported platforms
+    //
+    // Do not use windows here: The path gets normalized to something unix-y, and
+    // the lockfile keeps the "pretty" path the suer filled in at all times. So
+    // on windows the test fails.
     #[test]
-    fn test_windows_absolute_path_handling() {
+    fn test_unix_absolute_path_handling() {
         // Mock locked data
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
             version: Version::from_str("0.1.0").unwrap(),
-            location: UrlOrPath::Path("C:\\Users\\username\\mypkg.tar.gz".into()),
+            location: Verbatim::new(UrlOrPath::Path("/home/username/mypkg.tar.gz".into())),
             hash: None,
             requires_dist: vec![],
             requires_python: None,
@@ -2849,8 +2855,7 @@ mod tests {
         };
 
         let spec =
-            pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg.tar.gz")
-                .unwrap();
+            pep508_rs::Requirement::from_str("mypkg @ file:///home/username/mypkg.tar.gz").unwrap();
 
         let spec = pep508_requirement_to_uv_requirement(spec).unwrap();
 

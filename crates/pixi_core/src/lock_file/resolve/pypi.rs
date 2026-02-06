@@ -40,6 +40,7 @@ use pypi_modifiers::{
 use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
 use rattler_lock::{
     PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
+    Verbatim,
 };
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
@@ -1019,7 +1020,7 @@ async fn lock_pypi_packages(
                         )
                         .into_diagnostic()?,
                         editable: false,
-                        location,
+                        location: Verbatim::new(location),
                         hash,
                     }
                 }
@@ -1052,14 +1053,14 @@ async fn lock_pypi_packages(
                                 get_url_or_path(&reg.index, &reg.file.url, abs_project_root)
                                     .into_diagnostic()
                                     .context("cannot convert registry sdist")?;
-                            (url_or_path, hash, false)
+                            (Verbatim::new(url_or_path), hash, false)
                         }
                         SourceDist::DirectUrl(direct) => {
                             let url = direct.url.to_url();
                             let direct_url = Url::parse(&format!("direct+{url}"))
                                 .into_diagnostic()
                                 .context("could not create direct-url")?;
-                            (direct_url.into(), hash, false)
+                            (Verbatim::new(direct_url.into()), hash, false)
                         }
                         SourceDist::Git(git) => {
                             // Look up the original git reference from the manifest dependencies
@@ -1072,7 +1073,9 @@ async fn lock_pypi_packages(
                             let pinned_git_spec =
                                 into_pinned_git_spec(git.clone(), original_reference);
                             (
-                                pinned_git_spec.into_locked_git_url().to_url().into(),
+                                Verbatim::new(
+                                    pinned_git_spec.into_locked_git_url().to_url().into(),
+                                ),
                                 hash,
                                 false,
                             )
@@ -1102,7 +1105,7 @@ async fn lock_pypi_packages(
                             // instead of from the source path to copy the path that was passed in
                             // from the requirement.
                             let url_or_path = UrlOrPath::Path(install_path);
-                            (url_or_path, hash, false)
+                            (Verbatim::new(url_or_path), hash, false)
                         }
                         SourceDist::Directory(dir) => {
                             // Compute the hash of the package based on the source tree.
@@ -1125,7 +1128,14 @@ async fn lock_pypi_packages(
                             // Create the url for the lock file. This is based on the passed in URL
                             // instead of from the source path to copy the path that was passed in
                             // from the requirement.
-                            let url_or_path = UrlOrPath::Path(install_path);
+                            let url_or_path = if let Some(given) = dir.url.given() {
+                                Verbatim::new_with_given(
+                                    UrlOrPath::Path(install_path),
+                                    given.to_string(),
+                                )
+                            } else {
+                                Verbatim::new(UrlOrPath::Path(install_path))
+                            };
                             // Always set editable to false in lock file.
                             // Editability is looked up from manifest at install time.
                             (url_or_path, hash, false)

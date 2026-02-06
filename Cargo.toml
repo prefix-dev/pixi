@@ -99,7 +99,7 @@ ordermap = "1.0.0"
 parking_lot = "0.12.4"
 pathdiff = "0.2.3"
 pep440_rs = "0.7.3"
-pep508_rs = "0.9.2"
+pep508_rs = { version = "0.9.2", features = ["non-pep508-extensions"] }
 percent-encoding = "2.3.1"
 pin-project-lite = "0.2.16"
 pixi_allocator = { path = "crates/pixi_allocator" }

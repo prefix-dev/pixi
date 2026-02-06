@@ -98,7 +98,7 @@ pub fn convert_to_dist(
     lock_file_dir: &Path,
 ) -> Result<Dist, ConvertToUvDistError> {
     // Figure out if it is a url from the registry or a direct url
-    let dist = match &pkg.location {
+    let dist = match &*pkg.location {
         UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
             let url_without_direct = strip_direct_scheme(url);
             let pkg_name = to_uv_normalize(&pkg.name)?;
@@ -250,7 +250,7 @@ mod tests {
         let locked = PypiPackageData {
             name: "torch".parse().unwrap(),
             version: Version::from_str("2.3.0+cu121").unwrap(),
-            location: UrlOrPath::Url(url),
+            location: UrlOrPath::Url(url).into(),
             hash: None,
             requires_dist: vec![],
             requires_python: None,

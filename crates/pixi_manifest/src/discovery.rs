@@ -113,12 +113,12 @@ impl Manifests {
                     manifest.into_workspace_manifest(
                         ExternalWorkspaceProperties::default(),
                         PackageDefaults::default(),
-                        Some(manifest_dir),
+                        manifest_dir,
                     )
                 }),
             ManifestKind::Pyproject => PyProjectManifest::deserialize(&mut toml)
                 .map_err(TomlError::from)
-                .and_then(|manifest| manifest.into_workspace_manifest(Some(manifest_dir))),
+                .and_then(|manifest| manifest.into_workspace_manifest(manifest_dir)),
         };
 
         // Handle any errors that occurred during parsing.
@@ -412,7 +412,7 @@ impl WorkspaceDiscoverer {
                         manifest.into_workspace_manifest(
                             ExternalWorkspaceProperties::default(),
                             PackageDefaults::default(),
-                            Some(manifest_dir),
+                            manifest_dir,
                         )
                     } else {
                         if self.discover_package {
@@ -449,7 +449,7 @@ impl WorkspaceDiscoverer {
                     if manifest.has_pixi_workspace() {
                         // Parse the manifest as a workspace manifest if it
                         // contains a workspace
-                        manifest.into_workspace_manifest(Some(manifest_dir))
+                        manifest.into_workspace_manifest(manifest_dir)
                     } else {
                         if self.discover_package {
                             // Otherwise store the manifest for later to parse as the closest
@@ -497,10 +497,10 @@ impl WorkspaceDiscoverer {
                             workspace_manifest.workspace_package_properties(),
                             PackageDefaults::default(),
                             &workspace_manifest,
-                            Some(manifest_dir),
+                            manifest_dir,
                         ),
                         EitherManifest::Pyproject(manifest) => {
-                            manifest.into_package_manifest(&workspace_manifest, Some(manifest_dir))
+                            manifest.into_package_manifest(&workspace_manifest, manifest_dir)
                         }
                     };
 

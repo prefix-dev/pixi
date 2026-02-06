@@ -697,7 +697,7 @@ fn create_package_to_output<'a, 'b>(
             ),
             CondaPackageData::Source(source) => (None, Some(source.location.to_string())),
         },
-        PackageExt::PyPI(p, _) => match &p.location {
+        PackageExt::PyPI(p, _) => match &*p.location {
             UrlOrPath::Url(url) => (None, Some(url.to_string())),
             UrlOrPath::Path(path) => (None, Some(path.to_string())),
         },

@@ -157,17 +157,17 @@ pub fn as_uv_req(
             }
         }
         PixiPypiSource::Path { path, editable } => {
-            let joined = project_root.join(path);
+            let joined = project_root.join(path.inner());
             let canonicalized =
                 dunce::canonicalize(&joined).map_err(|e| AsPep508Error::CanonicalizeError {
                     source: e,
                     path: joined.clone(),
                 })?;
             let given = path
-                .to_str()
+                .given()
                 .map(|s| s.to_owned())
-                .unwrap_or_else(String::new);
-            let verbatim = VerbatimUrl::from_path(path, project_root)?.with_given(given);
+                .unwrap_or_else(|| path.inner().display().to_string());
+            let verbatim = VerbatimUrl::from_path(path.inner(), project_root)?.with_given(given);
 
             if canonicalized.is_dir() {
                 RequirementSource::Directory {
@@ -180,7 +180,7 @@ pub fn as_uv_req(
                     editable: Some(false),
                     url: verbatim,
                     // TODO: we could see if we ever need this
-                    // AFAICS it would be useful for constrainging dependencies
+                    // AFAICS it would be useful for constraining dependencies
                     r#virtual: Some(false),
                 }
             } else if *editable == Some(true) {
@@ -193,7 +193,7 @@ pub fn as_uv_req(
                 RequirementSource::Path {
                     install_path: canonicalized.into_boxed_path(),
                     url: verbatim,
-                    ext: DistExtension::from_path(path)?,
+                    ext: DistExtension::from_path(path.inner())?,
                 }
             }
         }

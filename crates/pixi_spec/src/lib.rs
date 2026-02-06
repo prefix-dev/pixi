@@ -28,6 +28,7 @@ use rattler_conda_types::{
     BuildNumberSpec, ChannelConfig, MatchSpecCondition, NamedChannelOrUrl, NamelessMatchSpec,
     ParseChannelError, StringMatcher, VersionSpec,
 };
+pub use rattler_lock::Verbatim;
 pub use source_anchor::SourceAnchor;
 pub use subdirectory::{Subdirectory, SubdirectoryError};
 use thiserror::Error;
@@ -134,7 +135,7 @@ impl PixiSpec {
                 url,
                 md5: spec.md5,
                 sha256: spec.sha256,
-                // A namelessmatchspec always describes a binary spec which cannot have a
+                // A nameless matchspec always describes a binary spec which cannot have a
                 // subdirectory
                 subdirectory: Subdirectory::default(),
             })

@@ -384,7 +384,8 @@ impl PyPIPackageDataBuilder {
                     version = version.as_ref()
                 ))
                 .unwrap(),
-            ),
+            )
+            .into(),
             hash: None,
             editable: false,
         }
@@ -396,7 +397,7 @@ impl PyPIPackageDataBuilder {
             version: pep440_rs::Version::from_str(version.as_ref()).unwrap(),
             requires_dist: vec![],
             requires_python: None,
-            location: UrlOrPath::Path(Utf8TypedPathBuf::from(path.to_string_lossy().to_string())),
+            location: UrlOrPath::Path(Utf8TypedPathBuf::from(path.to_string_lossy().to_string())).into(),
             hash: None,
             editable,
         }
@@ -414,7 +415,7 @@ impl PyPIPackageDataBuilder {
             version: pep440_rs::Version::from_str(version.as_ref()).unwrap(),
             requires_dist: vec![],
             requires_python: None,
-            location: UrlOrPath::Url(url),
+            location: UrlOrPath::Url(url).into(),
             hash: None,
             editable: false,
         }
