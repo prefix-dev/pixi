@@ -7690,7 +7690,7 @@ dependencies = [
 
 [[package]]
 name = "recipe-stage0"
-version = "0.1.2"
+version = "0.1.1"
 dependencies = [
  "hashlink",
  "indexmap 2.13.0",

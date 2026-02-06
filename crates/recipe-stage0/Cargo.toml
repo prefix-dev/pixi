@@ -2,7 +2,7 @@
 edition.workspace = true
 license.workspace = true
 name = "recipe-stage0"
-version = "0.1.2"
+version = "0.1.1"
 
 [dependencies]
 hashlink = { workspace = true }
