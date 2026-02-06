@@ -4,7 +4,7 @@
 [package]
 edition = "2024"
 name = "py-pixi-build-backend"
-version = "0.4.2"
+version = "0.4.3"
 
 [lib]
 crate-type = ["cdylib"]
