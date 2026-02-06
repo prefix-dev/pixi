@@ -3,7 +3,7 @@ description = "CMake build backend for Pixi"
 edition.workspace = true
 license.workspace = true
 name = "pixi-build-cmake"
-version = "0.3.7"
+version = "0.3.9"
 
 [package.metadata.dist]
 dist = false
