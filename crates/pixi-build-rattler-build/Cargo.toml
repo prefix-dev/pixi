@@ -2,7 +2,7 @@
 edition.workspace = true
 license.workspace = true
 name = "pixi-build-rattler-build"
-version = "0.3.6"
+version = "0.3.8"
 
 [package.metadata.dist]
 dist = false

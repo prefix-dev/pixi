@@ -16,6 +16,9 @@ requires-pixi = ">=0.45"
 [workspace.target.linux-64.build-variants]
 c_stdlib_version = ["2.17"]
 
+[workspace.target.osx.build-variants]
+c_compiler_version = ["19"]
+
 #
 # Shared feature for C/C++ compilers and build tools
 #
@@ -391,7 +394,13 @@ build-trampoline = { cmd = "python trampoline/build-trampoline.py", description 
 #
 [environments]
 backends-release = { features = ["backends-release", "python"] }
-default = { features = ["rust", "compilers", "python", "python-test-deps", "dev"] }
+default = { features = [
+  "rust",
+  "compilers",
+  "python",
+  "python-test-deps",
+  "dev",
+] }
 dist = { features = ["dist"] }
 docs = { features = ["rust", "compilers", "python", "docs"] }
 lefthook = { features = ["lefthook"] }
