@@ -292,6 +292,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         };
 
+        // Invalidate cached environment if task requires reactivation
+        if executable_task.task().reactivate() {
+            task_envs.remove(&executable_task.run_environment);
+        }
+
         // If we don't have a command environment yet, we need to compute it. We lazily
         // compute the task environment because we only need the environment if
         // a task is actually executed.

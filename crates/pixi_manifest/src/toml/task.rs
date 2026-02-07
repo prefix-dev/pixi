@@ -224,6 +224,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 .map(TomlFromStr::into_inner);
             let description = th.optional("description");
             let clean_env = th.optional("clean-env").unwrap_or(false);
+            let reactivate = th.optional("reactivate").unwrap_or(false);
             let args = th.optional::<Vec<TaskArg>>("args");
 
             let mut have_default = false;
@@ -253,6 +254,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 default_environment,
                 description,
                 clean_env,
+                reactivate,
                 args,
             }))
         } else {
