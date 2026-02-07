@@ -3807,19 +3807,19 @@ For instance, while <code>ipython</code> is really useful on its own, it becomes
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>ipython<span class="w"> </span>--with<span class="w"> </span>numpy<span class="w"> </span>--with<span class="w"> </span>matplotlib
 </span></code></pre></div>
 <p><code>numpy</code> exposes executables, but since it's added via <code>--with</code> it's executables are not being exposed.</p>
-<p>Importing <code>numpy</code> and <code>matplotlib</code> now works as expected.
+<p>Importing <code>numpy</code> and <code>matplotlib</code> now works as expected.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ipython<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import numpy; import matplotlib&#39;</span>
-</span></code></pre></div></p>
+</span></code></pre></div>
 <p>At some point, you might want to install multiple versions of the same package on your system.
 Since they will be all available on the system <code>PATH</code>, they need to be exposed under different names.</p>
-<p>Let's check out the following command:
+<p>Let's check out the following command:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--expose<span class="w"> </span><span class="nv">py3</span><span class="o">=</span>python<span class="w"> </span><span class="s2">&quot;python=3.12&quot;</span>
-</span></code></pre></div></p>
+</span></code></pre></div>
 <p>By specifying <code>--expose</code> we specified that we want to expose the executable <code>python</code> under the name <code>py3</code>.
 The package <code>python</code> has more executables, but since we specified <code>--exposed</code> they are not auto-exposed.</p>
-<p>You can run <code>py3</code> to start the python interpreter.
+<p>You can run <code>py3</code> to start the python interpreter.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>py3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;print(&#39;Hello World&#39;)&quot;</span>
-</span></code></pre></div></p>
+</span></code></pre></div>
 <h2 id="install-dependencies-from-source">Install Dependencies From Source<a class="headerlink" href="#install-dependencies-from-source" title="Permanent link">#</a></h2>
 <p>Pixi global also allows you to install <a href="../../build/getting_started/">Pixi packages</a>.
 Let's assume there's a C++ package we'd like to install globally from source.
@@ -3908,7 +3908,7 @@ At the moment, only Linux and macOS are supported.</p>
 <p>Completions of packages are installed as long as their binaries are exposed under the same name: e.g. <code>exposed = { git = "git" }</code>.</p>
 </div>
 <h2 id="adding-a-series-of-tools-at-once">Adding a Series of Tools at Once<a class="headerlink" href="#adding-a-series-of-tools-at-once" title="Permanent link">#</a></h2>
-<p>Without specifying an inastallation environment, you can add multiple tools at once:</p>
+<p>Without specifying an installation environment, you can add multiple tools at once:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>pixi-pack<span class="w"> </span>rattler-build
 </span></code></pre></div>
 <p>This command generates the following entry in the manifest:</p>
@@ -3942,16 +3942,16 @@ At the moment, only Linux and macOS are supported.</p>
 <h2 id="install-packages-for-a-different-platform">Install Packages For a Different Platform<a class="headerlink" href="#install-packages-for-a-different-platform" title="Permanent link">#</a></h2>
 <p>You can install packages for a different platform using the <code>--platform</code> flag.
 This is useful when you want to install packages for a different platform, such as <code>osx-64</code> packages on <code>osx-arm64</code>.
-For example, running this on <code>osx-arm64</code>:
+For example, running this on <code>osx-arm64</code>:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>python
 </span></code></pre></div>
-will create the following entry in the manifest:
+<p>will create the following entry in the manifest:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">[envs.python]</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;osx-64&quot;</span><span class="p">]</span>
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="c1"># ...</span>
-</span></code></pre></div></p>
+</span></code></pre></div>
 <h2 id="packaging">Packaging<a class="headerlink" href="#packaging" title="Permanent link">#</a></h2>
 <h3 id="opt-out-of-conda_prefix">Opt Out of <code>CONDA_PREFIX</code><a class="headerlink" href="#opt-out-of-conda_prefix" title="Permanent link">#</a></h3>
 <p>Pixi activates the target environment before running a globally exposed executable, which usually sets <code>CONDA_PREFIX</code> to that environment's path.
