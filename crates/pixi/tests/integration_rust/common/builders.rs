@@ -244,6 +244,11 @@ impl AddBuilder {
         self
     }
 
+    pub fn with_index(mut self, index: String) -> Self {
+        self.args.index = Some(index);
+        self
+    }
+
     /// Deprecated: Use .with_frozen(true).with_install(false) instead
     pub fn with_no_lockfile_update(mut self, no_lockfile_update: bool) -> Self {
         if no_lockfile_update {
