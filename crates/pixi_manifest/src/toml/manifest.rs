@@ -17,9 +17,9 @@ use toml_span::{
 use url::Url;
 
 use crate::{
-    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
-    KnownPreviewFeature, SolveGroups, SystemRequirements, TargetSelector, Targets, Task, TaskName,
-    TomlError, Warning, WithWarnings, WorkspaceManifest,
+    Activation, Environment, EnvironmentFeature, EnvironmentName, Environments, Feature,
+    FeatureName, KnownPreviewFeature, SolveGroups, SystemRequirements, TargetSelector, Targets,
+    Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
@@ -341,14 +341,17 @@ impl TomlManifest {
                     };
 
                     // Prepend synthetic feature to the feature list
-                    let mut final_features = Vec::new();
-                    if let Some(synthetic_name) = synthetic_feature_name {
+                    let mut final_features: Vec<Spanned<EnvironmentFeature>> = Vec::new();
+                    if synthetic_feature_name.is_some() {
                         final_features.push(Spanned {
-                            value: synthetic_name.to_string(),
+                            value: EnvironmentFeature::Inline,
                             span: toml_span::Span::default(),
                         });
                     }
-                    final_features.extend(explicit_features);
+                    final_features.extend(explicit_features.into_iter().map(|s| Spanned {
+                        value: EnvironmentFeature::Named(s.value),
+                        span: s.span,
+                    }));
 
                     (
                         final_features,
@@ -358,33 +361,50 @@ impl TomlManifest {
                     )
                 }
                 TomlEnvironmentList::Seq(seq_features) => {
-                    (seq_features.value, Some(seq_features.span), None, false)
+                    let named_features: Vec<Spanned<EnvironmentFeature>> = seq_features
+                        .value
+                        .into_iter()
+                        .map(|s| Spanned {
+                            value: EnvironmentFeature::Named(s.value),
+                            span: s.span,
+                        })
+                        .collect();
+                    (named_features, Some(seq_features.span), None, false)
                 }
             };
 
-            features_used_by_environments
-                .extend(included_features.iter().map(|span| span.value.clone()));
+            for spanned in &included_features {
+                let name_str = match &spanned.value {
+                    EnvironmentFeature::Inline => name.as_str().to_string(),
+                    EnvironmentFeature::Named(n) => n.clone(),
+                };
+                features_used_by_environments.insert(name_str);
+            }
 
             // Verify that the features of the environment actually exist and that they are
             // not defined twice.
             let mut features_seen_where = HashMap::new();
             let mut used_features = Vec::with_capacity(included_features.len());
             for Spanned {
-                value: feature_name,
+                value: env_feature,
                 span,
             } in &included_features
             {
-                let Some(feature) = features.get(feature_name.as_str()) else {
+                let feature_name_str = match env_feature {
+                    EnvironmentFeature::Inline => name.as_str().to_string(),
+                    EnvironmentFeature::Named(n) => n.clone(),
+                };
+                let Some(feature) = features.get(feature_name_str.as_str()) else {
                     return Err(TomlError::from(
                         GenericError::new(format!(
-                            "The feature '{feature_name}' is not defined in the manifest",
+                            "The feature '{feature_name_str}' is not defined in the manifest",
                         ))
                         .with_span((*span).into())
                         .with_help("Add the feature to the manifest"),
                     ));
                 };
 
-                if let Some(previous_span) = features_seen_where.insert(feature_name, *span) {
+                if let Some(previous_span) = features_seen_where.insert(feature_name_str, *span) {
                     return Err(TomlError::from(
                         GenericError::new(format!("The feature '{}' is included more than once.", &feature.name))
                             .with_span((*span).into())
@@ -1293,7 +1313,7 @@ mod test {
         let dev_env = workspace.environments.environments[dev_env_idx.unwrap().0]
             .as_ref()
             .unwrap();
-        assert!(dev_env.features.contains(&"dev".to_string()));
+        assert!(dev_env.features.contains(&EnvironmentFeature::Inline));
     }
 
     #[test]
@@ -1367,8 +1387,10 @@ mod test {
         let dev_env = workspace.environments.environments[dev_env_idx.0]
             .as_ref()
             .unwrap();
-        assert!(dev_env.features.contains(&"dev".to_string()));
-        assert!(dev_env.features.contains(&"python".to_string()));
+        assert!(dev_env.features.contains(&EnvironmentFeature::Inline));
+        assert!(dev_env
+            .features
+            .contains(&EnvironmentFeature::Named("python".to_string())));
     }
 
     #[test]
