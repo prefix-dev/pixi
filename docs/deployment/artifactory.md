@@ -12,9 +12,9 @@ The repository URL will be in the format: `https://my-org.jfrog.io/artifactory/<
 
 Artifactory supports different repository types:
 
-- **Local repositories**: Store your own private packages
+- **Local repositories**: Store your own private packages.
 - **Remote repositories**: Cache and mirror upstream channels like conda-forge. This reduces external bandwidth, speeds up downloads, and provides availability even when upstream channels are down.
-- **Virtual repositories** (not recommended): Combine multiple local and remote repositories under a single URL
+- **Virtual repositories**: Combine multiple local and remote repositories under a single URL. You usually don't need these unless you have more advanced use cases or migrations.
 
 A common setup is to create a remote repository that mirrors conda-forge, then combine it with a local repository for internal packages using a virtual repository.
 
