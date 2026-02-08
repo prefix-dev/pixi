@@ -1224,6 +1224,7 @@ async fn lock_pypi_packages(
     Ok(locked_packages)
 }
 
+#[allow(clippy::type_complexity)]
 fn split_no_deps_dependencies(
     dependencies: IndexMap<uv_normalize::PackageName, IndexSet<PixiPypiSpec>>,
 ) -> (
@@ -1531,6 +1532,7 @@ async fn lock_no_deps_registry_package(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn lock_no_deps_source_package<Context: BuildContext>(
     name: &uv_normalize::PackageName,
     spec: &PixiPypiSpec,

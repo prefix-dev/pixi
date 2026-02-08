@@ -67,6 +67,8 @@ pixi add [OPTIONS] <SPEC>...
 :  The subdirectory of the git repository to use
 
 ## Update Options
+- <a id="arg---no-deps" href="#arg---no-deps">`--no-deps`</a>
+:  Do not resolve transitive dependencies for PyPI packages
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock-file
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>

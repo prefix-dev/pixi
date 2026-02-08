@@ -1,7 +1,6 @@
 use crate::build::BuildCache;
 use crate::cache::build_backend_metadata::BuildBackendMetadataCache;
 use crate::cache::source_metadata::SourceMetadataCache;
-use fs_err;
 use pixi_consts::consts;
 use pixi_path::{AbsPresumedDirPath, AbsPresumedDirPathBuf};
 

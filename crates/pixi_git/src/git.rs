@@ -43,10 +43,7 @@ fn ensure_git_success(
         format!("git command failed ({context}): {}", stderr.trim())
     };
 
-    Err(GitError::from(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        message,
-    )))
+    Err(GitError::from(std::io::Error::other(message)))
 }
 
 struct CheckoutLock {

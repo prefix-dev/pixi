@@ -1,6 +1,5 @@
 use std::{
     collections::{BTreeSet as Set, HashMap},
-    fs,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
@@ -156,7 +155,7 @@ pub fn get_cache_dir() -> miette::Result<PathBuf> {
         })
         .or_else(|| rattler::default_cache_dir().ok())
         .ok_or_else(|| miette::miette!("could not determine default cache directory"))?;
-    fs::create_dir_all(&cache_dir)
+    fs_err::create_dir_all(&cache_dir)
         .into_diagnostic()
         .wrap_err_with(|| format!("failed to create cache directory {}", cache_dir.display()))?;
     Ok(cache_dir)
