@@ -14,7 +14,6 @@ use pixi_core::{DependencyType, WorkspaceLocator};
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, VersionOrStar};
 use url::Url;
 
-
 /// Adds dependencies to the workspace
 ///
 /// The dependencies should be defined as MatchSpec for conda package, or a PyPI

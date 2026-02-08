@@ -1258,13 +1258,13 @@ async fn add_pypi_with_index() {
         .find(|(name, _)| *name == PypiPackageName::from_str("requests").unwrap())
         .expect("requests package should be in dependencies");
     // Verify the index is set correctly
-    if let PixiPypiSpec::Version { index, .. } = spec {
+    if let PixiPypiSource::Registry { index, .. } = &spec.source {
         assert_eq!(
             index.as_ref().map(|u| u.as_str()),
             Some(custom_index.as_str()),
             "Index URL should match the provided custom index"
         );
     } else {
-        panic!("Expected PixiPypiSpec::Version variant");
+        panic!("Expected PixiPypiSource::Registry variant");
     }
 }
