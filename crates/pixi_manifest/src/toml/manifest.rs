@@ -294,23 +294,8 @@ impl TomlManifest {
 
                     // Handle inline environment config - create synthetic feature
                     let synthetic_feature_name = if env.has_inline_config() {
-                        let synthetic_name = FeatureName::from(name.as_str());
-
-                        // Check for conflict with existing feature
-                        if features.contains_key(&synthetic_name) {
-                            return Err(TomlError::from(
-                                GenericError::new(format!(
-                                    "Cannot define inline config for environment '{}' because \
-                                     a feature with the same name already exists",
-                                    name
-                                ))
-                                .with_help(format!(
-                                    "Either rename the feature or move the config to \
-                                     [feature.{}.dependencies]",
-                                    name
-                                )),
-                            ));
-                        }
+                        let synthetic_name =
+                            FeatureName::from(format!(".{}", name.as_str()));
 
                         // Extract warnings before conversion
                         warnings.extend(env.take_warnings());
@@ -375,7 +360,7 @@ impl TomlManifest {
 
             for spanned in &included_features {
                 let name_str = match &spanned.value {
-                    EnvironmentFeature::Inline => name.as_str().to_string(),
+                    EnvironmentFeature::Inline => format!(".{}", name.as_str()),
                     EnvironmentFeature::Named(n) => n.clone(),
                 };
                 features_used_by_environments.insert(name_str);
@@ -391,7 +376,7 @@ impl TomlManifest {
             } in &included_features
             {
                 let feature_name_str = match env_feature {
-                    EnvironmentFeature::Inline => name.as_str().to_string(),
+                    EnvironmentFeature::Inline => format!(".{}", name.as_str()),
                     EnvironmentFeature::Named(n) => n.clone(),
                 };
                 let Some(feature) = features.get(feature_name_str.as_str()) else {
@@ -1299,8 +1284,8 @@ mod test {
         )
         .unwrap();
 
-        // Verify synthetic feature was created
-        assert!(workspace.features.contains_key(&FeatureName::from("dev")));
+        // Verify synthetic feature was created with dot-prefixed key
+        assert!(workspace.features.contains_key(&FeatureName::from(".dev")));
 
         // Verify environment references the synthetic feature
         let dev_env_idx = workspace
@@ -1317,8 +1302,9 @@ mod test {
     }
 
     #[test]
-    fn test_inline_environment_conflict_with_feature() {
-        let input = r#"
+    fn test_inline_environment_coexists_with_feature() {
+        let (workspace, _, _) = TomlManifest::from_toml_str(
+            r#"
         [workspace]
         name = "test"
         channels = ["conda-forge"]
@@ -1327,20 +1313,38 @@ mod test {
         [feature.dev.dependencies]
         foo = "*"
 
+        [environments.dev]
+        features = ["dev"]
+
         [environments.dev.dependencies]
         bar = "*"
-        "#;
-
-        let manifest = TomlManifest::from_toml_str(input).unwrap();
-        let result = manifest.into_workspace_manifest(
+        "#,
+        )
+        .unwrap()
+        .into_workspace_manifest(
             ExternalWorkspaceProperties::default(),
             PackageDefaults::default(),
             None,
-        );
+        )
+        .unwrap();
 
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("feature with the same name already exists"));
+        // Both the named feature and inline feature should exist
+        assert!(workspace.features.contains_key(&FeatureName::from("dev")));
+        assert!(workspace.features.contains_key(&FeatureName::from(".dev")));
+
+        // Environment should have both inline and named features
+        let dev_env_idx = workspace
+            .environments
+            .by_name
+            .get(&EnvironmentName::Named("dev".to_string()))
+            .unwrap();
+        let dev_env = workspace.environments.environments[dev_env_idx.0]
+            .as_ref()
+            .unwrap();
+        assert!(dev_env.features.contains(&EnvironmentFeature::Inline));
+        assert!(dev_env
+            .features
+            .contains(&EnvironmentFeature::Named("dev".to_string())));
     }
 
     #[test]
@@ -1376,7 +1380,7 @@ mod test {
                 .features
                 .contains_key(&FeatureName::from("python"))
         );
-        assert!(workspace.features.contains_key(&FeatureName::from("dev")));
+        assert!(workspace.features.contains_key(&FeatureName::from(".dev")));
 
         // Verify environment has both features (synthetic first, then explicit)
         let dev_env_idx = workspace
@@ -1418,7 +1422,7 @@ mod test {
         .unwrap();
 
         // Verify synthetic feature was created with the task
-        let dev_feature = workspace.features.get(&FeatureName::from("dev")).unwrap();
+        let dev_feature = workspace.features.get(&FeatureName::from(".dev")).unwrap();
         assert!(
             dev_feature
                 .targets
@@ -1450,7 +1454,7 @@ mod test {
         .unwrap();
 
         // Verify synthetic feature was created with pypi dependencies
-        let dev_feature = workspace.features.get(&FeatureName::from("dev")).unwrap();
+        let dev_feature = workspace.features.get(&FeatureName::from(".dev")).unwrap();
         let pypi_deps = dev_feature.targets.default().pypi_dependencies.as_ref();
         assert!(pypi_deps.is_some());
     }

@@ -367,7 +367,9 @@ impl<'p> HasFeaturesIter<'p> for Environment<'p> {
         let env_name = &self.environment.name;
         let environment_features = self.environment.features.iter().map(|env_feature| {
             let feature_name = match env_feature {
-                manifest::EnvironmentFeature::Inline => FeatureName::from(env_name.as_str()),
+                manifest::EnvironmentFeature::Inline => {
+                    FeatureName::from(format!(".{}", env_name.as_str()))
+                }
                 manifest::EnvironmentFeature::Named(name) => FeatureName::from(name.clone()),
             };
             manifest

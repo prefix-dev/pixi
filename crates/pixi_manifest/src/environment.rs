@@ -177,11 +177,11 @@ impl EnvironmentFeature {
         }
     }
 
-    /// Resolves to the feature name string, using the environment name for
-    /// inline features.
+    /// Returns the key used to store/lookup the feature in the features map.
+    /// Inline features use a dot-prefix to avoid collisions with named features.
     pub fn to_feature_name(&self, environment_name: &EnvironmentName) -> String {
         match self {
-            EnvironmentFeature::Inline => environment_name.as_str().to_string(),
+            EnvironmentFeature::Inline => format!(".{}", environment_name.as_str()),
             EnvironmentFeature::Named(name) => name.clone(),
         }
     }
@@ -339,7 +339,7 @@ mod tests {
         assert_eq!(named.as_named(), Some("foo"));
 
         let env_name = EnvironmentName::Named("dev".to_string());
-        assert_eq!(inline.to_feature_name(&env_name), "dev");
+        assert_eq!(inline.to_feature_name(&env_name), ".dev");
         assert_eq!(named.to_feature_name(&env_name), "foo");
     }
 }

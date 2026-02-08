@@ -134,7 +134,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironment {
         let solve_group = th.optional("solve-group");
         let no_default_feature = th.optional("no-default-feature");
 
-        // Feature fields (same as TomlFeature)
+        // Feature fields (duplicated from TomlFeature because toml-span doesn't
+        // support flatten/delegation). These are converted via `into_toml_feature()`.
         let platforms: Option<Spanned<IndexSet<Platform>>> = th
             .optional::<TomlWith<_, Spanned<TomlIndexSet<TomlPlatform>>>>("platforms")
             .map(TomlWith::into_inner);

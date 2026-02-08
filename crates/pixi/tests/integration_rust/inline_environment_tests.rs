@@ -31,10 +31,10 @@ async fn test_inline_environment_dependencies() {
     let workspace = pixi.workspace().unwrap();
     let manifest = (&workspace).workspace_manifest();
 
-    // Check that a synthetic feature was created with the environment name
+    // Check that a synthetic feature was created with dot-prefixed key
     assert!(
-        manifest.features.contains_key(&FeatureName::from("dev")),
-        "Synthetic feature 'dev' should be created"
+        manifest.features.contains_key(&FeatureName::from(".dev")),
+        "Synthetic feature '.dev' should be created"
     );
 
     // Check that the environment exists
@@ -44,8 +44,8 @@ async fn test_inline_environment_dependencies() {
     // Verify the environment has the synthetic feature in its feature list
     let env = env.unwrap();
     assert!(
-        env.features().any(|f| f.name == FeatureName::from("dev")),
-        "Environment should reference the synthetic 'dev' feature"
+        env.features().any(|f| f.name == FeatureName::from(".dev")),
+        "Environment should reference the synthetic '.dev' feature"
     );
 }
 
@@ -76,17 +76,17 @@ async fn test_inline_environment_with_explicit_features() {
     let workspace = pixi.workspace().unwrap();
     let manifest = (&workspace).workspace_manifest();
 
-    // Both features should exist
+    // Both features should exist (inline uses dot-prefix)
     assert!(manifest.features.contains_key(&FeatureName::from("python")));
-    assert!(manifest.features.contains_key(&FeatureName::from("dev")));
+    assert!(manifest.features.contains_key(&FeatureName::from(".dev")));
 
     // The environment should have both features
     let env = workspace.environment("dev").unwrap();
     let feature_names: Vec<_> = env.features().map(|f| f.name.clone()).collect();
 
     assert!(
-        feature_names.contains(&FeatureName::from("dev")),
-        "Environment should have synthetic 'dev' feature"
+        feature_names.contains(&FeatureName::from(".dev")),
+        "Environment should have synthetic '.dev' feature"
     );
     assert!(
         feature_names.contains(&FeatureName::from("python")),
@@ -121,7 +121,7 @@ async fn test_inline_environment_tasks() {
     // Check that the synthetic feature has the task
     let dev_feature = manifest
         .features
-        .get(&FeatureName::from("dev"))
+        .get(&FeatureName::from(".dev"))
         .expect("dev feature should exist");
 
     assert!(
