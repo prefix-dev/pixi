@@ -38,6 +38,9 @@ pub struct Args {
     #[clap(flatten)]
     pub lock_file_usage: crate::LockFileUsageConfig,
 
+    #[clap(flatten)]
+    pub pypi_no_deps_config: crate::cli_config::PypiNoDepsConfig,
+
     /// The environment to install
     #[arg(long, short)]
     pub environment: Option<Vec<String>>,
@@ -116,6 +119,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         UpdateLockFileOptions {
             lock_file_usage: args.lock_file_usage.to_usage(),
             no_install: false,
+            pypi_no_deps: args.pypi_no_deps_config.no_deps,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),

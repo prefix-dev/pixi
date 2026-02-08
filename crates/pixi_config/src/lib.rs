@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeSet as Set, HashMap},
+    fs,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
@@ -144,7 +145,7 @@ pub fn pixi_home() -> Option<PathBuf> {
 /// - If that is not set, the default cache directory of
 ///   [`rattler::default_cache_dir`] is used.
 pub fn get_cache_dir() -> miette::Result<PathBuf> {
-    std::env::var("PIXI_CACHE_DIR")
+    let cache_dir = std::env::var("PIXI_CACHE_DIR")
         .ok()
         .map(PathBuf::from)
         .or_else(|| std::env::var("RATTLER_CACHE_DIR").map(PathBuf::from).ok())
@@ -154,7 +155,11 @@ pub fn get_cache_dir() -> miette::Result<PathBuf> {
             pixi_cache_dir.and_then(|d| d.exists().then_some(d))
         })
         .or_else(|| rattler::default_cache_dir().ok())
-        .ok_or_else(|| miette::miette!("could not determine default cache directory"))
+        .ok_or_else(|| miette::miette!("could not determine default cache directory"))?;
+    fs::create_dir_all(&cache_dir)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("failed to create cache directory {}", cache_dir.display()))?;
+    Ok(cache_dir)
 }
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCli {

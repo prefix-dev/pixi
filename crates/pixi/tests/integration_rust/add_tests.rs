@@ -543,6 +543,7 @@ index-url = "{index_url}"
                     spec,
                     PixiPypiSpec {
                         extras: vec![pep508_rs::ExtraName::from_str("cli").unwrap()],
+                        no_deps: false,
                         source: PixiPypiSource::Registry {
                             version: VersionOrStar::from_str("==24.8.0").unwrap(),
                             index: None,

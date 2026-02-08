@@ -201,11 +201,11 @@ fn anchor_literal_pattern(pattern: String) -> String {
 /// overrides our `WalkerBuilder` setting, where we explicitly ignore hidden folders.
 /// Imagine a user-provided globs like this:
 ///
-/// ```
+/// ```text
 /// "**", ".foo/bar.txt"
 /// ```
 /// To make it work, we need first to ignore all hidden folders after users' globs, so it becomes like this:
-/// ```
+/// ```text
 /// "**", ".foo/bar.txt" "!{**/.*, .*, .**/*}"
 /// ```
 ///
@@ -213,7 +213,7 @@ fn anchor_literal_pattern(pattern: String) -> String {
 /// Ignore everything from foo: `"!.foo/*"`, and then `whitelist` the `.foo/bar.txt` again.
 /// So the final globs will look like this:
 ///
-/// ```
+/// ```text
 /// ["**", ".foo/bar.txt", "!{**/.*, .*, .**/*}", ".foo", "!.foo/*", ".foo/bar.txt"]
 /// ```
 ///

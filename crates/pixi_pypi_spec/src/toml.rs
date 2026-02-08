@@ -62,6 +62,9 @@ struct RawPyPiRequirement {
 
     marker: MarkerTree,
 
+    /// Skip dependency resolution for this package.
+    pub no_deps: Option<bool>,
+
     // Path Only
     pub path: Option<PathBuf>,
     pub editable: Option<bool>,
@@ -114,7 +117,7 @@ impl RawPyPiRequirement {
             return Err(SpecConversion::VersionWithNonDetailedKeys { non_detailed_keys });
         }
 
-        let req = match (self.url, self.path, self.git, self.index) {
+        let mut req = match (self.url, self.path, self.git, self.index) {
             (Some(url), None, None, None) => PixiPypiSpec::with_extras_and_markers(
                 PixiPypiSource::Url {
                     url,
@@ -174,6 +177,10 @@ impl RawPyPiRequirement {
             }
         };
 
+        if self.no_deps.unwrap_or(false) {
+            req.set_no_deps(true);
+        }
+
         Ok(req)
     }
 }
@@ -187,6 +194,8 @@ impl<'de> toml_span::Deserialize<'de> for RawPyPiRequirement {
             .optional::<TomlWith<_, Vec<TomlFromStr<_>>>>("extras")
             .map(TomlWith::into_inner)
             .unwrap_or_default();
+
+        let no_deps = th.optional("no-deps");
 
         let path = th
             .optional::<TomlFromStr<_>>("path")
@@ -222,6 +231,7 @@ impl<'de> toml_span::Deserialize<'de> for RawPyPiRequirement {
         Ok(RawPyPiRequirement {
             version,
             extras,
+            no_deps,
             path,
             editable,
             git,
@@ -305,13 +315,23 @@ impl From<PixiPypiSpec> for toml_edit::Value {
             }
         }
 
+        fn insert_no_deps(table: &mut toml_edit::InlineTable, no_deps: bool) {
+            if no_deps {
+                table.insert(
+                    "no-deps",
+                    toml_edit::Value::Boolean(toml_edit::Formatted::new(true)),
+                );
+            }
+        }
+
         let extras = &val.extras;
         let markers = &val.env_markers;
+        let no_deps = val.no_deps;
 
         match &val.source {
             // Simple version string (no extras, no index)
             PixiPypiSource::Registry { version, index }
-                if extras.is_empty() && index.is_none() && markers.is_true() =>
+                if !no_deps && extras.is_empty() && index.is_none() && markers.is_true() =>
             {
                 toml_edit::Value::from(version.to_string())
             }
@@ -325,6 +345,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                 insert_extras(&mut table, extras);
                 insert_index(&mut table, index);
                 insert_markers(&mut table, markers);
+                insert_no_deps(&mut table, no_deps);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
             PixiPypiSource::Git {
@@ -375,6 +396,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                 }
                 insert_extras(&mut table, extras);
                 insert_markers(&mut table, markers);
+                insert_no_deps(&mut table, no_deps);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
             PixiPypiSource::Path { path, editable } => {
@@ -393,6 +415,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                 }
                 insert_extras(&mut table, extras);
                 insert_markers(&mut table, markers);
+                insert_no_deps(&mut table, no_deps);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
             PixiPypiSource::Url { url, subdirectory } => {
@@ -411,6 +434,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                 }
                 insert_extras(&mut table, extras);
                 insert_markers(&mut table, markers);
+                insert_no_deps(&mut table, no_deps);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
         }
@@ -493,6 +517,17 @@ mod test {
                 .unwrap()
                 .into_inner();
         assert_eq!(requirement.first().unwrap().1, &PixiPypiSpec::default());
+    }
+
+    #[test]
+    fn test_no_deps_table() {
+        let requirement = from_toml_str::<TomlIndexMap<pep508_rs::PackageName, PixiPypiSpec>>(
+            r#"foo = { version = "==0.3.0", no-deps = true }"#,
+        )
+        .unwrap()
+        .into_inner();
+        let spec = requirement.first().unwrap().1;
+        assert!(spec.no_deps());
     }
 
     #[test]
@@ -631,7 +666,7 @@ mod test {
     fn test_deserialize_fail_on_unknown() {
         let input = r#"foo = { borked = "bork"}"#;
         assert_snapshot!(format_parse_error(input, from_toml_str::<TomlIndexMap::<pep508_rs::PackageName, PixiPypiSpec>>(input).unwrap_err()), @r#"
-         × Unexpected keys, expected only 'version', 'extras', 'path', 'editable', 'git', 'branch', 'tag', 'rev', 'url', 'subdirectory', 'index', 'env-markers'
+         × Unexpected keys, expected only 'version', 'extras', 'no-deps', 'path', 'editable', 'git', 'branch', 'tag', 'rev', 'url', 'subdirectory', 'index', 'env-markers'
           ╭─[pixi.toml:1:9]
         1 │ foo = { borked = "bork"}
           ·         ───┬──

@@ -9,7 +9,7 @@ use std::{
     path::PathBuf,
 };
 
-use pep440_rs::VersionSpecifiers;
+use pep440_rs::{Operator, VersionSpecifiers};
 use pep508_rs::{ExtraName, MarkerTree};
 use pixi_spec::{GitSpec, Subdirectory};
 use serde::Serialize;
@@ -141,6 +141,9 @@ pub struct PixiPypiSpec {
     /// Optional package extras to install.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extras: Vec<ExtraName>,
+    /// Do not resolve or lock transitive dependencies for this package.
+    #[serde(default, skip_serializing_if = "is_false", rename = "no-deps")]
+    pub no_deps: bool,
     /// The environment markers that decide if/when this package gets installed
     #[serde(
         default,
@@ -200,6 +203,7 @@ impl From<PixiPypiSource> for PixiPypiSpec {
             extras: Vec::new(),
             source,
             env_markers: MarkerTree::default(),
+            no_deps: false,
         }
     }
 }
@@ -220,6 +224,7 @@ impl PixiPypiSpec {
             extras,
             source,
             env_markers,
+            no_deps: false,
         }
     }
 
@@ -231,6 +236,38 @@ impl PixiPypiSpec {
     /// Returns a mutable reference to the source.
     pub fn source_mut(&mut self) -> &mut PixiPypiSource {
         &mut self.source
+    }
+
+    /// Returns whether this spec disables dependency resolution.
+    pub fn no_deps(&self) -> bool {
+        self.no_deps
+    }
+
+    /// Set whether this spec disables dependency resolution.
+    pub fn set_no_deps(&mut self, no_deps: bool) {
+        self.no_deps = no_deps;
+    }
+
+    /// Returns true if this is a registry requirement pinned to an exact version (==).
+    pub fn is_exact_registry_pin(&self) -> bool {
+        match &self.source {
+            PixiPypiSource::Registry { version, .. } => match version {
+                VersionOrStar::Version(specs) => {
+                    if specs.len() != 1 {
+                        return false;
+                    }
+                    matches!(specs[0].operator(), Operator::Equal)
+                }
+                VersionOrStar::Star => false,
+            },
+            _ => false,
+        }
+    }
+
+    /// Set whether this spec disables dependency resolution, returning self.
+    pub fn with_no_deps(mut self, no_deps: bool) -> Self {
+        self.no_deps = no_deps;
+        self
     }
 
     /// Returns true if this is a source dependency (Git, Path, or Url).
@@ -323,9 +360,14 @@ impl PixiPypiSpec {
         }
 
         updated.env_markers.or(requirement.marker.clone());
+        updated.no_deps = self.no_deps;
 
         Ok(updated)
     }
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[cfg(test)]
@@ -383,6 +425,27 @@ mod tests {
             index: None,
         });
         assert!(!spec.is_source_dependency());
+    }
+
+    #[test]
+    fn test_is_exact_registry_pin() {
+        let exact = PixiPypiSpec::new(PixiPypiSource::Registry {
+            version: VersionOrStar::Version(VersionSpecifiers::from_str("==1.2.3").unwrap()),
+            index: None,
+        });
+        assert!(exact.is_exact_registry_pin());
+
+        let range = PixiPypiSpec::new(PixiPypiSource::Registry {
+            version: VersionOrStar::Version(VersionSpecifiers::from_str(">=1.2.3").unwrap()),
+            index: None,
+        });
+        assert!(!range.is_exact_registry_pin());
+
+        let star = PixiPypiSpec::new(PixiPypiSource::Registry {
+            version: VersionOrStar::Star,
+            index: None,
+        });
+        assert!(!star.is_exact_registry_pin());
     }
 
     #[test]

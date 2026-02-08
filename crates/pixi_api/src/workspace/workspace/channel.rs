@@ -56,6 +56,7 @@ pub async fn add<I: Interface>(
         UpdateLockFileOptions {
             lock_file_usage: options.lock_file_usage,
             no_install: options.no_install,
+            pypi_no_deps: false,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),
@@ -97,6 +98,7 @@ pub async fn remove<I: Interface>(
         UpdateLockFileOptions {
             lock_file_usage: options.lock_file_usage,
             no_install: options.no_install,
+            pypi_no_deps: false,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),
@@ -136,6 +138,7 @@ pub async fn set<I: Interface>(
         UpdateLockFileOptions {
             lock_file_usage: options.lock_file_usage,
             no_install: options.no_install,
+            pypi_no_deps: false,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),

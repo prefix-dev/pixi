@@ -1,0 +1,8 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[project]
+dependencies = ["dep>=1.0.0"]
+name = "deps-package"
+version = "0.1.0"

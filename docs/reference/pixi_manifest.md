@@ -797,6 +797,16 @@ black = { url = "URL", extras = ["cli"]}
 minimal-project = { path = "./minimal-project", editable = true, extras = ["dev"]}
 ```
 
+##### `no-deps`
+
+Skip resolving and locking transitive dependencies for this package. This keeps the package itself in the lockfile, but omits its dependency tree.
+
+For registry dependencies, Pixi still resolves the direct requirement to a specific version for the lockfile, but it does not expand `Requires-Dist`.
+
+```toml
+requests = { version = ">=2.0", no-deps = true }
+```
+
 ##### `version`
 
 The version of the package to install. e.g. `">=1.0.0"` or `*` which stands for any version, this is Pixi specific.

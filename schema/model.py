@@ -274,6 +274,10 @@ class _PyPIRequirement(StrictBaseModel):
         None,
         description="The [PEP 508 extras](https://peps.python.org/pep-0508/#extras) of the package",
     )
+    no_deps: bool | None = Field(
+        None,
+        description="Do not resolve or lock transitive dependencies for this package. For registry specs, the direct requirement is resolved but Requires-Dist is ignored.",
+    )
 
 
 class _PyPiGitRequirement(_PyPIRequirement):

@@ -3,7 +3,7 @@ source: crates/pixi_pypi_spec/src/lib.rs
 expression: "snapshot.into_iter().map(|Snapshot { input, result }|\nformat!(\"input: {input}\\nresult: {} \",\nresult.as_object().unwrap().get(\"error\").unwrap().as_str().unwrap())).join(\"\\n\")"
 ---
 input: pkg = { ver = "1.2.3" }
-result:   × Unexpected keys, expected only 'version', 'extras', 'path', 'editable', 'git', 'branch', 'tag', 'rev', 'url', 'subdirectory', 'index', 'env-markers'
+result:   × Unexpected keys, expected only 'version', 'extras', 'no-deps', 'path', 'editable', 'git', 'branch', 'tag', 'rev', 'url', 'subdirectory', 'index', 'env-markers'
    ╭─[pixi.toml:1:9]
  1 │ pkg = { ver = "1.2.3" }
    ·         ─┬─

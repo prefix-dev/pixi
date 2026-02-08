@@ -9,10 +9,12 @@ use reqwest::StatusCode;
 ///   * `GitDatabase` and `GitRepository` that represents a local clone of a remote repository's database.
 use std::{
     fmt::Display,
+    fs::OpenOptions,
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
     sync::LazyLock,
+    time::{Duration, Instant},
 };
 use url::Url;
 
@@ -25,6 +27,70 @@ use crate::{
 /// checkout is ready to go. See [`GitCheckout::reset`] for why we need this.
 const CHECKOUT_READY_LOCK: &str = ".ok";
 pub const GIT_DIR: &str = "GIT_DIR";
+
+fn ensure_git_success(
+    output: std::process::Output,
+    context: &str,
+) -> Result<std::process::Output, GitError> {
+    if output.status.success() {
+        return Ok(output);
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let message = if stderr.trim().is_empty() {
+        format!("git command failed: {context}")
+    } else {
+        format!("git command failed ({context}): {}", stderr.trim())
+    };
+
+    Err(GitError::from(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        message,
+    )))
+}
+
+struct CheckoutLock {
+    path: PathBuf,
+}
+
+impl CheckoutLock {
+    fn acquire(destination: &Path) -> Result<Self, GitError> {
+        let lock_path = destination.with_extension("lock");
+        if let Some(parent) = lock_path.parent() {
+            fs_err::create_dir_all(parent)?;
+        }
+
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            match OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&lock_path)
+            {
+                Ok(_) => return Ok(Self { path: lock_path }),
+                Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                    if Instant::now() >= deadline {
+                        return Err(GitError::from(std::io::Error::new(
+                            std::io::ErrorKind::TimedOut,
+                            format!(
+                                "timeout waiting for git checkout lock {}",
+                                lock_path.display()
+                            ),
+                        )));
+                    }
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+                Err(err) => return Err(GitError::from(err)),
+            }
+        }
+    }
+}
+
+impl Drop for CheckoutLock {
+    fn drop(&mut self) {
+        let _ = fs_err::remove_file(&self.path);
+    }
+}
 
 #[derive(Debug, thiserror::Error, Clone)]
 pub enum GitBinaryError {
@@ -289,7 +355,18 @@ impl GitDatabase {
             .filter(GitCheckout::is_fresh)
         {
             Some(co) => co,
-            None => GitCheckout::clone_into(destination, self, rev)?,
+            None => {
+                let _lock = CheckoutLock::acquire(destination)?;
+                // Another thread/process may have completed the checkout while we waited.
+                if let Some(co) = GitRepository::open(destination)
+                    .ok()
+                    .map(|repo| GitCheckout::new(rev, repo))
+                    .filter(GitCheckout::is_fresh)
+                {
+                    return Ok(co);
+                }
+                GitCheckout::clone_into(destination, self, rev)?
+            }
         };
         Ok(checkout)
     }
@@ -302,6 +379,7 @@ impl GitDatabase {
             .arg(revision.as_str())
             .current_dir(&self.repo.path)
             .output()?;
+        let output = ensure_git_success(output, "rev-parse --short")?;
 
         let mut result = String::from_utf8(output.stdout)?;
 
@@ -326,10 +404,11 @@ impl GitRepository {
     /// Opens an existing Git repository at `path`.
     pub(crate) fn open(path: &Path) -> Result<GitRepository, GitError> {
         // Make sure there is a Git repository at the specified path.
-        Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+        let output = Command::new(GIT.as_ref().map_err(|e| e.clone())?)
             .arg("rev-parse")
             .current_dir(path)
             .output()?;
+        let _ = ensure_git_success(output, "rev-parse")?;
 
         Ok(GitRepository {
             path: path.to_path_buf(),
@@ -339,10 +418,11 @@ impl GitRepository {
     /// Initializes a Git repository at `path`.
     fn init(path: &Path) -> Result<GitRepository, GitError> {
         // Initialize the repository.
-        Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+        let output = Command::new(GIT.as_ref().map_err(|e| e.clone())?)
             .arg("init")
             .current_dir(path)
             .output()?;
+        let _ = ensure_git_success(output, "init")?;
 
         Ok(GitRepository {
             path: path.to_path_buf(),
@@ -356,6 +436,7 @@ impl GitRepository {
             .arg(refname)
             .current_dir(&self.path)
             .output()?;
+        let result = ensure_git_success(result, "rev-parse")?;
 
         let mut result = String::from_utf8(result.stdout)?;
 
@@ -403,6 +484,7 @@ impl GitCheckout {
             .arg(dunce::simplified(&database.repo.path).display().to_string())
             .arg(dunce::simplified(into).display().to_string())
             .output()?;
+        let output = ensure_git_success(output, "clone --local")?;
 
         tracing::debug!("output after cloning {:?}", output);
 
@@ -443,22 +525,23 @@ impl GitCheckout {
         tracing::debug!("reset {} to {}", self.repo.path.display(), self.revision);
 
         // Perform the hard reset.
-        Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+        let output = Command::new(GIT.as_ref().map_err(|e| e.clone())?)
             .arg("reset")
             .arg("--hard")
             .arg(self.revision.as_str())
             .current_dir(&self.repo.path)
             .output()?;
+        let _ = ensure_git_success(output, "reset --hard")?;
 
         // Update submodules (`git submodule update --recursive`).
-        Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+        let output = Command::new(GIT.as_ref().map_err(|e| e.clone())?)
             .arg("submodule")
             .arg("update")
             .arg("--recursive")
             .arg("--init")
             .current_dir(&self.repo.path)
-            .output()
-            .map(drop)?;
+            .output()?;
+        let _ = ensure_git_success(output, "submodule update --recursive --init")?;
 
         fs_err::File::create(ok_file)?;
         Ok(())

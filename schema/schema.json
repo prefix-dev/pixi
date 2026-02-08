@@ -1367,6 +1367,11 @@
           "type": "string",
           "minLength": 1
         },
+        "no-deps": {
+          "title": "No-Deps",
+          "description": "Do not resolve or lock transitive dependencies for this package. For registry specs, the direct requirement is resolved but Requires-Dist is ignored.",
+          "type": "boolean"
+        },
         "subdirectory": {
           "title": "Subdirectory",
           "description": "The subdirectory in the repo, a path from the root of the repo.",
@@ -1394,6 +1399,11 @@
           "description": "The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
           "type": "string",
           "minLength": 1
+        },
+        "no-deps": {
+          "title": "No-Deps",
+          "description": "Do not resolve or lock transitive dependencies for this package. For registry specs, the direct requirement is resolved but Requires-Dist is ignored.",
+          "type": "boolean"
         },
         "rev": {
           "title": "Rev",
@@ -1428,6 +1438,11 @@
           "description": "The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
           "type": "string",
           "minLength": 1
+        },
+        "no-deps": {
+          "title": "No-Deps",
+          "description": "Do not resolve or lock transitive dependencies for this package. For registry specs, the direct requirement is resolved but Requires-Dist is ignored.",
+          "type": "boolean"
         },
         "subdirectory": {
           "title": "Subdirectory",
@@ -1679,6 +1694,11 @@
             "minLength": 1
           }
         },
+        "no-deps": {
+          "title": "No-Deps",
+          "description": "Do not resolve or lock transitive dependencies for this package. For registry specs, the direct requirement is resolved but Requires-Dist is ignored.",
+          "type": "boolean"
+        },
         "path": {
           "title": "Path",
           "description": "A path to a local source or wheel",
@@ -1707,6 +1727,11 @@
             "minLength": 1
           }
         },
+        "no-deps": {
+          "title": "No-Deps",
+          "description": "Do not resolve or lock transitive dependencies for this package. For registry specs, the direct requirement is resolved but Requires-Dist is ignored.",
+          "type": "boolean"
+        },
         "url": {
           "title": "Url",
           "description": "A URL to a remote source or wheel",
@@ -1734,6 +1759,11 @@
           "description": "The index to fetch the package from",
           "type": "string",
           "minLength": 1
+        },
+        "no-deps": {
+          "title": "No-Deps",
+          "description": "Do not resolve or lock transitive dependencies for this package. For registry specs, the direct requirement is resolved but Requires-Dist is ignored.",
+          "type": "boolean"
         },
         "version": {
           "title": "Version",

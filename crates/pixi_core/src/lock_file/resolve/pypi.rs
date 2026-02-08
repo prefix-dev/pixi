@@ -23,7 +23,7 @@ use pixi_consts::consts;
 use pixi_manifest::{
     EnvironmentName, SolveStrategy, SystemRequirements, pypi::pypi_options::PypiOptions,
 };
-use pixi_pypi_spec::PixiPypiSpec;
+use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, VersionOrStar};
 use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_uv_conversions::{
@@ -44,23 +44,26 @@ use rattler_lock::{
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
-use uv_client::{Connectivity, FlatIndexClient, RegistryClient};
+use uv_client::{Connectivity, FlatIndexClient, MetadataFormat, OwnedArchive, RegistryClient};
 use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
+use uv_distribution_filename::{BuildTag, DistFilename};
 use uv_distribution_types::{
     BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy,
     IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
     SourceDist, ToUrlError,
 };
-use uv_git::RepositoryReference;
-use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
+use uv_git::{GitResolver, RepositoryReference};
+use uv_pep508::VersionOrUrl;
+use uv_platform_tags::{TagCompatibility, TagPriority, Tags};
+use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests, VerbatimParsedUrl};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
     PreferenceError, Preferences, PythonRequirement, ResolutionMode, ResolveError, Resolver,
     ResolverEnvironment,
 };
-use uv_types::EmptyInstalledPackages;
+use uv_types::{BuildContext, EmptyInstalledPackages};
 
 use crate::{
     environment::CondaPrefixUpdated,
@@ -82,6 +85,12 @@ use pixi_uv_context::UvResolutionContext;
 #[derive(Debug, thiserror::Error)]
 #[error("Invalid hash: {0} type: {1}")]
 struct InvalidHash(String, String);
+
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("duplicate PyPI dependency found: {name}")]
+struct DuplicatePypiDependency {
+    name: String,
+}
 
 fn parse_hashes_from_hash_vec(hashes: &HashDigests) -> Result<Option<PackageHashes>, InvalidHash> {
     let mut sha256 = None;
@@ -364,6 +373,8 @@ pub async fn resolve_pypi(
         })
         .collect();
 
+    let (dependencies, mut no_deps_specs) = split_no_deps_dependencies(dependencies);
+
     // Pre-populate the git resolver with locked git references.
     // This ensures that when uv resolves git dependencies, it will find the cached commit
     // and not panic in `url_to_precise` function.
@@ -408,6 +419,22 @@ pub async fn resolve_pypi(
 
     // Construct the marker environment for the target platform
     let marker_environment = determine_marker_environment(platform, python_record.as_ref())?;
+
+    no_deps_specs = no_deps_specs
+        .into_iter()
+        .filter_map(|(name, spec)| {
+            let uv_req = match as_uv_req(&spec, name.as_ref(), project_root) {
+                Ok(req) => req,
+                Err(err) => return Some(Err(err)),
+            };
+            if uv_req.evaluate_markers(Some(&marker_environment), &uv_req.extras) {
+                Some(Ok((name, spec)))
+            } else {
+                None
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
 
     let requirements = dependencies
         .into_iter()
@@ -556,7 +583,7 @@ pub async fn resolve_pypi(
 
     let lazy_build_dispatch_dependencies = LazyBuildDispatchDependencies::default();
     let last_error = Arc::new(OnceCell::new());
-    let lazy_build_dispatch = LazyBuildDispatch::new(
+    let mut lazy_build_dispatch = LazyBuildDispatch::new(
         build_params,
         prefix_updater,
         project_env_vars,
@@ -663,158 +690,197 @@ pub async fn resolve_pypi(
 
     let overrides = Overrides::from_requirements(dependency_overrides);
 
-    // Wrap the resolution in panic catching to handle conda prefix initialization failures
-    // This includes both lookahead resolution and main resolution since both use lazy_build_dispatch
-    let package_requests = Rc::new(RefCell::new(Default::default()));
+    let (mut locked_packages, conda_task) = if requirements.is_empty() {
+        (Vec::new(), lazy_build_dispatch.conda_task.take())
+    } else {
+        let lazy_build_dispatch_ref = &lazy_build_dispatch;
+        let tags_for_resolver = tags.clone();
+        // Wrap the resolution in panic catching to handle conda prefix initialization failures
+        // This includes both lookahead resolution and main resolution since both use lazy_build_dispatch
+        let package_requests = Rc::new(RefCell::new(Default::default()));
 
-    let resolution_future = panic::AssertUnwindSafe(async {
-        let lookahead_index = InMemoryIndex::default();
-        let lookaheads = LookaheadResolver::new(
-            &requirements,
-            &constraints,
-            &overrides,
-            &context.hash_strategy,
-            &lookahead_index,
-            DistributionDatabase::new(
+        let resolution_future = panic::AssertUnwindSafe(async {
+            let lookahead_index = InMemoryIndex::default();
+            let lookaheads = LookaheadResolver::new(
+                &requirements,
+                &constraints,
+                &overrides,
+                &context.hash_strategy,
+                &lookahead_index,
+                DistributionDatabase::new(
+                    &registry_client,
+                    lazy_build_dispatch_ref,
+                    context.concurrency.downloads,
+                ),
+            )
+            .with_reporter(UvReporter::new_arc(
+                UvReporterOptions::new().with_existing(pb.clone()),
+            ))
+            .resolve(&resolver_env)
+            .await
+            .into_diagnostic()
+            .map_err(|e| SolveError::LookAhead(e.into()))?;
+
+            // Move manifest and provider setup inside catch_unwind
+            let manifest = Manifest::new(
+                requirements,
+                constraints,
+                overrides,
+                Preferences::from_iter(preferences, &resolver_env),
+                None,
+                Default::default(),
+                uv_resolver::Exclusions::default(),
+                lookaheads,
+            );
+
+            let provider_tags = tags_for_resolver.clone();
+            let fallback_provider = DefaultResolverProvider::new(
+                DistributionDatabase::new(
+                    &registry_client,
+                    lazy_build_dispatch_ref,
+                    context.concurrency.downloads,
+                ),
+                &flat_index,
+                Some(&provider_tags),
+                &requires_python,
+                AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
+                &context.hash_strategy,
+                options.exclude_newer.clone(),
+                &build_options,
+                &context.capabilities,
+            );
+
+            let provider = CondaResolverProvider {
+                fallback: fallback_provider,
+                conda_python_identifiers: &conda_python_packages,
+                package_requests: package_requests.clone(),
+            };
+
+            // We need a new in-memory index for the resolver so that it does not conflict
+            // with the build dispatch one. As we have noted in the comment above.
+            let resolver_in_memory_index = InMemoryIndex::default();
+            let resolver = Resolver::new_custom_io(
+                manifest,
+                options,
+                &context.hash_strategy,
+                resolver_env,
+                &marker_environment,
+                Some(tags_for_resolver.clone()),
+                &PythonRequirement::from_marker_environment(
+                    &marker_environment,
+                    requires_python.clone(),
+                ),
+                Conflicts::default(),
+                &resolver_in_memory_index,
+                context.shared_state.git(),
+                &context.capabilities,
+                &index_locations,
+                provider,
+                EmptyInstalledPackages,
+            )
+            .into_diagnostic()
+            .context("failed to resolve pypi dependencies")
+            .map_err(|e| SolveError::GeneralPanic {
+                message: format!("Failed to create resolver: {e}"),
+            })?
+            .with_reporter(UvReporter::new_arc(
+                UvReporterOptions::new().with_existing(pb.clone()),
+            ));
+
+            let resolution = resolver
+                .resolve()
+                .await
+                .map_err(|e| create_solve_error(e, &conda_python_packages))?;
+
+            let resolution = Resolution::from(resolution);
+
+            // Print the overridden package requests
+            print_overridden_requests(package_requests.borrow().deref());
+
+            // Print any diagnostics
+            for diagnostic in resolution.diagnostics() {
+                tracing::warn!("{}", diagnostic.message());
+            }
+
+            let locked_packages = lock_pypi_packages(
+                conda_python_packages,
+                lazy_build_dispatch_ref,
                 &registry_client,
-                &lazy_build_dispatch,
+                resolution,
+                &context.capabilities,
                 context.concurrency.downloads,
-            ),
-        )
-        .with_reporter(UvReporter::new_arc(
-            UvReporterOptions::new().with_existing(pb.clone()),
-        ))
-        .resolve(&resolver_env)
-        .await
-        .into_diagnostic()
-        .map_err(|e| SolveError::LookAhead(e.into()))?;
+                project_root,
+                &original_git_references,
+            )
+            .await
+            .map_err(|e| SolveError::Locking(e.into()))?;
 
-        // Move manifest and provider setup inside catch_unwind
-        let manifest = Manifest::new(
-            requirements,
-            constraints,
-            overrides,
-            Preferences::from_iter(preferences, &resolver_env),
-            None,
-            Default::default(),
-            uv_resolver::Exclusions::default(),
-            lookaheads,
-        );
+            Ok::<_, SolveError>(locked_packages)
+        });
 
-        let provider_tags = tags.clone();
-        let fallback_provider = DefaultResolverProvider::new(
-            DistributionDatabase::new(
-                &registry_client,
-                &lazy_build_dispatch,
-                context.concurrency.downloads,
-            ),
-            &flat_index,
-            Some(&provider_tags),
-            &requires_python,
-            AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
-            &context.hash_strategy,
-            options.exclude_newer.clone(),
-            &build_options,
-            &context.capabilities,
-        );
+        // We try to distinguish between build dispatch panics and any other panics that occur
+        let locked_packages = match resolution_future.catch_unwind().await {
+            Ok(result) => result?,
+            Err(panic_payload) => {
+                // Try to get the stored initialization error from the last_error holder
+                if let Some(stored_error) = last_error.get() {
+                    return Err(SolveError::BuildDispatchPanic {
+                        message: format!("{stored_error}"),
+                    }
+                    .into());
+                } else {
+                    // Use the original panic message for general panics
+                    let panic_message = if let Some(s) = panic_payload.downcast_ref::<String>() {
+                        s.clone()
+                    } else if let Some(&s) = panic_payload.downcast_ref::<&str>() {
+                        s.to_string()
+                    } else {
+                        "unknown panic occurred during PyPI resolution".to_string()
+                    };
 
-        let provider = CondaResolverProvider {
-            fallback: fallback_provider,
-            conda_python_identifiers: &conda_python_packages,
-            package_requests: package_requests.clone(),
+                    return Err(SolveError::GeneralPanic {
+                        message: panic_message,
+                    }
+                    .into());
+                }
+            }
         };
 
-        // We need a new in-memory index for the resolver so that it does not conflict
-        // with the build dispatch one. As we have noted in the comment above.
-        let resolver_in_memory_index = InMemoryIndex::default();
-        let resolver = Resolver::new_custom_io(
-            manifest,
-            options,
-            &context.hash_strategy,
-            resolver_env,
-            &marker_environment,
-            Some(tags),
-            &PythonRequirement::from_marker_environment(
-                &marker_environment,
-                requires_python.clone(),
-            ),
-            Conflicts::default(),
-            &resolver_in_memory_index,
-            context.shared_state.git(),
-            &context.capabilities,
-            &index_locations,
-            provider,
-            EmptyInstalledPackages,
-        )
-        .into_diagnostic()
-        .context("failed to resolve pypi dependencies")
-        .map_err(|e| SolveError::GeneralPanic {
-            message: format!("Failed to create resolver: {e}"),
-        })?
-        .with_reporter(UvReporter::new_arc(
-            UvReporterOptions::new().with_existing(pb.clone()),
-        ));
+        let conda_task = lazy_build_dispatch.conda_task.take();
+        (locked_packages, conda_task)
+    };
 
-        let resolution = resolver
-            .resolve()
-            .await
-            .map_err(|e| create_solve_error(e, &conda_python_packages))?;
-
-        let resolution = Resolution::from(resolution);
-
-        // Print the overridden package requests
-        print_overridden_requests(package_requests.borrow().deref());
-
-        // Print any diagnostics
-        for diagnostic in resolution.diagnostics() {
-            tracing::warn!("{}", diagnostic.message());
-        }
-
-        let locked_packages = lock_pypi_packages(
-            conda_python_packages,
-            &lazy_build_dispatch,
+    if !no_deps_specs.is_empty() {
+        let no_deps_locked = lock_no_deps_packages(
+            no_deps_specs,
             &registry_client,
-            resolution,
+            context.shared_state.git(),
+            &context.cache,
             &context.capabilities,
+            &lazy_build_dispatch,
             context.concurrency.downloads,
+            &tags,
             project_root,
             &original_git_references,
         )
         .await
         .map_err(|e| SolveError::Locking(e.into()))?;
 
-        let conda_task = lazy_build_dispatch.conda_task;
-
-        Ok::<_, SolveError>((locked_packages, conda_task))
-    });
-
-    // We try to distinguish between build dispatch panics and any other panics that occur
-    let (locked_packages, conda_task) = match resolution_future.catch_unwind().await {
-        Ok(result) => result?,
-        Err(panic_payload) => {
-            // Try to get the stored initialization error from the last_error holder
-            if let Some(stored_error) = last_error.get() {
-                return Err(SolveError::BuildDispatchPanic {
-                    message: format!("{stored_error}"),
-                }
-                .into());
-            } else {
-                // Use the original panic message for general panics
-                let panic_message = if let Some(s) = panic_payload.downcast_ref::<String>() {
-                    s.clone()
-                } else if let Some(&s) = panic_payload.downcast_ref::<&str>() {
-                    s.to_string()
-                } else {
-                    "unknown panic occurred during PyPI resolution".to_string()
-                };
-
-                return Err(SolveError::GeneralPanic {
-                    message: panic_message,
-                }
-                .into());
+        let mut seen_names = locked_packages
+            .iter()
+            .map(|(data, _)| data.name.clone())
+            .collect::<HashSet<_>>();
+        for (data, env) in no_deps_locked {
+            if !seen_names.insert(data.name.clone()) {
+                return Err(miette::Report::from(SolveError::Locking(Box::new(
+                    DuplicatePypiDependency {
+                        name: data.name.to_string(),
+                    },
+                ))));
             }
+            locked_packages.push((data, env));
         }
-    };
+    }
 
     Ok((locked_packages, conda_task))
 }
@@ -1156,6 +1222,484 @@ async fn lock_pypi_packages(
     }
 
     Ok(locked_packages)
+}
+
+fn split_no_deps_dependencies(
+    dependencies: IndexMap<uv_normalize::PackageName, IndexSet<PixiPypiSpec>>,
+) -> (
+    IndexMap<uv_normalize::PackageName, IndexSet<PixiPypiSpec>>,
+    Vec<(uv_normalize::PackageName, PixiPypiSpec)>,
+) {
+    let mut normal_deps: IndexMap<uv_normalize::PackageName, IndexSet<PixiPypiSpec>> =
+        IndexMap::new();
+    let mut no_deps_specs = Vec::new();
+
+    for (name, specs) in dependencies {
+        for spec in specs {
+            if spec.no_deps() {
+                no_deps_specs.push((name.clone(), spec));
+            } else {
+                normal_deps.entry(name.clone()).or_default().insert(spec);
+            }
+        }
+    }
+
+    (normal_deps, no_deps_specs)
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn lock_no_deps_packages(
+    specs: Vec<(uv_normalize::PackageName, PixiPypiSpec)>,
+    registry_client: &Arc<RegistryClient>,
+    git_resolver: &GitResolver,
+    cache: &uv_cache::Cache,
+    index_capabilities: &IndexCapabilities,
+    pixi_build_dispatch: &LazyBuildDispatch<'_>,
+    concurrent_downloads: usize,
+    tags: &Tags,
+    abs_project_root: &Path,
+    original_git_references: &HashMap<uv_normalize::PackageName, pixi_spec::GitReference>,
+) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
+    let download_concurrency = tokio::sync::Semaphore::new(concurrent_downloads);
+    let database =
+        DistributionDatabase::new(registry_client, pixi_build_dispatch, concurrent_downloads);
+    let mut locked = Vec::with_capacity(specs.len());
+
+    for (name, spec) in specs {
+        let data = match &spec.source {
+            PixiPypiSource::Registry { .. } => {
+                lock_no_deps_registry_package(
+                    &name,
+                    &spec,
+                    tags,
+                    registry_client,
+                    index_capabilities,
+                    &download_concurrency,
+                    abs_project_root,
+                )
+                .await?
+            }
+            _ => {
+                lock_no_deps_source_package(
+                    &name,
+                    &spec,
+                    &database,
+                    registry_client,
+                    git_resolver,
+                    cache,
+                    abs_project_root,
+                    original_git_references,
+                )
+                .await?
+            }
+        };
+
+        locked.push((data, PypiPackageEnvironmentData::default()));
+    }
+
+    Ok(locked)
+}
+
+async fn lock_no_deps_registry_package(
+    name: &uv_normalize::PackageName,
+    spec: &PixiPypiSpec,
+    tags: &Tags,
+    registry_client: &RegistryClient,
+    index_capabilities: &IndexCapabilities,
+    download_concurrency: &tokio::sync::Semaphore,
+    abs_project_root: &Path,
+) -> miette::Result<PypiPackageData> {
+    let version_specifiers = match &spec.source {
+        PixiPypiSource::Registry { version, .. } => match version {
+            VersionOrStar::Version(specs) => specs.clone(),
+            VersionOrStar::Star => pep440_rs::VersionSpecifiers::from_iter(vec![]),
+        },
+        _ => {
+            return Err(miette::miette!(
+                "no-deps registry requirement must be a registry dependency"
+            ));
+        }
+    };
+
+    let metadata = registry_client
+        .package_metadata(name, None, index_capabilities, download_concurrency)
+        .await
+        .into_diagnostic()?;
+
+    struct Candidate {
+        version: pep440_rs::Version,
+        file: uv_distribution_types::File,
+        index_url: IndexUrl,
+        requires_python: Option<uv_pep440::VersionSpecifiers>,
+        wheel_priority: Option<(TagPriority, Option<BuildTag>)>,
+    }
+
+    let mut best: Option<Candidate> = None;
+
+    for (index_url, format) in metadata {
+        match format {
+            MetadataFormat::Simple(simple) => {
+                let simple = OwnedArchive::deserialize(&simple);
+                for datum in simple.iter() {
+                    let pep_version = pep440_rs::Version::from_str(&datum.version.to_string())
+                        .into_diagnostic()?;
+                    if !version_specifiers.contains(&pep_version) {
+                        continue;
+                    }
+
+                    // Prefer the best compatible wheel for tags, fall back to sdist.
+                    let mut best_wheel: Option<(
+                        &uv_distribution_types::File,
+                        (TagPriority, Option<&BuildTag>),
+                    )> = None;
+                    for wheel in &datum.files.wheels {
+                        let TagCompatibility::Compatible(priority) = wheel.name.compatibility(tags)
+                        else {
+                            continue;
+                        };
+                        let wheel_priority = (priority, wheel.name.build_tag());
+                        match best_wheel {
+                            None => best_wheel = Some((&wheel.file, wheel_priority)),
+                            Some((_, best_priority)) => {
+                                if wheel_priority > best_priority {
+                                    best_wheel = Some((&wheel.file, wheel_priority));
+                                }
+                            }
+                        }
+                    }
+
+                    let (file, requires_python, wheel_priority) =
+                        if let Some((file, priority)) = best_wheel {
+                            (
+                                file,
+                                datum
+                                    .metadata
+                                    .as_ref()
+                                    .and_then(|m| m.requires_python.clone())
+                                    .or_else(|| file.requires_python.clone()),
+                                Some((priority.0, priority.1.cloned())),
+                            )
+                        } else if let Some(source) = datum.files.source_dists.first() {
+                            (
+                                &source.file,
+                                datum
+                                    .metadata
+                                    .as_ref()
+                                    .and_then(|m| m.requires_python.clone())
+                                    .or_else(|| source.file.requires_python.clone()),
+                                None,
+                            )
+                        } else {
+                            continue;
+                        };
+
+                    let candidate = Candidate {
+                        version: pep_version,
+                        file: file.clone(),
+                        index_url: index_url.clone(),
+                        requires_python,
+                        wheel_priority,
+                    };
+
+                    match &best {
+                        None => best = Some(candidate),
+                        Some(existing) => {
+                            if candidate.version > existing.version {
+                                best = Some(candidate);
+                            } else if candidate.version == existing.version {
+                                match (
+                                    candidate.wheel_priority.as_ref(),
+                                    existing.wheel_priority.as_ref(),
+                                ) {
+                                    (Some(candidate_priority), Some(existing_priority))
+                                        if candidate_priority > existing_priority =>
+                                    {
+                                        best = Some(candidate);
+                                    }
+                                    (Some(_), None) => {
+                                        best = Some(candidate);
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            MetadataFormat::Flat(entries) => {
+                for entry in &entries {
+                    match &entry.filename {
+                        DistFilename::WheelFilename(filename) => {
+                            let pep_version =
+                                pep440_rs::Version::from_str(&filename.version.to_string())
+                                    .into_diagnostic()?;
+                            if !version_specifiers.contains(&pep_version) {
+                                continue;
+                            }
+                            let TagCompatibility::Compatible(priority) =
+                                filename.compatibility(tags)
+                            else {
+                                continue;
+                            };
+                            let candidate = Candidate {
+                                version: pep_version,
+                                file: entry.file.clone(),
+                                index_url: entry.index.clone(),
+                                requires_python: entry.file.requires_python.clone(),
+                                wheel_priority: Some((priority, filename.build_tag().cloned())),
+                            };
+                            match &best {
+                                None => best = Some(candidate),
+                                Some(existing) => {
+                                    if candidate.version > existing.version {
+                                        best = Some(candidate);
+                                    } else if candidate.version == existing.version {
+                                        match (
+                                            candidate.wheel_priority.as_ref(),
+                                            existing.wheel_priority.as_ref(),
+                                        ) {
+                                            (Some(candidate_priority), Some(existing_priority))
+                                                if candidate_priority > existing_priority =>
+                                            {
+                                                best = Some(candidate);
+                                            }
+                                            (Some(_), None) => {
+                                                best = Some(candidate);
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        DistFilename::SourceDistFilename(filename) => {
+                            let pep_version =
+                                pep440_rs::Version::from_str(&filename.version.to_string())
+                                    .into_diagnostic()?;
+                            if !version_specifiers.contains(&pep_version) {
+                                continue;
+                            }
+                            let candidate = Candidate {
+                                version: pep_version,
+                                file: entry.file.clone(),
+                                index_url: entry.index.clone(),
+                                requires_python: entry.file.requires_python.clone(),
+                                wheel_priority: None,
+                            };
+                            match &best {
+                                None => best = Some(candidate),
+                                Some(existing) => {
+                                    if candidate.version > existing.version {
+                                        best = Some(candidate);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let Some(best) = best else {
+        return Err(miette::miette!(
+            "failed to lock no-deps package '{name}' with requirement '{spec}'",
+            name = name,
+            spec = spec
+        ));
+    };
+
+    let location = get_url_or_path(&best.index_url, &best.file.url, abs_project_root)
+        .into_diagnostic()
+        .context("cannot convert registry dist")?;
+    let hash = parse_hashes_from_hash_vec(&best.file.hashes)
+        .into_diagnostic()
+        .context("cannot parse hashes for registry dist")?;
+
+    Ok(PypiPackageData {
+        name: to_normalize(name).into_diagnostic()?,
+        version: best.version,
+        requires_python: best
+            .requires_python
+            .map(|r| to_version_specifiers(&r))
+            .transpose()
+            .into_diagnostic()?,
+        location,
+        requires_dist: Vec::new(),
+        hash,
+        editable: false,
+    })
+}
+
+async fn lock_no_deps_source_package<Context: BuildContext>(
+    name: &uv_normalize::PackageName,
+    spec: &PixiPypiSpec,
+    database: &DistributionDatabase<'_, Context>,
+    registry_client: &RegistryClient,
+    git_resolver: &GitResolver,
+    cache: &uv_cache::Cache,
+    abs_project_root: &Path,
+    original_git_references: &HashMap<uv_normalize::PackageName, pixi_spec::GitReference>,
+) -> miette::Result<PypiPackageData> {
+    let requirement = as_uv_req(spec, name.as_ref(), abs_project_root).into_diagnostic()?;
+    let pep508_req: uv_pep508::Requirement<VerbatimParsedUrl> = requirement.clone().into();
+    let Some(VersionOrUrl::Url(url)) = pep508_req.version_or_url else {
+        return Err(miette::miette!(
+            "no-deps non-registry dependency must be specified as a URL or path"
+        ));
+    };
+
+    let dist = Dist::from_url(pep508_req.name.clone(), url).into_diagnostic()?;
+    let metadata_response = database
+        .get_or_build_wheel_metadata(&dist, HashPolicy::None)
+        .await
+        .into_diagnostic()?;
+    let metadata = metadata_response.metadata;
+
+    let hash = parse_hashes_from_hash_vec(&metadata_response.hashes)
+        .into_diagnostic()
+        .context("cannot parse hashes for no-deps source")?;
+
+    let (location, editable) = match dist {
+        Dist::Built(dist) => match &dist {
+            BuiltDist::DirectUrl(dist) => {
+                let url = dist.url.to_url();
+                let direct_url = Url::parse(&format!("direct+{url}"))
+                    .into_diagnostic()
+                    .context("cannot create direct url")?;
+                (UrlOrPath::Url(direct_url), false)
+            }
+            BuiltDist::Path(dist) => (
+                UrlOrPath::Path(
+                    process_uv_path_url(&dist.url, &dist.install_path, abs_project_root)
+                        .into_diagnostic()?,
+                ),
+                false,
+            ),
+            BuiltDist::Registry(_) => {
+                return Err(miette::miette!(
+                    "unexpected registry dist for no-deps source package"
+                ));
+            }
+        },
+        Dist::Source(source) => match source {
+            SourceDist::DirectUrl(direct) => {
+                let url = direct.url.to_url();
+                let direct_url = Url::parse(&format!("direct+{url}"))
+                    .into_diagnostic()
+                    .context("could not create direct-url")?;
+                (direct_url.into(), false)
+            }
+            SourceDist::Git(git) => {
+                let mut git = git;
+                if git.git.precise().is_none() {
+                    let client = registry_client
+                        .uncached_client(git.git.repository())
+                        .clone();
+                    let disable_ssl = registry_client.disable_ssl(git.git.repository());
+                    let offline = matches!(registry_client.connectivity(), Connectivity::Offline);
+                    let fetch = git_resolver
+                        .fetch(
+                            &git.git,
+                            client,
+                            disable_ssl,
+                            offline,
+                            cache.root().to_path_buf(),
+                            None,
+                        )
+                        .await
+                        .into_diagnostic()
+                        .context("failed to resolve git reference")?;
+                    git.git = Box::new(fetch.into_git());
+                }
+                let package_name = git.name.clone();
+                let original_reference = original_git_references.get(&package_name).cloned();
+                let pinned_git_spec = into_pinned_git_spec(git.clone(), original_reference);
+                (pinned_git_spec.into_locked_git_url().to_url().into(), false)
+            }
+            SourceDist::Path(path) => {
+                let hash = if path.install_path.is_dir() {
+                    Some(
+                        PypiSourceTreeHashable::from_directory(&path.install_path)
+                            .into_diagnostic()
+                            .context("failed to compute hash of pypi source tree")?
+                            .hash(),
+                    )
+                } else {
+                    None
+                };
+
+                let install_path =
+                    process_uv_path_url(&path.url, &path.install_path, abs_project_root)
+                        .into_diagnostic()?;
+                let url_or_path = UrlOrPath::Path(install_path);
+                return Ok(PypiPackageData {
+                    name: to_normalize(&metadata.name).into_diagnostic()?,
+                    version: pep440_rs::Version::from_str(&metadata.version.to_string())
+                        .into_diagnostic()?,
+                    requires_python: metadata
+                        .requires_python
+                        .map(|r| to_version_specifiers(&r))
+                        .transpose()
+                        .into_diagnostic()?,
+                    location: url_or_path,
+                    requires_dist: Vec::new(),
+                    hash,
+                    editable: false,
+                });
+            }
+            SourceDist::Directory(dir) => {
+                let hash = if dir.install_path.is_dir() {
+                    Some(
+                        PypiSourceTreeHashable::from_directory(&dir.install_path)
+                            .into_diagnostic()
+                            .context("failed to compute hash of pypi source tree")?
+                            .hash(),
+                    )
+                } else {
+                    None
+                };
+
+                let install_path =
+                    process_uv_path_url(&dir.url, &dir.install_path, abs_project_root)
+                        .into_diagnostic()?;
+                let url_or_path = UrlOrPath::Path(install_path);
+                return Ok(PypiPackageData {
+                    name: to_normalize(&metadata.name).into_diagnostic()?,
+                    version: pep440_rs::Version::from_str(&metadata.version.to_string())
+                        .into_diagnostic()?,
+                    requires_python: metadata
+                        .requires_python
+                        .map(|r| to_version_specifiers(&r))
+                        .transpose()
+                        .into_diagnostic()?,
+                    location: url_or_path,
+                    requires_dist: Vec::new(),
+                    hash,
+                    editable: false,
+                });
+            }
+            SourceDist::Registry(_) => {
+                return Err(miette::miette!(
+                    "unexpected registry source dist for no-deps package"
+                ));
+            }
+        },
+    };
+
+    Ok(PypiPackageData {
+        name: to_normalize(&metadata.name).into_diagnostic()?,
+        version: pep440_rs::Version::from_str(&metadata.version.to_string()).into_diagnostic()?,
+        requires_python: metadata
+            .requires_python
+            .map(|r| to_version_specifiers(&r))
+            .transpose()
+            .into_diagnostic()?,
+        location,
+        requires_dist: Vec::new(),
+        hash,
+        editable,
+    })
 }
 
 #[cfg(test)]

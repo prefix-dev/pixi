@@ -149,6 +149,14 @@ impl NoInstallConfig {
     }
 }
 
+/// Configuration for skipping PyPI dependencies.
+#[derive(Parser, Debug, Default, Clone)]
+pub struct PypiNoDepsConfig {
+    /// Do not resolve transitive dependencies for PyPI packages.
+    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    pub no_deps: bool,
+}
+
 /// Lock file and installation configuration with --as-is support
 /// Used by shell, shell-hook, and run commands
 #[derive(Parser, Debug, Default, Clone)]

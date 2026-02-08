@@ -447,6 +447,7 @@ impl PixiControl {
                     backend_override: self.backend_override.clone(),
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
+                pypi_no_deps_config: Default::default(),
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
@@ -660,6 +661,7 @@ impl PixiControl {
                     frozen: false,
                     locked: false,
                 },
+                pypi_no_deps_config: Default::default(),
                 config: Default::default(),
                 all: false,
                 skip: None,

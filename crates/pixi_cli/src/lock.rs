@@ -58,6 +58,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 LockFileUsage::Update
             },
             no_install: args.no_install_config.no_install || args.dry_run,
+            pypi_no_deps: false,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await?;
