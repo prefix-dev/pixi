@@ -115,7 +115,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/python-3.14.3-h4b44e0e_100_cp314.conda
       - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
       - conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#5cf0bbaf1413268dc91fd7f5b51ffc148881cd09
-        build: h9490d1a_0
+        build: he01afda_0
       - conda: https://prefix.dev/conda-forge/win-64/sccache-0.13.0-h18a1a76_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/tk-8.6.13-h6ed50ae_3.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
@@ -12283,18 +12283,6 @@ packages:
 - conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#5cf0bbaf1413268dc91fd7f5b51ffc148881cd09
   name: rattler-build
   version: 0.0.0dev
-  build: h9490d1a_0
-  subdir: win-64
-  variants:
-    target_platform: win-64
-  depends:
-  - vc >=14.1,<15
-  - vc14_runtime >=14.16.27033
-  channel: null
-  license: BSD-3-Clause
-- conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#5cf0bbaf1413268dc91fd7f5b51ffc148881cd09
-  name: rattler-build
-  version: 0.0.0dev
   build: hb0f4dca_0
   subdir: linux-64
   variants:
@@ -12303,6 +12291,20 @@ packages:
   - libgcc >=15
   constrains:
   - __glibc >=2.17
+  channel: null
+  license: BSD-3-Clause
+- conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#5cf0bbaf1413268dc91fd7f5b51ffc148881cd09
+  name: rattler-build
+  version: 0.0.0dev
+  build: he01afda_0
+  subdir: win-64
+  variants:
+    c_compiler: vs2022
+    target_platform: win-64
+  depends:
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
   channel: null
   license: BSD-3-Clause
 - conda: git+https://github.com/prefix-dev/rattler-build?branch=refactor#5cf0bbaf1413268dc91fd7f5b51ffc148881cd09
