@@ -20,29 +20,25 @@ A common setup is to create a remote repository that mirrors conda-forge, then c
 
 ![Artifactory repository overview](../assets/artifactory-repository-overview.png)
 
-### 2. Generate an access token
+### 2. Generate an identity token
 
-To authenticate with Artifactory, you need to generate an access token:
+To authenticate with Artifactory, you need to generate an identity token:
 
-1. Click on your user profile in the top-right corner and select **Set Me Up**
+1. Click on your user profile in the top-right corner and select **Edit Profile**
 
-    ![Set Me Up menu](../assets/artifactory-set-me-up-menu.png)
+    ![Edit Profile menu](../assets/artifactory-edit-profile-menu.png)
 
-2. Select **conda** as the package type
+2. Under **Authentication Settings**, click **Generate an Identity Token**
 
-    ![Client type selection](../assets/artifactory-client-type-selection.png)
+    ![Edit Profile page](../assets/artifactory-edit-profile.png)
 
-3. Select your conda repository
+3. Add a description (e.g., "pixi") and click **Next**
 
-    ![Repository selection](../assets/artifactory-conda-client-repository.png)
+    ![Generate an Identity Token dialog](../assets/artifactory-generate-an-identity-token.png)
 
-4. Click **Generate Token & Create Instructions**
+4. Copy the generated **Reference Token**
 
-    ![Generate token button](../assets/artifactory-generate-token.png)
-
-5. Copy the generated token
-
-    ![Token generated](../assets/artifactory-token-generated.png)
+    ![Generated identity token](../assets/artifactory-generate-identity-token.png)
 
 ## Authenticating with pixi
 
