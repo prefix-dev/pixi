@@ -62,11 +62,15 @@ scripts = ["scripts/activate.sh"]
 RUSTC_WRAPPER = "sccache"
 
 [feature.backends-release.dependencies]
+questionary = ">=2.1,<3"
 rattler-build = { git = "https://github.com/prefix-dev/rattler-build.git", branch = "refactor" }
+rich = ">=14,<15"
 sccache = ">=0.13.0,<0.14"
+tomlkit = ">=0.13,<0.14"
 
 [feature.backends-release.tasks]
 generate-versions = { cmd = "python pixi-build-backends/scripts/generate-versions.py", description = "Generate version env vars for CI" }
+release-backends = { cmd = "python scripts/release_backends.py", description = "Bump backend versions, create tags, and push" }
 [feature.backends-release.tasks.upload-packages]
 args = ["packages_dir"]
 cmd = "python pixi-build-backends/scripts/upload-packages.py {{ packages_dir }}"
