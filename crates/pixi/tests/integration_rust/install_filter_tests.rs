@@ -177,6 +177,7 @@ async fn install_filter_target_with_skip_with_deps_stop() {
 async fn install_subset_e2e_skip_with_deps() {
     use std::path::{Path, PathBuf};
 
+    use temp_env;
     use url::Url;
 
     // manifest with dependent packages: dummy-g depends on dummy-b
@@ -204,11 +205,19 @@ async fn install_subset_e2e_skip_with_deps() {
 
     // Hard-skip dummy-g subtree: expect dummy-g absent, and since dummy-g depends
     // on dummy-b, dummy-b is also absent
-    pixi.install()
-        .with_frozen()
-        .with_skipped_with_deps(vec!["dummy-g".into()])
-        .await
-        .unwrap();
+    let cache_dir = pixi.workspace_path().join(".pixi-cache");
+    fs_err::create_dir_all(&cache_dir).expect("create cache dir");
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(cache_dir.to_str().unwrap()))],
+        async {
+            pixi.install()
+                .with_frozen()
+                .with_skipped_with_deps(vec!["dummy-g".into()])
+                .await
+        },
+    )
+    .await
+    .unwrap();
     let prefix = pixi.default_env_path().unwrap();
     // When filtering is active, the environment file should contain an invalid hash
     let env_file = prefix.join("conda-meta").join("pixi");

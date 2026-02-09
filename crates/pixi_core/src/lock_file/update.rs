@@ -28,7 +28,7 @@ use pixi_install_pypi::{
     LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
     PyPIUpdateConfig,
 };
-use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
+use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt, PyPiDependencies};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
@@ -331,6 +331,7 @@ impl Workspace {
         let lock_file_derived_data = UpdateContext::builder(self, Some(command_dispatcher))?
             .with_package_cache(package_cache)
             .with_no_install(options.no_install)
+            .with_pypi_no_deps(options.pypi_no_deps)
             .with_outdated_environments(outdated)
             .with_lock_file(lock_file)
             .with_glob_hash_cache(glob_hash_cache)
@@ -432,6 +433,9 @@ pub struct UpdateLockFileOptions {
 
     /// Don't install anything to disk.
     pub no_install: bool,
+
+    /// Treat all PyPI dependencies as no-deps for this operation.
+    pub pypi_no_deps: bool,
 
     /// The maximum number of concurrent solves that are allowed to run. If this
     /// value is None a heuristic is used based on the number of cores
@@ -1054,6 +1058,9 @@ pub struct UpdateContext<'p> {
 
     /// Optional list of packages explicitly targeted for update.
     update_targets: Option<std::collections::HashSet<String>>,
+
+    /// Treat all PyPI dependencies as no-deps for this update.
+    pypi_no_deps: bool,
 }
 
 impl<'p> UpdateContext<'p> {
@@ -1233,6 +1240,9 @@ pub struct UpdateContextBuilder<'p> {
 
     /// Optional list of package names explicitly targeted for update.
     update_targets: Option<std::collections::HashSet<String>>,
+
+    /// Treat all PyPI dependencies as no-deps for this update.
+    pypi_no_deps: bool,
 }
 
 impl<'p> UpdateContextBuilder<'p> {
@@ -1272,6 +1282,14 @@ impl<'p> UpdateContextBuilder<'p> {
     ) -> Self {
         Self {
             update_targets,
+            ..self
+        }
+    }
+
+    /// Treat all PyPI dependencies as no-deps for this update.
+    pub fn with_pypi_no_deps(self, pypi_no_deps: bool) -> Self {
+        Self {
+            pypi_no_deps,
             ..self
         }
     }
@@ -1511,6 +1529,7 @@ impl<'p> UpdateContextBuilder<'p> {
 
             no_install: self.no_install,
             update_targets: self.update_targets,
+            pypi_no_deps: self.pypi_no_deps,
         })
     }
 }
@@ -1546,6 +1565,7 @@ impl<'p> UpdateContext<'p> {
             mapping_client: None,
             command_dispatcher,
             update_targets: None,
+            pypi_no_deps: false,
         })
     }
 
@@ -1766,6 +1786,7 @@ impl<'p> UpdateContext<'p> {
                 project.root().to_path_buf(),
                 locked_group_records,
                 self.no_install,
+                self.pypi_no_deps,
             );
 
             pending_futures.push(pypi_solve_future.boxed_local());
@@ -2544,9 +2565,22 @@ async fn spawn_solve_pypi_task<'p>(
     project_root: PathBuf,
     locked_pypi_packages: Arc<PypiRecordsByName>,
     disallow_install_conda_prefix: bool,
+    pypi_no_deps: bool,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = grouped_environment.pypi_dependencies(Some(platform));
+    let dependencies = if pypi_no_deps {
+        dependencies
+            .into_iter()
+            .flat_map(|(name, specs)| {
+                specs
+                    .into_iter()
+                    .map(move |spec| (name.clone(), spec.with_no_deps(true)))
+            })
+            .collect::<PyPiDependencies>()
+    } else {
+        dependencies
+    };
     if dependencies.is_empty() {
         return Ok(TaskResult::PypiGroupSolved(
             grouped_environment.name().clone(),

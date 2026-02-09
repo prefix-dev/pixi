@@ -119,9 +119,12 @@ impl CacheDirs {
 
     /// Returns the location to store packages
     pub fn packages(&self) -> AbsPresumedDirPathBuf {
-        self.packages
+        let packages = self
+            .packages
             .clone()
-            .unwrap_or_else(|| self.root.join(consts::CACHED_PACKAGES).into_assume_dir())
+            .unwrap_or_else(|| self.root.join(consts::CACHED_PACKAGES).into_assume_dir());
+        let _ = fs_err::create_dir_all(packages.as_std_path());
+        packages
     }
 
     /// Returns the directory where git repositories are cached.

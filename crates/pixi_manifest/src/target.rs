@@ -667,6 +667,7 @@ impl<T> Targets<T> {
 mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
+    use pixi_pypi_spec::PypiPackageName;
     use pixi_spec::PixiSpec;
     use rattler_conda_types::{PackageName, VersionSpec};
     use std::str::FromStr;
@@ -967,5 +968,38 @@ mod tests {
             "==1.0",
             "Expected foo=1.0 on osx-arm64"
         );
+    }
+
+    #[test]
+    fn test_no_deps_registry_allows_unpinned() {
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        python = ">=3.10"
+
+        [pypi-dependencies]
+        requests = { version = ">=2.0", no-deps = true }
+        "#,
+        )
+        .unwrap();
+
+        let deps = manifest
+            .default_feature()
+            .pypi_dependencies(None)
+            .expect("pypi dependencies should be present");
+        let requests = deps
+            .get(&PypiPackageName::from_str("requests").unwrap())
+            .expect("requests dependency should be present");
+        let spec = requests.iter().next().expect("one requests spec");
+        assert!(spec.no_deps());
+        let version = spec
+            .as_version()
+            .expect("registry requirement should have version spec");
+        assert_eq!(version.to_string(), ">=2.0");
     }
 }

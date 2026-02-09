@@ -46,6 +46,7 @@ pub async fn reinstall<I: Interface>(
             UpdateLockFileOptions {
                 lock_file_usage,
                 no_install: false,
+                pypi_no_deps: false,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
             options.reinstall_packages.clone(),

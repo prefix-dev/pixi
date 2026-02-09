@@ -1,10 +1,12 @@
 use clap::Parser;
+use miette::IntoDiagnostic;
 use pixi_api::{
     WorkspaceContext,
     workspace::{DependencyOptions, GitOptions},
 };
 use pixi_config::ConfigCli;
 use pixi_core::{DependencyType, WorkspaceLocator};
+use pixi_pypi_spec::PixiPypiSpec;
 
 use crate::{
     cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
@@ -79,6 +81,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub dependency_config: DependencyConfig,
+
+    #[clap(flatten)]
+    pub pypi_no_deps_config: crate::cli_config::PypiNoDepsConfig,
 
     #[clap(flatten)]
     pub no_install_config: NoInstallConfig,
@@ -158,6 +163,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .await?
         }
         DependencyType::PypiDependency => {
+            let no_deps = args.pypi_no_deps_config.no_deps;
             let pypi_deps = match args
                 .dependency_config
                 .vcs_pep508_requirements(&workspace)
@@ -165,14 +171,36 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             {
                 Some(vcs_reqs) => vcs_reqs
                     .into_iter()
-                    .map(|(name, req)| (name, (req, None, None)))
-                    .collect(),
+                    .map(|(name, req)| {
+                        let pixi_req = if no_deps {
+                            Some(
+                                PixiPypiSpec::try_from(req.clone())
+                                    .into_diagnostic()?
+                                    .with_no_deps(true),
+                            )
+                        } else {
+                            None
+                        };
+                        Ok((name, (req, pixi_req, None)))
+                    })
+                    .collect::<miette::Result<_>>()?,
                 None => args
                     .dependency_config
                     .pypi_deps(&workspace)?
                     .into_iter()
-                    .map(|(name, req)| (name, (req, None, None)))
-                    .collect(),
+                    .map(|(name, req)| {
+                        let pixi_req = if no_deps {
+                            Some(
+                                PixiPypiSpec::try_from(req.clone())
+                                    .into_diagnostic()?
+                                    .with_no_deps(true),
+                            )
+                        } else {
+                            None
+                        };
+                        Ok((name, (req, pixi_req, None)))
+                    })
+                    .collect::<miette::Result<_>>()?,
             };
 
             workspace_ctx

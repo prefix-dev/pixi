@@ -8,7 +8,8 @@ use typed_path::Utf8TypedPath;
 use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 use crate::common::{LockFileExt, PixiControl};
 use crate::setup_tracing;
-use pixi_test_utils::{MockRepoData, Package};
+use pixi_consts::consts;
+use pixi_test_utils::{GitRepoFixture, MockRepoData, Package};
 
 /// Helper to check if a pypi package is installed as editable by looking for a .pth file.
 /// Editable installations create a .pth file in site-packages that points to the source directory.
@@ -1459,4 +1460,110 @@ version = "0.1.0"
         !has_editable_pth_file(&prefix_path, "editable_test"),
         "Package should NOT be installed as editable when manifest doesn't specify editable = true (even if lock file has editable: true)"
     );
+}
+
+#[tokio::test]
+async fn test_no_deps_git_skips_transitive_dependencies() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("dep", "1.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let git_fixture = GitRepoFixture::new("pypi-deps-package");
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "pypi-no-deps-git"
+        platforms = ["{platform}"]
+        channels = ["{channel}"]
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        deps-package = {{ git = "{git_url}", no-deps = true }}
+
+        [pypi-options]
+        extra-index-urls = ["{index_url}"]
+        "#,
+        platform = platform,
+        channel = channel.url(),
+        git_url = git_fixture.url,
+        index_url = pypi_index.index_url(),
+    ));
+
+    let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
+
+    assert!(lock_file.contains_pypi_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        platform,
+        "deps-package"
+    ));
+    assert!(!lock_file.contains_pypi_package(consts::DEFAULT_ENVIRONMENT_NAME, platform, "dep"));
+}
+
+#[tokio::test]
+async fn test_no_deps_path_skips_transitive_dependencies() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    let index = PyPIDatabase::new()
+        .with(PyPIPackage::new("pathpkg", "1.0.0").with_requires_dist(["dep>=1.0.0"]))
+        .with(PyPIPackage::new("dep", "1.0.0"))
+        .into_flat_index()
+        .expect("failed to create local flat index");
+
+    let wheel_path = index
+        .path()
+        .join("pathpkg-1.0.0-py3-none-any.whl")
+        .display()
+        .to_string()
+        .replace('\\', "/");
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "pypi-no-deps-path"
+        platforms = ["{platform}"]
+        channels = ["{channel}"]
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        pathpkg = {{ path = "{wheel_path}", no-deps = true }}
+        "#,
+        platform = platform,
+        channel = channel.url(),
+        wheel_path = wheel_path,
+    ));
+
+    let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
+
+    assert!(lock_file.contains_pypi_package(consts::DEFAULT_ENVIRONMENT_NAME, platform, "pathpkg"));
+    assert!(!lock_file.contains_pypi_package(consts::DEFAULT_ENVIRONMENT_NAME, platform, "dep"));
 }

@@ -76,6 +76,9 @@ pytest = { version = "==7.2.0", index = "https://pypi.org/simple" }
 # Extras
 fastapi = { version = "==0.78.0", extras = ["all"] }
 
+# No transitive dependencies (exact pin required for registry)
+requests = { version = ">=2.0", no-deps = true }
+
 # URL
 uvicorn = { url = "https://files.pythonhosted.org/packages/1e/db/4254e3eabe8020b458f1a747140d32277ec7a271daf1d235b70dc0b4e6e3/requests-2.32.5-py3-none-any.whl#sha256=2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6" }
 
