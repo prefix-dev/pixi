@@ -73,7 +73,7 @@ target/
 **/*.rs.bk
 
 # Backend build debug output
-crates/pixi-build-*/debug/
+crates/pixi_build_*/debug/
 
 # Backend test artifacts channel
 pixi-build-backends/backends/pixi-build-ros/tests/integration/artifacts-channel/

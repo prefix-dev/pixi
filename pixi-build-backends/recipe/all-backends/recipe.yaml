@@ -57,7 +57,7 @@ outputs:
               - set RUSTC_WRAPPER=sccache
               - set "CARGO_TARGET_DIR=${{ SRC_DIR }}\..\..\..\\target-cache-rust-backends"
           # Build all Rust backends at once
-          - cargo auditable build --locked --release --bins -p pixi-build-cmake -p pixi-build-mojo -p pixi-build-python -p pixi-build-rattler-build -p pixi-build-rust
+          - cargo auditable build --locked --release --bins -p pixi_build_cmake -p pixi_build_mojo -p pixi_build_python -p pixi_build_rattler_build -p pixi_build_rust
           # Install binaries to prefix
           - if: unix
             then:
