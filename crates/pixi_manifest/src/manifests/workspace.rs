@@ -3079,12 +3079,14 @@ bar = "*"
 
         // Check the environment was updated (feature removed)
         let env = manifest.workspace.environment("test-env").unwrap();
-        assert!(!env
-            .features
-            .contains(&EnvironmentFeature::Named("used".to_string())));
-        assert!(env
-            .features
-            .contains(&EnvironmentFeature::Named("also-used".to_string())));
+        assert!(
+            !env.features
+                .contains(&EnvironmentFeature::Named("used".to_string()))
+        );
+        assert!(
+            env.features
+                .contains(&EnvironmentFeature::Named("also-used".to_string()))
+        );
 
         // Cannot remove default feature
         let result = manifest.remove_feature(&FeatureName::from_str("default").unwrap());

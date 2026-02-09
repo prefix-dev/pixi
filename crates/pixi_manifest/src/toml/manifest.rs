@@ -294,8 +294,7 @@ impl TomlManifest {
 
                     // Handle inline environment config - create synthetic feature
                     let synthetic_feature_name = if env.has_inline_config() {
-                        let synthetic_name =
-                            FeatureName::from(format!(".{}", name.as_str()));
+                        let synthetic_name = FeatureName::from(format!(".{}", name.as_str()));
 
                         // Extract warnings before conversion
                         warnings.extend(env.take_warnings());
@@ -1342,9 +1341,11 @@ mod test {
             .as_ref()
             .unwrap();
         assert!(dev_env.features.contains(&EnvironmentFeature::Inline));
-        assert!(dev_env
-            .features
-            .contains(&EnvironmentFeature::Named("dev".to_string())));
+        assert!(
+            dev_env
+                .features
+                .contains(&EnvironmentFeature::Named("dev".to_string()))
+        );
     }
 
     #[test]
@@ -1392,9 +1393,11 @@ mod test {
             .as_ref()
             .unwrap();
         assert!(dev_env.features.contains(&EnvironmentFeature::Inline));
-        assert!(dev_env
-            .features
-            .contains(&EnvironmentFeature::Named("python".to_string())));
+        assert!(
+            dev_env
+                .features
+                .contains(&EnvironmentFeature::Named("python".to_string()))
+        );
     }
 
     #[test]
