@@ -95,10 +95,10 @@ pep440_rs = "0.7.3"
 pep508_rs = "0.9.2"
 percent-encoding = "2.3.1"
 pin-project-lite = "0.2.16"
-pixi_build_backend = { path = "crates/pixi_build_backend" }
 pixi_allocator = { path = "crates/pixi_allocator" }
 pixi_api = { path = "crates/pixi_api" }
 pixi_auth = { path = "crates/pixi_auth", default-features = false }
+pixi_build_backend = { path = "crates/pixi_build_backend" }
 pixi_build_backend_passthrough = { path = "crates/pixi_build_backend_passthrough" }
 pixi_build_discovery = { path = "crates/pixi_build_discovery" }
 pixi_build_frontend = { path = "crates/pixi_build_frontend" }
