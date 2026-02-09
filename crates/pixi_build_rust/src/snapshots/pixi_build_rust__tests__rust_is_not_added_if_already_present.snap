@@ -1,0 +1,29 @@
+---
+source: crates/pixi_build_rust/src/main.rs
+expression: generated_recipe.recipe
+---
+context: {}
+package:
+  name: foobar
+  version: 0.1.0
+source: []
+build:
+  number: ~
+  script: "[ ... script ... ]"
+requirements:
+  build:
+    - rust
+  host: []
+  run:
+    - boltons
+  run_constraints: []
+tests: []
+about:
+  homepage: ~
+  license: ~
+  license_file: ~
+  summary: ~
+  description: ~
+  documentation: ~
+  repository: ~
+extra: ~

@@ -1,0 +1,12 @@
+---
+source: crates/pixi_build_cmake/src/main.rs
+expression: result
+---
+Ok(
+    {
+        "**/*.{c,cc,cxx,cpp,h,hpp,hxx}",
+        "**/*.{cmake,cmake.in}",
+        "**/CMakeFiles.txt",
+        "custom/*.c",
+    },
+)
