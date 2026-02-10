@@ -161,6 +161,7 @@ nav:
       - Authentication: deployment/authentication.md
       - Container: deployment/container.md
       - S3: deployment/s3.md
+      - JFrog Artifactory: deployment/artifactory.md
   - Integration:
       - Editor:
           - VSCode: integration/editor/vscode.md
