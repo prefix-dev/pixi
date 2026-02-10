@@ -132,8 +132,6 @@ impl SourceRecord {
             package_record: self.package_record,
             location: self.manifest_source.clone().into(),
             package_build_source,
-            // Don't write input_hash to lock file
-            input: None,
             sources: self
                 .sources
                 .into_iter()
