@@ -306,7 +306,7 @@ impl Task {
     /// Returns whether this task requires re-running activation scripts.
     pub fn reactivate(&self) -> bool {
         match self {
-            Task::Execute(exe) => exe.reactivate,
+            Task::Execute(exe) => exe.modifies_env,
             _ => false,
         }
     }
@@ -379,8 +379,8 @@ pub struct Execute {
     /// The arguments to pass to the task
     pub args: Option<Vec<TaskArg>>,
 
-    /// Force re-running activation scripts before this task
-    pub reactivate: bool,
+    /// Indicates this task modifies the environment (e.g., generates files read by activation scripts)
+    pub modifies_env: bool,
 }
 
 impl From<Execute> for Task {
@@ -924,8 +924,8 @@ impl From<Task> for Item {
                 if let Some(description) = &process.description {
                     table.insert("description", description.into());
                 }
-                if process.reactivate {
-                    table.insert("reactivate", true.into());
+                if process.modifies_env {
+                    table.insert("modifies-env", true.into());
                 }
                 Item::Value(Value::InlineTable(table))
             }

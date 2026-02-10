@@ -222,7 +222,7 @@ impl From<AddArgs> for Task {
                 default_environment,
                 description,
                 clean_env,
-                reactivate: false,
+                modifies_env: false,
                 args,
             }))
         }

@@ -292,11 +292,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         };
 
-        // Invalidate cached environment if task requires reactivation
-        if executable_task.task().reactivate() {
-            task_envs.remove(&executable_task.run_environment);
-        }
-
         // If we don't have a command environment yet, we need to compute it. We lazily
         // compute the task environment because we only need the environment if
         // a task is actually executed.
@@ -353,6 +348,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 std::process::exit(code);
             }
             Err(err) => return Err(err.into()),
+        }
+
+        // Invalidate cached environment if task modifies it
+        if executable_task.task().reactivate() {
+            task_envs.remove(&executable_task.run_environment);
         }
 
         // Compute post-run hash, warn on missing globs, and update the cache
