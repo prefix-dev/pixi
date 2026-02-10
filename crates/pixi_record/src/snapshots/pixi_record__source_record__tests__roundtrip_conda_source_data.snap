@@ -9,86 +9,51 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     packages:
       noarch:
-      - conda: git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
-        name: git-child-test
-      - conda: git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
-        name: git-sibling-test
-      - conda: git+https://github.com/example/repo.git?tag=v1.0.0#abc123def456abc123def456abc123def456abc1
-      - conda: /workspace/absolute-recipe
-      - conda: recipes/my-package
-        name: path-child-test
-      - conda: recipes/my-package
-        name: path-sibling-test
-      - conda: recipes/no-build
+      - source: git-child-test[7ed0aa73] @ git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
+      - source: git-no-manifest-subdir[f0ed072f] @ git+https://github.com/example/repo.git?tag=v1.0.0#abc123def456abc123def456abc123def456abc1
+      - source: git-sibling-test[cb1b107e] @ git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
+      - source: path-absolute-manifest[17e682f7] @ /workspace/absolute-recipe
+      - source: path-child-test[9d062313] @ recipes/my-package
+      - source: path-no-build-source[e11447f7] @ recipes/no-build
+      - source: path-sibling-test[2c2ab470] @ recipes/my-package
 packages:
-- conda: git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
-  name: git-child-test
+- source: git-child-test[7ed0aa73] @ git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
   version: 1.1.0
   build: h234567_0
   subdir: noarch
-  noarch: false
-  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  md5: d41d8cd98f00b204e9800998ecf8427e
-  channel: null
   package_build_source:
     path: ../src
-- conda: git+https://github.com/example/repo.git?tag=v1.0.0#abc123def456abc123def456abc123def456abc1
-  name: git-no-manifest-subdir
+- source: git-no-manifest-subdir[f0ed072f] @ git+https://github.com/example/repo.git?tag=v1.0.0#abc123def456abc123def456abc123def456abc1
   version: 3.0.0
   build: h901237_0
   subdir: noarch
-  noarch: false
-  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  md5: d41d8cd98f00b204e9800998ecf8427e
-  channel: null
   package_build_source:
     path: build/subdir
-- conda: git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
-  name: git-sibling-test
+- source: git-sibling-test[cb1b107e] @ git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
   version: 1.0.0
   build: h123456_0
   subdir: noarch
-  noarch: false
-  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  md5: d41d8cd98f00b204e9800998ecf8427e
-  channel: null
   package_build_source:
     path: ../non-nested
-- conda: /workspace/absolute-recipe
-  name: path-absolute-manifest
+- source: path-absolute-manifest[17e682f7] @ /workspace/absolute-recipe
   version: 2.4.0
   build: h901236_0
   subdir: noarch
-  noarch: false
-  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  md5: d41d8cd98f00b204e9800998ecf8427e
   package_build_source:
     path: ../src
-- conda: recipes/my-package
-  name: path-child-test
+- source: path-child-test[9d062313] @ recipes/my-package
   version: 2.1.0
   build: h890123_0
   subdir: noarch
-  noarch: false
-  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  md5: d41d8cd98f00b204e9800998ecf8427e
   package_build_source:
     path: ../../src/lib
-- conda: recipes/no-build
-  name: path-no-build-source
+- source: path-no-build-source[e11447f7] @ recipes/no-build
   version: 2.5.0
   build: h901238_0
   subdir: noarch
-  noarch: false
-  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  md5: d41d8cd98f00b204e9800998ecf8427e
-- conda: recipes/my-package
-  name: path-sibling-test
+- source: path-sibling-test[2c2ab470] @ recipes/my-package
   version: 2.0.0
   build: h789012_0
   subdir: noarch
-  noarch: false
-  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  md5: d41d8cd98f00b204e9800998ecf8427e
   package_build_source:
     path: ../../other-package/src

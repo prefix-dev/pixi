@@ -293,7 +293,7 @@ fn git_reference_from_shallow(spec: Option<GitShallowSpec>, rev: &str) -> GitRef
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::str::FromStr;
+    use std::{path::Path, str::FromStr};
 
     use rattler_conda_types::Platform;
     use rattler_lock::{
@@ -302,12 +302,13 @@ mod tests {
 
     #[test]
     fn roundtrip_conda_source_data() {
-        let workspace_root = std::path::Path::new("/workspace");
+        let workspace_root = Path::new("/workspace");
 
         // Load the lock file from the snapshot content (skip insta frontmatter).
         let lock_source = lock_source_from_snapshot();
-        let lock_file = LockFile::from_str_with_base_directory(&lock_source, None)
-            .expect("failed to load lock file fixture");
+        let lock_file =
+            LockFile::from_str_with_base_directory(&lock_source, Some(Path::new("/workspace")))
+                .expect("failed to load lock file fixture");
 
         // Extract Conda source packages from the lock file.
         let environment = lock_file
@@ -338,7 +339,7 @@ mod tests {
 
     /// Extract the lock file body from the snapshot by skipping the insta frontmatter.
     fn lock_source_from_snapshot() -> String {
-        let snapshot_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+        let snapshot_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(
             "src/snapshots/pixi_record__source_record__tests__roundtrip_conda_source_data.snap",
         );
         #[allow(clippy::disallowed_methods)]
@@ -352,10 +353,7 @@ mod tests {
     }
 
     /// Build a lock file string from a set of SourceRecords.
-    fn build_lock_from_records(
-        records: &[SourceRecord],
-        workspace_root: &std::path::Path,
-    ) -> String {
+    fn build_lock_from_records(records: &[SourceRecord], workspace_root: &Path) -> String {
         let mut builder = LockFileBuilder::new();
         builder.set_channels(
             DEFAULT_ENVIRONMENT_NAME,
