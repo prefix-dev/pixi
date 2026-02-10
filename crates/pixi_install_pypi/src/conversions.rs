@@ -95,6 +95,7 @@ pub enum ConvertToUvDistError {
 /// Convert from a PypiPackageData to a uv [`distribution_types::Dist`]
 pub fn convert_to_dist(
     pkg: &PypiPackageData,
+    manifest_data: &crate::ManifestData,
     lock_file_dir: &Path,
 ) -> Result<Dist, ConvertToUvDistError> {
     // Figure out if it is a url from the registry or a direct url
@@ -211,7 +212,7 @@ pub fn convert_to_dist(
                     pkg_name,
                     absolute_url,
                     &abs_path,
-                    Some(pkg.editable),
+                    Some(manifest_data.editable),
                     Some(false),
                 )?
             } else {
@@ -254,13 +255,16 @@ mod tests {
             hash: None,
             requires_dist: vec![],
             requires_python: None,
-            editable: false,
         };
 
         // Convert the locked data to a uv dist
         // check if it does not panic
-        let dist = convert_to_dist(&locked, &PathBuf::new())
-            .expect("could not convert wheel with special chars to dist");
+        let dist = convert_to_dist(
+            &locked,
+            &crate::ManifestData { editable: false },
+            &PathBuf::new(),
+        )
+        .expect("could not convert wheel with special chars to dist");
 
         // Check if the dist is a built dist
         assert!(!dist.filename().unwrap().contains("%2B"));

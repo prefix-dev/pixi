@@ -695,14 +695,18 @@ impl<'p> LockFileDerivedData<'p> {
                 let pypi_records = pypi_packages
                     .into_iter()
                     .filter_map(LockedPackageRef::as_pypi)
-                    .map(|(data, env_data)| {
-                        let mut data = data.clone();
-                        data.editable = manifest_pypi_deps
-                            .get(&data.name)
-                            .and_then(|specs| specs.last())
-                            .and_then(|spec| spec.editable())
-                            .unwrap_or(false);
-                        (data, env_data.clone())
+                    .map(move |(data, env_data)| {
+                        (
+                            data.clone(),
+                            env_data.clone(),
+                            pixi_install_pypi::ManifestData {
+                                editable: manifest_pypi_deps
+                                    .get(&data.name)
+                                    .and_then(|specs| specs.last())
+                                    .and_then(|spec| spec.editable())
+                                    .unwrap_or_default(),
+                            },
+                        )
                     })
                     .collect::<Vec<_>>();
 
@@ -731,7 +735,7 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let pypi_lock_file_names = pypi_records
                     .iter()
-                    .filter_map(|(data, _)| to_uv_normalize(&data.name).ok())
+                    .filter_map(|(data, _, _)| to_uv_normalize(&data.name).ok())
                     .collect::<HashSet<_>>();
 
                 // Figure out uv reinstall

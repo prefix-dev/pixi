@@ -974,30 +974,6 @@ version = "0.1.0"
         lock_file.contains_pypi_package("dev", platform, "my-local-pkg"),
         "dev environment should contain my-local-pkg"
     );
-
-    // With the new architecture, the lock file always stores editable=false
-    // The actual editability is determined from the manifest at install time
-    let prod_editable = lock_file
-        .is_pypi_package_editable("prod", platform, "my-local-pkg")
-        .expect("should find my-local-pkg in prod");
-    let dev_editable = lock_file
-        .is_pypi_package_editable("dev", platform, "my-local-pkg")
-        .expect("should find my-local-pkg in dev");
-
-    // Both should have editable=false in the lock file
-    // The actual editability is applied at install time based on the manifest
-    assert!(
-        !prod_editable,
-        "prod environment should have my-local-pkg with editable=false in lock file, but got editable={prod_editable}",
-    );
-    assert!(
-        !dev_editable,
-        "dev environment should have my-local-pkg with editable=false in lock file, but got editable={dev_editable}",
-    );
-
-    // The key benefit of this architecture is that changing editability in the manifest
-    // does NOT require re-locking - only re-installing. Both environments share the same
-    // lock file entry but can have different editability at install time.
 }
 
 #[tokio::test]

@@ -1,3 +1,4 @@
+use crate::ManifestData;
 use crate::plan::InstallPlanner;
 use crate::plan::cache::DistCache;
 use crate::plan::installed_dists::InstalledDists;
@@ -387,19 +388,18 @@ impl PyPIPackageDataBuilder {
             )
             .into(),
             hash: None,
-            editable: false,
         }
     }
 
-    fn path<S: AsRef<str>>(name: S, version: S, path: PathBuf, editable: bool) -> PypiPackageData {
+    fn path<S: AsRef<str>>(name: S, version: S, path: PathBuf) -> PypiPackageData {
         PypiPackageData {
             name: pep508_rs::PackageName::new(name.as_ref().to_owned()).unwrap(),
             version: pep440_rs::Version::from_str(version.as_ref()).unwrap(),
             requires_dist: vec![],
             requires_python: None,
-            location: UrlOrPath::Path(Utf8TypedPathBuf::from(path.to_string_lossy().to_string())).into(),
+            location: UrlOrPath::Path(Utf8TypedPathBuf::from(path.to_string_lossy().to_string()))
+                .into(),
             hash: None,
-            editable,
         }
     }
 
@@ -417,12 +417,11 @@ impl PyPIPackageDataBuilder {
             requires_python: None,
             location: UrlOrPath::Url(url).into(),
             hash: None,
-            editable: false,
         }
     }
 }
 
-/// Implementor of the [`DistCache`] that does not cache anything
+/// Implementer of the [`DistCache`] that does not cache anything
 pub struct NoCache;
 
 impl<'a> DistCache<'a> for NoCache {
@@ -436,7 +435,7 @@ impl<'a> DistCache<'a> for NoCache {
     }
 }
 
-/// Implementor of the [`DistCache`] that assumes to have cached everything
+/// Implementer of the [`DistCache`] that assumes to have cached everything
 pub struct AllCached;
 impl<'a> DistCache<'a> for AllCached {
     fn is_cached(
@@ -478,7 +477,7 @@ impl<'a> DistCache<'a> for AllCached {
 /// Struct to create the required packages map
 #[derive(Default)]
 pub struct RequiredPackages {
-    required: HashMap<uv_normalize::PackageName, PypiPackageData>,
+    required: HashMap<uv_normalize::PackageName, (PypiPackageData, ManifestData)>,
 }
 
 impl RequiredPackages {
@@ -491,7 +490,8 @@ impl RequiredPackages {
         let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("should be correct");
         let data = PyPIPackageDataBuilder::registry(name, version);
-        self.required.insert(package_name, data);
+        self.required
+            .insert(package_name, (data, ManifestData { editable: false }));
         self
     }
 
@@ -505,16 +505,18 @@ impl RequiredPackages {
     ) -> Self {
         let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("should be correct");
-        let data = PyPIPackageDataBuilder::path(name, version, path, editable);
-        self.required.insert(package_name, data);
+        let data = PyPIPackageDataBuilder::path(name, version, path);
+        self.required
+            .insert(package_name, (data, ManifestData { editable }));
         self
     }
 
     pub fn add_local_wheel<S: AsRef<str>>(mut self, name: S, version: S, path: PathBuf) -> Self {
         let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("should be correct");
-        let data = PyPIPackageDataBuilder::path(name, version, path, false);
-        self.required.insert(package_name, data);
+        let data = PyPIPackageDataBuilder::path(name, version, path);
+        self.required
+            .insert(package_name, (data, ManifestData { editable: false }));
         self
     }
 
@@ -522,7 +524,8 @@ impl RequiredPackages {
         let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("should be correct");
         let data = PyPIPackageDataBuilder::url(name, version, url, UrlType::Direct);
-        self.required.insert(package_name, data);
+        self.required
+            .insert(package_name, (data, ManifestData { editable: false }));
         self
     }
 
@@ -530,14 +533,15 @@ impl RequiredPackages {
         let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("should be correct");
         let data = PyPIPackageDataBuilder::url(name, version, url, UrlType::Other);
-        self.required.insert(package_name, data);
+        self.required
+            .insert(package_name, (data, ManifestData { editable: false }));
         self
     }
 
     /// Convert to RequiredDists for the new install planner API
     /// Uses the default lock file directory from the test setup
     pub fn to_required_dists(&self) -> super::super::RequiredDists {
-        let packages: Vec<_> = self.required.values().cloned().collect();
+        let packages: Vec<_> = self.required.values().map(|(p, m)| (p, m)).collect();
         super::super::RequiredDists::from_packages(&packages, default_lock_file_dir())
             .expect("Failed to create RequiredDists in test")
     }
@@ -547,7 +551,7 @@ impl RequiredPackages {
         &self,
         lock_dir: impl AsRef<Path>,
     ) -> super::super::RequiredDists {
-        let packages: Vec<_> = self.required.values().cloned().collect();
+        let packages: Vec<_> = self.required.values().map(|(p, m)| (p, m)).collect();
         super::super::RequiredDists::from_packages(&packages, lock_dir)
             .expect("Failed to create RequiredDists in test")
     }

@@ -6,7 +6,7 @@ use pixi_uv_conversions::{to_parsed_git_url, to_uv_version};
 use rattler_lock::{PypiPackageData, UrlOrPath};
 use url::Url;
 use uv_cache_info::CacheInfoError;
-use uv_distribution_types::{InstalledDist, InstalledDistKind};
+use uv_distribution_types::{Dist, InstalledDist, InstalledDistKind};
 use uv_pypi_types::{ParsedGitUrl, ParsedUrlError};
 
 use crate::utils::{check_url_freshness, strip_direct_scheme};
@@ -30,29 +30,30 @@ pub enum NeedsReinstallError {
 
 /// Check if a package needs to be reinstalled
 pub(crate) fn need_reinstall(
-    installed: &InstalledDist,
-    locked: &PypiPackageData,
+    installed_dist: &InstalledDist,
+    required_pkg: &PypiPackageData,
+    required_dist: &Dist,
     lock_file_dir: &Path,
 ) -> Result<ValidateCurrentInstall, NeedsReinstallError> {
     // Check if the installed version is the same as the required version
-    match &installed.kind {
+    match &installed_dist.kind {
         InstalledDistKind::Registry(reg) => {
-            if !matches!(*locked.location, UrlOrPath::Url(_)) {
+            if !matches!(*required_pkg.location, UrlOrPath::Url(_)) {
                 return Ok(ValidateCurrentInstall::Reinstall(
                     NeedReinstall::SourceMismatch {
-                        locked_location: locked.location.to_string(),
+                        locked_location: required_pkg.location.to_string(),
                         installed_location: "registry".to_string(),
                     },
                 ));
             }
 
-            let specifier = to_uv_version(&locked.version)?;
+            let specifier = to_uv_version(&required_pkg.version)?;
 
             if reg.version != specifier {
                 return Ok(ValidateCurrentInstall::Reinstall(
                     NeedReinstall::VersionMismatch {
                         installed_version: reg.version.clone(),
-                        locked_version: locked.version.clone(),
+                        locked_version: required_pkg.version.clone(),
                     },
                 ));
             }
@@ -85,7 +86,7 @@ pub(crate) fn need_reinstall(
                     match result {
                         Ok(url) => {
                             // Convert the locked location, which can be a path or a url, to a url
-                            let locked_url = match &*locked.location {
+                            let locked_url = match &*required_pkg.location {
                                 // Fine if it is already a url
                                 UrlOrPath::Url(url) => url.clone(),
                                 // Do some path mangling if it is actually a path to get it into a url
@@ -116,7 +117,7 @@ pub(crate) fn need_reinstall(
                             if url == locked_url {
                                 // Okay so these are the same, but we need to check if the cache is newer
                                 // than the source directory
-                                if !check_url_freshness(&url, installed)? {
+                                if !check_url_freshness(&url, installed_dist)? {
                                     return Ok(ValidateCurrentInstall::Reinstall(
                                         NeedReinstall::SourceDirectoryNewerThanCache,
                                     ));
@@ -125,7 +126,10 @@ pub(crate) fn need_reinstall(
                                 return Ok(ValidateCurrentInstall::Reinstall(
                                     NeedReinstall::UrlMismatch {
                                         installed_url: url.to_string(),
-                                        locked_url: locked.location.as_url().map(|u| u.to_string()),
+                                        locked_url: required_pkg
+                                            .location
+                                            .as_url()
+                                            .map(|u| u.to_string()),
                                     },
                                 ));
                             }
@@ -136,11 +140,19 @@ pub(crate) fn need_reinstall(
                             ));
                         }
                     }
-                    // If editable status changed also re-install
-                    if dir_info.editable.unwrap_or_default() != locked.editable {
+                    eprintln!(
+                        "Dirinfo: Editable: {}",
+                        dir_info.editable.unwrap_or_default()
+                    );
+                    eprintln!("installed: {}", installed_dist.is_editable());
+                    eprintln!(
+                        "required_dist.is_editable(): {}",
+                        required_dist.is_editable()
+                    );
+                    if dir_info.editable.unwrap_or_default() != required_dist.is_editable() {
                         return Ok(ValidateCurrentInstall::Reinstall(
                             NeedReinstall::EditableStatusChanged {
-                                locked_editable: locked.editable,
+                                required_editable: required_dist.is_editable(),
                                 installed_editable: dir_info.editable.unwrap_or_default(),
                             },
                         ));
@@ -156,7 +168,7 @@ pub(crate) fn need_reinstall(
                     let lock_file_dir = typed_path::Utf8TypedPathBuf::from(
                         lock_file_dir.to_string_lossy().as_ref(),
                     );
-                    let locked_url = match &*locked.location {
+                    let locked_url = match &*required_pkg.location {
                         // Remove `direct+` scheme if it is there so we can compare the required to
                         // the installed url
                         UrlOrPath::Url(url) => strip_direct_scheme(url).into_owned(),
@@ -195,7 +207,7 @@ pub(crate) fn need_reinstall(
 
                     if locked_url == installed_url {
                         // Check cache freshness
-                        if !check_url_freshness(&locked_url, installed)? {
+                        if !check_url_freshness(&locked_url, installed_dist)? {
                             return Ok(ValidateCurrentInstall::Reinstall(
                                 NeedReinstall::ArchiveDistNewerThanCache,
                             ));
@@ -204,7 +216,7 @@ pub(crate) fn need_reinstall(
                         return Ok(ValidateCurrentInstall::Reinstall(
                             NeedReinstall::UrlMismatch {
                                 installed_url: installed_url.to_string(),
-                                locked_url: locked.location.as_url().map(|u| u.to_string()),
+                                locked_url: required_pkg.location.as_url().map(|u| u.to_string()),
                             },
                         ));
                     }
@@ -222,7 +234,7 @@ pub(crate) fn need_reinstall(
 
                     // Try to parse the locked git url, this can be any url, so this may fail
                     // in practice it always seems to succeed, even with a non-git url
-                    let locked_git_url = match &*locked.location {
+                    let locked_git_url = match &*required_pkg.location {
                         UrlOrPath::Url(url) => {
                             // is it a git url?
                             if LockedGitUrl::is_locked_git_url(url) {
@@ -294,7 +306,7 @@ pub(crate) fn need_reinstall(
                         Err(_) => {
                             return Ok(ValidateCurrentInstall::Reinstall(
                                 NeedReinstall::UnableToParseGitUrl {
-                                    url: locked
+                                    url: required_pkg
                                         .location
                                         .as_url()
                                         .map(|u| u.to_string())
@@ -328,7 +340,7 @@ pub(crate) fn need_reinstall(
     };
 
     // Do some extra checks if the version is the same
-    let metadata = match installed.read_metadata() {
+    let metadata = match installed_dist.read_metadata() {
         Ok(metadata) => metadata,
         Err(err) => {
             // Can't be sure lets reinstall
@@ -343,7 +355,7 @@ pub(crate) fn need_reinstall(
     if let Some(ref requires_python) = metadata.requires_python {
         // If the installed package requires a different requires python version of the locked package,
         // or if one of them is `Some` and the other is `None`.
-        match &locked.requires_python {
+        match &required_pkg.requires_python {
             Some(locked_requires_python) => {
                 if requires_python.to_string() != locked_requires_python.to_string() {
                     return Ok(ValidateCurrentInstall::Reinstall(
@@ -363,7 +375,7 @@ pub(crate) fn need_reinstall(
                 ));
             }
         }
-    } else if let Some(requires_python) = &locked.requires_python {
+    } else if let Some(requires_python) = &required_pkg.requires_python {
         return Ok(ValidateCurrentInstall::Reinstall(
             NeedReinstall::RequiredPythonChanged {
                 installed_python_require: "None".to_string(),

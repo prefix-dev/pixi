@@ -30,17 +30,17 @@ impl RequiredDists {
     /// # Returns
     /// A RequiredDists instance or an error if conversion fails
     pub fn from_packages(
-        packages: &[PypiPackageData],
+        packages: &[(&PypiPackageData, &crate::ManifestData)],
         lock_file_dir: impl AsRef<Path>,
     ) -> Result<Self, ConvertToUvDistError> {
         let mut dists = HashMap::new();
 
-        for pkg in packages {
+        for (pkg, manifest_data) in packages {
             let uv_name = PackageName::from_str(pkg.name.as_ref()).map_err(|_| {
                 ConvertToUvDistError::InvalidPackageName(pkg.name.as_ref().to_string())
             })?;
-            let dist = convert_to_dist(pkg, lock_file_dir.as_ref())?;
-            dists.insert(uv_name, (pkg.clone(), dist));
+            let dist = convert_to_dist(pkg, manifest_data, lock_file_dir.as_ref())?;
+            dists.insert(uv_name, ((*pkg).clone(), dist));
         }
 
         Ok(Self(dists))

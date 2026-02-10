@@ -46,7 +46,7 @@ pub(crate) enum NeedReinstall {
     UnableToConvertLockedPath { path: String },
     /// The editable status of the installed wheel changed with regards to the locked version
     EditableStatusChanged {
-        locked_editable: bool,
+        required_editable: bool,
         installed_editable: bool,
     },
     /// Somehow unable to parse the installed dist url
@@ -103,7 +103,7 @@ impl std::fmt::Display for NeedReinstall {
                 write!(f, "Unable to parse file url: {url}")
             }
             NeedReinstall::EditableStatusChanged {
-                locked_editable,
+                required_editable: locked_editable,
                 installed_editable,
             } => {
                 write!(

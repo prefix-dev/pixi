@@ -1532,15 +1532,6 @@ version = "0.1.0"
         .to_path(&workspace.lock_file_path())
         .unwrap();
 
-    // Verify the lock file now has editable: true
-    let lock_after_modification = pixi.lock_file().await.unwrap();
-    assert!(
-        lock_after_modification
-            .is_pypi_package_editable("default", platform, "editable-test")
-            .unwrap_or(false),
-        "Lock file should have editable: true after manual modification"
-    );
-
     // Now install with --locked (uses the modified lock file without re-resolving)
     // The fix should ensure that the package is installed as NON-editable
     // because the manifest doesn't specify editable = true

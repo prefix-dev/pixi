@@ -22,6 +22,7 @@ use pixi_manifest::{
     FeaturesExt,
     pypi::pypi_options::{NoBuild, PrereleaseMode},
 };
+use pixi_pypi_spec::PixiPypiSource;
 use pixi_record::{
     DevSourceRecord, LockedGitUrl, ParseLockFileError, PinnedBuildSourceSpec, PinnedSourceSpec,
     PixiRecord, SourceMismatchError, SourceRecord, VariantValue,
@@ -552,7 +553,8 @@ pub fn verify_environment_satisfiability(
     // 2. Check if we have a no-build option set, that we only have binary packages,
     //    or an editable source
     // 3. Check that wheel tags still are possible with current system requirements
-    if !environment.pypi_dependencies(None).is_empty() {
+    let pypi_dependencies = environment.pypi_dependencies(None);
+    if !pypi_dependencies.is_empty() {
         let group_pypi_options = grouped_env.pypi_options();
         let indexes = rattler_lock::PypiIndexes::from(group_pypi_options.clone());
 
@@ -565,7 +567,11 @@ pub fn verify_environment_satisfiability(
         // Actually check all pypi packages in one iteration
         for (platform, package_it) in locked_environment.pypi_packages_by_platform() {
             for (package_data, _) in package_it {
-                no_build_check.check(package_data)?;
+                let pypi_source = pypi_dependencies
+                    .get(&package_data.name)
+                    .and_then(|specs| specs.last())
+                    .map(|spec| &spec.source);
+                no_build_check.check(package_data, pypi_source)?;
                 pypi_wheel_tags_check.check(platform, package_data)?;
             }
         }
@@ -717,7 +723,11 @@ impl PypiNoBuildCheck {
         Self { check }
     }
 
-    pub fn check(&self, package_data: &PypiPackageData) -> Result<(), EnvironmentUnsat> {
+    pub fn check(
+        &self,
+        package_data: &PypiPackageData,
+        source: Option<&PixiPypiSource>,
+    ) -> Result<(), EnvironmentUnsat> {
         let Some(check) = &self.check else {
             return Ok(());
         };
@@ -751,7 +761,15 @@ impl PypiNoBuildCheck {
                 let path = Path::new(path.as_str());
                 if path.is_dir() {
                     // Editables are allowed with no-build
-                    if package_data.editable {
+                    let is_editable = source
+                        .map(|source| match source {
+                            PixiPypiSource::Path { path: _, editable } => {
+                                editable.unwrap_or_default()
+                            }
+                            _ => false,
+                        })
+                        .unwrap_or_default();
+                    if is_editable {
                         return Ok(());
                     } else {
                         // Non-editable source packages might not be allowed
@@ -2766,7 +2784,6 @@ mod tests {
             hash: None,
             requires_dist: vec![],
             requires_python: None,
-            editable: false,
         };
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@2993").unwrap(),
@@ -2786,7 +2803,6 @@ mod tests {
             hash: None,
             requires_dist: vec![],
             requires_python: None,
-            editable: false,
         };
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str(
@@ -2825,7 +2841,6 @@ mod tests {
             hash: None,
             requires_dist: vec![],
             requires_python: None,
-            editable: false,
         };
         pypi_satisfies_requirement(
             &spec_without_rev,
@@ -2851,7 +2866,6 @@ mod tests {
             hash: None,
             requires_dist: vec![],
             requires_python: None,
-            editable: false,
         };
 
         let spec =
