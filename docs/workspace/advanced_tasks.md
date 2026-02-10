@@ -20,6 +20,9 @@ configure = { cmd = [
     ".build",
 ] }
 
+# Add task descriptions, to be surfaced when the tasks are listed
+say-hello = { cmd = ["echo 'hello world'"], description = "Greet the world." }
+
 # Depend on other tasks
 build = { cmd = ["ninja", "-C", ".build"], depends-on = ["configure"] }
 
