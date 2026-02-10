@@ -112,4 +112,5 @@ This works for both built-in commands and any extensions you have installed, mak
 
 - [Pixi Diff](../pixi_diff/) - Compare lock files and environments
 - [Pixi Inject](../pixi_inject/) - Inject dependencies into existing environments
+- [Pixi Skills](../pixi_skills/) - Manage and install coding agent skills across LLM backends
 - [Global Tools](../../../global_tools/introduction/) - Managing global tool installations

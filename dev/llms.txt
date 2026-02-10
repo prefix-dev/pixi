@@ -93,6 +93,7 @@ for further details on how to use the software.
 - [Pixi Diff](https://prefix-dev.github.io/pixi/dev/integration/extensions/pixi_diff/index.md)
 - [Pixi Inject](https://prefix-dev.github.io/pixi/dev/integration/extensions/pixi_inject/index.md)
 - [Pixi Install-to-prefix](https://prefix-dev.github.io/pixi/dev/integration/extensions/pixi_install_to_prefix/index.md)
+- [Pixi Skills](https://prefix-dev.github.io/pixi/dev/integration/extensions/pixi_skills/index.md)
 - [Conda Deny](https://prefix-dev.github.io/pixi/dev/integration/third_party/conda_deny/index.md)
 - [Direnv](https://prefix-dev.github.io/pixi/dev/integration/third_party/direnv/index.md)
 - [Starship](https://prefix-dev.github.io/pixi/dev/integration/third_party/starship/index.md)
