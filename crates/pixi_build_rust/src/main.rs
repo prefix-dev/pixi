@@ -80,12 +80,13 @@ impl GenerateRecipe for RustGenerator {
         // rattler-build selectors with simple string comparison.
         let model_dependencies = model.dependencies(Some(host_platform));
 
-        // Get the list of compilers from config, defaulting to ["rust"] if not
-        // specified
+        // Get the list of compilers from config, defaulting to ["rust", "c"] if not
+        // specified. The rust compilers already depend on the c compiler.
+        // Adding it here allows to version the c compiler through the variant `c_compiler_version`.
         let compilers = config
             .compilers
             .clone()
-            .unwrap_or_else(|| vec!["rust".to_string()]);
+            .unwrap_or_else(|| vec!["rust".to_string(), "c".to_string()]);
 
         // Add configured compilers to build requirements
         pixi_build_backend::compilers::add_compilers_to_requirements(
@@ -731,15 +732,19 @@ mod tests {
             })
             .collect();
 
-        // Should have exactly one compiler: rust
+        // Should have exactly two compilers: rust and c
         assert_eq!(
             compiler_templates.len(),
-            1,
-            "Should have exactly one compiler when not specified"
+            2,
+            "Should have exactly two compilers when not specified"
         );
-        assert_eq!(
-            compiler_templates[0], "${{ compiler('rust') }}",
-            "Default compiler should be rust"
+        assert!(
+            compiler_templates.contains(&"${{ compiler('rust') }}".to_string()),
+            "Default compilers should include rust"
+        );
+        assert!(
+            compiler_templates.contains(&"${{ compiler('c') }}".to_string()),
+            "Default compilers should include c"
         );
     }
 
