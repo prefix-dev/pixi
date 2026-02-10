@@ -228,10 +228,20 @@ impl<'de> Deserialize<'de> for EnvironmentFeature {
             }
 
             fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                if v.starts_with('.') {
+                    return Err(E::custom(format!(
+                        "feature name '{v}' is not allowed; names starting with '.' are reserved"
+                    )));
+                }
                 Ok(EnvironmentFeature::Named(v.to_string()))
             }
 
             fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
+                if v.starts_with('.') {
+                    return Err(E::custom(format!(
+                        "feature name '{v}' is not allowed; names starting with '.' are reserved"
+                    )));
+                }
                 Ok(EnvironmentFeature::Named(v))
             }
         }
@@ -325,6 +335,17 @@ mod tests {
 
         assert_eq!(inline_back, EnvironmentFeature::Inline);
         assert_eq!(named_back, EnvironmentFeature::Named("test".to_string()));
+    }
+
+    #[test]
+    fn test_deserialize_dot_prefixed_feature_rejected() {
+        let result = serde_json::from_str::<EnvironmentFeature>("\".dev\"");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("reserved"),
+            "Error should mention reserved: {err}"
+        );
     }
 
     #[test]

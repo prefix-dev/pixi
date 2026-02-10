@@ -237,6 +237,16 @@ impl TomlManifest {
                             .with_help("All tables at the root of the document are implicitly added to the 'default' feature, use those instead."),
                     ));
                 }
+                if name.value.as_str().starts_with('.') {
+                    return Err(TomlError::from(
+                        GenericError::new(format!(
+                            "The feature name '{}' is not allowed. Feature names starting with '.' are reserved for internal use.",
+                            name.value
+                        ))
+                        .with_opt_span(name.span)
+                        .with_help("Choose a feature name that does not start with '.'"),
+                    ));
+                }
                 let WithWarnings {
                     value: feature,
                     warnings: mut feature_warnings,
@@ -376,7 +386,18 @@ impl TomlManifest {
             {
                 let feature_name_str = match env_feature {
                     EnvironmentFeature::Inline => format!(".{}", name.as_str()),
-                    EnvironmentFeature::Named(n) => n.clone(),
+                    EnvironmentFeature::Named(n) => {
+                        if n.starts_with('.') {
+                            return Err(TomlError::from(
+                                GenericError::new(format!(
+                                    "The feature name '{n}' is not allowed. Feature names starting with '.' are reserved for internal use.",
+                                ))
+                                .with_span((*span).into())
+                                .with_help("Use the inline environment syntax instead: [environments.<name>.dependencies]"),
+                            ));
+                        }
+                        n.clone()
+                    }
                 };
                 let Some(feature) = features.get(feature_name_str.as_str()) else {
                     return Err(TomlError::from(
@@ -1433,6 +1454,54 @@ mod test {
                 .tasks
                 .contains_key(&TaskName::from("test"))
         );
+    }
+
+    #[test]
+    fn test_reject_dot_prefixed_feature_in_seq() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [environments.dev.dependencies]
+        x = "*"
+
+        [environments]
+        test = [".dev"]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_reject_dot_prefixed_feature_in_map() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [environments]
+        dev = { features = [".dev"] }
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_reject_dot_prefixed_feature_definition() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [feature.".dev".dependencies]
+        x = "*"
+        "#,
+        ));
     }
 
     #[test]
