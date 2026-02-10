@@ -74,6 +74,7 @@ for further details on how to use the software.
 
 ## Distributing documentation
 
+- [JFrog Artifactory](https://prefix-dev.github.io/pixi/dev/deployment/artifactory/index.md)
 - [Authentication](https://prefix-dev.github.io/pixi/dev/deployment/authentication/index.md)
 - [Container](https://prefix-dev.github.io/pixi/dev/deployment/container/index.md)
 - [Pixi Pack](https://prefix-dev.github.io/pixi/dev/deployment/pixi_pack/index.md)
