@@ -18,6 +18,7 @@ build:
 requirements:
   build:
     - "${{ compiler('rust') }}"
+    - "${{ compiler('c') }}"
     - sccache
   host: []
   run: []
