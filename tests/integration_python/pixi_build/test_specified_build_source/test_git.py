@@ -1,6 +1,5 @@
 import json
 import shutil
-import sys
 import tomllib
 from collections.abc import Iterator
 from pathlib import Path
@@ -91,7 +90,6 @@ def prepare_cpp_git_workspace(
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(sys.platform == "win32", reason="crashes the test worker on Windows")
 def test_git_path_build(
     pixi: Path,
     build_data: Path,
