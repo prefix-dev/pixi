@@ -27,7 +27,7 @@ use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt, PackageNotProvidedError,
     PixiEnvironmentSpec, SolvePixiEnvironmentError,
-    build::{Dependencies, DependenciesError, PixiRunExports, SourceCodeLocation},
+    build::{Dependencies, DependenciesError, PinnedSourceCodeLocation, PixiRunExports},
     cache::{
         common::MetadataCache,
         source_metadata::{self, CachedSourceMetadata, SourceMetadataCacheShard},
@@ -48,7 +48,7 @@ pub struct SourceMetadataSpec {
 #[derive(Debug)]
 pub struct SourceMetadata {
     /// Manifest and optional build source location for this metadata.
-    pub source: SourceCodeLocation,
+    pub source: PinnedSourceCodeLocation,
 
     /// The metadata that was acquired from the build backend.
     pub records: Vec<SourceRecord>,
@@ -91,8 +91,7 @@ impl SourceMetadataSpec {
             channel_urls: self.backend_metadata.channels.clone(),
             build_environment: self.backend_metadata.build_environment.clone(),
             enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
-            manifest_source: build_backend_metadata.source.manifest_source().into(),
-            build_source: build_backend_metadata.source.source_code().into(),
+            source: build_backend_metadata.source.clone().into(),
         };
         let cache_read_result = command_dispatcher
             .source_metadata_cache()
@@ -181,16 +180,16 @@ impl SourceMetadataSpec {
             }
         }
 
-        tracing::error!("{:?}", &source_location);
-
         Ok(SourceMetadata {
             records: Self::amend_cached_source_records(&source_location, records),
             source: source_location,
         })
     }
 
+    /// Records from the cache do not include the locations where their sources were checked out
+    /// because those are derived from the cache key, instead we derive them from the input source.
     fn amend_cached_source_records(
-        source: &SourceCodeLocation,
+        source: &PinnedSourceCodeLocation,
         records: Vec<CachedSourceRecord>,
     ) -> Vec<SourceRecord> {
         records
@@ -233,7 +232,7 @@ impl SourceMetadataSpec {
         &self,
         command_dispatcher: &CommandDispatcher,
         output: &CondaOutput,
-        source: SourceCodeLocation,
+        source: PinnedSourceCodeLocation,
         reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<CachedSourceRecord, CommandDispatcherError<SourceMetadataError>> {
         let manifest_source = source.manifest_source().clone();

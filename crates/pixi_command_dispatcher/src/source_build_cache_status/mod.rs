@@ -12,7 +12,7 @@ use tracing::instrument;
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     PackageIdentifier, SourceCheckoutError,
-    build::{BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, SourceCodeLocation},
+    build::{BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, PinnedSourceCodeLocation},
     input_hash::{ConfigurationHash, ProjectModelHash},
 };
 
@@ -33,7 +33,7 @@ pub struct SourceBuildCacheStatusSpec {
     pub package: PackageIdentifier,
 
     /// Describes the source location of the package to query.
-    pub source: SourceCodeLocation,
+    pub source: PinnedSourceCodeLocation,
 
     /// The channels to use when building source packages.
     pub channels: Vec<ChannelUrl>,

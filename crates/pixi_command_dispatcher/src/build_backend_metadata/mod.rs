@@ -18,12 +18,13 @@ use std::{
 use thiserror::Error;
 use tracing::instrument;
 
+use crate::build::CanonicalSourceCodeLocation;
 use crate::cache::build_backend_metadata::CachedCondaMetadataId;
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
-    build::{SourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
+    build::{PinnedSourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
     cache::{
         build_backend_metadata::{self, BuildBackendMetadataCacheShard, CachedCondaMetadata},
         common::MetadataCache,
@@ -89,7 +90,7 @@ pub struct BuildBackendMetadataSpec {
 #[derive(Debug)]
 pub struct BuildBackendMetadata {
     /// The manifest and optional build source location for this metadata.
-    pub source: SourceCodeLocation,
+    pub source: PinnedSourceCodeLocation,
 
     /// The metadata that was acquired from the build backend.
     pub metadata: CachedCondaMetadata,
@@ -186,7 +187,7 @@ impl BuildBackendMetadataSpec {
             } else {
                 (manifest_source_checkout.clone(), None)
             };
-        let manifest_source_location = SourceCodeLocation::new(
+        let manifest_source_location = PinnedSourceCodeLocation::new(
             manifest_source_checkout.pinned.clone(),
             build_source.clone(),
         );
@@ -203,8 +204,7 @@ impl BuildBackendMetadataSpec {
             channel_urls: self.channels.clone(),
             build_environment: self.build_environment.clone(),
             enabled_protocols: self.enabled_protocols.clone(),
-            manifest_source: manifest_source_location.manifest_source().into(),
-            build_source: manifest_source_location.source_code().into(),
+            source: manifest_source_location.clone().into(),
         };
         let cache_read_result = command_dispatcher
             .build_backend_metadata_cache()
@@ -538,7 +538,7 @@ impl BuildBackendMetadataSpec {
     async fn call_conda_outputs(
         self,
         command_dispatcher: CommandDispatcher,
-        manifest_source: CanonicalSourceLocation,
+        canonical_manifest_source: CanonicalSourceLocation,
         build_source_checkout: SourceCheckout,
         project_model_hash: Option<ProjectModelHash>,
         configuration_hash: ConfigurationHash,
@@ -625,6 +625,8 @@ impl BuildBackendMetadataSpec {
             .collect();
 
         let canonical_build_source = CanonicalSourceLocation::from(build_source_checkout.pinned);
+        let canonical_build_source_opt =
+            (canonical_manifest_source != canonical_build_source).then_some(canonical_build_source);
 
         Ok(CachedCondaMetadata {
             id: CachedCondaMetadataId::random(),
@@ -634,9 +636,10 @@ impl BuildBackendMetadataSpec {
             build_variant_files: self.variant_files.into_iter().flatten().collect(),
             input_globs: outputs.input_globs.into_iter().collect(),
             input_files: input_glob_files,
-            build_source: (canonical_build_source != manifest_source)
-                .then_some(canonical_build_source),
-            manifest_source,
+            source: CanonicalSourceCodeLocation::new(
+                canonical_manifest_source,
+                canonical_build_source_opt,
+            ),
             project_model_hash,
             configuration_hash,
             timestamp,

@@ -1,13 +1,12 @@
 use super::common::{
     CacheError, CacheKey, CachedMetadata, MetadataCache, WriteResult as CommonWriteResult,
 };
-use crate::build::manifest_and_source_cache_key;
+use crate::build::CanonicalSourceCodeLocation;
 use crate::cache::build_backend_metadata::CachedCondaMetadataId;
 use crate::{BuildEnvironment, cache::common::VersionedMetadata};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_path::AbsPathBuf;
-use pixi_record::CanonicalSourceLocation;
 use pixi_spec::SourceLocationSpec;
 use pixi_variant::VariantValue;
 use rattler_conda_types::{ChannelUrl, PackageName, PackageRecord};
@@ -60,10 +59,7 @@ pub struct SourceMetadataCacheShard {
     pub enabled_protocols: EnabledProtocols,
 
     /// The pinned source location
-    pub manifest_source: CanonicalSourceLocation,
-
-    /// The pinned source location
-    pub build_source: CanonicalSourceLocation,
+    pub source: CanonicalSourceCodeLocation,
 }
 
 impl SourceMetadataCache {
@@ -105,7 +101,7 @@ impl CacheKey for SourceMetadataCacheShard {
 
         self.enabled_protocols.hash(&mut hasher);
 
-        let source_dir = manifest_and_source_cache_key(&self.manifest_source, &self.build_source);
+        let source_dir = self.source.cache_unique_key();
         format!(
             "{source_dir}/{}-{}-{}",
             self.package.as_normalized(),

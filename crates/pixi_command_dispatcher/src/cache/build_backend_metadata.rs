@@ -2,14 +2,14 @@ use super::common::{
     CacheError, CacheKey, CachedMetadata, MetadataCache, VersionedMetadata,
     WriteResult as CommonWriteResult,
 };
-use crate::build::manifest_and_source_cache_key;
+use crate::build::CanonicalSourceCodeLocation;
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
 use crate::{BuildEnvironment, PackageIdentifier};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_path::AbsPathBuf;
-use pixi_record::{CanonicalSourceLocation, VariantValue};
+use pixi_record::VariantValue;
 use rattler_conda_types::ChannelUrl;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, BinaryHeap};
@@ -58,10 +58,7 @@ pub struct BuildBackendMetadataCacheShard {
     pub enabled_protocols: EnabledProtocols,
 
     /// The pinned source location
-    pub manifest_source: CanonicalSourceLocation,
-
-    /// The pinned source location
-    pub build_source: CanonicalSourceLocation,
+    pub source: CanonicalSourceCodeLocation,
 }
 
 impl BuildBackendMetadataCache {
@@ -102,7 +99,7 @@ impl CacheKey for BuildBackendMetadataCacheShard {
         host_virtual_packages.hash(&mut hasher);
 
         self.enabled_protocols.hash(&mut hasher);
-        let source_dir = manifest_and_source_cache_key(&self.manifest_source, &self.build_source);
+        let source_dir = self.source.cache_unique_key();
         format!(
             "{source_dir}/{}-{}",
             self.build_environment.host_platform,
@@ -141,17 +138,13 @@ pub struct CachedCondaMetadata {
     #[serde(default)]
     pub configuration_hash: ConfigurationHash,
 
-    /// The pinned location of the manifest source code. This is also part
-    /// of the cache shard but for debug purposes we store it in this file as well.
-    pub manifest_source: CanonicalSourceLocation,
-
     /// The pinned location of the source code. Although the specification of
     /// where to find the source is part of the `project_model_hash`, the
     /// resolved location is not.
     ///
-    /// If this field is none, its the same as the `manifest_source`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub build_source: Option<CanonicalSourceLocation>,
+    /// This is also part of the cache shard but for debug purposes we store
+    /// it in this file as well.
+    pub source: CanonicalSourceCodeLocation,
 
     /// The build variants that were used to generate this metadata.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]

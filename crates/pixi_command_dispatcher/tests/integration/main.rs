@@ -18,7 +18,7 @@ use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, CommandDispatcherError, Executor,
     InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PackageIdentifier,
-    PixiEnvironmentSpec, SourceBuildCacheStatusSpec, build::SourceCodeLocation,
+    PixiEnvironmentSpec, SourceBuildCacheStatusSpec, build::PinnedSourceCodeLocation,
 };
 use pixi_config::default_channel_config;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
@@ -636,7 +636,7 @@ async fn source_build_cache_status_clear_works() {
 
     let spec = SourceBuildCacheStatusSpec {
         package: pkg,
-        source: SourceCodeLocation::new(
+        source: PinnedSourceCodeLocation::new(
             PinnedPathSpec {
                 path: tmp_dir.path().to_string_lossy().into_owned().into(),
             }

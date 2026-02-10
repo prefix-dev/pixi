@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::build::{SourceCodeLocation, source_checkout_cache_key};
+use crate::build::{PinnedSourceCodeLocation, source_checkout_cache_key};
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -282,7 +282,7 @@ pub struct BuildHostPackage {
     pub repodata_record: RepoDataRecord,
 
     /// The source location from which the package was built.
-    pub source: Option<SourceCodeLocation>,
+    pub source: Option<PinnedSourceCodeLocation>,
 }
 
 /// A cache entry returned by [`BuildCache::entry`] which enables
