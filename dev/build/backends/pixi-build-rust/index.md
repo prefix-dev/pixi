@@ -206,7 +206,7 @@ ignore-cargo-manifest = true
 ### `compilers`
 
 - **Type**: `Array<String>`
-- **Default**: `["rust"]`
+- **Default**: `["rust", "c"]`
 - **Target Merge Behavior**: `Overwrite` - Platform-specific compilers completely replace base compilers
 
 List of compilers to use for the build. The backend automatically generates appropriate compiler dependencies using conda-forge's compiler infrastructure.
@@ -220,7 +220,7 @@ For target-specific configuration, platform compilers completely replace the bas
 
 ```toml
 [package.build.config]
-compilers = ["rust"]
+compilers = ["rust", "c"]
 
 [package.build.target.linux-64.config]
 compilers = ["rust", "c", "cxx"]

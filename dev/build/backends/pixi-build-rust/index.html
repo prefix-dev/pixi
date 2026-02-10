@@ -4170,7 +4170,7 @@ The backend will only use metadata explicitly defined in your <code>pixi.toml</c
 <h3 id="compilers"><code>compilers</code><a class="headerlink" href="#compilers" title="Permanent link">#</a></h3>
 <ul>
 <li><strong>Type</strong>: <code>Array&lt;String&gt;</code></li>
-<li><strong>Default</strong>: <code>["rust"]</code></li>
+<li><strong>Default</strong>: <code>["rust", "c"]</code></li>
 <li><strong>Target Merge Behavior</strong>: <code>Overwrite</code> - Platform-specific compilers completely replace base compilers</li>
 </ul>
 <p>List of compilers to use for the build. The backend automatically generates appropriate compiler dependencies using conda-forge's compiler infrastructure.</p>
@@ -4179,7 +4179,7 @@ The backend will only use metadata explicitly defined in your <code>pixi.toml</c
 </span></code></pre></div>
 <p>For target-specific configuration, platform compilers completely replace the base configuration:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;rust&quot;</span><span class="p">]</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;rust&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;c&quot;</span><span class="p">]</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="k">[package.build.target.linux-64.config]</span>
 </span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;rust&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;c&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;cxx&quot;</span><span class="p">]</span>
