@@ -237,9 +237,7 @@ impl<'p> TaskGraph<'p> {
                 }
                 Ok((task_env, task)) => {
                     if templated {
-                        return Err(TaskGraphError::TemplatedFlagWithManifestTask(
-                            name.clone(),
-                        ));
+                        return Err(TaskGraphError::TemplatedFlagWithManifestTask(name.clone()));
                     }
 
                     // If an explicit environment was specified and the task is from the default
@@ -629,7 +627,9 @@ pub enum TaskGraphError {
     #[error("Positional argument '{0}' found after named argument for task {1}")]
     PositionalAfterNamedArgument(String, String),
 
-    #[error("--templated has no effect for manifest-defined task '{0}' (tasks in the manifest are always templated)")]
+    #[error(
+        "--templated has no effect for manifest-defined task '{0}' (tasks in the manifest are always templated)"
+    )]
     TemplatedFlagWithManifestTask(String),
 }
 
