@@ -236,6 +236,12 @@ impl<'p> TaskGraph<'p> {
                     return Err(TaskGraphError::AmbiguousTask(err));
                 }
                 Ok((task_env, task)) => {
+                    if templated {
+                        return Err(TaskGraphError::TemplatedFlagWithManifestTask(
+                            name.clone(),
+                        ));
+                    }
+
                     // If an explicit environment was specified and the task is from the default
                     // environment use the specified environment instead.
                     let run_env = match search_envs.explicit_environment.clone() {
@@ -622,6 +628,9 @@ pub enum TaskGraphError {
 
     #[error("Positional argument '{0}' found after named argument for task {1}")]
     PositionalAfterNamedArgument(String, String),
+
+    #[error("--templated has no effect for manifest-defined task '{0}' (tasks in the manifest are always templated)")]
+    TemplatedFlagWithManifestTask(String),
 }
 
 #[cfg(test)]
@@ -634,7 +643,7 @@ mod test {
 
     use crate::{
         task_environment::SearchEnvironments,
-        task_graph::{PreferExecutable, TaskGraph, join_args_with_single_quotes},
+        task_graph::{PreferExecutable, TaskGraph, TaskGraphError, join_args_with_single_quotes},
     };
 
     fn commands_in_order(
@@ -1085,6 +1094,40 @@ mod test {
             .expect("should have a command");
         // The platform should be resolved, not the raw template
         assert!(!cmd.contains("{{"));
+    }
+
+    /// Verifies that `pixi run --templated <manifest-task>` returns an error.
+    #[test]
+    fn test_templated_flag_errors_for_manifest_task() {
+        let project = r#"
+        [project]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
+
+        [tasks]
+        build = "echo building"
+        "#;
+
+        let project =
+            Workspace::from_str(Path::new("pixi.toml"), project).expect("valid workspace");
+
+        let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
+
+        let err = TaskGraph::from_cmd_args(
+            &project,
+            &search_envs,
+            vec!["build".to_string()],
+            false,
+            PreferExecutable::TaskFirst,
+            true,
+        )
+        .expect_err("should error when --templated is used with a manifest task");
+
+        assert!(matches!(
+            err,
+            TaskGraphError::TemplatedFlagWithManifestTask(_)
+        ));
     }
 
     #[test]
