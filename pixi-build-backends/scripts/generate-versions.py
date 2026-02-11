@@ -24,8 +24,9 @@ def main():
     repo_root = script_dir.parent.parent
 
     # Generate version suffix
-    date_suffix = datetime.now().strftime("%Y%m%d")
-    time_suffix = datetime.now().strftime("%H%M")
+    now = datetime.now()
+    date_suffix = now.strftime("%Y%m%d")
+    time_suffix = now.strftime("%H%M")
     git_hash = get_git_short_hash()
     version_suffix = f"{date_suffix}.{time_suffix}.{git_hash}"
 
