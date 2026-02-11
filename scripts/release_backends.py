@@ -280,6 +280,21 @@ def main() -> None:
                     pkgs.extend(["--package", b.cargo_name])
                 run(["cargo", "update", *pkgs])
 
+            # Update Cargo.lock for py-pixi-build-backend (separate workspace)
+            py_backend = next((b for b in updated if b.binary == "py-pixi-build-backend"), None)
+            if py_backend:
+                console.print()
+                run(
+                    [
+                        "cargo",
+                        "update",
+                        "--package",
+                        py_backend.cargo_name,
+                        "--manifest-path",
+                        str(py_backend.version_path),
+                    ]
+                )
+
             completed.append("Applied version bumps and updated lockfiles")
 
         # Step 3: Run linting
