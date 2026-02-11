@@ -441,3 +441,6 @@ source = { path = "crates/pixi" }
 
 [package.target.unix.build-dependencies]
 clang = "*"
+
+[workspace.build-variants]
+rust_compiler_version = ["1.90.0"]
