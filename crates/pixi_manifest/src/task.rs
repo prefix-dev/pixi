@@ -303,8 +303,8 @@ impl Task {
         }
     }
 
-    /// Returns whether this task requires re-running activation scripts.
-    pub fn reactivate(&self) -> bool {
+    /// Returns whether this task modifies the environment.
+    pub fn modifies_env(&self) -> bool {
         match self {
             Task::Execute(exe) => exe.modifies_env,
             _ => false,

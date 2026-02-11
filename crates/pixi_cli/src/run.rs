@@ -351,7 +351,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // Invalidate cached environment if task modifies it
-        if executable_task.task().reactivate() {
+        if executable_task.task().modifies_env() {
             task_envs.remove(&executable_task.run_environment);
         }
 
