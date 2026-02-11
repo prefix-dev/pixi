@@ -443,6 +443,7 @@ name = "pixi"
 backend = { name = "pixi-build-rust", version = "*" }
 config = { compilers = ["c", "rust"] }
 source = { path = "crates/pixi" }
+target.linux.config.env = { CFLAGS = "$CFLAGS -D_BSD_SOURCE" }
 
 [package.target.unix.build-dependencies]
 clang = "*"
