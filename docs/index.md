@@ -23,7 +23,10 @@ Pixi is a **fast, modern, and reproducible** package management tool for develop
 - [🐍 **Python**](python/tutorial.md)  
   Support for `pyproject.toml` and PyPI through uv.
 
-- [🌍 **Global Tools**](global_tools/introduction.md)  
+- [💾 **Disk Efficient**](workspace/environment.md#de-duplication)
+  Environments share files through hard links or reflinks, so packages are stored only once.
+
+- [🌍 **Global Tools**](global_tools/introduction.md)
   Install global tools, safely isolated. Replacing `apt`, `homebrew`, `winget`.
 
 ---

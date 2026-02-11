@@ -27,13 +27,15 @@ c_compiler_version = ["19"]
 # Shared feature for C/C++ compilers and build tools
 #
 [feature.compilers.dependencies]
-compilers = ">=1.11.0,<2"
+c-compiler = ">=1.11.0,<2"
+cxx-compiler = ">=1.11.0,<2"
 openssl = ">=3.5.4,<4"
 pkg-config = ">=0.29.2,<0.30"
 
 [feature.compilers.target.linux.dependencies]
+c-compiler = ">=1.6.0"
 clang = ">=21.1.2,<22"
-compilers = ">=1.6.0"
+cxx-compiler = ">=1.6.0"
 make = ">=4.4.1,<5"
 mold = ">=2.40.2,<3"
 
