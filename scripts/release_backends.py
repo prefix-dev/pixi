@@ -65,6 +65,7 @@ STEPS = [
     "Choose version bumps",
     "Apply version bumps and update lockfiles",
     "Run linting",
+    "Commit and push changes",
     "Create and merge PR",
     "Choose backends to tag",
     "Create tags and push",
@@ -156,21 +157,39 @@ def run(cmd: list[str]) -> None:
         sys.exit(1)
 
 
+def is_jj() -> bool:
+    """Check if the repository uses jj (Jujutsu)."""
+    return Path(".jj").is_dir()
+
+
 def find_remote() -> str:
     """Find a git remote that points to prefix-dev/pixi.
 
     Checks "upstream" first, then "origin", then all others.
+    Works with both git and jj repositories.
     """
-    output = subprocess.run(
-        ["git", "remote", "--verbose"],
-        capture_output=True,
-        text=True,
-    ).stdout
-    remotes: dict[str, str] = {}
-    for line in output.splitlines():
-        parts = line.split()
-        if len(parts) >= 2:
-            remotes[parts[0]] = parts[1]
+    if is_jj():
+        output = subprocess.run(
+            ["jj", "git", "remote", "list"],
+            capture_output=True,
+            text=True,
+        ).stdout
+        remotes: dict[str, str] = {}
+        for line in output.splitlines():
+            parts = line.split(maxsplit=1)
+            if len(parts) >= 2:
+                remotes[parts[0]] = parts[1]
+    else:
+        output = subprocess.run(
+            ["git", "remote", "--verbose"],
+            capture_output=True,
+            text=True,
+        ).stdout
+        remotes = {}
+        for line in output.splitlines():
+            parts = line.split()
+            if len(parts) >= 2:
+                remotes[parts[0]] = parts[1]
     for name in ["upstream", "origin"]:
         if name in remotes and UPSTREAM_REPO in remotes[name]:
             return name
@@ -179,6 +198,26 @@ def find_remote() -> str:
             return name
     console.print(f"[bold red]No git remote found for {UPSTREAM_REPO}[/bold red]")
     sys.exit(1)
+
+
+def commit_and_push(remote: str, branch: str, message: str) -> None:
+    """Create a branch, commit changes, and push to the remote."""
+    if is_jj():
+        run(["jj", "describe", "--message", message])
+        run(["jj", "bookmark", "set", branch])
+        run(["jj", "git", "push", "--bookmark", branch, "--remote", remote])
+    else:
+        # Delete the branch if it already exists locally
+        result = subprocess.run(
+            ["git", "branch", "--list", branch],
+            capture_output=True,
+            text=True,
+        )
+        if result.stdout.strip():
+            run(["git", "branch", "--delete", branch])
+        run(["git", "switch", "--create", branch])
+        run(["git", "commit", "--all", "--message", message])
+        run(["git", "push", "--set-upstream", remote, branch])
 
 
 def _ask(question: Any) -> Any:
@@ -304,7 +343,15 @@ def main() -> None:
             run(["pixi", "run", "--environment", "lefthook", "lint-fast"])
             completed.append("Linting passed")
 
-        # Step 4: Create and merge PR
+        # Step 4: Commit and push changes
+        step += 1
+        if start_step <= step:
+            console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
+            branch = "bump/backends-release"
+            commit_and_push(remote, branch, "chore: bump backend versions")
+            completed.append(f"Committed and pushed to {branch}")
+
+        # Step 5: Create and merge PR
         step += 1
         if start_step <= step:
             console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
@@ -312,7 +359,7 @@ def main() -> None:
             Confirm.ask("PR created and merged?", default=False)
             completed.append("PR created and merged")
 
-        # Step 5: Choose backends to tag
+        # Step 6: Choose backends to tag
         step += 1
         if start_step <= step:
             console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
@@ -339,7 +386,7 @@ def main() -> None:
 
             completed.append("Chose backends to tag")
 
-        # Step 6: Create tags and push
+        # Step 7: Create tags and push
         step += 1
         if start_step <= step:
             console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
