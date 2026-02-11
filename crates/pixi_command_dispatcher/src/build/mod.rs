@@ -20,7 +20,7 @@ pub use dependencies::{
     Dependencies, DependenciesError, DependencySource, KnownEnvironment, PixiRunExports, WithSource,
 };
 pub(crate) use move_file::{MoveError, move_file};
-use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec};
+use pixi_record::{CanonicalSourceLocation, PinnedBuildSourceSpec, PinnedSourceSpec};
 use serde::{Deserialize, Serialize};
 use url::Url;
 pub use work_dir_key::{SourceRecordOrCheckout, WorkDirKey};
@@ -39,14 +39,14 @@ const KNOWN_SUFFIXES: [&str; 3] = [".git", ".tar.gz", ".zip"];
 ///
 /// We want to prefer that location for our cache checks
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct SourceCodeLocation {
+pub struct PinnedSourceCodeLocation {
     /// The location of the manifest and the possible source code
     manifest_source: PinnedSourceSpec,
     /// The location of the source code that should be queried and build
     build_source: Option<PinnedBuildSourceSpec>,
 }
 
-impl SourceCodeLocation {
+impl PinnedSourceCodeLocation {
     pub fn new(
         manifest_source: PinnedSourceSpec,
         build_source: Option<PinnedBuildSourceSpec>,
@@ -86,7 +86,7 @@ impl SourceCodeLocation {
     }
 }
 
-impl std::fmt::Display for SourceCodeLocation {
+impl std::fmt::Display for PinnedSourceCodeLocation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -97,6 +97,90 @@ impl std::fmt::Display for SourceCodeLocation {
                 .map(|build| format!("{build}"))
                 .unwrap_or("undefined".to_string())
         )
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct CanonicalSourceCodeLocation {
+    /// The location of the manifest and the possible source code
+    manifest_source: CanonicalSourceLocation,
+    /// The location of the source code that should be queried and build
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    build_source: Option<CanonicalSourceLocation>,
+}
+
+impl CanonicalSourceCodeLocation {
+    pub fn new(
+        manifest_source: CanonicalSourceLocation,
+        build_source: Option<CanonicalSourceLocation>,
+    ) -> Self {
+        Self {
+            manifest_source,
+            build_source,
+        }
+    }
+
+    /// Get the reference to the manifest source
+    ///
+    /// The manifest source is the location where we can find either the
+    /// manifest or recipe. It can be separate from the actual source code.
+    pub fn manifest_source(&self) -> &CanonicalSourceLocation {
+        &self.manifest_source
+    }
+
+    /// Returns the location of the source code.
+    pub fn source_code(&self) -> &CanonicalSourceLocation {
+        self.build_source.as_ref().unwrap_or(&self.manifest_source)
+    }
+
+    pub fn as_source_and_alternative_root(
+        &self,
+    ) -> (&CanonicalSourceLocation, Option<&CanonicalSourceLocation>) {
+        (&self.manifest_source, self.build_source.as_ref())
+    }
+
+    /// Constructs a name for a cache directory for the given source checkout.
+    ///
+    /// This function uses heuristics to generate a name that is human-readable
+    /// but still unique.
+    pub fn cache_unique_key(&self) -> String {
+        match self.manifest_source() {
+            CanonicalSourceLocation::Url(url) => {
+                let mut hasher = Xxh3::new();
+                url.sha256.hash(&mut hasher);
+                self.source_code().hash(&mut hasher);
+                let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
+                format!("{}-{unique_key}", pretty_url_name(&url.url))
+            }
+            CanonicalSourceLocation::Git(git) => {
+                let name = pretty_url_name(git.repository.as_url());
+                let mut hasher = Xxh3::new();
+                git.hash(&mut hasher);
+                self.source_code().hash(&mut hasher);
+                let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
+                format!("{name}-{unique_key}")
+            }
+            CanonicalSourceLocation::Path(path) => {
+                let mut hasher = Xxh3::new();
+                path.path.hash(&mut hasher);
+                self.source_code().hash(&mut hasher);
+                let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
+                if let Some(file_name) = path.path.file_name() {
+                    format!("{file_name}-{unique_key}")
+                } else {
+                    unique_key
+                }
+            }
+        }
+    }
+}
+
+impl From<PinnedSourceCodeLocation> for CanonicalSourceCodeLocation {
+    fn from(value: PinnedSourceCodeLocation) -> Self {
+        Self {
+            manifest_source: value.manifest_source.into(),
+            build_source: value.build_source.map(|source| source.into_pinned().into()),
+        }
     }
 }
 
@@ -136,21 +220,19 @@ fn pretty_url_name(url: &Url) -> String {
 ///
 /// For path sources, only the path is used as there can only be one entry on
 /// disk anyway.
-pub(crate) fn source_checkout_cache_key(source: &PinnedSourceSpec) -> String {
+pub(crate) fn source_checkout_cache_key(source: &CanonicalSourceLocation) -> String {
     match source {
-        PinnedSourceSpec::Url(url) => {
+        CanonicalSourceLocation::Url(url) => {
             format!("{}-{:x}", pretty_url_name(&url.url), url.sha256)
         }
-        PinnedSourceSpec::Git(git) => {
-            let name = pretty_url_name(&git.git);
-            let hash = git.source.commit.to_short_string();
-            if !git.source.subdirectory.is_empty() {
-                format!("{name}-{}-{hash}", git.source.subdirectory)
-            } else {
-                format!("{name}-{hash}",)
-            }
+        CanonicalSourceLocation::Git(git) => {
+            let name = pretty_url_name(git.repository.as_url());
+            let mut hasher = Xxh3::new();
+            git.hash(&mut hasher);
+            let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
+            format!("{name}-{unique_key}")
         }
-        PinnedSourceSpec::Path(path) => {
+        CanonicalSourceLocation::Path(path) => {
             let mut hasher = Xxh3::new();
             path.path.hash(&mut hasher);
             let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
