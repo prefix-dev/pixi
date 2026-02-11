@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,10 @@ from .common import (
     copy_manifest,
     copytree_with_local_backend,
     verify_cli_command,
+)
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32", reason="git tests are not supported on Windows"
 )
 
 
