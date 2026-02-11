@@ -490,6 +490,42 @@ jobs:
             ${{ env.PIXI_WORKSPACE }}/target/aarch64-pc-windows-msvc/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*.exe
           retention-days: 14
 
+  pixi-build:
+    permissions:
+      id-token: write
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: namespace-profile-ubuntu-24-04-x86-64-4
+            name: linux-64
+          - runner: namespace-profile-macos-15-arm64-6
+            name: osx-arm64
+          - runner: namespace-profile-windows-2022-x86-64-8
+            name: win-64
+    runs-on: ${{ matrix.runner }}
+    name: "pixi build | ${{ matrix.name }}"
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
+        with:
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
+          environments: release
+      - name: "Bump version"
+        shell: bash
+        # Bump the version to the current version plus a date-time as rc value.
+        # This ensures that the version will be unique for the upload to prefix.dev.
+        run: pixi run bump --non-interactive "$(pixi run bump current-version)-rc.$(date +%Y%m%d%H%M)"
+      - name: "Build"
+        run: pixi build -v
+      - name: "Upload to prefix.dev"
+        shell: bash
+        run: pixi upload prefix --skip-existing --channel pixi-ci ./*.conda
+
   #
   # Run integration tests on important platforms
   #
