@@ -5320,162 +5320,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pixi-build-backend"
-version = "0.1.5"
-dependencies = [
- "async-trait",
- "chrono",
- "clap",
- "clap-verbosity-flag",
- "fs-err",
- "indexmap 2.13.0",
- "insta",
- "itertools 0.14.0",
- "jsonrpc-core",
- "jsonrpc-http-server",
- "jsonrpc-stdio-server",
- "miette 7.6.0",
- "minijinja",
- "ordermap",
- "pathdiff",
- "pixi_build_types",
- "rattler-build",
- "rattler_conda_types",
- "rattler_digest",
- "rattler_virtual_packages",
- "recipe-stage0",
- "serde",
- "serde_json",
- "serde_yaml",
- "tempfile",
- "thiserror 2.0.17",
- "tokio",
- "toml",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
-name = "pixi-build-cmake"
-version = "0.3.7"
-dependencies = [
- "async-trait",
- "indexmap 2.13.0",
- "insta",
- "miette 7.6.0",
- "minijinja",
- "pixi-build-backend",
- "pixi_build_types",
- "rattler-build",
- "rattler_conda_types",
- "recipe-stage0",
- "rstest",
- "serde",
- "serde_json",
- "strum",
- "tempfile",
- "tokio",
-]
-
-[[package]]
-name = "pixi-build-mojo"
-version = "0.1.7"
-dependencies = [
- "async-trait",
- "fs-err",
- "indexmap 2.13.0",
- "insta",
- "miette 7.6.0",
- "minijinja",
- "pixi-build-backend",
- "pixi_build_types",
- "rattler-build",
- "rattler_conda_types",
- "recipe-stage0",
- "rstest",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
-]
-
-[[package]]
-name = "pixi-build-python"
-version = "0.4.4"
-dependencies = [
- "async-trait",
- "fs-err",
- "indexmap 2.13.0",
- "insta",
- "miette 7.6.0",
- "minijinja",
- "once_cell",
- "pep508_rs",
- "pixi-build-backend",
- "pixi_build_types",
- "pyproject-toml",
- "rattler_conda_types",
- "recipe-stage0",
- "reqwest",
- "serde",
- "serde_json",
- "spdx 0.10.9",
- "tempfile",
- "thiserror 2.0.17",
- "tokio",
- "toml",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "pixi-build-rattler-build"
-version = "0.3.6"
-dependencies = [
- "async-trait",
- "chrono",
- "fs-err",
- "insta",
- "miette 7.6.0",
- "pathdiff",
- "pixi-build-backend",
- "pixi_build_types",
- "rattler-build",
- "rattler_conda_types",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "pixi-build-rust"
-version = "0.4.4"
-dependencies = [
- "async-trait",
- "cargo_toml",
- "fs-err",
- "indexmap 2.13.0",
- "insta",
- "miette 7.6.0",
- "minijinja",
- "once_cell",
- "pathdiff",
- "pixi-build-backend",
- "pixi_build_types",
- "rattler_conda_types",
- "recipe-stage0",
- "rstest",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.17",
- "tokio",
-]
-
-[[package]]
 name = "pixi_allocator"
 version = "0.1.0"
 dependencies = [
@@ -5527,6 +5371,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_build_backend"
+version = "0.1.7"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "clap",
+ "clap-verbosity-flag",
+ "fs-err",
+ "indexmap 2.13.0",
+ "insta",
+ "itertools 0.14.0",
+ "jsonrpc-core",
+ "jsonrpc-http-server",
+ "jsonrpc-stdio-server",
+ "miette 7.6.0",
+ "minijinja",
+ "ordermap",
+ "pathdiff",
+ "pixi_build_types",
+ "rattler-build",
+ "rattler_conda_types",
+ "rattler_digest",
+ "rattler_virtual_packages",
+ "recipe_stage0",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "pixi_build_backend_passthrough"
 version = "0.1.0"
 dependencies = [
@@ -5540,6 +5421,28 @@ dependencies = [
  "rattler_package_streaming",
  "serde",
  "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "pixi_build_cmake"
+version = "0.3.9"
+dependencies = [
+ "async-trait",
+ "indexmap 2.13.0",
+ "insta",
+ "miette 7.6.0",
+ "minijinja",
+ "pixi_build_backend",
+ "pixi_build_types",
+ "rattler-build",
+ "rattler_conda_types",
+ "recipe_stage0",
+ "rstest",
+ "serde",
+ "serde_json",
+ "strum",
  "tempfile",
  "tokio",
 ]
@@ -5587,6 +5490,103 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.17",
  "tracing",
+]
+
+[[package]]
+name = "pixi_build_mojo"
+version = "0.1.9"
+dependencies = [
+ "async-trait",
+ "fs-err",
+ "indexmap 2.13.0",
+ "insta",
+ "miette 7.6.0",
+ "minijinja",
+ "pixi_build_backend",
+ "pixi_build_types",
+ "rattler-build",
+ "rattler_conda_types",
+ "recipe_stage0",
+ "rstest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "pixi_build_python"
+version = "0.4.6"
+dependencies = [
+ "async-trait",
+ "fs-err",
+ "indexmap 2.13.0",
+ "insta",
+ "miette 7.6.0",
+ "minijinja",
+ "once_cell",
+ "pep508_rs",
+ "pixi_build_backend",
+ "pixi_build_types",
+ "pyproject-toml",
+ "rattler_conda_types",
+ "recipe_stage0",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "spdx 0.10.9",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "toml",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "pixi_build_rattler_build"
+version = "0.3.8"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "fs-err",
+ "insta",
+ "miette 7.6.0",
+ "pathdiff",
+ "pixi_build_backend",
+ "pixi_build_types",
+ "rattler-build",
+ "rattler_conda_types",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "pixi_build_rust"
+version = "0.4.6"
+dependencies = [
+ "async-trait",
+ "cargo_toml",
+ "fs-err",
+ "indexmap 2.13.0",
+ "insta",
+ "miette 7.6.0",
+ "minijinja",
+ "once_cell",
+ "pathdiff",
+ "pixi_build_backend",
+ "pixi_build_types",
+ "rattler_conda_types",
+ "recipe_stage0",
+ "rstest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
 ]
 
 [[package]]
@@ -7689,7 +7689,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "recipe-stage0"
+name = "recipe_stage0"
 version = "0.1.1"
 dependencies = [
  "hashlink",

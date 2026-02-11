@@ -3678,8 +3678,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "pixi-build-backend"
-version = "0.1.5"
+name = "pixi_build_backend"
+version = "0.1.7"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3700,7 +3700,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_digest",
  "rattler_virtual_packages",
- "recipe-stage0",
+ "recipe_stage0",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -3881,14 +3881,14 @@ dependencies = [
 
 [[package]]
 name = "py-pixi-build-backend"
-version = "0.4.1"
+version = "0.4.3"
 dependencies = [
  "async-trait",
  "fs-err",
  "indexmap 2.13.0",
  "miette",
  "paste",
- "pixi-build-backend",
+ "pixi_build_backend",
  "pixi_build_types",
  "pyo3",
  "pyo3-async-runtimes",
@@ -3896,7 +3896,7 @@ dependencies = [
  "pythonize",
  "rattler-build",
  "rattler_conda_types",
- "recipe-stage0",
+ "recipe_stage0",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -4780,7 +4780,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "recipe-stage0"
+name = "recipe_stage0"
 version = "0.1.1"
 dependencies = [
  "hashlink",

@@ -7,11 +7,9 @@
  </video>
 </div>
 
-
 With `pixi global`, users can manage globally installed tools in a way that makes them available from any directory.
 This means that the Pixi environment will be placed in a global location, and the tools will be exposed to the system `PATH`, allowing you to run them from the command line.
 Some packages, especially those with graphical user interfaces, will also add start menu entries.
-
 
 ## Basic Usage
 
@@ -37,6 +35,7 @@ pixi global install ipython --with numpy --with matplotlib
 `numpy` exposes executables, but since it's added via `--with` it's executables are not being exposed.
 
 Importing `numpy` and `matplotlib` now works as expected.
+
 ```bash
 ipython -c 'import numpy; import matplotlib'
 ```
@@ -45,6 +44,7 @@ At some point, you might want to install multiple versions of the same package o
 Since they will be all available on the system `PATH`, they need to be exposed under different names.
 
 Let's check out the following command:
+
 ```bash
 pixi global install --expose py3=python "python=3.12"
 ```
@@ -53,6 +53,7 @@ By specifying `--expose` we specified that we want to expose the executable `pyt
 The package `python` has more executables, but since we specified `--exposed` they are not auto-exposed.
 
 You can run `py3` to start the python interpreter.
+
 ```shell
 py3 -c "print('Hello World')"
 ```
@@ -129,7 +130,6 @@ In this case, we have to specify which output we want to install:
 pixi global install --path /path/to/package foobar
 ```
 
-
 ## Shell Completions
 
 When you work in a terminal, you are using a shell and shells can process completions of command line tools.
@@ -138,7 +138,6 @@ Then, your shell will present you all the flags `git` offers.
 However, that only works if you have the completions installed for the tool in question.
 If the tool you installed via `pixi global` contains completions they will be automatically installed.
 At the moment, only Linux and macOS are supported.
-
 
 First install a tool with `pixi global`:
 
@@ -175,10 +174,9 @@ end
 
     Completions of packages are installed as long as their binaries are exposed under the same name: e.g. `exposed = { git = "git" }`.
 
-
 ## Adding a Series of Tools at Once
 
-Without specifying an inastallation environment, you can add multiple tools at once:
+Without specifying an installation environment, you can add multiple tools at once:
 
 ```shell
 pixi global install pixi-pack rattler-build
@@ -232,10 +230,13 @@ These commands will be available globally, making it easy to access your preferr
 You can install packages for a different platform using the `--platform` flag.
 This is useful when you want to install packages for a different platform, such as `osx-64` packages on `osx-arm64`.
 For example, running this on `osx-arm64`:
+
 ```shell
 pixi global install --platform osx-64 python
 ```
+
 will create the following entry in the manifest:
+
 ```toml
 [envs.python]
 channels = ["conda-forge"]

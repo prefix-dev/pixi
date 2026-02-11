@@ -59,7 +59,7 @@ def configure_local_git_source(
     source = manifest.setdefault("package", {}).setdefault("build", {}).setdefault("source", {})
     for key in ("branch", "tag", "rev"):
         source.pop(key, None)
-    source["git"] = "file://" + str(repo.path.as_posix())
+    source["git"] = repo.path.as_uri()
     source["subdirectory"] = subdirectory
     if rev is not None:
         source["rev"] = rev
