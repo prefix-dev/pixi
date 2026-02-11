@@ -220,6 +220,16 @@ def commit_and_push(remote: str, branch: str, message: str) -> None:
         run(["git", "push", "--set-upstream", remote, branch])
 
 
+def sync_to_main(remote: str) -> None:
+    """Fetch latest changes and switch to the up-to-date main branch."""
+    if is_jj():
+        run(["jj", "git", "fetch", "--remote", remote])
+        run(["jj", "new", f"main@{remote}"])
+    else:
+        run(["git", "checkout", "main"])
+        run(["git", "pull", remote, "main"])
+
+
 def _ask(question: Any) -> Any:
     """Ask a questionary question, exiting on Ctrl+C."""
     answer = question.ask()
@@ -363,6 +373,9 @@ def main() -> None:
         step += 1
         if start_step <= step:
             console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
+
+            # Sync to main so tags are created on the merged commit
+            sync_to_main(remote)
 
             # Reload versions from disk in case they changed via the merged PR
             backends = load_backends()
