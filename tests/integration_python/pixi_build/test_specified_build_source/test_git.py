@@ -15,6 +15,12 @@ from ..common import (
 )
 from .conftest import LocalGitRepo
 
+# Serialize all tests in this module onto a single xdist worker. The
+# local_cpp_git_repo fixture invokes cmake/MSVC which is resource-heavy;
+# running multiple builds in parallel across workers can exhaust memory or
+# cause MSVC process contention (mspdbsrv.exe), crashing the xdist worker.
+pytestmark = pytest.mark.xdist_group("test_specified_build_source_git")
+
 
 def _git_source_entries(lock_file: Path) -> list[dict[str, Any]]:
     data = yaml.safe_load(lock_file.read_text())
@@ -59,7 +65,7 @@ def configure_local_git_source(
     source = manifest.setdefault("package", {}).setdefault("build", {}).setdefault("source", {})
     for key in ("branch", "tag", "rev"):
         source.pop(key, None)
-    source["git"] = "file://" + str(repo.path.as_posix())
+    source["git"] = repo.path.as_uri()
     source["subdirectory"] = subdirectory
     if rev is not None:
         source["rev"] = rev
