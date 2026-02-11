@@ -105,7 +105,14 @@ fn render_env_platform(
     platform: &Platform,
     ignore_pypi_errors: bool,
 ) -> miette::Result<()> {
-    let packages = env.packages(*platform).ok_or(miette::miette!(
+    let lock_platform = env
+        .lock_file()
+        .platform(&platform.to_string())
+        .ok_or(miette::miette!(
+            "platform '{platform}' not found for env {}",
+            env_name,
+        ))?;
+    let packages = env.packages(lock_platform).ok_or(miette::miette!(
         "platform '{platform}' not found for env {}",
         env_name,
     ))?;
@@ -198,7 +205,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut env_platform = Vec::new();
 
     for (env_name, env) in environments {
-        let available_platforms: HashSet<Platform> = HashSet::from_iter(env.platforms());
+        let available_platforms: HashSet<Platform> =
+            env.platforms().map(|p| p.subdir()).collect();
 
         if let Some(ref platforms) = args.platform {
             for plat in platforms {
@@ -252,7 +260,8 @@ mod tests {
         let output_dir = tempdir().unwrap();
 
         for (env_name, env) in lockfile.environments() {
-            for platform in env.platforms() {
+            for lock_platform in env.platforms() {
+                let platform = lock_platform.subdir();
                 // example contains pypi dependencies so should fail if `ignore_pypi_errors` is
                 // false.
                 assert!(

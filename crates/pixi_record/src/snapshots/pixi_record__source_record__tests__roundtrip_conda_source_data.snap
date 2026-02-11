@@ -3,6 +3,8 @@ source: crates/pixi_record/src/source_record.rs
 expression: roundtrip_lock
 ---
 version: 7
+platforms:
+- name: noarch
 environments:
   default:
     channels:

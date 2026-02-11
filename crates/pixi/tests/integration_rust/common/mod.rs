@@ -151,8 +151,11 @@ impl LockFileExt for LockFile {
         let Some(env) = self.environment(environment) else {
             return false;
         };
+        let Some(p) = self.platform(&platform.to_string()) else {
+            return false;
+        };
 
-        env.packages(platform)
+        env.packages(p)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_conda)
@@ -162,8 +165,11 @@ impl LockFileExt for LockFile {
         let Some(env) = self.environment(environment) else {
             return false;
         };
+        let Some(p) = self.platform(&platform.to_string()) else {
+            return false;
+        };
 
-        env.packages(platform)
+        env.packages(p)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_pypi)
@@ -180,8 +186,11 @@ impl LockFileExt for LockFile {
         let Some(env) = self.environment(environment) else {
             return false;
         };
+        let Some(p) = self.platform(&platform.to_string()) else {
+            return false;
+        };
 
-        env.packages(platform)
+        env.packages(p)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_conda)
@@ -198,8 +207,11 @@ impl LockFileExt for LockFile {
             eprintln!("environment not found: {environment}");
             return false;
         };
+        let Some(p) = self.platform(&platform.to_string()) else {
+            return false;
+        };
 
-        env.packages(platform)
+        env.packages(p)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_pypi)
@@ -212,9 +224,10 @@ impl LockFileExt for LockFile {
         platform: Platform,
         package: &str,
     ) -> Option<String> {
+        let p = self.platform(&platform.to_string())?;
         self.environment(environment)
             .and_then(|env| {
-                env.pypi_packages(platform).and_then(|mut packages| {
+                env.pypi_packages(p).and_then(|mut packages| {
                     packages.find(|(data, _)| data.name.as_ref() == package)
                 })
             })
@@ -227,8 +240,9 @@ impl LockFileExt for LockFile {
         platform: Platform,
         package: &str,
     ) -> Option<LockedPackageRef<'_>> {
+        let p = self.platform(&platform.to_string())?;
         self.environment(environment).and_then(|env| {
-            env.packages(platform)
+            env.packages(p)
                 .and_then(|mut packages| packages.find(|p| p.name() == package))
         })
     }
@@ -239,9 +253,10 @@ impl LockFileExt for LockFile {
         platform: Platform,
         package: &str,
     ) -> Option<UrlOrPath> {
+        let p = self.platform(&platform.to_string())?;
         self.environment(environment)
             .and_then(|env| {
-                env.packages(platform)
+                env.packages(p)
                     .and_then(|mut packages| packages.find(|p| p.name() == package))
             })
             .map(|p| p.location().clone())

@@ -46,14 +46,18 @@ impl LockFileDiff {
 
             let mut environment_diff = IndexMap::new();
 
-            for (platform, packages) in environment.packages_by_platform() {
+            for (lock_platform, packages) in environment.packages_by_platform() {
+                let platform = lock_platform.subdir();
                 // Determine the packages that were previously there.
                 let (mut previous_conda_packages, mut previous_pypi_packages): (
                     HashMap<_, _>,
                     HashMap<_, _>,
                 ) = previous
                     .as_ref()
-                    .and_then(|e| e.packages(platform))
+                    .and_then(|e| {
+                        let p = e.lock_file().platform(lock_platform.name())?;
+                        e.packages(p)
+                    })
                     .into_iter()
                     .flatten()
                     .partition_map(|p| match p {
@@ -119,14 +123,15 @@ impl LockFileDiff {
             }
 
             // Find platforms that were completely removed
-            for (platform, packages) in previous
+            for (lock_platform, packages) in previous
                 .as_ref()
                 .map(|e| e.packages_by_platform())
                 .into_iter()
                 .flatten()
-                .filter(|(platform, _)| !environment_diff.contains_key(platform))
+                .filter(|(p, _)| !environment_diff.contains_key(&p.subdir()))
                 .collect_vec()
             {
+                let platform = lock_platform.subdir();
                 let mut diff = PackagesDiff::default();
                 for package in packages {
                     diff.removed.push(package.into());
@@ -149,12 +154,12 @@ impl LockFileDiff {
             .collect_vec()
         {
             let mut environment_diff = IndexMap::new();
-            for (platform, packages) in environment.packages_by_platform() {
+            for (lock_platform, packages) in environment.packages_by_platform() {
                 let mut diff = PackagesDiff::default();
                 for package in packages {
                     diff.removed.push(package.into());
                 }
-                environment_diff.insert(platform, diff);
+                environment_diff.insert(lock_platform.subdir(), diff);
             }
             result
                 .environment

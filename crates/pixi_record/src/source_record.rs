@@ -354,7 +354,29 @@ mod tests {
 
     /// Build a lock file string from a set of SourceRecords.
     fn build_lock_from_records(records: &[SourceRecord], workspace_root: &Path) -> String {
-        let mut builder = LockFileBuilder::new();
+        // Collect all unique platforms from the records
+        let platforms: std::collections::HashSet<Platform> = records
+            .iter()
+            .map(|r| {
+                let conda_data =
+                    CondaPackageData::from(r.clone().into_conda_source_data(workspace_root));
+                Platform::from_str(&conda_data.record().subdir)
+                    .expect("failed to parse platform from subdir")
+            })
+            .collect();
+
+        let mut builder = LockFileBuilder::new()
+            .with_platforms(
+                platforms
+                    .iter()
+                    .map(|p| rattler_lock::PlatformData {
+                        name: rattler_lock::PlatformName::from(p),
+                        subdir: *p,
+                        virtual_packages: Vec::new(),
+                    })
+                    .collect(),
+            )
+            .expect("platforms should be unique");
         builder.set_channels(
             DEFAULT_ENVIRONMENT_NAME,
             [Channel::from("https://conda.anaconda.org/conda-forge/")],
@@ -366,7 +388,13 @@ mod tests {
 
             let platform = Platform::from_str(&conda_data.record().subdir)
                 .expect("failed to parse platform from subdir");
-            builder.add_conda_package(DEFAULT_ENVIRONMENT_NAME, platform, conda_data);
+            builder
+                .add_conda_package(
+                    DEFAULT_ENVIRONMENT_NAME,
+                    &platform.to_string(),
+                    conda_data,
+                )
+                .expect("platform was registered");
         }
 
         builder

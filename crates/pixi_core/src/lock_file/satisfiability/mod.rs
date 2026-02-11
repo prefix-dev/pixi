@@ -537,10 +537,13 @@ pub fn verify_environment_satisfiability(
     }
 
     let platforms = environment.platforms();
-    let locked_platforms = locked_environment.platforms().collect::<HashSet<_>>();
+    let locked_platforms = locked_environment
+        .platforms()
+        .map(|p| p.subdir())
+        .collect::<HashSet<_>>();
     let additional_platforms = locked_platforms
         .difference(&platforms)
-        .map(|p| p.to_owned())
+        .copied()
         .collect::<HashSet<_>>();
     if !additional_platforms.is_empty() {
         return Err(EnvironmentUnsat::AdditionalPlatformsInLockFile(
@@ -565,7 +568,8 @@ pub fn verify_environment_satisfiability(
         let pypi_wheel_tags_check = PypiWheelTagsCheck::new(environment, &locked_environment);
 
         // Actually check all pypi packages in one iteration
-        for (platform, package_it) in locked_environment.pypi_packages_by_platform() {
+        for (lock_platform, package_it) in locked_environment.pypi_packages_by_platform() {
+            let platform = lock_platform.subdir();
             for (package_data, _) in package_it {
                 let pypi_source = pypi_dependencies
                     .get(&package_data.name)
@@ -641,7 +645,10 @@ impl PypiWheelTagsCheck {
             let system_requirements = environment.system_requirements();
             locked_environment
                 .packages_by_platform()
-                .flat_map(|(platform, packages)| packages.map(move |package| (platform, package)))
+                .flat_map(|(lock_platform, packages)| {
+                    let platform = lock_platform.subdir();
+                    packages.map(move |package| (platform, package))
+                })
                 .filter_map(|(platform, package)| match package {
                     LockedPackageRef::Conda(rattler_lock::CondaPackageData::Binary(package)) => {
                         Some((platform, package))
@@ -861,7 +868,14 @@ pub async fn verify_platform_satisfiability(
     // Convert the lock file into a list of conda and pypi packages
     let mut pixi_records: Vec<PixiRecord> = Vec::new();
     let mut pypi_packages: Vec<PypiRecord> = Vec::new();
-    for package in locked_environment.packages(platform).into_iter().flatten() {
+    let lock_platform = locked_environment
+        .lock_file()
+        .platform(&platform.to_string());
+    for package in lock_platform
+        .and_then(|p| locked_environment.packages(p))
+        .into_iter()
+        .flatten()
+    {
         match package {
             LockedPackageRef::Conda(conda) => {
                 let url = conda.location().clone();

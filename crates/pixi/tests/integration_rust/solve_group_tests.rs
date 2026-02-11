@@ -115,10 +115,11 @@ async fn test_purl_are_added_for_pypi() {
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Check if boltons has a purl
+    let p = lock_file.platform(&Platform::current().to_string()).unwrap();
     lock_file
         .default_environment()
         .unwrap()
-        .packages(Platform::current())
+        .packages(p)
         .unwrap()
         .for_each(|dep| {
             if dep.as_conda().unwrap().record().name == PackageName::from_str("boltons").unwrap() {
@@ -135,10 +136,11 @@ async fn test_purl_are_added_for_pypi() {
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Check if boltons has a purl
+    let p = lock_file.platform(&Platform::current().to_string()).unwrap();
     lock_file
         .default_environment()
         .unwrap()
-        .packages(Platform::current())
+        .packages(p)
         .unwrap()
         .for_each(|dep| {
             if dep.as_conda().unwrap().record().name == PackageName::from_str("boltons").unwrap() {
@@ -850,8 +852,9 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
 
     // Get the lock file
     let lock = pixi.lock_file().await.unwrap();
+    let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
     let environment = lock.environment(DEFAULT_ENVIRONMENT_NAME).unwrap();
-    let conda_packages = environment.conda_packages(Platform::Linux64).unwrap();
+    let conda_packages = environment.conda_packages(p).unwrap();
 
     // Collect conda packages to a vector so we can iterate over them
     let conda_packages: Vec<_> = conda_packages.collect();

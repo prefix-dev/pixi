@@ -379,7 +379,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Get all the packages in the environment.
     let locked_deps = lock_file
         .environment(environment.name().as_str())
-        .and_then(|env| env.packages(platform).map(Vec::from_iter))
+        .and_then(|env| {
+            let p = lock_file.platform(&platform.to_string())?;
+            env.packages(p).map(Vec::from_iter)
+        })
         .unwrap_or_default();
 
     let locked_deps_ext = locked_deps
