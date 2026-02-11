@@ -209,7 +209,13 @@ impl Task {
                 Ok(rendered) => Ok(Some(Cow::Owned(rendered))),
                 Err(e) => Err(e),
             },
-            Task::Custom(custom) => custom.cmd.as_single(context),
+            Task::Custom(custom) => {
+                if custom.templated {
+                    custom.cmd.as_single(context)
+                } else {
+                    custom.cmd.as_single_no_render()
+                }
+            }
             Task::Execute(exe) => exe.cmd.as_single(context),
             Task::Alias(_) => Ok(None),
         }
@@ -432,6 +438,10 @@ pub struct Custom {
     /// The working directory for the command relative to the root of the
     /// project.
     pub cwd: Option<PathBuf>,
+
+    /// Whether to render the command through the template engine.
+    /// CLI commands default to false to avoid unexpected template errors.
+    pub templated: bool,
 }
 
 impl From<Custom> for Task {

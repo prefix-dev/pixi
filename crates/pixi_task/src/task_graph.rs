@@ -211,6 +211,7 @@ impl<'p> TaskGraph<'p> {
         args: Vec<String>,
         skip_deps: bool,
         prefer_executable: PreferExecutable,
+        templated: bool,
     ) -> Result<Self, TaskGraphError> {
         // Split 'args' into arguments if it's a single string, supporting commands
         // like: `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or
@@ -331,6 +332,7 @@ impl<'p> TaskGraph<'p> {
                     Custom {
                         cmd,
                         cwd: env::current_dir().ok(),
+                        templated,
                     }
                     .into(),
                 ),
@@ -642,6 +644,7 @@ mod test {
         environment_name: Option<EnvironmentName>,
         skip_deps: bool,
         prefer_executable: PreferExecutable,
+        templated: bool,
     ) -> Vec<String> {
         let project = Workspace::from_str(Path::new("pixi.toml"), project_str).unwrap();
 
@@ -654,6 +657,7 @@ mod test {
             run_args.iter().map(|arg| arg.to_string()).collect(),
             skip_deps,
             prefer_executable,
+            templated,
         )
         .unwrap();
 
@@ -693,6 +697,7 @@ mod test {
                 None,
                 false,
                 PreferExecutable::TaskFirst,
+                false,
             ),
             vec!["echo root", "echo task1", "echo task2", "echo top '--test'"]
         );
@@ -718,6 +723,7 @@ mod test {
                 None,
                 false,
                 PreferExecutable::TaskFirst,
+                false,
             ),
             vec!["echo root", "echo task1", "echo task2", "echo top"]
         );
@@ -745,6 +751,7 @@ mod test {
                 None,
                 false,
                 PreferExecutable::TaskFirst,
+                false,
             ),
             vec!["echo linux", "echo task1", "echo task2", "echo top",]
         );
@@ -765,6 +772,7 @@ mod test {
                 None,
                 false,
                 PreferExecutable::TaskFirst,
+                false,
             ),
             vec![r#"echo bla"#]
         );
@@ -791,6 +799,7 @@ mod test {
                 None,
                 false,
                 PreferExecutable::TaskFirst,
+                false,
             ),
             vec![r#"echo build"#]
         );
@@ -820,6 +829,7 @@ mod test {
                 None,
                 false,
                 PreferExecutable::TaskFirst,
+                false,
             ),
             vec![r#"hello world"#]
         );
@@ -853,6 +863,7 @@ mod test {
                 Some(EnvironmentName::Named("cuda".to_string())),
                 false,
                 PreferExecutable::TaskFirst,
+                false,
             ),
             vec![r#"python train.py --cuda"#, r#"python test.py --cuda"#]
         );
@@ -884,6 +895,7 @@ mod test {
                 None,
                 false,
                 PreferExecutable::TaskFirst,
+                false,
             ),
             vec![r#"echo foo"#, r#"echo bar"#]
         );
@@ -916,6 +928,7 @@ mod test {
             None,
             false,
             PreferExecutable::TaskFirst,
+            false,
         );
     }
 
@@ -938,7 +951,8 @@ mod test {
                 None,
                 None,
                 true,
-                PreferExecutable::TaskFirst
+                PreferExecutable::TaskFirst,
+                false,
             ),
             vec![r#"echo bar"#]
         );
@@ -949,7 +963,8 @@ mod test {
                 None,
                 None,
                 false,
-                PreferExecutable::TaskFirst
+                PreferExecutable::TaskFirst,
+                false,
             ),
             vec!["echo foo", "echo bar"]
         );
@@ -976,6 +991,105 @@ mod test {
         assert_eq!(quote_result, r#"'echo' 'it'"'"'s'"#);
     }
 
+    /// Regression test for https://github.com/prefix-dev/pixi/issues/5478
+    ///
+    /// Verifies that `pixi run echo '{{ hello }}'` does not fail when
+    /// templating is disabled (the default for CLI commands).
+    #[test]
+    fn test_custom_command_with_braces_no_template() {
+        let project = r#"
+        [project]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
+        "#;
+
+        let project =
+            Workspace::from_str(Path::new("pixi.toml"), project).expect("valid workspace");
+
+        let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
+
+        // Without --templated, {{ hello }} should pass through as-is.
+        // Multiple args simulate how the shell + clap deliver them:
+        //   pixi run echo '{{ hello }}'
+        // becomes args = ["echo", "{{ hello }}"]
+        let graph = TaskGraph::from_cmd_args(
+            &project,
+            &search_envs,
+            vec!["echo".to_string(), "{{ hello }}".to_string()],
+            false,
+            PreferExecutable::TaskFirst,
+            false,
+        )
+        .expect("should not fail with braces when templating is disabled");
+
+        let order = graph.topological_order();
+        assert_eq!(order.len(), 1);
+        let task = &graph[order[0]];
+        let context = pixi_manifest::task::TaskRenderContext {
+            platform: task.run_environment.best_platform(),
+            environment_name: task.run_environment.name(),
+            manifest_path: Some(&project.workspace.provenance.path),
+            args: task.args.as_ref(),
+        };
+        let cmd = task
+            .task
+            .as_single_command(&context)
+            .expect("should not fail")
+            .expect("should have a command");
+        assert!(cmd.contains("{{ hello }}"));
+    }
+
+    /// Verifies that `pixi run --templated echo '{{ pixi.platform }}'`
+    /// renders template variables.
+    #[test]
+    fn test_custom_command_with_templated_flag() {
+        let project = r#"
+        [project]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
+        "#;
+
+        let project =
+            Workspace::from_str(Path::new("pixi.toml"), project).expect("valid workspace");
+
+        let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
+
+        // With --templated, {{ pixi.platform }} should be rendered.
+        // Multiple args simulate how the shell + clap deliver them:
+        //   pixi run --templated echo '{{ pixi.platform }}'
+        // becomes args = ["echo", "{{ pixi.platform }}"]
+        let graph = TaskGraph::from_cmd_args(
+            &project,
+            &search_envs,
+            vec![
+                "echo".to_string(),
+                "{{ pixi.platform }}".to_string(),
+            ],
+            false,
+            PreferExecutable::TaskFirst,
+            true,
+        )
+        .expect("should succeed with valid template variable");
+
+        let order = graph.topological_order();
+        let task = &graph[order[0]];
+        let context = pixi_manifest::task::TaskRenderContext {
+            platform: task.run_environment.best_platform(),
+            environment_name: task.run_environment.name(),
+            manifest_path: Some(&project.workspace.provenance.path),
+            args: task.args.as_ref(),
+        };
+        let cmd = task
+            .task
+            .as_single_command(&context)
+            .expect("should render successfully")
+            .expect("should have a command");
+        // The platform should be resolved, not the raw template
+        assert!(!cmd.contains("{{"));
+    }
+
     #[test]
     fn test_prefer_executable_always() {
         let project = r#"
@@ -999,6 +1113,7 @@ mod test {
             vec!["foo".to_string()],
             false,
             PreferExecutable::Always,
+            false,
         )
         .expect("graph should be created");
 

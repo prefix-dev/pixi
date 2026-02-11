@@ -84,6 +84,14 @@ pub struct Args {
     #[arg(long)]
     pub skip_deps: bool,
 
+    /// Enable template rendering for the command arguments.
+    ///
+    /// By default, arguments passed to `pixi run` on the command line are not
+    /// processed by the template engine. Use this flag to enable rendering
+    /// of template variables like `{{ pixi.platform }}`.
+    #[arg(long)]
+    pub templated: bool,
+
     /// Run the task in dry-run mode (only print the command that would run)
     #[clap(short = 'n', long)]
     pub dry_run: bool,
@@ -194,6 +202,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         } else {
             PreferExecutable::TaskFirst
         },
+        args.templated,
     )?;
     tracing::debug!("Task graph: {}", task_graph);
 
