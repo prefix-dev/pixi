@@ -7,11 +7,11 @@ on:
       - main
     paths:
       - "pixi-build-backends/**"
-      - "crates/pixi-build-python/**"
-      - "crates/pixi-build-rattler-build/**"
-      - "crates/pixi-build-cmake/**"
-      - "crates/pixi-build-rust/**"
-      - "crates/pixi-build-mojo/**"
+      - "crates/pixi_build_python/**"
+      - "crates/pixi_build_rattler_build/**"
+      - "crates/pixi_build_cmake/**"
+      - "crates/pixi_build_rust/**"
+      - "crates/pixi_build_mojo/**"
       - ".github/workflows/backends-release.yml"
   pull_request:
     types:

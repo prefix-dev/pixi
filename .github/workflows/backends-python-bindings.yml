@@ -4,13 +4,13 @@ on:
   push:
     branches: [main]
     paths:
-      - crates/pixi-build-backend/**
+      - crates/pixi_build_backend/**
       - Cargo.*
       - pixi-build-backends/py-pixi-build-backend/**
       - .github/workflows/backends-python-bindings.yml
   pull_request:
     paths:
-      - crates/pixi-build-backend/**
+      - crates/pixi_build_backend/**
       - Cargo.*
       - pixi-build-backends/py-pixi-build-backend/**
       - .github/workflows/backends-python-bindings.yml

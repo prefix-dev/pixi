@@ -12,8 +12,8 @@ name = "pixi_build_backend"
 
 [features]
 default = ["rustls-tls"]
-native-tls = ["pixi-build-backend/native-tls", "rattler-build/native-tls"]
-rustls-tls = ["pixi-build-backend/rustls-tls", "rattler-build/rustls-tls"]
+native-tls = ["pixi_build_backend/native-tls", "rattler-build/native-tls"]
+rustls-tls = ["pixi_build_backend/rustls-tls", "rattler-build/rustls-tls"]
 
 [dependencies]
 # PyO3 for Python bindings
@@ -27,8 +27,8 @@ pyo3 = { version = "0.26", features = [
 pyo3-async-runtimes = { version = "0.26.0", features = ["tokio-runtime"] }
 
 # Core pixi-build dependencies (local crates)
-pixi-build-backend = { path = "../../crates/pixi-build-backend" }
-recipe-stage0 = { path = "../../crates/recipe-stage0" }
+pixi_build_backend = { path = "../../crates/pixi_build_backend" }
+recipe_stage0 = { path = "../../crates/recipe_stage0" }
 
 # Pixi types
 pixi_build_types = { path = "../../crates/pixi_build_types" }

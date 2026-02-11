@@ -161,6 +161,7 @@ nav:
       - Authentication: deployment/authentication.md
       - Container: deployment/container.md
       - S3: deployment/s3.md
+      - JFrog Artifactory: deployment/artifactory.md
   - Integration:
       - Editor:
           - VSCode: integration/editor/vscode.md
@@ -178,6 +179,7 @@ nav:
           - Pixi Inject: integration/extensions/pixi_inject.md
           - Pixi Install-to-prefix: integration/extensions/pixi_install_to_prefix.md
           - Pixi Pack: deployment/pixi_pack.md
+          - Pixi Skills: integration/extensions/pixi_skills.md
       - Third Party:
           - Conda Deny: integration/third_party/conda_deny.md
           - Direnv: integration/third_party/direnv.md
