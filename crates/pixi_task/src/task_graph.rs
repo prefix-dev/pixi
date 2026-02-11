@@ -1063,10 +1063,7 @@ mod test {
         let graph = TaskGraph::from_cmd_args(
             &project,
             &search_envs,
-            vec![
-                "echo".to_string(),
-                "{{ pixi.platform }}".to_string(),
-            ],
+            vec!["echo".to_string(), "{{ pixi.platform }}".to_string()],
             false,
             PreferExecutable::TaskFirst,
             true,
