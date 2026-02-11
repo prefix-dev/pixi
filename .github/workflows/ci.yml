@@ -542,7 +542,7 @@ jobs:
           path: ${{ env.TARGET_RELEASE }}
       - name: Setup unix binary, add to github path
         run: |
-          chmod a+x ${{ env.TARGET_RELEASE }}/pixi
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
         run: pixi info
@@ -568,7 +568,7 @@ jobs:
           path: ${{ env.TARGET_RELEASE }}
       - name: Setup unix binary, add to github path
         run: |
-          chmod a+x ${{ env.TARGET_RELEASE }}/pixi
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
         run: pixi info
@@ -632,7 +632,7 @@ jobs:
           path: ${{ env.TARGET_RELEASE }}
       - name: Setup unix binary, add to github path
         run: |
-          chmod a+x ${{ env.TARGET_RELEASE }}/pixi
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
         run: pixi info
@@ -668,7 +668,7 @@ jobs:
           path: ${{ env.TARGET_RELEASE }}
       - name: Setup unix binary, add to github path
         run: |
-          chmod a+x ${{ env.TARGET_RELEASE }}/pixi
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
         run: pixi info
@@ -766,7 +766,7 @@ jobs:
           path: ${{ env.TARGET_RELEASE }}
       - name: Setup unix binary, add to github path
         run: |
-          chmod a+x ${{ env.TARGET_RELEASE }}/pixi
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
         run: pixi info
@@ -821,7 +821,7 @@ jobs:
           path: ${{ env.TARGET_RELEASE }}
       - name: Setup unix binary, add to github path
         run: |
-          chmod a+x ${{ env.TARGET_RELEASE }}/pixi
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
         run: pixi info
