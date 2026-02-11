@@ -401,5 +401,6 @@ outputs:
       description: |
         This package provides a ROS build backend for Pixi, allowing the integration of ROS packages into the Pixi build system.
       license: BSD-3-Clause
+      license_file: LICENSE
       documentation: https://prefix-dev.github.io/pixi-build-backends
       repository: https://github.com/prefix-dev/pixi-build-backends
