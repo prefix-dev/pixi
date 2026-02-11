@@ -26,9 +26,6 @@ pub trait MetadataCache: Clone + Sized {
     /// Returns the root directory for this cache
     fn root(&self) -> &Path;
 
-    /// Returns the name of the cache file (e.g., "metadata.json")
-    fn cache_file_name(&self) -> &'static str;
-
     /// Reads the cached metadata for the given key without holding the lock.
     /// Returns the metadata and its version number if it exists.
     ///
@@ -39,8 +36,7 @@ pub trait MetadataCache: Clone + Sized {
     where
         Self::Metadata: VersionedMetadata,
     {
-        let cache_dir = self.root().join(input.hash_key());
-        let cache_file_path = cache_dir.join(self.cache_file_name());
+        let cache_file_path = self.cache_file_path(input);
 
         // Try to open the cache file (may not exist yet)
         let cache_file = match tokio::fs::File::open(&cache_file_path).await {
@@ -116,12 +112,16 @@ pub trait MetadataCache: Clone + Sized {
     where
         Self::Metadata: VersionedMetadata,
     {
-        let cache_dir = self.root().join(input.hash_key());
-        tokio::fs::create_dir_all(&cache_dir).await.map_err(|e| {
-            Self::Error::from_io_error("creating cache directory".to_string(), cache_dir.clone(), e)
-        })?;
-
-        let cache_file_path = cache_dir.join(self.cache_file_name());
+        let cache_file_path = self.cache_file_path(input);
+        if let Some(parent) = cache_file_path.parent() {
+            tokio::fs::create_dir_all(&parent).await.map_err(|e| {
+                Self::Error::from_io_error(
+                    "creating cache directory".to_string(),
+                    parent.to_path_buf(),
+                    e,
+                )
+            })?;
+        }
 
         // Open or create the cache file
         let cache_file = tokio::fs::OpenOptions::new()
@@ -217,6 +217,11 @@ pub trait MetadataCache: Clone + Sized {
         drop(locked_cache_file);
 
         Ok(WriteResult::Written)
+    }
+
+    /// Returns the path to the cache entry with the given key.
+    fn cache_file_path(&self, input: &Self::Key) -> PathBuf {
+        self.root().join(input.hash_key()).with_extension("json")
     }
 }
 

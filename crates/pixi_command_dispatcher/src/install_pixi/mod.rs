@@ -23,8 +23,9 @@ use thiserror::Error;
 
 use crate::{
     BuildEnvironment, BuildProfile, CommandDispatcher, CommandDispatcherError,
-    CommandDispatcherErrorResultExt, SourceBuildError, SourceBuildSpec, build::SourceCodeLocation,
-    executor::ExecutorFutures, install_pixi::reporter::WrappingInstallReporter,
+    CommandDispatcherErrorResultExt, SourceBuildError, SourceBuildSpec,
+    build::PinnedSourceCodeLocation, executor::ExecutorFutures,
+    install_pixi::reporter::WrappingInstallReporter,
 };
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -216,7 +217,7 @@ impl InstallPixiEnvironmentSpec {
 
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
-                source: SourceCodeLocation::new(
+                source: PinnedSourceCodeLocation::new(
                     source_record.manifest_source.clone(),
                     source_record.build_source.clone(),
                 ),
