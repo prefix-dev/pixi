@@ -1,5 +1,6 @@
 import json
 import shutil
+import sys
 import tomllib
 from collections.abc import Iterator
 from pathlib import Path
@@ -14,6 +15,10 @@ from ..common import (
     verify_cli_command,
 )
 from .conftest import LocalGitRepo
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32", reason="git tests are not supported on Windows"
+)
 
 
 def _git_source_entries(lock_file: Path) -> list[dict[str, Any]]:
