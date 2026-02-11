@@ -111,6 +111,7 @@ outputs:
       files:
         - bin/pixi-build-cmake
         - bin/pixi-build-cmake.exe
+        - LICENSE
         - THIRDPARTY.yml
       script:
         - if: unix
