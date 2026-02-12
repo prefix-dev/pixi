@@ -21,9 +21,9 @@ pre-commit:
   parallel: true
   jobs:
     - name: actionlint
-      run: pixi {run} -e lint actionlint
+      run: pixi {run} -e lint _actionlint
     - name: zizmor
-      run: pixi {run} -e lint zizmor
+      run: pixi {run} -e lint _zizmor
     - name: cargo-fmt
       glob: "*.rs"
       stage_fixed: true
@@ -37,32 +37,32 @@ pre-commit:
           - name: ruff lint
             run: pixi {run} -e lint ruff-lint {staged_files}
           - name: ruff format
-            run: pixi {run} -e lint ruff-format {staged_files}
+            run: pixi {run} -e lint ruff-fmt {staged_files}
     - name: cargo-shear
       glob: "*.rs,Cargo.toml"
       stage_fixed: true
-      run: pixi {run} -e lint cargo-shear
+      run: pixi {run} -e lint _cargo-shear
     - name: shell-format
       glob: "*.{sh, bash}"
-      run: pixi {run} -e lint shell-format {staged_files}
+      run: pixi {run} -e lint _shell-fmt {staged_files}
     - name: taplo
       stage_fixed: true
       glob: "*.toml"
       exclude:
         - schema/examples/invalid/*.toml
-      run: pixi {run} -e lint toml-format {staged_files}
+      run: pixi {run} -e lint _toml-fmt {staged_files}
     - name: dprint
       glob: "*.{yaml,yml}"
       group:
         jobs:
           - name: dprint check
-            run: pixi {run} -e lint dprint-check {staged_files}
+            run: pixi {run} -e lint _dprint-check {staged_files}
           - name: dprint fmt
-            run: pixi {run} -e lint dprint-fmt {staged_files}
+            run: pixi {run} -e lint _dprint-fmt {staged_files}
             stage_fixed: true
     - name: typos
       stage_fixed: true
-      run: pixi {run} -e lint typos
+      run: pixi {run} -e lint _typos
     - name: pixi-build-ros-lint
       root: pixi-build-backends/backends/pixi-build-ros
       glob: "*.{py,pyi}"
@@ -83,13 +83,13 @@ pre-push:
   jobs:
     - name: typecheck-python
       glob: "*.{py,pyi}"
-      run: pixi {run} -e lint typecheck-python
+      run: pixi {run} -e lint _typecheck-python
     - name: cargo-clippy
       glob: "*.rs"
       run: pixi {run} -e lint cargo-clippy
     - name: cargo-deny
       glob: "Cargo.lock,Cargo.toml"
       stage_fixed: true
-      run: pixi {run} -e lint cargo-deny
+      run: pixi {run} -e lint _cargo-deny
     - name: check-openssl
-      run: pixi {run} -e lint check-openssl
+      run: pixi {run} -e lint _check-openssl

@@ -156,12 +156,23 @@ generate-cli-docs = { cmd = "cargo run --locked --manifest-path crates/pixi_docs
 mike-serve = { cmd = "mike serve", description = "Serve versioned docs with mike" }
 
 #
-# Feature for running lefthook (lint orchestration)
+# Feature for linting and formatting tools
 #
-[feature.lefthook.dependencies]
+[feature.lint.dependencies]
+actionlint = ">=1.7.7,<2"
+basedpyright = ">=1.31.6,<2"
+cargo-deny = ">=0.19,<0.19.1" # 0.18.5 breaks license checking for uv crates
+cargo-shear = ">=1.7.1,<2"
+dprint = ">=0.49.1,<0.51"
+go-shfmt = ">=3.12.0,<4"
 lefthook = ">=2.0.11,<3"
+ruff = ">=0.14.0,<0.15"
+shellcheck = ">=0.10.0,<0.11"
+taplo = ">=0.10.0,<0.11"
+typos = ">=1.38.1,<2"
+zizmor = ">=1.18.0,<2"
 
-[feature.lefthook.tasks]
+[feature.lint.tasks]
 lefthook = { cmd = "lefthook", description = "Run lefthook" }
 lint = { depends-on = [
   "lint-fast",
@@ -172,39 +183,22 @@ lint-slow = { cmd = "lefthook run pre-push --all-files --force", description = "
 pre-commit-install = { cmd = "lefthook install", description = "Install all git hooks" }
 pre-commit-install-minimal = { cmd = "lefthook install pre-commit", description = "Install only pre-commit hook" }
 
-#
-# Feature for linting and formatting tools
-#
-[feature.lint.dependencies]
-actionlint = ">=1.7.7,<2"
-basedpyright = ">=1.31.6,<2"
-cargo-deny = ">=0.19,<0.19.1" # 0.18.5 breaks license checking for uv crates
-cargo-shear = ">=1.7.1,<2"
-dprint = ">=0.49.1,<0.51"
-go-shfmt = ">=3.12.0,<4"
-ruff = ">=0.14.0,<0.15"
-shellcheck = ">=0.10.0,<0.11"
-taplo = ">=0.10.0,<0.11"
-typos = ">=1.38.1,<2"
-zizmor = ">=1.18.0,<2"
-
-[feature.lint.tasks]
-actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" }, description = "Lint GitHub Actions workflows" }
+_actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" }, description = "Lint GitHub Actions workflows" }
+_cargo-deny = { cmd = "cargo deny --workspace check license --deny warnings", description = "Check cargo dependencies licenses" }
+_cargo-shear = { cmd = "cargo shear --fix", description = "Remove unused dependencies" }
+_check-openssl = { cmd = "python tests/scripts/check-openssl.py", description = "Check OpenSSL configuration" }
+_dprint-check = { cmd = "dprint check --log-level=silent", description = "Check formatting with dprint" }
+_dprint-fmt = { cmd = "dprint fmt --incremental=false", description = "Format with dprint" }
+_shell-fmt = { cmd = "shfmt --write --indent=4 --simplify --binary-next-line", description = "Format shell scripts" }
+_toml-fmt = { cmd = "taplo fmt", env = { RUST_LOG = "warn" }, description = "Format TOML files" }
+_toml-lint = { cmd = "taplo lint --verbose **/pixi.toml", description = "Lint TOML files" }
+_typecheck-python = { cmd = "basedpyright", description = "Type check Python code" }
+_typos = { cmd = "typos --force-exclude", description = "Check for typos" }
+_zizmor = { cmd = "zizmor .github/ --min-severity=medium", description = "Security audit GitHub Actions" }
 cargo-clippy = { cmd = "cargo clippy --all-targets --workspace -- -D warnings", description = "Run clippy on all targets" }
-cargo-deny = { cmd = "cargo deny --workspace check license --deny warnings", description = "Check cargo dependencies licenses" }
 cargo-fmt = { cmd = "cargo fmt --all", description = "Format Rust code" }
-cargo-shear = { cmd = "cargo shear --fix", description = "Remove unused dependencies" }
-check-openssl = { cmd = "python tests/scripts/check-openssl.py", description = "Check OpenSSL configuration" }
-dprint-check = { cmd = "dprint check --log-level=silent", description = "Check formatting with dprint" }
-dprint-fmt = { cmd = "dprint fmt --incremental=false", description = "Format with dprint" }
-ruff-format = { cmd = "ruff format --exit-non-zero-on-format --force-exclude", description = "Format Python code with ruff" }
+ruff-fmt = { cmd = "ruff format --exit-non-zero-on-format --force-exclude", description = "Format Python code with ruff" }
 ruff-lint = { cmd = "ruff check --fix --exit-non-zero-on-fix --force-exclude", description = "Lint Python code with ruff" }
-shell-format = { cmd = "shfmt --write --indent=4 --simplify --binary-next-line", description = "Format shell scripts" }
-toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" }, description = "Format TOML files" }
-toml-lint = { cmd = "taplo lint --verbose **/pixi.toml", description = "Lint TOML files" }
-typecheck-python = { cmd = "basedpyright", description = "Type check Python code" }
-typos = { cmd = "typos --force-exclude", description = "Check for typos" }
-zizmor = { cmd = "zizmor .github/ --min-severity=medium", description = "Security audit GitHub Actions" }
 
 #
 # Feature for micromamba export testing
@@ -214,20 +208,6 @@ micromamba = ">=2.3.2,<3"
 
 [feature.micromamba.tasks]
 test-export = { cmd = "bash tests/scripts/test-export.sh", description = "Test micromamba export functionality" }
-
-#
-# Feature for native-certs testing with local HTTPS server
-#
-[feature.test-native-certs.dependencies]
-mkcert = ">=1.4.4,<2"
-pip = ">=25,<26"
-rich = ">=14,<15"
-testcontainers = ">=4,<5"
-
-[feature.test-native-certs.tasks]
-test-native-certs = { cmd = "python scripts/test_native_certs.py --pixi-bin $CARGO_TARGET_DIR/release/pixi", depends-on = [
-  "build-release",
-], description = "Test native-certs feature with local HTTPS PyPI server" }
 
 #
 # Feature for generating PyPI test indexes
@@ -409,7 +389,6 @@ default = { features = [
 ] }
 dist = { features = ["dist"] }
 docs = { features = ["rust", "compilers", "python", "docs"] }
-lefthook = { features = ["lefthook"] }
 lint = { features = [
   "rust",
   "compilers",
@@ -427,8 +406,8 @@ rust-build = { features = ["rust", "compilers", "python", "rust-build"] }
 rust-test = { features = ["rust", "compilers", "python", "dev", "rust-test"] }
 schema = { features = ["schema"] }
 test = { features = ["test"] }
+# Used for the pixi workspace export tests
 test-export = { features = ["micromamba"] }
-test-native-certs = { features = ["python", "test-native-certs"] }
 trampoline = { features = ["trampoline", "python"] }
 
 #
