@@ -6,8 +6,8 @@ from .common import CURRENT_PLATFORM, ExitCode, copytree_with_local_backend, ver
 def test_build(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     project = "multi-output"
     test_data = build_data.joinpath(project)
-    test_data.joinpath("pixi.lock").unlink(missing_ok=True)
     copytree_with_local_backend(test_data, tmp_pixi_workspace, dirs_exist_ok=True)
+    tmp_pixi_workspace.joinpath("pixi.lock").unlink(missing_ok=True)
     package_manifest = tmp_pixi_workspace.joinpath("recipe", "pixi.toml")
 
     verify_cli_command(
