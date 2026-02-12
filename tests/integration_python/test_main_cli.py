@@ -181,7 +181,7 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
     verify_cli_command(
         [pixi, "workspace", "--manifest-path", manifest_path, "name", "get"],
-        stdout_contains="test_project_commands",
+        stdout_contains=tmp_pixi_workspace.name,
     )
     verify_cli_command(
         [pixi, "workspace", "--manifest-path", manifest_path, "name", "set", "new-name"],

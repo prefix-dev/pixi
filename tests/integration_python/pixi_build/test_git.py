@@ -10,9 +10,9 @@ from .common import (
     verify_cli_command,
 )
 
-pytestmark = pytest.mark.skipif(
-    sys.platform == "win32", reason="git tests are not supported on Windows"
-)
+# pytestmark = pytest.mark.skipif(
+#     sys.platform == "win32", reason="git tests are not supported on Windows"
+# )
 
 
 @pytest.mark.slow

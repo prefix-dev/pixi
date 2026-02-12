@@ -1,4 +1,7 @@
 from pathlib import Path
+import shutil
+import sys
+import tempfile
 
 import pytest
 
@@ -22,8 +25,12 @@ def pixi(request: pytest.FixtureRequest) -> Path:
 
 
 @pytest.fixture
-def tmp_pixi_workspace(tmp_path: Path) -> Path:
-    """Ensure to use a common config independent of the developers machine"""
+def tmp_pixi_workspace(tmp_path: Path) -> Iterator[Path]:
+    """Create a temporary workspace for tests, with a .pixi config.
+
+    On Windows, uses a shorter path to avoid MAX_PATH (260 char) limitations.
+    The build process creates deeply nested paths that can exceed this limit.
+    """
 
     pixi_config = f"""
 # Reset to defaults
@@ -43,11 +50,25 @@ use-environment-activation-cache = false
 [repodata-config."https://prefix.dev/"]
 disable-sharded = false
 """
-    dot_pixi = tmp_path.joinpath(".pixi")
-    dot_pixi.mkdir()
-    dot_pixi.joinpath("config.toml").write_text(pixi_config)
-    return tmp_path
+    
+    if sys.platform == "win32":
+        # Use a very short base path on Windows to avoid MAX_PATH issues.
+        # The standard temp directory (e.g. C:\Users\<user>\AppData\Local\Temp)
+        # is already quite long, so we use C:\.r instead.
+        short_base = Path("C:/.r")
+        short_base.mkdir(parents=True, exist_ok=True)
+        workspace = Path(tempfile.mkdtemp(dir=short_base))
+        workspace.joinpath(".pixi").mkdir()
+        workspace.joinpath(".pixi/config.toml").write_text(pixi_config)
 
+        try:
+            yield workspace
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+    else:
+        tmp_path.joinpath(".pixi").mkdir()
+        tmp_path.joinpath(".pixi/config.toml").write_text(pixi_config)
+        yield tmp_path
 
 @pytest.fixture
 def test_data() -> Path:
