@@ -377,14 +377,18 @@ default = { features = [
   "schema",
 ] }
 dist = { features = ["dist"] }
+# TODO: get rid of rust in the docs env, figure out what to do with the docs generation code.
 docs = { features = ["rust", "compilers", "python", "docs"] }
 python-test = { features = ["pytest", "python-test-deps", "python"] }
+# TODO: Could this be mixed with the backend-release env?
 recipes = { features = ["recipes"] }
 release = { features = ["release"] }
+# TODO: Can rust-build and rust-test be merged?
 rust-build = { features = ["rust", "compilers", "python", "rust-build"] }
 rust-test = { features = ["rust", "compilers", "python", "dev", "rust-test"] }
 schema = { features = ["schema"] }
 test = { features = ["test"] }
+# TODO: figure out why this is not in a rust-build env.
 trampoline = { features = ["trampoline", "python"] }
 
 #
