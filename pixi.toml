@@ -65,7 +65,7 @@ RUSTC_WRAPPER = "sccache"
 
 [feature.backends-release.dependencies]
 questionary = ">=2.1,<3"
-rattler-build = { git = "https://github.com/prefix-dev/rattler-build.git", branch = "refactor" }
+rattler-build = { git = "https://github.com/prefix-dev/rattler-build.git", branch = "main" }
 rich = ">=14,<15"
 sccache = ">=0.13.0,<0.14"
 tomlkit = ">=0.13,<0.14"
@@ -354,7 +354,7 @@ test-all-slow = { depends-on = [
 ], description = "Run all slow tests" }
 
 #
-# Feature for building Python trampolines
+# Feature for building trampolines
 #
 [feature.trampoline.dependencies]
 zstd = ">=1.5.7,<2"
@@ -376,14 +376,7 @@ default = { features = [
 ] }
 dist = { features = ["dist"] }
 docs = { features = ["rust", "compilers", "python", "docs"] }
-lint = { features = [
-  "rust",
-  "compilers",
-  "lint",
-  "python",
-  "python-test-deps",
-  "schema",
-] }
+lint = { features = ["rust", "compilers", "lint", "python", "schema"] }
 python-test = { features = ["pytest", "python-test-deps", "python"] }
 recipes = { features = ["recipes"] }
 release = { features = ["release"] }
