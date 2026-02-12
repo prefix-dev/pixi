@@ -1,6 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env -S pixi exec --with mkcert==1.4.4 --with pip==25.3 --with python==3.14.1 --with rich==14.2.0 --with testcontainers==4.13.3 python
 """
 Test script for the tls-root-certs feature.
+
+Use the local build pixi with:
+--pixi-bin $CARGO_TARGET_DIR/release/pixi
+
+Requires sudo access to install mkcert CA into system trust store.
 
 Sets up a local HTTPS PyPI server with a custom CA (via mkcert) to verify that:
 - tls-root-certs=webpki: Fails (mkcert CA not in webpki-roots)
@@ -23,6 +28,7 @@ from pathlib import Path
 
 from rich.console import Console
 from rich.panel import Panel
+from rich.markup import escape
 from testcontainers.core.container import DockerContainer
 
 console = Console()
@@ -78,7 +84,7 @@ PACKAGE_INDEX_HTML = """\
 """
 
 PIXI_TOML_TEMPLATE = """\
-[project]
+[workspace]
 name = "native-certs-test"
 version = "0.1.0"
 channels = ["conda-forge"]
@@ -221,7 +227,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Test tls-root-certs feature")
     parser.add_argument(
         "--pixi-bin",
-        default=os.environ.get("PIXI_BIN", "pixi"),
+        default=os.environ.get("PIXI_BIN"),
         help="Path to pixi binary (default: $PIXI_BIN or 'pixi')",
     )
     parser.add_argument(
@@ -232,10 +238,13 @@ def main() -> int:
     args = parser.parse_args()
 
     # Resolve pixi-bin path relative to current working directory before we cd elsewhere
-    pixi_bin = Path(args.pixi_bin)
-    if not pixi_bin.is_absolute():
-        pixi_bin = Path.cwd() / pixi_bin
-    args.pixi_bin = str(pixi_bin.resolve())
+    if not args.pixi_bin:
+        pixi_bin = "pixi"
+    else:
+        pixi_bin = Path(args.pixi_bin)
+        if not pixi_bin.is_absolute():
+            pixi_bin = Path.cwd() / pixi_bin
+        pixi_bin = str(pixi_bin.resolve())
 
     console.print(Panel("[bold]TLS Root Certs Feature Test[/bold]", style="yellow"))
 
@@ -285,7 +294,7 @@ def main() -> int:
             # Test A: With webpki certs (should fail)
             console.print("\n[yellow]Test A: With tls-root-certs=webpki (should FAIL)[/yellow]")
             console.print("The CA is NOT in webpki-roots, so this should fail\n")
-            success_a, output_a = run_pixi_test(args.pixi_bin, project_dir, tls_root_certs="webpki")
+            success_a, output_a = run_pixi_test(pixi_bin, project_dir, tls_root_certs="webpki")
             cert_error = any(term in output_a.lower() for term in ["certificate", "ssl", "tls"])
             test_a_passed = not success_a or cert_error
             if test_a_passed:
@@ -296,13 +305,13 @@ def main() -> int:
             # Test B: With native certs (should succeed)
             console.print("\n[yellow]Test B: With tls-root-certs=native (should SUCCEED)[/yellow]")
             console.print("The CA IS in the system trust store, so this should work\n")
-            success_b, output_b = run_pixi_test(args.pixi_bin, project_dir, tls_root_certs="native")
+            success_b, output_b = run_pixi_test(pixi_bin, project_dir, tls_root_certs="native")
             test_b_passed = success_b
             if test_b_passed:
                 console.print("[green]✓ Test B PASSED: Install succeeded with native certs[/green]")
             else:
                 console.print("[red]✗ Test B FAILED: Install failed[/red]")
-                console.print(f"Output: {output_b}")
+                console.print(f"Output: {escape(output_b)}")
 
         # Summary
         console.print(Panel("[bold]Test Summary[/bold]", style="yellow"))
@@ -320,7 +329,7 @@ def main() -> int:
             return 1
 
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        console.print(f"[red]Error: {escape(str(e))}[/red]")
         return 1
 
     finally:

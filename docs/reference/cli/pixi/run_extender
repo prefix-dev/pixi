@@ -24,6 +24,10 @@ pixi run --environment cuda python
 # The PATH should only contain the pixi environment here.
 pixi run --clean-env "echo \$PATH"
 
+# By default, CLI commands are not processed by the template engine.
+# Use --templated to enable template rendering for ad-hoc commands.
+pixi run --templated echo '{{ pixi.platform }}'
+
 ```
 
 ## Notes

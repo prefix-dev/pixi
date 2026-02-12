@@ -27,6 +27,8 @@ pixi run [OPTIONS] [TASK]...
 :  Use a clean environment to run the task
 - <a id="arg---skip-deps" href="#arg---skip-deps">`--skip-deps`</a>
 :  Don't run the dependencies of the task ('depends-on' field in the task definition)
+- <a id="arg---templated" href="#arg---templated">`--templated`</a>
+:  Enable template rendering for the command arguments
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
 :  Run the task in dry-run mode (only print the command that would run)
 - <a id="arg---help" href="#arg---help">`--help`</a>
