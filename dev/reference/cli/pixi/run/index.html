@@ -3741,6 +3741,12 @@
 </li>
 <li>
 <dl>
+<dt><a id="arg---templated" href="#arg---templated"><code>--templated</code></a></dt>
+<dd>Enable template rendering for the command arguments</dd>
+</dl>
+</li>
+<li>
+<dl>
 <dt><a id="arg---dry-run" href="#arg---dry-run"><code>--dry-run (-n)</code></a></dt>
 <dd>Run the task in dry-run mode (only print the command that would run)</dd>
 </dl>
@@ -3884,6 +3890,10 @@
 </span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1"># If you want to run a command in a clean environment you can use the --clean-env flag.</span>
 </span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="c1"># The PATH should only contain the pixi environment here.</span>
 </span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>pixi<span class="w"> </span>run<span class="w"> </span>--clean-env<span class="w"> </span><span class="s2">&quot;echo \$PATH&quot;</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="c1"># By default, CLI commands are not processed by the template engine.</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="c1"># Use --templated to enable template rendering for ad-hoc commands.</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>pixi<span class="w"> </span>run<span class="w"> </span>--templated<span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s1">&#39;{{ pixi.platform }}&#39;</span>
 </span></code></pre></div>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">#</a></h2>
 <div class="admonition info">

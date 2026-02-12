@@ -22,6 +22,7 @@ pixi run [OPTIONS] [TASK]...
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to run the task in
 - [`--clean-env`](#arg---clean-env) : Use a clean environment to run the task
 - [`--skip-deps`](#arg---skip-deps) : Don't run the dependencies of the task ('depends-on' field in the task definition)
+- [`--templated`](#arg---templated) : Enable template rendering for the command arguments
 - [`--dry-run (-n)`](#arg---dry-run) : Run the task in dry-run mode (only print the command that would run)
 - [`--help`](#arg---help) :
 
@@ -115,6 +116,10 @@ pixi run --environment cuda python
 # If you want to run a command in a clean environment you can use the --clean-env flag.
 # The PATH should only contain the pixi environment here.
 pixi run --clean-env "echo \$PATH"
+
+# By default, CLI commands are not processed by the template engine.
+# Use --templated to enable template rendering for ad-hoc commands.
+pixi run --templated echo '{{ pixi.platform }}'
 ```
 
 ## Notes
