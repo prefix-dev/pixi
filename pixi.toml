@@ -373,10 +373,11 @@ default = { features = [
   "python",
   "python-test-deps",
   "dev",
+  "lint",
+  "schema",
 ] }
 dist = { features = ["dist"] }
 docs = { features = ["rust", "compilers", "python", "docs"] }
-lint = { features = ["rust", "compilers", "lint", "python", "schema"] }
 python-test = { features = ["pytest", "python-test-deps", "python"] }
 recipes = { features = ["recipes"] }
 release = { features = ["release"] }
