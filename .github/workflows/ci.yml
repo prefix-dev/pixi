@@ -647,7 +647,7 @@ jobs:
         run: bash tests/scripts/test-examples.sh
 
       - name: Test export
-        run: pixi run --locked test-export
+        run: pixi exec --with micromamba==2.4.0 bash tests/scripts/test-export.sh
 
   test-integration-linux-x86_64:
     timeout-minutes: 30
@@ -684,7 +684,7 @@ jobs:
         run: bash tests/scripts/test-examples.sh
 
       - name: "Test export"
-        run: pixi run --locked test-export
+        run: pixi exec --with micromamba==2.4.0 bash tests/scripts/test-export.sh
 
   test-downstream-windows-x86_64:
     timeout-minutes: 30

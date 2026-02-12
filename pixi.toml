@@ -201,15 +201,6 @@ ruff-fmt = { cmd = "ruff format --exit-non-zero-on-format --force-exclude", desc
 ruff-lint = { cmd = "ruff check --fix --exit-non-zero-on-fix --force-exclude", description = "Lint Python code with ruff" }
 
 #
-# Feature for micromamba export testing
-#
-[feature.micromamba.dependencies]
-micromamba = ">=2.3.2,<3"
-
-[feature.micromamba.tasks]
-test-export = { cmd = "bash tests/scripts/test-export.sh", description = "Test micromamba export functionality" }
-
-#
 # Feature for generating PyPI test indexes
 #
 [feature.pypi-gen.dependencies]
@@ -406,8 +397,6 @@ rust-build = { features = ["rust", "compilers", "python", "rust-build"] }
 rust-test = { features = ["rust", "compilers", "python", "dev", "rust-test"] }
 schema = { features = ["schema"] }
 test = { features = ["test"] }
-# Used for the pixi workspace export tests
-test-export = { features = ["micromamba"] }
 trampoline = { features = ["trampoline", "python"] }
 
 #
