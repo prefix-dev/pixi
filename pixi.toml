@@ -172,22 +172,22 @@ typos = ">=1.38.1,<2"
 zizmor = ">=1.18.0,<2"
 
 [feature.lint.tasks]
-_actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" }, description = "Lint GitHub Actions workflows" }
-_cargo-deny = { cmd = "cargo deny --workspace check license --deny warnings", description = "Check cargo dependencies licenses" }
-_cargo-shear = { cmd = "cargo shear --fix", description = "Remove unused dependencies" }
-_check-openssl = { cmd = "python tests/scripts/check-openssl.py", description = "Check OpenSSL configuration" }
-_dprint-check = { cmd = "dprint check --log-level=silent", description = "Check formatting with dprint" }
-_dprint-fmt = { cmd = "dprint fmt --incremental=false", description = "Format with dprint" }
-_shell-fmt = { cmd = "shfmt --write --indent=4 --simplify --binary-next-line", description = "Format shell scripts" }
-_toml-fmt = { cmd = "taplo fmt", env = { RUST_LOG = "warn" }, description = "Format TOML files" }
-_toml-lint = { cmd = "taplo lint --verbose **/pixi.toml", description = "Lint TOML files" }
-_typecheck-python = { cmd = "basedpyright", description = "Type check Python code" }
-_typos = { cmd = "typos --force-exclude", description = "Check for typos" }
-_zizmor = { cmd = "zizmor .github/ --min-severity=medium", description = "Security audit GitHub Actions" }
+actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" }, description = "Lint GitHub Actions workflows" }
 cargo-clippy = { cmd = "cargo clippy --all-targets --workspace -- -D warnings", description = "Run clippy on all targets" }
+cargo-deny = { cmd = "cargo deny --workspace check license --deny warnings", description = "Check cargo dependencies licenses" }
 cargo-fmt = { cmd = "cargo fmt --all", description = "Format Rust code" }
+cargo-shear = { cmd = "cargo shear --fix", description = "Remove unused dependencies" }
+check-openssl = { cmd = "python tests/scripts/check-openssl.py", description = "Check OpenSSL configuration" }
+dprint-check = { cmd = "dprint check --log-level=silent", description = "Check formatting with dprint" }
+dprint-fmt = { cmd = "dprint fmt --incremental=false", description = "Format with dprint" }
 ruff-fmt = { cmd = "ruff format --exit-non-zero-on-format --force-exclude", description = "Format Python code with ruff" }
 ruff-lint = { cmd = "ruff check --fix --exit-non-zero-on-fix --force-exclude", description = "Lint Python code with ruff" }
+shell-fmt = { cmd = "shfmt --write --indent=4 --simplify --binary-next-line", description = "Format shell scripts" }
+toml-fmt = { cmd = "taplo fmt", env = { RUST_LOG = "warn" }, description = "Format TOML files" }
+toml-lint = { cmd = "taplo lint --verbose **/pixi.toml", description = "Lint TOML files" }
+typecheck-python = { cmd = "basedpyright", description = "Type check Python code" }
+typos = { cmd = "typos --force-exclude", description = "Check for typos" }
+zizmor = { cmd = "zizmor .github/ --min-severity=medium", description = "Security audit GitHub Actions" }
 
 #
 # Feature for release tasks
