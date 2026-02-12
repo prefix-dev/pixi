@@ -286,7 +286,7 @@ def main() -> None:
         step += 1
         if start_step <= step:
             console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
-            run(["pixi", "run", "--environment", "lefthook", "lint-fast"])
+            run(["pixi", "run", "lint-fast"])
             completed.append("Linting passed")
 
         # Step 4: Create and merge PR
