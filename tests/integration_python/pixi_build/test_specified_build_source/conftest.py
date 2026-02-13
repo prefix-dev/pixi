@@ -43,6 +43,7 @@ def local_cpp_git_repo(
             cwd=repo_path,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         if result.returncode != 0:
             raise RuntimeError(
