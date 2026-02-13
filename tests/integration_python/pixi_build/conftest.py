@@ -10,6 +10,9 @@ import pytest
 
 from .common import CURRENT_PLATFORM, Workspace, exec_extension, repo_root
 
+# Delay before retrying file operations on Windows when files are locked
+FILE_LOCK_RETRY_DELAY_SECONDS = 0.1
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_build_backend_override(request: pytest.FixtureRequest) -> None:
@@ -75,16 +78,16 @@ def simple_workspace(
             if item.is_dir():
                 shutil.rmtree(item)
             else: 
-                item.unlink(missing_ok=True)
+                item.unlink()
         except (PermissionError, OSError):
             # On Windows, files might still be locked by previous processes
             # Try one more time after a short delay
-            time.sleep(0.1)
+            time.sleep(FILE_LOCK_RETRY_DELAY_SECONDS)
             try:
                 if item.is_dir():
                     shutil.rmtree(item)
                 else:
-                    item.unlink(missing_ok=True)
+                    item.unlink()
             except (PermissionError, OSError):
                 # If it still fails, ignore it - the temp dir will be cleaned up eventually
                 pass
