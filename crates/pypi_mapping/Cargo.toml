@@ -11,10 +11,12 @@ version = "0.1.0"
 
 [dependencies]
 async-once-cell = { workspace = true }
+async-trait = { workspace = true }
 dashmap = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
 http-cache-reqwest = { workspace = true }
+http-cache-semantics = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pep440_rs = { workspace = true }
@@ -25,6 +27,7 @@ rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_networking = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
+rusqlite = { workspace = true }
 reqwest-middleware = { workspace = true }
 reqwest-retry = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

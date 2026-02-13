@@ -7,7 +7,7 @@ use std::{
 };
 
 use futures::{StreamExt, stream::FuturesUnordered};
-use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
+use http_cache_reqwest::{Cache, CacheMode, HttpCache, HttpCacheOptions};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_config::get_cache_dir;
@@ -23,6 +23,7 @@ use url::Url;
 mod custom_mapping;
 pub mod prefix;
 mod reporter;
+mod sqlite_cache;
 
 pub use custom_mapping::CustomMapping;
 pub use reporter::Reporter;
@@ -182,12 +183,12 @@ impl MappingClient {
         let cache_path = get_cache_dir()
             .expect("failed to determine cache directory for conda-pypi mappings. Please ensure PIXI_CACHE_DIR or XDG_CACHE_HOME is set, or that ~/.cache exists.")
             .join(pixi_consts::consts::CONDA_PYPI_MAPPING_CACHE_DIR);
+        let db_path = cache_path.join("http_cache.sqlite");
+        let cache_manager = sqlite_cache::SqliteCacheManager::new(db_path)
+            .expect("failed to initialize SQLite HTTP cache for conda-pypi mappings");
         let cache_strategy = Cache(HttpCache {
             mode: CacheMode::Default,
-            manager: CACacheManager {
-                path: cache_path.clone(),
-                remove_opts: Default::default(),
-            },
+            manager: cache_manager,
             options: HttpCacheOptions::default(),
         });
 
