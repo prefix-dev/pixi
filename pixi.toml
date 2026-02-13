@@ -69,7 +69,7 @@ RUSTC_WRAPPER = "sccache"
 
 [feature.backends-release.dependencies]
 questionary = ">=2.1,<3"
-rattler-build = { git = "https://github.com/prefix-dev/rattler-build.git", branch = "refactor" }
+rattler-build = { git = "https://github.com/prefix-dev/rattler-build.git", branch = "main" }
 rich = ">=14,<15"
 sccache = ">=0.13.0,<0.14"
 tomlkit = ">=0.13,<0.14"
@@ -160,23 +160,6 @@ generate-cli-docs = { cmd = "cargo run --locked --manifest-path crates/pixi_docs
 mike-serve = { cmd = "mike serve", description = "Serve versioned docs with mike" }
 
 #
-# Feature for running lefthook (lint orchestration)
-#
-[feature.lefthook.dependencies]
-lefthook = ">=2.0.11,<3"
-
-[feature.lefthook.tasks]
-lefthook = { cmd = "lefthook", description = "Run lefthook" }
-lint = { depends-on = [
-  "lint-fast",
-  "lint-slow",
-], description = "Run all linters and formatters on all code" }
-lint-fast = { cmd = "lefthook run pre-commit --all-files --force", description = "Run all fast linters and formatters (no clippy)" }
-lint-slow = { cmd = "lefthook run pre-push --all-files --force", description = "Run all slow linters and formatters" }
-pre-commit-install = { cmd = "lefthook install", description = "Install all git hooks" }
-pre-commit-install-minimal = { cmd = "lefthook install pre-commit", description = "Install only pre-commit hook" }
-
-#
 # Feature for linting and formatting tools
 #
 [feature.lint.dependencies]
@@ -201,47 +184,14 @@ cargo-shear = { cmd = "cargo shear --fix", description = "Remove unused dependen
 check-openssl = { cmd = "python tests/scripts/check-openssl.py", description = "Check OpenSSL configuration" }
 dprint-check = { cmd = "dprint check --log-level=silent", description = "Check formatting with dprint" }
 dprint-fmt = { cmd = "dprint fmt --incremental=false", description = "Format with dprint" }
-ruff-format = { cmd = "ruff format --exit-non-zero-on-format --force-exclude", description = "Format Python code with ruff" }
+ruff-fmt = { cmd = "ruff format --exit-non-zero-on-format --force-exclude", description = "Format Python code with ruff" }
 ruff-lint = { cmd = "ruff check --fix --exit-non-zero-on-fix --force-exclude", description = "Lint Python code with ruff" }
-shell-format = { cmd = "shfmt --write --indent=4 --simplify --binary-next-line", description = "Format shell scripts" }
-toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" }, description = "Format TOML files" }
+shell-fmt = { cmd = "shfmt --write --indent=4 --simplify --binary-next-line", description = "Format shell scripts" }
+toml-fmt = { cmd = "taplo fmt", env = { RUST_LOG = "warn" }, description = "Format TOML files" }
 toml-lint = { cmd = "taplo lint --verbose **/pixi.toml", description = "Lint TOML files" }
 typecheck-python = { cmd = "basedpyright", description = "Type check Python code" }
 typos = { cmd = "typos --force-exclude", description = "Check for typos" }
 zizmor = { cmd = "zizmor .github/ --min-severity=medium", description = "Security audit GitHub Actions" }
-
-#
-# Feature for micromamba export testing
-#
-[feature.micromamba.dependencies]
-micromamba = ">=2.3.2,<3"
-
-[feature.micromamba.tasks]
-test-export = { cmd = "bash tests/scripts/test-export.sh", description = "Test micromamba export functionality" }
-
-#
-# Feature for native-certs testing with local HTTPS server
-#
-[feature.test-native-certs.dependencies]
-mkcert = ">=1.4.4,<2"
-pip = ">=25,<26"
-rich = ">=14,<15"
-testcontainers = ">=4,<5"
-
-[feature.test-native-certs.tasks]
-test-native-certs = { cmd = "python scripts/test_native_certs.py --pixi-bin $CARGO_TARGET_DIR/release/pixi", depends-on = [
-  "build-release",
-], description = "Test native-certs feature with local HTTPS PyPI server" }
-
-#
-# Feature for generating PyPI test indexes
-#
-[feature.pypi-gen.dependencies]
-hatchling = ">=1.27.0,<2"
-python-build = ">=1.3.0,<2"
-
-[feature.pypi-gen.tasks]
-pypi-gen-indexes = { cmd = "python tests/data/pypi-indexes/generate-indexes.py", description = "Generate PyPI test indexes" }
 
 #
 # Feature for release tasks
@@ -260,6 +210,7 @@ release = { cmd = "python scripts/release.py", description = "Run the release sc
 # Feature for Python integration tests with pytest
 #
 [feature.pytest.tasks]
+pypi-gen-indexes = { cmd = "python tests/data/pypi-indexes/generate-indexes.py", description = "Generate PyPI test indexes" }
 test-common-wheels = { cmd = "pytest -s --numprocesses=auto tests/wheel_tests/", depends-on = [
   "build-release",
 ], description = "Run common wheel tests" }
@@ -281,6 +232,7 @@ test-pixi-build = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=30
 test-pixi-build-debug = { cmd = "pytest --pixi-build=debug --numprocesses=auto --durations=0 --timeout=300 tests/integration_python/pixi_build/", depends-on = [
   "build-debug",
 ], description = "Run pixi-build integration tests with debug build" }
+
 
 [feature.pytest.tasks.test-specific-test]
 args = ["test_substring"]
@@ -318,6 +270,10 @@ rattler-build = ">=0.55,<0.56"
 rich = ">=14.1.0,<15"
 tomli-w = ">=1.2.0,<2"
 types-pyyaml = ">=6.0.12.20250915,<7"
+
+# Dependencies to generate the pypi test indexes
+hatchling = ">=1.27.0,<2"
+python-build = ">=1.3.0,<2"
 
 #
 # Feature for building rattler-build recipes
@@ -391,13 +347,30 @@ test-all-slow = { depends-on = [
 ], description = "Run all slow tests" }
 
 #
-# Feature for building Python trampolines
+# Feature for building trampolines
 #
 [feature.trampoline.dependencies]
 zstd = ">=1.5.7,<2"
 
 [feature.trampoline.tasks]
 build-trampoline = { cmd = "python trampoline/build-trampoline.py", description = "Build the trampolines" }
+
+#
+# Feature for running lefthook (lint orchestration)
+#
+[feature.lefthook.dependencies]
+lefthook = ">=2.0.11,<3"
+
+[feature.lefthook.tasks]
+lefthook = { cmd = "lefthook", description = "Run lefthook" }
+lint = { depends-on = [
+  "lint-fast",
+  "lint-slow",
+], description = "Run all linters and formatters on all code" }
+lint-fast = { cmd = "lefthook run pre-commit --all-files --force", description = "Run all fast linters and formatters (no clippy)" }
+lint-slow = { cmd = "lefthook run pre-push --all-files --force", description = "Run all slow linters and formatters" }
+pre-commit-install = { cmd = "lefthook install", description = "Install all git hooks" }
+pre-commit-install-minimal = { cmd = "lefthook install pre-commit", description = "Install only pre-commit hook" }
 
 #
 # Environment definitions
@@ -410,30 +383,25 @@ default = { features = [
   "python",
   "python-test-deps",
   "dev",
+  "lint",
+  "schema",
 ] }
 dist = { features = ["dist"] }
+# TODO: get rid of rust in the docs env, figure out what to do with the docs generation code.
 docs = { features = ["rust", "compilers", "python", "docs"] }
-lefthook = { features = ["lefthook"] }
-lint = { features = [
-  "rust",
-  "compilers",
-  "lint",
-  "python",
-  "python-test-deps",
-  "schema",
-  "pypi-gen",
-] }
-pypi-gen = { features = ["python", "pypi-gen"] }
 python-test = { features = ["pytest", "python-test-deps", "python"] }
+# TODO: Could this be mixed with the backend-release env?
 recipes = { features = ["recipes"] }
 release = { features = ["release"] }
+# TODO: Can rust-build and rust-test be merged?
 rust-build = { features = ["rust", "compilers", "python", "rust-build"] }
 rust-test = { features = ["rust", "compilers", "python", "dev", "rust-test"] }
 schema = { features = ["schema"] }
 test = { features = ["test"] }
-test-export = { features = ["micromamba"] }
-test-native-certs = { features = ["python", "test-native-certs"] }
+# TODO: figure out why this is not in a rust-build env.
 trampoline = { features = ["trampoline", "python"] }
+# Required as it runs pixi tasks itself, so we don't want it to have a dependencies on itself.
+lefthook = { features = ["lefthook"] }
 
 #
 # Package definitions
