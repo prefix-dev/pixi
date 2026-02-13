@@ -200,7 +200,11 @@ impl WorkspaceMut {
     /// to continue the modification.
     async fn save_inner(&mut self) -> Result<(), std::io::Error> {
         let new_contents = self.workspace_manifest_document.to_string();
-        fs_err::tokio::write(&self.workspace().workspace.provenance.path, new_contents).await?;
+        pixi_utils::atomic_write::atomic_write(
+            &self.workspace().workspace.provenance.path,
+            new_contents,
+        )
+        .await?;
         self.modified = true;
         Ok(())
     }
@@ -218,7 +222,11 @@ impl WorkspaceMut {
         let mut workspace = self.workspace.take().expect("workspace is not available");
         if let Some(original) = self.original.take() {
             workspace.workspace.value = original.manifest;
-            fs_err::tokio::write(&workspace.workspace.provenance.path, original.source).await?;
+            pixi_utils::atomic_write::atomic_write(
+                &workspace.workspace.provenance.path,
+                original.source,
+            )
+            .await?;
         }
 
         Ok(workspace)
@@ -672,7 +680,7 @@ impl Drop for WorkspaceMut {
             && self.modified
         {
             let path = workspace.workspace.provenance.path;
-            if let Err(err) = fs_err::write(&path, &original.source) {
+            if let Err(err) = pixi_utils::atomic_write::atomic_write_sync(&path, &original.source) {
                 tracing::error!(
                     "Failed to revert manifest changes to {}: {}",
                     path.display(),
