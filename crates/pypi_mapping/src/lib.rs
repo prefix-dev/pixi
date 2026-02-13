@@ -23,7 +23,6 @@ use url::Url;
 mod custom_mapping;
 pub mod prefix;
 mod reporter;
-mod sqlite_cache;
 
 pub use custom_mapping::CustomMapping;
 pub use reporter::Reporter;
@@ -184,7 +183,7 @@ impl MappingClient {
             .expect("failed to determine cache directory for conda-pypi mappings. Please ensure PIXI_CACHE_DIR or XDG_CACHE_HOME is set, or that ~/.cache exists.")
             .join(pixi_consts::consts::CONDA_PYPI_MAPPING_CACHE_DIR);
         let db_path = cache_path.join("http_cache.sqlite");
-        let cache_manager = sqlite_cache::SqliteCacheManager::new(db_path)
+        let cache_manager = http_cache_sqlite::SqliteCacheManager::new(db_path)
             .expect("failed to initialize SQLite HTTP cache for conda-pypi mappings");
         let cache_strategy = Cache(HttpCache {
             mode: CacheMode::Default,

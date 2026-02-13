@@ -3324,6 +3324,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "http_cache_sqlite"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "http-cache-reqwest",
+ "http-cache-semantics",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
 name = "httparse"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6822,12 +6835,11 @@ name = "pypi_mapping"
 version = "0.1.0"
 dependencies = [
  "async-once-cell",
- "async-trait",
  "dashmap",
  "fs-err",
  "futures",
  "http-cache-reqwest",
- "http-cache-semantics",
+ "http_cache_sqlite",
  "itertools 0.14.0",
  "miette 7.6.0",
  "pep440_rs",
@@ -6840,7 +6852,6 @@ dependencies = [
  "reqwest",
  "reqwest-middleware",
  "reqwest-retry 0.7.0",
- "rusqlite",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
