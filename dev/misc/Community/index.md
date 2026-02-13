@@ -88,3 +88,7 @@ To further customize the look and feel of your badge, you can add `&style=<custo
 - [SciPy](https://github.com/scipy/scipy): Fundamental algorithms for scientific computing in Python.
 
 - [Snakedown](https://github.com/savente93/snakedown) A fast and intuitive python API reference generator so you can host your docs with your favourite static site generator.
+
+- [Parcels](https://github.com/Parcels-code/parcels): A customisable Lagrangian simulation framework.
+
+- [Xarray](https://github.com/pydata/xarray): N-D labeled arrays and datasets in Python.
