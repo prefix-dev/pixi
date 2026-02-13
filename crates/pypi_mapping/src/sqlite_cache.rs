@@ -91,7 +91,7 @@ impl CacheManager for SqliteCacheManager {
 
         match result {
             Some(data) => {
-                let entry: CacheEntry = serde_json::from_slice(&data)?;
+                let entry: CacheEntry = bincode::deserialize(&data)?;
                 Ok(Some((entry.response, entry.policy)))
             }
             None => Ok(None),
@@ -105,7 +105,7 @@ impl CacheManager for SqliteCacheManager {
         policy: CachePolicy,
     ) -> Result<HttpResponse> {
         let entry = CacheEntry { response, policy };
-        let data = serde_json::to_vec(&entry)?;
+        let data = bincode::serialize(&entry)?;
         let conn = self
             .connection
             .lock()
