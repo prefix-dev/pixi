@@ -1,4 +1,6 @@
 from pathlib import Path
+import os
+import stat
 import shutil
 import sys
 import tempfile
@@ -7,6 +9,53 @@ from collections.abc import Iterator
 import pytest
 
 from .common import CONDA_FORGE_CHANNEL, exec_extension
+
+
+# ---- DEBUG: Log which test each xdist worker is running ----
+_DEBUG_DIR = Path("C:/.r") if sys.platform == "win32" else Path("/tmp")
+_DEBUG_LOG = _DEBUG_DIR / "worker_debug.log"
+
+def pytest_runtest_logstart(nodeid: str, location: tuple) -> None:
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
+    pid = os.getpid()
+    with open(_DEBUG_LOG, "a") as f:
+        f.write(f"[{worker}][pid={pid}] START: {nodeid}\n")
+        f.flush()
+
+def pytest_runtest_logfinish(nodeid: str, location: tuple) -> None:
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
+    pid = os.getpid()
+    with open(_DEBUG_LOG, "a") as f:
+        f.write(f"[{worker}][pid={pid}] FINISH: {nodeid}\n")
+        f.flush()
+
+def pytest_testnodedown(node, error) -> None:
+    """Controller-side hook: called when an xdist worker goes down."""
+    log = _DEBUG_DIR / "node_down_debug.log"
+    with open(log, "a") as f:
+        f.write(f"\n=== pytest_testnodedown: {node.gateway.id} ===\n")
+        f.write(f"  error: {error!r}\n")
+        try:
+            io = node.gateway._io
+            if hasattr(io, 'popen'):
+                f.write(f"  subprocess returncode: {io.popen.poll()}\n")
+                f.write(f"  subprocess pid: {io.popen.pid}\n")
+        except Exception as e:
+            f.write(f"  (could not get subprocess info: {e!r})\n")
+        import traceback
+        f.write(f"  traceback:\n{''.join(traceback.format_stack())}\n")
+        f.flush()
+
+def pytest_internalerror(excrepr, excinfo) -> None:
+    """Called on any INTERNALERROR."""
+    log = _DEBUG_DIR / "internal_error_debug.log"
+    with open(log, "a") as f:
+        f.write("\n=== INTERNALERROR ===\n")
+        f.write(f"  {excrepr}\n")
+        import traceback
+        f.write(f"  traceback:\n{''.join(traceback.format_stack())}\n")
+        f.flush()
+# ---- END DEBUG ----
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -26,7 +75,7 @@ def pixi(request: pytest.FixtureRequest) -> Path:
 
 
 @pytest.fixture
-def tmp_pixi_workspace(tmp_path: Path) -> Iterator[Path]:
+def tmp_pixi_workspace(tmp_path: Path):
     """Create a temporary workspace for tests, with a .pixi config.
 
     On Windows, uses a shorter path to avoid MAX_PATH (260 char) limitations.
@@ -62,10 +111,28 @@ disable-sharded = false
         workspace.joinpath(".pixi").mkdir()
         workspace.joinpath(".pixi/config.toml").write_text(pixi_config)
 
+        def _robust_remove(func, path, exc):
+            import time
+            if isinstance(exc, PermissionError):
+                if exc.winerror == 5:  # Access denied (read-only file)
+                    os.chmod(path, stat.S_IWRITE)
+                    func(path)
+                    return
+                if exc.winerror == 32:  # Sharing violation (file in use)
+                    for _ in range(3):
+                        time.sleep(0.5)
+                        try:
+                            os.chmod(path, stat.S_IWRITE)
+                            func(path)
+                            return
+                        except PermissionError:
+                            continue
+            # If we get here, swallow the error (best-effort cleanup)
+
         try:
             yield workspace
         finally:
-            shutil.rmtree(workspace, ignore_errors=True)
+            shutil.rmtree(workspace, onexc=_robust_remove)
     else:
         tmp_path.joinpath(".pixi").mkdir()
         tmp_path.joinpath(".pixi/config.toml").write_text(pixi_config)
