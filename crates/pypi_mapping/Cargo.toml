@@ -12,7 +12,6 @@ version = "0.1.0"
 [dependencies]
 async-once-cell = { workspace = true }
 async-trait = { workspace = true }
-bincode = { workspace = true }
 dashmap = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }

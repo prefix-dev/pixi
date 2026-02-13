@@ -41,7 +41,6 @@ async-trait = "0.1.86"
 axum = "0.8"
 barrier_cell = { path = "crates/barrier_cell" }
 base64 = "0.22.1"
-bincode = "1.3.3"
 cargo_toml = "0.22.3"
 chrono = "0.4.40"
 clap = { version = "4.5.31", default-features = false }

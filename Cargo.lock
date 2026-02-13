@@ -6823,7 +6823,6 @@ version = "0.1.0"
 dependencies = [
  "async-once-cell",
  "async-trait",
- "bincode",
  "dashmap",
  "fs-err",
  "futures",
