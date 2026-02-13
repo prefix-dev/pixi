@@ -13,6 +13,7 @@ from .common import CURRENT_PLATFORM, copytree_with_local_backend, verify_cli_co
     "workspace_dirname",
     ["build-variant-manifest-rattler-build", "build-variant-manifest-python"],
 )
+@pytest.mark.xdist_group("serial")
 def test_inline_variants_produce_multiple_outputs(
     pixi: Path,
     tmp_pixi_workspace: Path,
@@ -57,6 +58,7 @@ def test_inline_variants_produce_multiple_outputs(
     "workspace_dirname",
     ["build-variant-manifest-rattler-build", "build-variant-manifest-python"],
 )
+@pytest.mark.xdist_group("serial")
 def test_inline_variants_change_triggers_rebuild(
     pixi: Path,
     tmp_pixi_workspace: Path,
@@ -107,6 +109,7 @@ def test_inline_variants_change_triggers_rebuild(
         "build-variant-conda-config-python",
     ],
 )
+@pytest.mark.xdist_group("serial")
 def test_variant_files_produce_multiple_outputs(
     pixi: Path,
     tmp_pixi_workspace: Path,
@@ -154,6 +157,7 @@ def test_variant_files_produce_multiple_outputs(
         "build-variant-conda-config-python",
     ],
 )
+@pytest.mark.xdist_group("serial")
 def test_variant_files_change_triggers_rebuild(
     pixi: Path,
     tmp_pixi_workspace: Path,

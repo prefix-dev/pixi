@@ -267,6 +267,7 @@ def test_build_using_rattler_build_backend(
     ("backend", "non_incremental_evidence"),
     [("pixi-build-rust", "Compiling simple-app"), ("pixi-build-cmake", "Configuring done")],
 )
+@pytest.mark.xdist_group("serial")
 def test_incremental_builds(
     pixi: Path,
     tmp_pixi_workspace: Path,
