@@ -100,6 +100,7 @@ def test_sync(pixi: Path, tmp_path: Path, build_data: Path, relative: bool) -> N
     "package_name",
     ["simple-package", None],
 )
+@pytest.mark.xdist_group("serial")
 def test_install_git_repository(
     pixi: Path,
     tmp_path: Path,
@@ -129,6 +130,7 @@ def test_install_git_repository(
     verify_cli_command([simple_package], env=env, stdout_contains="hello from simple-package")
 
 
+@pytest.mark.xdist_group("serial")
 def test_add_git_repository_to_existing_environment(
     pixi: Path, tmp_path: Path, build_data: Path, dummy_channel_1: Path
 ) -> None:

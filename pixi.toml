@@ -213,6 +213,7 @@ test-common-wheels = { cmd = "pytest -s --numprocesses=logical tests/wheel_tests
 # CI tests add --showlocals, and -vv for better visibility in CI logs
 test-common-wheels-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --verbose tests/wheel_tests/", description = "Run common wheel tests in CI" }
 test-integration-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --durations=0 --timeout=100 --verbose -m 'not extra_slow' tests/integration_python", description = "Run integration tests in CI" }
+test-integration-ci-windows = { cmd = "pytest --numprocesses=4 --dist loadscope --timeout-method=thread --showlocals -vv --durations=0 --timeout=100 --verbose -m 'not extra_slow' tests/integration_python", description = "Run integration tests in CI on Windows with reduced parallelism" }
 test-integration-extra-slow = { cmd = "pytest --numprocesses=logical --durations=0 --timeout=600 tests/integration_python", depends-on = [
   "build-release",
 ], description = "Run all integration tests including extra slow" }

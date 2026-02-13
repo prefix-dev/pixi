@@ -501,6 +501,7 @@ jobs:
     needs: build-binary-windows-x86_64
     env:
       TARGET_RELEASE: "target/pixi/release"
+      PYTHONDONTWRITEBYTECODE: "1"  # Prevent .pyc file lock conflicts during parallel execution
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
@@ -522,7 +523,7 @@ jobs:
 
       - name: Run pytests
         working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: pixi run --locked test-integration-ci
+        run: pixi run --locked test-integration-ci-windows
 
   test-pytest-macos-aarch64:
     timeout-minutes: 10

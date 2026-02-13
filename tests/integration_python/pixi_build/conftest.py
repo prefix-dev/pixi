@@ -67,10 +67,27 @@ def simple_workspace(
     # Make sure the tmp workspace is cleared before each test
     # This is important for windows where we might have issues with file locks if we try to delete after the test
     for item in tmp_pixi_workspace.iterdir():
-        if item.is_dir():
-            shutil.rmtree(item)
-        else: 
-            item.unlink()
+        if item.name == ".pixi":
+            # Skip the .pixi config directory as it's needed for all tests
+            continue
+        try:
+            if item.is_dir():
+                shutil.rmtree(item, ignore_errors=True)
+            else: 
+                item.unlink(missing_ok=True)
+        except (PermissionError, OSError):
+            # On Windows, files might still be locked by previous processes
+            # Try one more time after a short delay
+            import time
+            time.sleep(0.1)
+            try:
+                if item.is_dir():
+                    shutil.rmtree(item, ignore_errors=True)
+                else:
+                    item.unlink(missing_ok=True)
+            except (PermissionError, OSError):
+                # If it still fails, ignore it - the temp dir will be cleaned up eventually
+                pass
 
     workspace_dir = tmp_pixi_workspace.joinpath("workspace")
     workspace_dir.mkdir()
