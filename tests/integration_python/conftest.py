@@ -2,6 +2,7 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+from collections.abc import Iterator
 
 import pytest
 

@@ -1209,7 +1209,7 @@ outputs:
       script:
         - if: win
           then:
-            - mkdir -p %PREFIX%\\bin
+            - if not exist %PREFIX%\\bin mkdir %PREFIX%\\bin
             - echo @echo off > %PREFIX%\\bin\\frozen_no_install_build.bat
             - echo echo Hello from frozen_no_install_build >> %PREFIX%\\bin\\frozen_no_install_build.bat
           else:
