@@ -53,7 +53,7 @@ use-environment-activation-cache = false
 [repodata-config."https://prefix.dev/"]
 disable-sharded = false
 """
-    
+
     if sys.platform == "win32":
         # Use a very short base path on Windows to avoid MAX_PATH issues.
         # The standard temp directory (e.g. C:\Users\<user>\AppData\Local\Temp)
@@ -89,6 +89,7 @@ disable-sharded = false
         tmp_path.joinpath(".pixi").mkdir()
         tmp_path.joinpath(".pixi/config.toml").write_text(pixi_config)
         yield tmp_path
+
 
 @pytest.fixture
 def test_data() -> Path:

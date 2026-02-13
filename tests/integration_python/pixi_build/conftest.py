@@ -69,7 +69,7 @@ def simple_workspace(
     for item in tmp_pixi_workspace.iterdir():
         if item.is_dir():
             shutil.rmtree(item)
-        else: 
+        else:
             item.unlink()
 
     workspace_dir = tmp_pixi_workspace.joinpath("workspace")

@@ -16,6 +16,7 @@ from ..common import (
 )
 from .conftest import LocalGitRepo
 
+
 def _git_source_entries(lock_file: Path) -> list[dict[str, Any]]:
     data = yaml.safe_load(lock_file.read_text())
 
