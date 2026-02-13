@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import time
 from pathlib import Path
 from typing import Any
 
@@ -72,17 +73,16 @@ def simple_workspace(
             continue
         try:
             if item.is_dir():
-                shutil.rmtree(item, ignore_errors=True)
+                shutil.rmtree(item)
             else: 
                 item.unlink(missing_ok=True)
         except (PermissionError, OSError):
             # On Windows, files might still be locked by previous processes
             # Try one more time after a short delay
-            import time
             time.sleep(0.1)
             try:
                 if item.is_dir():
-                    shutil.rmtree(item, ignore_errors=True)
+                    shutil.rmtree(item)
                 else:
                     item.unlink(missing_ok=True)
             except (PermissionError, OSError):
