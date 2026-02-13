@@ -3328,6 +3328,7 @@ name = "http_cache_sqlite"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "fs-err",
  "http 1.4.0",
  "http-cache-reqwest",
  "http-cache-semantics",

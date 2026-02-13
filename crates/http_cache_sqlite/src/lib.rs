@@ -66,7 +66,7 @@ impl SqliteCacheManager {
     pub fn new(path: PathBuf) -> Result<Self> {
         // Ensure the parent directory exists
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+            fs_err::create_dir_all(parent)?;
         }
 
         let connection = Connection::open(&path)?;
