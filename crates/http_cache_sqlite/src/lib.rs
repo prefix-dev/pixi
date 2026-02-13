@@ -35,7 +35,7 @@ enum HttpVersion {
 
 /// A [`CacheManager`] implementation backed by a SQLite database.
 ///
-/// This replaces the default file-based [`CACacheManager`] to avoid creating
+/// This replaces the default file-based cache manager to avoid creating
 /// many small files on disk, which performs poorly on HPC and network
 /// filesystems. Instead, all cached HTTP responses are stored in a single
 /// SQLite database file.
