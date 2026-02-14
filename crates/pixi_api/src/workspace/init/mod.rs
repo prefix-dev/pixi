@@ -28,21 +28,9 @@ pub use options::{GitAttributes, InitOptions, ManifestFormat};
 
 pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::Result<Workspace> {
     let env = Environment::new();
-
-    // Determine the directory to use: if a name is provided, use global workspace directory;
-    // otherwise use the provided path.
-    let dir = if let Some(name) = &options.name {
-        pixi_home()
-            .ok_or_else(|| miette::miette!("Could not determine PIXI_HOME"))?
-            .join(consts::DEFAULT_GLOBAL_WORKSPACE_DIR)
-            .join(name)
-    } else {
-        options.path.clone()
-    };
-
     // Fail silently if the directory already exists or cannot be created.
-    fs_err::create_dir_all(&dir).into_diagnostic()?;
-    let dir = dunce::canonicalize(dir).into_diagnostic()?;
+    fs_err::create_dir_all(&options.path).into_diagnostic()?;
+    let dir = dunce::canonicalize(options.path).into_diagnostic()?;
     let pixi_manifest_path = dir.join(consts::WORKSPACE_MANIFEST);
     let pyproject_manifest_path = dir.join(consts::PYPROJECT_MANIFEST);
     let mojoproject_manifest_path = dir.join(consts::MOJOPROJECT_MANIFEST);

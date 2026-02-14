@@ -402,7 +402,6 @@ impl PixiControl {
                 pyproject_toml: false,
                 scm: Some(GitAttributes::Github),
                 conda_pypi_map: None,
-                workspace: None,
             },
         }
     }
@@ -422,7 +421,6 @@ impl PixiControl {
                 pyproject_toml: false,
                 scm: Some(GitAttributes::Github),
                 conda_pypi_map: None,
-                workspace: None,
             },
         }
     }

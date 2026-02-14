@@ -54,11 +54,6 @@ pub struct Args {
     /// Set a mapping between conda channels and pypi channels.
     #[arg(long = "conda-pypi-map", value_parser = parse_conda_pypi_mapping, value_delimiter = ',')]
     pub conda_pypi_map: Option<Vec<(NamedChannelOrUrl, String)>>,
-
-    /// Name of the workspace to create. If provided, the workspace will be registered in the
-    /// global workspace registry.
-    #[arg(long, short = 'w')]
-    pub workspace: Option<String>,
 }
 
 fn parse_conda_pypi_mapping(s: &str) -> Result<(NamedChannelOrUrl, String), String> {
@@ -108,7 +103,6 @@ impl From<Args> for InitOptions {
             format,
             scm,
             conda_pypi_mapping: args.conda_pypi_map.map(|map| map.into_iter().collect()),
-            name: args.workspace,
         }
     }
 }
