@@ -1,0 +1,14 @@
+---
+source: crates/pixi_manifest/src/manifests/document.rs
+expression: result
+---
+[project]
+name = "test"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+
+[tool.pixi.feature.cuda.pypi-dependencies]
+torch = ">=2.0.0"
+numpy = ">=1.20.0"

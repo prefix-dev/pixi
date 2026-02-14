@@ -449,6 +449,7 @@ impl ManifestDocument {
         //   - the [project.dependencies] array is selected for the default feature
         //   - the [dependency-groups.feature_name] array is selected unless
         //   - optional-dependencies is explicitly requested as location
+        //   - an existing [tool.pixi.feature.<feature>.pypi-dependencies] table exists
         let add_requirement = |source: &mut ManifestDocument,
                                table_parts: &[&str],
                                array: &str|
@@ -475,7 +476,54 @@ impl ManifestDocument {
             }
             Ok(())
         };
-        if feature_name.is_default()
+
+        // Check if there's an existing [tool.pixi.feature.<feature>.pypi-dependencies] table
+        // If so, we should use that instead of creating a new [dependency-groups] entry
+        let has_existing_pixi_pypi_deps = if !feature_name.is_default() && location.is_none() {
+            let table_name = TableName::new()
+                .with_prefix(self.table_prefix())
+                .with_feature_name(Some(feature_name))
+                .with_table(Some(consts::PYPI_DEPENDENCIES));
+            self.manifest()
+                .get_nested_table(&table_name.as_keys())
+                .is_ok()
+        } else {
+            false
+        };
+
+        if has_existing_pixi_pypi_deps {
+            // Use the existing [tool.pixi.feature.<feature>.pypi-dependencies] table
+            let pypi_requirement =
+                PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?;
+
+            let dependency_table_name = TableName::new()
+                .with_prefix(self.table_prefix())
+                .with_feature_name(Some(feature_name))
+                .with_table(Some(consts::PYPI_DEPENDENCIES));
+
+            let table = self
+                .manifest_mut()
+                .get_or_insert_nested_table(&dependency_table_name.as_keys())?;
+
+            let mut new_value = Value::from(pypi_requirement);
+
+            // Check if there exists an existing entry in the table that we should overwrite
+            let existing_value = table.iter_mut().find_map(|(key, value)| {
+                let existing_name = pep508_rs::PackageName::from_str(key.get()).ok()?;
+                if existing_name == requirement.name {
+                    value.as_value_mut()
+                } else {
+                    None
+                }
+            });
+
+            if let Some(existing_value) = existing_value {
+                *new_value.decor_mut() = existing_value.decor().clone();
+                *existing_value = new_value;
+            } else {
+                table.insert(requirement.name.as_ref(), Item::Value(new_value));
+            }
+        } else if feature_name.is_default()
             || matches!(location, Some(PypiDependencyLocation::Dependencies))
         {
             add_requirement(self, &["project"], "dependencies")?
@@ -1091,5 +1139,91 @@ channels = ["other-channel"]
 
         // Verify other feature is still there
         assert!(result.contains("[tool.pixi.feature.other]"));
+    }
+
+    /// This test checks that when adding a pypi dependency with a feature name,
+    /// if there's an existing [tool.pixi.feature.<feature>.pypi-dependencies] table,
+    /// the dependency is added there instead of creating a new [dependency-groups] entry.
+    /// See: https://github.com/prefix-dev/pixi/issues/5492
+    #[test]
+    pub fn add_pypi_dependency_reuses_existing_feature_table() {
+        let manifest_content = r#"[project]
+name = "test"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+
+[tool.pixi.feature.cuda.pypi-dependencies]
+torch = ">=2.0.0"
+"#;
+
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        // Add a new pypi dependency to the cuda feature without specifying location
+        let numpy_req = pep508_rs::Requirement::from_str("numpy>=1.20.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &numpy_req,
+                None,
+                None,
+                &FeatureName::from_str("cuda").unwrap(),
+                None,
+                None, // No location specified - should reuse existing table
+            )
+            .unwrap();
+
+        let result = document.to_string();
+
+        // Verify the dependency was added to the existing pypi-dependencies table
+        assert!(result.contains("[tool.pixi.feature.cuda.pypi-dependencies]"));
+        assert!(result.contains("numpy"));
+
+        // Verify no dependency-groups table was created
+        assert!(!result.contains("[dependency-groups]"));
+
+        insta::assert_snapshot!(result);
+    }
+
+    /// This test checks that when adding a pypi dependency with a feature name
+    /// and there's NO existing [tool.pixi.feature.<feature>.pypi-dependencies] table,
+    /// the dependency is added to [dependency-groups] as before.
+    #[test]
+    pub fn add_pypi_dependency_creates_dependency_groups_when_no_existing_table() {
+        let manifest_content = r#"[project]
+name = "test"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+"#;
+
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        // Add a new pypi dependency to a feature without specifying location
+        let numpy_req = pep508_rs::Requirement::from_str("numpy>=1.20.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &numpy_req,
+                None,
+                None,
+                &FeatureName::from_str("cuda").unwrap(),
+                None,
+                None, // No location specified - should create dependency-groups
+            )
+            .unwrap();
+
+        let result = document.to_string();
+
+        // Verify the dependency was added to dependency-groups
+        assert!(result.contains("[dependency-groups]"));
+        assert!(result.contains("cuda"));
+        assert!(result.contains("numpy"));
+
+        insta::assert_snapshot!(result);
     }
 }
