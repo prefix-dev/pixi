@@ -491,8 +491,7 @@ impl ManifestDocument {
         };
 
         if has_existing_pixi_pypi_deps {
-            let pypi_requirement =
-                PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?;
+            let pypi_requirement = PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?;
 
             let dependency_table_name = TableName::new()
                 .with_prefix(self.table_prefix())
