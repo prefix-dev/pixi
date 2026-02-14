@@ -564,6 +564,14 @@ impl<'a> TaskRenderContext<'a> {
             minijinja::Value::from(pixi_consts::consts::PIXI_VERSION),
         );
 
+        // Add init_cwd (current working directory when pixi was invoked)
+        if let Ok(cwd) = std::env::current_dir() {
+            pixi_vars.insert(
+                "init_cwd".to_string(),
+                minijinja::Value::from(cwd.display().to_string()),
+            );
+        }
+
         context_map.insert(
             "pixi".to_string(),
             minijinja::Value::from_serialize(&pixi_vars),
@@ -1188,5 +1196,14 @@ mod tests {
             .expect("should render with platform and args");
 
         assert_eq!(rendered, "build-linux-64-1.0.0");
+    }
+
+    #[test]
+    fn test_template_string_renders_init_cwd() {
+        let t = TemplateString::from("{{ pixi.init_cwd }}/test");
+        let context = TaskRenderContext::default();
+        let rendered = t.render(&context).expect("should render init_cwd");
+        let cwd = std::env::current_dir().unwrap();
+        assert_eq!(rendered, format!("{}/test", cwd.display()));
     }
 }
