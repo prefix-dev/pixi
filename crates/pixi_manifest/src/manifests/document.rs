@@ -477,8 +477,7 @@ impl ManifestDocument {
             Ok(())
         };
 
-        // Check if there's an existing [tool.pixi.feature.<feature>.pypi-dependencies] table
-        // If so, we should use that instead of creating a new [dependency-groups] entry
+        // Reuse existing feature pypi-dependencies table if present
         let has_existing_pixi_pypi_deps = if !feature_name.is_default() && location.is_none() {
             let table_name = TableName::new()
                 .with_prefix(self.table_prefix())
@@ -492,7 +491,6 @@ impl ManifestDocument {
         };
 
         if has_existing_pixi_pypi_deps {
-            // Use the existing [tool.pixi.feature.<feature>.pypi-dependencies] table
             let pypi_requirement =
                 PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?;
 
@@ -507,7 +505,6 @@ impl ManifestDocument {
 
             let mut new_value = Value::from(pypi_requirement);
 
-            // Check if there exists an existing entry in the table that we should overwrite
             let existing_value = table.iter_mut().find_map(|(key, value)| {
                 let existing_name = pep508_rs::PackageName::from_str(key.get()).ok()?;
                 if existing_name == requirement.name {
@@ -1141,10 +1138,7 @@ channels = ["other-channel"]
         assert!(result.contains("[tool.pixi.feature.other]"));
     }
 
-    /// This test checks that when adding a pypi dependency with a feature name,
-    /// if there's an existing [tool.pixi.feature.<feature>.pypi-dependencies] table,
-    /// the dependency is added there instead of creating a new [dependency-groups] entry.
-    /// See: https://github.com/prefix-dev/pixi/issues/5492
+    /// Regression test for https://github.com/prefix-dev/pixi/issues/5492
     #[test]
     pub fn add_pypi_dependency_reuses_existing_feature_table() {
         let manifest_content = r#"[project]
@@ -1162,7 +1156,6 @@ torch = ">=2.0.0"
             DocumentMut::from_str(manifest_content).unwrap(),
         ));
 
-        // Add a new pypi dependency to the cuda feature without specifying location
         let numpy_req = pep508_rs::Requirement::from_str("numpy>=1.20.0").unwrap();
         document
             .add_pypi_dependency(
@@ -1171,25 +1164,19 @@ torch = ">=2.0.0"
                 None,
                 &FeatureName::from_str("cuda").unwrap(),
                 None,
-                None, // No location specified - should reuse existing table
+                None,
             )
             .unwrap();
 
         let result = document.to_string();
 
-        // Verify the dependency was added to the existing pypi-dependencies table
         assert!(result.contains("[tool.pixi.feature.cuda.pypi-dependencies]"));
         assert!(result.contains("numpy"));
-
-        // Verify no dependency-groups table was created
         assert!(!result.contains("[dependency-groups]"));
 
         insta::assert_snapshot!(result);
     }
 
-    /// This test checks that when adding a pypi dependency with a feature name
-    /// and there's NO existing [tool.pixi.feature.<feature>.pypi-dependencies] table,
-    /// the dependency is added to [dependency-groups] as before.
     #[test]
     pub fn add_pypi_dependency_creates_dependency_groups_when_no_existing_table() {
         let manifest_content = r#"[project]
@@ -1204,7 +1191,6 @@ platforms = []
             DocumentMut::from_str(manifest_content).unwrap(),
         ));
 
-        // Add a new pypi dependency to a feature without specifying location
         let numpy_req = pep508_rs::Requirement::from_str("numpy>=1.20.0").unwrap();
         document
             .add_pypi_dependency(
@@ -1213,13 +1199,12 @@ platforms = []
                 None,
                 &FeatureName::from_str("cuda").unwrap(),
                 None,
-                None, // No location specified - should create dependency-groups
+                None,
             )
             .unwrap();
 
         let result = document.to_string();
 
-        // Verify the dependency was added to dependency-groups
         assert!(result.contains("[dependency-groups]"));
         assert!(result.contains("cuda"));
         assert!(result.contains("numpy"));
