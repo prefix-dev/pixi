@@ -224,7 +224,7 @@ jobs:
         uses: azure/trusted-signing-action@87c2e83e6868da99d3380aa309851b32ed9a8346 # v1.1.0
         with:
           endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
-          trusted-signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT_NAME }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT_NAME }}
           certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE_NAME }}
           files-folder: ${{ runner.temp }}/to-sign
           files-folder-filter: exe,msi
