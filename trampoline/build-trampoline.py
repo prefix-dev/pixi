@@ -40,10 +40,12 @@ def compress_binary(target: str, target_dir: Path) -> None:
     subprocess.run(["zstd", binary_path, "-o", compressed_path, "--force"], check=True)
 
 
-def main(target: str) -> None:
+def main(target: str, no_compress: bool = False, compress_only: bool = False) -> None:
     target_dir = Path("target/trampoline")
-    build_trampoline_binary(target, target_dir)
-    compress_binary(target, target_dir)
+    if not compress_only:
+        build_trampoline_binary(target, target_dir)
+    if not no_compress:
+        compress_binary(target, target_dir)
 
 
 if __name__ == "__main__":
@@ -53,6 +55,16 @@ if __name__ == "__main__":
         type=str,
         help="The target triple for the build (e.g., x86_64-unknown-linux-musl).",
     )
+    parser.add_argument(
+        "--no-compress",
+        action="store_true",
+        help="Skip the compression step (useful for signing before compressing).",
+    )
+    parser.add_argument(
+        "--compress-only",
+        action="store_true",
+        help="Only run the compression step (useful after signing).",
+    )
     args = parser.parse_args()
     target = args.target if args.target else get_default_target()
-    main(target)
+    main(target, no_compress=args.no_compress, compress_only=args.compress_only)
