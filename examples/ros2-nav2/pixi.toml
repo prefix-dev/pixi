@@ -1,14 +1,13 @@
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
 name = "ros2-nav2"
-platforms = ["linux-64", "osx-arm64", "osx-64"]
-
+platforms = ["linux-64", "osx-arm64", "osx-64", "linux-aarch64"]
 
 [tasks]
 start = "ros2 launch nav2_bringup tb3_simulation_launch.py headless:=False"
 
 [feature.humble]
-channels = ["https://prefix.dev/robostack-staging"]
+channels = ["https://prefix.dev/robostack-humble"]
 
 [feature.humble.dependencies]
 ros-humble-desktop = ">=0.10.0,<0.11"
@@ -35,5 +34,5 @@ RMW_IMPLEMENTATION = "rmw_cyclonedds_cpp"
 start-tb4 = "ros2 launch nav2_bringup tb4_simulation_launch.py headless:=False"
 
 [environments]
-default = { features = ["humble"] }
+humble = { features = ["humble"] }
 jazzy = { features = ["jazzy"] }
