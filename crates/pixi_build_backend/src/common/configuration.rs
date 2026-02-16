@@ -2,10 +2,9 @@ use std::collections::BTreeMap;
 
 use miette::IntoDiagnostic;
 use pixi_build_types::PlatformAndVirtualPackages;
-use rattler_build::{
-    NormalizedKey, metadata::PlatformWithVirtualPackages, recipe::variable::Variable,
-    types::Directories,
-};
+use rattler_build::{metadata::PlatformWithVirtualPackages, types::Directories};
+use rattler_build_jinja::Variable;
+use rattler_build_types::NormalizedKey;
 use rattler_conda_types::ChannelUrl;
 use rattler_virtual_packages::VirtualPackageOverrides;
 use url::Url;

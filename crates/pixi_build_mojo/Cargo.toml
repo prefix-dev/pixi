@@ -23,6 +23,8 @@ indexmap = { workspace = true }
 miette = { workspace = true }
 minijinja = { workspace = true }
 rattler-build = { workspace = true }
+rattler_build_jinja = { workspace = true }
+rattler_build_types = { workspace = true }
 rattler_conda_types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

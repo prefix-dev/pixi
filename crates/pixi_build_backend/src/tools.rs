@@ -1,26 +1,23 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use indexmap::IndexSet;
-use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_build::{
-    hash::HashInfo,
+    DiscoveredOutput,
     metadata::{BuildConfiguration, Debug, Output, PlatformWithVirtualPackages},
-    recipe::{
-        Jinja, ParsingError, Recipe,
-        parser::{BuildString, GlobVec, find_outputs_from_src},
-    },
-    selectors::SelectorConfig,
     system_tools::SystemTools,
     types::{Directories, PackageIdentifier, PackagingSettings},
-    variant_config::{DiscoveredOutput, ParseErrors, VariantConfig, VariantConfigError},
 };
+use rattler_build_recipe::{
+    stage1::{GlobVec, Source as RecipeSource},
+    variant_render::RenderConfig,
+};
+use rattler_build_variant_config::{VariantConfig, VariantConfigError};
 use rattler_conda_types::compression_level::CompressionLevel;
-use rattler_conda_types::{GenericVirtualPackage, Platform, package::CondaArchiveType};
+use rattler_conda_types::{GenericVirtualPackage, NoArchType, Platform, package::CondaArchiveType};
 use rattler_virtual_packages::VirtualPackageOverrides;
 use url::Url;
 
@@ -38,8 +35,14 @@ pub const VARIANTS_CONFIG_FILE: &str = "variants.yaml";
 pub struct RattlerBuild {
     /// The source of the recipe
     pub recipe_source: Source,
-    /// The selector configuration.
-    pub selector_config: SelectorConfig,
+    /// The target platform for the build.
+    pub target_platform: Platform,
+    /// The host platform for the build.
+    pub host_platform: Platform,
+    /// The build platform for the build.
+    pub build_platform: Platform,
+    /// Whether experimental features are enabled.
+    pub experimental: bool,
     /// The directory where the build should happen.
     pub work_directory: PathBuf,
 }
@@ -61,9 +64,9 @@ impl LoadedVariantConfig {
     pub fn from_recipe_path<'a>(
         source_dir: &Path,
         recipe_path: &Path,
-        selector_config: &SelectorConfig,
+        target_platform: Platform,
         additional_variant_files: impl Iterator<Item = &'a Path>,
-    ) -> Result<Self, VariantConfigError<Arc<str>>> {
+    ) -> Result<Self, VariantConfigError> {
         let mut variant_files = Vec::new();
         let mut input_globs = BTreeSet::new();
 
@@ -91,7 +94,7 @@ impl LoadedVariantConfig {
         variant_files.extend(additional_variant_files.map(|p| p.to_path_buf()));
 
         Ok(Self {
-            variant_config: VariantConfig::from_files(&variant_files, selector_config)?,
+            variant_config: VariantConfig::from_files(&variant_files, target_platform)?,
             input_globs,
         })
     }
@@ -118,10 +121,20 @@ pub enum OneOrMultipleOutputs {
 
 impl RattlerBuild {
     /// Create a new `RattlerBuild` instance.
-    pub fn new(source: Source, selector_config: SelectorConfig, work_directory: PathBuf) -> Self {
+    pub fn new(
+        source: Source,
+        target_platform: Platform,
+        host_platform: Platform,
+        build_platform: Platform,
+        experimental: bool,
+        work_directory: PathBuf,
+    ) -> Self {
         Self {
             recipe_source: source,
-            selector_config,
+            target_platform,
+            host_platform,
+            build_platform,
+            experimental,
             work_directory,
         }
     }
@@ -132,8 +145,14 @@ impl RattlerBuild {
         variant_files: &[PathBuf],
         variant_config_input: &Option<BTreeMap<String, Vec<String>>>,
     ) -> miette::Result<IndexSet<DiscoveredOutput>> {
-        // First find all outputs from the recipe
-        let outputs = find_outputs_from_src(self.recipe_source.clone())?;
+        // Create source for error reporting
+        let source = rattler_build_recipe::source_code::Source::from_string(
+            self.recipe_source.name.clone(),
+            self.recipe_source.code.to_string(),
+        );
+
+        // Parse the recipe into a stage0 representation
+        let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
 
         // Check if there is a `variants.yaml` file next to the recipe that we should
         // potentially use.
@@ -151,7 +170,8 @@ impl RattlerBuild {
         variant_config_paths.extend(variant_files.iter().cloned());
 
         let mut variant_config =
-            VariantConfig::from_files(&variant_config_paths, &self.selector_config)?;
+            VariantConfig::from_files(&variant_config_paths, self.target_platform)
+                .into_diagnostic()?;
 
         if let Some(variant_config_input) = variant_config_input {
             for (k, v) in variant_config_input.iter() {
@@ -160,11 +180,56 @@ impl RattlerBuild {
             }
         }
 
-        Ok(variant_config.find_variants(
-            &outputs,
-            self.recipe_source.clone(),
-            &self.selector_config,
-        )?)
+        // Build render config
+        let render_config = RenderConfig::new()
+            .with_target_platform(self.target_platform)
+            .with_build_platform(self.build_platform)
+            .with_host_platform(self.host_platform)
+            .with_experimental(self.experimental)
+            .with_recipe_path(&self.recipe_source.path);
+
+        // Render recipe with variant config
+        let rendered_variants = rattler_build_recipe::render_recipe(
+            &source,
+            &stage0_recipe,
+            &variant_config,
+            render_config,
+        )?;
+
+        // Convert RenderedVariants to DiscoveredOutputs
+        let mut outputs = IndexSet::new();
+        for rendered in rendered_variants {
+            let recipe = rendered.recipe;
+            let variant = rendered.variant;
+
+            let effective_target_platform = if recipe.build().noarch.is_none() {
+                self.target_platform
+            } else {
+                Platform::NoArch
+            };
+
+            let build_string = recipe
+                .build()
+                .string
+                .as_resolved()
+                .expect("build string should be resolved after evaluation")
+                .to_string();
+
+            outputs.insert(DiscoveredOutput {
+                name: recipe.package().name().as_normalized().to_string(),
+                version: recipe.package().version().to_string(),
+                build_string,
+                noarch_type: recipe.build().noarch.unwrap_or(NoArchType::none()),
+                target_platform: effective_target_platform,
+                used_vars: variant,
+                recipe,
+                hash: rendered
+                    .hash_info
+                    .expect("hash should be set after evaluation"),
+            });
+        }
+
+        Ok(outputs)
     }
 
     /// Get the outputs from the recipe.
@@ -181,41 +246,13 @@ impl RattlerBuild {
 
         let mut subpackages = BTreeMap::new();
 
-        let channels = channels.into_iter().map(Into::into).collect_vec();
+        let channels: Vec<_> = channels.into_iter().map(Into::into).collect();
         for discovered_output in discovered_outputs {
-            let hash = HashInfo::from_variant(
-                &discovered_output.used_vars,
-                &discovered_output.noarch_type,
-            );
+            let mut recipe = discovered_output.recipe.clone();
 
-            let selector_config = SelectorConfig {
-                variant: discovered_output.used_vars.clone(),
-                hash: Some(hash.clone()),
-                target_platform: self.selector_config.target_platform,
-                host_platform: self.selector_config.host_platform,
-                build_platform: self.selector_config.build_platform,
-                experimental: true,
-                allow_undefined: false,
-                recipe_path: Some(self.recipe_source.path.clone()),
-            };
-
-            let mut recipe = Recipe::from_node(&discovered_output.node, selector_config.clone())
-                .map_err(|err| {
-                    let errs: ParseErrors<_> = err
-                        .into_iter()
-                        .map(|err| ParsingError::from_partial(self.recipe_source.clone(), err))
-                        .collect::<Vec<_>>()
-                        .into();
-                    errs
-                })?;
-
-            recipe.build.string = BuildString::Resolved(BuildString::compute(
-                &discovered_output.hash,
-                recipe.build.number,
-            ));
-
+            // Add .pixi to the exclude list for path sources
             for source in &mut recipe.source {
-                if let rattler_build::recipe::parser::Source::Path(path_source) = source {
+                if let RecipeSource::Path(path_source) = source {
                     let include = path_source
                         .filter
                         .include_globs()
@@ -233,7 +270,7 @@ impl RattlerBuild {
                 }
             }
 
-            if recipe.build().skip() {
+            if recipe.build().skip {
                 eprintln!(
                     "Skipping build for variant: {:#?}",
                     discovered_output.used_vars
@@ -241,18 +278,12 @@ impl RattlerBuild {
                 continue;
             }
 
-            let jinja = Jinja::new(selector_config);
-
             subpackages.insert(
                 recipe.package().name().clone(),
                 PackageIdentifier {
                     name: recipe.package().name().clone(),
-                    version: recipe.package().version().version().clone().into(),
-                    build_string: recipe
-                        .build()
-                        .string()
-                        .resolve(&hash, recipe.build().number(), &jinja)
-                        .into_owned(),
+                    version: recipe.package().version().clone(),
+                    build_string: discovered_output.build_string.clone(),
                 },
             );
 
@@ -268,7 +299,7 @@ impl RattlerBuild {
                         platform: build_platform,
                         virtual_packages: build_vpkgs.clone(),
                     },
-                    hash,
+                    hash: discovered_output.hash.clone(),
                     variant: discovered_output.used_vars.clone(),
                     directories: output_directory(
                         if discovered_outputs.len() == 1 {

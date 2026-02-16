@@ -8,7 +8,6 @@ package:
   version: 0.1.0
 source: []
 build:
-  number: ~
   script:
     content: "mojo --version\n\nmojo build -i . ./main.mojo -o $PREFIX/bin/example\n\n\nmojo package -i . mylib -o $PREFIX/lib/mojo/lib.mojopkg"
     env: {}
@@ -20,12 +19,4 @@ requirements:
     - boltons
   run_constraints: []
 tests: []
-about:
-  homepage: ~
-  license: ~
-  license_file: ~
-  summary: ~
-  description: ~
-  documentation: ~
-  repository: ~
-extra: ~
+about: {}

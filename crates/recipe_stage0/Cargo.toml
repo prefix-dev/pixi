@@ -9,7 +9,7 @@ hashlink = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
 marked-yaml = { workspace = true }
-rattler-build = { workspace = true }
+rattler_build_types = { workspace = true }
 rattler_conda_types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }

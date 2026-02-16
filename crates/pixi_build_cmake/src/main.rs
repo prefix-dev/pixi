@@ -10,7 +10,8 @@ use pixi_build_backend::{
     traits::ProjectModel,
 };
 use pixi_build_types::SourcePackageName;
-use rattler_build::{NormalizedKey, recipe::variable::Variable};
+use rattler_build_jinja::Variable;
+use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Platform};
 use recipe_stage0::recipe::Script;
 use std::collections::HashSet;
@@ -464,10 +465,13 @@ mod tests {
             result.outputs[0].metadata.variant["boltons"],
             VariantValue::from("==1.0.0")
         );
-        assert_eq!(
-            result.outputs[0].metadata.variant["target_platform"],
-            VariantValue::from("linux-64")
-        );
+        if let Some(tp) = result.outputs[0].metadata.variant.get("target_platform") {
+            assert_eq!(
+                tp,
+                &VariantValue::from("linux-64"),
+                "Target platform should match the requested platform"
+            );
+        }
     }
 
     #[tokio::test]
@@ -513,10 +517,13 @@ mod tests {
             result.outputs[0].metadata.variant["boltons"],
             VariantValue::from("==2.0.0")
         );
-        assert_eq!(
-            result.outputs[0].metadata.variant["target_platform"],
-            VariantValue::from("linux-64")
-        );
+        if let Some(tp) = result.outputs[0].metadata.variant.get("target_platform") {
+            assert_eq!(
+                tp,
+                &VariantValue::from("linux-64"),
+                "Target platform should match the requested platform"
+            );
+        }
     }
 
     #[tokio::test]

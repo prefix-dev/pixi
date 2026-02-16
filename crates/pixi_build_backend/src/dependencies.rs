@@ -6,19 +6,17 @@ use std::{
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi_build_types as pbt;
 use pixi_build_types::{BinaryPackageSpec, NamedSpec};
-use rattler_build::render::pin::PinBound;
 use rattler_build::{
-    NormalizedKey,
-    recipe::{parser::Dependency, variable::Variable},
-    render::{
-        pin::PinError,
-        resolved_dependencies::{
-            DependencyInfo, PinCompatibleDependency, PinSubpackageDependency, ResolveError,
-            SourceDependency, VariantDependency,
-        },
+    render::resolved_dependencies::{
+        DependencyInfo, PinCompatibleDependency, PinSubpackageDependency, ResolveError,
+        SourceDependency, VariantDependency,
     },
     types::PackageIdentifier,
 };
+use rattler_build_jinja::Variable;
+use rattler_build_recipe::stage1::Dependency;
+use rattler_build_types::NormalizedKey;
+use rattler_build_types::{PinBound, PinError};
 use rattler_conda_types::{
     MatchSpec, NamelessMatchSpec, PackageName, PackageNameMatcher, PackageRecord,
     ParseStrictness::Strict,
@@ -124,7 +122,7 @@ impl<T: PackageSpec> ExtractedDependencies<T> {
             dependencies: extracted_specs
                 .specs
                 .into_iter()
-                .map(Dependency::Spec)
+                .map(|s| Dependency::Spec(Box::new(s)))
                 .collect(),
             sources: extracted_specs.sources,
         })
@@ -246,6 +244,7 @@ fn convert_dependency(
 ) -> Result<pbt::NamedSpec<pbt::PackageSpec>, ConvertDependencyError> {
     let match_spec = match dependency {
         Dependency::Spec(spec) => {
+            let spec = *spec;
             // Convert back to source spec if it is a source spec.
             if let Some(source_package) =
                 spec.url.clone().and_then(from_source_url_to_source_package)
@@ -272,16 +271,16 @@ fn convert_dependency(
             spec
         }
         Dependency::PinSubpackage(pin) => {
-            let name = &pin.pin_value().name;
+            let name = &pin.pin_subpackage.name;
             let subpackage = subpackages
                 .get(name)
                 .ok_or(ConvertDependencyError::SubpackageNotFound(name.to_owned()))?;
-            pin.pin_value()
+            pin.pin_subpackage
                 .apply(&subpackage.version, &subpackage.build_string)
                 .map_err(ConvertDependencyError::PinApplyError)?
         }
         Dependency::PinCompatible(pin) => {
-            let pin = pin.pin_value();
+            let pin = &pin.pin_compatible;
             let name = &pin.name;
             let args = &pin.args;
             return Ok(pbt::NamedSpec {
@@ -343,6 +342,7 @@ fn convert_constraint_dependency(
 ) -> Result<pbt::NamedSpec<pbt::ConstraintSpec>, ConvertDependencyError> {
     let match_spec = match dependency {
         Dependency::Spec(spec) => {
+            let spec = *spec;
             // Apply a variant if it is applicable.
             if let Some(NamedSpec { spec, name }) = apply_variant_and_convert(&spec, variant)? {
                 return Ok(NamedSpec {
@@ -353,11 +353,11 @@ fn convert_constraint_dependency(
             spec
         }
         Dependency::PinSubpackage(pin) => {
-            let name = &pin.pin_value().name;
+            let name = &pin.pin_subpackage.name;
             let subpackage = subpackages
                 .get(name)
                 .ok_or(ConvertDependencyError::SubpackageNotFound(name.to_owned()))?;
-            pin.pin_value()
+            pin.pin_subpackage
                 .apply(&subpackage.version, &subpackage.build_string)
                 .map_err(ConvertDependencyError::PinApplyError)?
         }
@@ -422,7 +422,7 @@ pub fn apply_variant(
         .map(|s| {
             match s {
                 Dependency::Spec(m) => {
-                    let m = m.clone();
+                    let m = *m.clone();
                     if build_time
                         && m.version.is_none()
                         && m.build.is_none()
@@ -452,33 +452,33 @@ pub fn apply_variant(
                     Ok(SourceDependency { spec: m }.into())
                 }
                 Dependency::PinSubpackage(pin) => {
-                    let name = &pin.pin_value().name;
+                    let name = &pin.pin_subpackage.name;
                     let subpackage = subpackages
                         .get(name)
                         .ok_or(ResolveError::PinSubpackageNotFound(name.to_owned()))?;
                     let pinned = pin
-                        .pin_value()
+                        .pin_subpackage
                         .apply(&subpackage.version, &subpackage.build_string)?;
                     Ok(PinSubpackageDependency {
                         spec: pinned,
                         name: name.as_normalized().to_string(),
-                        args: pin.pin_value().args.clone(),
+                        args: pin.pin_subpackage.args.clone(),
                     }
                     .into())
                 }
                 Dependency::PinCompatible(pin) => {
-                    let name = &pin.pin_value().name;
+                    let name = &pin.pin_compatible.name;
                     let pin_package = compatibility_specs
                         .get(name)
                         .ok_or(ResolveError::PinCompatibleNotFound(name.to_owned()))?;
 
                     let pinned = pin
-                        .pin_value()
+                        .pin_compatible
                         .apply(&pin_package.version, &pin_package.build)?;
                     Ok(PinCompatibleDependency {
                         spec: pinned,
                         name: name.as_normalized().to_string(),
-                        args: pin.pin_value().args.clone(),
+                        args: pin.pin_compatible.args.clone(),
                     }
                     .into())
                 }

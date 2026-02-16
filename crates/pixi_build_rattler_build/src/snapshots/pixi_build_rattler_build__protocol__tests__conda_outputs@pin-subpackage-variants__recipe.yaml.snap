@@ -9,6 +9,58 @@ input_file: tests/recipe/pin-subpackage-variants/recipe.yaml
       "metadata": {
         "name": "my-package",
         "version": "0.1.0",
+        "build": "py310hbede2c2_0",
+        "buildNumber": 0,
+        "subdir": "noarch",
+        "noarch": "generic",
+        "variant": {
+          "python": "3.10",
+          "target_platform": "noarch"
+        }
+      },
+      "hostDependencies": {
+        "depends": [
+          {
+            "name": "python",
+            "binary": {
+              "version": "3.10.*"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "name": "my-package-pinned",
+        "version": "0.1.0",
+        "build": "hba4f637_0",
+        "buildNumber": 0,
+        "subdir": "noarch",
+        "noarch": "generic",
+        "variant": {
+          "my-package": "0.1.0 py310hbede2c2_0",
+          "target_platform": "noarch"
+        }
+      },
+      "runDependencies": {
+        "depends": [
+          {
+            "name": "my-package",
+            "source": {
+              "path": {
+                "path": "."
+              },
+              "version": "==0.1.0",
+              "build": "py310hbede2c2_0"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "name": "my-package",
+        "version": "0.1.0",
         "build": "py38hb368f13_0",
         "buildNumber": 0,
         "subdir": "noarch",
@@ -104,58 +156,6 @@ input_file: tests/recipe/pin-subpackage-variants/recipe.yaml
               },
               "version": "==0.1.0",
               "build": "py39h6a44458_0"
-            }
-          }
-        ]
-      }
-    },
-    {
-      "metadata": {
-        "name": "my-package",
-        "version": "0.1.0",
-        "build": "py310hbede2c2_0",
-        "buildNumber": 0,
-        "subdir": "noarch",
-        "noarch": "generic",
-        "variant": {
-          "python": "3.10",
-          "target_platform": "noarch"
-        }
-      },
-      "hostDependencies": {
-        "depends": [
-          {
-            "name": "python",
-            "binary": {
-              "version": "3.10.*"
-            }
-          }
-        ]
-      }
-    },
-    {
-      "metadata": {
-        "name": "my-package-pinned",
-        "version": "0.1.0",
-        "build": "hba4f637_0",
-        "buildNumber": 0,
-        "subdir": "noarch",
-        "noarch": "generic",
-        "variant": {
-          "my-package": "0.1.0 py310hbede2c2_0",
-          "target_platform": "noarch"
-        }
-      },
-      "runDependencies": {
-        "depends": [
-          {
-            "name": "my-package",
-            "source": {
-              "path": {
-                "path": "."
-              },
-              "version": "==0.1.0",
-              "build": "py310hbede2c2_0"
             }
           }
         ]

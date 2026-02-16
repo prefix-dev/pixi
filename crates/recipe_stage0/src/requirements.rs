@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use indexmap::IndexMap;
-use rattler_build::NormalizedKey;
+use rattler_build_types::NormalizedKey;
 use rattler_conda_types::PackageName;
 
 use crate::matchspec::PackageDependency;

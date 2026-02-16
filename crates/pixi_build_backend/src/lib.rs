@@ -23,5 +23,5 @@ pub use traits::{PackageSourceSpec, PackageSpec, ProjectModel, TargetSelector, T
 
 pub use cli::main_ext as cli_main;
 
-pub use rattler_build::NormalizedKey;
-pub use rattler_build::recipe::variable::Variable;
+pub use rattler_build_jinja::Variable;
+pub use rattler_build_types::NormalizedKey;

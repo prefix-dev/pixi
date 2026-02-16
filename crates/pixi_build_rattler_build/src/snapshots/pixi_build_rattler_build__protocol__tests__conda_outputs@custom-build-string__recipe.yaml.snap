@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_build_rattler_build/src/protocol.rs
+assertion_line: 723
 expression: conda_outputs_snapshot(result)
 input_file: tests/recipe/custom-build-string/recipe.yaml
 ---
