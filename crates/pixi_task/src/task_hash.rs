@@ -128,28 +128,22 @@ impl TaskHash {
     pub fn task_args_hash(task: &ExecutableTask<'_>) -> Result<Option<NameHash>, InputHashesError> {
         let mut hasher = Xxh3::new();
 
-        let Ok(execute) = task.task().as_execute() else {
-            return Ok(None);
-        };
-
-        // Initialize the hasher state with the task args
+        // Always hash the args if they exist
         task.args().hash(&mut hasher);
-
-        // We need to compute hash from input args
-        // If no input args are provided, we treat them as empty list.
         let context = task.render_context();
-        if let Some(ref inputs) = execute.inputs {
+
+        // Hash inputs if present (on Alias or Execute)
+        if let Some(inputs) = task.task().inputs() {
             let rendered_inputs = inputs.render(&context)?;
             rendered_inputs.hash(&mut hasher);
         }
 
-        // and the same for output args
-        if let Some(ref outputs) = execute.outputs {
+        // Hash outputs if present
+        if let Some(outputs) = task.task().outputs() {
             let rendered_outputs = outputs.render(&context)?;
             rendered_outputs.hash(&mut hasher);
         }
 
-        // Create a namehash from the hasher
         Ok(Some(NameHash::from(&hasher as &dyn Hasher)))
     }
 }
@@ -163,11 +157,8 @@ pub struct InputHashes {
 impl InputHashes {
     /// Compute the input hashes from a task. Returns `None` if no files match.
     pub async fn from_task(task: &ExecutableTask<'_>) -> Result<Option<Self>, InputHashesError> {
-        let Ok(execute) = task.task().as_execute() else {
-            return Ok(None);
-        };
-
-        let Some(inputs) = &execute.inputs else {
+        // Use .inputs() directly from the task (works for Alias and Execute)
+        let Some(inputs) = task.task().inputs() else {
             return Ok(None);
         };
 
@@ -192,7 +183,6 @@ impl InputHashes {
     }
 }
 
-/// The combination of all the hashes of the inputs of a task.
 #[derive(Debug, Hash)]
 pub struct OutputHashes {
     pub files: FileHashes,
@@ -201,31 +191,27 @@ pub struct OutputHashes {
 impl OutputHashes {
     /// Compute the output hashes from a task. Returns `None` if no files match.
     pub async fn from_task(task: &ExecutableTask<'_>) -> Result<Option<Self>, InputHashesError> {
-        let outputs: Vec<String> = match task.task().as_execute() {
-            Ok(execute) => {
-                if let Some(outputs) = execute.outputs.clone() {
-                    let context = task.render_context();
-                    let mut rendered_outputs = Vec::new();
-                    for output in outputs.iter() {
-                        match output.render(&context) {
-                            Ok(rendered) => rendered_outputs.push(rendered),
-                            Err(err) => return Err(InputHashesError::TemplateStringError(err)),
-                        }
-                    }
-                    if rendered_outputs.is_empty() {
-                        return Ok(None);
-                    }
-                    rendered_outputs
-                } else {
-                    return Ok(None);
-                }
-            }
-            Err(_) => return Ok(None),
+        // Use .outputs() directly (works for Alias and Execute)
+        let Some(outputs) = task.task().outputs() else {
+            return Ok(None);
         };
 
-        let files = FileHashes::from_files(task.project().root(), outputs.iter()).await?;
+        let context = task.render_context();
+        let mut rendered_outputs = Vec::new();
+        for output in outputs.iter() {
+            match output.render(&context) {
+                Ok(rendered) => rendered_outputs.push(rendered),
+                Err(err) => return Err(InputHashesError::TemplateStringError(err)),
+            }
+        }
 
-        // If no files matched, treat as no outputs for caching purposes
+        if rendered_outputs.is_empty() {
+            return Ok(None);
+        }
+
+        // Use our rendered list to check the filesystem
+        let files = FileHashes::from_files(task.project().root(), rendered_outputs.iter()).await?;
+
         if files.files.is_empty() {
             return Ok(None);
         }
@@ -246,4 +232,71 @@ pub enum InputHashesError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     TemplateStringError(#[from] TemplateStringError),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_core::Workspace;
+    use pixi_manifest::TaskName;
+    use std::borrow::Cow;
+
+    #[tokio::test]
+    async fn test_alias_task_hash_with_outputs() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let project_path = temp_dir.path().join("pixi.toml");
+
+        // 1. Define a workspace with an alias task that has outputs
+        let manifest = r#"
+            [project]
+            name = "alias_test"
+            version = "0.1.0"
+            channels = []
+            platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+            [tasks]
+            # An alias task (no cmd) with an output glob
+            my_alias = { depends-on = [], outputs = ["output.txt"] }
+        "#;
+        std::fs::write(&project_path, manifest).unwrap();
+
+        // 2. Create the dummy output file so the glob matches
+        std::fs::write(temp_dir.path().join("output.txt"), "hello world").unwrap();
+
+        let workspace = Workspace::from_path(&project_path).unwrap();
+        let task_name = TaskName::from("my_alias");
+        let environment = workspace.default_environment();
+        let task = environment.task(&task_name, None).unwrap();
+
+        let executable_task = ExecutableTask {
+            workspace: &workspace,
+            name: Some(task_name),
+            task: Cow::Borrowed(task),
+            run_environment: environment,
+            args: Default::default(),
+        };
+
+        // 3. Compute the hash
+        let lock_file = rattler_lock::LockFile::default();
+        let hash = TaskHash::from_task(&executable_task, &lock_file)
+            .await
+            .unwrap()
+            .expect("TaskHash should not be None even for alias tasks with outputs");
+
+        // 4. Assertions
+        assert!(hash.command.is_none());
+        assert!(
+            hash.outputs.is_some(),
+            "Outputs should be captured for alias tasks"
+        );
+
+        let output_hashes = &hash.outputs.as_ref().unwrap().files;
+        // Use Path::new() to satisfy the Borrow<Path> requirement of the HashMap
+        assert!(
+            output_hashes
+                .files
+                .contains_key(std::path::Path::new("output.txt")),
+            "output.txt should be in the hash"
+        );
+    }
 }

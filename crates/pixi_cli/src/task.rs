@@ -186,8 +186,10 @@ impl From<AddArgs> for Task {
         if cmd_args.trim().is_empty() && !depends_on.is_empty() {
             Self::Alias(Alias {
                 depends_on,
-                description,
-                args: value.args,
+                description: None,
+                args: None,
+                inputs: None,  // Add this
+                outputs: None, // Add this
             })
         } else if depends_on.is_empty()
             && value.cwd.is_none()
@@ -234,6 +236,8 @@ impl From<AliasArgs> for Task {
             depends_on: value.depends_on,
             description: value.description,
             args: None,
+            inputs: None,  // Add this
+            outputs: None, // Add this
         })
     }
 }

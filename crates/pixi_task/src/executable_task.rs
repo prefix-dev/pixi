@@ -317,21 +317,15 @@ impl<'p> ExecutableTask<'p> {
 
     /// Emit warnings for missing input/output globs given a computed hash.
     pub fn warn_on_missing_globs(&self, post_hash: &TaskHash) {
-        let (rendered_inputs, rendered_outputs) = match self.task().as_execute() {
-            Ok(exe) => {
-                let context = self.render_context();
-                let ins = exe
-                    .inputs
-                    .as_ref()
-                    .map(|p| p.render(&context).unwrap_or_default());
-                let outs = exe
-                    .outputs
-                    .as_ref()
-                    .map(|p| p.render(&context).unwrap_or_default());
-                (ins, outs)
-            }
-            Err(_) => (None, None),
-        };
+        let context = self.render_context();
+        let rendered_inputs = self
+            .task()
+            .inputs()
+            .map(|p| p.render(&context).unwrap_or_default());
+        let rendered_outputs = self
+            .task()
+            .outputs()
+            .map(|p| p.render(&context).unwrap_or_default());
 
         // Outputs warning
         if rendered_outputs.is_some()
@@ -405,13 +399,6 @@ impl<'p> ExecutableTask<'p> {
         &self,
         post_run_hash: Option<TaskHash>,
     ) -> Result<(), CacheUpdateError> {
-        let execute = if let Ok(task) = self.task().as_execute() {
-            task
-        } else {
-            // Don't save cache for non-execute tasks
-            return Ok(());
-        };
-
         let task_cache_folder = self.project().task_cache_folder();
         let args_cache = TaskHash::task_args_hash(self)?;
         let cache_file = task_cache_folder.join(self.cache_name(args_cache));
@@ -422,9 +409,11 @@ impl<'p> ExecutableTask<'p> {
             None => return Ok(()),
         };
 
-        // If any configured globs (inputs or outputs) did not match, do not create a cache entry
-        let outputs_unmatched = execute.outputs.is_some() && new_hash.outputs.is_none();
-        let inputs_unmatched = execute.inputs.is_some() && new_hash.inputs.is_none();
+        // Check if the configured globs (inputs or outputs) actually matched files.
+        // If they were defined but nothing was found on disk, we don't create a cache entry.
+        let outputs_unmatched = self.task().outputs().is_some() && new_hash.outputs.is_none();
+        let inputs_unmatched = self.task().inputs().is_some() && new_hash.inputs.is_none();
+
         if outputs_unmatched || inputs_unmatched {
             return Ok(());
         }
