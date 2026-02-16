@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from .common import CURRENT_PLATFORM, ExitCode, copytree_with_local_backend, verify_cli_command
+from .common import CURRENT_PLATFORM, copytree_with_local_backend, verify_cli_command
 
 
 def test_build(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:

@@ -1,6 +1,5 @@
 import json
 import shutil
-import sys
 import tomllib
 from collections.abc import Iterator
 from pathlib import Path
