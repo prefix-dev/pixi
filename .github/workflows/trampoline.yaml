@@ -77,7 +77,7 @@ jobs:
         run: pixi run build-trampoline --target ${{ matrix.target }} --no-compress
 
       - name: Azure login (OIDC)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && github.event_name != 'pull_request'
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -85,7 +85,7 @@ jobs:
           allow-no-subscriptions: true
 
       - name: Sign Windows trampoline
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && github.event_name != 'pull_request'
         uses: azure/trusted-signing-action@87c2e83e6868da99d3380aa309851b32ed9a8346 # v1.1.0
         with:
           endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
