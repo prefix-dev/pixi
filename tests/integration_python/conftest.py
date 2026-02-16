@@ -1,4 +1,6 @@
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 import os
 import stat
 import shutil
@@ -64,7 +66,7 @@ disable-sharded = false
         workspace.joinpath(".pixi").mkdir()
         workspace.joinpath(".pixi/config.toml").write_text(pixi_config)
 
-        def _robust_remove(func, path, exc):
+        def _robust_remove(func: Callable[..., Any], path: str, exc: BaseException) -> None:
             if isinstance(exc, PermissionError):
                 if exc.winerror == 5:  # Access denied (read-only file)
                     os.chmod(path, stat.S_IWRITE)
