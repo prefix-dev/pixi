@@ -379,8 +379,9 @@ impl<'p> TaskGraph<'p> {
                 let context = pixi_manifest::task::TaskRenderContext {
                     platform: node.run_environment.best_platform(),
                     environment_name: node.run_environment.name(),
-                    manifest_path: None, // manifest_path not available at TaskNode level
+                    manifest_path: None,
                     args: node.args.as_ref(),
+                    init_cwd: None,
                 };
                 let dependency = TypedDependency::from_dependency(&dependency, &context)?;
                 // Check if we visited this node before already.
@@ -671,6 +672,7 @@ mod test {
                     environment_name: task.run_environment.name(),
                     manifest_path: Some(&project.workspace.provenance.path),
                     args: task.args.as_ref(),
+                    init_cwd: None,
                 };
                 task.full_command(&context).ok().flatten()
             })
@@ -1031,6 +1033,7 @@ mod test {
             environment_name: task.run_environment.name(),
             manifest_path: Some(&project.workspace.provenance.path),
             args: task.args.as_ref(),
+            init_cwd: None,
         };
         let cmd = task
             .task
@@ -1077,6 +1080,7 @@ mod test {
             environment_name: task.run_environment.name(),
             manifest_path: Some(&project.workspace.provenance.path),
             args: task.args.as_ref(),
+            init_cwd: None,
         };
         let cmd = task
             .task

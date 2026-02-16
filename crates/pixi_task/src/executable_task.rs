@@ -137,6 +137,7 @@ impl<'p> ExecutableTask<'p> {
             environment_name: self.run_environment.name(),
             manifest_path: Some(&self.workspace.workspace.provenance.path),
             args: Some(&self.args),
+            init_cwd: None,
         }
     }
 
