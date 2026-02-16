@@ -605,7 +605,6 @@ pub fn verify_environment_satisfiability(
     let locked_prerelease_mode = locked_environment
         .solve_options()
         .pypi_prerelease_mode
-        .unwrap_or_default()
         .into();
     let expected_prerelease_mode = grouped_env
         .pypi_options()
