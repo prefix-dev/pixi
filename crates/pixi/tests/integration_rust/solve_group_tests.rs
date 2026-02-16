@@ -115,10 +115,11 @@ async fn test_purl_are_added_for_pypi() {
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Check if boltons has a purl
+    let p = lock_file.platform(&Platform::current().to_string()).unwrap();
     lock_file
         .default_environment()
         .unwrap()
-        .packages(Platform::current())
+        .packages(p)
         .unwrap()
         .for_each(|dep| {
             if dep.as_conda().unwrap().record().name == PackageName::from_str("boltons").unwrap() {
@@ -135,10 +136,11 @@ async fn test_purl_are_added_for_pypi() {
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Check if boltons has a purl
+    let p = lock_file.platform(&Platform::current().to_string()).unwrap();
     lock_file
         .default_environment()
         .unwrap()
-        .packages(Platform::current())
+        .packages(p)
         .unwrap()
         .for_each(|dep| {
             if dep.as_conda().unwrap().record().name == PackageName::from_str("boltons").unwrap() {
@@ -850,8 +852,9 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
 
     // Get the lock file
     let lock = pixi.lock_file().await.unwrap();
+    let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
     let environment = lock.environment(DEFAULT_ENVIRONMENT_NAME).unwrap();
-    let conda_packages = environment.conda_packages(Platform::Linux64).unwrap();
+    let conda_packages = environment.conda_packages(p).unwrap();
 
     // Collect conda packages to a vector so we can iterate over them
     let conda_packages: Vec<_> = conda_packages.collect();
@@ -974,30 +977,6 @@ version = "0.1.0"
         lock_file.contains_pypi_package("dev", platform, "my-local-pkg"),
         "dev environment should contain my-local-pkg"
     );
-
-    // With the new architecture, the lock file always stores editable=false
-    // The actual editability is determined from the manifest at install time
-    let prod_editable = lock_file
-        .is_pypi_package_editable("prod", platform, "my-local-pkg")
-        .expect("should find my-local-pkg in prod");
-    let dev_editable = lock_file
-        .is_pypi_package_editable("dev", platform, "my-local-pkg")
-        .expect("should find my-local-pkg in dev");
-
-    // Both should have editable=false in the lock file
-    // The actual editability is applied at install time based on the manifest
-    assert!(
-        !prod_editable,
-        "prod environment should have my-local-pkg with editable=false in lock file, but got editable={prod_editable}",
-    );
-    assert!(
-        !dev_editable,
-        "dev environment should have my-local-pkg with editable=false in lock file, but got editable={dev_editable}",
-    );
-
-    // The key benefit of this architecture is that changing editability in the manifest
-    // does NOT require re-locking - only re-installing. Both environments share the same
-    // lock file entry but can have different editability at install time.
 }
 
 #[tokio::test]

@@ -369,11 +369,12 @@ mod tests {
 
     #[fixture]
     fn ripgrep_records() -> Vec<PackageRecord> {
-        LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep.lock"))
+        let lock = LockFile::from_str_with_base_directory(include_str!("./test_data/lockfiles/ripgrep.lock"), None)
+            .unwrap();
+        let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
+        lock.default_environment()
             .unwrap()
-            .default_environment()
-            .unwrap()
-            .conda_repodata_records(Platform::Linux64)
+            .conda_repodata_records(p)
             .unwrap()
             .unwrap()
             .into_iter()
@@ -391,11 +392,12 @@ mod tests {
 
     #[fixture]
     fn ripgrep_bat_records() -> Vec<PackageRecord> {
-        LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep_bat.lock"))
+        let lock = LockFile::from_str_with_base_directory(include_str!("./test_data/lockfiles/ripgrep_bat.lock"), None)
+            .unwrap();
+        let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
+        lock.default_environment()
             .unwrap()
-            .default_environment()
-            .unwrap()
-            .conda_repodata_records(Platform::Linux64)
+            .conda_repodata_records(p)
             .unwrap()
             .unwrap()
             .into_iter()

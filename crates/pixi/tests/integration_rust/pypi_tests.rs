@@ -150,6 +150,99 @@ test = {{features = ["test"]}}
     );
 }
 
+fn write_subproject(pixi: &PixiControl, name: &str, version: &str) -> std::io::Result<()> {
+    fs_err::create_dir(pixi.workspace_path().join(name))?;
+    let mut file = File::create(pixi.workspace_path().join(format!("{name}/pyproject.toml")))?; // Creates or overwrites the file
+    file.write_all(
+        format!(
+            r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{name}"
+version = "{version}"
+        "#
+        )
+        .as_bytes(),
+    )
+}
+
+#[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
+async fn pyproject_relative_path_dependencies() {
+    setup_tracing();
+
+    let simple = PyPIDatabase::new()
+        .with(PyPIPackage::new("mine", "1.0.0"))
+        .with(PyPIPackage::new("also_mine", "1.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let platform = Platform::current();
+    let platform_str = platform.to_string();
+
+    let index_url = simple.index_url();
+
+    let pyproject = format!(
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "relative-path-dependencies"
+version = "0.9.9"
+dependencies = [
+    "mine @ ./mine"    
+]
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["{platform_str}"]
+conda-pypi-map = {{}}
+
+[tool.pixi.dependencies]
+python = "==3.11.0"
+
+[tool.pixi.pypi-dependencies]
+also_mine = {{ path = "./also_mine" }}
+
+[tool.pixi.pypi-options]
+index-url = "{index_url}"
+"#,
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+    write_subproject(&pixi, "mine", "0.1.0").unwrap();
+    write_subproject(&pixi, "also_mine", "2.1.0").unwrap();
+
+    println!("Calling update_lock_file now\n");
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    match lock.get_pypi_package("default", platform, "mine").unwrap() {
+        rattler_lock::LockedPackageRef::Conda(_) => {
+            panic!("Got a Conda package when I expected a pypi one")
+        }
+        rattler_lock::LockedPackageRef::Pypi(pkg, _) => {
+            assert_eq!(pkg.name.as_dist_info_name(), "mine");
+            assert_eq!(pkg.location.given(), Some("./mine"));
+        }
+    }
+    match lock
+        .get_pypi_package("default", platform, "also-mine")
+        .unwrap()
+    {
+        rattler_lock::LockedPackageRef::Conda(_) => {
+            panic!("Got a Conda package when I expected a pypi one")
+        }
+        rattler_lock::LockedPackageRef::Pypi(pkg, _) => {
+            assert_eq!(pkg.name.as_dist_info_name(), "also_mine");
+            assert_eq!(pkg.location.given(), Some("./also_mine"));
+        }
+    }
+}
+
 #[tokio::test]
 async fn pyproject_environment_markers_resolved() {
     setup_tracing();
@@ -1432,20 +1525,12 @@ version = "0.1.0"
     );
 
     // Parse and write the modified lock file back
-    let modified_lockfile = LockFile::from_str(&modified_lock_file_str).unwrap();
+    let modified_lockfile =
+        LockFile::from_str_with_base_directory(&modified_lock_file_str, None).unwrap();
     let workspace = pixi.workspace().unwrap();
     modified_lockfile
         .to_path(&workspace.lock_file_path())
         .unwrap();
-
-    // Verify the lock file now has editable: true
-    let lock_after_modification = pixi.lock_file().await.unwrap();
-    assert!(
-        lock_after_modification
-            .is_pypi_package_editable("default", platform, "editable-test")
-            .unwrap_or(false),
-        "Lock file should have editable: true after manual modification"
-    );
 
     // Now install with --locked (uses the modified lock file without re-resolving)
     // The fix should ensure that the package is installed as NON-editable

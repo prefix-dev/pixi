@@ -43,8 +43,6 @@ pub enum Field {
     Depends,
     #[clap(name = "file-name")]
     FileName,
-    #[clap(name = "is-editable")]
-    IsEditable,
     Kind,
     License,
     #[clap(name = "license-family")]
@@ -76,7 +74,6 @@ impl Display for Field {
             Field::Constrains => write!(f, "constrains"),
             Field::Depends => write!(f, "depends"),
             Field::FileName => write!(f, "file-name"),
-            Field::IsEditable => write!(f, "is-editable"),
             Field::Kind => write!(f, "kind"),
             Field::License => write!(f, "license"),
             Field::LicenseFamily => write!(f, "license-family"),
@@ -107,7 +104,6 @@ impl Field {
             Field::Constrains => "Constrains",
             Field::Depends => "Depends",
             Field::FileName => "File Name",
-            Field::IsEditable => "Editable",
             Field::Kind => "Kind",
             Field::License => "License",
             Field::LicenseFamily => "License Family",
@@ -200,10 +196,6 @@ pub struct Args {
     pub explicit: bool,
 }
 
-fn serde_skip_is_editable(editable: &bool) -> bool {
-    !(*editable)
-}
-
 #[derive(Serialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 enum KindPackage {
@@ -241,8 +233,6 @@ struct PackageToOutput {
     license: Option<String>,
     license_family: Option<String>,
     is_explicit: bool,
-    #[serde(skip_serializing_if = "serde_skip_is_editable")]
-    is_editable: bool,
     md5: Option<String>,
     sha256: Option<String>,
     arch: Option<String>,
@@ -285,18 +275,9 @@ impl PackageToOutput {
                     .unwrap_or_default(),
             ),
             Field::Kind => Cell::new(format!("{}", self.kind.fancy_display())),
-            Field::Source => {
-                let base = self.source.as_deref().unwrap_or_default();
-                let content = if self.is_editable {
-                    format!("{base} {}", Style::new().yellow().apply_to("(editable)"))
-                } else {
-                    base.to_string()
-                };
-                Cell::new(content)
-            }
+            Field::Source => Cell::new(self.source.as_deref().unwrap_or_default().to_string()),
             Field::License => Cell::new(self.license.as_deref().unwrap_or_default()),
             Field::LicenseFamily => Cell::new(self.license_family.as_deref().unwrap_or_default()),
-            Field::IsEditable => Cell::new(if self.is_editable { "true" } else { "false" }),
             Field::Md5 => Cell::new(self.md5.as_deref().unwrap_or_default()),
             Field::Sha256 => Cell::new(self.sha256.as_deref().unwrap_or_default()),
             Field::Arch => Cell::new(self.arch.as_deref().unwrap_or_default()),
@@ -398,7 +379,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Get all the packages in the environment.
     let locked_deps = lock_file
         .environment(environment.name().as_str())
-        .and_then(|env| env.packages(platform).map(Vec::from_iter))
+        .and_then(|env| {
+            let p = lock_file.platform(&platform.to_string())?;
+            env.packages(p).map(Vec::from_iter)
+        })
         .unwrap_or_default();
 
     let locked_deps_ext = locked_deps
@@ -697,7 +681,7 @@ fn create_package_to_output<'a, 'b>(
             ),
             CondaPackageData::Source(source) => (None, Some(source.location.to_string())),
         },
-        PackageExt::PyPI(p, _) => match &p.location {
+        PackageExt::PyPI(p, _) => match &*p.location {
             UrlOrPath::Url(url) => (None, Some(url.to_string())),
             UrlOrPath::Path(path) => (None, Some(path.to_string())),
         },
@@ -705,11 +689,6 @@ fn create_package_to_output<'a, 'b>(
 
     let requested_spec = requested_specs.get(&name).cloned();
     let is_explicit = requested_spec.is_some();
-
-    let is_editable = match package {
-        PackageExt::Conda(_) => false,
-        PackageExt::PyPI(p, _) => p.editable,
-    };
 
     let constrains = match package {
         PackageExt::Conda(pkg) => pkg.record().constrains.clone(),
@@ -737,7 +716,6 @@ fn create_package_to_output<'a, 'b>(
         license,
         license_family,
         is_explicit,
-        is_editable,
         md5,
         sha256,
         arch,

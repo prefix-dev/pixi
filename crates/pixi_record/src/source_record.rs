@@ -81,7 +81,7 @@ pub struct SourceRecord {
     pub build_source: Option<PinnedBuildSourceSpec>,
 
     /// The variants that uniquely identify the way this package was built.
-    pub variants: Option<BTreeMap<String, VariantValue>>,
+    pub variants: BTreeMap<String, VariantValue>,
 
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
@@ -132,8 +132,6 @@ impl SourceRecord {
             package_record: self.package_record,
             location: self.manifest_source.clone().into(),
             package_build_source,
-            // Don't write input_hash to lock file
-            input: None,
             sources: self
                 .sources
                 .into_iter()
@@ -141,7 +139,9 @@ impl SourceRecord {
                 .collect(),
             variants: self
                 .variants
-                .map(|variants| variants.into_iter().map(|(k, v)| (k, v.into())).collect()),
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
         }
     }
 
@@ -210,12 +210,11 @@ impl SourceRecord {
                 .into_iter()
                 .map(|(k, v)| (k, SourceLocationSpec::from(v)))
                 .collect(),
-            variants: data.variants.map(|variants| {
-                variants
-                    .into_iter()
-                    .map(|(k, v)| (k, VariantValue::from(v)))
-                    .collect()
-            }),
+            variants: data
+                .variants
+                .into_iter()
+                .map(|(k, v)| (k, VariantValue::from(v)))
+                .collect(),
         })
     }
 
@@ -227,17 +226,11 @@ impl SourceRecord {
             return false;
         }
 
-        match (&self.variants, &other.variants) {
-            (Some(variants), Some(other_variants)) => {
-                // If both records have variants, we use that to identify them.
-                variants == other_variants
-            }
-            _ => {
-                self.package_record.build == other.package_record.build
-                    && self.package_record.version == other.package_record.version
-                    && self.package_record.subdir == other.package_record.subdir
-            }
+        if self.variants.is_empty() || other.variants.is_empty() {
+            return true;
         }
+
+        self.variants == other.variants
     }
 }
 
@@ -300,7 +293,7 @@ fn git_reference_from_shallow(spec: Option<GitShallowSpec>, rev: &str) -> GitRef
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::str::FromStr;
+    use std::{path::Path, str::FromStr};
 
     use rattler_conda_types::Platform;
     use rattler_lock::{
@@ -309,11 +302,13 @@ mod tests {
 
     #[test]
     fn roundtrip_conda_source_data() {
-        let workspace_root = std::path::Path::new("/workspace");
+        let workspace_root = Path::new("/workspace");
 
         // Load the lock file from the snapshot content (skip insta frontmatter).
         let lock_source = lock_source_from_snapshot();
-        let lock_file = LockFile::from_str(&lock_source).expect("failed to load lock file fixture");
+        let lock_file =
+            LockFile::from_str_with_base_directory(&lock_source, Some(Path::new("/workspace")))
+                .expect("failed to load lock file fixture");
 
         // Extract Conda source packages from the lock file.
         let environment = lock_file
@@ -344,7 +339,7 @@ mod tests {
 
     /// Extract the lock file body from the snapshot by skipping the insta frontmatter.
     fn lock_source_from_snapshot() -> String {
-        let snapshot_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+        let snapshot_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(
             "src/snapshots/pixi_record__source_record__tests__roundtrip_conda_source_data.snap",
         );
         #[allow(clippy::disallowed_methods)]
@@ -358,11 +353,30 @@ mod tests {
     }
 
     /// Build a lock file string from a set of SourceRecords.
-    fn build_lock_from_records(
-        records: &[SourceRecord],
-        workspace_root: &std::path::Path,
-    ) -> String {
-        let mut builder = LockFileBuilder::new();
+    fn build_lock_from_records(records: &[SourceRecord], workspace_root: &Path) -> String {
+        // Collect all unique platforms from the records
+        let platforms: std::collections::HashSet<Platform> = records
+            .iter()
+            .map(|r| {
+                let conda_data =
+                    CondaPackageData::from(r.clone().into_conda_source_data(workspace_root));
+                Platform::from_str(&conda_data.record().subdir)
+                    .expect("failed to parse platform from subdir")
+            })
+            .collect();
+
+        let mut builder = LockFileBuilder::new()
+            .with_platforms(
+                platforms
+                    .iter()
+                    .map(|p| rattler_lock::PlatformData {
+                        name: rattler_lock::PlatformName::from(p),
+                        subdir: *p,
+                        virtual_packages: Vec::new(),
+                    })
+                    .collect(),
+            )
+            .expect("platforms should be unique");
         builder.set_channels(
             DEFAULT_ENVIRONMENT_NAME,
             [Channel::from("https://conda.anaconda.org/conda-forge/")],
@@ -374,7 +388,13 @@ mod tests {
 
             let platform = Platform::from_str(&conda_data.record().subdir)
                 .expect("failed to parse platform from subdir");
-            builder.add_conda_package(DEFAULT_ENVIRONMENT_NAME, platform, conda_data);
+            builder
+                .add_conda_package(
+                    DEFAULT_ENVIRONMENT_NAME,
+                    &platform.to_string(),
+                    conda_data,
+                )
+                .expect("platform was registered");
         }
 
         builder

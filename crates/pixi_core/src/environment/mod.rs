@@ -147,7 +147,9 @@ impl EnvironmentHash {
         // Hash the packages
         let mut urls = Vec::new();
         if let Some(env) = lock_file.environment(run_environment.name().as_str())
-            && let Some(packages) = env.packages(run_environment.best_platform())
+            && let Some(lock_platform) =
+                lock_file.platform(&run_environment.best_platform().to_string())
+            && let Some(packages) = env.packages(lock_platform)
         {
             for package in packages {
                 urls.push(package.location().to_string())
@@ -178,7 +180,8 @@ impl LockedEnvironmentHash {
         // Intentionally ignore `skipped` here: the quick-validate cache is only
         // used during runs, and should not vary based on transient install
         // filters.
-        if let Some(packages) = environment.packages(platform) {
+        let lock_platform = environment.lock_file().platform(&platform.to_string());
+        if let Some(packages) = lock_platform.and_then(|p| environment.packages(p)) {
             for package in packages {
                 // Always has the url or path
                 package.location().to_owned().to_string().hash(&mut hasher);
@@ -192,8 +195,7 @@ impl LockedEnvironmentHash {
                             md5.hash(&mut hasher);
                         }
                     }
-                    LockedPackageRef::Pypi(pack, env) => {
-                        pack.editable.hash(&mut hasher);
+                    LockedPackageRef::Pypi(_, env) => {
                         env.extras.hash(&mut hasher);
                     }
                 }

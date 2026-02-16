@@ -144,7 +144,7 @@ pub struct CachedSourceRecord {
     pub package_record: PackageRecord,
 
     /// The variants that uniquely identify the way this package was built.
-    pub variants: Option<BTreeMap<String, VariantValue>>,
+    pub variants: BTreeMap<String, VariantValue>,
 
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.

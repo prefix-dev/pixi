@@ -14,6 +14,7 @@ pub use install_subset::{FilteredPackages, InstallSubset};
 pub use package_identifier::PypiPackageIdentifier;
 use pixi_record::PixiRecord;
 pub use pixi_uv_context::UvResolutionContext;
+pub use rattler_lock::Verbatim;
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 pub use records_by_name::{PixiRecordsByName, PypiRecordsByName};
 pub use resolve::pypi::resolve_pypi;

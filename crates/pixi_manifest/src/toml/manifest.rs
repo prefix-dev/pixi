@@ -92,7 +92,7 @@ impl TomlManifest {
         external: WorkspacePackageProperties,
         package_defaults: PackageDefaults,
         workspace: &WorkspaceManifest,
-        root_directory: Option<&Path>,
+        root_directory: &Path,
     ) -> Result<(PackageManifest, Vec<Warning>), TomlError> {
         let Some(PixiSpanned {
             value: package,
@@ -141,7 +141,7 @@ impl TomlManifest {
         self,
         mut external: ExternalWorkspaceProperties,
         package_defaults: PackageDefaults,
-        root_directory: Option<&Path>,
+        root_directory: &Path,
     ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
         let workspace = self
             .workspace
@@ -632,7 +632,7 @@ mod test {
                 manifest.into_workspace_manifest(
                     ExternalWorkspaceProperties::default(),
                     PackageDefaults::default(),
-                    None,
+                    Path::new(""),
                 )
             })
             .expect_err("parsing should fail");
@@ -659,7 +659,7 @@ mod test {
 
     #[test]
     fn test_workspace_name_from_package() {
-        let workspace_manifest = WorkspaceManifest::from_toml_str(
+        let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [workspace]
         channels = []
@@ -673,6 +673,7 @@ mod test {
         [package.build]
         backend = { name = "foobar", version = "*" }
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -998,7 +999,7 @@ mod test {
 
     #[test]
     fn test_parse_dev_path() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [workspace]
         name = "test"
@@ -1008,6 +1009,7 @@ mod test {
         [dev]
         test-package = { path = "../test-package" }
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -1022,7 +1024,7 @@ mod test {
 
     #[test]
     fn test_parse_dev_git() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [workspace]
         name = "test"
@@ -1032,6 +1034,7 @@ mod test {
         [dev]
         my-lib = { git = "https://github.com/example/my-lib.git", branch = "main" }
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -1046,7 +1049,7 @@ mod test {
 
     #[test]
     fn test_parse_dev_multiple() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [workspace]
         name = "test"
@@ -1058,6 +1061,7 @@ mod test {
         pkg-b = { git = "https://github.com/example/pkg-b.git" }
         pkg-c = { url = "https://example.com/pkg-c.tar.gz" }
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -1074,7 +1078,7 @@ mod test {
 
     #[test]
     fn test_parse_feature_dev() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [workspace]
         name = "test"
@@ -1088,6 +1092,7 @@ mod test {
         default = []
         extra = ["extra"]
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -1108,7 +1113,7 @@ mod test {
 
     #[test]
     fn test_parse_target_dev() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [workspace]
         name = "test"
@@ -1121,6 +1126,7 @@ mod test {
         [target.win-64.dev]
         windows-pkg = { path = "../windows-pkg" }
         "#,
+            Path::new(""),
         )
         .unwrap();
 

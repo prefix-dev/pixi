@@ -51,7 +51,12 @@ use uv_resolver::{ExcludeNewer, FlatIndex};
 
 use crate::plan::{CachedWheels, RequiredDists};
 
-pub type PyPIRecords = (PypiPackageData, PypiPackageEnvironmentData);
+/// Extra data available from the manifest, not the lockfile
+pub struct ManifestData {
+    pub editable: bool,
+}
+
+pub type PyPIRecords = (PypiPackageData, PypiPackageEnvironmentData, ManifestData);
 
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
@@ -431,11 +436,14 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     /// Create the installation plan by analyzing current state vs requirements
     async fn create_installation_plan(
         &self,
-        pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
+        pypi_records: &[crate::PyPIRecords],
         setup: &UvInstallerConfig,
     ) -> miette::Result<PyPIInstallationPlan> {
         // Create required distributions with pre-created Dist objects
-        let required_packages: Vec<_> = pypi_records.iter().map(|(pkg, _)| pkg.clone()).collect();
+        let required_packages: Vec<_> = pypi_records
+            .iter()
+            .map(|(pkg, _, spec)| (pkg, spec))
+            .collect();
         let required_dists =
             RequiredDists::from_packages(&required_packages, self.config.lock_file_dir)
                 .into_diagnostic()

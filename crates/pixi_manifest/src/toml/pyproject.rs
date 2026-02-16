@@ -1,7 +1,7 @@
 //! This module provides [`toml_span`] parsing functionality for
 //! `pyproject.toml` files.
 
-use std::str::FromStr;
+use std::path::Path;
 
 use indexmap::IndexMap;
 use pep440_rs::{Version, VersionSpecifiers};
@@ -17,6 +17,7 @@ use toml_span::{
     value::ValueInner,
 };
 
+use crate::error::{GenericError, TomlError};
 use crate::pyproject::{PyProjectManifest, Tool, ToolPoetry};
 
 #[derive(Debug)]
@@ -27,15 +28,22 @@ pub struct PyProjectToml {
 }
 
 impl PyProjectToml {
-    pub fn into_inner(self) -> pyproject_toml::PyProjectToml {
-        pyproject_toml::PyProjectToml {
-            project: self.project.map(TomlProject::into_inner),
+    pub fn into_inner(
+        self,
+        working_dir: &Path,
+    ) -> Result<pyproject_toml::PyProjectToml, TomlError> {
+        Ok(pyproject_toml::PyProjectToml {
+            project: self
+                .project
+                .map(|p| p.into_inner(working_dir))
+                .transpose()?,
             build_system: self.build_system.map(TomlBuildSystem::into_inner),
             dependency_groups: self
                 .dependency_groups
                 .map(Spanned::take)
-                .map(TomlDependencyGroups::into_inner),
-        }
+                .map(|dg| dg.into_inner(working_dir))
+                .transpose()?,
+        })
     }
 }
 
@@ -48,7 +56,6 @@ impl<'de> toml_span::Deserialize<'de> for PyProjectToml {
         let dependency_groups = th.optional("dependency-groups");
 
         th.finalize(Some(value))?;
-
         Ok(PyProjectToml {
             project,
             build_system,
@@ -165,18 +172,44 @@ pub struct TomlProject {
     pub scripts: Option<IndexMap<String, Spanned<String>>>,
     /// Corresponds to the gui_scripts group in the core metadata
     pub gui_scripts: Option<IndexMap<String, Spanned<String>>>,
-    /// Project dependencies
-    pub dependencies: Option<Vec<Spanned<Requirement>>>,
-    /// Optional dependencies
-    pub optional_dependencies: Option<IndexMap<String, Vec<Spanned<Requirement>>>>,
+    /// Project dependencies (stored as raw strings, parsed later with working_dir)
+    pub dependencies: Option<Vec<Spanned<String>>>,
+    /// Optional dependencies (stored as raw strings, parsed later with working_dir)
+    pub optional_dependencies: Option<IndexMap<String, Vec<Spanned<String>>>>,
     /// Specifies which fields listed by PEP 621 were intentionally unspecified
     /// so another tool can/will provide such metadata dynamically.
     pub dynamic: Option<Vec<Spanned<String>>>,
 }
 
 impl TomlProject {
-    pub fn into_inner(self) -> Project {
-        Project {
+    pub fn into_inner(self, working_dir: &Path) -> Result<Project, TomlError> {
+        let dependencies = self
+            .dependencies
+            .map(|deps| {
+                deps.into_iter()
+                    .map(|s| parse_requirement_with_dir(&s, working_dir))
+                    .inspect(|v| eprintln!("Debug VersionOrUrl: {v:?}"))
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .transpose()?;
+
+        let optional_dependencies = self
+            .optional_dependencies
+            .map(|opt_deps| {
+                opt_deps
+                    .into_iter()
+                    .map(|(key, deps)| {
+                        let parsed = deps
+                            .into_iter()
+                            .map(|s| parse_requirement_with_dir(&s, working_dir))
+                            .collect::<Result<Vec<_>, _>>()?;
+                        Ok((key, parsed))
+                    })
+                    .collect::<Result<IndexMap<_, _>, TomlError>>()
+            })
+            .transpose()?;
+
+        Ok(Project {
             name: self.name.take(),
             version: self.version.map(Spanned::take),
             description: self.description.map(Spanned::take),
@@ -224,19 +257,12 @@ impl TomlProject {
                     .map(|(k, v)| (k, v.take()))
                     .collect()
             }),
-            dependencies: self
-                .dependencies
-                .map(|dependencies| dependencies.into_iter().map(Spanned::take).collect()),
-            optional_dependencies: self.optional_dependencies.map(|optional_dependencies| {
-                optional_dependencies
-                    .into_iter()
-                    .map(|(k, v)| (k, v.into_iter().map(Spanned::take).collect()))
-                    .collect()
-            }),
+            dependencies,
+            optional_dependencies,
             dynamic: self
                 .dynamic
                 .map(|dynamic| dynamic.into_iter().map(Spanned::take).collect()),
-        }
+        })
     }
 }
 
@@ -273,13 +299,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlProject {
         let gui_scripts = th
             .optional::<TomlIndexMap<_, _>>("gui-scripts")
             .map(TomlIndexMap::into_inner);
-        let dependencies = th
-            .optional::<TomlWith<_, Vec<Spanned<TomlFromStr<_>>>>>("dependencies")
-            .map(TomlWith::into_inner);
+        let dependencies: Option<Vec<Spanned<String>>> = th.optional("dependencies");
         let optional_dependencies = th
-            .optional::<TomlWith<_, TomlIndexMap<_, Vec<Spanned<TomlFromStr<_>>>>>>(
-                "optional-dependencies",
-            )
+            .optional::<TomlWith<_, TomlIndexMap<_, Vec<Spanned<Same>>>>>("optional-dependencies")
             .map(TomlWith::into_inner);
         let dynamic = th.optional("dynamic");
 
@@ -308,10 +330,17 @@ impl<'de> toml_span::Deserialize<'de> for TomlProject {
     }
 }
 
-impl<'de> DeserializeAs<'de, Project> for TomlProject {
-    fn deserialize_as(value: &mut Value<'de>) -> Result<Project, DeserError> {
-        Self::deserialize(value).map(Self::into_inner)
-    }
+/// Parse a raw PEP 508 string into a [`Requirement`], optionally using a
+/// working directory to resolve relative paths.
+fn parse_requirement_with_dir(
+    spanned: &Spanned<String>,
+    working_dir: &Path,
+) -> Result<Requirement, TomlError> {
+    Requirement::parse(&spanned.value, working_dir).map_err(|e| {
+        GenericError::new(e.message.to_string())
+            .with_span(spanned.span.start..spanned.span.end)
+            .into()
+    })
 }
 
 /// A wrapper around [`ReadMe`] that implements [`toml_span::Deserialize`] and
@@ -442,60 +471,64 @@ impl<'de> DeserializeAs<'de, Contact> for TomlContact {
     }
 }
 
-/// A wrapper around [`DependencyGroups`] that implements
-/// [`toml_span::Deserialize`] and [`pixi_toml::DeserializeAs`].
+/// Intermediate representation of `[dependency-groups]` that stores requirement
+/// strings unparsed. The strings are resolved into [`Requirement`] objects in
+/// [`TomlDependencyGroups::into_inner`] where a working directory can be
+/// provided.
 #[derive(Debug)]
-pub struct TomlDependencyGroups(pub DependencyGroups);
+pub struct TomlDependencyGroups(pub IndexMap<String, Vec<TomlDependencyGroupSpecifier>>);
 
 impl TomlDependencyGroups {
-    pub fn into_inner(self) -> DependencyGroups {
-        self.0
+    pub fn into_inner(self, working_dir: &Path) -> Result<DependencyGroups, TomlError> {
+        let mut groups = IndexMap::new();
+        for (name, specifiers) in self.0 {
+            let parsed = specifiers
+                .into_iter()
+                .map(|spec| match spec {
+                    TomlDependencyGroupSpecifier::String(spanned) => {
+                        let req = parse_requirement_with_dir(&spanned, working_dir)?;
+                        Ok(DependencyGroupSpecifier::String(req))
+                    }
+                    TomlDependencyGroupSpecifier::Table { include_group } => {
+                        Ok(DependencyGroupSpecifier::Table { include_group })
+                    }
+                })
+                .collect::<Result<Vec<_>, TomlError>>()?;
+            groups.insert(name, parsed);
+        }
+        Ok(DependencyGroups(groups))
     }
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlDependencyGroups {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
-        Ok(Self(DependencyGroups(
-            TomlWith::<_, TomlIndexMap<_, Vec<TomlDependencyGroupSpecifier>>>::deserialize(value)?
-                .into_inner(),
-        )))
+        let map = TomlIndexMap::<String, Vec<TomlDependencyGroupSpecifier>>::deserialize(value)?;
+        Ok(Self(map.into_inner()))
     }
 }
 
-impl<'de> DeserializeAs<'de, DependencyGroups> for TomlDependencyGroups {
-    fn deserialize_as(value: &mut Value<'de>) -> Result<DependencyGroups, DeserError> {
-        Self::deserialize(value).map(Self::into_inner)
-    }
-}
-
-/// A wrapper around [`DependencyGroupSpecifier`] that implements
-/// [`toml_span::Deserialize`] and [`pixi_toml::DeserializeAs`].
+/// Intermediate representation of a dependency group specifier that stores
+/// requirement strings unparsed.
 #[derive(Debug)]
-pub struct TomlDependencyGroupSpecifier(DependencyGroupSpecifier);
-
-impl TomlDependencyGroupSpecifier {
-    pub fn into_inner(self) -> DependencyGroupSpecifier {
-        self.0
-    }
+pub enum TomlDependencyGroupSpecifier {
+    /// Raw PEP 508 string, parsed later with working_dir context
+    String(Spanned<String>),
+    /// Include another dependency group
+    Table { include_group: String },
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlDependencyGroupSpecifier {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let span = value.span;
         match value.take() {
-            ValueInner::String(str) => Ok(Self(DependencyGroupSpecifier::String(
-                Requirement::from_str(&str).map_err(|e| {
-                    DeserError::from(Error {
-                        kind: ErrorKind::Custom(e.message.to_string().into()),
-                        span: value.span,
-                        line_info: None,
-                    })
-                })?,
-            ))),
+            ValueInner::String(str) => Ok(TomlDependencyGroupSpecifier::String(
+                Spanned::with_span(str.into_owned(), span),
+            )),
             ValueInner::Table(table) => {
                 let mut th = TableHelper::from((table, value.span));
                 let include_group = th.required("include-group")?;
                 th.finalize(None)?;
-                Ok(Self(DependencyGroupSpecifier::Table { include_group }))
+                Ok(TomlDependencyGroupSpecifier::Table { include_group })
             }
             inner => Err(DeserError::from(expected(
                 "a string or table",
@@ -503,12 +536,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlDependencyGroupSpecifier {
                 value.span,
             ))),
         }
-    }
-}
-
-impl<'de> DeserializeAs<'de, DependencyGroupSpecifier> for TomlDependencyGroupSpecifier {
-    fn deserialize_as(value: &mut Value<'de>) -> Result<DependencyGroupSpecifier, DeserError> {
-        Self::deserialize(value).map(Self::into_inner)
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::utils::extract_directory_from_url;
 use crate::{Pep508ToPyPiRequirementError, PixiPypiSource, PixiPypiSpec, VersionOrStar};
 use pixi_git::GitUrl;
-use pixi_spec::GitSpec;
+use pixi_spec::{GitSpec, Verbatim};
 use std::path::Path;
 
 /// Implement from [`pep508_rs::Requirement`] to make the conversion easier.
@@ -89,9 +89,14 @@ impl TryFrom<pep508_rs::Requirement> for PixiPypiSpec {
                         let file = url.to_file_path().map_err(|_| {
                             Pep508ToPyPiRequirementError::PathUrlIntoPath(url.clone())
                         })?;
+                        let path = if let Some(g) = u.given() {
+                            Verbatim::new_with_given(file, g.to_string())
+                        } else {
+                            Verbatim::new(file)
+                        };
                         PixiPypiSpec::with_extras_and_markers(
                             PixiPypiSource::Path {
-                                path: file,
+                                path,
                                 editable: None,
                             },
                             req.extras,

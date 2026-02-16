@@ -318,7 +318,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 variant_configuration: Some(variant_configuration.clone()),
                 variant_files: Some(variant_files.clone()),
                 // Fresh builds don't have pre-existing variants to match against
-                variants: None,
+                variants: Default::default(),
                 enabled_protocols: Default::default(),
                 work_directory: None,
                 clean: args.clean,

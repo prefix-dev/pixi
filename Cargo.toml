@@ -1,16 +1,23 @@
 [workspace]
 default-members = [
   "crates/pixi",
-  "crates/pixi_build_cmake",
-  "crates/pixi_build_mojo",
-  "crates/pixi_build_python",
-  "crates/pixi_build_rattler_build",
-  "crates/pixi_build_rust",
+  # "crates/pixi_build_cmake",
+  # "crates/pixi_build_mojo",
+  # "crates/pixi_build_python",
+  # "crates/pixi_build_rattler_build",
+  # "crates/pixi_build_rust",
 ]
 exclude = [
   # Only pulled in when enabling certain features. We do not want to include
   # these crates when running workspace wide commands.
   "crates/pixi_allocator",
+  "crates/pixi_build_cmake",
+  "crates/pixi_build_mojo",
+  "crates/pixi_build_python",
+  "crates/pixi_build_rattler_build",
+  "crates/pixi_build_rust",
+  "crates/pixi_build_backend",
+  "crates/recipe_stage0",
   # Standalone projects that should not be part of the workspace
   "docs",
   "examples",
@@ -92,13 +99,13 @@ ordermap = "1.0.0"
 parking_lot = "0.12.4"
 pathdiff = "0.2.3"
 pep440_rs = "0.7.3"
-pep508_rs = "0.9.2"
+pep508_rs = { version = "0.9.2", features = ["non-pep508-extensions"] }
 percent-encoding = "2.3.1"
 pin-project-lite = "0.2.16"
 pixi_allocator = { path = "crates/pixi_allocator" }
 pixi_api = { path = "crates/pixi_api" }
 pixi_auth = { path = "crates/pixi_auth", default-features = false }
-pixi_build_backend = { path = "crates/pixi_build_backend" }
+# pixi_build_backend = { path = "crates/pixi_build_backend" }
 pixi_build_backend_passthrough = { path = "crates/pixi_build_backend_passthrough" }
 pixi_build_discovery = { path = "crates/pixi_build_discovery" }
 pixi_build_frontend = { path = "crates/pixi_build_frontend" }
@@ -223,37 +230,63 @@ zstd = { version = "0.13.3", default-features = false }
 
 # Rattler crates
 coalesced_map = "0.1.2"
-file_url = "0.2.6"
-rattler = { version = "0.39.0", default-features = false }
-rattler_cache = { version = "0.6.2", default-features = false }
+file_url = "0.2.7"
+rattler = { version = "0.39.10", default-features = false }
+rattler_cache = { version = "0.6.9", default-features = false }
 rattler_conda_types = { version = "0.43.1", default-features = false, features = [
   "rayon",
 ] }
-rattler_digest = { version = "1.2.0", default-features = false }
-rattler_lock = { version = "0.26.7", default-features = false }
-rattler_menuinst = { version = "0.2.35", default-features = false }
-rattler_networking = { version = "0.25.22", default-features = false, features = [
+rattler_digest = { version = "1.2.2", default-features = false }
+rattler_lock = { version = "0.26.12", default-features = false }
+rattler_menuinst = { version = "0.2.45", default-features = false }
+rattler_networking = { version = "0.25.32", default-features = false, features = [
   "dirs",
   "google-cloud-auth",
 ] }
-rattler_package_streaming = { version = "0.23.14", default-features = false }
-rattler_repodata_gateway = { version = "0.25.0", default-features = false }
-rattler_shell = { version = "0.25.8", default-features = false }
-rattler_solve = { version = "4.1.0", default-features = false }
-rattler_upload = { version = "0.4.5", default-features = false, features = [
+rattler_package_streaming = { version = "0.23.24", default-features = false }
+rattler_repodata_gateway = { version = "0.25.10", default-features = false }
+rattler_shell = { version = "0.25.18", default-features = false }
+rattler_solve = { version = "4.2.2", default-features = false }
+rattler_upload = { version = "0.4.10", default-features = false, features = [
   "s3",
 ] }
-rattler_virtual_packages = { version = "2.3.0", default-features = false }
+rattler_virtual_packages = { version = "2.3.7", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Rattler build crates
-rattler-build = { git = "https://github.com/prefix-dev/rattler-build", branch = "main", default-features = false }
+# rattler-build = { git = "https://github.com/prefix-dev/rattler-build", branch = "main", default-features = false }
+
+[workspace.metadata]
+
+[workspace.metadata.cargo-patch-source]
+original-versions = { coalesced_map = "0.1.2", file_url = "0.2.6", rattler = "0.39.0", rattler_cache = "0.6.2", rattler_conda_types = "0.43.1", rattler_digest = "1.2.0", rattler_lock = "0.26.7", rattler_menuinst = "0.2.35", rattler_networking = "0.25.22", rattler_package_streaming = "0.23.14", rattler_repodata_gateway = "0.25.0", rattler_shell = "0.25.8", rattler_solve = "4.1.0", rattler_upload = "0.4.5", rattler_virtual_packages = "2.3.0", simple_spawn_blocking = "1.1.0" }
+managed-patches = ["crates-io"]
 
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
 reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
 reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
+coalesced_map = { path = "/var/home/tobias/src/rattler/crates/coalesced_map" }
+file_url = { path = "/var/home/tobias/src/rattler/crates/file_url" }
+rattler = { path = "/var/home/tobias/src/rattler/crates/rattler" }
+# rattler-build = { path = "/var/home/tobias/src/rattler-build" }
+rattler_cache = { path = "/var/home/tobias/src/rattler/crates/rattler_cache" }
+rattler_conda_types = { path = "/var/home/tobias/src/rattler/crates/rattler_conda_types" }
+rattler_digest = { path = "/var/home/tobias/src/rattler/crates/rattler_digest" }
+rattler_lock = { path = "/var/home/tobias/src/rattler/crates/rattler_lock" }
+rattler_menuinst = { path = "/var/home/tobias/src/rattler/crates/rattler_menuinst" }
+rattler_networking = { path = "/var/home/tobias/src/rattler/crates/rattler_networking" }
+rattler_package_streaming = { path = "/var/home/tobias/src/rattler/crates/rattler_package_streaming" }
+rattler_repodata_gateway = { path = "/var/home/tobias/src/rattler/crates/rattler_repodata_gateway" }
+rattler_shell = { path = "/var/home/tobias/src/rattler/crates/rattler_shell" }
+rattler_solve = { path = "/var/home/tobias/src/rattler/crates/rattler_solve" }
+rattler_upload = { path = "/var/home/tobias/src/rattler/crates/rattler_upload" }
+rattler_virtual_packages = { path = "/var/home/tobias/src/rattler/crates/rattler_virtual_packages" }
+simple_spawn_blocking = { path = "/var/home/tobias/src/rattler/crates/simple_spawn_blocking" }
+
+# [patch."https://github.com/prefix-dev/rattler-build"]
+# rattler-build = { path = "/var/home/tobias/src/rattler-build" }
 
 [profile.ci]
 codegen-units = 16
