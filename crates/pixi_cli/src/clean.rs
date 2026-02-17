@@ -181,7 +181,7 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
         dirs.push(cache_dir.join(consts::CONDA_REPODATA_CACHE_DIR));
     }
     if args.mapping {
-        dirs.push(cache_dir.join(consts::CONDA_PYPI_MAPPING_CACHE_DIR));
+        dirs.extend(pypi_mapping::cache_paths()?);
     }
     if args.exec {
         dirs.push(cache_dir.join(consts::CACHED_ENVS_DIR));
@@ -216,7 +216,11 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
     }
 
     for dir in dirs {
-        remove_folder_with_progress(dir, true).await?;
+        if dir.is_file() {
+            remove_file(dir, false).await?;
+        } else {
+            remove_folder_with_progress(dir, true).await?;
+        }
     }
     Ok(())
 }

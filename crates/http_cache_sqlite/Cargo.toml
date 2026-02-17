@@ -15,6 +15,7 @@ rusqlite = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 url = { workspace = true }
+tokio = { workspace = true, features = ["sync"]}
 
 [dev-dependencies]
 http = { workspace = true }

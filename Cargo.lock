@@ -5711,6 +5711,7 @@ dependencies = [
  "pixi_utils",
  "pixi_uv_context",
  "pixi_uv_conversions",
+ "pypi_mapping",
  "pypi_modifiers",
  "rattler",
  "rattler_conda_types",
