@@ -12,9 +12,8 @@ regex = '''
   (?P<minor>\d+)
   \.
   (?P<patch>\d+)
-  (-rc.
-    (?P<candidate>\d+)
-  )?
+  (-rc\.(?P<candidate>.+))
+  ?
   '''
 
 [git]

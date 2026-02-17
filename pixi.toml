@@ -9,10 +9,10 @@ authors = [
 ]
 channels = ["https://prefix.dev/conda-forge"]
 description = "Package management made easy!"
-platforms = ["linux-64"]
+platforms = ["linux-64", "linux-aarch64", "osx-64", "osx-arm64", "win-64"]
 preview = ["pixi-build"]
 requires-pixi = ">=0.45"
-build-variants-files = ["variants.yaml"]
+
 [workspace.build-variants]
 rust_compiler_version = ["1.90.0"]
 
@@ -406,17 +406,16 @@ lefthook = { features = ["lefthook"] }
 #
 # Package definitions
 #
-#[package]
-#name = "pixi"
+[package]
+name = "pixi"
 
 [package.build]
-backend = { name = "pixi-build-rattler-build", version = "*" }
 
-#backend = { name = "pixi-build-rust", version = "*" }
-#config = { compilers = ["c", "rust"] }
-#source = { path = "crates/pixi" }
-## Required to support the build of tree-sitter.
-#target.linux.config.env = { CFLAGS = "$CFLAGS -D_BSD_SOURCE", RUSTFLAGS = "-C link-arg=-Wl,--verbose,--sysroot=$CONDA_BUILD_SYSROOT" }
+backend = { name = "pixi-build-rust", version = "*" }
+config = { compilers = ["c", "rust"] }
+source = { path = "crates/pixi" }
+# Required to support the build of tree-sitter.
+target.linux.config.env = { CFLAGS = "$CFLAGS -D_BSD_SOURCE", RUSTFLAGS = "-C link-arg=-Wl,--verbose,--sysroot=$CONDA_BUILD_SYSROOT" }
 
-#[package.target.unix.build-dependencies]
-#clang = "*"
+[package.target.unix.build-dependencies]
+clang = "*"

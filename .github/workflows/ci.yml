@@ -109,10 +109,10 @@ jobs:
         include:
           - runner: ubuntu-latest
             name: linux-64
-#          - runner: namespace-profile-macos-15-arm64-6
-#            name: osx-arm64
-#          - runner: namespace-profile-windows-2022-x86-64-8
-#            name: win-64
+          - runner: namespace-profile-macos-15-arm64-6
+            name: osx-arm64
+          - runner: namespace-profile-windows-2022-x86-64-8
+            name: win-64
     runs-on: ${{ matrix.runner }}
     name: "pixi build | ${{ matrix.name }}"
     steps:
@@ -126,9 +126,9 @@ jobs:
           locked: false
       - name: "Bump version"
         shell: bash
-        # Bump the version to the current version plus a date-time as rc value.
+        # Bump the version to the current version plus the main or PR and then the commit value
         # This ensures that the version will be unique for the upload to prefix.dev.
-        run: pixi run bump --non-interactive "$(pixi run bump current-version)-rc.$(date +%Y%m%d%H%M)"
+        run: pixi run bump --non-interactive "$(pixi run bump current-version)-rc.${GITHUB_REF_NAME:-$(echo $GITHUB_SHA | head -c 8))}"
       - name: "Build"
         run: pixi build -v
       - name: "Upload to prefix.dev"
