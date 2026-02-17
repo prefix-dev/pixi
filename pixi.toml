@@ -414,7 +414,7 @@ backend = { name = "pixi-build-rust", version = "*" }
 config = { compilers = ["c", "rust"] }
 source = { path = "crates/pixi" }
 # Required to support the build of tree-sitter.
-target.linux.config.env = { CFLAGS = "$CFLAGS -D_BSD_SOURCE" }
+target.linux.config.env = { CFLAGS = "$CFLAGS -D_BSD_SOURCE", RUSTFLAGS = "-C link-arg=-Wl,--verbose" }
 
 [package.target.unix.build-dependencies]
 clang = "*"
