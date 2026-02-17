@@ -271,9 +271,12 @@ fn get_field_cell(package: &Package, field: Field) -> Cell {
         }
         Field::Version => Cell::new(&package.version),
         Field::Build => Cell::new(package.build.as_deref().unwrap_or_default()),
-        Field::BuildNumber => {
-            Cell::new(package.build_number.map(|n| n.to_string()).unwrap_or_default())
-        }
+        Field::BuildNumber => Cell::new(
+            package
+                .build_number
+                .map(|n| n.to_string())
+                .unwrap_or_default(),
+        ),
         Field::Size => Cell::new(
             package
                 .size_bytes
@@ -304,9 +307,7 @@ fn get_field_cell(package: &Package, field: Field) -> Cell {
         Field::Arch => Cell::new(package.arch.as_deref().unwrap_or_default()),
         Field::Platform => Cell::new(package.platform.as_deref().unwrap_or_default()),
         Field::Subdir => Cell::new(package.subdir.as_deref().unwrap_or_default()),
-        Field::Timestamp => {
-            Cell::new(package.timestamp.map(|t| t.to_string()).unwrap_or_default())
-        }
+        Field::Timestamp => Cell::new(package.timestamp.map(|t| t.to_string()).unwrap_or_default()),
         Field::Noarch => Cell::new(package.noarch.as_deref().unwrap_or_default()),
         Field::FileName => Cell::new(package.file_name.as_deref().unwrap_or_default()),
         Field::Url => Cell::new(package.url.as_deref().unwrap_or_default()),
