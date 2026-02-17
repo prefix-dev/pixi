@@ -112,6 +112,12 @@
                       </RegistryKey>
                     </Component>
 
+                    <Component Id='PixiGuiMarker' Guid='B7E5F8A1-3C2D-4E6F-9A1B-8D7C6E5F4A3B'>
+                        <RegistryKey Root="HKCU" Key="Software\Prefix GmbH\pixi">
+                            <RegistryValue Name="PixiGui" Value="1" Type="string" KeyPath="yes" />
+                        </RegistryKey>
+                    </Component>
+
                     <Directory Id='Bin' Name='bin'>
                         <Component Id='Path' Guid='AA248D99-6E0E-4590-B029-3636DE5E41CE'>
                             <RegistryKey Root="HKCU" Key="Software\Prefix GmbH\pixi">
@@ -182,7 +188,41 @@
                 Absent='allow'>
                 <ComponentRef Id='Path'/>
             </Feature>
+
+            <Feature
+                Id='PixiGui'
+                Title='Pixi GUI'
+                Description='Install pixi-gui, a graphical user interface for pixi. Downloads pixi-gui from conda-forge during installation (requires internet connection).'
+                Level='1'
+                Absent='allow'>
+                <ComponentRef Id='PixiGuiMarker'/>
+            </Feature>
         </Feature>
+
+        <CustomAction
+            Id='InstallPixiGui'
+            FileKey='exe0'
+            ExeCommand='global install pixi-gui'
+            Execute='deferred'
+            Return='check'
+            Impersonate='yes'/>
+
+        <CustomAction
+            Id='UninstallPixiGui'
+            FileKey='exe0'
+            ExeCommand='global uninstall pixi-gui'
+            Execute='deferred'
+            Return='ignore'
+            Impersonate='yes'/>
+
+        <InstallExecuteSequence>
+            <Custom Action='InstallPixiGui' After='InstallFiles'>
+                <![CDATA[(&PixiGui=3)]]>
+            </Custom>
+            <Custom Action='UninstallPixiGui' Before='RemoveFiles'>
+                <![CDATA[(&PixiGui=2)]]>
+            </Custom>
+        </InstallExecuteSequence>
 
         <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize'/>
 
