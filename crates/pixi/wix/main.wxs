@@ -254,6 +254,9 @@
             <Publish Dialog='WelcomeDlg' Control='Next' Event='NewDialog' Value='CustomizeDlg' Order='99'>1</Publish>
             <Publish Dialog='CustomizeDlg' Control='Back' Event='NewDialog' Value='WelcomeDlg' Order='99'>1</Publish>
 
+            <ProgressText Action='InstallPixiGui'>Downloading and installing Pixi GUI from conda-forge... This may take a moment.</ProgressText>
+            <ProgressText Action='UninstallPixiGui'>Removing Pixi GUI...</ProgressText>
+
         </UI>
 
 
