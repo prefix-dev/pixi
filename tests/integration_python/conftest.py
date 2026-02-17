@@ -61,7 +61,7 @@ disable-sharded = false
         # The standard temp directory (e.g. C:\Users\<user>\AppData\Local\Temp)
         # is already quite long, so we use C:\.r instead.
         # Use no drive letter to avoid issues with different drives
-        short_base = Path("\.r")
+        short_base = Path(r"\.r")
         short_base.mkdir(parents=True, exist_ok=True)
         workspace = Path(tempfile.mkdtemp(dir=short_base))
         workspace.joinpath(".pixi").mkdir()
