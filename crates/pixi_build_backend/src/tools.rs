@@ -87,11 +87,22 @@ impl LoadedVariantConfig {
             }
         };
 
+        // When the recipe is outside source_dir (e.g. via the `recipe` config
+        // option), also check for a variants.yaml in source_dir itself so that
+        // project-level variant overrides are still picked up.
         let variant_path = source_dir.join(VARIANTS_CONFIG_FILE);
         if let Some(recipe_path_parent) = recipe_path.parent()
             && recipe_path_parent != source_dir
             && variant_path.is_file()
         {
+            if let Some(path) = pathdiff::diff_paths(&variant_path, source_dir) {
+                let normalized_path = if cfg!(target_os = "windows") {
+                    path.to_string_lossy().replace("\\", "/")
+                } else {
+                    path.to_string_lossy().to_string()
+                };
+                input_globs.insert(normalized_path);
+            }
             variant_files.push(variant_path);
         }
 
@@ -379,5 +390,119 @@ pub fn output_directory(
         recipe_dir,
         recipe_path: recipe_path.to_path_buf(),
         output_dir: build_dir,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use fs_err as fs;
+    use rattler_build::selectors::SelectorConfig;
+    use rattler_conda_types::Platform;
+    use tempfile::tempdir;
+
+    use super::{LoadedVariantConfig, VARIANTS_CONFIG_FILE};
+
+    fn default_selector_config() -> SelectorConfig {
+        SelectorConfig {
+            target_platform: Platform::Linux64,
+            host_platform: Platform::Linux64,
+            build_platform: Platform::Linux64,
+            hash: None,
+            variant: Default::default(),
+            experimental: false,
+            allow_undefined: true,
+            recipe_path: None,
+        }
+    }
+
+    #[test]
+    fn test_source_dir_variants_tracked_in_input_globs() {
+        let tmp = tempdir().unwrap();
+        let source_dir = tmp.path();
+
+        // Recipe lives in a subdirectory (custom recipe path scenario)
+        let recipe_dir = source_dir.join("custom");
+        let recipe_path = recipe_dir.join("recipe.yaml");
+        fs::create_dir_all(&recipe_dir).unwrap();
+        fs::write(&recipe_path, "fake").unwrap();
+
+        // Place variants.yaml in source_dir (project root)
+        let variant_file = source_dir.join(VARIANTS_CONFIG_FILE);
+        fs::write(&variant_file, "python:\n  - \"3.11\"\n").unwrap();
+
+        let loaded = LoadedVariantConfig::from_recipe_path(
+            source_dir,
+            &recipe_path,
+            &default_selector_config(),
+            std::iter::empty(),
+        )
+        .unwrap();
+
+        // variants.yaml in source_dir should appear in input_globs
+        assert!(
+            loaded.input_globs.contains(VARIANTS_CONFIG_FILE),
+            "input_globs should contain {VARIANTS_CONFIG_FILE} but was: {:?}",
+            loaded.input_globs
+        );
+    }
+
+    #[test]
+    fn test_source_dir_variants_not_tracked_when_recipe_in_source_dir() {
+        let tmp = tempdir().unwrap();
+        let source_dir = tmp.path();
+
+        // Recipe lives directly in source_dir (default case)
+        let recipe_path = source_dir.join("recipe.yaml");
+        fs::write(&recipe_path, "fake").unwrap();
+
+        // Place variants.yaml in source_dir
+        let variant_file = source_dir.join(VARIANTS_CONFIG_FILE);
+        fs::write(&variant_file, "python:\n  - \"3.11\"\n").unwrap();
+
+        let loaded = LoadedVariantConfig::from_recipe_path(
+            source_dir,
+            &recipe_path,
+            &default_selector_config(),
+            std::iter::empty(),
+        )
+        .unwrap();
+
+        // When recipe is in source_dir, variants.yaml next to recipe IS the
+        // source_dir one — it's already tracked by the first block, so the
+        // second block should NOT fire (recipe_path_parent == source_dir).
+        // The glob should still be present from the first block.
+        assert!(
+            loaded.input_globs.contains(VARIANTS_CONFIG_FILE),
+            "input_globs should contain {VARIANTS_CONFIG_FILE} but was: {:?}",
+            loaded.input_globs
+        );
+    }
+
+    #[test]
+    fn test_variants_glob_tracked_even_when_file_missing() {
+        let tmp = tempdir().unwrap();
+        let source_dir = tmp.path();
+
+        let recipe_dir = source_dir.join("custom");
+        let recipe_path = recipe_dir.join("recipe.yaml");
+        fs::create_dir_all(&recipe_dir).unwrap();
+        fs::write(&recipe_path, "fake").unwrap();
+
+        // No variants.yaml anywhere — but the glob next to the recipe is
+        // still tracked so the build system detects if the file appears later.
+        let loaded = LoadedVariantConfig::from_recipe_path(
+            source_dir,
+            &recipe_path,
+            &default_selector_config(),
+            std::iter::empty(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            loaded.input_globs,
+            BTreeSet::from([String::from("custom/variants.yaml")])
+        );
     }
 }

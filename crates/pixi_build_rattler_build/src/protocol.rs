@@ -1009,7 +1009,7 @@ numpy:
             recipe
         );
 
-        // Test custom recipe path
+        // Test custom recipe path (relative)
         let tmp = tempdir().unwrap();
         let custom_recipe = tmp.path().join("custom").join("my_recipe.yaml");
         fs::create_dir_all(custom_recipe.parent().unwrap()).unwrap();
@@ -1025,6 +1025,43 @@ numpy:
                 .recipe_source
                 .path,
             custom_recipe
+        );
+
+        // Test custom recipe path overrides autodiscovery
+        let tmp = tempdir().unwrap();
+        let default_recipe = tmp.path().join("recipe.yaml");
+        fs::write(&default_recipe, FAKE_RECIPE).unwrap();
+        let custom_recipe = tmp.path().join("custom").join("recipe.yaml");
+        fs::create_dir_all(custom_recipe.parent().unwrap()).unwrap();
+        fs::write(&custom_recipe, FAKE_RECIPE).unwrap();
+        let config = RattlerBuildBackendConfig {
+            recipe: Some(PathBuf::from("custom/recipe.yaml")),
+            ..Default::default()
+        };
+        assert_eq!(
+            try_initialize(&tmp.path().join("pixi.toml"), Some(config))
+                .await
+                .unwrap()
+                .recipe_source
+                .path,
+            custom_recipe
+        );
+
+        // Test custom recipe path (absolute)
+        let tmp = tempdir().unwrap();
+        let recipe = tmp.path().join("abs_recipe.yaml");
+        fs::write(&recipe, FAKE_RECIPE).unwrap();
+        let config = RattlerBuildBackendConfig {
+            recipe: Some(recipe.clone()),
+            ..Default::default()
+        };
+        assert_eq!(
+            try_initialize(&tmp.path().join("pixi.toml"), Some(config))
+                .await
+                .unwrap()
+                .recipe_source
+                .path,
+            recipe
         );
     }
 
@@ -1103,6 +1140,14 @@ numpy:
                 String::from("pkg/dir/**")
             ])
         );
+
+        // Case 3: source is a file in a subdirectory (custom recipe path)
+        let custom_dir = base_path.join("custom");
+        let custom_recipe = custom_dir.join("my_recipe.yaml");
+        fs::create_dir_all(&custom_dir).unwrap();
+        fs::write(&custom_recipe, "fake").unwrap();
+        let globs = super::build_input_globs(base_path, &custom_recipe, None, Vec::new()).unwrap();
+        assert_eq!(globs, BTreeSet::from([String::from("custom/**")]));
     }
 
     #[test]
@@ -1184,6 +1229,14 @@ numpy:
         let path = PathBuf::from("/foo/bar/recipe.yaml");
         let globs = super::get_metadata_input_globs(&manifest_root, &path).unwrap();
         assert_eq!(globs, BTreeSet::from([String::from("bar/recipe.yaml")]));
+        // Case: custom recipe in nested subdir
+        let manifest_root = PathBuf::from("/tmp/xxx");
+        let path = PathBuf::from("/tmp/xxx/custom/my_recipe.yaml");
+        let globs = super::get_metadata_input_globs(&manifest_root, &path).unwrap();
+        assert_eq!(
+            globs,
+            BTreeSet::from([String::from("custom/my_recipe.yaml")])
+        );
     }
 
     #[test]
