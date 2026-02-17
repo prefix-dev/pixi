@@ -33,7 +33,7 @@ impl Default for WorkspaceRegistry {
 
 impl WorkspaceRegistry {
     /// Loads the workspace registry from disk, if it exists.
-    pub async fn load() -> miette::Result<Self> {
+    pub fn load() -> miette::Result<Self> {
         let path = workspace_registry_path()
             .ok_or_else(|| miette::miette!("Unable to determine pixi home directory"))?;
 

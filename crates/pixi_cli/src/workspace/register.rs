@@ -60,7 +60,7 @@ pub enum Command {
 pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
         Some(Command::List(args)) => {
-            let workspace_registry = WorkspaceRegistry::load().await?;
+            let workspace_registry = WorkspaceRegistry::load()?;
             let workspaces = workspace_registry.named_workspaces_map();
             let out = if args.json {
                 serde_json::to_string_pretty(&workspaces).into_diagnostic()?
@@ -77,7 +77,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .into_diagnostic()?;
         }
         Some(Command::Remove(remove_args)) => {
-            let mut workspace_registry = WorkspaceRegistry::load().await?;
+            let mut workspace_registry = WorkspaceRegistry::load()?;
             workspace_registry.remove_workspace(&remove_args.name).await?;
 
             eprintln!(
@@ -115,7 +115,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .unwrap_or_else(|| workspace.display_name().to_string());
             let target_path = args.path.unwrap_or_else(|| workspace.root().to_path_buf());
 
-            let mut workspace_registry = WorkspaceRegistry::load().await?;
+            let mut workspace_registry = WorkspaceRegistry::load()?;
             workspace_registry.add_workspace(target_name, target_path).await?;
 
             eprintln!(
