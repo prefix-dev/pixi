@@ -74,7 +74,6 @@ def simple_workspace(
 
     workspace_dir = tmp_pixi_workspace.joinpath("workspace")
     workspace_dir.mkdir()
-    # shutil.move(tmp_pixi_workspace.joinpath(".pixi"), workspace_dir.joinpath(".pixi"))
 
     debug_dir = tmp_pixi_workspace.joinpath("debug_dir")
     debug_dir.mkdir()
