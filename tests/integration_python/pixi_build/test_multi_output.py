@@ -56,13 +56,13 @@ def test_available_packages(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
     )
 
     # foobar is a dependency of foobar-desktop, so it should be there as well
-    # verify_cli_command(
-    #     [pixi, "run", "-v", "--manifest-path", tmp_pixi_workspace, "foobar"],
-    #     stdout_contains="Hello from foobar",
-    # )
-    # # bizbar is a output of the recipe, but we don't request it
-    # # So it shouldn't be part of the environment
-    # verify_cli_command(
-    #     [pixi, "run", "-v", "--manifest-path", tmp_pixi_workspace, "bizbar"],
-    #     expected_exit_code=ExitCode.COMMAND_NOT_FOUND,
-    # )
+    verify_cli_command(
+        [pixi, "run", "-v", "--manifest-path", tmp_pixi_workspace, "foobar"],
+        stdout_contains="Hello from foobar",
+    )
+    # bizbar is a output of the recipe, but we don't request it
+    # So it shouldn't be part of the environment
+    verify_cli_command(
+        [pixi, "run", "-v", "--manifest-path", tmp_pixi_workspace, "bizbar"],
+        expected_exit_code=ExitCode.COMMAND_NOT_FOUND,
+    )
