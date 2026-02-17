@@ -3,17 +3,16 @@ source: crates/pixi_command_dispatcher/tests/integration/main.rs
 expression: output
 ---
 Pixi solve (foobar-desktop)
-├── Git Checkout (file://[LOCAL_GIT_REPO]/@[GIT_HASH])
-├── Source metadata (foobar-desktop @ file://[LOCAL_GIT_REPO]/@[GIT_HASH] (subdir: recipe))
-│   └── Build backend metadata (file://[LOCAL_GIT_REPO]/@[GIT_HASH] (subdir: recipe))
+├── Git Checkout (file://[LOCAL_GIT_REPO]#[GIT_HASH])
+├── Source metadata (foobar-desktop @ git+file://[LOCAL_GIT_REPO]?subdirectory=recipe&rev=[GIT_REF]#[GIT_HASH])
 │       └── Instantiate tool environment (pixi-build-rattler-build)
 │           ├── Pixi solve (pixi-build-rattler-build)
 │           │   └── Conda solve #0
 │           └── Pixi install (pixi-build-rattler-build)
-├── Source metadata (foobar @ file://[LOCAL_GIT_REPO]/@[GIT_HASH] (subdir: recipe))
+├── Source metadata (foobar @ git+file://[LOCAL_GIT_REPO]?subdirectory=recipe&rev=[GIT_REF]#[GIT_HASH])
 └── Conda solve #1
 Pixi install (test-env)
-├── Source build (foobar @ (manifest-src: file://[LOCAL_GIT_REPO]/@[GIT_HASH] (subdir: recipe), build-src: undefined))
+├── Source build (foobar @ (manifest-src: git+file://[LOCAL_GIT_REPO]?subdirectory=recipe&rev=[GIT_REF]#[GIT_HASH], build-src: undefined))
 │   └── Backend source build (foobar)
-└── Source build (foobar-desktop @ (manifest-src: file://[LOCAL_GIT_REPO]/@[GIT_HASH] (subdir: recipe), build-src: undefined))
+└── Source build (foobar-desktop @ (manifest-src: git+file://[LOCAL_GIT_REPO]?subdirectory=recipe&rev=[GIT_REF]#[GIT_HASH], build-src: undefined))
     └── Backend source build (foobar-desktop)

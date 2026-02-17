@@ -2145,7 +2145,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2179,7 +2179,7 @@ checksum = "6738d2e996274e499bc7b0d693c858b7720b9cd2543a0643a3087e6cb0a4fa16"
 dependencies = [
  "cfg-if 1.0.4",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2429,7 +2429,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2637,9 +2637,9 @@ dependencies = [
 
 [[package]]
 name = "fs-err"
-version = "3.2.2"
+version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baf68cef89750956493a66a10f512b9e58d9db21f2a573c079c0bdf1207a54a7"
+checksum = "73fde052dbfc920003cfd2c8e2c6e6d4cc7c1091538c3a24226cec0665ab08c0"
 dependencies = [
  "autocfg",
  "tokio",
@@ -3670,9 +3670,9 @@ dependencies = [
 
 [[package]]
 name = "insta"
-version = "1.43.2"
+version = "1.46.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46fdb647ebde000f43b5b53f773c30cf9b0cb4300453208713fa38b2c70935a0"
+checksum = "e82db8c87c7f1ccecb34ce0c24399b8a73081427f3c7c50a5d597925356115e4"
 dependencies = [
  "console 0.15.11",
  "globset",
@@ -3682,6 +3682,7 @@ dependencies = [
  "regex",
  "serde",
  "similar",
+ "tempfile",
  "walkdir",
 ]
 
@@ -3776,7 +3777,7 @@ dependencies = [
  "portable-atomic",
  "portable-atomic-util",
  "serde_core",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4111,7 +4112,7 @@ version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d463f34ca3c400fde3a054da0e0b8c6ffa21e4590922f3e18281bb5eeef4cbdc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4484,9 +4485,9 @@ dependencies = [
 
 [[package]]
 name = "minijinja"
-version = "2.14.0"
+version = "2.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12ea9ac0a51fb5112607099560fdf0f90366ab088a2a9e6e8ae176794e9806aa"
+checksum = "b479616bb6f0779fb0f3964246beda02d4b01144e1b0d5519616e012ccc2a245"
 dependencies = [
  "aho-corasick",
  "serde",
@@ -4677,7 +4678,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5320,162 +5321,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pixi-build-backend"
-version = "0.1.5"
-dependencies = [
- "async-trait",
- "chrono",
- "clap",
- "clap-verbosity-flag",
- "fs-err",
- "indexmap 2.13.0",
- "insta",
- "itertools 0.14.0",
- "jsonrpc-core",
- "jsonrpc-http-server",
- "jsonrpc-stdio-server",
- "miette 7.6.0",
- "minijinja",
- "ordermap",
- "pathdiff",
- "pixi_build_types",
- "rattler-build",
- "rattler_conda_types",
- "rattler_digest",
- "rattler_virtual_packages",
- "recipe-stage0",
- "serde",
- "serde_json",
- "serde_yaml",
- "tempfile",
- "thiserror 2.0.17",
- "tokio",
- "toml",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
-name = "pixi-build-cmake"
-version = "0.3.7"
-dependencies = [
- "async-trait",
- "indexmap 2.13.0",
- "insta",
- "miette 7.6.0",
- "minijinja",
- "pixi-build-backend",
- "pixi_build_types",
- "rattler-build",
- "rattler_conda_types",
- "recipe-stage0",
- "rstest",
- "serde",
- "serde_json",
- "strum",
- "tempfile",
- "tokio",
-]
-
-[[package]]
-name = "pixi-build-mojo"
-version = "0.1.7"
-dependencies = [
- "async-trait",
- "fs-err",
- "indexmap 2.13.0",
- "insta",
- "miette 7.6.0",
- "minijinja",
- "pixi-build-backend",
- "pixi_build_types",
- "rattler-build",
- "rattler_conda_types",
- "recipe-stage0",
- "rstest",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
-]
-
-[[package]]
-name = "pixi-build-python"
-version = "0.4.4"
-dependencies = [
- "async-trait",
- "fs-err",
- "indexmap 2.13.0",
- "insta",
- "miette 7.6.0",
- "minijinja",
- "once_cell",
- "pep508_rs",
- "pixi-build-backend",
- "pixi_build_types",
- "pyproject-toml",
- "rattler_conda_types",
- "recipe-stage0",
- "reqwest",
- "serde",
- "serde_json",
- "spdx 0.10.9",
- "tempfile",
- "thiserror 2.0.17",
- "tokio",
- "toml",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "pixi-build-rattler-build"
-version = "0.3.6"
-dependencies = [
- "async-trait",
- "chrono",
- "fs-err",
- "insta",
- "miette 7.6.0",
- "pathdiff",
- "pixi-build-backend",
- "pixi_build_types",
- "rattler-build",
- "rattler_conda_types",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "pixi-build-rust"
-version = "0.4.4"
-dependencies = [
- "async-trait",
- "cargo_toml",
- "fs-err",
- "indexmap 2.13.0",
- "insta",
- "miette 7.6.0",
- "minijinja",
- "once_cell",
- "pathdiff",
- "pixi-build-backend",
- "pixi_build_types",
- "rattler_conda_types",
- "recipe-stage0",
- "rstest",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.17",
- "tokio",
-]
-
-[[package]]
 name = "pixi_allocator"
 version = "0.1.0"
 dependencies = [
@@ -5527,6 +5372,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_build_backend"
+version = "0.1.7"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "clap",
+ "clap-verbosity-flag",
+ "fs-err",
+ "indexmap 2.13.0",
+ "insta",
+ "itertools 0.14.0",
+ "jsonrpc-core",
+ "jsonrpc-http-server",
+ "jsonrpc-stdio-server",
+ "miette 7.6.0",
+ "minijinja",
+ "ordermap",
+ "pathdiff",
+ "pixi_build_types",
+ "rattler-build",
+ "rattler_conda_types",
+ "rattler_digest",
+ "rattler_virtual_packages",
+ "recipe_stage0",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "pixi_build_backend_passthrough"
 version = "0.1.0"
 dependencies = [
@@ -5540,6 +5422,28 @@ dependencies = [
  "rattler_package_streaming",
  "serde",
  "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "pixi_build_cmake"
+version = "0.3.9"
+dependencies = [
+ "async-trait",
+ "indexmap 2.13.0",
+ "insta",
+ "miette 7.6.0",
+ "minijinja",
+ "pixi_build_backend",
+ "pixi_build_types",
+ "rattler-build",
+ "rattler_conda_types",
+ "recipe_stage0",
+ "rstest",
+ "serde",
+ "serde_json",
+ "strum",
  "tempfile",
  "tokio",
 ]
@@ -5587,6 +5491,103 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.17",
  "tracing",
+]
+
+[[package]]
+name = "pixi_build_mojo"
+version = "0.1.9"
+dependencies = [
+ "async-trait",
+ "fs-err",
+ "indexmap 2.13.0",
+ "insta",
+ "miette 7.6.0",
+ "minijinja",
+ "pixi_build_backend",
+ "pixi_build_types",
+ "rattler-build",
+ "rattler_conda_types",
+ "recipe_stage0",
+ "rstest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "pixi_build_python"
+version = "0.4.6"
+dependencies = [
+ "async-trait",
+ "fs-err",
+ "indexmap 2.13.0",
+ "insta",
+ "miette 7.6.0",
+ "minijinja",
+ "once_cell",
+ "pep508_rs",
+ "pixi_build_backend",
+ "pixi_build_types",
+ "pyproject-toml",
+ "rattler_conda_types",
+ "recipe_stage0",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "spdx 0.10.9",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "toml",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "pixi_build_rattler_build"
+version = "0.3.8"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "fs-err",
+ "insta",
+ "miette 7.6.0",
+ "pathdiff",
+ "pixi_build_backend",
+ "pixi_build_types",
+ "rattler-build",
+ "rattler_conda_types",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "pixi_build_rust"
+version = "0.4.6"
+dependencies = [
+ "async-trait",
+ "cargo_toml",
+ "fs-err",
+ "indexmap 2.13.0",
+ "insta",
+ "miette 7.6.0",
+ "minijinja",
+ "once_cell",
+ "pathdiff",
+ "pixi_build_backend",
+ "pixi_build_types",
+ "rattler_conda_types",
+ "recipe_stage0",
+ "rstest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
 ]
 
 [[package]]
@@ -6930,7 +6931,7 @@ dependencies = [
  "once_cell",
  "socket2 0.5.10",
  "tracing",
- "windows-sys 0.60.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7689,7 +7690,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "recipe-stage0"
+name = "recipe_stage0"
 version = "0.1.1"
 dependencies = [
  "hashlink",
@@ -8293,7 +8294,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -8306,7 +8307,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.11.0",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -8373,7 +8374,7 @@ dependencies = [
  "security-framework 3.5.1",
  "security-framework-sys",
  "webpki-root-certs 0.26.11",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -9382,7 +9383,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.3",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -11571,7 +11572,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

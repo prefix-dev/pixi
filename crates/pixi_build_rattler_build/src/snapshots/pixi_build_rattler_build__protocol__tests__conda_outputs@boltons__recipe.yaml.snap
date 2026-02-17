@@ -1,0 +1,47 @@
+---
+source: crates/pixi_build_rattler_build/src/protocol.rs
+expression: conda_outputs_snapshot(result)
+input_file: tests/recipe/boltons/recipe.yaml
+---
+{
+  "outputs": [
+    {
+      "metadata": {
+        "name": "boltons-with-extra",
+        "version": "23.0.0",
+        "build": "pyh4616a5c_0",
+        "buildNumber": 0,
+        "subdir": "noarch",
+        "license": "BSD-3-Clause",
+        "noarch": "python",
+        "variant": {
+          "target_platform": "noarch"
+        }
+      },
+      "hostDependencies": {
+        "depends": [
+          {
+            "name": "python"
+          },
+          {
+            "name": "pip"
+          },
+          {
+            "name": "setuptools"
+          }
+        ]
+      },
+      "runDependencies": {
+        "depends": [
+          {
+            "name": "pip"
+          }
+        ]
+      }
+    }
+  ],
+  "inputGlobs": [
+    "recipe.yaml",
+    "variants.yaml"
+  ]
+}

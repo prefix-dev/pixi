@@ -452,11 +452,21 @@ impl Workspace {
 
     /// Returns an environment in this project based on a name or an environment
     /// variable.
+    ///
+    /// If no explicit name is provided, this function will try to read the
+    /// environment name from the `PIXI_ENVIRONMENT_NAME` environment variable.
+    /// However, if `PIXI_PROJECT_ROOT` is set and differs from this workspace's
+    /// root, the environment variable is ignored and the default environment
+    /// is returned instead. This handles the case where a pixi task runs
+    /// another pixi project via `--manifest-path` - the child process should
+    /// not inherit the parent's environment name.
     pub fn environment_from_name_or_env_var(
         &self,
         name: Option<String>,
     ) -> miette::Result<Environment<'_>> {
-        let environment_name = EnvironmentName::from_arg_or_env_var(name).into_diagnostic()?;
+        let environment_name =
+            EnvironmentName::from_arg_or_env_var(name, self.root()).into_diagnostic()?;
+
         self.environment(&environment_name)
             .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))
     }
@@ -928,6 +938,7 @@ mod tests {
     use pixi_manifest::{FeatureName, FeaturesExt};
     use rattler_conda_types::{Platform, Version};
     use rattler_virtual_packages::{LibC, VirtualPackage};
+    use std::env;
 
     use super::*;
 

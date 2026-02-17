@@ -20,6 +20,9 @@ configure = { cmd = [
     ".build",
 ] }
 
+# Add task descriptions, to be surfaced when the tasks are listed
+say-hello = { cmd = ["echo", "hello world"], description = "Greet the world." }
+
 # Depend on other tasks
 build = { cmd = ["ninja", "-C", ".build"], depends-on = ["configure"] }
 
@@ -272,7 +275,17 @@ pixi run partial-override-with-arg cli-arg
 
 ### MiniJinja Templating for Task Arguments
 
-Task commands support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.
+Task commands defined in the manifest support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.
+
+!!! note "Templating and ad-hoc CLI commands"
+    MiniJinja templating is only applied to tasks defined in your manifest file (`pixi.toml` / `pyproject.toml`).
+    Ad-hoc commands passed directly to `pixi run` on the command line are **not** templated by default,
+    so commands like `pixi run echo '{{ hello }}'` are passed through as-is.
+    Use the `--templated` flag to opt in to template rendering for CLI commands:
+
+    ```shell
+    pixi run --templated echo '{{ pixi.platform }}'
+    ```
 
 Basic syntax for using an argument in your command:
 
