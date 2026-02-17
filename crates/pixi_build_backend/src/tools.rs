@@ -54,6 +54,28 @@ pub struct LoadedVariantConfig {
     pub input_globs: BTreeSet<String>,
 }
 
+/// Track a potential variants.yaml location: always add it to `input_globs`
+/// (so the build system notices if the file appears later), and load it into
+/// `variant_files` if it already exists.
+fn track_variant_path(
+    variant_path: PathBuf,
+    source_dir: &Path,
+    input_globs: &mut BTreeSet<String>,
+    variant_files: &mut Vec<PathBuf>,
+) {
+    if let Some(rel) = pathdiff::diff_paths(&variant_path, source_dir) {
+        let normalized = if cfg!(target_os = "windows") {
+            rel.to_string_lossy().replace("\\", "/")
+        } else {
+            rel.to_string_lossy().to_string()
+        };
+        input_globs.insert(normalized);
+    }
+    if variant_path.is_file() {
+        variant_files.push(variant_path);
+    }
+}
+
 impl LoadedVariantConfig {
     /// Load variant configuration from a recipe path. This checks if there is a
     /// `variants.yaml` and loads it alongside the recipe.
@@ -67,43 +89,33 @@ impl LoadedVariantConfig {
         let mut variant_files = Vec::new();
         let mut input_globs = BTreeSet::new();
 
-        // Check if there is a `variants.yaml` file next to the recipe that we should
-        // potentially use.
+        // Check if there is a `variants.yaml` file next to the recipe that we
+        // should potentially use.
         if let Some(variant_path) = recipe_path
             .parent()
             .map(|parent| parent.join(VARIANTS_CONFIG_FILE))
         {
-            if let Some(path) = pathdiff::diff_paths(&variant_path, source_dir) {
-                // Normalize paths on windows
-                let normalized_path = if cfg!(target_os = "windows") {
-                    path.to_string_lossy().replace("\\", "/")
-                } else {
-                    path.to_string_lossy().to_string()
-                };
-                input_globs.insert(normalized_path);
-            }
-            if variant_path.is_file() {
-                variant_files.push(variant_path);
-            }
-        };
+            track_variant_path(
+                variant_path,
+                source_dir,
+                &mut input_globs,
+                &mut variant_files,
+            );
+        }
 
         // When the recipe is outside source_dir (e.g. via the `recipe` config
         // option), also check for a variants.yaml in source_dir itself so that
         // project-level variant overrides are still picked up.
-        let variant_path = source_dir.join(VARIANTS_CONFIG_FILE);
         if let Some(recipe_path_parent) = recipe_path.parent()
             && recipe_path_parent != source_dir
-            && variant_path.is_file()
         {
-            if let Some(path) = pathdiff::diff_paths(&variant_path, source_dir) {
-                let normalized_path = if cfg!(target_os = "windows") {
-                    path.to_string_lossy().replace("\\", "/")
-                } else {
-                    path.to_string_lossy().to_string()
-                };
-                input_globs.insert(normalized_path);
-            }
-            variant_files.push(variant_path);
+            let variant_path = source_dir.join(VARIANTS_CONFIG_FILE);
+            track_variant_path(
+                variant_path,
+                source_dir,
+                &mut input_globs,
+                &mut variant_files,
+            );
         }
 
         // Add additional variant files
@@ -490,8 +502,9 @@ mod tests {
         fs::create_dir_all(&recipe_dir).unwrap();
         fs::write(&recipe_path, "fake").unwrap();
 
-        // No variants.yaml anywhere — but the glob next to the recipe is
-        // still tracked so the build system detects if the file appears later.
+        // No variants.yaml anywhere — but the globs are still tracked so the
+        // build system detects if the file appears later (both next to the
+        // recipe and in source_dir).
         let loaded = LoadedVariantConfig::from_recipe_path(
             source_dir,
             &recipe_path,
@@ -502,7 +515,10 @@ mod tests {
 
         assert_eq!(
             loaded.input_globs,
-            BTreeSet::from([String::from("custom/variants.yaml")])
+            BTreeSet::from([
+                String::from("custom/variants.yaml"),
+                String::from(VARIANTS_CONFIG_FILE),
+            ])
         );
     }
 }
