@@ -123,6 +123,7 @@ jobs:
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: release
+          locked: false
       - name: "Bump version"
         shell: bash
         # Bump the version to the current version plus a date-time as rc value.
