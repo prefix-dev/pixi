@@ -107,12 +107,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: namespace-profile-ubuntu-24-04-x86-64-4
+          - runner: ubuntu-latest
             name: linux-64
-          - runner: namespace-profile-macos-15-arm64-6
-            name: osx-arm64
-          - runner: namespace-profile-windows-2022-x86-64-8
-            name: win-64
+#          - runner: namespace-profile-macos-15-arm64-6
+#            name: osx-arm64
+#          - runner: namespace-profile-windows-2022-x86-64-8
+#            name: win-64
     runs-on: ${{ matrix.runner }}
     name: "pixi build | ${{ matrix.name }}"
     steps:
