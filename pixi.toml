@@ -220,7 +220,7 @@ test-integration-extra-slow-ci = { cmd = "pytest --numprocesses=logical --dist l
 test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=logical --durations=0 --timeout=600 -m 'not slow and not extra_slow' tests/integration_python", depends-on = [
   "build-debug",
 ], description = "Run fast integration tests with debug build" }
-test-integration-slow = { cmd = "pytest --numprocesses=4 --dist loadgroup --durations=0 --timeout=600 -m 'not extra_slow' tests/integration_python", depends-on = [
+test-integration-slow = { cmd = "pytest --numprocesses=logical --dist loadgroup --durations=0 --timeout=600 -m 'not extra_slow' tests/integration_python", depends-on = [
   "build-release",
 ], description = "Run integration tests excluding extra slow" }
 test-pixi-build = { cmd = "pytest --numprocesses=logical --durations=0 --timeout=300 tests/integration_python/pixi_build/", depends-on = [
