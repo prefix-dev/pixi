@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 async-trait = { workspace = true }
 fs-err = { workspace = true }
+http-cache = { workspace = true }
 http-cache-reqwest = { workspace = true }
 http-cache-semantics = { workspace = true }
 rusqlite = { workspace = true }

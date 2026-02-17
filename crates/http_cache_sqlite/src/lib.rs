@@ -1,5 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
+use http_cache::HttpVersion as UpstreamHttpVersion;
 use http_cache_reqwest::{CacheManager, HttpResponse};
 use http_cache_semantics::CachePolicy;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -32,6 +33,31 @@ enum HttpVersion {
     H2,
     #[serde(rename = "HTTP/3.0")]
     H3,
+}
+
+impl From<HttpVersion> for UpstreamHttpVersion {
+    fn from(v: HttpVersion) -> Self {
+        match v {
+            HttpVersion::Http09 => UpstreamHttpVersion::Http09,
+            HttpVersion::Http10 => UpstreamHttpVersion::Http10,
+            HttpVersion::Http11 => UpstreamHttpVersion::Http11,
+            HttpVersion::H2 => UpstreamHttpVersion::H2,
+            HttpVersion::H3 => UpstreamHttpVersion::H3,
+        }
+    }
+}
+
+impl From<&UpstreamHttpVersion> for HttpVersion {
+    fn from(v: &UpstreamHttpVersion) -> Self {
+        match v {
+            UpstreamHttpVersion::Http09 => HttpVersion::Http09,
+            UpstreamHttpVersion::Http10 => HttpVersion::Http10,
+            UpstreamHttpVersion::Http11 => HttpVersion::Http11,
+            UpstreamHttpVersion::H2 => HttpVersion::H2,
+            UpstreamHttpVersion::H3 => HttpVersion::H3,
+            _ => HttpVersion::Http11, // fallback for non_exhaustive
+        }
+    }
 }
 
 /// A [`CacheManager`] implementation backed by a SQLite database.
@@ -107,28 +133,26 @@ impl SqliteCacheManager {
     }
 }
 
-/// Reconstruct an [`HttpResponse`] by round-tripping through our local
-/// [`ResponseMeta`] + [`HttpVersion`] types.
-///
-/// Both our local types and the upstream types use identical serde `rename`
-/// attributes, so a JSON round-trip through `serde_json::Value` is the
-/// simplest way to convert without depending on private upstream fields.
-fn response_from_parts(body: Vec<u8>, meta: ResponseMeta) -> Result<HttpResponse> {
-    let mut map = serde_json::to_value(&meta)?;
-    map.as_object_mut()
-        .ok_or("expected JSON object")?
-        .insert("body".to_string(), serde_json::to_value(&body)?);
-    let response: HttpResponse = serde_json::from_value(map)?;
-    Ok(response)
+/// Reconstruct an [`HttpResponse`] from a raw body and stored metadata.
+fn response_from_parts(body: Vec<u8>, meta: ResponseMeta) -> HttpResponse {
+    HttpResponse {
+        body,
+        headers: meta.headers,
+        status: meta.status,
+        url: meta.url,
+        version: meta.version.into(),
+    }
 }
 
+/// Split an [`HttpResponse`] into its raw body and JSON-serialized metadata.
 fn response_to_parts(response: &HttpResponse) -> Result<(Vec<u8>, String)> {
-    // Serialize the full response to a JSON value, then pull out the body
-    // and keep the rest as metadata.
-    let mut map = serde_json::to_value(response)?;
-    let obj = map.as_object_mut().ok_or("expected JSON object")?;
-    obj.remove("body");
-    let meta_json = serde_json::to_string(&map)?;
+    let meta = ResponseMeta {
+        headers: response.headers.clone(),
+        status: response.status,
+        url: response.url.clone(),
+        version: (&response.version).into(),
+    };
+    let meta_json = serde_json::to_string(&meta)?;
     Ok((response.body.clone(), meta_json))
 }
 
@@ -153,7 +177,7 @@ impl CacheManager for SqliteCacheManager {
             Some((body, meta_json, policy_json)) => {
                 let meta: ResponseMeta = serde_json::from_str(&meta_json)?;
                 let policy: CachePolicy = serde_json::from_str(&policy_json)?;
-                let response = response_from_parts(body, meta)?;
+                let response = response_from_parts(body, meta);
                 Ok(Some((response, policy)))
             }
             None => Ok(None),

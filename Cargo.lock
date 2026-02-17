@@ -3330,6 +3330,7 @@ dependencies = [
  "async-trait",
  "fs-err",
  "http 1.4.0",
+ "http-cache",
  "http-cache-reqwest",
  "http-cache-semantics",
  "rusqlite",
