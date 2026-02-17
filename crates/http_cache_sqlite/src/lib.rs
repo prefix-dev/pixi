@@ -193,19 +193,17 @@ impl CacheManager for SqliteCacheManager {
         let (body, meta_json) = response_to_parts(&response)?;
         let policy_json = serde_json::to_string(&policy)?;
         let conn = self.connection.lock().expect("mutex poisoned");
-        conn.execute(
+        let mut stmt = conn.prepare_cached(
             "INSERT OR REPLACE INTO http_cache (cache_key, body, response_meta, policy) VALUES (?1, ?2, ?3, ?4)",
-            params![cache_key, body, meta_json, policy_json],
         )?;
+        stmt.execute(params![cache_key, body, meta_json, policy_json])?;
         Ok(response)
     }
 
     async fn delete(&self, cache_key: &str) -> Result<()> {
         let conn = self.connection.lock().expect("mutex poisoned");
-        conn.execute(
-            "DELETE FROM http_cache WHERE cache_key = ?1",
-            params![cache_key],
-        )?;
+        let mut stmt = conn.prepare_cached("DELETE FROM http_cache WHERE cache_key = ?1")?;
+        stmt.execute(params![cache_key])?;
         Ok(())
     }
 }
