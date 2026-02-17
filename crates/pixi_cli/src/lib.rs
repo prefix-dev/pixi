@@ -428,13 +428,13 @@ fn set_console_colors(args: &Args) {
 /// Check if LD_PRELOAD is set and emit a warning if it is.
 /// LD_PRELOAD can interfere with pixi environments and cause unexpected behavior.
 fn check_ld_preload() {
-    if let Ok(ld_preload) = env::var("LD_PRELOAD") {
-        if !ld_preload.is_empty() {
-            tracing::warn!(
-                "LD_PRELOAD environment variable is set to: {}. Pixi environments might not work correctly.",
-                ld_preload
-            );
-        }
+    if let Ok(ld_preload) = env::var("LD_PRELOAD")
+        && !ld_preload.is_empty()
+    {
+        tracing::warn!(
+            "LD_PRELOAD environment variable is set to: {}. Pixi environments might not work correctly.",
+            ld_preload
+        );
     }
 }
 
