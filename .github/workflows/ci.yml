@@ -495,7 +495,7 @@ jobs:
   #
 
   test-pytest-windows-x86_64:
-    timeout-minutes: 10
+    timeout-minutes: 30
     name: Pytest | windows x86_64
     runs-on: windows-latest
     needs: build-binary-windows-x86_64
