@@ -10,7 +10,8 @@ build:
       export CFLAGS="$CFLAGS -D_BSD_SOURCE"
       export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,--verbose,--sysroot=$CONDA_BUILD_SYSROOT"
       ln -s $BUILD_PREFIX/x86_64-conda-linux-gnu/sysroot/lib $BUILD_PREFIX/x86_64-conda-linux-gnu/sysroot/lib64
-      cargo install --locked --root "$PREFIX" --target-dir target --no-track --force --path crates/pixi
+      ls -l $BUILD_PREFIX/x86_64-conda-linux-gnu/sysroot/      
+      cargo install --debug --locked --root "$PREFIX" --target-dir target --no-track --force --path crates/pixi
 requirements:
   build:
     - if: unix
