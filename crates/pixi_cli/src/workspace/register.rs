@@ -1,12 +1,10 @@
-use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 
 use crate::cli_config::WorkspaceConfig;
 use clap::Parser;
 use miette::IntoDiagnostic;
-use pixi_config::pixi_home;
-use pixi_consts::consts;
+use pixi_api::workspace::WorkspaceRegistry;
 use pixi_core::WorkspaceLocator;
 
 /// Commands to manage the registry of workspaces. Default command will add a new workspace
@@ -58,50 +56,12 @@ pub enum Command {
     // Prune(PruneArgs),
 }
 
-pub fn global_config_write_path() -> miette::Result<PathBuf> {
-    let mut global_locations = pixi_config::config_path_global();
-    let mut to = global_locations
-        .pop()
-        .expect("should have at least one global config path");
-
-    for p in global_locations {
-        if p.exists() {
-            to = p;
-            break;
-        }
-    }
-    Ok(to)
-}
-
-pub fn get_global_workspaces_map() -> miette::Result<HashMap<String, PathBuf>> {
-    let global_workspaces_dir = pixi_home()
-        .ok_or_else(|| miette::miette!("Could not determine PIXI_HOME"))?
-        .join(consts::DEFAULT_GLOBAL_WORKSPACE_DIR);
-
-    let mut workspaces = HashMap::new();
-
-    if global_workspaces_dir.exists() {
-        for entry in fs_err::read_dir(&global_workspaces_dir).into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path().join("pixi.toml");
-            if path.is_file() {
-                let space = entry
-                    .file_name()
-                    .into_string()
-                    .expect("Unable to find workspaces");
-                let full_path = path.canonicalize().into_diagnostic()?;
-                workspaces.insert(space, full_path);
-            }
-        }
-    }
-
-    Ok(workspaces)
-}
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
         Some(Command::List(args)) => {
-            let workspaces = get_global_workspaces_map()?;
+            let workspace_registry = WorkspaceRegistry::load().await?;
+            let workspaces = workspace_registry.named_workspaces_map();
             let out = if args.json {
                 serde_json::to_string_pretty(&workspaces).into_diagnostic()?
             } else {
@@ -117,26 +77,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .into_diagnostic()?;
         }
         Some(Command::Remove(remove_args)) => {
-            let workspace_dir = pixi_home()
-                .ok_or_else(|| miette::miette!("Could not determine PIXI_HOME"))?
-                .join(consts::DEFAULT_GLOBAL_WORKSPACE_DIR)
-                .join(&remove_args.name);
+            let mut workspace_registry = WorkspaceRegistry::load().await?;
+            workspace_registry.remove_workspace(&remove_args.name).await?;
 
-            if workspace_dir.exists() {
-                fs_err::remove_dir_all(workspace_dir).into_diagnostic()?;
-                eprintln!(
-                    "{} Workspace '{}' has been removed from the registry successfully.",
-                    console::style(console::Emoji("✔ ", "")).green(),
-                    &remove_args.name
-                );
-            } else {
-                return Err(
-                    miette::diagnostic!("Workspace '{}' is not found.", remove_args.name,).into(),
-                );
-            }
+            eprintln!(
+                "{} Workspace '{}' has been removed from the registry successfully.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                &remove_args.name
+            );
         }
         // Some(Command::Prune(_)) => {
-        //     let mut workspaces = config.named_workspaces.clone();
+        //     let workspace_registry = WorkspaceRegistry::load().await?;
+        //     let workspaces = workspace_registry.named_workspaces_map();
         //     workspaces.retain(|key, val| {
         //         if val.exists() {
         //             true
@@ -163,14 +115,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .unwrap_or_else(|| workspace.display_name().to_string());
             let target_path = args.path.unwrap_or_else(|| workspace.root().to_path_buf());
 
-            let workspace_dir = pixi_home()
-                .ok_or_else(|| miette::miette!("Could not determine PIXI_HOME"))?
-                .join(consts::DEFAULT_GLOBAL_WORKSPACE_DIR)
-                .join(&target_name);
-
-            fs_err::tokio::symlink(&target_path, &workspace_dir)
-                .await
-                .into_diagnostic()?;
+            let mut workspace_registry = WorkspaceRegistry::load().await?;
+            workspace_registry.add_workspace(target_name, target_path).await?;
 
             eprintln!(
                 "{} {}",
