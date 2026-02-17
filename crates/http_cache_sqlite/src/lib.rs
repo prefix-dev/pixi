@@ -80,6 +80,12 @@ impl SqliteCacheManager {
         // NORMAL sync is significantly faster than FULL.
         connection.pragma_update(None, "synchronous", "NORMAL")?;
 
+        // Use memory-mapped I/O for reads (32 MB limit). This is a cap,
+        // not an allocation — the actual mapped region equals the database
+        // file size. If the OS cannot satisfy the mmap, SQLite silently
+        // falls back to regular read() syscalls.
+        connection.pragma_update(None, "mmap_size", 32 * 1024 * 1024)?;
+
         // Set a busy timeout so concurrent processes wait rather than
         // immediately failing with SQLITE_BUSY.
         connection.busy_timeout(std::time::Duration::from_secs(5))?;
