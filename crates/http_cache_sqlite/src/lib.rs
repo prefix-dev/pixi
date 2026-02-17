@@ -4,7 +4,7 @@ use http_cache_reqwest::{CacheManager, HttpResponse};
 use http_cache_semantics::CachePolicy;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 type Result<T> = std::result::Result<T, BoxError>;
@@ -129,7 +129,7 @@ fn response_to_parts(response: &HttpResponse) -> Result<(Vec<u8>, String)> {
 #[async_trait::async_trait]
 impl CacheManager for SqliteCacheManager {
     async fn get(&self, cache_key: &str) -> Result<Option<(HttpResponse, CachePolicy)>> {
-        let conn = self.connection.lock().await;
+        let conn = self.connection.lock().expect("mutex poisoned");
         let mut stmt = conn.prepare_cached(
             "SELECT body, response_meta, policy FROM http_cache WHERE cache_key = ?1",
         )?;
@@ -162,7 +162,7 @@ impl CacheManager for SqliteCacheManager {
     ) -> Result<HttpResponse> {
         let (body, meta_json) = response_to_parts(&response)?;
         let policy_json = serde_json::to_string(&policy)?;
-        let conn = self.connection.lock().await;
+        let conn = self.connection.lock().expect("mutex poisoned");
         conn.execute(
             "INSERT OR REPLACE INTO http_cache (cache_key, body, response_meta, policy) VALUES (?1, ?2, ?3, ?4)",
             params![cache_key, body, meta_json, policy_json],
@@ -171,7 +171,7 @@ impl CacheManager for SqliteCacheManager {
     }
 
     async fn delete(&self, cache_key: &str) -> Result<()> {
-        let conn = self.connection.lock().await;
+        let conn = self.connection.lock().expect("mutex poisoned");
         conn.execute(
             "DELETE FROM http_cache WHERE cache_key = ?1",
             params![cache_key],
