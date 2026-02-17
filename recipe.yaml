@@ -1,0 +1,25 @@
+package:
+  name: pixi
+  version: 0.63.2
+source:
+  path: .
+build:
+  number: 1
+  script:
+    content: |
+      export CFLAGS="$CFLAGS -D_BSD_SOURCE"
+      export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,--verbose,--sysroot=$CONDA_BUILD_SYSROOT"
+      ln -s $BUILD_PREFIX/x86_64-conda-linux-gnu/sysroot/lib $BUILD_PREFIX/x86_64-conda-linux-gnu/sysroot/lib64
+      cargo install --locked --root "$PREFIX" --target-dir target --no-track --force --path crates/pixi
+requirements:
+  build:
+    - if: unix
+      then: clang
+    - ${{ compiler('rust') }}
+    - ${{ compiler('c') }}
+    - ${{ stdlib('c') }}
+about:
+  homepage: https://github.com/prefix-dev/pixi
+  license: BSD-3-Clause
+  description: A package management and workflow tool
+  repository: https://github.com/prefix-dev/pixi
