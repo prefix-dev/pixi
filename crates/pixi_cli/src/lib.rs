@@ -629,4 +629,28 @@ mod tests {
             },
         );
     }
+
+    #[test]
+    fn test_check_ld_preload_not_set() {
+        // Test that check_ld_preload doesn't panic when LD_PRELOAD is not set
+        temp_env::with_var_unset("LD_PRELOAD", || {
+            check_ld_preload();
+        });
+    }
+
+    #[test]
+    fn test_check_ld_preload_empty() {
+        // Test that check_ld_preload doesn't panic when LD_PRELOAD is empty
+        temp_env::with_var("LD_PRELOAD", Some(""), || {
+            check_ld_preload();
+        });
+    }
+
+    #[test]
+    fn test_check_ld_preload_set() {
+        // Test that check_ld_preload works when LD_PRELOAD is set
+        temp_env::with_var("LD_PRELOAD", Some("/path/to/lib.so"), || {
+            check_ld_preload();
+        });
+    }
 }
