@@ -1,0 +1,23 @@
+[package]
+name = "http_cache_sqlite"
+version = "0.1.0"
+description = "A SQLite-backed CacheManager for http-cache-reqwest"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+fs-err = { workspace = true }
+http-cache = { workspace = true }
+http-cache-reqwest = { workspace = true }
+http-cache-semantics = { workspace = true }
+rusqlite = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+http = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

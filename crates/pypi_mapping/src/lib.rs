@@ -7,7 +7,7 @@ use std::{
 };
 
 use futures::{StreamExt, stream::FuturesUnordered};
-use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
+use http_cache_reqwest::{Cache, CacheMode, HttpCache, HttpCacheOptions};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_config::get_cache_dir;
@@ -28,6 +28,35 @@ pub use custom_mapping::CustomMapping;
 pub use reporter::Reporter;
 
 use crate::custom_mapping::CustomMappingClient;
+
+/// Returns the path to the SQLite database used for caching conda-pypi
+/// mappings.
+pub fn mapping_db_path() -> miette::Result<PathBuf> {
+    let cache_dir = get_cache_dir()?;
+    Ok(cache_dir.join(format!(
+        "{}.sqlite",
+        pixi_consts::consts::CONDA_PYPI_MAPPING_CACHE
+    )))
+}
+
+/// Returns all cache paths used by the conda-pypi mapping system.
+///
+/// This includes the legacy directory cache, the SQLite database file,
+/// and its WAL/SHM companion files.
+pub fn cache_paths() -> miette::Result<Vec<PathBuf>> {
+    let cache_dir = get_cache_dir()?;
+    let db_path = mapping_db_path()?;
+    Ok(vec![
+        // Legacy directory-based cache
+        cache_dir.join(pixi_consts::consts::CONDA_PYPI_MAPPING_CACHE),
+        // SQLite write-ahead log
+        db_path.with_extension("sqlite-wal"),
+        // SQLite shared memory index
+        db_path.with_extension("sqlite-shm"),
+        // SQLite database
+        db_path,
+    ])
+}
 
 /// A compressed mapping is a mapping of a package name to a potential pypi
 /// name.
@@ -179,15 +208,17 @@ impl MappingClient {
         // Construct a client with a retry policy and local caching
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
         let retry_strategy = RetryTransientMiddleware::new_with_policy(retry_policy);
-        let cache_path = get_cache_dir()
-            .expect("failed to determine cache directory for conda-pypi mappings. Please ensure PIXI_CACHE_DIR or XDG_CACHE_HOME is set, or that ~/.cache exists.")
-            .join(pixi_consts::consts::CONDA_PYPI_MAPPING_CACHE_DIR);
+        let db_path = mapping_db_path()
+            .expect("failed to determine cache directory for conda-pypi mappings. Please ensure PIXI_CACHE_DIR or XDG_CACHE_HOME is set, or that ~/.cache exists.");
+        let cache_path = db_path
+            .parent()
+            .expect("db path should have a parent")
+            .to_path_buf();
+        let cache_manager = http_cache_sqlite::SqliteCacheManager::new(db_path)
+            .expect("failed to initialize SQLite HTTP cache for conda-pypi mappings");
         let cache_strategy = Cache(HttpCache {
             mode: CacheMode::Default,
-            manager: CACacheManager {
-                path: cache_path.clone(),
-                remove_opts: Default::default(),
-            },
+            manager: cache_manager,
             options: HttpCacheOptions::default(),
         });
 

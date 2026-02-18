@@ -15,6 +15,7 @@ dashmap = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
 http-cache-reqwest = { workspace = true }
+http_cache_sqlite = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pep440_rs = { workspace = true }
