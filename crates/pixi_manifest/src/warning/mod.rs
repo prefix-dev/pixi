@@ -1,8 +1,12 @@
 mod deprecation;
+pub mod codes;
+pub mod config;
 
 use std::{fmt::Display, sync::Arc};
 
 pub use deprecation::Deprecation;
+pub use codes::WarningCode;
+pub use config::{WarningAction, WarningConfig};
 use miette::{Diagnostic, LabeledSpan, NamedSource, SourceSpan};
 use thiserror::Error;
 
@@ -17,6 +21,25 @@ pub enum Warning {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Generic(#[from] GenericWarning),
+}
+
+impl Warning {
+    /// Reports the warning using the provided configuration.
+    pub fn report(&self, code: WarningCode, config: &WarningConfig) {
+        let action = config.apply_config(&code);
+        match action {
+            WarningAction::Hide => {}
+            WarningAction::Log => {
+                eprintln!("{}: {}", code.short_code(), self);
+            }
+            WarningAction::Verbose => {
+                eprintln!("{}: {} (https://pixi.sh/latest/warnings#{})", code.short_code(), self, code.as_str());
+            }
+            WarningAction::Fail => {
+                panic!("{}: {}", code.short_code(), self);
+            }
+        }
+    }
 }
 
 impl From<GenericError> for Warning {
