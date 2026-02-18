@@ -609,7 +609,7 @@ impl PixiControl {
         let mut task_env = None;
         let mut result = RunOutput::default();
         for task_id in task_graph.topological_order() {
-            let task = ExecutableTask::from_task_graph(&task_graph, task_id);
+            let task = ExecutableTask::from_task_graph(&task_graph, task_id, None);
 
             // Construct the task environment if not already created.
             let task_env = match task_env.as_ref() {

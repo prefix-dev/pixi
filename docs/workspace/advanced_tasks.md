@@ -309,6 +309,7 @@ In addition to task arguments, Pixi automatically provides a `pixi` object in th
 | `pixi.environment.name` | The name of the current environment (when available) | `default`, `prod`, `test` |
 | `pixi.manifest_path` | Absolute path to the manifest file | `/path/to/project/pixi.toml` |
 | `pixi.version` | The version of pixi being used | `0.59.0` |
+| `pixi.init_cwd` | The current working directory when pixi was invoked | `/path/to/cwd` |
 | `pixi.is_win` | Boolean flag indicating if the platform is Windows | `true` or `false` |
 | `pixi.is_unix` | Boolean flag indicating if the platform is Unix-like | `true` or `false` |
 | `pixi.is_linux` | Boolean flag indicating if the platform is Linux | `true` or `false` |
@@ -330,6 +331,9 @@ deploy = { cmd = "deploy.sh --env {{ pixi.environment.name }}", args = [] }
 
 # Using manifest path
 validate = { cmd = "validator --manifest {{ pixi.manifest_path }}", args = [] }
+
+# Using init_cwd in inputs/outputs for caching
+mkdir_test = { cmd = "mkdir -p {{ pixi.init_cwd }}/test", outputs = ["{{ pixi.init_cwd }}/test"] }
 ```
 
 The pixi variables can also be combined with task arguments:
