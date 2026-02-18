@@ -126,6 +126,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                     depends_on: deps,
                     description: None,
                     args: None,
+                    inputs: None,  // Add this
+                    outputs: None, // Add this
                 })
                 .into());
             }
@@ -256,15 +258,22 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 args,
             }))
         } else {
+            // 1. Extract EVERYTHING from the table first
             let depends_on = depends_on(&mut th)?;
             let description = th.optional("description");
             let args = th.optional::<Vec<TaskArg>>("args");
+            let inputs = th.optional("inputs"); // Move these UP
+            let outputs = th.optional("outputs"); // Move these UP
+
+            // 2. NOW finalize
             th.finalize(None)?;
 
             Task::Alias(Alias {
                 depends_on,
                 description,
                 args,
+                inputs, // Add this
+                outputs,
             })
         };
 
