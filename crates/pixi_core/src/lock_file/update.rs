@@ -54,6 +54,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
+use uv_install_wheel::LinkMode;
 use uv_normalize::ExtraName;
 
 use super::{
@@ -2085,6 +2086,14 @@ impl<'p> UpdateContext<'p> {
                 .cloned()
                 .unwrap_or_default();
 
+            // Derive link mode from config restrictions for PyPI build dispatch
+            let config = project.config();
+            let link_mode = derive_link_mode(
+                config.allow_symbolic_links(),
+                config.allow_hard_links(),
+                config.allow_ref_links(),
+            );
+
             // Spawn a task to solve the pypi environment
             let cache_key =
                 lock_file::outdated::BuildCacheKey::new(environment.name().clone(), platform);
@@ -2110,6 +2119,7 @@ impl<'p> UpdateContext<'p> {
                 locked_group_records,
                 self.no_install,
                 build_cache,
+                link_mode,
             );
 
             pending_futures.push(
@@ -3004,6 +3014,7 @@ async fn spawn_solve_pypi_task<'p>(
     locked_pypi_packages: Arc<PypiRecordsByName>,
     disallow_install_conda_prefix: bool,
     build_cache: Arc<lock_file::outdated::PypiEnvironmentBuildCache>,
+    link_mode: LinkMode,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = grouped_environment.pypi_dependencies(Some(platform));
@@ -3082,6 +3093,7 @@ async fn spawn_solve_pypi_task<'p>(
             exclude_newer,
             solve_strategy,
             build_cache,
+            link_mode,
         )
         .await
         .with_context(|| {
