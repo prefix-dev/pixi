@@ -4431,6 +4431,11 @@ Use the <code>--templated</code> flag to opt in to template rendering for CLI co
 <td><code>0.59.0</code></td>
 </tr>
 <tr>
+<td><code>pixi.init_cwd</code></td>
+<td>The current working directory when pixi was invoked</td>
+<td><code>/path/to/cwd</code></td>
+</tr>
+<tr>
 <td><code>pixi.is_win</code></td>
 <td>Boolean flag indicating if the platform is Windows</td>
 <td><code>true</code> or <code>false</code></td>
@@ -4466,6 +4471,9 @@ Use the <code>--templated</code> flag to opt in to template rendering for CLI co
 </span><span id="__span-26-11"><a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a>
 </span><span id="__span-26-12"><a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a><span class="c1"># Using manifest path</span>
 </span><span id="__span-26-13"><a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a><span class="n">validate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;validator --manifest {{ pixi.manifest_path }}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-26-14"><a id="__codelineno-26-14" name="__codelineno-26-14" href="#__codelineno-26-14"></a>
+</span><span id="__span-26-15"><a id="__codelineno-26-15" name="__codelineno-26-15" href="#__codelineno-26-15"></a><span class="c1"># Using init_cwd in inputs/outputs for caching</span>
+</span><span id="__span-26-16"><a id="__codelineno-26-16" name="__codelineno-26-16" href="#__codelineno-26-16"></a><span class="n">mkdir_test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;mkdir -p {{ pixi.init_cwd }}/test&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">outputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;{{ pixi.init_cwd }}/test&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>The pixi variables can also be combined with task arguments:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="k">[tasks]</span>
