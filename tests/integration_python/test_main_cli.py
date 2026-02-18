@@ -181,7 +181,7 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
     verify_cli_command(
         [pixi, "workspace", "--manifest-path", manifest_path, "name", "get"],
-        stdout_contains="test_project_commands",
+        stdout_contains=tmp_pixi_workspace.name,
     )
     verify_cli_command(
         [pixi, "workspace", "--manifest-path", manifest_path, "name", "set", "new-name"],
@@ -1209,7 +1209,7 @@ outputs:
       script:
         - if: win
           then:
-            - mkdir -p %PREFIX%\\bin
+            - if not exist %PREFIX%\\bin mkdir %PREFIX%\\bin
             - echo @echo off > %PREFIX%\\bin\\frozen_no_install_build.bat
             - echo echo Hello from frozen_no_install_build >> %PREFIX%\\bin\\frozen_no_install_build.bat
           else:

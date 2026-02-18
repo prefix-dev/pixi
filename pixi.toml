@@ -42,7 +42,7 @@ vs2017_win-64 = ">=19.16.27033,<20"
 # Shared feature for Python
 #
 [feature.python.dependencies]
-python = ">=3.14,<3.15"
+python = ">=3.13,<3.14"
 
 #
 # Shared feature for Rust toolchain
@@ -207,25 +207,26 @@ release = { cmd = "python scripts/release.py", description = "Run the release sc
 #
 [feature.pytest.tasks]
 pypi-gen-indexes = { cmd = "python tests/data/pypi-indexes/generate-indexes.py", description = "Generate PyPI test indexes" }
-test-common-wheels = { cmd = "pytest -s --numprocesses=auto tests/wheel_tests/", depends-on = [
+test-common-wheels = { cmd = "pytest -s --numprocesses=logical tests/wheel_tests/", depends-on = [
   "build-release",
 ], description = "Run common wheel tests" }
-test-common-wheels-ci = { cmd = "pytest --numprocesses=auto --verbose tests/wheel_tests/", description = "Run common wheel tests in CI" }
-test-integration-ci = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=100 --verbose -m 'not extra_slow' tests/integration_python", description = "Run integration tests in CI" }
-test-integration-extra-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=600 tests/integration_python", depends-on = [
+# CI tests add --showlocals, and -vv for better visibility in CI logs
+test-common-wheels-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --verbose tests/wheel_tests/", description = "Run common wheel tests in CI" }
+test-integration-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --durations=0 --timeout=600 --verbose -m 'not extra_slow' tests/integration_python", description = "Run integration tests in CI" }
+test-integration-extra-slow = { cmd = "pytest --numprocesses=logical --durations=0 --timeout=600 tests/integration_python", depends-on = [
   "build-release",
 ], description = "Run all integration tests including extra slow" }
-test-integration-extra-slow-ci = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=600 tests/integration_python", description = "Run all integration tests in CI" }
-test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=auto --durations=0 --timeout=100 -m 'not slow and not extra_slow' tests/integration_python", depends-on = [
+test-integration-extra-slow-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --durations=0 --timeout=600 tests/integration_python", description = "Run all integration tests in CI" }
+test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=logical --durations=0 --timeout=600 -m 'not slow and not extra_slow' tests/integration_python", depends-on = [
   "build-debug",
 ], description = "Run fast integration tests with debug build" }
-test-integration-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=100 -m 'not extra_slow' tests/integration_python", depends-on = [
+test-integration-slow = { cmd = "pytest --numprocesses=logical --dist loadgroup --durations=0 --timeout=600 -m 'not extra_slow' tests/integration_python", depends-on = [
   "build-release",
 ], description = "Run integration tests excluding extra slow" }
-test-pixi-build = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=300 tests/integration_python/pixi_build/", depends-on = [
+test-pixi-build = { cmd = "pytest --numprocesses=logical --durations=0 --timeout=300 tests/integration_python/pixi_build/", depends-on = [
   "build-release",
 ], description = "Run pixi-build integration tests" }
-test-pixi-build-debug = { cmd = "pytest --pixi-build=debug --numprocesses=auto --durations=0 --timeout=300 tests/integration_python/pixi_build/", depends-on = [
+test-pixi-build-debug = { cmd = "pytest --pixi-build=debug --numprocesses=logical --durations=0 --timeout=300 tests/integration_python/pixi_build/", depends-on = [
   "build-debug",
 ], description = "Run pixi-build integration tests with debug build" }
 
