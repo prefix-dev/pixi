@@ -53,6 +53,7 @@ use uv_distribution_types::{
     SourceDist, ToUrlError,
 };
 use uv_git::RepositoryReference;
+use uv_install_wheel::LinkMode;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
@@ -60,7 +61,6 @@ use uv_resolver::{
     PreferenceError, Preferences, PythonRequirement, ResolutionMode, ResolveError, Resolver,
     ResolverEnvironment,
 };
-use uv_install_wheel::LinkMode;
 use uv_types::EmptyInstalledPackages;
 
 use crate::{

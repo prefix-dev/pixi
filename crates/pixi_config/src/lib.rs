@@ -923,11 +923,7 @@ impl From<ConfigCli> for Config {
             } else {
                 None
             },
-            allow_hard_links: if cli.no_hard_links {
-                Some(false)
-            } else {
-                None
-            },
+            allow_hard_links: if cli.no_hard_links { Some(false) } else { None },
             allow_ref_links: if cli.no_ref_links { Some(false) } else { None },
             ..Default::default()
         }
