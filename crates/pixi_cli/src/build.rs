@@ -7,7 +7,7 @@ use miette::{Context, IntoDiagnostic};
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
-    build::SourceCodeLocation,
+    build::PinnedSourceCodeLocation,
 };
 use pixi_config::ConfigCli;
 use pixi_consts::consts::{
@@ -311,7 +311,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .source_build(SourceBuildSpec {
                 package,
                 output_directory: None,
-                source: SourceCodeLocation::new(manifest_source.clone(), None),
+                source: PinnedSourceCodeLocation::new(manifest_source.clone(), None),
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),

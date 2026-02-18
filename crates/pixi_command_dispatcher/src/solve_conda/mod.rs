@@ -124,7 +124,7 @@ impl SolveCondaEnvironmentSpec {
             let package_names_from_source = self
                 .source_repodata
                 .iter()
-                .flat_map(|metadata| &metadata.cached_metadata.records)
+                .flat_map(|metadata| &metadata.records)
                 .map(|metadata| &metadata.package_record.name)
                 .dedup()
                 .collect::<HashSet<_>>();
@@ -189,7 +189,7 @@ impl SolveCondaEnvironmentSpec {
 
             // Add source records
             for source_metadata in &self.source_repodata {
-                for record in &source_metadata.cached_metadata.records {
+                for record in &source_metadata.records {
                     let url = unique_url(record);
                     let repodata_record = RepoDataRecord {
                         package_record: record.package_record.clone(),

@@ -601,6 +601,7 @@ impl PixiControl {
             } else {
                 PreferExecutable::TaskFirst
             },
+            args.templated,
         )
         .map_err(RunError::TaskGraphError)?;
 
