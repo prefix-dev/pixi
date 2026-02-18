@@ -111,6 +111,7 @@ pub fn walk_globs(
     let mut builder = ignore::WalkBuilder::new(effective_walk_root);
 
     let walker_builder = builder
+        .follow_links(true)
         .git_ignore(false)
         .git_exclude(true)
         .hidden(enable_ignoring_hidden)
