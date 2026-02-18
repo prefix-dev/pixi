@@ -65,6 +65,7 @@ STEPS = [
     "Choose version bumps",
     "Apply version bumps and update lockfiles",
     "Run linting",
+    "Commit and push changes",
     "Create and merge PR",
     "Choose backends to tag",
     "Create tags and push",
@@ -181,6 +182,27 @@ def find_remote() -> str:
     sys.exit(1)
 
 
+def commit_and_push(remote: str, branch: str, message: str) -> None:
+    """Create a branch, commit changes, and push to the remote."""
+    # Delete the branch if it already exists locally
+    result = subprocess.run(
+        ["git", "branch", "--list", branch],
+        capture_output=True,
+        text=True,
+    )
+    if result.stdout.strip():
+        run(["git", "branch", "--delete", branch])
+    run(["git", "switch", "--create", branch])
+    run(["git", "commit", "--all", "--message", message])
+    run(["git", "push", "--set-upstream", remote, branch])
+
+
+def sync_to_main(remote: str) -> None:
+    """Fetch latest changes and switch to the up-to-date main branch."""
+    run(["git", "checkout", "main"])
+    run(["git", "pull", remote, "main"])
+
+
 def _ask(question: Any) -> Any:
     """Ask a questionary question, exiting on Ctrl+C."""
     answer = question.ask()
@@ -280,6 +302,21 @@ def main() -> None:
                     pkgs.extend(["--package", b.cargo_name])
                 run(["cargo", "update", *pkgs])
 
+            # Update Cargo.lock for py-pixi-build-backend (separate workspace)
+            py_backend = next((b for b in updated if b.binary == "py-pixi-build-backend"), None)
+            if py_backend:
+                console.print()
+                run(
+                    [
+                        "cargo",
+                        "update",
+                        "--package",
+                        py_backend.cargo_name,
+                        "--manifest-path",
+                        str(py_backend.version_path),
+                    ]
+                )
+
             completed.append("Applied version bumps and updated lockfiles")
 
         # Step 3: Run linting
@@ -289,7 +326,15 @@ def main() -> None:
             run(["pixi", "run", "--environment", "lefthook", "lint-fast"])
             completed.append("Linting passed")
 
-        # Step 4: Create and merge PR
+        # Step 4: Commit and push changes
+        step += 1
+        if start_step <= step:
+            console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
+            branch = "bump/backends-release"
+            commit_and_push(remote, branch, "chore: bump backend versions")
+            completed.append(f"Committed and pushed to {branch}")
+
+        # Step 5: Create and merge PR
         step += 1
         if start_step <= step:
             console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
@@ -297,10 +342,13 @@ def main() -> None:
             Confirm.ask("PR created and merged?", default=False)
             completed.append("PR created and merged")
 
-        # Step 5: Choose backends to tag
+        # Step 6: Choose backends to tag
         step += 1
         if start_step <= step:
             console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
+
+            # Sync to main so tags are created on the merged commit
+            sync_to_main(remote)
 
             # Reload versions from disk in case they changed via the merged PR
             backends = load_backends()
@@ -324,7 +372,7 @@ def main() -> None:
 
             completed.append("Chose backends to tag")
 
-        # Step 6: Create tags and push
+        # Step 7: Create tags and push
         step += 1
         if start_step <= step:
             console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
