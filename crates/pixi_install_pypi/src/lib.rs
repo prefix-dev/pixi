@@ -177,6 +177,59 @@ pub struct PyPIBuildConfig<'a> {
     pub index_strategy: Option<&'a pixi_manifest::pypi::pypi_options::IndexStrategy>,
     pub exclude_newer: Option<&'a DateTime<Utc>>,
     pub skip_wheel_filename_check: Option<bool>,
+    /// The link mode to use when installing packages.
+    /// If `None`, uses the default for the platform (Clone on macOS, Hardlink on Linux).
+    pub link_mode: Option<LinkMode>,
+}
+
+/// Derives the appropriate `LinkMode` based on installation restrictions.
+///
+/// This function implements a fallback chain for link modes when certain methods
+/// are disallowed:
+/// - Default preference order: Clone (on macOS) or Hardlink (elsewhere)
+/// - If reflinks are disallowed, falls back to Hardlink
+/// - If hardlinks are disallowed, falls back to Symlink
+/// - If symlinks are disallowed, falls back to Copy
+/// - Copy is always allowed as a last resort
+pub fn derive_link_mode(
+    allow_symbolic_links: Option<bool>,
+    allow_hard_links: Option<bool>,
+    allow_ref_links: Option<bool>,
+) -> LinkMode {
+    // Get platform default
+    let default = LinkMode::default();
+
+    // Helper to check if a mode is allowed
+    let is_clone_allowed = allow_ref_links.unwrap_or(true);
+    let is_hardlink_allowed = allow_hard_links.unwrap_or(true);
+    let is_symlink_allowed = allow_symbolic_links.unwrap_or(true);
+
+    // If default is allowed, use it
+    let default_allowed = match default {
+        LinkMode::Clone => is_clone_allowed,
+        LinkMode::Hardlink => is_hardlink_allowed,
+        LinkMode::Symlink => is_symlink_allowed,
+        LinkMode::Copy => true, // Copy is always allowed
+    };
+
+    if default_allowed {
+        return default;
+    }
+
+    // Otherwise, find the first allowed mode in preference order
+    // Preference: Clone > Hardlink > Symlink > Copy
+    if is_clone_allowed {
+        return LinkMode::Clone;
+    }
+    if is_hardlink_allowed {
+        return LinkMode::Hardlink;
+    }
+    if is_symlink_allowed {
+        return LinkMode::Symlink;
+    }
+
+    // Fall back to Copy (always allowed)
+    LinkMode::Copy
 }
 
 /// Configuration for PyPI context, grouping uv and environment settings
@@ -829,7 +882,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             setup.build_isolation.to_uv(&setup.venv),
             &self.context_config.uv_context.extra_build_requires,
             &self.context_config.uv_context.extra_build_variables,
-            LinkMode::default(),
+            self.build_config.link_mode.unwrap_or_default(),
             &setup.build_options,
             &self.context_config.uv_context.hash_strategy,
             setup.exclude_newer.clone(),
@@ -1008,7 +1061,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let start = std::time::Instant::now();
 
         uv_installer::Installer::new(&setup.venv, uv_preview::Preview::default())
-            .with_link_mode(LinkMode::default())
+            .with_link_mode(self.build_config.link_mode.unwrap_or_default())
             .with_installer_name(Some(consts::PIXI_UV_INSTALLER.to_string()))
             .with_reporter(UvReporter::new_arc(options))
             .install(all_dists.clone())

@@ -13,7 +13,7 @@ use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_record::{PixiRecord, SourceRecord, VariantValue};
 use rattler::install::{
-    InstallationResultRecord, Installer, InstallerError, Transaction,
+    InstallationResultRecord, Installer, InstallerError, LinkOptions, Transaction,
     link_script::{LinkScriptError, PrePostLinkResult},
 };
 use rattler_conda_types::{
@@ -174,7 +174,12 @@ impl InstallPixiEnvironmentSpec {
             .with_package_cache(command_dispatcher.package_cache().clone())
             .with_reinstall_packages(self.force_reinstall)
             .with_ignored_packages(self.ignore_packages.unwrap_or_default())
-            .with_execute_link_scripts(command_dispatcher.allow_execute_link_scripts());
+            .with_execute_link_scripts(command_dispatcher.allow_execute_link_scripts())
+            .with_link_options(LinkOptions {
+                allow_symbolic_links: command_dispatcher.allow_symbolic_links(),
+                allow_hard_links: command_dispatcher.allow_hard_links(),
+                allow_ref_links: command_dispatcher.allow_ref_links(),
+            });
 
         if let Some(installed) = self.installed {
             installer = installer.with_installed_packages(installed);

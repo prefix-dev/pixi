@@ -182,6 +182,18 @@ pub struct ConfigCli {
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     run_post_link_scripts: bool,
 
+    /// Disallow symbolic links during package installation
+    #[arg(long, env = "PIXI_NO_SYMBOLIC_LINKS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    no_symbolic_links: bool,
+
+    /// Disallow hard links during package installation
+    #[arg(long, env = "PIXI_NO_HARD_LINKS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    no_hard_links: bool,
+
+    /// Disallow ref links (copy-on-write) during package installation
+    #[arg(long, env = "PIXI_NO_REF_LINKS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    no_ref_links: bool,
+
     /// Do not verify the TLS certificate of the server.
     #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     tls_no_verify: bool,
@@ -791,6 +803,21 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_post_link_scripts: Option<RunPostLinkScripts>,
 
+    /// If set to false, symbolic links will not be used during package installation.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_symbolic_links: Option<bool>,
+
+    /// If set to false, hard links will not be used during package installation.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_hard_links: Option<bool>,
+
+    /// If set to false, ref links (copy-on-write) will not be used during package installation.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_ref_links: Option<bool>,
+
     /// Https/Http proxy configuration for pixi
     #[serde(default)]
     #[serde(skip_serializing_if = "ProxyConfig::is_default")]
@@ -843,6 +870,9 @@ impl Default for Config {
             experimental: ExperimentalConfig::default(),
             concurrency: ConcurrencyConfig::default(),
             run_post_link_scripts: None,
+            allow_symbolic_links: None,
+            allow_hard_links: None,
+            allow_ref_links: None,
             proxy_config: ProxyConfig::default(),
             build: BuildConfig::default(),
             tool_platform: None,
@@ -887,6 +917,14 @@ impl From<ConfigCli> for Config {
                 },
             },
             pinning_strategy: cli.pinning_strategy,
+            // CLI uses --no-* flags which invert to allow_* = false
+            allow_symbolic_links: if cli.no_symbolic_links {
+                Some(false)
+            } else {
+                None
+            },
+            allow_hard_links: if cli.no_hard_links { Some(false) } else { None },
+            allow_ref_links: if cli.no_ref_links { Some(false) } else { None },
             ..Default::default()
         }
     }
@@ -1396,6 +1434,9 @@ impl Config {
             "repodata-config.disable-sharded",
             "repodata-config.disable-zstd",
             "run-post-link-scripts",
+            "allow-symbolic-links",
+            "allow-hard-links",
+            "allow-ref-links",
             "s3-options",
             "s3-options.<bucket>",
             "s3-options.<bucket>.endpoint-url",
@@ -1452,6 +1493,9 @@ impl Config {
             // Make other take precedence over self to allow for setting the value through the CLI
             concurrency: self.concurrency.merge(other.concurrency),
             run_post_link_scripts: other.run_post_link_scripts.or(self.run_post_link_scripts),
+            allow_symbolic_links: other.allow_symbolic_links.or(self.allow_symbolic_links),
+            allow_hard_links: other.allow_hard_links.or(self.allow_hard_links),
+            allow_ref_links: other.allow_ref_links.or(self.allow_ref_links),
 
             proxy_config: self.proxy_config.merge(other.proxy_config),
             build: self.build.merge(other.build),
@@ -1978,6 +2022,24 @@ impl Config {
     pub fn run_post_link_scripts(&self) -> RunPostLinkScripts {
         self.run_post_link_scripts.clone().unwrap_or_default()
     }
+
+    /// Returns whether symbolic links are allowed during package installation.
+    /// Defaults to `None` (allow).
+    pub fn allow_symbolic_links(&self) -> Option<bool> {
+        self.allow_symbolic_links
+    }
+
+    /// Returns whether hard links are allowed during package installation.
+    /// Defaults to `None` (allow).
+    pub fn allow_hard_links(&self) -> Option<bool> {
+        self.allow_hard_links
+    }
+
+    /// Returns whether ref links (copy-on-write) are allowed during package installation.
+    /// Defaults to `None` (allow).
+    pub fn allow_ref_links(&self) -> Option<bool> {
+        self.allow_ref_links
+    }
 }
 
 /// Returns the path to the system-level pixi config file.
@@ -2133,6 +2195,9 @@ UNUSED = "unused"
             concurrent_solves: Some(8),
             concurrent_downloads: Some(100),
             run_post_link_scripts: true,
+            no_symbolic_links: false,
+            no_hard_links: false,
+            no_ref_links: false,
             use_environment_activation_cache: true,
             pinning_strategy: Some(PinningStrategy::Semver),
         };
@@ -2163,6 +2228,9 @@ UNUSED = "unused"
             concurrent_solves: None,
             concurrent_downloads: None,
             run_post_link_scripts: false,
+            no_symbolic_links: false,
+            no_hard_links: false,
+            no_ref_links: false,
             use_environment_activation_cache: false,
             pinning_strategy: None,
         };
@@ -2318,6 +2386,9 @@ UNUSED = "unused"
                 )]),
             },
             run_post_link_scripts: Some(RunPostLinkScripts::Insecure),
+            allow_symbolic_links: Some(true),
+            allow_hard_links: Some(true),
+            allow_ref_links: Some(false),
             proxy_config: ProxyConfig::default(),
             build: BuildConfig::default(),
             tool_platform: None,
