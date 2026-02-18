@@ -131,7 +131,13 @@ jobs:
         run: pixi run bump --non-interactive "$(pixi run bump current-version)-rc.${GITHUB_REF_NAME:-$(echo $GITHUB_SHA | head -c 8))}"
       - name: "Build"
         run: pixi build -v
+      - name: Push artifact to GitHub
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: pixi-${{ matrix.name }}-${{ github.sha }}
+          path: ./*.conda
       - name: "Upload to prefix.dev"
+        if: github.event_name != 'pull_request'
         shell: bash
         run: pixi upload prefix --skip-existing --channel pixi-ci ./*.conda
 
