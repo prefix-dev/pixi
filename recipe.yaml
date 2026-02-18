@@ -6,12 +6,22 @@ source:
 build:
   number: 1
   script:
-    content: |
-      export CFLAGS="$CFLAGS -D_BSD_SOURCE"
-      export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,--verbose,--sysroot=$CONDA_BUILD_SYSROOT"
-      ln -s $BUILD_PREFIX/x86_64-conda-linux-gnu/sysroot/lib $BUILD_PREFIX/x86_64-conda-linux-gnu/sysroot/lib64
-      ls -l $BUILD_PREFIX/x86_64-conda-linux-gnu/sysroot/      
-      cargo install --debug --locked --root "$PREFIX" --target-dir target --no-track --force --path crates/pixi
+    - if: linux
+      then: |
+        # Required for the tree-sitter crate
+        export CFLAGS="$CFLAGS -D_BSD_SOURCE"
+        # Required to fix the linking to the right sysroot
+        export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,--verbose,--sysroot=$CONDA_BUILD_SYSROOT"
+        # Fixing an issue with the sysroot on linux-64 where the lib directory is named lib instead of lib64
+        ln -s $BUILD_PREFIX/x86_64-conda-linux-gnu/sysroot/lib $BUILD_PREFIX/x86_64-conda-linux-gnu/sysroot/lib64
+        ls -l $BUILD_PREFIX/x86_64-conda-linux-gnu/sysroot/        
+        cargo install --locked --root "$PREFIX" --target-dir target --no-track --force --path crates/pixi
+    - if: osx
+      then: |
+        cargo install --locked --root "$PREFIX" --target-dir target --no-track --force --path crates/pixi
+    - if: win
+      then: |
+          cargo install --locked --root "%PREFIX%" --target-dir target --no-track --force --path crates/pixi
 requirements:
   build:
     - if: unix
