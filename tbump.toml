@@ -12,9 +12,8 @@ regex = '''
   (?P<minor>\d+)
   \.
   (?P<patch>\d+)
-  (rc
-    (?P<candidate>\d+)
-  )?
+  (-rc\.(?P<candidate>.+))
+  ?
   '''
 
 [git]
@@ -28,18 +27,22 @@ src = "CITATION.cff"
 [[file]]
 search = '^version = "{current_version}"'
 src = "crates/pixi/Cargo.toml"
+version_template = "{major}.{minor}.{patch}"
 
 [[file]]
 search = "pixi-version: v{current_version}"
 src = "docs/integration/ci/github_actions.md"
+version_template = "{major}.{minor}.{patch}"
 
 [[file]]
 search = "ARG PIXI_VERSION=v{current_version}"
 src = "docs/integration/editor/vscode.md"
+version_template = "{major}.{minor}.{patch}"
 
 [[file]]
 search = "/pixi.sh/v{current_version}/"
 src = "schema/schema.json"
+version_template = "{major}.{minor}.{patch}"
 
 [[file]]
 search = "Version: v{current_version}"
@@ -52,6 +55,7 @@ src = "install/install.ps1"
 [[file]]
 search = "PIXI_VERSION = \"{current_version}\""
 src = "tests/integration_python/common.py"
+version_template = "{major}.{minor}.{patch}"
 
 [[file]]
 search = "None => \"{current_version}\","

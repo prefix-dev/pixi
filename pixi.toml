@@ -9,15 +9,32 @@ authors = [
 ]
 channels = ["https://prefix.dev/conda-forge"]
 description = "Package management made easy!"
-platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
+platforms = ["linux-64", "linux-aarch64", "osx-64", "osx-arm64", "win-64"]
 preview = ["pixi-build"]
 requires-pixi = ">=0.45"
 
 [workspace.target.linux-64.build-variants]
+c_compiler = ["gcc"]
+c_compiler_version = ["14"]
+c_stdlib = ["sysroot"]
 c_stdlib_version = ["2.17"]
+openssl = ["3.5"]
+rust_compiler = ["rust"]
+
+[workspace.build-variants]
+rust_compiler_version = ["1.90.0"]
 
 [workspace.target.osx.build-variants]
-c_compiler_version = ["19"]
+c_compiler = ["clang"]
+c_compiler_version = ["16"]
+c_stdlib = ["macosx_deployment_target"]
+c_stdlib_version = ["11"]
+rust_compiler = ["rust"]
+
+[workspace.target.win-64.build-variants]
+c_compiler = ["vs2022"]
+c_stdlib = ["vs"]
+libgit2 = ["1.9"]
 
 #
 # Shared feature for C/C++ compilers and build tools
@@ -402,12 +419,19 @@ lefthook = { features = ["lefthook"] }
 #
 # Package definitions
 #
-[package]
-name = "pixi"
+#[package]
+#name = "pixi"
+#
+#[package.build]
+#backend = { name = "pixi-build-rust", version = "*" }
+#config = { compilers = ["c", "rust"] }
+#source = { path = "crates/pixi" }
+## Required to support the build of tree-sitter.
+#target.linux.config.env = { CFLAGS = "$CFLAGS -D_BSD_SOURCE", RUSTFLAGS = "$RUSTFLAGS -C link-arg=-Wl,--verbose,--sysroot=$CONDA_BUILD_SYSROOT" }
+#
+#[package.target.unix.build-dependencies]
+#clang = "*"
 
-[package.build]
-backend = { name = "pixi-build-rust", version = "*" }
-source = { path = "crates/pixi" }
-
-[package.target.unix.build-dependencies]
-clang = "*"
+[package.build.backend]
+name = "pixi-build-rattler-build"
+version = "*"
