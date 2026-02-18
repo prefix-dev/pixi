@@ -157,39 +157,21 @@ def run(cmd: list[str]) -> None:
         sys.exit(1)
 
 
-def is_jj() -> bool:
-    """Check if the repository uses jj (Jujutsu)."""
-    return Path(".jj").is_dir()
-
-
 def find_remote() -> str:
     """Find a git remote that points to prefix-dev/pixi.
 
     Checks "upstream" first, then "origin", then all others.
-    Works with both git and jj repositories.
     """
-    if is_jj():
-        output = subprocess.run(
-            ["jj", "git", "remote", "list"],
-            capture_output=True,
-            text=True,
-        ).stdout
-        remotes: dict[str, str] = {}
-        for line in output.splitlines():
-            parts = line.split(maxsplit=1)
-            if len(parts) >= 2:
-                remotes[parts[0]] = parts[1]
-    else:
-        output = subprocess.run(
-            ["git", "remote", "--verbose"],
-            capture_output=True,
-            text=True,
-        ).stdout
-        remotes = {}
-        for line in output.splitlines():
-            parts = line.split()
-            if len(parts) >= 2:
-                remotes[parts[0]] = parts[1]
+    output = subprocess.run(
+        ["git", "remote", "--verbose"],
+        capture_output=True,
+        text=True,
+    ).stdout
+    remotes: dict[str, str] = {}
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) >= 2:
+            remotes[parts[0]] = parts[1]
     for name in ["upstream", "origin"]:
         if name in remotes and UPSTREAM_REPO in remotes[name]:
             return name
@@ -202,32 +184,23 @@ def find_remote() -> str:
 
 def commit_and_push(remote: str, branch: str, message: str) -> None:
     """Create a branch, commit changes, and push to the remote."""
-    if is_jj():
-        run(["jj", "describe", "--message", message])
-        run(["jj", "bookmark", "set", branch])
-        run(["jj", "git", "push", "--bookmark", branch, "--remote", remote])
-    else:
-        # Delete the branch if it already exists locally
-        result = subprocess.run(
-            ["git", "branch", "--list", branch],
-            capture_output=True,
-            text=True,
-        )
-        if result.stdout.strip():
-            run(["git", "branch", "--delete", branch])
-        run(["git", "switch", "--create", branch])
-        run(["git", "commit", "--all", "--message", message])
-        run(["git", "push", "--set-upstream", remote, branch])
+    # Delete the branch if it already exists locally
+    result = subprocess.run(
+        ["git", "branch", "--list", branch],
+        capture_output=True,
+        text=True,
+    )
+    if result.stdout.strip():
+        run(["git", "branch", "--delete", branch])
+    run(["git", "switch", "--create", branch])
+    run(["git", "commit", "--all", "--message", message])
+    run(["git", "push", "--set-upstream", remote, branch])
 
 
 def sync_to_main(remote: str) -> None:
     """Fetch latest changes and switch to the up-to-date main branch."""
-    if is_jj():
-        run(["jj", "git", "fetch", "--remote", remote])
-        run(["jj", "new", f"main@{remote}"])
-    else:
-        run(["git", "checkout", "main"])
-        run(["git", "pull", remote, "main"])
+    run(["git", "checkout", "main"])
+    run(["git", "pull", remote, "main"])
 
 
 def _ask(question: Any) -> Any:
