@@ -60,6 +60,7 @@ use uv_resolver::{
     PreferenceError, Preferences, PythonRequirement, ResolutionMode, ResolveError, Resolver,
     ResolverEnvironment,
 };
+use uv_install_wheel::LinkMode;
 use uv_types::EmptyInstalledPackages;
 
 use crate::{
@@ -299,6 +300,7 @@ pub async fn resolve_pypi(
     disallow_install_conda_prefix: bool,
     exclude_newer: Option<DateTime<Utc>>,
     solve_strategy: SolveStrategy,
+    link_mode: LinkMode,
 ) -> miette::Result<(LockedPypiPackages, Option<CondaPrefixUpdated>)> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
@@ -552,7 +554,8 @@ pub async fn resolve_pypi(
     // non-tampered requests.
     .with_shared_state(context.shared_state.fork())
     .with_source_strategy(context.source_strategy)
-    .with_concurrency(context.concurrency);
+    .with_concurrency(context.concurrency)
+    .with_link_mode(link_mode);
 
     let lazy_build_dispatch_dependencies = LazyBuildDispatchDependencies::default();
     let last_error = Arc::new(OnceCell::new());
