@@ -93,7 +93,7 @@ outputs:
       script:
         - if: win
           then:
-            - mkdir -p %PREFIX%\bin
+            - if not exist %PREFIX%\bin mkdir %PREFIX%\bin
             - echo @echo off > %PREFIX%\bin\foobar.bat
             - echo echo Hello from foobar >> %PREFIX%\bin\foobar.bat
           else:
@@ -108,7 +108,7 @@ outputs:
       script:
         - if: win
           then:
-            - mkdir -p %PREFIX%\bin
+            - if not exist %PREFIX%\bin mkdir %PREFIX%\bin
             - echo @echo off > %PREFIX%\bin\bizbar.bat
             - echo echo Hello from bizbar >> %PREFIX%\bin\bizbar.bat
           else:
