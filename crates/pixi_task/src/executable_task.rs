@@ -93,11 +93,16 @@ pub struct ExecutableTask<'p> {
     pub task: Cow<'p, Task>,
     pub run_environment: Environment<'p>,
     pub args: ArgValues,
+    pub init_cwd: Option<PathBuf>,
 }
 
 impl<'p> ExecutableTask<'p> {
     /// Constructs a new executable task from a task graph node.
-    pub fn from_task_graph(task_graph: &TaskGraph<'p>, task_id: TaskId) -> Self {
+    pub fn from_task_graph(
+        task_graph: &TaskGraph<'p>,
+        task_id: TaskId,
+        init_cwd: Option<PathBuf>,
+    ) -> Self {
         let node = &task_graph[task_id];
 
         Self {
@@ -106,6 +111,7 @@ impl<'p> ExecutableTask<'p> {
             task: node.task.clone(),
             run_environment: node.run_environment.clone(),
             args: node.args.clone().unwrap_or_default(),
+            init_cwd,
         }
     }
 
@@ -137,7 +143,7 @@ impl<'p> ExecutableTask<'p> {
             environment_name: self.run_environment.name(),
             manifest_path: Some(&self.workspace.workspace.provenance.path),
             args: Some(&self.args),
-            init_cwd: None,
+            init_cwd: self.init_cwd.as_deref(),
         }
     }
 
@@ -607,6 +613,7 @@ mod tests {
             task: Cow::Borrowed(task),
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
+            init_cwd: None,
         };
 
         let script = executable_task.as_script().unwrap().unwrap();

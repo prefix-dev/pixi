@@ -225,8 +225,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // make sure that child processes are killed when pixi stops
     let _drop_guard = signal.clone().drop_guard();
 
+    let init_cwd = std::env::current_dir().ok();
     for task_id in task_graph.topological_order() {
-        let executable_task = ExecutableTask::from_task_graph(&task_graph, task_id);
+        let executable_task =
+            ExecutableTask::from_task_graph(&task_graph, task_id, init_cwd.clone());
 
         // If the task is not executable (e.g. an alias), we skip it. This ensures we
         // don't instantiate a prefix for an alias.
