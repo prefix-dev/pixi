@@ -10,7 +10,6 @@ from .common import (
 )
 
 
-
 @pytest.mark.slow
 def test_build_git_source_deps(pixi: Path, tmp_pixi_workspace: Path, build_data: Path) -> None:
     """
