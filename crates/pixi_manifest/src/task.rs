@@ -209,7 +209,13 @@ impl Task {
                 Ok(rendered) => Ok(Some(Cow::Owned(rendered))),
                 Err(e) => Err(e),
             },
-            Task::Custom(custom) => custom.cmd.as_single(context),
+            Task::Custom(custom) => {
+                if custom.templated {
+                    custom.cmd.as_single(context)
+                } else {
+                    custom.cmd.as_single_no_render()
+                }
+            }
             Task::Execute(exe) => exe.cmd.as_single(context),
             Task::Alias(_) => Ok(None),
         }
@@ -432,6 +438,10 @@ pub struct Custom {
     /// The working directory for the command relative to the root of the
     /// project.
     pub cwd: Option<PathBuf>,
+
+    /// Whether to render the command through the template engine.
+    /// CLI commands default to false to avoid unexpected template errors.
+    pub templated: bool,
 }
 
 impl From<Custom> for Task {
@@ -473,6 +483,9 @@ pub struct TaskRenderContext<'a> {
 
     /// The arguments to use for rendering.
     pub args: Option<&'a ArgValues>,
+
+    /// The current working directory when pixi was invoked.
+    pub init_cwd: Option<&'a Path>,
 }
 
 impl Default for TaskRenderContext<'_> {
@@ -482,6 +495,7 @@ impl Default for TaskRenderContext<'_> {
             environment_name: &DEFAULT_ENV,
             manifest_path: None,
             args: None,
+            init_cwd: None,
         }
     }
 }
@@ -553,6 +567,13 @@ impl<'a> TaskRenderContext<'a> {
             "version".to_string(),
             minijinja::Value::from(pixi_consts::consts::PIXI_VERSION),
         );
+
+        if let Some(cwd) = self.init_cwd {
+            pixi_vars.insert(
+                "init_cwd".to_string(),
+                minijinja::Value::from(cwd.display().to_string()),
+            );
+        }
 
         context_map.insert(
             "pixi".to_string(),
@@ -1105,6 +1126,7 @@ mod tests {
             environment_name: &env_name,
             manifest_path: Some(&manifest_path),
             args: Some(&args),
+            init_cwd: None,
         };
 
         // Test platform
@@ -1178,5 +1200,17 @@ mod tests {
             .expect("should render with platform and args");
 
         assert_eq!(rendered, "build-linux-64-1.0.0");
+    }
+
+    #[test]
+    fn test_template_string_renders_init_cwd() {
+        let t = TemplateString::from("{{ pixi.init_cwd }}/test");
+        let cwd = std::env::current_dir().unwrap();
+        let context = TaskRenderContext {
+            init_cwd: Some(&cwd),
+            ..TaskRenderContext::default()
+        };
+        let rendered = t.render(&context).expect("should render init_cwd");
+        assert_eq!(rendered, format!("{}/test", cwd.display()));
     }
 }

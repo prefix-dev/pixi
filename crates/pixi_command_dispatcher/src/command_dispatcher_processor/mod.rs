@@ -9,13 +9,14 @@ use std::{
     sync::Arc,
 };
 
+use crate::source_build_cache_status::SourceBuildCacheKey;
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt, DevSourceMetadata,
     DevSourceMetadataError, DevSourceMetadataSpec, InstallPixiEnvironmentResult, Reporter,
     SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
-    SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceBuildError, SourceBuildResult,
-    SourceBuildSpec, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    SourceBuildCacheStatusError, SourceBuildError, SourceBuildResult, SourceBuildSpec,
+    SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
         BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcherChannel,
@@ -136,7 +137,7 @@ pub(crate) struct CommandDispatcherProcessor {
         SourceBuildCacheStatusId,
         PendingDeduplicatingTask<Arc<SourceBuildCacheEntry>, SourceBuildCacheStatusError>,
     >,
-    source_build_cache_status_ids: HashMap<SourceBuildCacheStatusSpec, SourceBuildCacheStatusId>,
+    source_build_cache_status_ids: HashMap<SourceBuildCacheKey, SourceBuildCacheStatusId>,
 
     /// Dev source metadata requests that are currently being processed.
     dev_source_metadata: HashMap<

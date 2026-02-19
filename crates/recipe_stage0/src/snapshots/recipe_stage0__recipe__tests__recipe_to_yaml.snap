@@ -1,0 +1,46 @@
+---
+source: crates/recipe_stage0/src/recipe.rs
+expression: recipe
+---
+context:
+  name: xtensor
+  version: 0.24.6
+package:
+  name: "${{ name|lower }}"
+  version: "${{ version }}"
+source:
+  - url: "https://github.com/xtensor-stack/xtensor/archive/${{ version }}.tar.gz"
+    sha256: f87259b51aabafdd1183947747edfff4cff75d55375334f2e81cee6dc68ef655
+build:
+  number: ~
+  script:
+    content: ""
+    env: {}
+    secrets: []
+requirements:
+  build:
+    - "${{ compiler('cxx') }}"
+    - cmake
+    - if: unix
+      then: make
+      else: ninja
+  host:
+    - "xtl >=0.7,<0.8"
+    - "${{ context.name }}"
+  run:
+    - "xtl >=0.7,<0.8"
+  run_constraints:
+    - "xsimd >=8.0.3,<10"
+tests: []
+about:
+  homepage: "https://github.com/xtensor-stack/xtensor"
+  license: BSD-3-Clause
+  license_file:
+    - LICENSE
+  summary: The C++ tensor algebra library
+  description: Multi dimensional arrays with broadcasting and lazy computing
+  documentation: "https://xtensor.readthedocs.io"
+  repository: "https://github.com/xtensor-stack/xtensor"
+extra:
+  recipe-maintainers:
+    - some-maintainer

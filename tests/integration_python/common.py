@@ -66,9 +66,16 @@ def verify_cli_command(
     reset_env: bool = False,
     strip_ansi: bool = False,
 ) -> Output:
-    base_env = {} if reset_env else dict(os.environ)
-    # Remove all PIXI_ prefixed env vars to avoid interference from the outer environment
-    base_env = {k: v for k, v in base_env.items() if not k.startswith("PIXI_")}
+    if reset_env:
+        base_env = {}
+        # On Windows, preserve essential system variables so temp file creation
+        # doesn't fall back to C:\WINDOWS\ (which requires admin privileges).
+        if sys.platform == "win32":
+            for var in ("TEMP", "TMP", "SYSTEMROOT", "SYSTEMDRIVE"):
+                if var in os.environ:
+                    base_env[var] = os.environ[var]
+    else:
+        base_env = dict(os.environ)
     complete_env = base_env if env is None else base_env | env
     # Set `PIXI_NO_WRAP` to avoid to have miette wrapping lines
     complete_env |= {"PIXI_NO_WRAP": "1"}

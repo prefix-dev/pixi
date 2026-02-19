@@ -101,6 +101,16 @@ impl CanonicalUrl {
 #[serde(transparent)]
 pub struct RepositoryUrl(Url);
 
+impl<'de> serde::Deserialize<'de> for RepositoryUrl {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let url = Url::deserialize(deserializer)?;
+        Ok(RepositoryUrl::new(&url))
+    }
+}
+
 impl RepositoryUrl {
     pub fn new(url: &Url) -> Self {
         let mut url = CanonicalUrl::new(url).0;

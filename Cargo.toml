@@ -1,11 +1,11 @@
 [workspace]
 default-members = [
   "crates/pixi",
-  "crates/pixi-build-cmake",
-  "crates/pixi-build-mojo",
-  "crates/pixi-build-python",
-  "crates/pixi-build-rattler-build",
-  "crates/pixi-build-rust",
+  "crates/pixi_build_cmake",
+  "crates/pixi_build_mojo",
+  "crates/pixi_build_python",
+  "crates/pixi_build_rattler_build",
+  "crates/pixi_build_rust",
 ]
 exclude = [
   # Only pulled in when enabling certain features. We do not want to include
@@ -95,10 +95,10 @@ pep440_rs = "0.7.3"
 pep508_rs = "0.9.2"
 percent-encoding = "2.3.1"
 pin-project-lite = "0.2.16"
-pixi-build-backend = { path = "crates/pixi-build-backend" }
 pixi_allocator = { path = "crates/pixi_allocator" }
 pixi_api = { path = "crates/pixi_api" }
 pixi_auth = { path = "crates/pixi_auth", default-features = false }
+pixi_build_backend = { path = "crates/pixi_build_backend" }
 pixi_build_backend_passthrough = { path = "crates/pixi_build_backend_passthrough" }
 pixi_build_discovery = { path = "crates/pixi_build_discovery" }
 pixi_build_frontend = { path = "crates/pixi_build_frontend" }
@@ -139,7 +139,7 @@ pyproject-toml = "0.13.7"
 rand = { version = "0.9.1", default-features = false }
 
 rayon = "1.10.0"
-recipe-stage0 = { path = "crates/recipe-stage0" }
+recipe_stage0 = { path = "crates/recipe_stage0" }
 regex = "1.11.1"
 reqwest = { version = "0.12.12", default-features = false }
 retry-policies = "0.4"
