@@ -53,6 +53,10 @@ pub struct Args {
     #[clap(long, default_value = "false", conflicts_with = "shell")]
     json: bool,
 
+    /// Generate a deactivation script instead of an activation script
+    #[clap(long, default_value = "false", conflicts_with = "json")]
+    deactivate: bool,
+
     #[clap(flatten)]
     prompt_config: ConfigCliPrompt,
 }
@@ -116,6 +120,43 @@ async fn generate_activation_script(
     }
 }
 
+/// Generates the deactivation script.
+async fn generate_deactivation_script(
+    shell: Option<ShellEnum>,
+    environment: &Environment<'_>,
+) -> miette::Result<String> {
+    // Get shell from the arguments or from the current process or use default if
+    // all fails
+    let shell = shell.unwrap_or_else(|| {
+        ShellEnum::from_parent_process()
+            .unwrap_or_else(|| ShellEnum::from_env().unwrap_or_default())
+    });
+
+    let activator = get_activator(environment, shell.clone()).into_diagnostic()?;
+
+    let current_env = std::env::vars().collect::<HashMap<String, String>>();
+
+    let path = std::env::var("PATH")
+        .ok()
+        .map(|p| std::env::split_paths(&p).collect::<Vec<_>>());
+
+    let conda_prefix = std::env::var("CONDA_PREFIX").ok().map(|p| p.into());
+
+    // Use the deactivation method with environment variables
+    let result = activator
+        .deactivation(ActivationVariables {
+            conda_prefix,
+            path,
+            path_modification_behavior: PathModificationBehavior::default(),
+            current_env,
+        })
+        .into_diagnostic()?;
+
+    let script = result.script.contents().into_diagnostic()?;
+
+    Ok(script.to_string())
+}
+
 /// Generates a JSON object describing the changes to the shell environment when
 /// activating the provided pixi environment.
 async fn generate_environment_json(
@@ -167,8 +208,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .await?;
 
-    let output = match args.json {
-        true => {
+    let output = match (args.json, args.deactivate) {
+        (true, _) => {
+            // JSON mode takes precedence over deactivate (they are mutually exclusive anyway)
             generate_environment_json(
                 &environment,
                 &lock_file_data.into_lock_file(),
@@ -177,9 +219,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )
             .await?
         }
-        // Skipping the activated environment caching for the script.
-        // As it can still run scripts.
-        false => generate_activation_script(args.shell, &environment, &workspace).await?,
+        (_, true) => {
+            // Deactivation script
+            generate_deactivation_script(args.shell, &environment).await?
+        }
+        _ => {
+            // Default: activation script
+            generate_activation_script(args.shell, &environment, &workspace).await?
+        }
     };
 
     // Print the output - either a JSON object or a shell script
