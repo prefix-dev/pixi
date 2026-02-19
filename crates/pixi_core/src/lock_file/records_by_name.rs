@@ -32,7 +32,7 @@ impl HasNameVersion for PypiRecord {
         &self.0.name
     }
     fn version(&self) -> &Self::V {
-        &self.0.version
+        self.0.version.as_ref().expect("pypi record dedup requires a version")
     }
 }
 

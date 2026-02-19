@@ -231,7 +231,7 @@ impl LockFileExt for LockFile {
                     packages.find(|(data, _)| data.name.as_ref() == package)
                 })
             })
-            .map(|(data, _)| data.version.to_string())
+            .map(|(data, _)| data.version_string())
     }
 
     fn get_pypi_package(

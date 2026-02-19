@@ -34,7 +34,7 @@ pub(crate) enum NeedReinstall {
     /// The package is not installed
     VersionMismatch {
         installed_version: uv_pep440::Version,
-        locked_version: pep440_rs::Version,
+        locked_version: String,
     },
     /// The `direct_url.json` file is missing
     MissingDirectUrl,
