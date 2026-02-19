@@ -392,14 +392,14 @@ mod test {
         let parse_error = TomlWorkspace::from_toml_str(input)
             .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), Some(path)))
             .unwrap_err();
-        assert_snapshot!(format_parse_error(input, parse_error), @r###"
-         × `date` is neither a valid date (input contains invalid characters) nor a valid datetime (input contains invalid characters)
+        assert_snapshot!(format_parse_error(input, parse_error), @r#"
+         × `date` is neither a valid date (input contains invalid characters) nor a valid datetime (premature end of input)
           ╭─[pixi.toml:4:26]
         3 │         platforms = []
         4 │         exclude-newer = "date"
           ·                          ────
         5 │
           ╰────
-        "###);
+        "#);
     }
 }

@@ -19,9 +19,12 @@ rustls-tls = ["pixi_build_backend/rustls-tls", "rattler-build/rustls-tls"]
 [dependencies]
 async-trait = { workspace = true }
 fs-err = { workspace = true }
+indexmap = { workspace = true }
 miette = { workspace = true }
 pathdiff = { workspace = true }
 rattler-build = { workspace = true }
+rattler_build_recipe = { workspace = true }
+rattler_build_variant_config = { workspace = true }
 rattler_conda_types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

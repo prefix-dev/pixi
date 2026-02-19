@@ -9,13 +9,11 @@ use pixi_build_types::{
         CondaBuildV1RunExports,
     },
 };
-use rattler_build::{
-    recipe::variable::Variable,
-    render::resolved_dependencies::{
-        DependencyInfo, FinalizedDependencies, FinalizedRunDependencies, ResolvedDependencies,
-        RunExportDependency, SourceDependency,
-    },
+use rattler_build::render::resolved_dependencies::{
+    DependencyInfo, FinalizedDependencies, FinalizedRunDependencies, ResolvedDependencies,
+    RunExportDependency, SourceDependency,
 };
+use rattler_build_jinja::Variable;
 use rattler_conda_types::{
     Channel, MatchSpec, PackageName, PackageNameMatcher, package::RunExportsJson,
 };

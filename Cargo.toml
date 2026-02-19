@@ -11,6 +11,9 @@ exclude = [
   # Only pulled in when enabling certain features. We do not want to include
   # these crates when running workspace wide commands.
   "crates/pixi_allocator",
+  # Debug output directories that don't contain Cargo.toml
+  "crates/pixi-build-cmake",
+  "crates/pixi-build-python",
   # Standalone projects that should not be part of the workspace
   "docs",
   "examples",
@@ -85,7 +88,7 @@ libc = { version = "0.2.170", default-features = false }
 marked-yaml = "0.8.0"
 memchr = "2.7.4"
 miette = { version = "7.6.0" }
-minijinja = "2.7.0"
+minijinja = "2.15.1"
 nix = { version = "0.29.0", default-features = false }
 once_cell = "1.20.3"
 ordermap = "1.0.0"
@@ -224,30 +227,36 @@ zstd = { version = "0.13.3", default-features = false }
 # Rattler crates
 coalesced_map = "0.1.2"
 file_url = "0.2.6"
-rattler = { version = "0.39.0", default-features = false }
-rattler_cache = { version = "0.6.2", default-features = false }
-rattler_conda_types = { version = "0.43.1", default-features = false, features = [
+rattler = { version = "0.39.12", default-features = false }
+rattler_cache = { version = "0.6.11", default-features = false }
+rattler_conda_types = { version = "0.43.2", default-features = false, features = [
   "rayon",
 ] }
-rattler_digest = { version = "1.2.0", default-features = false }
-rattler_lock = { version = "0.26.7", default-features = false }
-rattler_menuinst = { version = "0.2.35", default-features = false }
-rattler_networking = { version = "0.25.22", default-features = false, features = [
+rattler_digest = { version = "1.2.2", default-features = false }
+rattler_lock = { version = "0.26.13", default-features = false }
+rattler_menuinst = { version = "0.2.46", default-features = false }
+rattler_networking = { version = "0.25.33", default-features = false, features = [
   "dirs",
   "google-cloud-auth",
 ] }
-rattler_package_streaming = { version = "0.23.14", default-features = false }
-rattler_repodata_gateway = { version = "0.25.0", default-features = false }
-rattler_shell = { version = "0.25.8", default-features = false }
-rattler_solve = { version = "4.1.0", default-features = false }
-rattler_upload = { version = "0.4.5", default-features = false, features = [
+rattler_package_streaming = { version = "0.23.26", default-features = false }
+rattler_repodata_gateway = { version = "0.25.12", default-features = false }
+rattler_shell = { version = "0.25.19", default-features = false }
+rattler_solve = { version = "4.2.3", default-features = false }
+rattler_upload = { version = "0.4.12", default-features = false, features = [
   "s3",
 ] }
-rattler_virtual_packages = { version = "2.3.0", default-features = false }
+rattler_virtual_packages = { version = "2.3.8", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Rattler build crates
-rattler-build = { git = "https://github.com/prefix-dev/rattler-build", branch = "main", default-features = false }
+rattler-build = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9", default-features = false, features = [
+  "s3",
+] }
+rattler_build_jinja = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
+rattler_build_recipe = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
+rattler_build_types = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
+rattler_build_variant_config = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
 
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.

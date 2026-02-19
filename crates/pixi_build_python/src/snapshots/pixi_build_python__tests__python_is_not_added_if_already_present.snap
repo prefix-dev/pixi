@@ -8,7 +8,6 @@ package:
   version: 0.1.0
 source: []
 build:
-  number: ~
   script: "[ ... script ... ]"
   noarch: python
 requirements:
@@ -21,12 +20,4 @@ requirements:
     - python
   run_constraints: []
 tests: []
-about:
-  homepage: ~
-  license: ~
-  license_file: ~
-  summary: ~
-  description: ~
-  documentation: ~
-  repository: ~
-extra: ~
+about: {}

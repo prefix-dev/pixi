@@ -1,6 +1,7 @@
 use miette::Diagnostic;
 use pixi_build_types::ProjectModel;
-use rattler_build::{NormalizedKey, recipe::variable::Variable};
+use rattler_build_jinja::Variable;
+use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Platform, Version};
 use recipe_stage0::recipe::{About, IntermediateRecipe, Package, Value};
 use serde::de::DeserializeOwned;
