@@ -36,9 +36,7 @@ use rattler_build::{
     tool_configuration::Configuration,
     types::{PackageIdentifier, PackagingSettings},
 };
-use rattler_build_recipe::{
-    stage1::Source as RecipeSource, variant_render::RenderConfig,
-};
+use rattler_build_recipe::{stage1::Source as RecipeSource, variant_render::RenderConfig};
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::NoArchType;
 use rattler_conda_types::{
