@@ -8,9 +8,112 @@ use pixi_consts::consts;
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, PrefixRecord, Version};
+use serde::Serialize;
 
 use super::{EnvChanges, EnvState, EnvironmentName, Mapping, Project, project::ParsedEnvironment};
 use crate::common::find_package_records;
+
+/// JSON-serializable representation of an exposed mapping.
+#[derive(Serialize)]
+struct ExposedMappingJson {
+    exposed_name: String,
+    executable: String,
+}
+
+/// JSON-serializable representation of a dependency with its installed version.
+#[derive(Serialize)]
+struct DependencyJson {
+    name: String,
+    version: Option<String>,
+}
+
+/// JSON-serializable representation of a global environment.
+#[derive(Serialize)]
+struct GlobalEnvironmentJson {
+    name: String,
+    dependencies: Vec<DependencyJson>,
+    exposed: Vec<ExposedMappingJson>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    platform: Option<String>,
+}
+
+/// Print global environments as JSON to stdout.
+pub async fn list_global_environments_json(
+    project: &Project,
+    regex: Option<String>,
+) -> miette::Result<()> {
+    let mut project_envs = project.environments().clone();
+    project_envs.sort_by(|a, _, b, _| a.to_string().cmp(&b.to_string()));
+
+    project_envs.retain(|_, parsed_environment| {
+        !parsed_environment.dependencies.specs.is_empty()
+    });
+
+    if let Some(regex) = regex {
+        let regex = regex::Regex::new(&regex).into_diagnostic()?;
+        project_envs.retain(|env_name, _| regex.is_match(env_name.as_str()));
+    }
+
+    let mut environments = Vec::new();
+    for (env_name, env) in project_envs.iter() {
+        let env_dir = project.env_root.path().join(env_name.as_str());
+        let conda_meta = env_dir.join(consts::CONDA_META_DIR);
+        let records = find_package_records(&conda_meta).await?;
+
+        let dependencies = env
+            .dependencies
+            .specs
+            .iter()
+            .map(|(name, _spec)| {
+                let version = records
+                    .iter()
+                    .find(|rec| {
+                        rec.repodata_record.package_record.name.as_normalized()
+                            == name.as_normalized()
+                    })
+                    .map(|rec| {
+                        rec.repodata_record
+                            .package_record
+                            .version
+                            .version()
+                            .to_string()
+                    });
+                DependencyJson {
+                    name: name.as_normalized().to_string(),
+                    version,
+                }
+            })
+            .collect();
+
+        let exposed = env
+            .exposed
+            .iter()
+            .map(|mapping| ExposedMappingJson {
+                exposed_name: mapping.exposed_name().to_string(),
+                executable: mapping.executable_relname().to_string(),
+            })
+            .collect();
+
+        environments.push(GlobalEnvironmentJson {
+            name: env_name.as_str().to_string(),
+            dependencies,
+            exposed,
+            platform: env.platform.map(|p| p.to_string()),
+        });
+    }
+
+    let json_string =
+        serde_json::to_string_pretty(&environments).expect("cannot serialize environments to JSON");
+    writeln!(std::io::stdout(), "{json_string}")
+        .inspect_err(|e| {
+            if e.kind() == std::io::ErrorKind::BrokenPipe {
+                std::process::exit(0);
+            }
+        })
+        .into_diagnostic()?;
+
+    Ok(())
+}
 
 /// Creating the ASCII art representation of a section.
 pub fn format_asciiart_section(label: &str, content: String, last: bool, more: bool) -> String {
