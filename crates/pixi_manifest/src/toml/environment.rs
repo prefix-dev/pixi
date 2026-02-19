@@ -11,7 +11,6 @@ use crate::{
     pypi::pypi_options::PypiOptions,
     toml::{TargetSelector, platform::TomlPlatform, target::TomlTarget, task::TomlTask},
     utils::{PixiSpanned, package_map::UniquePackageMap},
-    warning::Deprecation,
     workspace::{ChannelPriority, SolveStrategy},
 };
 
@@ -48,8 +47,6 @@ pub struct TomlEnvironment {
     pub solve_strategy: Option<SolveStrategy>,
     pub system_requirements: SystemRequirements,
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
     pub dev: Option<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
     pub activation: Option<Activation>,
@@ -67,8 +64,6 @@ impl TomlEnvironment {
     /// defined directly on the environment.
     pub fn has_inline_config(&self) -> bool {
         self.dependencies.is_some()
-            || self.host_dependencies.is_some()
-            || self.build_dependencies.is_some()
             || self.pypi_dependencies.is_some()
             || self.dev.is_some()
             || !self.tasks.is_empty()
@@ -106,8 +101,8 @@ impl TomlEnvironment {
             target: self.target,
             solve_strategy: self.solve_strategy,
             dependencies: self.dependencies,
-            host_dependencies: self.host_dependencies,
-            build_dependencies: self.build_dependencies,
+            host_dependencies: None,
+            build_dependencies: None,
             pypi_dependencies: self.pypi_dependencies,
             dev: self.dev,
             activation: self.activation,
@@ -148,35 +143,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironment {
             .unwrap_or_default();
         let dependencies = th.optional("dependencies");
 
-        // Handle deprecated host-dependencies
-        let host_dependencies: Option<Spanned<UniquePackageMap>> = th.optional("host-dependencies");
-        if let Some(host_dependencies) = &host_dependencies {
-            warnings.push(
-                Deprecation::renamed_field(
-                    "host-dependencies",
-                    "dependencies",
-                    host_dependencies.span,
-                )
-                .into(),
-            );
-        }
-        let host_dependencies = host_dependencies.map(From::from);
-
-        // Handle deprecated build-dependencies
-        let build_dependencies: Option<Spanned<UniquePackageMap>> =
-            th.optional("build-dependencies");
-        if let Some(build_dependencies) = &build_dependencies {
-            warnings.push(
-                Deprecation::renamed_field(
-                    "build-dependencies",
-                    "dependencies",
-                    build_dependencies.span,
-                )
-                .into(),
-            );
-        }
-        let build_dependencies = build_dependencies.map(From::from);
-
         let pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>> = th
             .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
             .map(TomlIndexMap::into_inner);
@@ -209,8 +175,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironment {
 
         // Validation: if it's a map format without inline config, need features or solve-group
         let has_inline = dependencies.is_some()
-            || host_dependencies.is_some()
-            || build_dependencies.is_some()
             || pypi_dependencies.is_some()
             || dev.is_some()
             || !tasks.is_empty()
@@ -241,8 +205,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironment {
             solve_strategy,
             system_requirements,
             dependencies,
-            host_dependencies,
-            build_dependencies,
             pypi_dependencies,
             dev,
             activation,
