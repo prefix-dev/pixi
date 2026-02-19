@@ -346,9 +346,9 @@ pub struct IntermediateRecipe {
     pub requirements: ConditionalRequirements,
     #[serde(default)]
     pub tests: Vec<Test>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub about: Option<About>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extra: Option<Extra>,
 }
 
@@ -533,6 +533,7 @@ impl Display for Python {
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct Build {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub number: Option<Value<u64>>,
     pub script: Script,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -701,12 +702,19 @@ impl Display for PackageContents {
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct About {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub homepage: Option<Value<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub license: Option<Value<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub license_file: Option<Vec<Value<String>>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<Value<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<Value<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub documentation: Option<Value<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repository: Option<Value<String>>,
 }
 

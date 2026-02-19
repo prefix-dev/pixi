@@ -11,6 +11,9 @@ exclude = [
   # Only pulled in when enabling certain features. We do not want to include
   # these crates when running workspace wide commands.
   "crates/pixi_allocator",
+  # Debug output directories that don't contain Cargo.toml
+  "crates/pixi-build-cmake",
+  "crates/pixi-build-python",
   # Standalone projects that should not be part of the workspace
   "docs",
   "examples",
@@ -85,7 +88,7 @@ libc = { version = "0.2.170", default-features = false }
 marked-yaml = "0.8.0"
 memchr = "2.7.4"
 miette = { version = "7.6.0" }
-minijinja = "2.7.0"
+minijinja = "2.15.1"
 nix = { version = "0.29.0", default-features = false }
 once_cell = "1.20.3"
 ordermap = "1.0.0"
@@ -247,7 +250,13 @@ rattler_virtual_packages = { version = "2.3.9", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Rattler build crates
-rattler-build = { version = "0.27.0", default-features = false }
+rattler-build = { version = "0.27.0", default-features = false, features = [
+  "s3",
+] }
+rattler_build_jinja = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
+rattler_build_recipe = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
+rattler_build_types = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
+rattler_build_variant_config = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
 
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.

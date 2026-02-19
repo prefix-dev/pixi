@@ -3,7 +3,9 @@
 use std::collections::BTreeMap;
 
 use miette::IntoDiagnostic;
-use rattler_build::{NormalizedKey, recipe::variable::Variable, variant_config::VariantConfig};
+use rattler_build_jinja::Variable;
+use rattler_build_types::NormalizedKey;
+use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::Platform;
 
 use crate::ProjectModel;
@@ -17,7 +19,6 @@ pub fn compute_variants<P: ProjectModel>(
     // Create a variant config from the variant configuration in the parameters.
     let variant_config = VariantConfig {
         variants: input_variant_configuration.unwrap_or_default(),
-        pin_run_as_build: None,
         zip_keys: None,
     };
 
@@ -26,6 +27,6 @@ pub fn compute_variants<P: ProjectModel>(
 
     // Determine the combinations of the used variants.
     variant_config
-        .combinations(&used_variants, None)
+        .combinations(&used_variants)
         .into_diagnostic()
 }

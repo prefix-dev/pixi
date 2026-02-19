@@ -21,18 +21,17 @@ use pixi_build_types::{
     },
 };
 use rattler_build::{
-    NormalizedKey,
+    DiscoveredOutput,
     build::{WorkingDirectoryBehavior, run_build},
     console_utils::LoggingOutputHandler,
-    hash::HashInfo,
     metadata::{BuildConfiguration, Debug, Output, PlatformWithVirtualPackages},
-    recipe::{ParsingError, Recipe, parser::find_outputs_from_src},
-    selectors::SelectorConfig,
-    source_code::Source,
     tool_configuration::Configuration,
     types::{Directories, PackageIdentifier, PackagingSettings},
-    variant_config::{DiscoveredOutput, ParseErrors, VariantConfig},
 };
+use rattler_build_recipe::variant_render::RenderConfig;
+use rattler_build_types::NormalizedKey;
+use rattler_build_variant_config::VariantConfig;
+use rattler_conda_types::NoArchType;
 use rattler_conda_types::{
     Platform, compression_level::CompressionLevel, package::CondaArchiveType,
 };
@@ -47,6 +46,7 @@ use crate::{
     },
     generated_recipe::{BackendConfig, GenerateRecipe, PythonParams},
     protocol::{Protocol, ProtocolInstantiator},
+    source::Source,
     specs_conversion::{
         convert_variant_from_pixi_build_types, convert_variant_to_pixi_build_types,
         from_build_v1_args_to_finalized_dependencies,
@@ -236,17 +236,6 @@ where
             .map(|(_, target_config)| self.config.merge_with_target_config(target_config))
             .unwrap_or_else(|| Ok(self.config.clone()))?;
 
-        let selector_config_for_variants = SelectorConfig {
-            target_platform: params.host_platform,
-            host_platform: params.host_platform,
-            build_platform,
-            hash: None,
-            variant: Default::default(),
-            experimental: false,
-            allow_undefined: false,
-            recipe_path: Some(self.source_dir.join(&self.manifest_rel_path)),
-        };
-
         let mut variants = self
             .generate_recipe
             .default_variants(params.host_platform)?;
@@ -257,7 +246,7 @@ where
         // variants (highest priority).
         let variant_files = params.variant_files.unwrap_or_default();
         let mut variant_config =
-            VariantConfig::from_files(&variant_files, &selector_config_for_variants)?;
+            VariantConfig::from_files(&variant_files, params.host_platform).into_diagnostic()?;
         variants.append(&mut variant_config.variants);
         variant_config.variants = variants;
 
@@ -298,19 +287,59 @@ where
             path: recipe_path.clone(),
         };
 
-        // Determine the different outputs that are supported by the recipe by expanding
-        // all the different variant combinations.
-        //
-        // TODO(baszalmstra): The selector config we pass in here doesnt have all values
-        // filled in. This is on purpose because at this point we dont yet know all
-        // values like the variant. We should introduce a new type of selector config
-        // for this particular case.
-        let outputs = find_outputs_from_src(named_source.clone())?;
-        let discovered_outputs = variant_config.find_variants(
-            &outputs,
-            named_source.clone(),
-            &selector_config_for_variants,
+        // Create source for error reporting
+        let source = rattler_build_recipe::source_code::Source::from_string(
+            named_source.name.clone(),
+            named_source.code.to_string(),
+        );
+
+        // Parse the recipe into stage0
+        let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
+
+        // Build render config
+        let render_config = RenderConfig::new()
+            .with_target_platform(params.host_platform)
+            .with_build_platform(build_platform)
+            .with_host_platform(params.host_platform)
+            .with_recipe_path(&recipe_path);
+
+        // Render recipe with variant config
+        let rendered_variants = rattler_build_recipe::render_recipe(
+            &source,
+            &stage0_recipe,
+            &variant_config,
+            render_config,
         )?;
+
+        // Convert to DiscoveredOutputs
+        let discovered_outputs: IndexSet<DiscoveredOutput> = rendered_variants
+            .into_iter()
+            .map(|rendered| {
+                let recipe = rendered.recipe;
+                let variant = rendered.variant;
+                let effective_target_platform = if recipe.build().noarch.is_none() {
+                    params.host_platform
+                } else {
+                    Platform::NoArch
+                };
+                let build_string = recipe
+                    .build()
+                    .string
+                    .as_resolved()
+                    .expect("build string should be resolved")
+                    .to_string();
+                DiscoveredOutput {
+                    name: recipe.package().name().as_normalized().to_string(),
+                    version: recipe.package().version().to_string(),
+                    build_string,
+                    noarch_type: recipe.build().noarch.unwrap_or(NoArchType::none()),
+                    target_platform: effective_target_platform,
+                    used_vars: variant,
+                    recipe,
+                    hash: rendered.hash_info.expect("hash should be set"),
+                }
+            })
+            .collect();
 
         // Construct a mapping that for packages that we want from source.
         //
@@ -330,34 +359,15 @@ where
 
         for discovered_output in discovered_outputs {
             let variant = discovered_output.used_vars;
-            let hash = HashInfo::from_variant(&variant, &discovered_output.noarch_type);
-
-            // Construct the selector config for this particular output. We base this on the
-            // selector config that was used to determine the variants.
-            let selector_config = SelectorConfig {
-                variant: variant.clone(),
-                hash: Some(hash.clone()),
-                target_platform: discovered_output.target_platform,
-                ..selector_config_for_variants.clone()
-            };
-
-            // Convert this discovered output into a recipe.
-            let recipe = Recipe::from_node(&discovered_output.node, selector_config.clone())
-                .map_err(|err| {
-                    let errs: ParseErrors<_> = err
-                        .into_iter()
-                        .map(|err| ParsingError::from_partial(named_source.clone(), err))
-                        .collect::<Vec<_>>()
-                        .into();
-                    errs
-                })?;
+            let hash = discovered_output.hash;
+            let recipe = discovered_output.recipe;
 
             // Skip this output if the recipe is marked as skipped
-            if recipe.build().skip() {
+            if recipe.build().skip {
                 continue;
             }
 
-            let build_number = recipe.build().number;
+            let build_number = recipe.build().number.unwrap_or(0);
 
             let directories = output_directory(
                 if num_of_outputs == 1 {
@@ -425,16 +435,18 @@ where
                 },
             );
 
+            let noarch = recipe.build().noarch.unwrap_or(NoArchType::none());
+
             outputs.push(CondaOutput {
                 metadata: CondaOutputMetadata {
                     name: recipe.package().name().clone(),
-                    version: recipe.package.version().clone(),
+                    version: recipe.package().version().clone(),
                     build: discovered_output.build_string.clone(),
                     build_number,
                     subdir: discovered_output.target_platform,
                     license: recipe.about.license.map(|l| l.to_string()),
                     license_family: recipe.about.license_family,
-                    noarch: recipe.build.noarch,
+                    noarch,
                     purls: None,
                     python_site_packages_path: None,
                     variant: variant
@@ -601,35 +613,67 @@ where
         // immediately use the intermediate recipe for some of this rattler-build
         // functions.
         let recipe_path = self.source_dir.join(&self.manifest_rel_path);
-        let named_source = Source {
-            name: self.manifest_rel_path.display().to_string(),
-            code: Arc::from(recipe.recipe.to_yaml_pretty().into_diagnostic()?.as_str()),
-            path: recipe_path.clone(),
-        };
+        let recipe_code: Arc<str> =
+            Arc::from(recipe.recipe.to_yaml_pretty().into_diagnostic()?.as_str());
 
-        // Determine the different outputs that are supported by the recipe.
-        let selector_config_for_variants = SelectorConfig {
-            target_platform: host_platform,
-            host_platform,
-            build_platform,
-            hash: None,
-            variant: Default::default(),
-            experimental: false,
-            allow_undefined: false,
-            recipe_path: Some(self.source_dir.join(&self.manifest_rel_path)),
-        };
-        let outputs = find_outputs_from_src(named_source.clone())?;
+        // Parse the recipe into stage0
+        // Create source for error reporting
+        let source = rattler_build_recipe::source_code::Source::from_string(
+            self.manifest_rel_path.display().to_string(),
+            recipe_code.to_string(),
+        );
+
+        let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
 
         let variant_config = VariantConfig {
             variants,
-            pin_run_as_build: None,
             zip_keys: None,
         };
-        let discovered_outputs = variant_config.find_variants(
-            &outputs,
-            named_source.clone(),
-            &selector_config_for_variants,
+
+        // Build render config
+        let render_config = RenderConfig::new()
+            .with_target_platform(host_platform)
+            .with_build_platform(build_platform)
+            .with_host_platform(host_platform)
+            .with_recipe_path(&recipe_path);
+
+        // Render recipe with variant config
+        let rendered_variants = rattler_build_recipe::render_recipe(
+            &source,
+            &stage0_recipe,
+            &variant_config,
+            render_config,
         )?;
+
+        // Convert to DiscoveredOutputs
+        let discovered_outputs: IndexSet<DiscoveredOutput> = rendered_variants
+            .into_iter()
+            .map(|rendered| {
+                let r = rendered.recipe;
+                let variant = rendered.variant;
+                let effective_target_platform = if r.build().noarch.is_none() {
+                    host_platform
+                } else {
+                    Platform::NoArch
+                };
+                let build_string = r
+                    .build()
+                    .string
+                    .as_resolved()
+                    .expect("build string should be resolved")
+                    .to_string();
+                DiscoveredOutput {
+                    name: r.package().name().as_normalized().to_string(),
+                    version: r.package().version().to_string(),
+                    build_string,
+                    noarch_type: r.build().noarch.unwrap_or(NoArchType::none()),
+                    target_platform: effective_target_platform,
+                    used_vars: variant,
+                    recipe: r,
+                    hash: rendered.hash_info.expect("hash should be set"),
+                }
+            })
+            .collect();
         let discovered_output = find_matching_output(&params.output, discovered_outputs)?;
 
         // Set up the proper directories for the build.
@@ -774,7 +818,7 @@ pub fn find_matching_output(
 ) -> miette::Result<DiscoveredOutput> {
     // Filter all outputs that are skipped or dont match the name
     discovered_outputs.retain(|output| {
-        !output.recipe.build.skip() && output.name == expected_output.name.as_normalized()
+        !output.recipe.build().skip && output.name == expected_output.name.as_normalized()
     });
 
     if discovered_outputs.is_empty() {
@@ -822,7 +866,7 @@ pub fn find_matching_output(
                 && expected_output
                     .version
                     .as_ref()
-                    .is_none_or(|version| version == &output.recipe.package.version)
+                    .is_none_or(|version| version.to_string() == output.version)
                 && expected_output.subdir == output.target_platform
         })
         .ok_or_else(|| {

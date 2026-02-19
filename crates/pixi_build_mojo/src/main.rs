@@ -10,7 +10,8 @@ use pixi_build_backend::{
     intermediate_backend::IntermediateBackendInstantiator,
     traits::ProjectModel,
 };
-use rattler_build::{NormalizedKey, recipe::variable::Variable};
+use rattler_build_jinja::Variable;
+use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Platform};
 use recipe_stage0::recipe::Script;
 use std::collections::HashSet;

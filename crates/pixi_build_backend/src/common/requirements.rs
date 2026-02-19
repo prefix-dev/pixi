@@ -1,9 +1,8 @@
 use std::collections::{BTreeMap, HashMap};
 
-use rattler_build::{
-    NormalizedKey,
-    recipe::{parser::Requirements, variable::Variable},
-};
+use rattler_build_jinja::Variable;
+use rattler_build_recipe::stage1::Requirements;
+use rattler_build_types::NormalizedKey;
 use serde::Serialize;
 
 use crate::{

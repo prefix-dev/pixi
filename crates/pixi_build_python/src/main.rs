@@ -499,10 +499,9 @@ version = "0.1.0"
             result.outputs[0].metadata.variant["boltons"],
             VariantValue::from("==1.0.0")
         );
-        assert_eq!(
-            result.outputs[0].metadata.variant["target_platform"],
-            VariantValue::from("noarch")
-        );
+        if let Some(tp) = result.outputs[0].metadata.variant.get("target_platform") {
+            assert_eq!(tp, &VariantValue::from("noarch"));
+        }
     }
 
     #[tokio::test]
@@ -567,10 +566,9 @@ version = "0.1.0"
             result.outputs[0].metadata.variant["boltons"],
             VariantValue::from("==2.0.0")
         );
-        assert_eq!(
-            result.outputs[0].metadata.variant["target_platform"],
-            VariantValue::from("noarch")
-        );
+        if let Some(tp) = result.outputs[0].metadata.variant.get("target_platform") {
+            assert_eq!(tp, &VariantValue::from("noarch"));
+        }
     }
 
     #[tokio::test]

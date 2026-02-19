@@ -2,19 +2,20 @@ use std::{collections::BTreeMap, path::PathBuf, str::FromStr, sync::Arc};
 
 use miette::IntoDiagnostic;
 use rattler_build::{
-    NormalizedKey,
+    DiscoveredOutput,
     metadata::{BuildConfiguration, Debug, Output, PlatformWithVirtualPackages},
-    recipe::parser::find_outputs_from_src,
     render::resolved_dependencies::RunExportsDownload,
-    selectors::SelectorConfig,
-    source_code::Source,
     system_tools::SystemTools,
     tool_configuration,
     types::{Directories, PackageIdentifier, PackagingSettings},
-    variant_config::VariantConfig,
 };
+use rattler_build_recipe::variant_render::RenderConfig;
+use rattler_build_types::NormalizedKey;
+use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::compression_level::CompressionLevel;
-use rattler_conda_types::{GenericVirtualPackage, NamedChannelOrUrl, package::CondaArchiveType};
+use rattler_conda_types::{
+    GenericVirtualPackage, NamedChannelOrUrl, NoArchType, Platform, package::CondaArchiveType,
+};
 use url::Url;
 
 use crate::{generated_recipe::GeneratedRecipe, utils::TemporaryRenderedRecipe};
@@ -29,7 +30,9 @@ use crate::{generated_recipe::GeneratedRecipe, utils::TemporaryRenderedRecipe};
 pub async fn get_build_output(
     generated_recipe: &GeneratedRecipe,
     tool_config: Arc<tool_configuration::Configuration>,
-    selector_config: SelectorConfig,
+    target_platform: Platform,
+    host_platform: Platform,
+    build_platform: Platform,
     host_virtual_packages: Option<Vec<GenericVirtualPackage>>,
     build_virtual_packages: Option<Vec<GenericVirtualPackage>>,
     channel_base_urls: Option<Vec<Url>>,
@@ -37,26 +40,63 @@ pub async fn get_build_output(
     output_dir: PathBuf,
 ) -> miette::Result<Vec<Output>> {
     let recipe_path = recipe_folder.join("recipe.yaml");
+    let recipe_code = generated_recipe.recipe.to_yaml_pretty().into_diagnostic()?;
 
-    // First find all outputs from the recipe
-    let named_source = Source {
-        name: "recipe".to_string(),
-        code: Arc::from(
-            generated_recipe
-                .recipe
-                .to_yaml_pretty()
-                .into_diagnostic()?
-                .as_str(),
-        ),
-        path: recipe_path.clone(),
-    };
+    // Create source for error reporting
+    let source = rattler_build_recipe::source_code::Source::from_string(
+        "recipe".to_string(),
+        recipe_code.clone(),
+    );
 
-    let outputs = find_outputs_from_src(named_source.clone()).into_diagnostic()?;
+    // Parse the recipe into stage0
+    let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
 
     let variant_config = VariantConfig::default();
 
-    let outputs_and_variants =
-        variant_config.find_variants(&outputs, named_source, &selector_config)?;
+    // Build render config
+    let render_config = RenderConfig::new()
+        .with_target_platform(target_platform)
+        .with_build_platform(build_platform)
+        .with_host_platform(host_platform)
+        .with_recipe_path(&recipe_path);
+
+    // Render recipe with variant config
+    let rendered_variants = rattler_build_recipe::render_recipe(
+        &source,
+        &stage0_recipe,
+        &variant_config,
+        render_config,
+    )?;
+
+    // Convert to DiscoveredOutputs
+    let outputs_and_variants: Vec<DiscoveredOutput> = rendered_variants
+        .into_iter()
+        .map(|rendered| {
+            let recipe = rendered.recipe;
+            let variant = rendered.variant;
+            let effective_target_platform = if recipe.build().noarch.is_none() {
+                target_platform
+            } else {
+                Platform::NoArch
+            };
+            let build_string = recipe
+                .build()
+                .string
+                .as_resolved()
+                .expect("build string should be resolved")
+                .to_string();
+            DiscoveredOutput {
+                name: recipe.package().name().as_normalized().to_string(),
+                version: recipe.package().version().to_string(),
+                build_string,
+                noarch_type: recipe.build().noarch.unwrap_or(NoArchType::none()),
+                target_platform: effective_target_platform,
+                used_vars: variant,
+                recipe,
+                hash: rendered.hash_info.expect("hash should be set"),
+            }
+        })
+        .collect();
 
     let mut subpackages = BTreeMap::new();
     let mut outputs = Vec::new();
@@ -69,7 +109,7 @@ pub async fn get_build_output(
     for discovered_output in outputs_and_variants {
         let recipe = &discovered_output.recipe;
 
-        if recipe.build().skip() {
+        if recipe.build().skip {
             continue;
         }
 
@@ -82,7 +122,7 @@ pub async fn get_build_output(
             },
         );
 
-        let build_name = if recipe.cache.is_some() {
+        let build_name = if recipe.inherits_from.is_some() {
             global_build_name.clone()
         } else {
             recipe.package().name().as_normalized().to_string()
@@ -124,23 +164,24 @@ pub async fn get_build_output(
             build_configuration: BuildConfiguration {
                 target_platform: discovered_output.target_platform,
                 host_platform: PlatformWithVirtualPackages {
-                    platform: selector_config.host_platform,
+                    platform: host_platform,
                     virtual_packages: host_virtual_packages.clone().unwrap_or_default(),
                 },
                 build_platform: PlatformWithVirtualPackages {
-                    platform: selector_config.build_platform,
+                    platform: build_platform,
                     virtual_packages: build_virtual_packages.clone().unwrap_or_default(),
                 },
                 hash: discovered_output.hash.clone(),
                 variant: discovered_output.used_vars.clone(),
-                directories: Directories::setup(
+                directories: Directories::builder(
                     &build_name,
                     &recipe_path,
                     &output_dir,
-                    true,
                     &timestamp,
-                    recipe.build().merge_build_and_host_envs,
                 )
+                .no_build_id(true)
+                .merge_build_and_host(recipe.build().merge_build_and_host_envs)
+                .build()
                 .into_diagnostic()?,
                 channels,
                 channel_priority: tool_config.channel_priority,

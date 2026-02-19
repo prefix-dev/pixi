@@ -8,7 +8,6 @@ package:
   version: 0.1.0
 source: []
 build:
-  number: ~
   script: "[ ... script ... ]"
 requirements:
   build:
@@ -19,12 +18,4 @@ requirements:
   run: []
   run_constraints: []
 tests: []
-about:
-  homepage: ~
-  license: ~
-  license_file: ~
-  summary: ~
-  description: ~
-  documentation: ~
-  repository: ~
-extra: ~
+about: {}
