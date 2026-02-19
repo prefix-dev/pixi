@@ -4,6 +4,7 @@
 //! configuration directly, without needing explicit feature definitions.
 
 use pixi_manifest::{FeatureName, HasFeaturesIter, HasWorkspaceManifest, TaskName};
+use pixi_test_utils::{MockRepoData, Package};
 use rattler_conda_types::Platform;
 
 use crate::common::{LockFileExt, PixiControl};
@@ -14,17 +15,24 @@ use crate::setup_tracing;
 async fn test_inline_environment_dependencies() {
     setup_tracing();
 
-    let pixi = PixiControl::from_manifest(
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("foo", "1").finish());
+
+    let channel = package_database.into_channel().await.unwrap();
+    let platform = Platform::current();
+
+    let pixi = PixiControl::from_manifest(&format!(
         r#"
         [workspace]
         name = "test-inline-env"
-        channels = ["https://prefix.dev/conda-forge"]
-        platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+        channels = ["{channel_url}"]
+        platforms = ["{platform}"]
 
         [environments.dev.dependencies]
-        git = "*"
+        foo = "*"
         "#,
-    )
+        channel_url = channel.url(),
+    ))
     .unwrap();
 
     // Verify the workspace was created correctly
@@ -54,30 +62,38 @@ async fn test_inline_environment_dependencies() {
 async fn test_inline_environment_with_explicit_features() {
     setup_tracing();
 
-    let pixi = PixiControl::from_manifest(
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("foo", "1").finish());
+    package_database.add_package(Package::build("bar", "1").finish());
+
+    let channel = package_database.into_channel().await.unwrap();
+    let platform = Platform::current();
+
+    let pixi = PixiControl::from_manifest(&format!(
         r#"
         [workspace]
         name = "test-inline-with-features"
-        channels = ["https://prefix.dev/conda-forge"]
-        platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+        channels = ["{channel_url}"]
+        platforms = ["{platform}"]
 
-        [feature.python.dependencies]
-        python = "3.11.*"
+        [feature.extra.dependencies]
+        bar = "*"
 
         [environments.dev]
-        features = ["python"]
+        features = ["extra"]
 
         [environments.dev.dependencies]
-        git = "*"
+        foo = "*"
         "#,
-    )
+        channel_url = channel.url(),
+    ))
     .unwrap();
 
     let workspace = pixi.workspace().unwrap();
     let manifest = (&workspace).workspace_manifest();
 
     // Both features should exist (inline uses dot-prefix)
-    assert!(manifest.features.contains_key(&FeatureName::from("python")));
+    assert!(manifest.features.contains_key(&FeatureName::from("extra")));
     assert!(manifest.features.contains_key(&FeatureName::from(".dev")));
 
     // The environment should have both features
@@ -89,8 +105,8 @@ async fn test_inline_environment_with_explicit_features() {
         "Environment should have synthetic '.dev' feature"
     );
     assert!(
-        feature_names.contains(&FeatureName::from("python")),
-        "Environment should have explicit 'python' feature"
+        feature_names.contains(&FeatureName::from("extra")),
+        "Environment should have explicit 'extra' feature"
     );
 }
 
@@ -99,20 +115,27 @@ async fn test_inline_environment_with_explicit_features() {
 async fn test_inline_environment_tasks() {
     setup_tracing();
 
-    let pixi = PixiControl::from_manifest(
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("foo", "1").finish());
+
+    let channel = package_database.into_channel().await.unwrap();
+    let platform = Platform::current();
+
+    let pixi = PixiControl::from_manifest(&format!(
         r#"
         [workspace]
         name = "test-inline-tasks"
-        channels = ["https://prefix.dev/conda-forge"]
-        platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+        channels = ["{channel_url}"]
+        platforms = ["{platform}"]
 
         [environments.dev.dependencies]
-        git = "*"
+        foo = "*"
 
         [environments.dev.tasks]
         hello = "echo hello"
         "#,
-    )
+        channel_url = channel.url(),
+    ))
     .unwrap();
 
     let workspace = pixi.workspace().unwrap();
@@ -139,17 +162,25 @@ async fn test_inline_environment_tasks() {
 async fn test_inline_environment_lock_file() {
     setup_tracing();
 
-    let pixi = PixiControl::from_manifest(
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("foo", "1").finish());
+
+    let channel = package_database.into_channel().await.unwrap();
+    let platform = Platform::current();
+
+    let pixi = PixiControl::from_manifest(&format!(
         r#"
         [workspace]
         name = "test-inline-lock"
-        channels = ["https://prefix.dev/conda-forge"]
-        platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+        channels = ["{channel_url}"]
+        platforms = ["{platform}"]
+        conda-pypi-map = {{}}
 
         [environments.dev.dependencies]
-        zlib = "*"
+        foo = "*"
         "#,
-    )
+        channel_url = channel.url(),
+    ))
     .unwrap();
 
     // Update the lock file
@@ -157,7 +188,7 @@ async fn test_inline_environment_lock_file() {
 
     // Verify the environment exists in the lock file and has the dependency
     assert!(
-        lock.contains_conda_package("dev", Platform::current(), "zlib"),
-        "Lock file should contain 'zlib' for 'dev' environment"
+        lock.contains_conda_package("dev", platform, "foo"),
+        "Lock file should contain 'foo' for 'dev' environment"
     );
 }
