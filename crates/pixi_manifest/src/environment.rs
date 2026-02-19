@@ -10,7 +10,7 @@ use regex::Regex;
 use serde::{self, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
-use crate::{consts::DEFAULT_ENVIRONMENT_NAME, solve_group::SolveGroupIdx};
+use crate::{FeatureName, consts::DEFAULT_ENVIRONMENT_NAME, solve_group::SolveGroupIdx};
 
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
 #[error(
@@ -181,7 +181,9 @@ impl EnvironmentFeature {
     /// Inline features use a dot-prefix to avoid collisions with named features.
     pub fn to_feature_name(&self, environment_name: &EnvironmentName) -> String {
         match self {
-            EnvironmentFeature::Inline => format!(".{}", environment_name.as_str()),
+            EnvironmentFeature::Inline => {
+                FeatureName::inline(environment_name.as_str()).to_string()
+            }
             EnvironmentFeature::Named(name) => name.clone(),
         }
     }

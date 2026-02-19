@@ -41,7 +41,7 @@ async fn test_inline_environment_dependencies() {
 
     // Check that a synthetic feature was created with dot-prefixed key
     assert!(
-        manifest.features.contains_key(&FeatureName::from(".dev")),
+        manifest.features.contains_key(&FeatureName::inline("dev")),
         "Synthetic feature '.dev' should be created"
     );
 
@@ -52,7 +52,7 @@ async fn test_inline_environment_dependencies() {
     // Verify the environment has the synthetic feature in its feature list
     let env = env.unwrap();
     assert!(
-        env.features().any(|f| f.name == FeatureName::from(".dev")),
+        env.features().any(|f| f.name == FeatureName::inline("dev")),
         "Environment should reference the synthetic '.dev' feature"
     );
 }
@@ -94,14 +94,14 @@ async fn test_inline_environment_with_explicit_features() {
 
     // Both features should exist (inline uses dot-prefix)
     assert!(manifest.features.contains_key(&FeatureName::from("extra")));
-    assert!(manifest.features.contains_key(&FeatureName::from(".dev")));
+    assert!(manifest.features.contains_key(&FeatureName::inline("dev")));
 
     // The environment should have both features
     let env = workspace.environment("dev").unwrap();
     let feature_names: Vec<_> = env.features().map(|f| f.name.clone()).collect();
 
     assert!(
-        feature_names.contains(&FeatureName::from(".dev")),
+        feature_names.contains(&FeatureName::inline("dev")),
         "Environment should have synthetic '.dev' feature"
     );
     assert!(
@@ -144,7 +144,7 @@ async fn test_inline_environment_tasks() {
     // Check that the synthetic feature has the task
     let dev_feature = manifest
         .features
-        .get(&FeatureName::from(".dev"))
+        .get(&FeatureName::inline("dev"))
         .expect("dev feature should exist");
 
     assert!(

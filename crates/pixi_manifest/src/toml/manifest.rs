@@ -293,19 +293,19 @@ impl TomlManifest {
                     let no_default_feature = env.no_default_feature;
 
                     // Handle inline environment config - create synthetic feature
-                    let synthetic_feature_name = if env.has_inline_config() {
-                        let synthetic_name = FeatureName::from(format!(".{}", name.as_str()));
-
+                    let mut final_features: Vec<Spanned<EnvironmentFeature>> = Vec::new();
+                    if env.has_inline_config() {
                         // Extract warnings before conversion
                         warnings.extend(env.take_warnings());
 
                         // Convert inline config to Feature using existing logic
                         if let Some(toml_feature) = env.into_toml_feature() {
+                            let inline_name = FeatureName::inline(name.as_str());
                             let WithWarnings {
                                 value: synthetic_feature,
                                 warnings: feature_warnings,
                             } = toml_feature.into_feature(
-                                synthetic_name.clone(),
+                                inline_name.clone(),
                                 preview,
                                 &workspace.value,
                             )?;
@@ -313,24 +313,15 @@ impl TomlManifest {
                             warnings.extend(feature_warnings);
 
                             // Add synthetic feature to features map
-                            features.insert(synthetic_name.clone(), synthetic_feature);
-                            features_used_by_environments.insert(synthetic_name.to_string());
+                            features_used_by_environments
+                                .insert(inline_name.to_string());
+                            features.insert(inline_name, synthetic_feature);
 
-                            Some(synthetic_name)
-                        } else {
-                            None
+                            final_features.push(Spanned {
+                                value: EnvironmentFeature::Inline,
+                                span: toml_span::Span::default(),
+                            });
                         }
-                    } else {
-                        None
-                    };
-
-                    // Prepend synthetic feature to the feature list
-                    let mut final_features: Vec<Spanned<EnvironmentFeature>> = Vec::new();
-                    if synthetic_feature_name.is_some() {
-                        final_features.push(Spanned {
-                            value: EnvironmentFeature::Inline,
-                            span: toml_span::Span::default(),
-                        });
                     }
                     final_features.extend(explicit_features.into_iter().map(|s| Spanned {
                         value: EnvironmentFeature::Named(s.value),
@@ -359,7 +350,9 @@ impl TomlManifest {
 
             for spanned in &included_features {
                 let name_str = match &spanned.value {
-                    EnvironmentFeature::Inline => format!(".{}", name.as_str()),
+                    EnvironmentFeature::Inline => {
+                        FeatureName::inline(name.as_str()).to_string()
+                    }
                     EnvironmentFeature::Named(n) => n.clone(),
                 };
                 features_used_by_environments.insert(name_str);
@@ -375,7 +368,9 @@ impl TomlManifest {
             } in &included_features
             {
                 let feature_name_str = match env_feature {
-                    EnvironmentFeature::Inline => format!(".{}", name.as_str()),
+                    EnvironmentFeature::Inline => {
+                        FeatureName::inline(name.as_str()).to_string()
+                    }
                     EnvironmentFeature::Named(n) => {
                         if n.starts_with('.') {
                             return Err(TomlError::from(
@@ -1295,7 +1290,7 @@ mod test {
         .unwrap();
 
         // Verify synthetic feature was created with dot-prefixed key
-        assert!(workspace.features.contains_key(&FeatureName::from(".dev")));
+        assert!(workspace.features.contains_key(&FeatureName::inline("dev")));
 
         // Verify environment references the synthetic feature
         let dev_env_idx = workspace
@@ -1340,7 +1335,7 @@ mod test {
 
         // Both the named feature and inline feature should exist
         assert!(workspace.features.contains_key(&FeatureName::from("dev")));
-        assert!(workspace.features.contains_key(&FeatureName::from(".dev")));
+        assert!(workspace.features.contains_key(&FeatureName::inline("dev")));
 
         // Environment should have both inline and named features
         let dev_env_idx = workspace
@@ -1392,7 +1387,7 @@ mod test {
                 .features
                 .contains_key(&FeatureName::from("python"))
         );
-        assert!(workspace.features.contains_key(&FeatureName::from(".dev")));
+        assert!(workspace.features.contains_key(&FeatureName::inline("dev")));
 
         // Verify environment has both features (synthetic first, then explicit)
         let dev_env_idx = workspace
@@ -1436,7 +1431,7 @@ mod test {
         .unwrap();
 
         // Verify synthetic feature was created with the task
-        let dev_feature = workspace.features.get(&FeatureName::from(".dev")).unwrap();
+        let dev_feature = workspace.features.get(&FeatureName::inline("dev")).unwrap();
         assert!(
             dev_feature
                 .targets
@@ -1501,7 +1496,7 @@ mod test {
         .unwrap();
 
         // Verify synthetic feature was created with pypi dependencies
-        let dev_feature = workspace.features.get(&FeatureName::from(".dev")).unwrap();
+        let dev_feature = workspace.features.get(&FeatureName::inline("dev")).unwrap();
         let pypi_deps = dev_feature.targets.default().pypi_dependencies.as_ref();
         assert!(pypi_deps.is_some());
     }
