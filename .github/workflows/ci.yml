@@ -94,6 +94,9 @@ jobs:
           files_yaml: |
             code:
               - "pixi-build-backends/backends/pixi-build-ros/**"
+              - "pixi-build-backends/py-pixi-build-backend/**"
+              - "crates/recipe_stage0/**"
+              - "crates/pixi_build_backend/**"
 
   lint:
     name: "lint"
