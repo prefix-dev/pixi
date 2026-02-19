@@ -2,8 +2,9 @@ use indexmap::IndexMap;
 use serde::Deserialize;
 use toml_span::{DeserError, Value};
 use pixi_toml::TomlEnum;
+use regex::Regex;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Deserialize, strum::Display, strum::EnumString)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Deserialize, strum::Display, strum::EnumString, strum::VariantNames)]
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
 pub enum WarningAction {
