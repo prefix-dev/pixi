@@ -237,16 +237,6 @@ impl TomlManifest {
                             .with_help("All tables at the root of the document are implicitly added to the 'default' feature, use those instead."),
                     ));
                 }
-                if name.value.as_str().starts_with('.') {
-                    return Err(TomlError::from(
-                        GenericError::new(format!(
-                            "The feature name '{}' is not allowed. Feature names starting with '.' are reserved for internal use.",
-                            name.value
-                        ))
-                        .with_opt_span(name.span)
-                        .with_help("Choose a feature name that does not start with '.'"),
-                    ));
-                }
                 let WithWarnings {
                     value: feature,
                     warnings: mut feature_warnings,
@@ -1485,21 +1475,6 @@ mod test {
 
         [environments]
         dev = { features = [".dev"] }
-        "#,
-        ));
-    }
-
-    #[test]
-    fn test_reject_dot_prefixed_feature_definition() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        name = "foo"
-        channels = []
-        platforms = []
-
-        [feature.".dev".dependencies]
-        x = "*"
         "#,
         ));
     }
