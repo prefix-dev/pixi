@@ -255,7 +255,7 @@ impl LockFileDiff {
                 LockedPackage::Conda(p) => {
                     format!("{} {}", &p.record().version.as_str(), &p.record().build)
                 }
-                LockedPackage::Pypi(p) => p.version.to_string(),
+                LockedPackage::Pypi(p) => p.version_string(),
             }
         }
 
@@ -323,19 +323,15 @@ impl LockFileDiff {
                         )
                     }
                     (LockedPackage::Pypi(previous), LockedPackage::Pypi(current)) => {
+                        let prev_ver = previous.version_string();
+                        let curr_ver = current.version_string();
                         format!(
                             "{} {} {}\t{}\t->\t{}",
                             console::style("~").yellow(),
                             consts::PypiEmoji,
                             name,
-                            choose_style(
-                                &previous.version.to_string(),
-                                &current.version.to_string()
-                            ),
-                            choose_style(
-                                &current.version.to_string(),
-                                &previous.version.to_string()
-                            ),
+                            choose_style(&prev_ver, &curr_ver),
+                            choose_style(&curr_ver, &prev_ver),
                         )
                     }
                     _ => unreachable!(),

@@ -637,7 +637,7 @@ impl WorkspaceMut {
                     .iter()
                     .filter_map(|data| {
                         if &data.name == name.as_normalized() {
-                            Version::from_str(&data.version.to_string()).ok()
+                            data.version.as_ref().and_then(|v| Version::from_str(&v.to_string()).ok())
                         } else {
                             None
                         }

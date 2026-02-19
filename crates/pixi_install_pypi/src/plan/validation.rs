@@ -47,13 +47,13 @@ pub(crate) fn need_reinstall(
                 ));
             }
 
-            let specifier = to_uv_version(&required_pkg.version)?;
+            let specifier = to_uv_version(required_pkg.version.as_ref().expect("registry packages always have a version"))?;
 
             if reg.version != specifier {
                 return Ok(ValidateCurrentInstall::Reinstall(
                     NeedReinstall::VersionMismatch {
                         installed_version: reg.version.clone(),
-                        locked_version: required_pkg.version.clone(),
+                        locked_version: required_pkg.version_string(),
                     },
                 ));
             }

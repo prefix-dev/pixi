@@ -244,6 +244,145 @@ index-url = "{index_url}"
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
+async fn pyproject_dynamic_version_source_dependency() {
+    setup_tracing();
+
+    let platform = Platform::current();
+    let platform_str = platform.to_string();
+
+    let pyproject = format!(
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "main-package"
+version = "1.0.0"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["{platform_str}"]
+conda-pypi-map = {{}}
+
+[tool.pixi.dependencies]
+python = "==3.11.0"
+
+[tool.pixi.pypi-dependencies]
+dynamic-dep = {{ path = "./dynamic-dep" }}
+"#,
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+    // Create a source dependency with a dynamic version
+    fs_err::create_dir(pixi.workspace_path().join("dynamic-dep")).unwrap();
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamic-dep"
+dynamic = ["version"]
+"#,
+    )
+    .unwrap();
+
+    // Create a minimal setup.py that provides the dynamic version
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/setup.py"),
+        r#"from setuptools import setup
+setup(version="42.23.12")
+"#,
+    )
+    .unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    // The lock file should contain the dynamic-dep package
+    let pkg = lock
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should be in the lock file");
+
+    match pkg {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            eprintln!("dynamic-dep version in lock file: {:?}", data.version);
+            // A source dependency with dynamic version should have no version in the lock file
+            assert!(
+                data.version.is_none(),
+                "expected no version for dynamic source dependency, got {:?}",
+                data.version
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
+    // Round-trip: serialize and parse the lock file, then verify the version is still None
+    let lock_str = lock.render_to_string().unwrap();
+    let lock2 = rattler_lock::LockFile::from_str_with_base_directory(&lock_str, None).unwrap();
+    match lock2
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should survive round-trip")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version.is_none(),
+                "version should be None after round-trip, got {:?}",
+                data.version
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
+    // Write the round-tripped lock file back, then add a new pypi dependency
+    // to force a full re-resolve while the lock file with None version is on disk.
+    let workspace = pixi.workspace().unwrap();
+    lock2.to_path(&workspace.lock_file_path()).unwrap();
+
+    // Create a second source dependency to force the lock file to be stale
+    fs_err::create_dir(pixi.workspace_path().join("another-dep")).unwrap();
+    fs_err::write(
+        pixi.workspace_path().join("another-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "another-dep"
+version = "1.0.0"
+"#,
+    )
+    .unwrap();
+    fs_err::write(
+        pixi.workspace_path().join("another-dep/setup.py"),
+        "from setuptools import setup\nsetup()\n",
+    )
+    .unwrap();
+
+    pixi.add_pypi("another-dep @ ./another-dep").await.unwrap();
+
+    match pixi
+        .lock_file()
+        .await
+        .unwrap()
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should survive re-resolve")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version.is_none(),
+                "version should be None after re-resolve, got {:?}",
+                data.version
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+}
+
+#[tokio::test]
 async fn pyproject_environment_markers_resolved() {
     setup_tracing();
 

@@ -230,7 +230,7 @@ impl LockFileExt for LockFile {
                 env.pypi_packages(p)
                     .and_then(|mut packages| packages.find(|data| data.name.as_ref() == package))
             })
-            .map(|data| data.version.to_string())
+            .map(|data| data.version_string())
     }
 
     fn get_pypi_package(

@@ -614,14 +614,15 @@ pub async fn resolve_pypi(
     let preferences = locked_pypi_packages
         .iter()
         .map(|record| {
+            let Some(version) = &record.version else {
+                return Ok(None);
+            };
             let requirement = uv_pep508::Requirement {
                 name: to_uv_normalize(&record.name)?,
                 extras: Vec::new().into(),
                 version_or_url: Some(uv_pep508::VersionOrUrl::VersionSpecifier(
                     uv_pep440::VersionSpecifiers::from(
-                        uv_pep440::VersionSpecifier::equals_version(to_uv_version(
-                            &record.version,
-                        )?),
+                        uv_pep440::VersionSpecifier::equals_version(to_uv_version(version)?),
                     ),
                 )),
                 marker: uv_pep508::MarkerTree::TRUE,
@@ -1002,9 +1003,11 @@ async fn lock_pypi_packages(
                         name: pep508_rs::PackageName::new(metadata.name.to_string())
                             .into_diagnostic()
                             .context("cannot convert name")?,
-                        version: pep440_rs::Version::from_str(&metadata.version.to_string())
-                            .into_diagnostic()
-                            .context("cannot convert version")?,
+                        version: Some(
+                            pep440_rs::Version::from_str(&metadata.version.to_string())
+                                .into_diagnostic()
+                                .context("cannot convert version")?,
+                        ),
                         requires_python: metadata
                             .requires_python
                             .map(|r| to_version_specifiers(&r))
@@ -1137,8 +1140,12 @@ async fn lock_pypi_packages(
 
                     PypiPackageData {
                         name: to_normalize(&metadata.name).into_diagnostic()?,
-                        version: pep440_rs::Version::from_str(&metadata.version.to_string())
-                            .into_diagnostic()?,
+                        version: (!metadata.dynamic)
+                            .then(|| {
+                                pep440_rs::Version::from_str(&metadata.version.to_string())
+                                    .into_diagnostic()
+                            })
+                            .transpose()?,
                         requires_python: metadata
                             .requires_python
                             .map(|r| to_version_specifiers(&r))

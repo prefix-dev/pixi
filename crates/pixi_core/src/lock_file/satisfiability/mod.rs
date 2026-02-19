@@ -1033,7 +1033,7 @@ pub(crate) fn pypi_satisfies_requirement(
         RequirementSource::Registry { specifier, .. } => {
             // In the old way we always satisfy based on version so let's keep it similar
             // here
-            let version_string = locked_data.version.to_string();
+            let version_string = locked_data.version_string();
             if specifier.contains(
                 &uv_pep440::Version::from_str(&version_string).expect("could not parse version"),
             ) {
@@ -2786,7 +2786,7 @@ mod tests {
         // Mock locked data
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
-            version: Version::from_str("0.1.0").unwrap(),
+            version: Some(Version::from_str("0.1.0").unwrap()),
             location: "git+https://github.com/mypkg@rev=29932f3915935d773dc8d52c292cadd81c81071d#29932f3915935d773dc8d52c292cadd81c81071d"
                 .parse()
                 .expect("failed to parse url"),
@@ -2805,7 +2805,7 @@ mod tests {
 
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
-            version: Version::from_str("0.1.0").unwrap(),
+            version: Some(Version::from_str("0.1.0").unwrap()),
             location: "git+https://github.com/mypkg.git?rev=29932f3915935d773dc8d52c292cadd81c81071d#29932f3915935d773dc8d52c292cadd81c81071d"
                 .parse()
                 .expect("failed to parse url"),
@@ -2842,7 +2842,7 @@ mod tests {
         // should satisfy
         let locked_data_default_branch = PypiPackageData {
             name: "mypkg".parse().unwrap(),
-            version: Version::from_str("0.1.0").unwrap(),
+            version: Some(Version::from_str("0.1.0").unwrap()),
             // No ?rev= query param, only the fragment with commit hash
             location: "git+https://github.com/mypkg.git#29932f3915935d773dc8d52c292cadd81c81071d"
                 .parse()
@@ -2870,7 +2870,7 @@ mod tests {
         // Mock locked data
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
-            version: Version::from_str("0.1.0").unwrap(),
+            version: Some(Version::from_str("0.1.0").unwrap()),
             location: Verbatim::new(UrlOrPath::Path("/home/username/mypkg.tar.gz".into())),
             hash: None,
             requires_dist: vec![],

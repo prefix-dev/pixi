@@ -179,7 +179,7 @@ pub fn convert_to_dist(
                 }))
             } else {
                 let pkg_name = to_uv_normalize(&pkg.name)?;
-                let pkg_version = to_uv_version(&pkg.version)?;
+                let pkg_version = to_uv_version(pkg.version.as_ref().expect("registry source dists always have a version"))?;
                 Dist::Source(SourceDist::Registry(RegistrySourceDist {
                     name: pkg_name,
                     version: pkg_version,
@@ -250,7 +250,7 @@ mod tests {
         // Pass into locked data
         let locked = PypiPackageData {
             name: "torch".parse().unwrap(),
-            version: Version::from_str("2.3.0+cu121").unwrap(),
+            version: Some(Version::from_str("2.3.0+cu121").unwrap()),
             location: UrlOrPath::Url(url).into(),
             hash: None,
             requires_dist: vec![],

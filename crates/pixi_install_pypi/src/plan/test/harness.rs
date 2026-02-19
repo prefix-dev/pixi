@@ -373,7 +373,7 @@ impl PyPIPackageDataBuilder {
     fn registry<S: AsRef<str>>(name: S, version: S) -> PypiPackageData {
         PypiPackageData {
             name: pep508_rs::PackageName::new(name.as_ref().to_owned()).unwrap(),
-            version: pep440_rs::Version::from_str(version.as_ref()).unwrap(),
+            version: Some(pep440_rs::Version::from_str(version.as_ref()).unwrap()),
             // We don't check these fields, for determining the installation from a registry
             //
             requires_dist: vec![],
@@ -394,7 +394,7 @@ impl PyPIPackageDataBuilder {
     fn path<S: AsRef<str>>(name: S, version: S, path: PathBuf) -> PypiPackageData {
         PypiPackageData {
             name: pep508_rs::PackageName::new(name.as_ref().to_owned()).unwrap(),
-            version: pep440_rs::Version::from_str(version.as_ref()).unwrap(),
+            version: Some(pep440_rs::Version::from_str(version.as_ref()).unwrap()),
             requires_dist: vec![],
             requires_python: None,
             location: UrlOrPath::Path(Utf8TypedPathBuf::from(path.to_string_lossy().to_string()))
@@ -412,7 +412,7 @@ impl PyPIPackageDataBuilder {
         };
         PypiPackageData {
             name: pep508_rs::PackageName::new(name.as_ref().to_owned()).unwrap(),
-            version: pep440_rs::Version::from_str(version.as_ref()).unwrap(),
+            version: Some(pep440_rs::Version::from_str(version.as_ref()).unwrap()),
             requires_dist: vec![],
             requires_python: None,
             location: UrlOrPath::Url(url).into(),

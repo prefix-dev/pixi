@@ -184,7 +184,7 @@ pub fn generate_dependency_map(locked_deps: &[LockedPackageRef<'_>]) -> HashMap<
                         LockedPackageRef::Conda(conda_data) => {
                             conda_data.record().version.to_string()
                         }
-                        LockedPackageRef::Pypi(pypi_data) => pypi_data.version.to_string(),
+                        LockedPackageRef::Pypi(pypi_data) => pypi_data.version_string(),
                     },
                     dependencies: package_info
                         .dependencies

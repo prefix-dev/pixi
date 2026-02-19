@@ -32,7 +32,9 @@ impl HasNameVersion for PypiPackageData {
         &self.name
     }
     fn version(&self) -> &Self::V {
-        &self.version
+        self.version
+            .as_ref()
+            .expect("pypi record dedup requires a version")
     }
 }
 
