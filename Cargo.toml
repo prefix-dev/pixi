@@ -250,13 +250,13 @@ rattler_virtual_packages = { version = "2.3.8", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Rattler build crates
-rattler-build = { path = "../rattler-build", default-features = false, features = [
+rattler-build = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9", default-features = false, features = [
   "s3",
 ] }
-rattler_build_jinja = { path = "../rattler-build/crates/rattler_build_jinja" }
-rattler_build_recipe = { path = "../rattler-build/crates/rattler_build_recipe" }
-rattler_build_types = { path = "../rattler-build/crates/rattler_build_types" }
-rattler_build_variant_config = { path = "../rattler-build/crates/rattler_build_variant_config" }
+rattler_build_jinja = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
+rattler_build_recipe = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
+rattler_build_types = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
+rattler_build_variant_config = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
 
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
