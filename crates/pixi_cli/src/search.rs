@@ -363,7 +363,7 @@ fn print_package_info<W: Write>(
     )?;
 
     let size = match package.package_record.size {
-        Some(size) => size.to_string(),
+        Some(size) => indicatif::HumanBytes(size).to_string(),
         None => String::from("Not found."),
     };
     writeln!(
@@ -384,12 +384,35 @@ fn print_package_info<W: Write>(
         console::style(license)
     )?;
 
+    if let Some(timestamp) = package.package_record.timestamp {
+        writeln!(
+            out,
+            "{:19} {:19}",
+            console::style("Timestamp"),
+            console::style(
+                timestamp
+                    .datetime()
+                    .format("%Y-%m-%d %H:%M:%S UTC")
+                    .to_string()
+            )
+        )?;
+    }
+
     writeln!(
         out,
         "{:19} {:19}",
         console::style("Subdir"),
-        console::style(package.package_record.subdir)
+        console::style(&package.package_record.subdir)
     )?;
+
+    if let Some(noarch_kind) = package.package_record.noarch.kind() {
+        writeln!(
+            out,
+            "{:19} {:19}",
+            console::style("NoArch"),
+            console::style(format!("{noarch_kind:?}").to_lowercase())
+        )?;
+    }
 
     writeln!(
         out,
@@ -402,7 +425,7 @@ fn print_package_info<W: Write>(
         out,
         "{:19} {:19}",
         console::style("URL"),
-        console::style(package.url)
+        console::style(&package.url)
     )?;
 
     let md5 = match package.package_record.md5 {
@@ -427,8 +450,24 @@ fn print_package_info<W: Write>(
         console::style(sha256),
     )?;
 
+    if !package.package_record.track_features.is_empty() {
+        writeln!(out, "\nTrack features:")?;
+        for feature in &package.package_record.track_features {
+            writeln!(out, " - {feature}")?;
+        }
+    }
+
+    if let Some(purls) = package.package_record.purls.as_ref()
+        && !purls.is_empty()
+    {
+        writeln!(out, "\nPackage URLs:")?;
+        for purl in purls {
+            writeln!(out, " - {purl}")?;
+        }
+    }
+
     writeln!(out, "\nDependencies:")?;
-    for dependency in package.package_record.depends {
+    for dependency in &package.package_record.depends {
         writeln!(out, " - {dependency}")?;
     }
 
