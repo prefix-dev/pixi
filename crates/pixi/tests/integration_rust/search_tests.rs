@@ -8,6 +8,28 @@ use crate::common::PixiControl;
 use crate::setup_tracing;
 use pixi_test_utils::{MockRepoData, Package};
 
+fn strip_ansi(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Skip ESC [ ... m sequences
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                while let Some(&next) = chars.peek() {
+                    chars.next();
+                    if next == 'm' {
+                        break;
+                    }
+                }
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 #[tokio::test]
 async fn search_return_latest_across_everything() {
     setup_tracing();
@@ -194,12 +216,7 @@ async fn test_search_multiple_versions() {
         .await
         .unwrap()
         .unwrap();
-    let output = String::from_utf8(out).unwrap();
-    let output = output
-        // Remove ANSI escape codes from output
-        .replace("\x1b[0m", "")
-        .replace("\x1b[1m", "")
-        .replace("\x1b[2m", "");
+    let output = strip_ansi(&String::from_utf8(out).unwrap());
 
     let latest_package = result.last().expect("should have at least one result");
     assert_eq!(latest_package.package_record.version.as_str(), "0.2.0");
@@ -208,6 +225,80 @@ async fn test_search_multiple_versions() {
         .lines()
         // Filter out URL line since temporary directory name is random.
         .filter(|line| !line.starts_with("URL"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_snapshot!(output);
+}
+
+#[tokio::test]
+async fn test_search_multiple_packages_compact_view() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+
+    // Add multiple different packages
+    package_database.add_package(
+        Package::build("alpha", "1.0.0")
+            .with_build("h1_0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("alpha", "2.0.0")
+            .with_build("h1_0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("alpha", "3.0.0")
+            .with_build("h1_0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("beta", "0.5.0")
+            .with_build("h2_0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+
+    let temp_dir = TempDir::new().unwrap();
+    let channel_dir = temp_dir.path().join("channel");
+    package_database.write_repodata(&channel_dir).await.unwrap();
+    let channel = Url::from_file_path(channel_dir).unwrap();
+    let platform = Platform::current();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-compact-view"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+
+    "#
+    ))
+    .unwrap();
+
+    let mut out = Vec::new();
+    let mut builder = pixi.search("*a*".to_string());
+    builder.args.limit = 2;
+    builder.args.limit_packages = 10;
+    let _result = search::execute_impl(builder.args, &mut out)
+        .await
+        .unwrap()
+        .unwrap();
+    let output = strip_ansi(&String::from_utf8(out).unwrap());
+
+    // Filter out lines containing temp dir paths
+    let output = output
+        .lines()
+        .map(|line| {
+            // Replace channel URLs (file:///...) with a placeholder
+            if let Some(idx) = line.find("file:///") {
+                format!("{}<channel>", &line[..idx])
+            } else {
+                line.to_string()
+            }
+        })
         .collect::<Vec<_>>()
         .join("\n");
     assert_snapshot!(output);

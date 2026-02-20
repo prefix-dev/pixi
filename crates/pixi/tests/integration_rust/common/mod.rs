@@ -469,7 +469,8 @@ impl PixiControl {
                     ..Default::default()
                 },
                 platform: Platform::current(),
-                limit: None,
+                limit: 5,
+                limit_packages: 10,
                 channels: ChannelsConfig::default(),
             },
         }

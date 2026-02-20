@@ -25,7 +25,7 @@ use crate::{
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
-    /// Name of package to search
+    /// MatchSpec of a package to search
     #[arg(required = true)]
     pub package: String,
 
@@ -39,13 +39,18 @@ pub struct Args {
     #[arg(short, long, default_value_t = Platform::current())]
     pub platform: Platform,
 
-    /// Limit the number of search results (versions per package)
-    #[clap(short, long)]
-    pub limit: Option<usize>,
+    /// Limit the number of versions shown per package, -1 for no limit
+    #[clap(short, long, default_value = "5", allow_hyphen_values = true)]
+    pub limit: i64,
 
-    /// Number of packages to show detailed information for
-    #[clap(short = 'n', long = "limit-packages", default_value = "3")]
-    pub limit_packages: usize,
+    /// Limit the number of packages shown, -1 for no limit
+    #[clap(
+        short = 'n',
+        long = "limit-packages",
+        default_value = "5",
+        allow_hyphen_values = true
+    )]
+    pub limit_packages: i64,
 }
 
 pub async fn execute_impl<W: Write>(
@@ -74,7 +79,11 @@ pub async fn execute_impl<W: Write>(
     let channels = args.channels.resolve_from_project(workspace.as_ref())?;
     eprintln!(
         "Using channels: {}",
-        channels.iter().map(|c| c.name()).collect::<Vec<_>>().join(", ")
+        channels
+            .iter()
+            .map(|c| c.name())
+            .collect::<Vec<_>>()
+            .join(", ")
     );
 
     let packages = if let Some(workspace) = workspace {
@@ -93,8 +102,19 @@ pub async fn execute_impl<W: Write>(
         .await?
     };
 
+    let limit_versions = if args.limit < 0 {
+        None
+    } else {
+        Some(args.limit as usize)
+    };
+    let limit_packages = if args.limit_packages < 0 {
+        None
+    } else {
+        Some(args.limit_packages as usize)
+    };
+
     // Print search results with detailed info for first N packages
-    if let Err(e) = print_search_results(&packages, out, args.limit_packages, args.limit)
+    if let Err(e) = print_search_results(&packages, out, limit_packages, limit_versions)
         && e.kind() != std::io::ErrorKind::BrokenPipe
     {
         return Err(e).into_diagnostic();
@@ -112,7 +132,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 fn print_search_results<W: Write>(
     packages: &[RepoDataRecord],
     out: &mut W,
-    limit_packages: usize,
+    limit_packages: Option<usize>,
     limit_versions: Option<usize>,
 ) -> io::Result<()> {
     // Group packages by name
@@ -124,37 +144,93 @@ fn print_search_results<W: Write>(
             .push(pkg);
     }
 
-    // Show detailed info for first N packages
-    for (i, (_, records)) in by_name.iter().take(limit_packages).enumerate() {
-        if i > 0 {
-            writeln!(out, "\n{}", "=".repeat(60))?;
-        }
+    let channel_config = default_channel_config();
+
+    // Single package name => show detailed view
+    if by_name.len() == 1 {
+        let (_, records) = by_name.iter().next().unwrap();
         let newest = records
             .last()
             .expect("records is non-empty since packages is non-empty");
         let others: Vec<_> = records.iter().rev().skip(1).cloned().collect();
-        print_package_info(newest, &others, out)?;
+        print_package_info(newest, &others, out, limit_versions)?;
+        return Ok(());
     }
 
-    // Show compact table for remaining packages
-    if by_name.len() > limit_packages {
-        writeln!(out, "\n{}", "=".repeat(60))?;
+    // Multiple package names => show compact summary view
+    let n_packages = limit_packages.unwrap_or(usize::MAX);
+    let n_versions = limit_versions.unwrap_or(usize::MAX);
+
+    for (i, (name, records)) in by_name.iter().enumerate() {
+        if i >= n_packages {
+            break;
+        }
+        if i > 0 {
+            writeln!(out)?;
+        }
+
+        let total_versions = records.len();
         writeln!(
             out,
-            "\nAdditional matching packages ({}):\n",
-            by_name.len() - limit_packages
+            "{} ({} {})",
+            console::style(name.as_source()).cyan().bright(),
+            total_versions,
+            if total_versions == 1 {
+                "version"
+            } else {
+                "versions"
+            }
         )?;
 
-        let remaining: Vec<_> = by_name
-            .iter()
-            .skip(limit_packages)
-            .map(|(_, records)| {
-                *records
-                    .last()
-                    .expect("records is non-empty since packages is non-empty")
-            })
-            .collect();
-        print_matching_packages(&remaining, out, limit_versions)?;
+        let shown = total_versions.min(n_versions);
+        for record in records.iter().rev().take(shown) {
+            let channel_name = record
+                .channel
+                .as_ref()
+                .and_then(|channel| Url::from_str(channel).ok())
+                .and_then(|url| channel_config.strip_channel_alias(&url))
+                .or_else(|| record.channel.clone())
+                .unwrap_or_else(|| "<unknown>".to_string());
+
+            writeln!(
+                out,
+                "  {} {} [{}] {}",
+                record.package_record.version,
+                record.package_record.build,
+                record.package_record.subdir,
+                channel_name,
+            )?;
+        }
+
+        let remaining_versions = total_versions.saturating_sub(shown);
+        if remaining_versions > 0 {
+            writeln!(
+                out,
+                "  {} and {} more {} (use -l to show more)",
+                console::style("...").dim(),
+                remaining_versions,
+                if remaining_versions == 1 {
+                    "version"
+                } else {
+                    "versions"
+                }
+            )?;
+        }
+    }
+
+    let remaining_packages = by_name.len().saturating_sub(n_packages);
+    if remaining_packages > 0 {
+        writeln!(
+            out,
+            "\n{} and {} more {} (use -n to show more)",
+            console::style("...").dim(),
+            remaining_packages,
+            if remaining_packages == 1 {
+                "package"
+            } else {
+                "packages"
+            }
+        )?;
     }
 
     Ok(())
@@ -173,6 +249,7 @@ fn print_package_info<W: Write>(
     package: &RepoDataRecord,
     other_versions: &Vec<&RepoDataRecord>,
     out: &mut W,
+    limit_versions: Option<usize>,
 ) -> io::Result<()> {
     writeln!(out)?;
 
@@ -334,9 +411,18 @@ fn print_package_info<W: Write>(
             version_width = version_width,
             build_width = build_width
         )?;
-        let max_displayed_versions = 4;
-        let mut counter = 0;
-        for (version, builds) in grouped_by_version.iter().rev() {
+        let max_displayed = limit_versions.unwrap_or(usize::MAX);
+        for (i, (version, builds)) in grouped_by_version.iter().enumerate() {
+            if i >= max_displayed {
+                let remaining = grouped_by_version.len() - max_displayed;
+                writeln!(
+                    out,
+                    "{} and {} more",
+                    console::style("...").dim(),
+                    remaining
+                )?;
+                break;
+            }
             writeln!(
                 out,
                 "{:version_width$} {:build_width$}{}",
@@ -346,73 +432,7 @@ fn print_package_info<W: Write>(
                 version_width = version_width,
                 build_width = build_width
             )?;
-            counter += 1;
-            if counter == max_displayed_versions {
-                writeln!(
-                    out,
-                    "... and {} more",
-                    grouped_by_version.len() - max_displayed_versions
-                )?;
-                break;
-            }
         }
-    }
-
-    Ok(())
-}
-
-fn print_matching_packages<W: Write>(
-    packages: &[&RepoDataRecord],
-    out: &mut W,
-    limit: Option<usize>,
-) -> io::Result<()> {
-    writeln!(
-        out,
-        "{:40} {:19} {:19}",
-        console::style("Package").bold(),
-        console::style("Version").bold(),
-        console::style("Channel").bold(),
-    )?;
-
-    // split off at `limit`, discard the second half
-    let limit = limit.unwrap_or(usize::MAX);
-
-    let (packages, remaining_packages) = if limit < packages.len() {
-        packages.split_at(limit)
-    } else {
-        (packages, &[][..])
-    };
-
-    let channel_config = default_channel_config();
-    for package in packages {
-        // TODO: change channel fetch logic to be more robust
-        // currently it relies on channel field being a url with trailing slash
-        // https://github.com/conda/rattler/issues/146
-
-        let channel_name = package
-            .channel
-            .as_ref()
-            .and_then(|channel| Url::from_str(channel).ok())
-            .and_then(|url| channel_config.strip_channel_alias(&url))
-            .or_else(|| package.channel.clone())
-            .unwrap_or_else(|| "<unknown>".to_string());
-
-        let channel_name = format!("{}/{}", channel_name, package.package_record.subdir);
-
-        let package_name = &package.package_record.name;
-        let version = package.package_record.version.as_str();
-
-        writeln!(
-            out,
-            "{:40} {:19} {:19}",
-            console::style(package_name.as_source()).cyan().bright(),
-            console::style(version),
-            console::style(channel_name),
-        )?;
-    }
-
-    if !remaining_packages.is_empty() {
-        println!("... and {} more", remaining_packages.len());
     }
 
     Ok(())
