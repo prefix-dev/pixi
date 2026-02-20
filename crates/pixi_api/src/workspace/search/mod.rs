@@ -40,7 +40,6 @@ pub async fn search(
         ));
     }
 
-    // Sort by name, then by version within each package
     packages.sort();
 
     Ok(packages)

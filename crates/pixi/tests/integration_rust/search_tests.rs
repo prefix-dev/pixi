@@ -102,21 +102,25 @@ async fn search_using_match_spec() {
     package_database.add_package(
         Package::build("foo", "0.1.0")
             .with_build("h60d57d3_0")
+            .with_build_number(0)
             .finish(),
     );
     package_database.add_package(
         Package::build("foo", "0.1.0")
             .with_build("h60d57d3_1")
+            .with_build_number(1)
             .finish(),
     );
     package_database.add_package(
         Package::build("foo", "0.2.0")
             .with_build("h60d57d3_0")
+            .with_build_number(0)
             .finish(),
     );
     package_database.add_package(
         Package::build("foo", "0.2.0")
             .with_build("h60d57d3_1")
+            .with_build_number(1)
             .finish(),
     );
 
@@ -174,24 +178,28 @@ async fn test_search_multiple_versions() {
     package_database.add_package(
         Package::build("foo", "0.1.0")
             .with_build("h60d57d3_0")
+            .with_build_number(0)
             .with_subdir(Platform::NoArch)
             .finish(),
     );
     package_database.add_package(
         Package::build("foo", "0.1.0")
             .with_build("h60d57d3_1")
+            .with_build_number(1)
             .with_subdir(Platform::NoArch)
             .finish(),
     );
     package_database.add_package(
         Package::build("foo", "0.2.0")
             .with_build("h60d57d3_0")
+            .with_build_number(0)
             .with_subdir(Platform::NoArch)
             .finish(),
     );
     package_database.add_package(
         Package::build("foo", "0.2.0")
             .with_build("h60d57d3_1")
+            .with_build_number(1)
             .with_subdir(Platform::NoArch)
             .finish(),
     );
@@ -229,6 +237,7 @@ async fn test_search_multiple_versions() {
         .collect::<Vec<_>>()
         .join("\n");
     assert_snapshot!(output);
+    assert!(output.contains("0.1.0    h60d57d3_1  (+ 1 build)"));
 }
 
 #[tokio::test]
