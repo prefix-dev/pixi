@@ -61,6 +61,7 @@ rattler_lock = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
+serde_json = { workspace = true }
 temp-env = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }

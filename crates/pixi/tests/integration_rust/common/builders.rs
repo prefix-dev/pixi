@@ -294,7 +294,7 @@ pub struct SearchBuilder {
 }
 
 impl IntoFuture for SearchBuilder {
-    type Output = miette::Result<Option<Vec<RepoDataRecord>>>;
+    type Output = miette::Result<Vec<RepoDataRecord>>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
