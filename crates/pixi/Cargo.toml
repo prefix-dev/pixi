@@ -58,6 +58,7 @@ pixi_utils = { workspace = true }
 pypi_mapping = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_lock = { workspace = true }
+serde_json = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }

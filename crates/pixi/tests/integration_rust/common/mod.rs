@@ -472,6 +472,7 @@ impl PixiControl {
                 all_platforms: false,
                 limit: 5,
                 limit_packages: 10,
+                json: false,
                 channels: ChannelsConfig::default(),
             },
         }

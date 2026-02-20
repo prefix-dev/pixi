@@ -1,6 +1,7 @@
 use insta::assert_snapshot;
 use pixi_cli::search;
 use rattler_conda_types::Platform;
+use serde_json::Value;
 use tempfile::TempDir;
 use url::Url;
 
@@ -302,4 +303,80 @@ async fn test_search_multiple_packages_compact_view() {
         .collect::<Vec<_>>()
         .join("\n");
     assert_snapshot!(output);
+}
+
+#[tokio::test]
+async fn test_search_json_output() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+
+    // Add packages on different platforms with different attributes
+    package_database.add_package(
+        Package::build("foo", "1.0.0")
+            .with_build("h1_0")
+            .with_subdir(Platform::NoArch)
+            .with_dependency("bar >=1.0")
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "2.0.0")
+            .with_build("h2_0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+
+    let temp_dir = TempDir::new().unwrap();
+    let channel_dir = temp_dir.path().join("channel");
+    package_database.write_repodata(&channel_dir).await.unwrap();
+    let channel = Url::from_file_path(channel_dir).unwrap();
+    let platform = Platform::current();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-json-output"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+
+    "#
+    ))
+    .unwrap();
+
+    let mut out = Vec::new();
+    let mut builder = pixi.search("foo".to_string());
+    builder.args.json = true;
+    let _result = search::execute_impl(builder.args, &mut out)
+        .await
+        .unwrap()
+        .unwrap();
+    let output = String::from_utf8(out).unwrap();
+
+    // Parse the JSON output to verify structure
+    let json: Value = serde_json::from_str(&output).expect("output should be valid JSON");
+    let obj = json.as_object().expect("top level should be an object");
+
+    // Should have platform keys
+    assert!(
+        obj.contains_key("noarch") || obj.contains_key(&platform.to_string()),
+        "should contain platform keys, got: {:?}",
+        obj.keys().collect::<Vec<_>>()
+    );
+
+    // Verify a record has the expected fields
+    let first_platform = obj.values().next().unwrap().as_object().unwrap();
+    let first_record = first_platform.values().next().unwrap().as_object().unwrap();
+    assert!(first_record.contains_key("name"));
+    assert!(first_record.contains_key("version"));
+    assert!(first_record.contains_key("build"));
+    assert!(first_record.contains_key("build_number"));
+    assert!(first_record.contains_key("url"));
+    assert!(first_record.contains_key("depends"));
+    assert!(first_record.contains_key("constrains"));
+
+    // Verify the filename key contains an archive extension
+    let first_filename = first_platform.keys().next().unwrap();
+    assert!(
+        first_filename.ends_with(".conda") || first_filename.ends_with(".tar.bz2"),
+        "filename should end with .conda or .tar.bz2, got: {first_filename}"
+    );
 }
