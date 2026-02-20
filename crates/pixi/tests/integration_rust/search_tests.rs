@@ -362,20 +362,17 @@ async fn test_search_json_output() {
         obj.keys().collect::<Vec<_>>()
     );
 
+    // Each platform value should be an array of records
+    let first_platform_records = obj.values().next().unwrap().as_array().unwrap();
+    assert!(!first_platform_records.is_empty());
+
     // Verify a record has the expected fields
-    let first_platform = obj.values().next().unwrap().as_object().unwrap();
-    let first_record = first_platform.values().next().unwrap().as_object().unwrap();
+    let first_record = first_platform_records[0].as_object().unwrap();
     assert!(first_record.contains_key("name"));
     assert!(first_record.contains_key("version"));
     assert!(first_record.contains_key("build"));
     assert!(first_record.contains_key("build_number"));
     assert!(first_record.contains_key("url"));
     assert!(first_record.contains_key("depends"));
-
-    // Verify the filename key contains an archive extension
-    let first_filename = first_platform.keys().next().unwrap();
-    assert!(
-        first_filename.ends_with(".conda") || first_filename.ends_with(".tar.bz2"),
-        "filename should end with .conda or .tar.bz2, got: {first_filename}"
-    );
+    assert!(first_record.contains_key("fn"));
 }

@@ -64,15 +64,14 @@ pub struct Args {
 
 fn build_json_output(
     packages: &[RepoDataRecord],
-) -> IndexMap<String, IndexMap<String, &RepoDataRecord>> {
-    let mut result: IndexMap<String, IndexMap<String, &RepoDataRecord>> = IndexMap::new();
+) -> IndexMap<String, Vec<&RepoDataRecord>> {
+    let mut result: IndexMap<String, Vec<&RepoDataRecord>> = IndexMap::new();
     for pkg in packages {
         let platform = pkg.package_record.subdir.clone();
-        let file_name = pkg.identifier.to_file_name();
-        result
-            .entry(platform)
-            .or_default()
-            .insert(file_name, pkg);
+        result.entry(platform).or_default().push(pkg);
+    }
+    for records in result.values_mut() {
+        records.sort_unstable_by(|a, b| b.cmp(a));
     }
     result
 }
