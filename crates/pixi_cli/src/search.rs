@@ -266,32 +266,36 @@ fn print_search_results<W: Write>(
 
         let remaining_versions = total_versions.saturating_sub(shown);
         if remaining_versions > 0 {
+            let label = if remaining_versions == 1 {
+                "version"
+            } else {
+                "versions"
+            };
             writeln!(
                 out,
-                "  {} and {} more {} (use -l to show more)",
-                console::style("...").dim(),
-                remaining_versions,
-                if remaining_versions == 1 {
-                    "version"
-                } else {
-                    "versions"
-                }
+                "  {}",
+                console::style(format!(
+                    "... and {remaining_versions} more {label} (use -l to show more)"
+                ))
+                .dim(),
             )?;
         }
     }
 
     let remaining_packages = by_name.len().saturating_sub(n_packages);
     if remaining_packages > 0 {
+        let label = if remaining_packages == 1 {
+            "package"
+        } else {
+            "packages"
+        };
         writeln!(
             out,
-            "\n{} and {} more {} (use -n to show more)",
-            console::style("...").dim(),
-            remaining_packages,
-            if remaining_packages == 1 {
-                "package"
-            } else {
-                "packages"
-            }
+            "\n{}",
+            console::style(format!(
+                "... and {remaining_packages} more {label} (use -n to show more)"
+            ))
+            .dim(),
         )?;
     }
 
