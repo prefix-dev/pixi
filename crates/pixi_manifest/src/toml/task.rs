@@ -225,6 +225,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
             let description = th.optional("description");
             let clean_env = th.optional("clean-env").unwrap_or(false);
             let args = th.optional::<Vec<TaskArg>>("args");
+            let error_on_missing_globs = th.optional("error-on-missing-globs");
 
             let mut have_default = false;
             for arg in args.iter().flat_map(|a| a.iter()) {
@@ -254,6 +255,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 description,
                 clean_env,
                 args,
+                error_on_missing_globs,
             }))
         } else {
             let depends_on = depends_on(&mut th)?;

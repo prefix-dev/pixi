@@ -322,8 +322,15 @@ impl<'p> ExecutableTask<'p> {
         Ok(Some(hash))
     }
 
-    /// Emit warnings for missing input/output globs given a computed hash.
-    pub fn warn_on_missing_globs(&self, post_hash: &TaskHash) {
+    /// Check for missing input/output globs given a computed hash.
+    ///
+    /// When `error_on_missing` is `true`, returns an error if any configured
+    /// globs (inputs or outputs) matched no files. Otherwise emits a warning.
+    pub fn check_missing_globs(
+        &self,
+        post_hash: &TaskHash,
+        error_on_missing: bool,
+    ) -> miette::Result<()> {
         let (rendered_inputs, rendered_outputs) = match self.task().as_execute() {
             Ok(exe) => {
                 let context = self.render_context();
@@ -340,31 +347,51 @@ impl<'p> ExecutableTask<'p> {
             Err(_) => (None, None),
         };
 
-        // Outputs warning
+        // Outputs check
         if rendered_outputs.is_some()
             && post_hash.outputs.is_none()
             && let Some(globs) = rendered_outputs.as_ref()
         {
-            tracing::warn!(
-                "No files matched the output globs for task '{}'",
-                self.name().unwrap_or_default()
-            );
+            let task_name = self.name().unwrap_or_default();
             let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
-            tracing::warn!("Output globs: {}", formatted);
+            if error_on_missing {
+                miette::bail!(
+                    "No files matched the output globs for task '{}'. Output globs: {}",
+                    task_name,
+                    formatted,
+                );
+            } else {
+                tracing::warn!(
+                    "No files matched the output globs for task '{}'",
+                    task_name
+                );
+                tracing::warn!("Output globs: {}", formatted);
+            }
         }
 
-        // Inputs warning
+        // Inputs check
         if rendered_inputs.is_some()
             && post_hash.inputs.is_none()
             && let Some(globs) = rendered_inputs.as_ref()
         {
-            tracing::warn!(
-                "No files matched the input globs for task '{}'",
-                self.name().unwrap_or_default()
-            );
+            let task_name = self.name().unwrap_or_default();
             let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
-            tracing::warn!("Input globs: {}", formatted);
+            if error_on_missing {
+                miette::bail!(
+                    "No files matched the input globs for task '{}'. Input globs: {}",
+                    task_name,
+                    formatted,
+                );
+            } else {
+                tracing::warn!(
+                    "No files matched the input globs for task '{}'",
+                    task_name
+                );
+                tracing::warn!("Input globs: {}", formatted);
+            }
         }
+
+        Ok(())
     }
 
     /// We store the hashes of the inputs and the outputs of the task in a file
@@ -618,6 +645,55 @@ mod tests {
 
         let script = executable_task.as_script().unwrap().unwrap();
         assert_eq!(script, "export \"FOO=bar\";\n\ntest ");
+    }
+
+    #[test]
+    fn test_check_missing_globs_error() {
+        let file_contents = r#"
+            [tasks]
+            test = {cmd = "test", inputs = ["missing_file.txt"]}
+            "#;
+
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+
+        let executable_task = ExecutableTask {
+            workspace: &workspace,
+            name: Some("test".into()),
+            task: Cow::Borrowed(task),
+            run_environment: workspace.default_environment(),
+            args: ArgValues::default(),
+        };
+
+        let post_hash = TaskHash {
+            command: None,
+            inputs: None, // Missing inputs
+            outputs: None,
+            environment: pixi_core::environment::EnvironmentHash::from_environment(
+                &workspace.default_environment(),
+                &HashMap::new(),
+                &rattler_lock::LockFile::default(),
+            ),
+        };
+
+        // Test with error_on_missing = false (should succeed/warn)
+        assert!(executable_task.check_missing_globs(&post_hash, false).is_ok());
+
+        // Test with error_on_missing = true (should error)
+        let result = executable_task.check_missing_globs(&post_hash, true);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "No files matched the input globs for task 'test'. Input globs: `missing_file.txt`"
+        );
     }
 
     #[tokio::test]
