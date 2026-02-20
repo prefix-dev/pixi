@@ -18,7 +18,31 @@ pixi auth login [OPTIONS] <HOST>
 :  The host to authenticate with (e.g. prefix.dev)
 <br>**required**: `true`
 
-## Options
+## OAuth/OIDC Authentication
+- <a id="arg---oauth" href="#arg---oauth">`--oauth`</a>
+:  Use OAuth/OIDC authentication
+- <a id="arg---oauth-issuer-url" href="#arg---oauth-issuer-url">`--oauth-issuer-url <OAUTH_ISSUER_URL>`</a>
+:  OIDC issuer URL (defaults to <https://{host>})
+- <a id="arg---oauth-client-id" href="#arg---oauth-client-id">`--oauth-client-id <OAUTH_CLIENT_ID>`</a>
+:  OAuth client ID (defaults to "rattler")
+- <a id="arg---oauth-client-secret" href="#arg---oauth-client-secret">`--oauth-client-secret <OAUTH_CLIENT_SECRET>`</a>
+:  OAuth client secret (for confidential clients)
+- <a id="arg---oauth-flow" href="#arg---oauth-flow">`--oauth-flow <OAUTH_FLOW>`</a>
+:  OAuth flow: auto (default), auth-code, device-code
+<br>**options**: `auto`, `auth-code`, `device-code`
+- <a id="arg---oauth-scope" href="#arg---oauth-scope">`--oauth-scope <OAUTH_SCOPES>`</a>
+:  Additional OAuth scopes to request (repeatable)
+<br>May be provided more than once.
+
+## S3 Authentication
+- <a id="arg---s3-access-key-id" href="#arg---s3-access-key-id">`--s3-access-key-id <S3_ACCESS_KEY_ID>`</a>
+:  The S3 access key ID
+- <a id="arg---s3-secret-access-key" href="#arg---s3-secret-access-key">`--s3-secret-access-key <S3_SECRET_ACCESS_KEY>`</a>
+:  The S3 secret access key
+- <a id="arg---s3-session-token" href="#arg---s3-session-token">`--s3-session-token <S3_SESSION_TOKEN>`</a>
+:  The S3 session token
+
+## Token / Basic Authentication
 - <a id="arg---token" href="#arg---token">`--token <TOKEN>`</a>
 :  The token to use (for authentication with prefix.dev)
 - <a id="arg---username" href="#arg---username">`--username <USERNAME>`</a>
@@ -27,11 +51,5 @@ pixi auth login [OPTIONS] <HOST>
 :  The password to use (for basic HTTP authentication)
 - <a id="arg---conda-token" href="#arg---conda-token">`--conda-token <CONDA_TOKEN>`</a>
 :  The token to use on anaconda.org / quetz authentication
-- <a id="arg---s3-access-key-id" href="#arg---s3-access-key-id">`--s3-access-key-id <S3_ACCESS_KEY_ID>`</a>
-:  The S3 access key ID
-- <a id="arg---s3-secret-access-key" href="#arg---s3-secret-access-key">`--s3-secret-access-key <S3_SECRET_ACCESS_KEY>`</a>
-:  The S3 secret access key
-- <a id="arg---s3-session-token" href="#arg---s3-session-token">`--s3-session-token <S3_SESSION_TOKEN>`</a>
-:  The S3 session token
 
 --8<-- "docs/reference/cli/pixi/auth/login_extender:example"
