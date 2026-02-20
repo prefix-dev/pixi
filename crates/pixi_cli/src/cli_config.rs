@@ -48,8 +48,11 @@ impl WorkspaceConfig {
         if let Some(manifest_path) = &self.manifest_path {
             DiscoveryStart::ExplicitManifest(manifest_path.clone())
         } else if let Some(workspace) = &self.workspace {
-            let workspace_registry = WorkspaceRegistry::load().expect("Unable to load workspace registry");
-            let path = workspace_registry.named_workspace(&workspace).expect("Unable to find workspace");
+            let workspace_registry =
+                WorkspaceRegistry::load().expect("Unable to load workspace registry");
+            let path = workspace_registry
+                .named_workspace(workspace)
+                .expect("Unable to find workspace");
             DiscoveryStart::ExplicitManifest(path)
         } else {
             DiscoveryStart::CurrentDir

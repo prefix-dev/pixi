@@ -49,7 +49,6 @@ pub const CACHED_SOURCE_BUILDS: &str = "pkgs";
 pub const DEFAULT_GLOBAL_WORKSPACE_DIR: &str = "workspaces";
 pub const WORKSPACES_REGISTRY: &str = "workspaces.toml";
 
-
 /// The directory relative to the .pixi folder that stores build related caches.
 pub const WORKSPACE_CACHE_DIR: &str = "build";
 

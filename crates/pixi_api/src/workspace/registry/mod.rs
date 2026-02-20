@@ -1,34 +1,25 @@
 use std::collections::HashMap;
 
-use serde::{Deserialize, Serialize};
 use miette::{Context, IntoDiagnostic};
+use serde::{Deserialize, Serialize};
 
 use std::path::PathBuf;
 
-use pixi_consts::consts;
 use pixi_config::pixi_home;
-
+use pixi_consts::consts;
 
 /// Returns the path to the workspace registry file
 pub fn workspace_registry_path() -> Option<PathBuf> {
     pixi_home().map(|d| d.join(consts::WORKSPACES_REGISTRY))
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct WorkspaceRegistry {
     /// Mapping of a named workspaces to the path of their manifest file.
     #[serde(default)]
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub named_workspaces: HashMap<String, PathBuf>,
-}
-
-impl Default for WorkspaceRegistry {
-    fn default() -> Self {
-        Self {
-            named_workspaces: HashMap::new(),
-        }
-    }
 }
 
 impl WorkspaceRegistry {
@@ -39,22 +30,23 @@ impl WorkspaceRegistry {
 
         let contents = match fs_err::read_to_string(&path) {
             Ok(c) => c,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound || e.kind() == std::io::ErrorKind::NotADirectory => {
+            Err(e)
+                if e.kind() == std::io::ErrorKind::NotFound
+                    || e.kind() == std::io::ErrorKind::NotADirectory =>
+            {
                 // File doesn't exist yet, return default
                 return Ok(WorkspaceRegistry::default());
             }
             Err(e) => {
-                return Err(e)
-                    .into_diagnostic()?;
+                return Err(e).into_diagnostic()?;
             }
         };
 
-        let de = toml_edit::de::Deserializer::parse(&contents)
-            .into_diagnostic()?;
+        let de = toml_edit::de::Deserializer::parse(&contents).into_diagnostic()?;
 
         // Deserialize the contents
-        let registry: WorkspaceRegistry = serde_ignored::deserialize(de, |_| {})
-            .into_diagnostic()?;
+        let registry: WorkspaceRegistry =
+            serde_ignored::deserialize(de, |_| {}).into_diagnostic()?;
 
         Ok(registry)
     }
@@ -63,7 +55,6 @@ impl WorkspaceRegistry {
     pub async fn save(&self) -> miette::Result<()> {
         let path = workspace_registry_path()
             .ok_or_else(|| miette::miette!("Unable to determine pixi home directory"))?;
-
 
         if let Some(parent) = path.parent() {
             fs_err::create_dir_all(parent)
@@ -86,25 +77,15 @@ impl WorkspaceRegistry {
             self.named_workspaces.remove(name);
             self.save().await?;
         } else {
-            return Err(
-                miette::diagnostic!("Workspace '{}' is not found.", name,).into(),
-            );
+            return Err(miette::diagnostic!("Workspace '{}' is not found.", name,).into());
         }
         Ok(())
     }
 
     /// Add a workspace to the registry given the name and path association
     pub async fn add_workspace(&mut self, name: String, path: PathBuf) -> miette::Result<()> {
-        if self.named_workspaces.contains_key(&name) {
-            return Err(miette::diagnostic!(
-                "Workspace with name '{}' is already registered.",
-                name,
-            )
-            .into());
-        } else {
-            self.named_workspaces.insert(name, path);
-            self.save().await?;
-        }
+        self.named_workspaces.entry(name).or_insert(path);
+        self.save().await?;
         Ok(())
     }
 

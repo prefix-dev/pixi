@@ -56,7 +56,6 @@ pub enum Command {
     // Prune(PruneArgs),
 }
 
-
 pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
         Some(Command::List(args)) => {
@@ -78,7 +77,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         Some(Command::Remove(remove_args)) => {
             let mut workspace_registry = WorkspaceRegistry::load()?;
-            workspace_registry.remove_workspace(&remove_args.name).await?;
+            workspace_registry
+                .remove_workspace(&remove_args.name)
+                .await?;
 
             eprintln!(
                 "{} Workspace '{}' has been removed from the registry successfully.",
@@ -116,7 +117,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let target_path = args.path.unwrap_or_else(|| workspace.root().to_path_buf());
 
             let mut workspace_registry = WorkspaceRegistry::load()?;
-            workspace_registry.add_workspace(target_name, target_path).await?;
+            workspace_registry
+                .add_workspace(target_name, target_path)
+                .await?;
 
             eprintln!(
                 "{} {}",
