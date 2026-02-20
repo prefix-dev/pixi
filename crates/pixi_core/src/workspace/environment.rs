@@ -364,10 +364,17 @@ impl<'p> HasFeaturesIter<'p> for Environment<'p> {
     /// Returns references to the features that make up this environment.
     fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
         let manifest = self.workspace_manifest();
-        let environment_features = self.environment.features.iter().map(|feature_name| {
+        let env_name = &self.environment.name;
+        let environment_features = self.environment.features.iter().map(|env_feature| {
+            let feature_name = match env_feature {
+                manifest::EnvironmentFeature::Inline => {
+                    FeatureName::from(format!(".{}", env_name.as_str()))
+                }
+                manifest::EnvironmentFeature::Named(name) => FeatureName::from(name.clone()),
+            };
             manifest
                 .features
-                .get(&FeatureName::from(feature_name.clone()))
+                .get(&feature_name)
                 .expect("feature usage should have been validated upfront")
         });
 

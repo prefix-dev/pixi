@@ -35,7 +35,7 @@ pub use discovery::{
     DiscoveryStart, ExplicitManifestError, LoadManifestsError, Manifests, WorkspaceDiscoverer,
     WorkspaceDiscoveryError,
 };
-pub use environment::{Environment, EnvironmentName};
+pub use environment::{Environment, EnvironmentFeature, EnvironmentName};
 pub use error::TomlError;
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
