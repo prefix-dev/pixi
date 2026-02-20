@@ -11,7 +11,10 @@ use pixi_config::default_channel_config;
 use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
 use pixi_manifest::FeaturesExt;
 use pixi_progress::await_in_progress;
-use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{
+    MatchSpec, PackageName, ParseStrictness, ParseStrictnessWithNameMatcher, Platform,
+    RepoDataRecord,
+};
 use tracing::{debug, error};
 use url::Url;
 
@@ -128,17 +131,27 @@ pub async fn execute_impl<W: Write>(
         args.platform
     };
 
+    // Parse the match spec early so we fail fast on invalid input
+    let matchspec = MatchSpec::from_str(
+        &args.package,
+        ParseStrictnessWithNameMatcher {
+            parse_strictness: ParseStrictness::Lenient,
+            exact_names_only: false,
+        },
+    )
+    .into_diagnostic()?;
+
     let packages = if let Some(workspace) = workspace {
         await_in_progress("searching packages...", |_| async {
             WorkspaceContext::new(CliInterface {}, workspace)
-                .search(&args.package, channels, platforms)
+                .search(matchspec, channels, platforms)
                 .await
         })
         .await?
     } else {
         await_in_progress("searching packages...", |_| async {
             DefaultContext::new(CliInterface {})
-                .search(&args.package, channels, platforms)
+                .search(matchspec, channels, platforms)
                 .await
         })
         .await?

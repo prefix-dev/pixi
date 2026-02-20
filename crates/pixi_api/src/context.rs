@@ -29,14 +29,14 @@ impl<I: Interface> DefaultContext<I> {
         }
     }
 
-    /// Search for packages matching a pattern (supports glob patterns like python*)
+    /// Search for packages matching a [`MatchSpec`]
     pub async fn search(
         &self,
-        pattern: &str,
+        matchspec: MatchSpec,
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
     ) -> miette::Result<Vec<RepoDataRecord>> {
-        crate::workspace::search::search(None, pattern, channels, platforms).await
+        crate::workspace::search::search(None, matchspec, channels, platforms).await
     }
 }
 
@@ -392,13 +392,14 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
-    /// Search for packages matching a pattern (supports glob patterns like python*)
+    /// Search for packages matching a [`MatchSpec`]
     pub async fn search(
         &self,
-        pattern: &str,
+        matchspec: MatchSpec,
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
     ) -> miette::Result<Vec<RepoDataRecord>> {
-        crate::workspace::search::search(Some(&self.workspace), pattern, channels, platforms).await
+        crate::workspace::search::search(Some(&self.workspace), matchspec, channels, platforms)
+            .await
     }
 }
