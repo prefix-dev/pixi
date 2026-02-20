@@ -46,6 +46,18 @@ impl From<String> for TaskName {
     }
 }
 
+/// A named group of tasks with optional description
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TaskGroup {
+    /// Description of the group (used for display purposes)
+    pub description: Option<String>,
+    /// The tasks that belong to this group
+    pub tasks: Vec<TaskName>,
+}
+
+/// Maps group name to group definition
+pub type TaskGroups = IndexMap<String, TaskGroup>;
+
 /// A task dependency with optional args
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Dependency {
@@ -936,26 +948,24 @@ impl From<Task> for Item {
                 }
                 Item::Value(Value::InlineTable(table))
             }
-            Task::Alias(alias) => {
-                if alias.args.is_some() {
+            Task::Alias(alias) => match &alias.args {
+                Some(args_vec) => {
                     let mut table = Table::new().into_inline_table();
 
-                    if let Some(args_vec) = &alias.args {
-                        let mut args = Vec::new();
-                        for arg in args_vec {
-                            if let Some(default) = &arg.default {
-                                let mut arg_table = Table::new().into_inline_table();
-                                arg_table.insert("arg", arg.name.as_str().into());
-                                arg_table.insert("default", default.into());
-                                args.push(Value::InlineTable(arg_table));
-                            } else {
-                                args.push(Value::String(toml_edit::Formatted::new(
-                                    arg.name.as_str().to_string(),
-                                )));
-                            }
+                    let mut args = Vec::new();
+                    for arg in args_vec {
+                        if let Some(default) = &arg.default {
+                            let mut arg_table = Table::new().into_inline_table();
+                            arg_table.insert("arg", arg.name.as_str().into());
+                            arg_table.insert("default", default.into());
+                            args.push(Value::InlineTable(arg_table));
+                        } else {
+                            args.push(Value::String(toml_edit::Formatted::new(
+                                arg.name.as_str().to_string(),
+                            )));
                         }
-                        table.insert("args", Value::Array(Array::from_iter(args)));
                     }
+                    table.insert("args", Value::Array(Array::from_iter(args)));
 
                     let mut deps = Vec::new();
                     for dep in alias.depends_on.iter() {
@@ -991,7 +1001,8 @@ impl From<Task> for Item {
                     }
 
                     Item::Value(Value::InlineTable(table))
-                } else {
+                }
+                None => {
                     let mut array = Array::new();
                     for dep in alias.depends_on.iter() {
                         let mut table = Table::new().into_inline_table();
@@ -1020,16 +1031,17 @@ impl From<Task> for Item {
                         array.push(Value::InlineTable(table));
                     }
 
-                    if let Some(description) = &alias.description {
-                        let mut table = Table::new().into_inline_table();
-                        table.insert("depends-on", Value::Array(array));
-                        table.insert("description", description.into());
-                        Item::Value(Value::InlineTable(table))
-                    } else {
-                        Item::Value(Value::Array(array))
+                    match &alias.description {
+                        Some(description) => {
+                            let mut table = Table::new().into_inline_table();
+                            table.insert("depends-on", Value::Array(array));
+                            table.insert("description", description.into());
+                            Item::Value(Value::InlineTable(table))
+                        }
+                        None => Item::Value(Value::Array(array)),
                     }
                 }
-            }
+            },
             _ => Item::None,
         }
     }
