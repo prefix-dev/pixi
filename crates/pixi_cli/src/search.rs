@@ -80,7 +80,7 @@ fn build_json_output(packages: &[RepoDataRecord]) -> IndexMap<String, Vec<&RepoD
 pub async fn execute_impl<W: Write>(
     args: Args,
     out: &mut W,
-) -> miette::Result<Option<Vec<RepoDataRecord>>> {
+) -> miette::Result<Vec<RepoDataRecord>> {
     let workspace = match WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
@@ -182,7 +182,7 @@ pub async fn execute_impl<W: Write>(
         }
     }
 
-    Ok(Some(packages))
+    Ok(packages)
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {

@@ -87,7 +87,7 @@ async fn search_return_latest_across_everything() {
     .unwrap();
 
     // Search and check that the latest version is returned
-    let binding = pixi.search("foo".to_string()).await.unwrap().unwrap();
+    let binding = pixi.search("foo".to_string()).await.unwrap();
     let found_package = binding.last().unwrap();
 
     assert_eq!(found_package.package_record.version.as_str(), "4");
@@ -143,17 +143,13 @@ async fn search_using_match_spec() {
     .unwrap();
 
     // Without match spec the latest version is returned
-    let binding = pixi.search("foo".to_string()).await.unwrap().unwrap();
+    let binding = pixi.search("foo".to_string()).await.unwrap();
     let found_package = binding.last().unwrap();
     assert_eq!(found_package.package_record.version.as_str(), "0.2.0");
     assert_eq!(found_package.package_record.build.as_str(), "h60d57d3_1");
 
     // Search for a specific version
-    let binding = pixi
-        .search("foo<=0.1.0".to_string())
-        .await
-        .unwrap()
-        .unwrap();
+    let binding = pixi.search("foo<=0.1.0".to_string()).await.unwrap();
     let found_package = binding.last().unwrap();
     assert_eq!(found_package.package_record.version.as_str(), "0.1.0");
     assert_eq!(found_package.package_record.build.as_str(), "h60d57d3_1");
@@ -162,7 +158,6 @@ async fn search_using_match_spec() {
     let binding = pixi
         .search("foo[build=h60d57d3_0]".to_string())
         .await
-        .unwrap()
         .unwrap();
     let found_package = binding.last().unwrap();
     assert_eq!(found_package.package_record.version.as_str(), "0.2.0");
@@ -227,10 +222,7 @@ async fn test_search_multiple_versions() {
 
     let mut out = Vec::new();
     let builder = pixi.search("foo".to_string());
-    let result = search::execute_impl(builder.args, &mut out)
-        .await
-        .unwrap()
-        .unwrap();
+    let result = search::execute_impl(builder.args, &mut out).await.unwrap();
     let output = strip_ansi(&String::from_utf8(out).unwrap());
 
     let latest_package = result.last().expect("should have at least one result");
@@ -298,10 +290,7 @@ async fn test_search_multiple_packages_compact_view() {
     let mut builder = pixi.search("*a*".to_string());
     builder.args.limit = 2;
     builder.args.limit_packages = 10;
-    let _result = search::execute_impl(builder.args, &mut out)
-        .await
-        .unwrap()
-        .unwrap();
+    let _result = search::execute_impl(builder.args, &mut out).await.unwrap();
     let output = strip_ansi(&String::from_utf8(out).unwrap());
 
     // Filter out lines containing temp dir paths
@@ -360,10 +349,7 @@ async fn test_search_json_output() {
     let mut out = Vec::new();
     let mut builder = pixi.search("foo".to_string());
     builder.args.json = true;
-    let _result = search::execute_impl(builder.args, &mut out)
-        .await
-        .unwrap()
-        .unwrap();
+    let _result = search::execute_impl(builder.args, &mut out).await.unwrap();
     let output = String::from_utf8(out).unwrap();
 
     // Parse the JSON output to verify structure
