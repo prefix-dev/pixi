@@ -57,19 +57,8 @@ pub async fn search(
         ));
     }
 
-    // Sort alphabetically by name, then by version within each package
-    packages.sort_by(|a, b| {
-        a.package_record
-            .name
-            .cmp(&b.package_record.name)
-            .then_with(|| a.package_record.version.cmp(&b.package_record.version))
-            .then_with(|| {
-                a.package_record
-                    .build_number
-                    .cmp(&b.package_record.build_number)
-            })
-            .then_with(|| a.package_record.build.cmp(&b.package_record.build))
-    });
+    // Sort by name, then by version within each package
+    packages.sort();
 
     Ok(packages)
 }
