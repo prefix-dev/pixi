@@ -1926,6 +1926,16 @@ impl Config {
                 }
                 return Ok(());
             }
+            "allow-symbolic-links" => {
+                self.allow_symbolic_links =
+                    value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "allow-hard-links" => {
+                self.allow_hard_links = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "allow-ref-links" => {
+                self.allow_ref_links = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
             key if key.starts_with("proxy-config") => {
                 if key == "proxy-config" {
                     if let Some(value) = value {
