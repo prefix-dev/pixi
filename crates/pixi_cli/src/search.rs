@@ -65,9 +65,7 @@ pub struct Args {
     pub json: bool,
 }
 
-fn build_json_output(
-    packages: &[RepoDataRecord],
-) -> IndexMap<String, Vec<&RepoDataRecord>> {
+fn build_json_output(packages: &[RepoDataRecord]) -> IndexMap<String, Vec<&RepoDataRecord>> {
     let mut result: IndexMap<String, Vec<&RepoDataRecord>> = IndexMap::new();
     for pkg in packages {
         let platform = pkg.package_record.subdir.clone();
@@ -131,7 +129,6 @@ pub async fn execute_impl<W: Write>(
         args.platform
     };
 
-    // Parse the match spec early so we fail fast on invalid input
     let matchspec = MatchSpec::from_str(
         &args.package,
         ParseStrictnessWithNameMatcher {
@@ -213,10 +210,7 @@ fn print_search_results<W: Write>(
 
     // Single package name => show detailed view
     if by_name.len() == 1 {
-        let (_, records) = by_name
-            .iter()
-            .next()
-            .expect("by_name has exactly 1 entry");
+        let (_, records) = by_name.iter().next().expect("by_name has exactly 1 entry");
         let newest = records
             .last()
             .expect("records is non-empty since packages is non-empty");
@@ -241,7 +235,7 @@ fn print_search_results<W: Write>(
         writeln!(
             out,
             "{} ({} {})",
-            console::style(name.as_source()).cyan().bright(),
+            console::style(name.as_source()).green().bold(),
             total_versions,
             if total_versions == 1 {
                 "version"
@@ -263,10 +257,10 @@ fn print_search_results<W: Write>(
             writeln!(
                 out,
                 "  {} {} [{}] {}",
-                record.package_record.version,
+                console::style(&record.package_record.version).cyan(),
                 record.package_record.build,
                 record.package_record.subdir,
-                channel_name,
+                console::style(channel_name).dim(),
             )?;
         }
 
