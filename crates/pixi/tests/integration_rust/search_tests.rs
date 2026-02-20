@@ -371,7 +371,6 @@ async fn test_search_json_output() {
     assert!(first_record.contains_key("build_number"));
     assert!(first_record.contains_key("url"));
     assert!(first_record.contains_key("depends"));
-    assert!(first_record.contains_key("constrains"));
 
     // Verify the filename key contains an archive extension
     let first_filename = first_platform.keys().next().unwrap();

@@ -12,7 +12,6 @@ use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
 use pixi_manifest::FeaturesExt;
 use pixi_progress::await_in_progress;
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
-use serde::Serialize;
 use tracing::{debug, error};
 use url::Url;
 
@@ -63,76 +62,17 @@ pub struct Args {
     pub json: bool,
 }
 
-/// A single package record for JSON output.
-#[derive(Serialize)]
-struct SearchRecord {
-    name: String,
-    version: String,
-    build: String,
-    build_number: u64,
-    channel: Option<String>,
-    url: Url,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    size: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    timestamp: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    license: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    md5: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    sha256: Option<String>,
-    depends: Vec<String>,
-    constrains: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    run_exports: Option<SearchRunExports>,
-}
-
-/// Run exports section for JSON output.
-#[derive(Serialize)]
-struct SearchRunExports {
-    noarch: Vec<String>,
-    strong: Vec<String>,
-    weak: Vec<String>,
-    strong_constrains: Vec<String>,
-    weak_constrains: Vec<String>,
-}
-
 fn build_json_output(
     packages: &[RepoDataRecord],
-) -> IndexMap<String, IndexMap<String, SearchRecord>> {
-    let mut result: IndexMap<String, IndexMap<String, SearchRecord>> = IndexMap::new();
+) -> IndexMap<String, IndexMap<String, &RepoDataRecord>> {
+    let mut result: IndexMap<String, IndexMap<String, &RepoDataRecord>> = IndexMap::new();
     for pkg in packages {
         let platform = pkg.package_record.subdir.clone();
         let file_name = pkg.identifier.to_file_name();
-        let record = SearchRecord {
-            name: pkg.package_record.name.as_source().to_string(),
-            version: pkg.package_record.version.to_string(),
-            build: pkg.package_record.build.clone(),
-            build_number: pkg.package_record.build_number,
-            channel: pkg.channel.clone(),
-            url: pkg.url.clone(),
-            size: pkg.package_record.size,
-            timestamp: pkg.package_record.timestamp.as_ref().map(|t| t.timestamp()),
-            license: pkg.package_record.license.clone(),
-            md5: pkg.package_record.md5.map(|h| format!("{h:x}")),
-            sha256: pkg.package_record.sha256.map(|h| format!("{h:x}")),
-            depends: pkg.package_record.depends.clone(),
-            constrains: pkg.package_record.constrains.clone(),
-            run_exports: pkg.package_record.run_exports.as_ref().map(|re| {
-                SearchRunExports {
-                    noarch: re.noarch.clone(),
-                    strong: re.strong.clone(),
-                    weak: re.weak.clone(),
-                    strong_constrains: re.strong_constrains.clone(),
-                    weak_constrains: re.weak_constrains.clone(),
-                }
-            }),
-        };
         result
             .entry(platform)
             .or_default()
-            .insert(file_name, record);
+            .insert(file_name, pkg);
     }
     result
 }
