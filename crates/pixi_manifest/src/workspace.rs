@@ -10,6 +10,7 @@ use url::Url;
 use super::pypi::pypi_options::PypiOptions;
 use crate::{
     PrioritizedChannel, S3Options, Targets, exclude_newer::ExcludeNewer, preview::Preview,
+    warning::WarningConfig,
 };
 use minijinja::{AutoEscape, Environment, UndefinedBehavior};
 use once_cell::sync::Lazy;
@@ -89,6 +90,9 @@ pub struct Workspace {
 
     /// Exclude package candidates that are newer than this date.
     pub exclude_newer: Option<ExcludeNewer>,
+
+    /// Configurable warning behavior
+    pub warnings: WarningConfig,
 }
 
 /// A source that contributes additional build variant definitions.
