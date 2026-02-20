@@ -313,8 +313,7 @@ impl TomlManifest {
                             warnings.extend(feature_warnings);
 
                             // Add synthetic feature to features map
-                            features_used_by_environments
-                                .insert(inline_name.to_string());
+                            features_used_by_environments.insert(inline_name.to_string());
                             features.insert(inline_name, synthetic_feature);
 
                             final_features.push(Spanned {
@@ -350,9 +349,7 @@ impl TomlManifest {
 
             for spanned in &included_features {
                 let name_str = match &spanned.value {
-                    EnvironmentFeature::Inline => {
-                        FeatureName::inline(name.as_str()).to_string()
-                    }
+                    EnvironmentFeature::Inline => FeatureName::inline(name.as_str()).to_string(),
                     EnvironmentFeature::Named(n) => n.clone(),
                 };
                 features_used_by_environments.insert(name_str);
@@ -368,9 +365,7 @@ impl TomlManifest {
             } in &included_features
             {
                 let feature_name_str = match env_feature {
-                    EnvironmentFeature::Inline => {
-                        FeatureName::inline(name.as_str()).to_string()
-                    }
+                    EnvironmentFeature::Inline => FeatureName::inline(name.as_str()).to_string(),
                     EnvironmentFeature::Named(n) => {
                         if n.starts_with('.') {
                             return Err(TomlError::from(
