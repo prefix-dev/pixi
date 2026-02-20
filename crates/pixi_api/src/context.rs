@@ -34,9 +34,9 @@ impl<I: Interface> DefaultContext<I> {
         &self,
         pattern: &str,
         channels: IndexSet<Channel>,
-        platform: Platform,
+        platforms: Vec<Platform>,
     ) -> miette::Result<Vec<RepoDataRecord>> {
-        crate::workspace::search::search(None, pattern, channels, platform).await
+        crate::workspace::search::search(None, pattern, channels, platforms).await
     }
 }
 
@@ -397,8 +397,8 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         pattern: &str,
         channels: IndexSet<Channel>,
-        platform: Platform,
+        platforms: Vec<Platform>,
     ) -> miette::Result<Vec<RepoDataRecord>> {
-        crate::workspace::search::search(Some(&self.workspace), pattern, channels, platform).await
+        crate::workspace::search::search(Some(&self.workspace), pattern, channels, platforms).await
     }
 }

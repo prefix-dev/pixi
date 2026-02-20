@@ -11,7 +11,7 @@ pub async fn search(
     workspace: Option<&Workspace>,
     pattern: &str,
     channels: IndexSet<Channel>,
-    platform: Platform,
+    platforms: Vec<Platform>,
 ) -> miette::Result<Vec<RepoDataRecord>> {
     let client = if let Some(workspace) = workspace {
         workspace.authenticated_client()?.clone()
@@ -36,7 +36,7 @@ pub async fn search(
     let repo_data = gateway
         .query(
             channels.clone(),
-            [platform, Platform::NoArch],
+            platforms,
             vec![matchspec.clone()],
         )
         .recursive(false)

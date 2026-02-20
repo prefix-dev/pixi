@@ -9,6 +9,7 @@ use miette::{IntoDiagnostic, Report};
 use pixi_api::{DefaultContext, WorkspaceContext};
 use pixi_config::default_channel_config;
 use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
+use pixi_manifest::FeaturesExt;
 use pixi_progress::await_in_progress;
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use tracing::{debug, error};
@@ -35,9 +36,13 @@ pub struct Args {
     #[clap(flatten)]
     pub project_config: WorkspaceConfig,
 
-    /// The platform to search for, defaults to current platform
-    #[arg(short, long, default_value_t = Platform::current())]
-    pub platform: Platform,
+    /// The platform(s) to search for
+    #[arg(short, long, default_values_t = [Platform::current(), Platform::NoArch])]
+    pub platform: Vec<Platform>,
+
+    /// Search across all platforms (from manifest if available, otherwise all known platforms)
+    #[arg(long, conflicts_with = "platform")]
+    pub all_platforms: bool,
 
     /// Limit the number of versions shown per package, -1 for no limit
     #[clap(short, long, default_value = "5", allow_hyphen_values = true)]
@@ -86,17 +91,36 @@ pub async fn execute_impl<W: Write>(
             .join(", ")
     );
 
+    // Resolve platforms
+    let platforms = if args.all_platforms {
+        if let Some(ref workspace) = workspace {
+            let mut platforms: Vec<Platform> = workspace
+                .default_environment()
+                .platforms()
+                .into_iter()
+                .collect();
+            if !platforms.contains(&Platform::NoArch) {
+                platforms.push(Platform::NoArch);
+            }
+            platforms
+        } else {
+            Platform::all().collect()
+        }
+    } else {
+        args.platform
+    };
+
     let packages = if let Some(workspace) = workspace {
         await_in_progress("searching packages...", |_| async {
             WorkspaceContext::new(CliInterface {}, workspace)
-                .search(&args.package, channels, args.platform)
+                .search(&args.package, channels, platforms)
                 .await
         })
         .await?
     } else {
         await_in_progress("searching packages...", |_| async {
             DefaultContext::new(CliInterface {})
-                .search(&args.package, channels, args.platform)
+                .search(&args.package, channels, platforms)
                 .await
         })
         .await?

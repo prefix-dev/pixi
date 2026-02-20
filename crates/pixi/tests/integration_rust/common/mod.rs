@@ -468,7 +468,8 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                     ..Default::default()
                 },
-                platform: Platform::current(),
+                platform: vec![Platform::current(), Platform::NoArch],
+                all_platforms: false,
                 limit: 5,
                 limit_packages: 10,
                 channels: ChannelsConfig::default(),
