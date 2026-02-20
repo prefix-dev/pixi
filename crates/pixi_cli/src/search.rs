@@ -428,12 +428,7 @@ fn print_package_info<W: Write>(
         Some(md5) => format!("{md5:x}"),
         None => "Not available".to_string(),
     };
-    writeln!(
-        out,
-        "{:19} {}",
-        console::style("MD5"),
-        console::style(md5)
-    )?;
+    writeln!(out, "{:19} {}", console::style("MD5"), console::style(md5))?;
 
     let sha256 = match package.package_record.sha256 {
         Some(sha256) => format!("{sha256:x}"),
