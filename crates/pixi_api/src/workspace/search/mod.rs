@@ -21,11 +21,7 @@ pub async fn search(
     let gateway = config.gateway().with_client(client).finish();
 
     let repo_data = gateway
-        .query(
-            channels.clone(),
-            platforms,
-            vec![matchspec.clone()],
-        )
+        .query(channels.clone(), platforms, vec![matchspec.clone()])
         .recursive(false)
         .await
         .into_diagnostic()?;
