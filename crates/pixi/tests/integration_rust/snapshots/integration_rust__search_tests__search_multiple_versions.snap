@@ -8,8 +8,8 @@ foo-0.2.0-h60d57d3_1 (+ 1 build)
 Name                foo
 Version             0.2.0
 Build               h60d57d3_1
-Size                Not found.
-License             Not found.
+Size                30.00 KiB
+Timestamp           2024-01-01 00:00:00 UTC
 Subdir              noarch
 File Name           foo-0.2.0-h60d57d3_1.conda
 MD5                 046ee97456e4c968d514dcb0b4632a8c
@@ -21,4 +21,4 @@ Run exports:
 
 Other Versions (1):
 Version  Build
-0.1.0    h60d57d3_1  (+ 1 build)
+0.1.0    h60d57d3_1 (+ 1 build)

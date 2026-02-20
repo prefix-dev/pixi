@@ -1,3 +1,4 @@
+use chrono::{TimeZone, Utc};
 use insta::assert_snapshot;
 use pixi_cli::search;
 use rattler_conda_types::Platform;
@@ -173,6 +174,10 @@ async fn test_search_multiple_versions() {
     setup_tracing();
 
     let mut package_database = MockRepoData::default();
+    let timestamp = Utc
+        .with_ymd_and_hms(2024, 1, 1, 0, 0, 0)
+        .single()
+        .expect("valid timestamp");
 
     // Add package with multiple versions and build strings
     package_database.add_package(
@@ -196,13 +201,14 @@ async fn test_search_multiple_versions() {
             .with_subdir(Platform::NoArch)
             .finish(),
     );
-    package_database.add_package(
-        Package::build("foo", "0.2.0")
-            .with_build("h60d57d3_1")
-            .with_build_number(1)
-            .with_subdir(Platform::NoArch)
-            .finish(),
-    );
+    let mut latest_package = Package::build("foo", "0.2.0")
+        .with_build("h60d57d3_1")
+        .with_build_number(1)
+        .with_timestamp(timestamp)
+        .with_subdir(Platform::NoArch)
+        .finish();
+    latest_package.package_record.size = Some(30 * 1024);
+    package_database.add_package(latest_package);
     let temp_dir = TempDir::new().unwrap();
     let channel_dir = temp_dir.path().join("channel");
     package_database.write_repodata(&channel_dir).await.unwrap();
@@ -237,7 +243,7 @@ async fn test_search_multiple_versions() {
         .collect::<Vec<_>>()
         .join("\n");
     assert_snapshot!(output);
-    assert!(output.contains("0.1.0    h60d57d3_1  (+ 1 build)"));
+    assert!(output.contains("0.1.0    h60d57d3_1 (+ 1 build)"));
 }
 
 #[tokio::test]

@@ -341,21 +341,21 @@ fn print_package_info<W: Write>(
 
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("Name"),
         console::style(package_name)
     )?;
 
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("Version"),
         console::style(package.package_record.version)
     )?;
 
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("Build"),
         console::style(build)
     )?;
@@ -366,26 +366,24 @@ fn print_package_info<W: Write>(
     };
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("Size"),
         console::style(size)
     )?;
 
-    let license = match package.package_record.license {
-        Some(license) => license,
-        None => String::from("Not found."),
-    };
-    writeln!(
-        out,
-        "{:19} {:19}",
-        console::style("License"),
-        console::style(license)
-    )?;
+    if let Some(license) = package.package_record.license.as_ref() {
+        writeln!(
+            out,
+            "{:19} {}",
+            console::style("License"),
+            console::style(license)
+        )?;
+    }
 
     if let Some(timestamp) = package.package_record.timestamp {
         writeln!(
             out,
-            "{:19} {:19}",
+            "{:19} {}",
             console::style("Timestamp"),
             console::style(
                 timestamp
@@ -398,7 +396,7 @@ fn print_package_info<W: Write>(
 
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("Subdir"),
         console::style(&package.package_record.subdir)
     )?;
@@ -406,7 +404,7 @@ fn print_package_info<W: Write>(
     if let Some(noarch_kind) = package.package_record.noarch.kind() {
         writeln!(
             out,
-            "{:19} {:19}",
+            "{:19} {}",
             console::style("NoArch"),
             console::style(format!("{noarch_kind:?}").to_lowercase())
         )?;
@@ -414,14 +412,14 @@ fn print_package_info<W: Write>(
 
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("File Name"),
         console::style(package.identifier.to_file_name())
     )?;
 
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("URL"),
         console::style(&package.url)
     )?;
@@ -432,7 +430,7 @@ fn print_package_info<W: Write>(
     };
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("MD5"),
         console::style(md5)
     )?;
@@ -443,7 +441,7 @@ fn print_package_info<W: Write>(
     };
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("SHA256"),
         console::style(sha256),
     )?;
@@ -499,20 +497,12 @@ fn print_package_info<W: Write>(
             .max()
             .expect("there is at least one version, so this should not be empty")
             + 1;
-        let build_width = other_versions
-            .iter()
-            .map(|v| v.package_record.build.len())
-            .chain(["Build".len()].iter().cloned())
-            .max()
-            .expect("there is at least one build, so this should not be empty")
-            + 1;
         writeln!(
             out,
-            "{:version_width$} {:build_width$}",
+            "{:version_width$} {}",
             console::style("Version").bold(),
             console::style("Build").bold(),
-            version_width = version_width,
-            build_width = build_width
+            version_width = version_width
         )?;
         let max_displayed = limit_versions.unwrap_or(usize::MAX);
         for (i, (version, builds)) in grouped_by_version.iter().enumerate() {
@@ -532,12 +522,11 @@ fn print_package_info<W: Write>(
             let other_builds = builds[..builds.len() - 1].to_vec();
             writeln!(
                 out,
-                "{:version_width$} {:build_width$}{}",
+                "{:version_width$} {}{}",
                 console::style(version.to_string()),
                 console::style(newest_build.package_record.build.clone()),
                 console::style(format_additional_builds_string(Some(other_builds))).dim(),
-                version_width = version_width,
-                build_width = build_width
+                version_width = version_width
             )?;
         }
     }
