@@ -2340,6 +2340,7 @@ UNUSED = "unused"
             // Deprecated keys
             change_ps1: None,
             force_activate: None,
+            error_on_missing_globs: Some(true),
         };
         let original_other = other.clone();
         config = config.merge_config(other);
