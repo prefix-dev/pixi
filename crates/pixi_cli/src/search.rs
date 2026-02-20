@@ -317,8 +317,6 @@ fn print_package_info<W: Write>(
     out: &mut W,
     limit_versions: Option<usize>,
 ) -> io::Result<()> {
-    writeln!(out)?;
-
     let package = package.clone();
     let package_name = package.package_record.name.as_source();
     let build = &package.package_record.build;
