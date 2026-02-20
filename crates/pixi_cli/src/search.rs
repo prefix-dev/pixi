@@ -528,12 +528,16 @@ fn print_package_info<W: Write>(
                 )?;
                 break;
             }
+            let newest_build = builds
+                .last()
+                .expect("each version group has at least one build");
+            let other_builds = builds[..builds.len() - 1].to_vec();
             writeln!(
                 out,
                 "{:version_width$} {:build_width$}{}",
                 console::style(version.to_string()),
-                console::style(builds[0].package_record.build.clone()),
-                console::style(format_additional_builds_string(Some(builds[1..].to_vec()))).dim(),
+                console::style(newest_build.package_record.build.clone()),
+                console::style(format_additional_builds_string(Some(other_builds))).dim(),
                 version_width = version_width,
                 build_width = build_width
             )?;
