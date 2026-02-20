@@ -200,7 +200,10 @@ fn print_search_results<W: Write>(
 
     // Single package name => show detailed view
     if by_name.len() == 1 {
-        let (_, records) = by_name.iter().next().unwrap();
+        let (_, records) = by_name
+            .iter()
+            .next()
+            .expect("by_name has exactly 1 entry");
         let newest = records
             .last()
             .expect("records is non-empty since packages is non-empty");
