@@ -39,9 +39,11 @@ rattler_repodata_gateway = { workspace = true, features = [
 regex = { workspace = true }
 same-file = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+serde_ignored = { workspace = true }
 strsim = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
+toml_edit = { workspace = true, features = ["serde"] }
 tracing = { workspace = true }
 url = { workspace = true }
 uv-normalize = { workspace = true }

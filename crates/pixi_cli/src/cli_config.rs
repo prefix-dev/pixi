@@ -5,6 +5,7 @@ use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
+use pixi_api::workspace::WorkspaceRegistry;
 use pixi_build_frontend::BackendOverride;
 use pixi_config::Config;
 use pixi_consts::consts;
@@ -28,21 +29,33 @@ use pixi_pypi_spec::PypiPackageName;
 #[derive(Parser, Debug, Default, Clone)]
 pub struct WorkspaceConfig {
     /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
-    #[arg(long, short, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    #[arg(long, short, global = true, conflicts_with = "workspace", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub manifest_path: Option<PathBuf>,
 
     /// Backend override for testing purposes. This field is ignored by clap
     /// and should only be set programmatically in tests.
     #[clap(skip)]
     pub backend_override: Option<BackendOverride>,
+
+    /// Name of the workspace
+    #[arg(long, short = 'w', global = true, conflicts_with = "manifest_path", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    pub workspace: Option<String>,
 }
 
 impl WorkspaceConfig {
     /// Returns the start location when trying to discover a workspace.
     pub fn workspace_locator_start(&self) -> DiscoveryStart {
-        match &self.manifest_path {
-            Some(path) => DiscoveryStart::ExplicitManifest(path.clone()),
-            None => DiscoveryStart::CurrentDir,
+        if let Some(manifest_path) = &self.manifest_path {
+            DiscoveryStart::ExplicitManifest(manifest_path.clone())
+        } else if let Some(workspace) = &self.workspace {
+            let workspace_registry =
+                WorkspaceRegistry::load().expect("Unable to load workspace registry");
+            let path = workspace_registry
+                .named_workspace(workspace)
+                .expect("Unable to find workspace");
+            DiscoveryStart::ExplicitManifest(path)
+        } else {
+            DiscoveryStart::CurrentDir
         }
     }
 }

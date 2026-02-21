@@ -1,0 +1,156 @@
+---
+source: crates/pixi_config/src/lib.rs
+assertion_line: 2467
+expression: debug
+---
+Config {
+    default_channels: [
+        Name(
+            "conda-forge",
+        ),
+        Name(
+            "bioconda",
+        ),
+        Name(
+            "defaults",
+        ),
+    ],
+    authentication_override_file: None,
+    tls_no_verify: Some(
+        false,
+    ),
+    tls_root_certs: None,
+    mirrors: {
+        Url {
+            scheme: "https",
+            cannot_be_a_base: false,
+            username: "",
+            password: None,
+            host: Some(
+                Domain(
+                    "conda.anaconda.org",
+                ),
+            ),
+            port: None,
+            path: "/conda-forge",
+            query: None,
+            fragment: None,
+        }: [
+            Url {
+                scheme: "whatever",
+                cannot_be_a_base: false,
+                username: "",
+                password: None,
+                host: Some(
+                    Domain(
+                        "config_2",
+                    ),
+                ),
+                port: None,
+                path: "",
+                query: None,
+                fragment: None,
+            },
+        ],
+    },
+    pinning_strategy: None,
+    loaded_from: [
+        "path/config_2.toml",
+        "path/config_1.toml",
+    ],
+    channel_config: ChannelConfig {
+        channel_alias: Url {
+            scheme: "https",
+            cannot_be_a_base: false,
+            username: "",
+            password: None,
+            host: Some(
+                Domain(
+                    "conda.anaconda.org",
+                ),
+            ),
+            port: None,
+            path: "/",
+            query: None,
+            fragment: None,
+        },
+        root_dir: "/root/dir",
+    },
+    repodata_config: RepodataConfig {
+        default: RepodataChannelConfig {
+            disable_jlap: Some(
+                true,
+            ),
+            disable_bzip2: None,
+            disable_zstd: Some(
+                true,
+            ),
+            disable_sharded: None,
+        },
+        per_channel: {},
+    },
+    pypi_config: PyPIConfig {
+        index_url: None,
+        extra_index_urls: [],
+        keyring_provider: None,
+        allow_insecure_host: [],
+    },
+    s3_options: {
+        "bucket1": S3Options {
+            endpoint_url: Url {
+                scheme: "https",
+                cannot_be_a_base: false,
+                username: "",
+                password: None,
+                host: Some(
+                    Domain(
+                        "my-s3-host",
+                    ),
+                ),
+                port: None,
+                path: "/",
+                query: None,
+                fragment: None,
+            },
+            region: "us-east-1",
+            force_path_style: false,
+        },
+    },
+    detached_environments: Some(
+        Boolean(
+            true,
+        ),
+    ),
+    shell: ShellConfig {
+        force_activate: None,
+        source_completion_scripts: None,
+        change_ps1: Some(
+            true,
+        ),
+    },
+    experimental: ExperimentalConfig {
+        use_environment_activation_cache: None,
+    },
+    concurrency: ConcurrencyConfig {
+        solves: 1,
+        downloads: 50,
+    },
+    run_post_link_scripts: None,
+    proxy_config: ProxyConfig {
+        https: None,
+        http: None,
+        non_proxy_hosts: [],
+    },
+    build: BuildConfig {
+        package_format: Some(
+            PackageFormatAndCompression {
+                archive_type: Conda,
+                compression_level: Highest,
+            },
+        ),
+    },
+    tool_platform: None,
+    named_workspaces: {},
+    change_ps1: None,
+    force_activate: None,
+}
