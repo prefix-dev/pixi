@@ -1,4 +1,4 @@
-use pixi_config::{self, Config};
+use pixi_api::workspace::WorkspaceRegistry;
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_manifest::EnvironmentName;
@@ -229,37 +229,21 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
     Ok(())
 }
 
-fn global_config_write_path() -> miette::Result<PathBuf> {
-    let mut global_locations = pixi_config::config_path_global();
-    let mut to = global_locations
-        .pop()
-        .expect("should have at least one global config path");
-
-    for p in global_locations {
-        if p.exists() {
-            to = p;
-            break;
-        }
-    }
-    Ok(to)
-}
-
 /// Clean disassociated workspaces from the workspace registry
 async fn clean_workspaces() -> miette::Result<()> {
-    let mut config = Config::load_global();
-    let to = global_config_write_path()?;
-    let mut workspaces = config.named_workspaces.clone();
+    let mut workspace_registry = WorkspaceRegistry::load()?;
+    let workspace_map = workspace_registry.named_workspaces_map();
 
-    workspaces.retain(|key, val| {
-        if val.exists() {
-            true
-        } else {
-            eprintln!("{} {}", console::style("removed workspace").green(), key);
-            false
-        }
-    });
-    config.named_workspaces = workspaces;
-    config.save(&to)?;
+    let names_to_remove: Vec<_> = workspace_map
+        .iter()
+        .filter(|(_, path)| !path.exists())
+        .map(|(name, _)| name.clone())
+        .collect();
+
+    for name in names_to_remove {
+        workspace_registry.remove_workspace(&name).await?;
+        eprintln!("{} {}", console::style("removed workspace").green(), name);
+    }
     eprintln!(
         "{} Workspace registry cleaned",
         console::style(console::Emoji("✔ ", "")).green(),
