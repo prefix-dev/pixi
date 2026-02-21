@@ -51,6 +51,9 @@ pub enum Command {
     /// Remove a workspace from registry.
     #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
+    /// Prune disassociated workspaces from registry.
+    #[clap(visible_alias = "pr")]
+    Prune(PruneArgs),
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -82,6 +85,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 "{} Workspace '{}' has been removed from the registry successfully.",
                 console::style(console::Emoji("✔ ", "")).green(),
                 &remove_args.name
+            );
+        }
+        Some(Command::Prune(_)) => {
+            let mut workspace_registry = WorkspaceRegistry::load()?;
+            let workspace_map = workspace_registry.named_workspaces_map();
+
+            let names_to_remove: Vec<_> = workspace_map
+                .iter()
+                .filter(|(_, path)| !path.exists())
+                .map(|(name, _)| name.clone())
+                .collect();
+
+            for name in names_to_remove {
+                workspace_registry.remove_workspace(&name).await?;
+                eprintln!("{} {}", console::style("removed workspace").green(), name);
+            }
+            eprintln!(
+                "{} Workspace registry cleaned",
+                console::style(console::Emoji("✔ ", "")).green(),
             );
         }
         None => {

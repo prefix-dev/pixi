@@ -232,20 +232,12 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
 /// Clean disassociated workspaces from the workspace registry
 async fn clean_workspaces() -> miette::Result<()> {
     let mut workspace_registry = WorkspaceRegistry::load()?;
-    let workspace_map = workspace_registry.named_workspaces_map();
-
-    let names_to_remove: Vec<_> = workspace_map
-        .iter()
-        .filter(|(_, path)| !path.exists())
-        .map(|(name, _)| name.clone())
-        .collect();
-
-    for name in names_to_remove {
-        workspace_registry.remove_workspace(&name).await?;
-        eprintln!("{} {}", console::style("removed workspace").green(), name);
+    let removed_workspaces = workspace_registry.prune().await?;
+    for name in removed_workspaces {
+        eprintln!("{} {}", console::style("pruned workspace").green(), name);
     }
     eprintln!(
-        "{} Workspace registry cleaned",
+        "{} Workspace registry pruned",
         console::style(console::Emoji("✔ ", "")).green(),
     );
     Ok(())
