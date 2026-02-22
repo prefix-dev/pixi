@@ -98,7 +98,6 @@ mod tests {
     use itertools::Itertools;
     use rattler_conda_types::{PackageName, Platform};
     use pixi_manifest::FeaturesExt;
-    use rattler_conda_types::PackageName;
 
     use crate::Workspace;
 
@@ -208,7 +207,7 @@ mod tests {
         // Create a project where two environments share a solve group but one
         // feature restricts platforms. When solving for win-64, the restricted
         // feature's dependencies should not be included.
-        let project = Project::from_str(
+        let project = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
         [project]
@@ -239,7 +238,7 @@ mod tests {
         // For win-64, only 'a' should be present because 'b' belongs to a
         // feature that restricts to linux-64/osx-arm64.
         let win64_deps: HashSet<_> = solve_group
-            .dependencies(None, Some(Platform::Win64))
+            .combined_dependencies(Some(Platform::Win64))
             .names()
             .cloned()
             .collect();
@@ -254,7 +253,7 @@ mod tests {
 
         // For linux-64, both 'a' and 'b' should be present.
         let linux64_deps: HashSet<_> = solve_group
-            .dependencies(None, Some(Platform::Linux64))
+            .combined_dependencies(Some(Platform::Linux64))
             .names()
             .cloned()
             .collect();
