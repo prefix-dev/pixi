@@ -92,20 +92,24 @@ impl<'p> OutdatedEnvironments<'p> {
         for (solve_group, platforms) in conda_solve_groups_out_of_date {
             for env in solve_group.environments() {
                 let env_platforms = env.platforms();
-                outdated_conda
-                    .entry(env.clone())
-                    .or_default()
-                    .extend(platforms.iter().filter(|p| env_platforms.contains(p)).copied());
+                outdated_conda.entry(env.clone()).or_default().extend(
+                    platforms
+                        .iter()
+                        .filter(|p| env_platforms.contains(p))
+                        .copied(),
+                );
             }
         }
 
         for (solve_group, platforms) in pypi_solve_groups_out_of_date {
             for env in solve_group.environments() {
                 let env_platforms = env.platforms();
-                outdated_pypi
-                    .entry(env.clone())
-                    .or_default()
-                    .extend(platforms.iter().filter(|p| env_platforms.contains(p)).copied());
+                outdated_pypi.entry(env.clone()).or_default().extend(
+                    platforms
+                        .iter()
+                        .filter(|p| env_platforms.contains(p))
+                        .copied(),
+                );
             }
         }
 

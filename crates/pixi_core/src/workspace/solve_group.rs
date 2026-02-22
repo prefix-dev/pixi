@@ -96,8 +96,8 @@ mod tests {
     use std::{collections::HashSet, path::Path};
 
     use itertools::Itertools;
-    use rattler_conda_types::{PackageName, Platform};
     use pixi_manifest::FeaturesExt;
+    use rattler_conda_types::{PackageName, Platform};
 
     use crate::Workspace;
 
