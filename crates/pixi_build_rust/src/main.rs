@@ -162,9 +162,16 @@ impl GenerateRecipe for RustGenerator {
             has_sccache = true;
         }
 
+        // Synthesize cargo_args: add --bin for each binary if specified
+        let mut cargo_args = config.extra_args.clone();
+        for bin in &config.binaries {
+            cargo_args.push("--bin".to_string());
+            cargo_args.push(bin.clone());
+        }
+
         let build_script = BuildScriptContext {
             source_dir: manifest_root.display().to_string(),
-            extra_args: config.extra_args.clone(),
+            extra_args: cargo_args,
             has_openssl,
             has_sccache,
             is_bash: !Platform::current().is_windows(),
@@ -239,6 +246,35 @@ pub async fn main() {
 
 #[cfg(test)]
 mod tests {
+
+    #[tokio::test]
+    async fn test_binaries_flag_is_rendered() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+        });
+
+        let generated_recipe = RustGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RustBackendConfig {
+                    binaries: vec!["rattler-build".to_string()],
+                    ignore_cargo_manifest: Some(true),
+                    ..Default::default()
+                },
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &std::collections::HashSet::new(),
+                vec![],
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let content = &generated_recipe.recipe.build.script.content;
+        assert!(content.contains("--bin rattler-build"));
+    }
     use cargo_toml::Manifest;
     use indexmap::IndexMap;
     use recipe_stage0::recipe::{Item, Value};
