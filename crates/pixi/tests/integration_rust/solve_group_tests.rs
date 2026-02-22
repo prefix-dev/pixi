@@ -102,7 +102,9 @@ async fn conda_solve_group_functionality() {
 
 #[tokio::test]
 async fn conda_solve_group_heterogeneous_platforms() {
-    let mut package_database = PackageDatabase::default();
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
 
     // Add `foo` available on both linux-64 and win-64
     package_database.add_package(
@@ -160,7 +162,7 @@ async fn conda_solve_group_heterogeneous_platforms() {
 
     // This should succeed; before the fix it would fail with
     // "No candidates were found for bar" when solving for win-64.
-    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
 
     // `full` environment: has `foo` on both platforms, no `bar`
     assert!(
