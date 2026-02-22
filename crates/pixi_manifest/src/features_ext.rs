@@ -166,7 +166,6 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn pypi_dependencies(&self, platform: Option<Platform>) -> PyPiDependencies {
         let deps: Vec<_> = self
             .features()
-            .filter(|f| f.supports_platform(platform))
             .filter_map(|f| f.pypi_dependencies(platform))
             .collect();
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
@@ -184,7 +183,6 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn dependencies(&self, kind: SpecType, platform: Option<Platform>) -> CondaDependencies {
         let deps: Vec<_> = self
             .features()
-            .filter(|f| f.supports_platform(platform))
             .filter_map(|f| f.dependencies(kind, platform))
             .collect();
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))

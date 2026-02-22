@@ -375,17 +375,6 @@ impl Feature {
         self.pypi_options.as_ref()
     }
 
-    /// Returns true if this feature supports the given platform, or if no
-    /// platform restriction is specified. Features without an explicit platform
-    /// restriction are considered to support all platforms.
-    pub fn supports_platform(&self, platform: Option<Platform>) -> bool {
-        match (&self.platforms, platform) {
-            (Some(platforms), Some(p)) => platforms.value.contains(&p),
-            _ => true,
-        }
-    }
-}
-
     /// Returns the dev dependencies of the feature for a given `platform`.
     ///
     /// Dev dependencies are source packages whose build/host/run dependencies
