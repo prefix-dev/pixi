@@ -1,0 +1,16 @@
+[project]
+channels = ["conda-forge"]
+name = "pixitest"
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+[dependencies]
+numpy = "*"
+
+[feature.feat1]
+platforms = ["linux-64", "osx-arm64"]
+[feature.feat1.dependencies]
+kubernetes-kind = "*"
+
+[environments]
+env1 = { solve-group = "prod" }
+env2 = { features = ["feat1"], solve-group = "prod" }
