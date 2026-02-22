@@ -3,11 +3,15 @@ extend-exclude = [
   ".git/",
   ".pixi/",
   "**/*.snap",
-  ".codespellrc",
-  "tests/mapping_files/*",
+  "tests/data/mapping_files/*",
+  "examples/**/**.ipynb",
+  "robostack.yaml",
 ]
 ignore-hidden = false
 
 [default.extend-identifiers]
+_placehold = "_placehold"
+intoto = "intoto"
+plt-setp = "plt.setp"
 pn = "pn"
 solvePnPRansac = "solvePnPRansac"

@@ -1,11 +1,16 @@
-use std::path::Path;
+use std::{
+    fmt::Display,
+    path::{Path, PathBuf},
+};
 
-use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
+use itertools::Either;
+use rattler_conda_types::{NamelessMatchSpec, package::CondaArchiveType};
+use serde_with::serde_as;
 use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
 
-use crate::SpecConversionError;
+use crate::{BinarySpec, SpecConversionError};
 
-/// A specification of a package from a git repository.
+/// A specification of a package from a path.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct PathSpec {
     /// The path to the package
@@ -13,17 +18,174 @@ pub struct PathSpec {
 }
 
 impl PathSpec {
+    /// Constructs a new [`PathSpec`] from the given path.
+    pub fn new(path: impl Into<Utf8TypedPathBuf>) -> Self {
+        Self { path: path.into() }
+    }
+
     /// Converts this instance into a [`NamelessMatchSpec`] if the path points
     /// to binary archive.
     pub fn try_into_nameless_match_spec(
         self,
         root_dir: &Path,
     ) -> Result<Option<NamelessMatchSpec>, SpecConversionError> {
-        if !self.is_binary() {
-            // Not a binary package
-            return Ok(None);
+        match self.into_source_or_binary() {
+            Either::Left(_source) => Ok(None),
+            Either::Right(binary) => Ok(Some(binary.try_into_nameless_match_spec(root_dir)?)),
+        }
+    }
+
+    /// Resolves the path relative to `root_dir`. If the path is absolute,
+    /// it is returned verbatim.
+    ///
+    /// May return an error if the path is prefixed with `~` and the home
+    /// directory is undefined.
+    pub fn resolve(&self, root_dir: impl AsRef<Path>) -> Result<PathBuf, SpecConversionError> {
+        resolve_path(Path::new(self.path.as_str()), root_dir)
+    }
+
+    /// Converts this instance into a [`PathSourceSpec`] if the path points to a
+    /// source package. Otherwise, returns this instance unmodified.
+    #[allow(clippy::result_large_err)]
+    pub fn try_into_source_path(self) -> Result<PathSourceSpec, Self> {
+        if self.is_binary() {
+            Err(self)
+        } else {
+            Ok(PathSourceSpec { path: self.path })
+        }
+    }
+
+    /// Returns true if this path points to a binary archive.
+    ///
+    /// This is determined by checking if the path has a known binary archive
+    /// extension (e.g. `.tar.bz2`, `.conda`).
+    pub fn is_binary(&self) -> bool {
+        CondaArchiveType::try_from(Path::new(self.path.as_str())).is_some()
+    }
+
+    /// Converts this instance into a [`PathSourceSpec`] if the path points to a
+    /// source package. Or to a [`NamelessMatchSpec`] otherwise.
+    pub fn into_source_or_binary(self) -> Either<PathSourceSpec, PathBinarySpec> {
+        if self.is_binary() {
+            Either::Right(PathBinarySpec { path: self.path })
+        } else {
+            Either::Left(PathSourceSpec { path: self.path })
+        }
+    }
+}
+
+impl Display for PathSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.path)
+    }
+}
+
+// TODO: Contribute `impl FromStr for Utf8TypedPathBuf` to typed-path
+// to continue using `serde_as` and remove manual implementations of
+// serialization and deserialization below. See git blame history
+// right before this line was added.
+
+/// Path to a source package. Different from [`PathSpec`] in that this type only
+/// refers to source packages.
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct PathSourceSpec {
+    /// The path to the package. Either a directory or an archive.
+    pub path: Utf8TypedPathBuf,
+}
+
+impl Display for PathSourceSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.path)
+    }
+}
+
+impl serde::Serialize for PathSourceSpec {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        #[derive(serde::Serialize)]
+        struct Raw {
+            path: String,
         }
 
+        Raw {
+            path: self.path.to_string(),
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PathSourceSpec {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        struct Raw {
+            path: String,
+        }
+
+        Raw::deserialize(deserializer).map(|raw| PathSourceSpec {
+            path: raw.path.into(),
+        })
+    }
+}
+
+impl From<PathSourceSpec> for PathSpec {
+    fn from(value: PathSourceSpec) -> Self {
+        Self { path: value.path }
+    }
+}
+
+impl PathSourceSpec {
+    /// Resolves the path relative to `root_dir`. If the path is absolute,
+    /// it is returned verbatim.
+    ///
+    /// May return an error if the path is prefixed with `~` and the home
+    /// directory is undefined.
+    pub fn resolve(&self, root_dir: impl AsRef<Path>) -> Result<PathBuf, SpecConversionError> {
+        resolve_path(Path::new(self.path.as_str()), root_dir)
+    }
+}
+
+/// Path to a source package. Different from [`PathSpec`] in that this type only
+/// refers to source packages.
+#[serde_as]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, ::serde::Serialize)]
+pub struct PathBinarySpec {
+    /// The path to the package. Either a directory or an archive.
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    pub path: Utf8TypedPathBuf,
+}
+
+impl From<PathBinarySpec> for PathSpec {
+    fn from(value: PathBinarySpec) -> Self {
+        Self { path: value.path }
+    }
+}
+
+impl From<PathBinarySpec> for BinarySpec {
+    fn from(value: PathBinarySpec) -> Self {
+        Self::Path(value)
+    }
+}
+
+impl PathBinarySpec {
+    /// Resolves the path relative to `root_dir`. If the path is absolute,
+    /// it is returned verbatim.
+    ///
+    /// May return an error if the path is prefixed with `~` and the home
+    /// directory is undefined.
+    pub fn resolve(&self, root_dir: impl AsRef<Path>) -> Result<PathBuf, SpecConversionError> {
+        resolve_path(Path::new(self.path.as_str()), root_dir)
+    }
+
+    /// Converts this instance into a [`NamelessMatchSpec`]
+    pub fn try_into_nameless_match_spec(
+        self,
+        root_dir: &Path,
+    ) -> Result<NamelessMatchSpec, SpecConversionError> {
         // Convert the path to an absolute path based on the root_dir
         let path = if self.path.is_absolute() {
             self.path
@@ -54,42 +216,106 @@ impl PathSpec {
         let local_file_url =
             file_url::file_path_to_url(path.to_path()).expect("failed to convert path to file url");
 
-        Ok(Some(NamelessMatchSpec {
+        Ok(NamelessMatchSpec {
             url: Some(local_file_url),
             ..NamelessMatchSpec::default()
-        }))
+        })
     }
+}
 
-    /// Converts this instance into a [`PathSourceSpec`] if the path points to a
-    /// source package. Otherwise, returns this instance unmodified.
-    #[allow(clippy::result_large_err)]
-    pub fn try_into_source_path(self) -> Result<PathSourceSpec, Self> {
-        if self.is_binary() {
-            Err(self)
-        } else {
-            Ok(PathSourceSpec { path: self.path })
+/// Resolves the path relative to `root_dir`. If the path is absolute,
+/// it is returned verbatim.
+///
+/// May return an error if the path is prefixed with `~` and the home
+/// directory is undefined.
+fn resolve_path(path: &Path, root_dir: impl AsRef<Path>) -> Result<PathBuf, SpecConversionError> {
+    if path.is_absolute() {
+        Ok(PathBuf::from(path))
+    } else if let Ok(user_path) = path.strip_prefix("~/") {
+        let home_dir = dirs::home_dir()
+            .ok_or_else(|| SpecConversionError::InvalidPath(path.display().to_string()))?;
+        Ok(home_dir.join(user_path))
+    } else {
+        Ok(root_dir.as_ref().join(path))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_binary() {
+        // Test binary archive extensions supported by CondaArchiveType
+        let binary_extensions = vec![
+            "package.tar.bz2",
+            "package.conda",
+            "path/to/package.tar.bz2",
+            "path/to/package.conda",
+        ];
+
+        for path_str in binary_extensions {
+            let spec = PathSpec::new(Utf8TypedPathBuf::from(path_str));
+            assert!(
+                spec.is_binary(),
+                "Expected {path_str} to be identified as a binary archive"
+            );
+        }
+
+        // Test non-binary paths (including unsupported archive formats)
+        let non_binary_paths = vec![
+            "directory",
+            "path/to/directory",
+            "file.txt",
+            "package.zip",
+            "package.tar.gz",
+            "package.tar",
+            "package.tar.xz",
+            "package.tar.zst",
+            "path/to/pyproject.toml",
+            "src/main.rs",
+        ];
+
+        for path_str in non_binary_paths {
+            let spec = PathSpec::new(Utf8TypedPathBuf::from(path_str));
+            assert!(
+                !spec.is_binary(),
+                "Expected {path_str} to NOT be identified as a binary archive"
+            );
         }
     }
 
-    /// Returns true if this path points to a binary archive.
-    pub fn is_binary(&self) -> bool {
-        self.path
-            .file_name()
-            .and_then(ArchiveIdentifier::try_from_path)
-            .is_some()
+    #[test]
+    fn test_into_source_or_binary() {
+        // Binary path should return Right (binary)
+        let binary_spec = PathSpec::new(Utf8TypedPathBuf::from("package.tar.bz2"));
+        match binary_spec.into_source_or_binary() {
+            Either::Right(_) => {}
+            Either::Left(_) => panic!("Expected binary spec to return Right variant"),
+        }
+
+        // Non-binary path should return Left (source)
+        let source_spec = PathSpec::new(Utf8TypedPathBuf::from("directory"));
+        match source_spec.into_source_or_binary() {
+            Either::Left(_) => {}
+            Either::Right(_) => panic!("Expected source spec to return Left variant"),
+        }
     }
-}
 
-/// Path to a source package. Different from [`PathSpec`] in that this type only
-/// refers to source packages.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct PathSourceSpec {
-    /// The path to the package. Either a directory or an archive.
-    pub path: Utf8TypedPathBuf,
-}
+    #[test]
+    fn test_try_into_source_path() {
+        // Binary path should return Err with original spec
+        let binary_spec = PathSpec::new(Utf8TypedPathBuf::from("package.conda"));
+        assert!(
+            binary_spec.try_into_source_path().is_err(),
+            "Expected binary path to fail conversion to source path"
+        );
 
-impl From<PathSourceSpec> for PathSpec {
-    fn from(value: PathSourceSpec) -> Self {
-        Self { path: value.path }
+        // Non-binary path should return Ok with source spec
+        let source_spec = PathSpec::new(Utf8TypedPathBuf::from("path/to/source"));
+        assert!(
+            source_spec.try_into_source_path().is_ok(),
+            "Expected non-binary path to succeed conversion to source path"
+        );
     }
 }

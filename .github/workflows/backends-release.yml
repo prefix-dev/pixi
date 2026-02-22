@@ -1,0 +1,131 @@
+name: "Backends - Conda Packages"
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "pixi-build-backends/**"
+      - "crates/pixi_build_python/**"
+      - "crates/pixi_build_rattler_build/**"
+      - "crates/pixi_build_cmake/**"
+      - "crates/pixi_build_rust/**"
+      - "crates/pixi_build_mojo/**"
+      - ".github/workflows/backends-release.yml"
+  pull_request:
+    types:
+      - labeled
+      - synchronize
+      - opened
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'release:backends')}}
+    timeout-minutes: 80
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      REPO_NAME: "prefix-dev/pixi"
+      SCCACHE_GHA_ENABLED: "true"
+      ACTIONS_CACHE_SERVICE_V2: on
+    strategy:
+      matrix:
+        include:
+          - target: linux-64
+            os: ubuntu-latest
+          - target: linux-aarch64
+            os: ubuntu-latest
+          - target: win-64
+            os: windows-latest
+          - target: osx-64
+            os: macos-15-intel
+          - target: osx-arm64
+            os: macos-15
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+        with:
+          environments: backends-release
+      - name: Configure sccache
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+      - name: Enable long paths (Windows)
+        if: matrix.os == 'windows-latest'
+        run: git config --global core.longpaths true
+        shell: bash
+      - name: Set package version environment variables
+        shell: bash
+        run: pixi run -e backends-release generate-versions >> $GITHUB_ENV
+
+      - name: Build all backends for ${{ matrix.target }}
+        shell: bash
+        env:
+          RATTLER_BUILD_ENABLE_GITHUB_INTEGRATION: "true"
+          RATTLER_BUILD_COLOR: "always"
+        run: |
+          pixi run -e backends-release build-backend-packages ${{ matrix.target }}
+
+      - name: Show sccache stats
+        shell: bash
+        run: pixi run -e backends-release sccache --stop-server
+
+      - name: Remove build cache
+        shell: bash
+        run: rm -rf output/build_cache
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: conda-packages-${{ matrix.target }}
+          path: output/**/*.conda
+
+      - name: Kill any lingering processes (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          # Kill any Python processes
+          Get-Process python* -ErrorAction SilentlyContinue | Stop-Process -Force
+
+          # Kill any processes from the pixi environment
+          $pixiPath = "${{ github.workspace }}\.pixi\envs\backends-release\bin"
+          Get-Process | Where-Object { $_.Path -like "$pixiPath*" } | Stop-Process -Force
+
+          # Wait a moment for handles to be released
+          Start-Sleep -Seconds 2
+
+  upload:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.repository == 'prefix-dev/pixi'
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+      - name: Download all conda packages
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: conda-packages-*
+          path: conda-packages
+          merge-multiple: true
+          run-id: ${{ github.run_id }}
+      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+        with:
+          environments: backends-release
+      - name: Upload packages
+        run: pixi run -e backends-release upload-packages conda-packages

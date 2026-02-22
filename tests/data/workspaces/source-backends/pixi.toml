@@ -1,0 +1,4 @@
+[workspace]
+channels = ["conda-forge"]
+platforms = []
+preview = ["pixi-build"]

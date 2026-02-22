@@ -1,5 +1,4 @@
-[project]
-authors = ["Ruben Arts <ruben@prefix.dev>"]
+[workspace]
 channels = ["conda-forge"]
 description = "Jupyter Lab examples"
 name = "jupyterlab"

@@ -1,0 +1,5 @@
+---
+source: src/global/project/parsed_manifest.rs
+expression: manifest.unwrap_err()
+---
+'pixi' is not allowed as exposed name in the map

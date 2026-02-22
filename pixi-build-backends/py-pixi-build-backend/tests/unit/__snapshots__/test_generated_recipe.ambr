@@ -1,0 +1,23 @@
+# serializer version: 1
+# name: test_generated_recipe_from_model
+  '''
+  context: {}
+  package:
+    name: test_project
+    version: 1.0.0
+  source: []
+  build:
+    script:
+      content: ''
+      env: {}
+      secrets: []
+  requirements:
+    build: []
+    host: []
+    run: []
+    run_constraints: []
+  tests: []
+  about: {}
+  
+  '''
+# ---

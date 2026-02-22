@@ -1,40 +1,24 @@
-use std::{
-    cell::UnsafeCell,
-    mem::MaybeUninit,
-    sync::atomic::{AtomicU8, Ordering},
-};
+use std::sync::Arc;
+
+use parking_lot::Mutex;
 use thiserror::Error;
-use tokio::sync::Notify;
 
-/// A synchronization primitive that can be used to wait for a value to become available.
+/// A synchronization primitive, that can be used to wait for a value to become
+/// available.
 ///
-/// The [`BarrierCell`] is initially empty, requesters can wait for a value to become available
-/// using the `wait` method. Once a value is available, the `set` method can be used to set the
-/// value in the cell. The `set` method can only be called once. If the `set` method is called
-/// multiple times, it will return an error. When `set` is called all waiters will be notified.
+/// The [`BarrierCell`] is initially empty, requesters can wait for a value to
+/// become available using the `wait` method. Once a value is available, the
+/// `set` method can be used to set the value in the cell. The `set` method can
+/// only be called once. If the `set` method is called multiple times, it will
+/// return an error. When `set` is called successfully all waiters will be
+/// notified.
 pub struct BarrierCell<T> {
-    state: AtomicU8,
-    value: UnsafeCell<MaybeUninit<T>>,
-    notify: Notify,
+    data: Mutex<Option<ValueOrNotify<T>>>,
 }
 
-unsafe impl<T: Sync> Sync for BarrierCell<T> {}
-
-unsafe impl<T: Send> Send for BarrierCell<T> {}
-
-impl<T> Drop for BarrierCell<T> {
-    fn drop(&mut self) {
-        if self.state.load(Ordering::Acquire) == BarrierCellState::Initialized as u8 {
-            unsafe { self.value.get_mut().assume_init_drop() }
-        }
-    }
-}
-
-#[repr(u8)]
-enum BarrierCellState {
-    Uninitialized,
-    Initializing,
-    Initialized,
+enum ValueOrNotify<T> {
+    Value(Arc<T>),
+    Notify(tokio::sync::broadcast::Sender<Arc<T>>),
 }
 
 impl<T> Default for BarrierCell<T> {
@@ -52,51 +36,52 @@ pub enum SetError {
 impl<T> BarrierCell<T> {
     /// Constructs a new instance.
     pub fn new() -> Self {
+        let (sender, _) = tokio::sync::broadcast::channel(1);
         Self {
-            state: AtomicU8::new(BarrierCellState::Uninitialized as u8),
-            value: UnsafeCell::new(MaybeUninit::uninit()),
-            notify: Notify::new(),
+            data: Mutex::new(Some(ValueOrNotify::Notify(sender))),
         }
     }
 
     /// Wait for a value to become available in the cell
-    pub async fn wait(&self) -> &T {
-        self.notify.notified().await;
-        unsafe { (*self.value.get()).assume_init_ref() }
+    #[expect(clippy::await_holding_lock)]
+    pub async fn wait(&self) -> Arc<T> {
+        let lock = self.data.lock();
+        match &*lock {
+            Some(ValueOrNotify::Value(value)) => value.clone(),
+            Some(ValueOrNotify::Notify(notify)) => {
+                let mut recv = notify.subscribe();
+                drop(lock);
+                recv.recv().await.expect("notify channel closed")
+            }
+            _ => unreachable!(),
+        }
     }
 
-    /// Set the value in the cell, if the cell was already initialized this will return an error.
-    pub fn set(&self, value: T) -> Result<(), SetError> {
-        let state = self
-            .state
-            .fetch_max(BarrierCellState::Initializing as u8, Ordering::SeqCst);
-
-        // If the state is larger than started writing, then either there is an active writer or
-        // the cell has already been initialized.
-        if state == BarrierCellState::Initialized as u8 {
-            return Err(SetError::AlreadySet);
-        } else {
-            unsafe { *self.value.get() = MaybeUninit::new(value) };
-            self.state
-                .store(BarrierCellState::Initialized as u8, Ordering::Release);
-            self.notify.notify_waiters();
+    /// Set the value in the cell, if the cell was already initialized this will
+    /// return an error.
+    pub fn set(&self, value: Arc<T>) -> Result<(), SetError> {
+        let mut lock = self.data.lock();
+        match lock.take() {
+            Some(ValueOrNotify::Value(value)) => {
+                *lock = Some(ValueOrNotify::Value(value));
+                Err(SetError::AlreadySet)
+            }
+            Some(ValueOrNotify::Notify(notify)) => {
+                *lock = Some(ValueOrNotify::Value(value.clone()));
+                drop(lock);
+                let _ = notify.send(value);
+                Ok(())
+            }
+            _ => unreachable!(),
         }
-
-        Ok(())
     }
 
-    /// Consumes this instance and converts it into the inner value if it has been initialized.
-    pub fn into_inner(mut self) -> Option<T> {
-        if self.state.compare_exchange(
-            BarrierCellState::Initialized as u8,
-            BarrierCellState::Uninitialized as u8,
-            Ordering::Acquire,
-            Ordering::Acquire,
-        ) == Ok(BarrierCellState::Initialized as u8)
-        {
-            Some(unsafe { self.value.get_mut().assume_init_read() })
-        } else {
-            None
-        }
+    /// Consumes this instance and converts it into the inner value if it has
+    /// been initialized.
+    pub fn into_inner(self) -> Option<Arc<T>> {
+        self.data.into_inner().and_then(|v| match v {
+            ValueOrNotify::Value(value) => Some(value),
+            _ => None,
+        })
     }
 }

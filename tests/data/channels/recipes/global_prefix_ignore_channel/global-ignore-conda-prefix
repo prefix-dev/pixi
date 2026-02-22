@@ -1,0 +1,1 @@
+If this file is present, `pixi global` will not set the CONDA_PREFIX environment variable during activation of the executable

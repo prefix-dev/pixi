@@ -1,5 +1,6 @@
 use crate::environment::EnvironmentIdx;
 use indexmap::{Equivalent, IndexMap};
+use serde::{Deserialize, Serialize};
 use std::hash::Hash;
 use std::ops::Index;
 
@@ -24,16 +25,16 @@ impl Index<SolveGroupIdx> for SolveGroups {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct SolveGroupIdx(pub(crate) usize);
 
 impl SolveGroups {
     /// Returns the solve group with the given name or `None` if it does not
     /// exist.
-    pub fn find<Q: ?Sized>(&self, name: &Q) -> Option<&SolveGroup>
+    pub fn find<Q>(&self, name: &Q) -> Option<&SolveGroup>
     where
-        Q: Hash + Equivalent<String>,
+        Q: ?Sized + Hash + Equivalent<String>,
     {
         let index = self.by_name.get(name)?;
         Some(&self.solve_groups[index.0])

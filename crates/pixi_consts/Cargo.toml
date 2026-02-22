@@ -11,5 +11,6 @@ version = "0.1.0"
 
 [dependencies]
 console = { workspace = true }
-lazy_static = { workspace = true }
+rattler_cache = { workspace = true }
+rattler_conda_types = { workspace = true }
 url = { workspace = true }

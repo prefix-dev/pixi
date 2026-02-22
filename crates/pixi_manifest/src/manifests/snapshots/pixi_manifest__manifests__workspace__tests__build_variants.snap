@@ -1,0 +1,14 @@
+---
+source: crates/pixi_manifest/src/manifests/workspace.rs
+expression: resolved_linux
+---
+[
+    Some(
+        {
+            "python": [
+                "3.10.*",
+                "3.11.*",
+            ],
+        },
+    ),
+]

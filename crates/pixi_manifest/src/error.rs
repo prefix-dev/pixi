@@ -1,12 +1,18 @@
-use std::{borrow::Borrow, fmt::Display};
+use std::{
+    borrow::{Borrow, Cow},
+    fmt::{Display, Formatter},
+    ops::Range,
+};
 
+use crate::{KnownPreviewFeature, ManifestKind, WorkspaceManifest};
 use itertools::Itertools;
-use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
-use rattler_conda_types::{version_spec::ParseVersionSpecError, InvalidPackageNameError};
+use miette::{Diagnostic, LabeledSpan, SourceOffset, SourceSpan};
+use pixi_pypi_spec::Pep508ToPyPiRequirementError;
+use pixi_toml::TomlDiagnostic;
+use pyproject_toml::ResolveError;
+use rattler_conda_types::{InvalidPackageNameError, version_spec::ParseVersionSpecError};
 use thiserror::Error;
-
-use super::pypi::pypi_requirement::Pep508ToPyPiRequirementError;
-use crate::ParsedManifest;
+use toml_span::{DeserError, Error};
 
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum DependencyError {
@@ -18,6 +24,8 @@ pub enum DependencyError {
     NoDependency(String),
     #[error("No Pypi dependencies.")]
     NoPyPiDependencies,
+    #[error(transparent)]
+    Pep508ToPyPiRequirementError(#[from] Box<Pep508ToPyPiRequirementError>),
 }
 
 #[derive(Error, Debug)]
@@ -28,53 +36,255 @@ pub enum RequirementConversionError {
     InvalidVersion(#[from] ParseVersionSpecError),
 }
 
-#[derive(Error, Debug, Clone, Diagnostic)]
+#[derive(Default, Debug)]
+pub struct GenericError {
+    pub message: Cow<'static, str>,
+    pub span: Option<Range<usize>>,
+    pub span_label: Option<Cow<'static, str>>,
+    pub labels: Vec<LabeledSpan>,
+    pub help: Option<Cow<'static, str>>,
+}
+
+impl GenericError {
+    pub fn new(message: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            message: message.into(),
+            ..Default::default()
+        }
+    }
+
+    pub fn with_span(mut self, span: Range<usize>) -> Self {
+        self.span = Some(span);
+        self
+    }
+
+    pub fn with_span_label(mut self, span: impl Into<Cow<'static, str>>) -> Self {
+        self.span_label = Some(span.into());
+        self
+    }
+
+    pub fn with_opt_span(mut self, span: Option<Range<usize>>) -> Self {
+        self.span = span;
+        self
+    }
+
+    pub fn with_label(mut self, label: LabeledSpan) -> Self {
+        self.labels.push(label);
+        self
+    }
+
+    pub fn with_labels(mut self, labels: impl IntoIterator<Item = LabeledSpan>) -> Self {
+        self.labels.extend(labels);
+        self
+    }
+
+    pub fn with_opt_label(mut self, text: impl Into<String>, range: Option<Range<usize>>) -> Self {
+        if let Some(range) = range {
+            self.labels.push(LabeledSpan::new_with_span(
+                Some(text.into()),
+                SourceSpan::from(range),
+            ));
+        }
+        self
+    }
+
+    pub fn with_help(mut self, help: impl Into<Cow<'static, str>>) -> Self {
+        self.help = Some(help.into());
+        self
+    }
+}
+
+#[derive(Error, Debug)]
 pub enum TomlError {
+    Error(toml_edit::TomlError),
+    TomlError(TomlDiagnostic),
+    NoPixiTable(ManifestKind, Option<String>),
+    MissingField(Cow<'static, str>, Option<Range<usize>>),
+    Generic(GenericError),
     #[error(transparent)]
-    Error(#[from] toml_edit::TomlError),
-    #[error("Missing table `[tool.pixi]`")]
-    NoPixiTable,
-    #[error("Missing field `name`")]
-    NoProjectName(Option<std::ops::Range<usize>>),
-    #[error("Could not find or access the part '{part}' in the path '[{table_name}]'")]
-    TableError { part: String, table_name: String },
-    #[error("Could not find or access array '{array_name}' in '[{table_name}]'")]
+    FeatureNotEnabled(#[from] FeatureNotEnabled),
+    TableError {
+        part: String,
+        table_name: String,
+    },
     ArrayError {
         array_name: String,
         table_name: String,
     },
-    #[error("Could not convert pep508 to pixi pypi requirement")]
-    Conversion(#[from] Pep508ToPyPiRequirementError),
+    #[error(transparent)]
+    Conversion(#[from] Box<Pep508ToPyPiRequirementError>),
+    #[error(transparent)]
+    ResolveError(#[from] ResolveError),
+    #[error(transparent)]
+    InvalidNonPackageDependencies(#[from] InvalidNonPackageDependencies),
+    InvalidFeature(String),
 }
 
-impl TomlError {
-    pub fn to_fancy<T>(&self, file_name: &str, contents: impl Into<String>) -> Result<T, Report> {
-        if let Some(span) = self.span() {
-            Err(miette::miette!(
-                labels = vec![LabeledSpan::at(span, self.message())],
-                "failed to parse project manifest"
-            )
-            .with_source_code(NamedSource::new(file_name, contents.into())))
-        } else {
-            Err(self.clone()).into_diagnostic()
+impl From<toml_span::Error> for TomlError {
+    fn from(value: Error) -> Self {
+        TomlError::TomlError(TomlDiagnostic(value))
+    }
+}
+
+impl From<GenericError> for TomlError {
+    fn from(value: GenericError) -> Self {
+        TomlError::Generic(value)
+    }
+}
+
+impl Display for TomlError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TomlError::Error(err) => write!(f, "{}", err.message()),
+            TomlError::TomlError(err) => write!(f, "{err}"),
+            TomlError::NoPixiTable(manifest_kind, detail) => {
+                let filename = manifest_kind.file_name();
+                if let Some(detail) = detail {
+                    write!(f, "Missing table in manifest {filename}:\n{detail}")
+                } else {
+                    write!(f, "Missing table in manifest {filename}")
+                }
+            }
+            TomlError::MissingField(key, _) => write!(f, "Missing field `{key}`"),
+            TomlError::Generic(err) => write!(f, "{}", &err.message),
+            TomlError::FeatureNotEnabled(err) => write!(f, "{err}"),
+            TomlError::TableError { part, table_name } => write!(
+                f,
+                "Could not find or access the part '{part}' in the path '[{table_name}]'"
+            ),
+            TomlError::ArrayError {
+                array_name,
+                table_name,
+            } => write!(
+                f,
+                "Could not find or access array '{array_name}' in '[{table_name}]'"
+            ),
+            TomlError::Conversion(_) => {
+                write!(f, "Could not convert pep508 to pixi pypi requirement")
+            }
+            TomlError::InvalidNonPackageDependencies(err) => write!(f, "{err}"),
+            TomlError::ResolveError(err) => write!(f, "{err}"),
+            TomlError::InvalidFeature(feature_name) => write!(f, "{feature_name} does not exist"),
+        }
+    }
+}
+
+impl From<toml_edit::TomlError> for TomlError {
+    fn from(e: toml_edit::TomlError) -> Self {
+        TomlError::Error(e)
+    }
+}
+
+impl From<DeserError> for TomlError {
+    fn from(mut value: DeserError) -> Self {
+        // TODO: Now we only take the first error, but we could make this smarter
+        value.errors.remove(0).into()
+    }
+}
+
+#[derive(Error, Debug, Clone)]
+#[error("{message}")]
+pub struct FeatureNotEnabled {
+    pub feature: Cow<'static, str>,
+    pub message: Cow<'static, str>,
+    pub span: Option<std::ops::Range<usize>>,
+}
+
+impl FeatureNotEnabled {
+    pub fn new(message: impl Into<Cow<'static, str>>, feature: KnownPreviewFeature) -> Self {
+        Self {
+            feature: <&'static str>::from(feature).into(),
+            message: message.into(),
+            span: None,
         }
     }
 
-    fn span(&self) -> Option<std::ops::Range<usize>> {
+    pub fn with_opt_span(self, span: Option<std::ops::Range<usize>>) -> Self {
+        Self { span, ..self }
+    }
+}
+
+impl Diagnostic for FeatureNotEnabled {
+    fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
+        Some(Box::new(format!(
+            "Add `preview = [\"{}\"]` under [workspace] to enable the preview feature",
+            self.feature
+        )))
+    }
+
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
+        if let Some(span) = self.span.clone() {
+            Some(Box::new(std::iter::once(
+                LabeledSpan::new_primary_with_span(None, span),
+            )))
+        } else {
+            None
+        }
+    }
+}
+
+impl Diagnostic for TomlError {
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
+        let mut additional_spans = None;
+        let span = match self {
+            TomlError::Error(err) => err.span().map(SourceSpan::from),
+            TomlError::Generic(GenericError { span, labels, .. }) => {
+                additional_spans = Some(labels.clone());
+                if labels.iter().all(|label| !label.primary()) {
+                    span.clone().map(SourceSpan::from)
+                } else {
+                    None
+                }
+            }
+            TomlError::TomlError(err) => return err.labels(),
+            TomlError::NoPixiTable(_, _) => Some(SourceSpan::new(SourceOffset::from(0), 1)),
+            TomlError::MissingField(_, span) => span.clone().map(SourceSpan::from),
+            TomlError::FeatureNotEnabled(err) => return err.labels(),
+            TomlError::InvalidNonPackageDependencies(err) => return err.labels(),
+            _ => None,
+        };
+
+        // This is here to make it easier to add more match arms in the future.
+        #[allow(clippy::match_single_binding)]
+        let message = match self {
+            TomlError::Generic(GenericError { span_label, .. }) => {
+                span_label.clone().map(Cow::into_owned)
+            }
+            _ => None,
+        };
+
+        if let Some(span) = span {
+            Some(Box::new(
+                std::iter::once(LabeledSpan::new_primary_with_span(message, span))
+                    .chain(additional_spans.into_iter().flatten()),
+            ))
+        } else if let Some(additional_spans) = additional_spans {
+            Some(Box::new(additional_spans.into_iter()))
+        } else {
+            None
+        }
+    }
+
+    fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
         match self {
-            TomlError::Error(e) => e.span(),
-            TomlError::NoPixiTable => Some(0..1),
-            TomlError::NoProjectName(span) => span.clone(),
+            TomlError::NoPixiTable(ManifestKind::Pixi, _) => Some(Box::new(
+                "More information about pixi manifest files can be found at https://pixi.sh/latest/reference/pixi_manifest/",
+            )),
+            TomlError::NoPixiTable(ManifestKind::Pyproject, _) => Some(Box::new(
+                "Check your manifest for a [tool.pixi.*] table. See https://pixi.sh/latest/python/pyproject_toml for more information.",
+            )),
+            TomlError::TomlError(err) => err.help(),
+            TomlError::FeatureNotEnabled(err) => err.help(),
+            TomlError::InvalidNonPackageDependencies(err) => err.help(),
+            TomlError::Generic(GenericError { help, .. }) => help
+                .as_deref()
+                .map(|str| Box::new(str.to_string()) as Box<dyn Display>),
             _ => None,
         }
     }
-    fn message(&self) -> String {
-        match self {
-            TomlError::Error(e) => e.message().to_owned(),
-            _ => self.to_string(),
-        }
-    }
+}
 
+impl TomlError {
     pub fn table_error(part: &str, table_name: &str) -> Self {
         Self::TableError {
             part: part.into(),
@@ -103,7 +313,7 @@ pub struct UnknownFeature {
 }
 
 impl UnknownFeature {
-    pub fn new(feature: String, manifest: impl Borrow<ParsedManifest>) -> Self {
+    pub fn new(feature: String, manifest: impl Borrow<WorkspaceManifest>) -> Self {
         // Find the top 2 features that are closest to the feature name.
         let existing_features = manifest
             .borrow()
@@ -144,5 +354,27 @@ impl miette::Diagnostic for UnknownFeature {
         } else {
             None
         }
+    }
+}
+
+/// An error that indicates that some package sections are only valid when the
+/// manifest describes a package instead of a workspace.
+#[derive(Debug, Error, Clone)]
+#[error("build-, host- and run-dependency sections are only valid for packages.")]
+pub struct InvalidNonPackageDependencies {
+    pub invalid_dependency_sections: Vec<Range<usize>>,
+}
+
+impl Diagnostic for InvalidNonPackageDependencies {
+    fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
+        Some(Box::new(
+            "These sections are only valid when the manifest describes a package instead of a workspace.\nAdd a `[package]` section to the manifest to fix this error or remove the offending sections.",
+        ))
+    }
+
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
+        Some(Box::new(self.invalid_dependency_sections.iter().map(
+            |range| LabeledSpan::new_with_span(None, SourceSpan::from(range.clone())),
+        )))
     }
 }

@@ -1,0 +1,51 @@
+---
+source: crates/pixi_build_frontend/src/into_build_types.rs
+expression: project_model
+---
+{
+  "name": "rich_example",
+  "version": "0.1.0",
+  "description": null,
+  "authors": null,
+  "license": null,
+  "license_file": null,
+  "readme": null,
+  "homepage": null,
+  "repository": null,
+  "documentation": null,
+  "configuration": null,
+  "targets": {
+    "default_target": {
+      "host_dependencies": {
+        "hatchling": {
+          "detailedVersion": {
+            "version": "==1.26.3",
+            "build": null,
+            "build_number": null,
+            "file_name": null,
+            "channel": null,
+            "subdir": null,
+            "md5": null,
+            "sha256": null
+          }
+        }
+      },
+      "build_dependencies": {},
+      "run_dependencies": {
+        "rich": {
+          "detailedVersion": {
+            "version": ">=13.9.4,<14",
+            "build": null,
+            "build_number": null,
+            "file_name": null,
+            "channel": null,
+            "subdir": null,
+            "md5": null,
+            "sha256": null
+          }
+        }
+      }
+    },
+    "targets": {}
+  }
+}

@@ -1,16 +1,18 @@
 ---
 source: crates/pixi_utils/src/conda_environment_file.rs
-expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
+expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\nparse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
     (
         [
             MatchSpec {
                 name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "python",
-                    },
+                    Exact(
+                        PackageName {
+                            normalized: None,
+                            source: "python",
+                        },
+                    ),
                 ),
                 version: Some(
                     StrictRange(
@@ -26,19 +28,25 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
                 md5: None,
                 sha256: None,
                 url: None,
+                license: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "setuptools",
-                    },
+                    Exact(
+                        PackageName {
+                            normalized: None,
+                            source: "setuptools",
+                        },
+                    ),
                 ),
                 version: Some(
                     Range(
@@ -52,19 +60,25 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
                 md5: None,
                 sha256: None,
                 url: None,
+                license: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
                 name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "wheel",
-                    },
+                    Exact(
+                        PackageName {
+                            normalized: None,
+                            source: "wheel",
+                        },
+                    ),
                 ),
                 version: Some(
                     Range(
@@ -78,12 +92,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
                 md5: None,
                 sha256: None,
                 url: None,
+                license: None,
+                condition: None,
+                track_features: None,
             },
         ],
         [
@@ -104,7 +122,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         ),
                     ),
                 ),
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -124,7 +142,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         ),
                     ),
                 ),
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -144,7 +162,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         ),
                     ),
                 ),
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -164,7 +182,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         ),
                     ),
                 ),
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -184,7 +202,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         ),
                     ),
                 ),
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -204,7 +222,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         ),
                     ),
                 ),
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -224,7 +242,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         ),
                     ),
                 ),
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -244,7 +262,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         ),
                     ),
                 ),
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -253,7 +271,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 ),
                 extras: [],
                 version_or_url: None,
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -266,7 +284,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     ),
                 ],
                 version_or_url: None,
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -282,7 +300,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     ),
                 ],
                 version_or_url: None,
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -309,7 +327,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         ),
                     ),
                 ),
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -336,7 +354,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         ),
                     ),
                 ),
-                marker: None,
+                marker: true,
                 origin: None,
             },
             Requirement {
@@ -363,7 +381,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         ),
                     ),
                 ),
-                marker: None,
+                marker: true,
                 origin: None,
             },
         ],

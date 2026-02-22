@@ -1,0 +1,7 @@
+---
+source: crates/pixi_command_dispatcher/tests/integration/main.rs
+expression: format_diagnostic(&err)
+---
+  × The environment for the build backend package (`backend-without-compatible-api-version *`) does not depend on `pixi-build-api-version`. Without this package pixi has no way of knowing the API to
+  │ use to communicate with the backend.
+  help: Modify the requirements on `backend-without-compatible-api-version` or contact the maintainers to ensure a dependency on `pixi-build-api-version` is added.

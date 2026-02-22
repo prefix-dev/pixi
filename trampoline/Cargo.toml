@@ -1,0 +1,31 @@
+[package]
+authors = ["pixi contributors <hi@prefix.dev>"]
+description = "Trampoline binary that is used to run binaries instaled by pixi global"
+edition = "2021"
+homepage = "https://github.com/prefix-dev/pixi"
+license = "BSD-3-Clause"
+name = "pixi_trampoline"
+readme = "README.md"
+repository = "https://github.com/prefix-dev/pixi"
+version = "0.1.0"
+
+[profile.release]
+# Enable Link Time Optimization.
+lto = true
+# Reduce number of codegen units to increase optimizations.
+codegen-units = 1
+# Optimize for size.
+opt-level = "z"
+# Abort on panic.
+panic = "abort"
+# Automatically strip symbols from the binary.
+debug = false
+strip = true
+
+
+[dependencies]
+ctrlc = "3.5"
+fs-err = "3.1.3"
+miette = "7.6.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"

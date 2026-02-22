@@ -1,0 +1,35 @@
+[package]
+authors.workspace = true
+description = "Sets up environments to use for building of pixi.toml files"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_build_frontend"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+fs-err = { workspace = true, features = ["tokio"] }
+futures = { workspace = true }
+jsonrpsee = { workspace = true, features = ["client"] }
+miette = { workspace = true, features = ["fancy-no-backtrace", "serde"] }
+ordermap = { workspace = true }
+pixi_build_discovery = { workspace = true }
+pixi_build_types = { workspace = true }
+rattler_conda_types = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["process", "io-std"] }
+tokio-util = { workspace = true, features = ["codec"] }
+tracing = { workspace = true }
+
+
+[dev-dependencies]
+tokio = { workspace = true, features = [
+  "process",
+  "io-std",
+  "rt-multi-thread",
+] }
+tokio-util = { workspace = true, features = ["io"] }

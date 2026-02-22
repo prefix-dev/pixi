@@ -1,0 +1,15 @@
+---
+source: crates/pixi_manifest/src/discovery.rs
+expression: snapshot
+---
+  × Missing table in manifest pixi.toml:
+  │ Any of the following sections is required:
+  │ * workspace
+  │ * project
+  │ * package
+   ╭─[<CARGO_ROOT>/tests/data/workspace-discovery/missing-tables/pixi.toml:1:1]
+ 1 │ # Empty on purpose.
+   · ─
+ 2 │ # Explicit discovery should fail with a diagnostic.
+   ╰────
+  help: More information about pixi manifest files can be found at https://pixi.sh/latest/reference/pixi_manifest/

@@ -1,0 +1,16 @@
+---
+source: crates/pixi_manifest/src/manifests/source.rs
+expression: source.to_string()
+---
+[project]
+name = "test"
+[tool.pixi.workspace]
+channels = []
+platforms = []
+
+[tool.pixi.environments]
+foo = []
+bar = ["not-default"]
+baz = { features = ["default"], solve-group = "group1" }
+foobar = { features = ["default"], solve-group = "group1", no-default-feature = true }
+barfoo = { features = ["default"], no-default-feature = true }

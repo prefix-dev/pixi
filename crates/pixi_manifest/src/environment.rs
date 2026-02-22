@@ -2,26 +2,39 @@ use std::{
     borrow::Borrow,
     fmt,
     hash::{Hash, Hasher},
+    path::Path,
     str::FromStr,
 };
 
 use miette::Diagnostic;
 use regex::Regex;
-use serde::{self, Deserialize, Deserializer};
-use serde_with::SerializeDisplay;
+use serde::{self, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
-use crate::consts::DEFAULT_ENVIRONMENT_NAME;
-use crate::solve_group::SolveGroupIdx;
-use crate::utils::PixiSpanned;
+use crate::{consts::DEFAULT_ENVIRONMENT_NAME, solve_group::SolveGroupIdx};
+
+#[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
+#[error(
+    "Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers and dashes"
+)]
+pub struct ParseEnvironmentNameError {
+    /// The string that was attempted to be parsed.
+    pub attempted_parse: String,
+}
 
 /// The name of an environment. This is either a string or default for the
 /// default environment.
-#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, SerializeDisplay)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EnvironmentName {
     #[default]
     Default,
     Named(String),
+}
+
+impl Serialize for EnvironmentName {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.as_str().serialize(serializer)
+    }
 }
 
 impl Hash for EnvironmentName {
@@ -47,20 +60,41 @@ impl EnvironmentName {
 
     /// Tries to read the environment name from an argument, then it will try
     /// to read from an environment variable, otherwise it will fall back to
-    /// default
+    /// default.
+    ///
+    /// If `PIXI_PROJECT_ROOT` is set to a path different from `workspace_root`,
+    /// the environment variable fallback is skipped. This handles the case
+    /// where a pixi task runs another pixi project via `--manifest-path` - the
+    /// child process should not inherit the parent's environment name.
     pub fn from_arg_or_env_var(
         arg_name: Option<String>,
+        workspace_root: &Path,
     ) -> Result<Self, ParseEnvironmentNameError> {
+        // If an explicit name is provided, use it
         if let Some(arg_name) = arg_name {
             return EnvironmentName::from_str(&arg_name);
-        } else if std::env::var("PIXI_IN_SHELL").is_ok() {
-            if let Ok(env_var_name) = std::env::var("PIXI_ENVIRONMENT_NAME") {
-                if env_var_name == DEFAULT_ENVIRONMENT_NAME {
-                    return Ok(EnvironmentName::Default);
-                }
-                return Ok(EnvironmentName::Named(env_var_name));
-            }
         }
+
+        // Check if we should ignore PIXI_ env vars because they belong to a
+        // different workspace
+        let should_ignore_env_vars = std::env::var("PIXI_PROJECT_ROOT")
+            .ok()
+            .is_some_and(|pixi_root| Path::new(&pixi_root) != workspace_root);
+
+        if should_ignore_env_vars {
+            return Ok(EnvironmentName::Default);
+        }
+
+        // Try to read from environment variable
+        if std::env::var("PIXI_IN_SHELL").is_ok()
+            && let Ok(env_var_name) = std::env::var("PIXI_ENVIRONMENT_NAME")
+        {
+            if env_var_name == DEFAULT_ENVIRONMENT_NAME {
+                return Ok(EnvironmentName::Default);
+            }
+            return Ok(EnvironmentName::Named(env_var_name));
+        }
+
         Ok(EnvironmentName::Default)
     }
 }
@@ -74,8 +108,8 @@ impl Borrow<str> for EnvironmentName {
 impl fmt::Display for EnvironmentName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EnvironmentName::Default => write!(f, "{}", DEFAULT_ENVIRONMENT_NAME),
-            EnvironmentName::Named(name) => write!(f, "{}", name),
+            EnvironmentName::Default => write!(f, "{DEFAULT_ENVIRONMENT_NAME}"),
+            EnvironmentName::Named(name) => write!(f, "{name}"),
         }
     }
 }
@@ -84,13 +118,6 @@ impl PartialEq<str> for EnvironmentName {
     fn eq(&self, other: &str) -> bool {
         self.as_str() == other
     }
-}
-
-#[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
-#[error("Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers and dashes")]
-pub struct ParseEnvironmentNameError {
-    /// The string that was attempted to be parsed.
-    pub attempted_parse: String,
 }
 
 impl FromStr for EnvironmentName {
@@ -127,7 +154,7 @@ impl<'de> Deserialize<'de> for EnvironmentName {
 ///
 /// Individual features cannot be used directly, instead they are grouped
 /// together into environments. Environments are then locked and installed.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Environment {
     /// The name of the environment
     pub name: EnvironmentName,
@@ -138,10 +165,6 @@ pub struct Environment {
     /// that make up the environment.
     pub features: Vec<String>,
 
-    /// The optional location of where the features of the environment are
-    /// defined in the manifest toml.
-    pub features_source_loc: Option<std::ops::Range<usize>>,
-
     /// An optional solver-group. Multiple environments can share the same
     /// solve-group. All the dependencies of the environment that share the
     /// same solve-group will be solved together.
@@ -149,36 +172,6 @@ pub struct Environment {
 
     /// Whether to include the default feature in that environment
     pub no_default_feature: bool,
-}
-
-/// Helper struct to deserialize the environment from TOML.
-/// The environment description can only hold these values.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
-pub(super) struct TomlEnvironment {
-    #[serde(default)]
-    pub features: PixiSpanned<Vec<String>>,
-    pub solve_group: Option<String>,
-    #[serde(default)]
-    pub no_default_feature: bool,
-}
-
-pub(super) enum TomlEnvironmentMapOrSeq {
-    Map(TomlEnvironment),
-    Seq(Vec<String>),
-}
-
-impl<'de> Deserialize<'de> for TomlEnvironmentMapOrSeq {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        serde_untagged::UntaggedEnumVisitor::new()
-            .map(|map| map.deserialize().map(TomlEnvironmentMapOrSeq::Map))
-            .seq(|seq| seq.deserialize().map(TomlEnvironmentMapOrSeq::Seq))
-            .expecting("either a map or a sequence")
-            .deserialize(deserializer)
-    }
 }
 
 #[cfg(test)]

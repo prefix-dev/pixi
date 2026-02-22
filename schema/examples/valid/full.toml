@@ -12,9 +12,36 @@ license = "MIT"
 license-file = "LICENSE"
 name = "project"
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+preview = ["pixi-build"]
 readme = "README.md"
 repository = "https://github.com/author/project"
+solve-strategy = "lowest"
 version = "0.1.0"
+
+[project.pypi-options]
+no-build = false
+[project.pypi-options.dependency-overrides]
+numpy = { version = ">=1.21.0" }
+
+[package]
+# Inherit the name and version the workspace
+name = { workspace = true }
+version = { workspace = true }
+
+[package.build.backend]
+additional-dependencies = { git = "*" }
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-python"
+version = "*"
+
+[package.build]
+source = { path = "my_project" }
+
+[tool.pixi-build-python]
+noarch = false
 
 [dependencies]
 detailed = { version = ">=1.2.3" }
@@ -33,29 +60,45 @@ md5 = { url = "https://example.com/package-1.2.3-asdf2.conda", md5 = "6f5902ac23
 package_path = { path = "path/to/package-1.2.3-abc1.conda" }
 sha256 = { url = "https://example.com/package-1.2.3-asdf2.conda", sha256 = "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447" }
 
-# In the future we'll add source dependencies
-#git = { git = "https://github.com/prefix-dev/pixi", branch = "main" }
-#git2 = { git = "https://github.com/prefix-dev/rattler-build", tag = "v0.1.0" }
-#git3 = { git = "https://github.com/prefix-dev/rattler", rev = "v0.1.0" }
+git = { git = "https://github.com/prefix-dev/pixi", branch = "main" }
+git2 = { git = "https://github.com/prefix-dev/rattler-build", tag = "v0.1.0" }
+git3 = { git = "https://github.com/prefix-dev/rattler", rev = "v0.1.0" }
+git4 = { git = "https://github.com/prefix-dev/rattler", rev = "v0.1.0", subdirectory = "python" }
 #path = { path = "~/path/to/package" }
 #path2 = { path = "path/to/package" }
+
+[pypi-options]
+no-binary = ["testpypi"]
+no-build = ["foobar"]
+no-build-isolation = ["requests"]
+skip-wheel-filename-check = false
 
 [pypi-dependencies]
 requests = { version = ">= 2.8.1, ==2.8.*", extras = [
   "security",
   "tests",
 ] } # Using the map allows the user to add `extras`
+test-pinning-index = { version = "*", index = "https://example.com/test" }
 testpypi = "*"
 testpypi1 = "*"
 
 
-[host-dependencies]
+[package.host-dependencies]
 package1 = { version = ">=1.2.3", build = "py34_0" }
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 test = "*"
 test1 = "*"
 
-[build-dependencies]
+[package.build-dependencies]
+package1 = { version = ">=1.2.3", build = "py34_0" }
+pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
+test = "*"
+test1 = "*"
+
+[package.run-dependencies]
+test1 = "*"
+
+[package.target.osx-64.host-dependencies]
 package1 = { version = ">=1.2.3", build = "py34_0" }
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 test = "*"
@@ -63,8 +106,7 @@ test1 = "*"
 
 [tasks]
 build = "conda build ."
-# deprecated depends_on
-test = { cmd = "pytest", cwd = "tests", depends_on = [
+test = { cmd = "pytest", cwd = "tests", depends-on = [
   "build",
 ], description = "Run tests using pytests after building." }
 test2 = { cmd = "pytest", cwd = "tests" }
@@ -90,13 +132,20 @@ test = "*"
 [feature.test2.dependencies]
 test = "*"
 
+[feature.yes-build.pypi-options]
+dependency-overrides = { numpy = ">=2.0.0" }
+no-build = true
+skip-wheel-filename-check = true
+
 [feature.prod]
 activation = { scripts = ["activate.sh", "deactivate.sh"] }
 channel-priority = "disabled"
+solve-strategy = "lowest-direct"
 
 [feature.lint]
 channel-priority = "strict"
 dependencies = { flake8 = "3.7.9", black = "19.10b0" }
+solve-strategy = "highest"
 
 [environments]
 prod = { features = ["test2"], solve-group = "test" }
@@ -125,18 +174,6 @@ requests = { version = ">= 2.8.1, ==2.8.*", extras = [
 ] } # Using the map allows the user to add `extras`
 testpypi = "*"
 testpypi1 = "*"
-
-[target.osx-64.host-dependencies]
-package1 = { version = ">=1.2.3", build = "py34_0" }
-pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-test = "*"
-test1 = "*"
-
-[target.linux-64.build-dependencies]
-package1 = { version = ">=1.2.3", build = "py34_0" }
-pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-test = "*"
-test1 = "*"
 
 [target.linux-64.tasks]
 build = "conda build ."
@@ -181,6 +218,10 @@ warmup = "python warmup.py"
 
 [feature.cuda2.target.osx-arm64.dependencies]
 mlx = "x.y.z"
+
+[feature.dev.pypi-dependencies]
+ribasim = { git = "https://github.com/Deltares/Ribasim.git", subdirectory = "python/ribasim" }
+ribasim2 = { path = "test/riba", subdirectory = "python/ribasim" }
 
 # Channels and Platforms are not available as separate tables as they are implemented as lists
 [feature.cuda2]

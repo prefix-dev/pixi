@@ -11,6 +11,8 @@ version = "0.1.0"
 
 [dependencies]
 async-once-cell = { workspace = true }
+dashmap = { workspace = true }
+fs-err = { workspace = true }
 futures = { workspace = true }
 http-cache-reqwest = { workspace = true }
 itertools = { workspace = true }
@@ -18,12 +20,16 @@ miette = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_config = { workspace = true }
+pixi_consts = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
+rattler_networking = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 reqwest-middleware = { workspace = true }
 reqwest-retry = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
 url = { workspace = true }

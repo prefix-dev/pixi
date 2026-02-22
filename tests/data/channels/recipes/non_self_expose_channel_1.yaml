@@ -1,0 +1,27 @@
+recipe:
+  name: self-expose-test
+  version: 1.0.0
+
+outputs:
+  # jupyter-core exposes the jupyter tool, while jupyter only depends on jupyter-core
+  - package:
+      name: jupyter-core
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "jupyter on windows" > $PREFIX/bin/jupyter.bat
+          else:
+            - echo "jupyter on unix" > $PREFIX/bin/jupyter
+            - chmod +x $PREFIX/bin/jupyter
+
+  - package:
+      name: jupyter
+      version: 0.1.0
+
+    requirements:
+      run:
+        - jupyter-core

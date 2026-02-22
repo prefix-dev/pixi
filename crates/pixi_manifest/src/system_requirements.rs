@@ -1,28 +1,25 @@
+use std::collections::BTreeMap;
+
 use miette::Diagnostic;
 use rattler_conda_types::Version;
 use rattler_virtual_packages::{Cuda, LibC, Linux, Osx, VirtualPackage};
-use serde::Deserialize;
-use serde_with::{serde_as, DisplayFromStr};
-use std::str::FromStr;
+use serde::Serialize;
+use serde_value::Value;
 use thiserror::Error;
 
-const GLIBC_FAMILY: &str = "glibc";
+pub const GLIBC_FAMILY: &str = "glibc";
+pub const MUSL_FAMILY: &str = "musl";
 
 /// Describes the minimal system requirements to be able to run a certain environment.
-#[serde_as]
-#[derive(Debug, Clone, Deserialize, Default, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct SystemRequirements {
     /// Dictates the minimum version of macOS required.
-    #[serde_as(as = "Option<DisplayFromStr>")]
     pub macos: Option<Version>,
 
     /// Dictates the minimum linux version required.
-    #[serde_as(as = "Option<DisplayFromStr>")]
     pub linux: Option<Version>,
 
     /// Dictates the minimum cuda version required.
-    #[serde_as(as = "Option<DisplayFromStr>")]
     pub cuda: Option<Version>,
 
     /// Dictates information about the libc version (and optional family).
@@ -124,6 +121,29 @@ impl SystemRequirements {
             archspec,
         })
     }
+
+    /// Returns the combination of two system requirements.
+    ///
+    /// If both system requirements specify the same virtual package, the incoming version is taken.
+    ///
+    pub fn merge(&self, other: &Self) -> Self {
+        Self {
+            linux: other.linux.clone().or(self.linux.clone()),
+            cuda: other.cuda.clone().or(self.cuda.clone()),
+            macos: other.macos.clone().or(self.macos.clone()),
+            libc: other.libc.clone().or(self.libc.clone()),
+            archspec: other.archspec.clone().or(self.archspec.clone()),
+        }
+    }
+
+    /// Returns true if the system requirements are empty, meaning that no requirements were specified.
+    pub fn is_empty(&self) -> bool {
+        self.linux.is_none()
+            && self.cuda.is_none()
+            && self.macos.is_none()
+            && self.libc.is_none()
+            && self.archspec.is_none()
+    }
 }
 
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -154,23 +174,6 @@ impl PartialEq for LibCSystemRequirement {
 
 impl Eq for LibCSystemRequirement {}
 
-impl<'de> Deserialize<'de> for LibCSystemRequirement {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        serde_untagged::UntaggedEnumVisitor::new()
-            .map(|map| map.deserialize().map(LibCSystemRequirement::OtherFamily))
-            .string(|s| {
-                Version::from_str(s)
-                    .map(LibCSystemRequirement::GlibC)
-                    .map_err(serde::de::Error::custom)
-            })
-            .expecting("a version or a mapping with `family` and `version`")
-            .deserialize(deserializer)
-    }
-}
-
 impl LibCSystemRequirement {
     /// Returns the family and version of this libc requirement.
     pub fn family_and_version(&self) -> (&str, &Version) {
@@ -183,15 +186,37 @@ impl LibCSystemRequirement {
     }
 }
 
-#[serde_as]
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
+impl Serialize for LibCSystemRequirement {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            LibCSystemRequirement::GlibC(version) => serializer.serialize_str(&version.to_string()),
+            LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion { family, version }) => {
+                let mut map = BTreeMap::new(); // Initialize the BTreeMap
+                if let Some(fam) = family {
+                    map.insert(
+                        Value::String("family".to_string()),
+                        Value::String(fam.clone()),
+                    );
+                }
+                map.insert(
+                    Value::String("version".to_string()),
+                    Value::String(version.to_string()),
+                );
+                Value::Map(map).serialize(serializer) // Wrap the map in Value::Map
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct LibCFamilyAndVersion {
     /// The libc family, e.g. glibc
     pub family: Option<String>,
 
     /// The minimum version of the libc family
-    #[serde_as(as = "DisplayFromStr")]
     pub version: Version,
 }
 
@@ -216,99 +241,74 @@ impl From<LibCFamilyAndVersion> for LibC {
     }
 }
 
+impl std::fmt::Display for LibCSystemRequirement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LibCSystemRequirement::GlibC(version) => {
+                write!(f, "GlibC version: {version}")
+            }
+            LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion { family, version }) => {
+                match family {
+                    Some(fam) => write!(f, "{fam} version: {version}"),
+                    None => write!(f, "No family, version: {version}"),
+                }
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for SystemRequirements {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "- {} {}",
+            console::style("macOS:").cyan(),
+            self.macos
+                .as_ref()
+                .map_or("None".to_string(), |v| v.to_string())
+        )?;
+        writeln!(
+            f,
+            "- {} {}",
+            console::style("Linux:").cyan(),
+            self.linux
+                .as_ref()
+                .map_or("None".to_string(), |v| v.to_string())
+        )?;
+        writeln!(
+            f,
+            "- {} {}",
+            console::style("CUDA:").cyan(),
+            self.cuda
+                .as_ref()
+                .map_or("None".to_string(), |v| v.to_string())
+        )?;
+        writeln!(
+            f,
+            "- {} {}",
+            console::style("LibC:").cyan(),
+            self.libc
+                .as_ref()
+                .map_or("None".to_string(), |v| v.to_string())
+        )?;
+        writeln!(
+            f,
+            "- {} {}",
+            console::style("Archspec:").cyan(),
+            self.archspec.as_deref().unwrap_or("None")
+        )?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
     use insta::assert_snapshot;
     use rattler_conda_types::Version;
-    use rattler_virtual_packages::{Cuda, LibC, Linux, Osx, VirtualPackage};
-    use serde::Deserialize;
     use std::str::FromStr;
-
-    #[test]
-    fn system_requirements_works() {
-        let file_content = r#"
-        linux = "5.11"
-        cuda = "12.2"
-        macos = "10.15"
-        libc = { family = "glibc", version = "2.12" }
-        "#;
-
-        let system_requirements: SystemRequirements =
-            toml_edit::de::from_str(file_content).unwrap();
-
-        let expected_requirements: Vec<VirtualPackage> = vec![
-            VirtualPackage::Linux(Linux {
-                version: Version::from_str("5.11").unwrap(),
-            }),
-            VirtualPackage::Cuda(Cuda {
-                version: Version::from_str("12.2").unwrap(),
-            }),
-            VirtualPackage::Osx(Osx {
-                version: Version::from_str("10.15").unwrap(),
-            }),
-            VirtualPackage::LibC(LibC {
-                version: Version::from_str("2.12").unwrap(),
-                family: "glibc".to_string(),
-            }),
-        ];
-
-        assert_eq!(
-            system_requirements.virtual_packages(),
-            expected_requirements
-        );
-    }
-
-    #[test]
-    fn test_system_requirements_failing_edge_cases() {
-        #[derive(Deserialize)]
-        struct Manifest {
-            #[serde(rename = "system-requirements")]
-            _system_requirements: SystemRequirements,
-        }
-
-        let file_contents = [
-            (
-                "version_misspelled",
-                r#"
-        [system-requirements]
-        libc = { veion = "2.12" }
-        "#,
-            ),
-            (
-                "unknown_key",
-                r#"
-        [system-requirements]
-        lib = "2.12"
-        "#,
-            ),
-            (
-                "fam_misspelled",
-                r#"
-        [system-requirements.libc]
-        version = "2.12"
-        fam = "glibc"
-        "#,
-            ),
-            (
-                "lic_misspelled",
-                r#"
-        [system-requirements.lic]
-        version = "2.12"
-        family = "glibc"
-        "#,
-            ),
-        ];
-
-        for (name, file_content) in file_contents {
-            let error = match toml_edit::de::from_str::<Manifest>(file_content) {
-                Ok(_) => panic!("Expected error"),
-                Err(e) => e.to_string(),
-            };
-            assert_snapshot!(name, &error, file_content);
-        }
-    }
+    use toml_edit::ser::to_string_pretty;
 
     #[test]
     fn test_empty_union() {
@@ -469,6 +469,100 @@ mod tests {
             }
         );
 
-        assert_matches!(eglibc_2_17.union(&glibc_2_12).unwrap_err(), SystemRequirementsUnionError::DifferentLibcFamilies(fam_a, fam_b) if fam_a == "eglibc" && fam_b == "glibc");
+        assert_matches!(eglibc_2_17.union(&glibc_2_12).unwrap_err(), SystemRequirementsUnionError::DifferentLibcFamilies(fam_a, fam_b) if fam_a == "eglibc" && fam_b == GLIBC_FAMILY);
+    }
+
+    #[test]
+    fn test_serialization() {
+        let system_requirements = SystemRequirements {
+            macos: Some(Version::from_str("10.15").unwrap()),
+            linux: Some(Version::from_str("5.11").unwrap()),
+            cuda: Some(Version::from_str("12.2").unwrap()),
+            libc: Some(LibCSystemRequirement::GlibC(
+                Version::from_str("2.12").unwrap(),
+            )),
+            archspec: Some("x86_64".to_string()),
+        };
+
+        let serialized = to_string_pretty(&system_requirements).unwrap();
+        assert_snapshot!(serialized);
+    }
+
+    #[test]
+    fn test_serialization_other_family() {
+        let system_requirements = SystemRequirements {
+            macos: Some(Version::from_str("10.15").unwrap()),
+            linux: Some(Version::from_str("5.11").unwrap()),
+            cuda: Some(Version::from_str("12.2").unwrap()),
+            libc: Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
+                family: Some(GLIBC_FAMILY.to_string()),
+                version: Version::from_str("2.12").unwrap(),
+            })),
+            archspec: Some("x86_64".to_string()),
+        };
+
+        let serialized = to_string_pretty(&system_requirements).unwrap();
+        assert_snapshot!(serialized);
+    }
+
+    #[test]
+    fn test_merge() {
+        let a = SystemRequirements {
+            macos: Some(Version::from_str("10.15").unwrap()),
+            linux: Some(Version::from_str("5.11").unwrap()),
+            cuda: Some(Version::from_str("12.2").unwrap()),
+            libc: Some(LibCSystemRequirement::GlibC(
+                Version::from_str("2.12").unwrap(),
+            )),
+            archspec: Some("x86_64".to_string()),
+        };
+
+        let b = SystemRequirements {
+            macos: Some(Version::from_str("10.16").unwrap()),
+            linux: Some(Version::from_str("5.12").unwrap()),
+            cuda: Some(Version::from_str("12.1").unwrap()),
+            libc: Some(LibCSystemRequirement::GlibC(
+                Version::from_str("2.13").unwrap(),
+            )),
+            archspec: Some("arm".to_string()),
+        };
+
+        let c = a.merge(&b);
+
+        assert_eq!(c.macos, Some(Version::from_str("10.16").unwrap()));
+        assert_eq!(c.linux, Some(Version::from_str("5.12").unwrap()));
+        assert_eq!(c.cuda, Some(Version::from_str("12.1").unwrap()));
+        assert_eq!(
+            c.libc,
+            Some(LibCSystemRequirement::GlibC(
+                Version::from_str("2.13").unwrap()
+            ))
+        );
+        assert_eq!(c.archspec, Some("arm".to_string()));
+
+        let d = SystemRequirements {
+            macos: None,
+            linux: None,
+            cuda: None,
+            libc: Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
+                family: Some(MUSL_FAMILY.to_string()),
+                version: Version::from_str("2.13").unwrap(),
+            })),
+            archspec: None,
+        };
+
+        let e = a.merge(&d);
+
+        assert_eq!(e.macos, Some(Version::from_str("10.15").unwrap()));
+        assert_eq!(e.linux, Some(Version::from_str("5.11").unwrap()));
+        assert_eq!(e.cuda, Some(Version::from_str("12.2").unwrap()));
+        assert_eq!(
+            e.libc,
+            Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
+                family: Some(MUSL_FAMILY.to_string()),
+                version: Version::from_str("2.13").unwrap(),
+            }))
+        );
+        assert_eq!(e.archspec, Some("x86_64".to_string()));
     }
 }

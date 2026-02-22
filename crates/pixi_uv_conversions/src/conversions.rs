@@ -1,88 +1,764 @@
-use distribution_types::{FlatIndexLocation, IndexLocations, IndexUrl};
-use pep508_rs::VerbatimUrl;
-use pixi_manifest::pypi::pypi_options::PypiOptions;
-use pixi_manifest::pypi::GitRev;
-use rattler_lock::FindLinksUrlOrPath;
-use uv_git::GitReference;
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
-/// Converts to the [`distribution_types::FlatIndexLocation`]
-pub fn to_flat_index_location(find_links: &FindLinksUrlOrPath) -> FlatIndexLocation {
-    match find_links {
-        FindLinksUrlOrPath::Path(path) => FlatIndexLocation::Path(path.clone()),
-        FindLinksUrlOrPath::Url(url) => FlatIndexLocation::Url(url.clone()),
-    }
+use crate::GitUrlWithPrefix;
+use miette::IntoDiagnostic;
+use pep440_rs::VersionSpecifiers;
+use pixi_git::{git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha};
+use pixi_manifest::pypi::pypi_options::{
+    FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PrereleaseMode,
+    PypiOptions,
+};
+use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
+use pixi_spec::GitReference as PixiReference;
+use std::{collections::HashSet, fmt::Write};
+use uv_configuration::BuildOptions;
+use uv_configuration::TrustedHost;
+use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
+use uv_normalize::{InvalidNameError, PackageName};
+use uv_pep508::{VerbatimUrl, VerbatimUrlError};
+use uv_python::PythonEnvironment;
+use uv_redacted::DisplaySafeUrl;
+
+use crate::{ConversionError, VersionError};
+
+#[derive(thiserror::Error, Debug)]
+pub enum ConvertFlatIndexLocationError {
+    #[error("could not convert path to flat index location {1}")]
+    VerbatimUrlError(#[source] VerbatimUrlError, PathBuf),
+    #[error("base path is not absolute: {path}", path = .0.display())]
+    NotAbsolute(PathBuf),
+}
+
+/// Convert PyPI options to build options
+pub fn pypi_options_to_build_options(
+    no_build: &NoBuild,
+    no_binary: &NoBinary,
+) -> Result<BuildOptions, InvalidNameError> {
+    let uv_no_build = match no_build {
+        NoBuild::None => uv_configuration::NoBuild::None,
+        NoBuild::All => uv_configuration::NoBuild::All,
+        NoBuild::Packages(vec) => uv_configuration::NoBuild::Packages(
+            vec.iter()
+                .map(|s| PackageName::from_str(s.as_ref()))
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
+    };
+    let uv_no_binary = match no_binary {
+        NoBinary::None => uv_configuration::NoBinary::None,
+        NoBinary::All => uv_configuration::NoBinary::All,
+        NoBinary::Packages(vec) => uv_configuration::NoBinary::Packages(
+            vec.iter()
+                .map(|s| PackageName::from_str(s.as_ref()))
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
+    };
+
+    Ok(BuildOptions::new(uv_no_binary, uv_no_build))
 }
 
 /// Convert the subset of pypi-options to index locations
-pub fn pypi_options_to_index_locations(options: &PypiOptions) -> IndexLocations {
+pub fn pypi_options_to_index_locations(
+    options: &PypiOptions,
+    base_path: &Path,
+) -> Result<IndexLocations, ConvertFlatIndexLocationError> {
+    // Check if the base path is absolute
+    // Otherwise uv might panic
+    if !base_path.is_absolute() {
+        return Err(ConvertFlatIndexLocationError::NotAbsolute(
+            base_path.to_path_buf(),
+        ));
+    }
+
     // Convert the index to a `IndexUrl`
     let index = options
         .index_url
         .clone()
+        .map(DisplaySafeUrl::from)
         .map(VerbatimUrl::from_url)
-        .map(IndexUrl::from);
+        .map(IndexUrl::from)
+        .map(Index::from_index_url)
+        .into_iter();
 
     // Convert to list of extra indexes
     let extra_indexes = options
         .extra_index_urls
         .clone()
-        .map(|urls| {
+        .into_iter()
+        .flat_map(|urls| {
             urls.into_iter()
+                .map(DisplaySafeUrl::from)
                 .map(VerbatimUrl::from_url)
                 .map(IndexUrl::from)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+                .map(Index::from_extra_index_url)
+        });
 
-    // Convert to list of flat indexes
-    let flat_indexes = options
-        .find_links
-        .clone()
-        .map(|indexes| {
-            indexes
-                .into_iter()
-                .map(|index| to_flat_index_location(&index))
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let flat_indexes = if let Some(flat_indexes) = options.find_links.clone() {
+        // Convert to list of flat indexes
+        flat_indexes
+            .into_iter()
+            .map(|url| match url {
+                FindLinksUrlOrPath::Path(relative) => VerbatimUrl::from_path(&relative, base_path)
+                    .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, relative)),
+                FindLinksUrlOrPath::Url(url) => Ok(VerbatimUrl::from_url(url.clone().into())),
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(IndexUrl::from)
+            .map(Index::from_find_links)
+            .collect()
+    } else {
+        vec![]
+    };
 
-    // we don't have support for an explicit `no_index` field in the `PypiOptions`
+    // we don't have support for an explicit `no_index` field in the `PypiIndexes`
     // so we only set it if you want to use flat indexes only
-    let no_index = index.is_none() && !flat_indexes.is_empty();
-    IndexLocations::new(index, extra_indexes, flat_indexes, no_index)
+    let indexes: Vec<_> = index.chain(extra_indexes).collect();
+    let no_index = indexes.is_empty() && !flat_indexes.is_empty();
+
+    Ok(IndexLocations::new(indexes, flat_indexes, no_index))
 }
 
 /// Convert locked indexes to IndexLocations
-pub fn locked_indexes_to_index_locations(indexes: &rattler_lock::PypiIndexes) -> IndexLocations {
+pub fn locked_indexes_to_index_locations(
+    indexes: &rattler_lock::PypiIndexes,
+    base_path: &Path,
+) -> Result<IndexLocations, ConvertFlatIndexLocationError> {
+    // Check if the base path is absolute
+    // Otherwise uv might panic
+    if !base_path.is_absolute() {
+        return Err(ConvertFlatIndexLocationError::NotAbsolute(
+            base_path.to_path_buf(),
+        ));
+    }
+
     let index = indexes
         .indexes
         .first()
         .cloned()
+        .map(DisplaySafeUrl::from)
         .map(VerbatimUrl::from_url)
-        .map(IndexUrl::from);
+        .map(IndexUrl::from)
+        .map(Index::from_index_url)
+        .into_iter();
     let extra_indexes = indexes
         .indexes
         .iter()
         .skip(1)
         .cloned()
+        .map(DisplaySafeUrl::from)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
-        .collect::<Vec<_>>();
+        .map(Index::from_extra_index_url);
     let flat_indexes = indexes
         .find_links
         .iter()
-        .map(to_flat_index_location)
-        .collect::<Vec<_>>();
+        .map(|url| match url {
+            rattler_lock::FindLinksUrlOrPath::Path(relative) => {
+                VerbatimUrl::from_path(relative, base_path).map_err(|e| {
+                    ConvertFlatIndexLocationError::VerbatimUrlError(e, relative.clone())
+                })
+            }
+            rattler_lock::FindLinksUrlOrPath::Url(url) => {
+                Ok(VerbatimUrl::from_url(url.clone().into()))
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(IndexUrl::from)
+        .map(Index::from_find_links)
+        .collect();
 
     // we don't have support for an explicit `no_index` field in the `PypiIndexes`
     // so we only set it if you want to use flat indexes only
-    let no_index = index.is_none() && !flat_indexes.is_empty();
-    IndexLocations::new(index, extra_indexes, flat_indexes, no_index)
+    let indexes: Vec<_> = index.chain(extra_indexes).collect();
+    let flat_index: Vec<_> = flat_indexes;
+    let no_index = indexes.is_empty() && !flat_index.is_empty();
+    Ok(IndexLocations::new(indexes, flat_index, no_index))
 }
 
-pub fn to_git_reference(rev: &GitRev) -> GitReference {
-    match rev {
-        GitRev::Full(rev) => GitReference::FullCommit(rev.clone()),
-        GitRev::Short(rev) => GitReference::BranchOrTagOrCommit(rev.clone()),
+#[derive(Clone)]
+pub enum BuildIsolation {
+    /// No build isolation
+    Isolated,
+    /// Build isolation with a shared environment
+    Shared,
+    /// Build isolation with a shared environment and a list of package names
+    SharedPackage(Vec<PackageName>),
+}
+
+impl BuildIsolation {
+    pub fn to_uv<'a>(&'a self, python_env: &'a PythonEnvironment) -> uv_types::BuildIsolation<'a> {
+        match self {
+            BuildIsolation::Isolated => uv_types::BuildIsolation::Isolated,
+            BuildIsolation::Shared => uv_types::BuildIsolation::Shared(python_env),
+            BuildIsolation::SharedPackage(packages) => {
+                uv_types::BuildIsolation::SharedPackage(python_env, packages)
+            }
+        }
+    }
+
+    pub fn to_uv_with<'a, F: FnOnce() -> &'a PythonEnvironment>(
+        &'a self,
+        get_env: F,
+    ) -> uv_types::BuildIsolation<'a> {
+        match self {
+            BuildIsolation::Isolated => uv_types::BuildIsolation::Isolated,
+            BuildIsolation::Shared => uv_types::BuildIsolation::Shared(get_env()),
+            BuildIsolation::SharedPackage(packages) => {
+                uv_types::BuildIsolation::SharedPackage(get_env(), packages)
+            }
+        }
+    }
+}
+
+impl TryFrom<NoBuildIsolation> for BuildIsolation {
+    type Error = ConversionError;
+
+    fn try_from(no_build: NoBuildIsolation) -> Result<Self, Self::Error> {
+        Ok(match no_build {
+            NoBuildIsolation::All => BuildIsolation::Shared,
+            NoBuildIsolation::Packages(packages) if packages.is_empty() => BuildIsolation::Isolated,
+            NoBuildIsolation::Packages(packages) => BuildIsolation::SharedPackage(
+                packages
+                    .into_iter()
+                    .map(|pkg| to_uv_normalize(&pkg))
+                    .collect::<Result<_, _>>()?,
+            ),
+        })
+    }
+}
+
+/// Convert pixi `IndexStrategy` to `uv_types::IndexStrategy`
+pub fn to_index_strategy(
+    index_strategy: Option<&IndexStrategy>,
+) -> uv_configuration::IndexStrategy {
+    if let Some(index_strategy) = index_strategy {
+        match index_strategy {
+            IndexStrategy::FirstIndex => uv_configuration::IndexStrategy::FirstIndex,
+            IndexStrategy::UnsafeFirstMatch => uv_configuration::IndexStrategy::UnsafeFirstMatch,
+            IndexStrategy::UnsafeBestMatch => uv_configuration::IndexStrategy::UnsafeBestMatch,
+        }
+    } else {
+        uv_configuration::IndexStrategy::default()
+    }
+}
+
+/// Convert pixi `PrereleaseMode` to `uv_resolver::PrereleaseMode`
+pub fn to_prerelease_mode(prerelease_mode: Option<&PrereleaseMode>) -> uv_resolver::PrereleaseMode {
+    match prerelease_mode {
+        Some(PrereleaseMode::Disallow) => uv_resolver::PrereleaseMode::Disallow,
+        Some(PrereleaseMode::Allow) => uv_resolver::PrereleaseMode::Allow,
+        Some(PrereleaseMode::IfNecessary) => uv_resolver::PrereleaseMode::IfNecessary,
+        Some(PrereleaseMode::Explicit) => uv_resolver::PrereleaseMode::Explicit,
+        Some(PrereleaseMode::IfNecessaryOrExplicit) | None => {
+            uv_resolver::PrereleaseMode::IfNecessaryOrExplicit
+        }
+    }
+}
+
+pub fn into_uv_git_reference(git_ref: PixiGitReference) -> uv_git_types::GitReference {
+    match git_ref {
+        PixiGitReference::Branch(branch) => uv_git_types::GitReference::Branch(branch),
+        PixiGitReference::Tag(tag) => uv_git_types::GitReference::Tag(tag),
+        PixiGitReference::ShortCommit(rev) | PixiGitReference::FullCommit(rev) => {
+            uv_git_types::GitReference::BranchOrTagOrCommit(rev)
+        }
+        PixiGitReference::BranchOrTag(rev) => uv_git_types::GitReference::BranchOrTag(rev),
+        PixiGitReference::BranchOrTagOrCommit(rev) => {
+            uv_git_types::GitReference::BranchOrTagOrCommit(rev)
+        }
+        PixiGitReference::NamedRef(rev) => uv_git_types::GitReference::NamedRef(rev),
+        PixiGitReference::DefaultBranch => uv_git_types::GitReference::DefaultBranch,
+    }
+}
+
+pub fn into_uv_git_sha(git_sha: PixiGitSha) -> uv_git_types::GitOid {
+    uv_git_types::GitOid::from_str(&git_sha.to_string())
+        .expect("we expect it to be the same git sha")
+}
+
+pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiReference {
+    match git_reference {
+        uv_git_types::GitReference::Branch(branch) => PixiReference::Branch(branch.to_string()),
+        uv_git_types::GitReference::Tag(tag) => PixiReference::Tag(tag.to_string()),
+        uv_git_types::GitReference::BranchOrTag(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git_types::GitReference::BranchOrTagOrCommit(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git_types::GitReference::NamedRef(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git_types::GitReference::DefaultBranch => PixiReference::DefaultBranch,
+    }
+}
+
+/// Convert a solved [`GitSourceDist`] into [`PinnedGitSpec`]
+///
+/// The `original_reference` parameter allows preserving the original git reference
+/// from the manifest (e.g., `Branch("main")`). When uv resolves a git dependency,
+/// it may normalize branch references to `DefaultBranch`, losing the original
+/// branch information. If provided, this original reference will be used instead
+/// of the one from uv's resolution.
+///
+/// If no original reference is provided (user didn't specify branch/tag/rev),
+/// we store the resolved commit as `Rev(commit)` rather than `DefaultBranch`.
+/// This ensures the lock file has a precise reference that doesn't require
+/// cache lookups when re-resolving (similar to how uv's lockfile works).
+pub fn into_pinned_git_spec(
+    dist: GitSourceDist,
+    original_reference: Option<PixiReference>,
+) -> PinnedGitSpec {
+    // Necessary to convert between our gitsha and uv gitsha.
+    let git_sha = PixiGitSha::from_str(
+        &dist
+            .git
+            .precise()
+            .expect("we expect it to be resolved")
+            .to_string(),
+    )
+    .expect("we expect it to be a valid sha");
+
+    // Use the original reference from the manifest if provided.
+    // If no explicit reference was specified, use DefaultBranch.
+    // The precise commit is already captured in the fragment (`#commit`),
+    // so we don't need to duplicate it in the query string as `?rev=commit`.
+    let reference = original_reference.unwrap_or(PixiReference::DefaultBranch);
+
+    let pinned_checkout = PinnedGitCheckout::new(
+        git_sha,
+        dist.subdirectory
+            .and_then(|sd| pixi_spec::Subdirectory::try_from(sd.to_path_buf()).ok())
+            .unwrap_or_default(),
+        reference,
+    );
+
+    PinnedGitSpec::new(dist.git.repository().clone().into(), pinned_checkout)
+}
+
+/// Convert a locked git url into a parsed git url
+/// [`LockedGitUrl`] is always recorded in the lock file and looks like this:
+/// <git+https://git.example.com/MyProject.git?tag=v1.0&subdirectory=pkg_dir#1c4b2c7864a60ea169e091901fcde63a8d6fbfdc>
+///
+/// [`uv_pypi_types::ParsedGitUrl`] looks like this:
+/// <git+https://git.example.com/MyProject.git@v1.0#subdirectory=pkg_dir>
+///
+/// So we need to convert the locked git url into a parsed git url.
+/// which is used in the uv crate.
+pub fn to_parsed_git_url(
+    locked_git_url: &LockedGitUrl,
+) -> miette::Result<uv_pypi_types::ParsedGitUrl> {
+    let git_source = PinnedGitCheckout::from_locked_url(locked_git_url)?;
+    // Construct manually [`ParsedGitUrl`] from locked url.
+    let parsed_git_url = uv_pypi_types::ParsedGitUrl::from_source(
+        uv_git_types::GitUrl::from_fields(
+            {
+                let mut url = locked_git_url.to_url();
+                // Locked git url contains query parameters and fragments
+                // so we need to clean it to a base repository URL
+                url.set_fragment(None);
+                url.set_query(None);
+
+                let git_url = GitUrlWithPrefix::from(&url);
+                git_url.to_display_safe_url()
+            },
+            into_uv_git_reference(git_source.reference.into()),
+            Some(into_uv_git_sha(git_source.commit)),
+        )
+        .into_diagnostic()?,
+        if git_source.subdirectory.is_empty() {
+            None
+        } else {
+            Some(
+                git_source
+                    .subdirectory
+                    .as_path()
+                    .to_path_buf()
+                    .into_boxed_path(),
+            )
+        },
+    );
+
+    Ok(parsed_git_url)
+}
+
+/// Converts from the open-source variant to the uv-specific variant,
+/// these are incompatible types
+pub fn to_uv_specifiers(
+    specifiers: &VersionSpecifiers,
+) -> Result<uv_pep440::VersionSpecifiers, uv_pep440::VersionSpecifiersParseError> {
+    uv_pep440::VersionSpecifiers::from_str(specifiers.to_string().as_str())
+}
+
+pub fn to_requirements<'req>(
+    requirements: impl Iterator<Item = &'req uv_distribution_types::Requirement>,
+) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
+    let requirements: Result<Vec<pep508_rs::Requirement>, ConversionError> = requirements
+        .map(|requirement| {
+            // First we convert `uv_distribution_types::Requirement` into a string
+            // The implementation is nearly identical to `requirement.to_string()`.
+            // However, we ignore the uv specific index since
+            // `pep508_rs::Requirement::from_str` isn't able to parse that
+
+            let uv_distribution_types::Requirement {
+                extras,
+                name,
+                source,
+                marker,
+                groups: _groups,
+                origin: _origin,
+            } = requirement;
+
+            let mut package_string = String::new();
+            write!(&mut package_string, "{name}")?;
+            if !extras.is_empty() {
+                write!(
+                    package_string,
+                    "[{}]",
+                    extras
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )?;
+            }
+            match &source {
+                uv_distribution_types::RequirementSource::Registry {
+                    specifier, index, ..
+                } => {
+                    write!(package_string, "{specifier}")?;
+                    if let Some(index) = index {
+                        // This is the main difference to the `requirement.to_string()`
+                        // We only log this value, but don't put it into the final string
+                        tracing::info!("Ignore specified index '{}' of '{}'", index.url, name);
+                    }
+                }
+                uv_distribution_types::RequirementSource::Url { url, .. } => {
+                    write!(package_string, " @ {url}")?;
+                }
+                uv_distribution_types::RequirementSource::Git {
+                    url: _,
+                    git,
+                    subdirectory,
+                } => {
+                    write!(package_string, " @ git+{}", git.repository())?;
+                    if let Some(reference) = git.reference().as_str() {
+                        write!(package_string, "@{reference}")?;
+                    }
+                    if let Some(subdirectory) = subdirectory {
+                        writeln!(package_string, "#subdirectory={}", subdirectory.display())?;
+                    }
+                }
+                uv_distribution_types::RequirementSource::Path { url, .. } => {
+                    write!(package_string, " @ {url}")?;
+                }
+                uv_distribution_types::RequirementSource::Directory { url, .. } => {
+                    write!(package_string, " @ {url}")?;
+                }
+            }
+            if let Some(marker) = marker.contents() {
+                write!(package_string, " ; {marker}")?;
+            }
+            pep508_rs::Requirement::from_str(&package_string)
+                .map_err(crate::Pep508Error::Pep508Error)
+                .map_err(From::from)
+        })
+        .collect();
+
+    requirements
+}
+
+/// Convert back to PEP508 without the VerbatimParsedUrl
+/// We need this function because we need to convert to the introduced
+/// `VerbatimParsedUrl` back to crates.io `VerbatimUrl`, for the locking
+pub fn convert_uv_requirements_to_pep508<'req>(
+    requires_dist: impl Iterator<Item = &'req uv_pep508::Requirement<uv_pypi_types::VerbatimParsedUrl>>,
+) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
+    // Convert back top PEP508 Requirement<VerbatimUrl>
+    let requirements: Result<Vec<pep508_rs::Requirement>, _> = requires_dist
+        .map(|r| {
+            let requirement = r.to_string();
+            pep508_rs::Requirement::from_str(&requirement).map_err(crate::Pep508Error::Pep508Error)
+        })
+        .collect();
+
+    Ok(requirements?)
+}
+
+/// Converts `uv_normalize::PackageName` to `pep508_rs::PackageName`
+pub fn to_normalize(
+    normalise: &uv_normalize::PackageName,
+) -> Result<pep508_rs::PackageName, crate::ConversionError> {
+    Ok(pep508_rs::PackageName::from_str(normalise.as_str())
+        .map_err(crate::NameError::PepNameError)?)
+}
+
+/// Converts `pe508::PackageName` to  `uv_normalize::PackageName`
+pub fn to_uv_normalize(
+    normalise: &pep508_rs::PackageName,
+) -> Result<uv_normalize::PackageName, crate::ConversionError> {
+    Ok(
+        uv_normalize::PackageName::from_str(normalise.to_string().as_str())
+            .map_err(crate::NameError::UvNameError)?,
+    )
+}
+
+/// Converts `pep508_rs::ExtraName` to `uv_normalize::ExtraName`
+pub fn to_uv_extra_name(
+    extra_name: &pep508_rs::ExtraName,
+) -> Result<uv_normalize::ExtraName, crate::ConversionError> {
+    Ok(
+        uv_normalize::ExtraName::from_str(extra_name.to_string().as_str())
+            .map_err(crate::NameError::UvExtraNameError)?,
+    )
+}
+
+/// Converts `uv_normalize::ExtraName` to `pep508_rs::ExtraName`
+pub fn to_extra_name(
+    extra_name: &uv_normalize::ExtraName,
+) -> Result<pep508_rs::ExtraName, crate::ConversionError> {
+    Ok(
+        pep508_rs::ExtraName::from_str(extra_name.to_string().as_str())
+            .map_err(crate::NameError::PepExtraNameError)?,
+    )
+}
+
+/// Converts `pep440_rs::Version` to `uv_pep440::Version`
+pub fn to_uv_version(
+    version: &pep440_rs::Version,
+) -> Result<uv_pep440::Version, crate::ConversionError> {
+    Ok(
+        uv_pep440::Version::from_str(version.to_string().as_str())
+            .map_err(VersionError::UvError)?,
+    )
+}
+
+/// Converts `pep508_rs::MarkerTree` to `uv_pep508::MarkerTree`
+pub fn to_uv_marker_tree(
+    marker_tree: &pep508_rs::MarkerTree,
+) -> Result<uv_pep508::MarkerTree, crate::ConversionError> {
+    let serialized = marker_tree.try_to_string();
+    if let Some(serialized) = serialized {
+        Ok(uv_pep508::MarkerTree::from_str(serialized.as_str())
+            .map_err(crate::Pep508Error::UvPep508)?)
+    } else {
+        Ok(uv_pep508::MarkerTree::default())
+    }
+}
+
+/// Converts `uv_pep508::MarkerTree` to `pep508_rs::MarkerTree`
+pub fn to_marker_environment(
+    marker_env: &uv_pep508::MarkerEnvironment,
+) -> Result<pep508_rs::MarkerEnvironment, crate::ConversionError> {
+    let serde_str = serde_json::to_string(marker_env).expect("its valid");
+    serde_json::from_str(&serde_str).map_err(crate::ConversionError::MarkerEnvironmentSerialization)
+}
+
+/// Converts `pep440_rs::VersionSpecifiers` to `uv_pep440::VersionSpecifiers`
+pub fn to_uv_version_specifiers(
+    version_specifier: &pep440_rs::VersionSpecifiers,
+) -> Result<uv_pep440::VersionSpecifiers, crate::ConversionError> {
+    Ok(
+        uv_pep440::VersionSpecifiers::from_str(&version_specifier.to_string())
+            .map_err(crate::VersionSpecifiersError::UvVersionError)?,
+    )
+}
+
+/// Converts `uv_pep440::VersionSpecifiers` to `pep440_rs::VersionSpecifiers`
+pub fn to_version_specifiers(
+    version_specifier: &uv_pep440::VersionSpecifiers,
+) -> Result<pep440_rs::VersionSpecifiers, crate::ConversionError> {
+    Ok(
+        pep440_rs::VersionSpecifiers::from_str(&version_specifier.to_string())
+            .map_err(crate::VersionSpecifiersError::PepVersionError)?,
+    )
+}
+
+/// Converts trusted_host `string` to `uv_configuration::TrustedHost`
+pub fn to_uv_trusted_host(
+    trusted_host: &str,
+) -> Result<uv_configuration::TrustedHost, crate::ConversionError> {
+    Ok(uv_configuration::TrustedHost::from_str(trusted_host)?)
+}
+
+/// Configure insecure hosts for TLS verification bypass
+/// This function handles the logic for when tls_no_verify is enabled,
+/// adding all index hosts to the insecure list as a workaround since UV doesn't have a global SSL disable option
+pub fn configure_insecure_hosts_for_tls_bypass(
+    base_insecure_hosts: Vec<TrustedHost>,
+    tls_no_verify: bool,
+    index_locations: &IndexLocations,
+) -> Vec<TrustedHost> {
+    let mut allow_insecure_hosts = base_insecure_hosts;
+    let mut seen: HashSet<String> = allow_insecure_hosts
+        .iter()
+        .map(|host| host.to_string().to_ascii_lowercase())
+        .collect();
+
+    if tls_no_verify {
+        // When tls_no_verify is enabled, add all index hosts to the insecure list
+        // This is a workaround since UV doesn't have a global SSL disable option
+        //
+        // We use allowed_indexes() instead of known_indexes() because:
+        // - allowed_indexes() returns only indexes that will actually be used for package resolution
+        // - It deduplicates by name, excluding overridden/duplicate index definitions
+        // - This matches uv's authentication behavior and ensures we only bypass TLS for actively used indexes
+        let mut has_pypi_org_index = false;
+
+        let mut push_host = |host: &str, allow_insecure_hosts: &mut Vec<TrustedHost>| {
+            let key = host.to_ascii_lowercase();
+            if seen.insert(key.clone()) {
+                match to_uv_trusted_host(host) {
+                    Ok(trusted_host) => allow_insecure_hosts.push(trusted_host),
+                    Err(e) => tracing::warn!("Failed to add host {} as trusted: {}", host, e),
+                }
+            }
+        };
+
+        for index_url in index_locations.allowed_indexes() {
+            if let Some(host) = index_url.url().host_str() {
+                has_pypi_org_index |= host.eq_ignore_ascii_case("pypi.org");
+                push_host(host, &mut allow_insecure_hosts);
+            }
+        }
+
+        // Add hosts from find-links/flat indexes (if they are http/https)
+        for flat_index in index_locations.flat_indexes() {
+            if let Some(host) = flat_index.url().host_str() {
+                push_host(host, &mut allow_insecure_hosts);
+            }
+        }
+
+        // Add the default PyPI download host when using the main PyPI index.
+        if has_pypi_org_index {
+            push_host("files.pythonhosted.org", &mut allow_insecure_hosts);
+        }
+
+        tracing::warn!(
+            "TLS verification is disabled for PyPI operations. This is insecure and should only be used for testing or internal networks."
+        );
+    }
+
+    allow_insecure_hosts
+}
+
+/// Converts a date to a `uv_resolver::ExcludeNewer`
+/// since 0.8.2 uv also allows this per package,
+/// but we only support the global one for now
+pub fn to_exclude_newer(exclude_newer: chrono::DateTime<chrono::Utc>) -> uv_resolver::ExcludeNewer {
+    let seconds_since_epoch = exclude_newer.timestamp();
+    let nanoseconds = exclude_newer.timestamp_subsec_nanos();
+    let timestamp = jiff::Timestamp::new(seconds_since_epoch, nanoseconds as _).unwrap_or(
+        if seconds_since_epoch < 0 {
+            jiff::Timestamp::MIN
+        } else {
+            jiff::Timestamp::MAX
+        },
+    );
+    // Will convert into a global ExcludeNewer
+    // ..into is needed to convert into the uv timestamp type
+    uv_resolver::ExcludeNewer::global(timestamp.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use url::Url;
+    use uv_distribution_types::{Index, IndexUrl};
+
+    #[test]
+    fn test_configure_insecure_hosts_for_tls_bypass_enabled() {
+        // Create test index locations
+        let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://pypi.org/simple/").unwrap().into(),
+        ));
+        let extra_index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://test-index.example.com/simple/")
+                .unwrap()
+                .into(),
+        ));
+
+        let indexes = vec![
+            Index::from_index_url(index_url),
+            Index::from_extra_index_url(extra_index_url),
+        ];
+        let index_locations = IndexLocations::new(indexes, vec![], false);
+
+        // Test with tls_no_verify enabled
+        let base_hosts = vec![];
+        let result = configure_insecure_hosts_for_tls_bypass(
+            base_hosts,
+            true, // tls_no_verify = true
+            &index_locations,
+        );
+
+        // Should have added both hosts
+        assert_eq!(result.len(), 3);
+        let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
+        assert!(host_names.contains(&"pypi.org".to_string()));
+        assert!(host_names.contains(&"test-index.example.com".to_string()));
+        assert!(host_names.contains(&"files.pythonhosted.org".to_string()));
+    }
+
+    #[test]
+    fn test_configure_insecure_hosts_for_tls_bypass_disabled() {
+        // Create test index locations
+        let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://pypi.org/simple/").unwrap().into(),
+        ));
+        let indexes = vec![Index::from_index_url(index_url)];
+        let index_locations = IndexLocations::new(indexes, vec![], false);
+
+        // Test with tls_no_verify disabled
+        let base_hosts = vec![];
+        let result = configure_insecure_hosts_for_tls_bypass(
+            base_hosts,
+            false, // tls_no_verify = false
+            &index_locations,
+        );
+
+        // Should not have added any hosts
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_configure_insecure_hosts_for_tls_bypass_preserves_existing() {
+        // Create test index locations
+        let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://pypi.org/simple/").unwrap().into(),
+        ));
+        let indexes = vec![Index::from_index_url(index_url)];
+        let index_locations = IndexLocations::new(indexes, vec![], false);
+
+        // Start with existing trusted host
+        let existing_host = to_uv_trusted_host("existing.example.com").unwrap();
+        let base_hosts = vec![existing_host];
+
+        let result = configure_insecure_hosts_for_tls_bypass(
+            base_hosts,
+            true, // tls_no_verify = true
+            &index_locations,
+        );
+
+        // Should have preserved existing host and added new one
+        assert_eq!(result.len(), 3);
+        let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
+        assert!(host_names.contains(&"existing.example.com".to_string()));
+        assert!(host_names.contains(&"pypi.org".to_string()));
+        assert!(host_names.contains(&"files.pythonhosted.org".to_string()));
+    }
+
+    #[test]
+    fn test_configure_insecure_hosts_for_flat_index_hosts() {
+        // Flat index hosted on a custom domain should be added when tls_no_verify is enabled
+        let flat_index = Index::from_find_links(IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            Url::parse("https://packages.example.org/simple/")
+                .unwrap()
+                .into(),
+        )));
+        let index_locations = IndexLocations::new(vec![], vec![flat_index], true);
+
+        let result = configure_insecure_hosts_for_tls_bypass(vec![], true, &index_locations);
+
+        let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
+        assert!(host_names.contains(&"packages.example.org".to_string()));
     }
 }

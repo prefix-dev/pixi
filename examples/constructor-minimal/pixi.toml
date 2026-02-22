@@ -1,0 +1,87 @@
+[workspace]
+channels = ["conda-forge"]
+name = "my installer"
+platforms = [
+  "linux-64",
+  "linux-aarch64",
+  "linux-ppc64le",
+  "osx-64",
+  "osx-arm64",
+  "win-64",
+]
+version = "0.1.0"
+
+[environments]
+build-linux = ["build", "build-linux"]
+build-osx = ["build", "build-osx", "build-win"]
+build-win = ["build", "build-win"]
+installer = ["installer"]
+
+[feature.installer.dependencies]
+micromamba = "*" # provide `bin/activate` (or `Scripts/activate`)
+python = "*"     # constructor requires this for `@EXPLICIT` envs
+
+[feature.build.dependencies]
+constructor = "*"
+jaq = "*"         # needed to get current platform
+mamba = "*"       # needed for cross-architecturo solves
+
+[feature.build.tasks]
+construct = { cmd = """
+  rm -rf dist/installer/$CC_PLATFORM
+  && cat installer/construct.yaml.in > installer/construct.yaml
+  && echo "environment_file: ./specs/installer_$(echo $CC_PLATFORM)_conda_spec.txt"
+    >> installer/construct.yaml
+  && constructor installer
+    --platform $CC_PLATFORM
+    --cache-dir build/.cache/constructor
+    --output-dir dist/installer/$CC_PLATFORM
+    --conda-exe $(which mamba || where mamba)
+""", env = { CONDA_EXE = "$(which mamba || where mamba)" } }
+platform = "pixi info --json | jaq -r '.platform'"
+specs = "pixi project export conda-explicit-spec --environment installer ./installer/specs"
+
+[feature.build-linux]
+platforms = ["linux-64", "linux-aarch64", "linux-ppc64le"]
+[feature.build-linux.tasks]
+build = { depends-on = [
+  "specs",
+  "build-linux-64",
+  "build-linux-aarch64",
+  "build-linux-ppc64le",
+] }
+build-linux-64 = "CC_PLATFORM=linux-64 pixi run construct"
+build-linux-aarch64 = "CC_PLATFORM=linux-aarch64 pixi run construct"
+build-linux-ppc64le = "CC_PLATFORM=linux-ppc64le pixi run construct"
+start = { depends-on = ["build"], cmd = """
+  rm -rf build/_installer_env_/
+  && bash dist/installer/$(pixi run platform)/*.sh -fbp build/_installer_env_/
+""" }
+
+[feature.build-osx]
+platforms = ["osx-64", "osx-arm64"]
+[feature.build-osx.tasks]
+build = { depends-on = ["specs", "build-osx-64", "build-osx-arm64"] }
+build-osx-64 = "CC_PLATFORM=osx-64 pixi run construct"
+build-osx-arm64 = "CC_PLATFORM=osx-arm64 pixi run construct"
+start = { depends-on = ["build"], cmd = """
+  rm -rf build/_installer_env_/
+  && bash dist/installer/$(pixi run platform)/*.sh -fbp build/_installer_env_/
+""" }
+
+[feature.build-win]
+platforms = ["win-64"]
+[feature.build-win.tasks]
+build = { depends-on = ["specs", "build-win-64"] }
+build-win-64 = "CC_PLATFORM=win-64 pixi run construct"
+start = { depends-on = ["build"], cmd = '''
+rm -rf build/_installer_env_/
+&& start
+  /wait
+  ""
+  dist\installer\$(pixi run platform)\*.exe
+  /InstallationType=JustMe
+  /RegisterPython=0
+  /S
+  /D=build\_installer_env_
+''' }

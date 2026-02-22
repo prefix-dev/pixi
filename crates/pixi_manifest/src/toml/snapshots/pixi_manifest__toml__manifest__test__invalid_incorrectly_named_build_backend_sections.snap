@@ -1,0 +1,16 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = []\n        preview = [\"pixi-build\"]\n\n        [package]\n        name = \"foobar\"\n        version = \"0.1.0\"\n\n        [build-system]\n        build-backend = { name = \"foobar\", version = \"*\" }\n\n        [build-backend.backend]\n        \"#,)"
+---
+  × The build backend name `backend` does not match the name defined in the build system `foobar`
+    ╭─[pixi.toml:14:24]
+ 11 │         [build-system]
+ 12 │         build-backend = { name = "foobar", version = "*" }
+    ·                                   ───┬──
+    ·                                      ╰── the backend name is defined here
+ 13 │
+ 14 │         [build-backend.backend]
+    ·                        ───┬───
+    ·                           ╰── this should be foobar
+ 15 │
+    ╰────

@@ -1,3 +1,5 @@
+# pyright: reportOptionalMemberAccess=false
+
 import cv2
 import numpy as np
 
@@ -31,6 +33,7 @@ print("Press SPACE to capture an image for calibration.")
 print("Press ESC to calibrate the camera using the previously captured images.")
 
 while True:
+    gray = None
     ret, frame = cap.read()
     if not ret:
         break

@@ -1,6 +1,6 @@
 use miette::IntoDiagnostic;
-use pep508_rs::{MarkerEnvironment, MarkerEnvironmentBuilder};
 use rattler_conda_types::{PackageRecord, Platform};
+use uv_pep508::{MarkerEnvironment, MarkerEnvironmentBuilder};
 
 /// Determine the available env markers based on the platform and python package.
 pub fn determine_marker_environment(

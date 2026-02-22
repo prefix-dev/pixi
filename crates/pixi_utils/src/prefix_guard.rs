@@ -1,11 +1,9 @@
-use std::{
-    io,
-    io::{Read, Seek, Write},
-    path::Path,
-};
+use std::{io, path::Path};
 
-use fd_lock::RwLockWriteGuard;
+use async_fd_lock::LockWrite;
 use serde::{Deserialize, Serialize};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::{self, io::AsyncSeekExt};
 
 const GUARD_PATH: &str = ".guard";
 
@@ -22,15 +20,16 @@ enum GuardState {
     Ready,
 }
 
-pub struct WriteGuard<'a> {
-    guard: RwLockWriteGuard<'a, std::fs::File>,
+#[derive(Debug)]
+pub struct AsyncWriteGuard {
+    guard: async_fd_lock::RwLockWriteGuard<tokio::fs::File>,
     state: GuardState,
 }
 
-impl<'a> WriteGuard<'a> {
-    fn new(mut guard: RwLockWriteGuard<'a, std::fs::File>) -> io::Result<Self> {
+impl AsyncWriteGuard {
+    async fn new(mut guard: async_fd_lock::RwLockWriteGuard<tokio::fs::File>) -> io::Result<Self> {
         let mut bytes = Vec::new();
-        guard.read_to_end(&mut bytes)?;
+        guard.read_to_end(&mut bytes).await?;
         let state = serde_json::from_slice(&bytes).unwrap_or(GuardState::Unknown);
         Ok(Self { guard, state })
     }
@@ -41,64 +40,64 @@ impl<'a> WriteGuard<'a> {
     }
 
     /// Notify this instance that installation of the prefix has started.
-    pub fn begin(&mut self) -> io::Result<()> {
+    pub async fn begin(&mut self) -> io::Result<()> {
         if self.state != GuardState::Installing {
-            self.guard.rewind()?;
+            self.guard.rewind().await?;
             let bytes = serde_json::to_vec(&GuardState::Installing)?;
-            self.guard.write_all(&bytes)?;
-            self.guard.set_len(bytes.len() as u64)?;
-            self.guard.flush()?;
+            self.guard.write_all(&bytes).await?;
+            // self.guard.set_len(bytes.len() as u64)?;
+            self.guard.flush().await?;
             self.state = GuardState::Installing;
         }
         Ok(())
     }
 
     /// Finishes writing to the guard and releases the lock.
-    pub fn finish(self) -> io::Result<()> {
-        let WriteGuard {
+    pub async fn finish(self) -> io::Result<()> {
+        let AsyncWriteGuard {
             mut guard,
             state: status,
         } = self;
         if status == GuardState::Installing {
-            guard.rewind()?;
+            guard.rewind().await?;
             let bytes = serde_json::to_vec(&GuardState::Ready)?;
-            guard.write_all(&bytes)?;
-            guard.set_len(bytes.len() as u64)?;
-            guard.flush()?;
+            guard.write_all(&bytes).await?;
+            guard.flush().await?;
         }
         Ok(())
     }
 }
 
-pub struct PrefixGuard {
-    guard: fd_lock::RwLock<std::fs::File>,
+pub struct AsyncPrefixGuard {
+    guard: tokio::fs::File,
 }
 
-impl PrefixGuard {
+impl AsyncPrefixGuard {
     /// Constructs a new guard for the given prefix but does not perform any
     /// locking operations yet.
-    pub fn new(prefix: &Path) -> io::Result<Self> {
+    pub async fn new(prefix: &Path) -> io::Result<Self> {
         let guard_path = prefix.join(GUARD_PATH);
 
         // Ensure that the directory exists
-        std::fs::create_dir_all(guard_path.parent().unwrap())?;
+        fs_err::tokio::create_dir_all(guard_path.parent().unwrap()).await?;
+
+        let file = tokio::fs::File::options()
+            .write(true)
+            .read(true)
+            .create(true)
+            .truncate(false)
+            .open(guard_path)
+            .await?;
 
         // Open the file
-        Ok(Self {
-            guard: fd_lock::RwLock::new(
-                std::fs::File::options()
-                    .write(true)
-                    .read(true)
-                    .create(true)
-                    .truncate(false)
-                    .open(guard_path)?,
-            ),
-        })
+        Ok(Self { guard: file })
     }
 
     /// Locks the guard for writing and returns a write guard which can be used
     /// to unlock it.
-    pub fn write(&mut self) -> io::Result<WriteGuard> {
-        WriteGuard::new(self.guard.write()?)
+    pub async fn write(self) -> io::Result<AsyncWriteGuard> {
+        let write_guard = self.guard.lock_write().await?;
+
+        AsyncWriteGuard::new(write_guard).await
     }
 }

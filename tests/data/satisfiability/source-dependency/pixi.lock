@@ -1,0 +1,20 @@
+version: 6
+environments:
+  default:
+    channels:
+      - url: https://prefix.dev/pixi-build-backends/
+      - url: https://prefix.dev/conda-forge/
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
+    packages:
+      linux-64:
+        - conda: child-package
+packages:
+  - conda: child-package
+    name: child-package
+    version: 0.1.0
+    build: ""
+    subdir: noarch
+    noarch: false
+    variants:
+      target_platform: noarch

@@ -1,0 +1,16 @@
+---
+source: crates/pixi_cli/src/workspace/export/conda_environment.rs
+expression: env_yaml.unwrap().to_yaml_string()
+---
+name: default
+channels:
+- conda-forge
+- nodefaults
+dependencies:
+- pytest *
+- flask >=3.0.2,<3.1
+- gunicorn >=21.2.0,<21.3
+- python >=3.12
+- pip
+- pip:
+  - -e .

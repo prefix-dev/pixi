@@ -1,0 +1,9 @@
+---
+source: src/global/project/parsed_manifest.rs
+expression: "examples.into_iter().map(|example|\nParsedManifest::from_toml_str(example).unwrap_err().to_string()).collect::<Vec<_>>().join(\"\\n\")"
+---
+unexpected keys in table: `[("invalid", Span { start: 1, end: 8 })]`
+expected: ["version", "envs"]
+unexpected keys in table: `[("invalid", Span { start: 14, end: 21 })]`
+expected: ["channels", "platform", "dependencies", "exposed", "shortcuts"]
+Failed to parse environment name 'python;3', please use only lowercase letters, numbers, dashes, underscores and dots

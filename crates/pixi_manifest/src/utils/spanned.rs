@@ -1,6 +1,11 @@
 //! Taken from: <https://docs.rs/serde_spanned/latest/serde_spanned/struct.Spanned.html>
-use std::cmp::Ordering;
-use std::hash::{Hash, Hasher};
+use pixi_toml::{DeserializeAs, FromKey};
+use std::{
+    cmp::Ordering,
+    hash::{Hash, Hasher},
+};
+use toml_span::value::Key;
+use toml_span::{DeserError, Spanned, Value};
 
 // Currently serde itself doesn't have a spanned type, so we map our `Spanned`
 // to a special value in the serde data model. Namely one with these special
@@ -24,6 +29,53 @@ pub struct PixiSpanned<T> {
     pub span: Option<std::ops::Range<usize>>,
     /// The spanned value.
     pub value: T,
+}
+
+impl<T> From<Spanned<T>> for PixiSpanned<T> {
+    fn from(value: Spanned<T>) -> Self {
+        Self {
+            span: Some(value.span.start..value.span.end),
+            value: value.value,
+        }
+    }
+}
+
+impl<'de, T: toml_span::Deserialize<'de>> toml_span::Deserialize<'de> for PixiSpanned<T> {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let span = value.span;
+        let value = T::deserialize(value)?;
+        Ok(Self {
+            span: Some(span.start..span.end),
+            value,
+        })
+    }
+}
+
+impl<'de, T, U> DeserializeAs<'de, PixiSpanned<T>> for PixiSpanned<U>
+where
+    U: DeserializeAs<'de, T>,
+{
+    fn deserialize_as(value: &mut Value<'de>) -> Result<PixiSpanned<T>, DeserError> {
+        let span = value.span;
+        let value = U::deserialize_as(value)?;
+        Ok(PixiSpanned {
+            span: Some(span.start..span.end),
+            value,
+        })
+    }
+}
+
+impl<'de, T: FromKey<'de>> FromKey<'de> for PixiSpanned<T> {
+    type Err = T::Err;
+
+    fn from_key(key: Key<'de>) -> Result<Self, Self::Err> {
+        let span = key.span;
+        let value = T::from_key(key)?;
+        Ok(Self {
+            span: Some(span.start..span.end),
+            value,
+        })
+    }
 }
 
 impl<T: Default> Default for PixiSpanned<T> {
@@ -171,8 +223,9 @@ impl<T: serde::ser::Serialize> serde::ser::Serialize for PixiSpanned<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::spanned::PixiSpanned;
     use serde::Deserialize;
+
+    use crate::utils::spanned::PixiSpanned;
 
     #[test]
     pub fn test_spanned() {

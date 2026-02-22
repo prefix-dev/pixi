@@ -1,0 +1,12 @@
+---
+source: crates/pixi_manifest/src/discovery.rs
+expression: snapshot
+---
+  × [package] section is only allowed when the `pixi-build` feature is enabled
+   ╭─[:1:1]
+ 1 │ ╭─▶ [package]
+ 2 │ │   name = "package"
+ 3 │ ╰─▶ version = "0.1.0"
+ 4 │
+   ╰────
+  help: Add `preview = ["pixi-build"]` under [workspace] to enable the preview feature

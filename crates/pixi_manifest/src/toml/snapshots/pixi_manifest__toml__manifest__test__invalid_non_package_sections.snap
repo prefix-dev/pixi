@@ -1,0 +1,20 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = []\n        preview = [\"pixi-build\"]\n\n        [build-dependencies]\n\n        [host-dependencies]\n\n        [target.win.host-dependencies]\n        \"#,)"
+---
+  × When `pixi-build` is enabled, host-dependencies can only be specified for a package.
+    ╭─[pixi.toml:9:9]
+  4 │         platforms = []
+  5 │         preview = ["pixi-build"]
+    ·                     ─────┬────
+    ·                          ╰── pixi-build is enabled here
+  6 │
+  7 │         [build-dependencies]
+  8 │
+  9 │         [host-dependencies]
+    ·         ──────────┬─────────
+    ·                   ╰── host-dependencies specified here
+ 10 │
+ 11 │         [target.win.host-dependencies]
+    ╰────
+  help: Did you mean [package.host-dependencies]?

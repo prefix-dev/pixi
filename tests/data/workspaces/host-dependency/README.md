@@ -1,0 +1,1 @@
+This is an example workspace where package_a depends on package_b in the host section.

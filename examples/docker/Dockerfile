@@ -1,17 +1,34 @@
-FROM ghcr.io/prefix-dev/pixi:0.18.0 AS build
+FROM ghcr.io/prefix-dev/pixi:0.28.2 AS install
 
-COPY . /app
+# Create a dummy blank project
+WORKDIR /app/docker_project
+RUN touch __init__.py
+
+# Install dependencies
 WORKDIR /app
-RUN pixi run build-wheel
-RUN pixi run postinstall-production
-RUN pixi shell-hook -e prod > /shell-hook
-RUN echo "gunicorn -w 4 docker_project:app --bind :8000" >> /shell-hook
+COPY pyproject.toml .
+COPY pixi.lock .
+RUN --mount=type=cache,target=/root/.cache/rattler/cache,sharing=private pixi install
 
+# Build for production
+FROM install AS build
+
+# Create an "entrypoint.sh" script which activates the pixi environment
+RUN printf '#!/bin/sh\n%s\nexec "$@"' "$(pixi shell-hook -e prod)" > /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Build then install the Python wheel
+COPY . .
+RUN pixi run build-wheel
+RUN pixi run install-wheel
+
+# Final minimal production image
 FROM ubuntu:22.04 AS production
 
 # only copy the production environment into prod container
 COPY --from=build /app/.pixi/envs/prod /app/.pixi/envs/prod
-COPY --from=build /shell-hook /shell-hook
+COPY --from=build /entrypoint.sh /entrypoint.sh
 WORKDIR /app
 EXPOSE 8000
-CMD ["/bin/bash", "/shell-hook"]
+ENTRYPOINT ["/entrypoint.sh"]  # uses the pixi environment
+CMD ["gunicorn", "docker_project:app", "-b", "0.0.0.0:8000"]

@@ -1,0 +1,6 @@
+---
+source: crates/pixi_pypi_spec/src/lib.rs
+expression: as_pypi_req
+snapshot_kind: text
+---
+{ version = "*", extras = ["habbasi"], env-markers = "sys_platform == 'linux'" }

@@ -1,0 +1,11 @@
+services:
+  pixi-example:
+    image: localhost/prefix-dev/docker-project:latest
+    build:
+      context: .
+      target: install
+    command: pixi run dev -h 0.0.0.0 -p 8000
+    ports:
+      - 8000:8000
+    volumes:
+      - ./docker_project:/app/docker_project:ro

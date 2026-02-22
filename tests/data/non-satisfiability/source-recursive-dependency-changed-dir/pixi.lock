@@ -1,0 +1,33 @@
+version: 6
+environments:
+  default:
+    channels:
+      - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      win-64:
+        - conda: foobar
+        - conda: child-package
+packages:
+  - conda: child-package
+    name: child-package
+    version: 0.0.1
+    build: ""
+    subdir: noarch
+    noarch: false
+    depends:
+      - foobar
+    # This should cause the lock-file to be invalid because the package `foobar`
+    # does not come from the directory `not-foobar`.
+    sources:
+      foobar:
+        path: "../not-foobar"
+    variants:
+      target_platform: noarch
+  - conda: foobar
+    name: foobar
+    version: 0.0.1
+    build: ""
+    subdir: noarch
+    noarch: false
+    variants:
+      target_platform: noarch

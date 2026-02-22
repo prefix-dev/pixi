@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/toml/package.rs
+expression: "format_parse_error(input, parse_error)"
+---
+  × the workspace does not define a 'version'
+   ╭─[pixi.toml:3:19]
+ 2 │         name = "package-name"
+ 3 │         version = { workspace = true }
+   ·                   ────────────────────
+ 4 │
+   ╰────

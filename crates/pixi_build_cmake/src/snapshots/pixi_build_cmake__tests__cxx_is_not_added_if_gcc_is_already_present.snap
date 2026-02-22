@@ -1,0 +1,21 @@
+---
+source: crates/pixi_build_cmake/src/main.rs
+expression: generated_recipe.recipe
+---
+context: {}
+package:
+  name: foobar
+  version: 0.1.0
+source: []
+build:
+  script: "[ ... script ... ]"
+requirements:
+  build:
+    - gxx
+    - cmake
+    - ninja
+  host: []
+  run: []
+  run_constraints: []
+tests: []
+about: {}

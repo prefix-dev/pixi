@@ -1,0 +1,18 @@
+---
+source: crates/pixi_manifest/src/manifests/workspace.rs
+expression: manifest.provenance.document.to_string()
+---
+[project]
+name = "flask-hello-world-pyproject"
+version = "0.1.0"
+description = "Example how to get started with flask in a pixi environment."
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+requires-python = ">=3.11"
+
+[tool.pixi.project]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.tasks]
+start = "python -m flask run --port=5050"

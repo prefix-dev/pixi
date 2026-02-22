@@ -3,7 +3,10 @@
 # This is a small example that builds and uploads a `.whl` to a custom pypi registry
 # If you want to upload to PyPI just replace the `--repository-url`
 # To use with GCP, make sure you've run a `gcloud auth`
-
+#
+# Install keyring and keyrings.google-artifactregistry-auth globally:
+# `pixi global install keyring --with keyrings.google-artifactregistry-auth`
+#
 # Using the custom registry:
 #
 # To use the custom GCP registry, unfortunately you have to have keyring installed globally
@@ -28,7 +31,7 @@ dependencies = ["rich"]
 description = "Add a short description here"
 name = "python-library-gcp-keyring"
 requires-python = ">= 3.11"
-version = "0.1.0"
+version = "0.1.2"
 
 [build-system]
 build-backend = "hatchling.build"
@@ -55,17 +58,25 @@ keyring = ">=25.2.0,<25.3"
 pytest = "*"
 
 # Local install for testing
-[tool.pixi.pypi-dependencies]
-python-library-gcp-keyring = { path = ".", editable = true }
+[tool.pixi.feature.local]
+pypi-dependencies = { python-library-gcp-keyring = { path = ".", editable = true } }
+
+# Use the custom GCP registry
+[tool.pixi.feature.gcp]
+pypi-dependencies = { python-library-gcp-keyring = "==0.1.1" }
+pypi-options.extra-index-urls = [
+  "https://oauth2accesstoken@europe-west4-python.pkg.dev/test-artifact-registry-423208/test/simple",
+]
 
 [tool.pixi.environments]
+default = { features = ["local"], solve-group = "default" }
 # Use this env for publishing:
 publish = { features = ["publish"], solve-group = "default" }
 # Use this env for testing:
-test = { features = ["test"], solve-group = "default" }
+test-gcp = { features = ["test", "gcp"] }
+test-local = { features = ["test", "local"] }
 
-# This has tasks for building and uploading
-# to custom GCP instance
+# This has tasks for building and uploading to custom GCP instance
 [tool.pixi.feature.publish.tasks]
 # Build into a wheel using hatch
 build = { cmd = "hatch build", inputs = ["say_hi/*"], outputs = ["dist/*"] }

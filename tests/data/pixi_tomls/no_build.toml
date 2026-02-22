@@ -1,0 +1,15 @@
+[project]
+channels = ["conda-forge"]
+description = "Package management made easy!"
+name = "no_build"
+platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+version = "0.1.0"
+
+[pypi-options]
+no-build = ["sdist"]
+
+[dependencies]
+python = "3.12.*"
+
+[pypi-dependencies]
+sdist = "==0.0.0"

@@ -1,0 +1,14 @@
+---
+source: src/cli/workspace/export/conda_environment.rs
+expression: env_yaml.unwrap().to_yaml_string()
+---
+name: alternative
+channels:
+- conda-forge
+- nodefaults
+dependencies:
+- python ==3.12
+- pip
+- pip:
+  - --index-url https://pypi.tuna.tsinghua.edu.cn/simple/
+  - flask==3.0.3

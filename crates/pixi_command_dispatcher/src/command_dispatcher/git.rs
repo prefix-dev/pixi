@@ -1,0 +1,106 @@
+use pixi_git::{GitError, GitUrl, git::GitReference, source::Fetch};
+use pixi_path::AbsPathBuf;
+use pixi_record::{PinnedGitCheckout, PinnedGitSpec, PinnedSourceSpec};
+use pixi_spec::GitSpec;
+
+use super::{Task, TaskSpec};
+use crate::{CommandDispatcher, CommandDispatcherError, SourceCheckout, SourceCheckoutError};
+
+/// A task that is send to the background to checkout a git repository.
+pub(crate) type GitCheckoutTask = Task<GitUrl>;
+impl TaskSpec for GitUrl {
+    type Output = Fetch;
+    type Error = GitError;
+}
+
+impl CommandDispatcher {
+    /// Check out the git repository associated with the given spec.
+    pub async fn pin_and_checkout_git(
+        &self,
+        git_spec: GitSpec,
+    ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
+        // Determine the git url, including the reference
+        let git_reference = git_spec
+            .rev
+            .clone()
+            .map(|rev| rev.into())
+            .unwrap_or(GitReference::DefaultBranch);
+        let pinned_git_reference = git_spec.rev.unwrap_or_default();
+
+        let git_url = GitUrl::try_from(git_spec.git)
+            .map_err(GitError::from)
+            .map_err(SourceCheckoutError::GitError)
+            .map_err(CommandDispatcherError::Failed)?
+            .with_reference(git_reference.clone());
+
+        // Fetch the git url in the background
+        let fetch = self
+            .checkout_git_url(git_url)
+            .await
+            .map_err(|err| err.map(SourceCheckoutError::from))?;
+
+        // Determine the pinned spec from the fetch
+        let pinned = PinnedGitSpec {
+            git: fetch.repository().url.clone().into_url(),
+            source: PinnedGitCheckout {
+                commit: fetch.commit(),
+                subdirectory: git_spec.subdirectory.clone(),
+                reference: pinned_git_reference,
+            },
+        };
+
+        Self::fetch_to_checkout(fetch, pinned)
+    }
+
+    /// Check out a particular git repository.
+    ///
+    /// The git checkout is performed in the background.
+    pub async fn checkout_git_url(
+        &self,
+        git_url: GitUrl,
+    ) -> Result<Fetch, CommandDispatcherError<GitError>> {
+        self.execute_task(git_url).await
+    }
+
+    /// Checkout a pinned git repository.
+    pub async fn checkout_pinned_git(
+        &self,
+        git_spec: PinnedGitSpec,
+    ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
+        let git_url = GitUrl::from_commit(
+            git_spec.git.clone(),
+            git_spec.source.reference.clone().into(),
+            git_spec.source.commit,
+        );
+        // Fetch the git url in the background
+        let fetch = self
+            .checkout_git_url(git_url)
+            .await
+            .map_err(|err| err.map(SourceCheckoutError::from))?;
+
+        Self::fetch_to_checkout(fetch, git_spec)
+    }
+
+    #[allow(clippy::result_large_err)]
+    fn fetch_to_checkout(
+        fetch: Fetch,
+        pinned: PinnedGitSpec,
+    ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
+        let root_dir = AbsPathBuf::new(fetch.into_path())
+            .expect("git checkout returned a relative path")
+            .into_assume_dir();
+
+        let path = if !pinned.source.subdirectory.is_empty() {
+            root_dir
+                .join(pinned.source.subdirectory.as_path())
+                .into_assume_dir()
+        } else {
+            root_dir
+        };
+
+        Ok(SourceCheckout {
+            path: path.into(),
+            pinned: PinnedSourceSpec::Git(pinned),
+        })
+    }
+}

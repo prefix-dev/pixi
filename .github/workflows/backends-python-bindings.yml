@@ -1,0 +1,49 @@
+name: Backends - Python Bindings
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - crates/pixi_build_backend/**
+      - Cargo.*
+      - pixi-build-backends/py-pixi-build-backend/**
+      - .github/workflows/backends-python-bindings.yml
+  pull_request:
+    paths:
+      - crates/pixi_build_backend/**
+      - Cargo.*
+      - pixi-build-backends/py-pixi-build-backend/**
+      - .github/workflows/backends-python-bindings.yml
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  format_lint_test:
+    name: Test the Python bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+        with:
+          manifest-path: pixi-build-backends/py-pixi-build-backend/pixi.toml
+          environments: ci
+      - name: Run clippy
+        run: |
+          cd pixi-build-backends/py-pixi-build-backend
+          pixi run -e ci lint
+      - name: Run tests
+        run: |
+          cd pixi-build-backends/py-pixi-build-backend
+          pixi run -e ci test --color=yes

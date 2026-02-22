@@ -1,0 +1,20 @@
+---
+source: crates/pixi_build_mojo/src/main.rs
+expression: generated_recipe.recipe
+---
+context: {}
+package:
+  name: foobar
+  version: 0.1.0
+source: []
+build:
+  script: "[ ... script ... ]"
+requirements:
+  build:
+    - mojo-compiler
+  host: []
+  run:
+    - boltons
+  run_constraints: []
+tests: []
+about: {}

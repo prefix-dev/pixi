@@ -1,0 +1,13 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+name = "pixi"
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
+
+# --8<-- [start:all]
+# --8<-- [start:not-all]
+[tasks]
+fmt = "ruff"
+lint = "pylint"
+# --8<-- [end:not-all]
+style = [{ task = "fmt" }, { task = "lint" }]
+# --8<-- [end:all]

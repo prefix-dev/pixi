@@ -1,0 +1,12 @@
+---
+source: crates/pixi_manifest/src/manifests/source.rs
+expression: source.to_string()
+---
+[project]
+name = "test"
+[tool.pixi.workspace]
+channels = []
+platforms = []
+
+[tool.pixi.environments]
+bar = ["default"]

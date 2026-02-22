@@ -1,0 +1,5 @@
+---
+source: crates/pixi/tests/integration_rust/add_tests.rs
+expression: git_package.unwrap().as_conda().unwrap().location()
+---
+git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#[FULL_COMMIT]

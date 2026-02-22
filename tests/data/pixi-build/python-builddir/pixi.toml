@@ -1,0 +1,31 @@
+[workspace]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "python-builddir"
+platforms = ["osx-arm64", "linux-64", "osx-64", "win-64"]
+preview = ["pixi-build"]
+version = "0.1.0"
+
+[dependencies]
+simple-meson-app = { path = "." }
+
+[package]
+name = "simple-meson-app"
+version = "0.1.0"
+
+[package.build.backend]
+name = "pixi-build-python"
+version = "*"
+
+[package.build]
+source.path = "src"
+
+[package.build.config]
+extra-args = ["-Cbuilddir=mybuilddir"]
+
+[package.host-dependencies]
+meson-python = "*"
+python = "*"
+uv = "*"

@@ -1,0 +1,23 @@
+{
+  "info": {
+    "subdir": "osx-arm64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "post-link-script-package-0.1.0-h60d57d3_0.conda": {
+      "arch": "arm64",
+      "build": "h60d57d3_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "01a2b26ab45ecb4ba41c01f600de9ab2",
+      "name": "post-link-script-package",
+      "platform": "osx",
+      "sha256": "915ad75ee95304aae35e41819dfd9a9d1478995b66305875c781648953594645",
+      "size": 1324,
+      "subdir": "osx-arm64",
+      "timestamp": 1743152763273,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}

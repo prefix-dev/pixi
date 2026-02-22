@@ -1,0 +1,121 @@
+name: Update Trampoline Binaries
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "trampoline/**"
+      - ".github/workflows/trampoline.yaml"
+      - "src/global/trampoline.rs"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: "Linux-x86_64"
+            target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+
+          - name: "Linux-aarch64"
+            target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+
+          - name: "Linux-powerpc64le"
+            target: powerpc64le-unknown-linux-gnu
+            os: ubuntu-latest
+
+          - name: "Linux-riscv64"
+            target: riscv64gc-unknown-linux-gnu
+            os: ubuntu-latest
+
+          - name: "Linux-loong64"
+            target: loongarch64-unknown-linux-gnu
+            os: ubuntu-latest
+
+          - name: "macOS-x86"
+            target: x86_64-apple-darwin
+            os: macos-15-intel
+
+          - name: "macOS-arm"
+            target: aarch64-apple-darwin
+            os: macos-15
+
+          - name: "Windows"
+            target: x86_64-pc-windows-msvc
+            os: windows-latest
+
+          - name: "Windows-arm"
+            target: aarch64-pc-windows-msvc
+            os: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0 # Fetch full history so we have branch information
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: taiki-e/setup-cross-toolchain-action@b8d1a322a6009a2b7220f53996695778eef89b41 # v1
+        with:
+          target: ${{ matrix.target }}
+
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+        with:
+          environments: trampoline
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build trampoline binary
+        run: pixi run build-trampoline --target ${{ matrix.target }}
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: trampoline-${{ matrix.target }}
+          path: trampoline/binaries/pixi-trampoline-${{ matrix.target }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}.zst
+
+  aggregate:
+    runs-on: ubuntu-latest
+    needs: build # This ensures the aggregation job runs after the build jobs
+    permissions:
+      contents: write # Allow write permissions for contents (like pushing to the repo)
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Download all binaries
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          path: trampoline/binaries/
+          merge-multiple: true
+
+      - name: List downloaded files
+        run: ls -R trampoline/binaries/
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: trampolines
+          path: trampoline/binaries/
+
+      - name: Commit and push updated binaries
+        # Don't run on forks
+        if: github.repository == 'prefix-dev/pixi' && startsWith(github.ref, 'refs/heads')
+        run: |
+          # Set the repository to push to the repository the workflow is running on
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add trampoline/binaries/
+          git commit -m "[CI]: Update trampoline binaries for all targets"
+          # Push changes to the branch that triggered the workflow
+          BRANCH=${GITHUB_REF#refs/heads/}
+          git push origin HEAD:$BRANCH

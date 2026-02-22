@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors = ["Tim de Jager <tim@prefix.dev>"]
 channels = ["conda-forge"]
 name = "pypi-custom-registry"
@@ -6,7 +6,7 @@ platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
 
 # Define a default here, this is not needed
 # but we can show that we can override it
-[project.pypi-options]
+[pypi-options]
 index-url = "https://pypi.org/simple"
 
 [tasks]

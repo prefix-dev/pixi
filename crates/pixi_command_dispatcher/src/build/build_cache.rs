@@ -1,0 +1,345 @@
+use std::{
+    collections::{BTreeMap, BTreeSet, BinaryHeap},
+    hash::{Hash, Hasher},
+    io::SeekFrom,
+    path::PathBuf,
+    sync::Arc,
+};
+
+use crate::build::{PinnedSourceCodeLocation, source_checkout_cache_key};
+use crate::input_hash::{ConfigurationHash, ProjectModelHash};
+use async_fd_lock::{LockWrite, RwLockWriteGuard};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use itertools::Itertools;
+use pixi_path::{AbsPathBuf, AbsPresumedDirPath, AbsPresumedDirPathBuf, AbsPresumedFilePathBuf};
+use pixi_record::{CanonicalSourceLocation, VariantValue};
+use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use thiserror::Error;
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+use xxhash_rust::xxh3::Xxh3;
+
+/// A cache for caching build artifacts of a source checkout.
+#[derive(Clone)]
+pub struct BuildCache {
+    pub(crate) root: AbsPresumedDirPathBuf,
+}
+
+#[derive(Debug, Clone, Error)]
+pub enum BuildCacheError {
+    /// An I/O error occurred while reading or writing the cache.
+    #[error("an IO error occurred while {0} {1}")]
+    IoError(String, AbsPathBuf, #[source] Arc<std::io::Error>),
+}
+
+/// Defines additional input besides the source files that are used to compute
+/// the metadata of a source checkout.
+///
+/// Specs
+#[derive(Hash, Clone, Eq, PartialEq)]
+pub struct BuildInput {
+    /// The location of the source for the build
+    pub build_source: CanonicalSourceLocation,
+
+    /// The URL channels used in the build.
+    pub channel_urls: Vec<ChannelUrl>,
+
+    /// The name of the package
+    pub name: String,
+
+    /// The version of the package to build
+    pub version: String,
+
+    /// The build string of the package to build
+    pub build: String,
+
+    /// The platform for which the metadata was computed.
+    pub subdir: String,
+
+    /// The host platform
+    pub host_platform: Platform,
+
+    /// The virtual packages of the target host
+    pub host_virtual_packages: BTreeSet<GenericVirtualPackage>,
+
+    /// The virtual packages used to build the package
+    pub build_virtual_packages: BTreeSet<GenericVirtualPackage>,
+
+    /// The specific variant values for this build. Different variants result
+    /// in different cache keys to ensure they are cached separately.
+    pub variants: Option<BTreeMap<String, VariantValue>>,
+}
+
+impl BuildInput {
+    /// Computes a unique semi-human-readable hash for this key. Some parts of
+    /// the input are hashes and others are included directly in the name this
+    /// is to make it easier to identify the cache files.
+    pub fn hash_key(&self) -> String {
+        let BuildInput {
+            build_source,
+            channel_urls,
+            name,
+            version,
+            build,
+            subdir,
+            host_platform,
+            host_virtual_packages,
+            build_virtual_packages,
+            variants,
+        } = self;
+
+        // Hash some of the keys
+        let mut hasher = Xxh3::new();
+        build_source.hash(&mut hasher);
+        build.hash(&mut hasher);
+        channel_urls.hash(&mut hasher);
+        host_platform.hash(&mut hasher);
+        host_virtual_packages.hash(&mut hasher);
+        build_virtual_packages.hash(&mut hasher);
+
+        // Include variants in the hash to ensure different variant values
+        // get different cache keys. BTreeMap is already sorted by key, so we
+        // can hash it directly for deterministic results.
+        variants.hash(&mut hasher);
+
+        let hash = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
+
+        format!("{name}-{version}-{subdir}-{hash}",)
+    }
+}
+
+impl BuildCache {
+    /// The version identifier that should be used for the cache directory.
+    pub const CACHE_SUFFIX: &'static str = "v0";
+
+    /// Constructs a new instance.
+    pub fn new(root: AbsPresumedDirPathBuf) -> Self {
+        Self { root }
+    }
+
+    /// Returns a cache entry for the given source checkout and input from the
+    /// cache. If the cache doesn't contain an entry for this source and input,
+    /// it returns `None`.
+    ///
+    /// This function also returns a [`BuildCacheEntry`] which can be used to
+    /// update the cache. The [`BuildCacheEntry`] also holds an exclusive
+    /// lock on the cache which prevents other processes from accessing the
+    /// cache entry. Drop the entry as soon as possible to release the lock.
+    pub async fn entry(
+        &self,
+        manifest_source: &CanonicalSourceLocation,
+        input: &BuildInput,
+    ) -> Result<(Option<CachedBuild>, BuildCacheEntry), BuildCacheError> {
+        let input_key = input.hash_key();
+        tracing::debug!(
+            manifest_source = %manifest_source,
+            input_key = %input_key,
+            name = %input.name,
+            version = %input.version,
+            subdir = %input.subdir,
+            host_platform = %input.host_platform,
+            build = %input.build,
+            channel_urls = ?input.channel_urls,
+            host_virtual_packages = %input.host_virtual_packages.iter().format(","),
+            build_virtual_packages = %input.build_virtual_packages.iter().format(","),
+            variants = ?input.variants,
+            "opening source build cache entry",
+        );
+
+        // Ensure the cache directory exists
+        let cache_dir = self
+            .root
+            .join(source_checkout_cache_key(manifest_source))
+            .join(&input_key);
+        let cache_dir = cache_dir
+            .create_dir_all()
+            .map_err(|e| {
+                BuildCacheError::IoError(
+                    "creating cache directory".to_string(),
+                    cache_dir.clone(),
+                    Arc::new(e),
+                )
+            })?
+            .to_path_buf();
+
+        // Try to acquire a lock on the cache file.
+        let cache_file_path = cache_dir.join(".lock").into_assume_file();
+        let cache_file = tokio::fs::OpenOptions::new()
+            .write(true)
+            .read(true)
+            .truncate(false)
+            .create(true)
+            .open(&cache_file_path)
+            .await
+            .map_err(|e| {
+                BuildCacheError::IoError(
+                    "opening cache file".to_string(),
+                    cache_file_path.clone().into(),
+                    Arc::new(e),
+                )
+            })?;
+
+        let mut locked_cache_file = cache_file.lock_write().await.map_err(|e| {
+            BuildCacheError::IoError(
+                "locking cache file".to_string(),
+                cache_file_path.clone().into(),
+                Arc::new(e.error),
+            )
+        })?;
+
+        // Try to parse the contents of the file
+        let mut cache_file_contents = String::new();
+        locked_cache_file
+            .read_to_string(&mut cache_file_contents)
+            .await
+            .map_err(|e| {
+                BuildCacheError::IoError(
+                    "reading cache file".to_string(),
+                    cache_file_path.clone().into(),
+                    Arc::new(e),
+                )
+            })?;
+
+        let metadata: Option<CachedBuild> = serde_json::from_str(&cache_file_contents).ok();
+        if let Some(existing) = metadata.as_ref() {
+            tracing::debug!(
+                manifest_source = %manifest_source,
+                input_key = %input_key,
+                package = ?existing.record.package_record.name,
+                build = %existing.record.package_record.build,
+                "found cached build metadata",
+            );
+        } else {
+            tracing::debug!(
+                manifest_source = %manifest_source,
+                input_key = %input_key,
+                "no cached build metadata found",
+            );
+        }
+        Ok((
+            metadata,
+            BuildCacheEntry {
+                file: locked_cache_file,
+                cache_dir,
+                cache_file_path,
+            },
+        ))
+    }
+}
+
+/// Cached result of calling `conda/getMetadata` on a build backend.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CachedBuild {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<CachedBuildSourceInfo>,
+    pub record: RepoDataRecord,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CachedBuildSourceInfo {
+    /// Glob patterns that define which files affect the build. If any matching
+    /// file changes, the build should be considered stale.
+    #[serde(default, skip_serializing_if = "BinaryHeap::is_empty")]
+    pub input_globs: BinaryHeap<String>,
+
+    /// The actual files that matched the globs at the time of the build. This
+    /// allows detecting file deletions and additions by comparing against
+    /// current glob matches.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub input_files: BTreeSet<PathBuf>,
+
+    /// The packages that were used during the build process.
+    #[serde(default)]
+    pub build: BuildHostEnvironment,
+    /// The packages that were installed in the host environment.
+    #[serde(default)]
+    pub host: BuildHostEnvironment,
+
+    /// A hash of the project model. If this changes, the build should be
+    /// considered stale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_model_hash: Option<ProjectModelHash>,
+
+    /// A hash of the build configuration. If this changes, the build should be
+    /// considered stale.
+    #[serde(default)]
+    pub configuration_hash: ConfigurationHash,
+}
+
+#[serde_as]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub struct BuildHostEnvironment {
+    /// Describes the packages that were installed in the host environment.
+    pub packages: Vec<BuildHostPackage>,
+}
+
+#[serde_as]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BuildHostPackage {
+    /// The repodata record of the package.
+    #[serde(flatten)]
+    pub repodata_record: RepoDataRecord,
+
+    /// The source location from which the package was built.
+    pub source: Option<PinnedSourceCodeLocation>,
+}
+
+/// A cache entry returned by [`BuildCache::entry`] which enables
+/// updating the cache.
+///
+/// As long as this entry is held, no other process can access this cache entry.
+pub struct BuildCacheEntry {
+    file: RwLockWriteGuard<tokio::fs::File>,
+    cache_dir: AbsPresumedDirPathBuf,
+    cache_file_path: AbsPresumedFilePathBuf,
+}
+
+impl BuildCacheEntry {
+    /// The directory where the cache is stored.
+    pub fn cache_dir(&self) -> &AbsPresumedDirPath {
+        &self.cache_dir
+    }
+
+    /// Write the given metadata to the cache file.
+    pub async fn insert(
+        &mut self,
+        metadata: CachedBuild,
+    ) -> Result<RepoDataRecord, BuildCacheError> {
+        self.file.seek(SeekFrom::Start(0)).await.map_err(|e| {
+            BuildCacheError::IoError(
+                "seeking to start of cache file".to_string(),
+                self.cache_file_path.clone().into(),
+                Arc::new(e),
+            )
+        })?;
+        let bytes = serde_json::to_vec(&metadata).expect("serialization to JSON should not fail");
+        self.file.write_all(&bytes).await.map_err(|e| {
+            BuildCacheError::IoError(
+                "writing metadata to cache file".to_string(),
+                self.cache_file_path.clone().into(),
+                Arc::new(e),
+            )
+        })?;
+        self.file
+            .inner_mut()
+            .set_len(bytes.len() as u64)
+            .await
+            .map_err(|e| {
+                BuildCacheError::IoError(
+                    "setting length of cache file".to_string(),
+                    self.cache_file_path.clone().into(),
+                    Arc::new(e),
+                )
+            })?;
+
+        tracing::debug!(
+            cache_file = %self.cache_file_path.display(),
+            package = ?metadata.record.package_record.name,
+            build = %metadata.record.package_record.build,
+            "updated source build cache entry",
+        );
+
+        Ok(metadata.record)
+    }
+}

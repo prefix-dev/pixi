@@ -1,0 +1,13 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foo\"\n        channels = []\n        platforms = []\n\n        [package]\n\n        [package.build]\n        backend = { name = \"foobar\", version = \"*\" }\n        \"#,)"
+---
+  × [package] section is only allowed when the `pixi-build` feature is enabled
+   ╭─[pixi.toml:7:9]
+ 6 │
+ 7 │         [package]
+   ·         ──────────
+ 8 │
+ 9 │         [package.build]
+   ╰────
+  help: Add `preview = ["pixi-build"]` under [workspace] to enable the preview feature

@@ -1,0 +1,8 @@
+---
+source: crates/pixi_build_discovery/tests/discovery.rs
+expression: "pixi_test_utils :: format_diagnostic(& err)"
+input_file: tests/data/discovery/ros-package/TEST-CASE
+---
+  × the source directory '<CARGO_ROOT>/tests/data/discovery/ros-package', does not contain a supported manifest
+  help: ROS packages require you to specify the 'package.xml' file path directly, due to supporting more backends in the future. Or ensure that the source directory contains a valid manifest file:
+        pixi.toml, pyproject.toml, mojoproject.toml, recipe.yaml, recipe.yml.

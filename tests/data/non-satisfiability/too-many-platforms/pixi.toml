@@ -1,0 +1,12 @@
+[project]
+authors = ["Julian Hofer <julianhofer@gnome.org>"]
+channels = ["https://prefix.dev/conda-forge"]
+description = "Add a short description here"
+name = "too-many-platforms"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+numpy = ">=2.2.2,<3"

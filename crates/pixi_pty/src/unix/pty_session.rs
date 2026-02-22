@@ -7,12 +7,43 @@ use nix::{
     sys::{select, time::TimeVal, wait::WaitStatus},
 };
 use signal_hook::iterator::Signals;
+use std::time::{Duration, Instant};
 use std::{
     fs::File,
     io::{self, Read, Write},
     os::fd::AsFd,
     process::Command,
 };
+
+/// A helper struct to handle sequences that should bypass the rolling buffer
+/// and be forwarded immediately to the output.
+struct BufferBypass {
+    sequences: Vec<Vec<u8>>,
+}
+
+impl BufferBypass {
+    fn new(sequences: &[&[u8]]) -> Self {
+        Self {
+            sequences: sequences.iter().map(|s| s.to_vec()).collect(),
+        }
+    }
+
+    /// Scans the buffer for the configured sequences. If found, writes them to the writer
+    /// immediately and removes them from the buffer.
+    fn process(&self, buffer: &mut Vec<u8>, writer: &mut impl Write) -> io::Result<()> {
+        for seq in &self.sequences {
+            while let Some(pos) = buffer
+                .windows(seq.len())
+                .position(|window| window == seq.as_slice())
+            {
+                writer.write_all(seq)?;
+                writer.flush()?;
+                buffer.drain(pos..pos + seq.len());
+            }
+        }
+        Ok(())
+    }
+}
 
 pub struct PtySession {
     pub process: PtyProcess,
@@ -22,6 +53,9 @@ pub struct PtySession {
 
     /// A file handle of the stdin of the pty process
     pub process_stdin: File,
+
+    /// Rolling buffer used for the wait_until pattern matching
+    pub rolling_buffer: Vec<u8>,
 }
 
 /// ```
@@ -48,6 +82,7 @@ impl PtySession {
             process,
             process_stdout,
             process_stdin,
+            rolling_buffer: Vec::with_capacity(4096),
         })
     }
 
@@ -56,15 +91,17 @@ impl PtySession {
     ///
     /// Returns number of written bytes
     pub fn send<B: AsRef<[u8]>>(&mut self, s: B) -> io::Result<usize> {
+        // sleep for 0.05 seconds to delay sending the next command
+        std::thread::sleep(Duration::from_millis(50));
         self.process_stdin.write(s.as_ref())
     }
 
     /// Sends string and a newline to process. This is guaranteed to be flushed to the process.
     /// Returns number of written bytes.
     pub fn send_line(&mut self, line: &str) -> io::Result<usize> {
-        let mut len = self.send(line)?;
-        len += self.process_stdin.write(&[b'\n'])?;
-        Ok(len)
+        let result = self.send(format!("{line}\n"))?;
+        self.flush()?;
+        Ok(result)
     }
 
     /// Make sure all bytes written via `send()` are sent to the process
@@ -75,7 +112,15 @@ impl PtySession {
     /// Interact with the process. This will put the current process into raw mode and
     /// forward all input from stdin to the process and all output from the process to stdout.
     /// This will block until the process exits.
-    pub fn interact(&mut self) -> io::Result<Option<i32>> {
+    pub fn interact(&mut self, wait_until: Option<&str>) -> io::Result<Option<i32>> {
+        let pattern_timeout = Duration::from_secs(3);
+        let pattern_start = Instant::now();
+
+        // Define the DAQ sequences that should bypass the buffer
+        // This is needed for fish >= 4.1.0 which queries the terminal on startup.
+        // If we buffer this query, fish hangs waiting for a response.
+        let daq_bypass = BufferBypass::new(&[b"\x1b[c", b"\x1b[0c"]);
+
         // Make sure anything we have written so far has been flushed.
         self.flush()?;
 
@@ -93,12 +138,13 @@ impl PtySession {
         fd_set.insert(stdin_fd);
 
         // Create a buffer for reading from the process
-        let mut buf = [0u8; 2048];
+        let mut buf = [0u8; 4096];
 
         // Catch the SIGWINCH signal to handle window resizing
         // and forward the new terminal size to the process
         let mut signals = Signals::new([SIGWINCH])?;
 
+        let mut write_stdout = wait_until.is_none();
         // Call select in a loop and handle incoming data
         let exit_status = loop {
             // Make sure that the process is still alive
@@ -124,7 +170,21 @@ impl PtySession {
                 }
             }
 
-            let mut select_timeout = TimeVal::new(4, 0);
+            // Check if we have waited long enough for the pattern
+            if pattern_start.elapsed() > pattern_timeout && !write_stdout {
+                io::stdout().write_all(
+                    format!(
+                        "WARNING: Did not detect successful shell initialization within {} second(s).\n\r         Please check on https://pixi.sh/latest/advanced/pixi_shell/#issues-with-pixi-shell for more tips.\n\r",
+                        pattern_timeout.as_secs()
+                    )
+                    .as_bytes(),
+                )?;
+                io::stdout().write_all(&self.rolling_buffer)?;
+                io::stdout().flush()?;
+                write_stdout = true;
+            }
+
+            let mut select_timeout = TimeVal::new(0, 100_000);
             let mut select_set = fd_set;
 
             let res = select::select(None, &mut select_set, None, None, &mut select_timeout);
@@ -140,7 +200,45 @@ impl PtySession {
                 // We have new data coming from the process
                 if select_set.contains(process_stdout_fd) {
                     let bytes_read = self.process_stdout.read(&mut buf).unwrap_or(0);
-                    if bytes_read > 0 {
+                    if !write_stdout {
+                        if let Some(wait_until) = wait_until {
+                            // Append new data to rolling buffer
+                            self.rolling_buffer.extend_from_slice(&buf[..bytes_read]);
+
+                            // Handle pass-through of Device Attribute Query (\e[c)
+                            daq_bypass.process(&mut self.rolling_buffer, &mut io::stdout())?;
+
+                            // Find the first occurrence of the pattern
+                            if let Some(window_pos) = self
+                                .rolling_buffer
+                                .windows(wait_until.len())
+                                .position(|window| window == wait_until.as_bytes())
+                            {
+                                write_stdout = true;
+
+                                // Calculate position after the pattern
+                                let output_start = window_pos + wait_until.len();
+
+                                // Write remaining buffered content after the pattern
+                                if output_start < self.rolling_buffer.len() {
+                                    io::stdout().write_all(&self.rolling_buffer[output_start..])?;
+                                    io::stdout().flush()?;
+                                }
+
+                                // Clear the rolling buffer as we don't need it anymore
+                                self.rolling_buffer.clear();
+                            } else {
+                                // Keep only up to 2 * wait_until.len() bytes from the end
+                                // This ensures we don't miss matches across buffer boundaries
+                                let keep_size = wait_until.len() * 2;
+                                if self.rolling_buffer.len() > keep_size {
+                                    self.rolling_buffer = self
+                                        .rolling_buffer
+                                        .split_off(self.rolling_buffer.len() - keep_size);
+                                }
+                            }
+                        }
+                    } else if bytes_read > 0 {
                         io::stdout().write_all(&buf[..bytes_read])?;
                         io::stdout().flush()?;
                     }

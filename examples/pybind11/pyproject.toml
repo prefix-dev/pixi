@@ -1,0 +1,44 @@
+[build-system]
+build-backend = "scikit_build_core.build"
+requires = ["scikit-build-core", "pybind11"]
+
+[project]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.6",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+]
+description = "A simple pybind11 example"
+name = "mysum"
+requires-python = ">=3.7"
+version = "0.1.0"
+
+[tool.scikit-build]
+cmake.source-dir = "."
+sdist.exclude = [".pixi"]
+wheel.packages = ["mysum"]
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+
+[tool.pixi.dependencies]
+pybind11 = ">=2.13.6,<3"
+
+[tool.pixi.feature.build.dependencies]
+cmake = ">=3.15,<4"
+cxx-compiler = ">=1.8.0,<2"
+make = ">=4.4.1,<5"
+ninja = ">=1.12.1,<2"
+scikit-build-core = ">=0.10.7,<0.11"
+uv = ">=0.4.25,<0.5"
+
+[tool.pixi.feature.build.tasks.build]
+cmd = ["uv", "build"]
+
+[tool.pixi.environments]
+build = ["build"]

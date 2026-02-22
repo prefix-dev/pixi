@@ -1,0 +1,94 @@
+---
+source: crates/pixi_record/src/source_record.rs
+expression: roundtrip_lock
+---
+version: 6
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      noarch:
+      - conda: git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
+        name: git-child-test
+      - conda: git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
+        name: git-sibling-test
+      - conda: git+https://github.com/example/repo.git?tag=v1.0.0#abc123def456abc123def456abc123def456abc1
+      - conda: /workspace/absolute-recipe
+      - conda: recipes/my-package
+        name: path-child-test
+      - conda: recipes/my-package
+        name: path-sibling-test
+      - conda: recipes/no-build
+packages:
+- conda: git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
+  name: git-child-test
+  version: 1.1.0
+  build: h234567_0
+  subdir: noarch
+  noarch: false
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  md5: d41d8cd98f00b204e9800998ecf8427e
+  channel: null
+  package_build_source:
+    path: ../src
+- conda: git+https://github.com/example/repo.git?tag=v1.0.0#abc123def456abc123def456abc123def456abc1
+  name: git-no-manifest-subdir
+  version: 3.0.0
+  build: h901237_0
+  subdir: noarch
+  noarch: false
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  md5: d41d8cd98f00b204e9800998ecf8427e
+  channel: null
+  package_build_source:
+    path: build/subdir
+- conda: git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
+  name: git-sibling-test
+  version: 1.0.0
+  build: h123456_0
+  subdir: noarch
+  noarch: false
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  md5: d41d8cd98f00b204e9800998ecf8427e
+  channel: null
+  package_build_source:
+    path: ../non-nested
+- conda: /workspace/absolute-recipe
+  name: path-absolute-manifest
+  version: 2.4.0
+  build: h901236_0
+  subdir: noarch
+  noarch: false
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  md5: d41d8cd98f00b204e9800998ecf8427e
+  package_build_source:
+    path: ../src
+- conda: recipes/my-package
+  name: path-child-test
+  version: 2.1.0
+  build: h890123_0
+  subdir: noarch
+  noarch: false
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  md5: d41d8cd98f00b204e9800998ecf8427e
+  package_build_source:
+    path: ../../src/lib
+- conda: recipes/no-build
+  name: path-no-build-source
+  version: 2.5.0
+  build: h901238_0
+  subdir: noarch
+  noarch: false
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  md5: d41d8cd98f00b204e9800998ecf8427e
+- conda: recipes/my-package
+  name: path-sibling-test
+  version: 2.0.0
+  build: h789012_0
+  subdir: noarch
+  noarch: false
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  md5: d41d8cd98f00b204e9800998ecf8427e
+  package_build_source:
+    path: ../../other-package/src

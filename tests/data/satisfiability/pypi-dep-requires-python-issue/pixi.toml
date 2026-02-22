@@ -1,0 +1,11 @@
+[project]
+channels = ["conda-forge"]
+name = "trial-project"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[dependencies]
+python = "==3.11"
+
+[pypi-dependencies]
+dataclasses = "==0.8"

@@ -1,12 +1,12 @@
 pub use nix::sys::{signal, wait};
 use nix::{
     self,
-    fcntl::{open, OFlag},
+    fcntl::{OFlag, open},
     libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO},
-    pty::{grantpt, posix_openpt, unlockpt, PtyMaster, Winsize},
+    pty::{PtyMaster, Winsize, grantpt, posix_openpt, unlockpt},
     sys::termios::{InputFlags, Termios},
     sys::{stat, termios},
-    unistd::{close, dup, dup2, fork, setsid, ForkResult, Pid},
+    unistd::{ForkResult, Pid, close, dup, dup2, fork, setsid},
 };
 use std::os::fd::AsFd;
 use std::{
@@ -39,7 +39,7 @@ pub struct PtyProcess {
 /// instead of using a static mutex this calls ioctl with TIOCPTYGNAME directly
 /// based on https://blog.tarq.io/ptsname-on-osx-with-rust/
 fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
-    use nix::libc::{ioctl, TIOCPTYGNAME};
+    use nix::libc::{TIOCPTYGNAME, ioctl};
     use std::ffi::CStr;
 
     // the buffer size on OSX is 128, defined by sys/ttycom.h
@@ -106,15 +106,11 @@ impl PtyProcess {
                     close(slave_fd)?;
                 }
 
-                // set echo off
+                // Set `echo` and `window_size` for the pty
                 set_echo(io::stdin(), opts.echo)?;
                 set_window_size(io::stdout().as_raw_fd(), window_size)?;
 
-                // let mut flags = termios::tcgetattr(io::stdin())?;
-                // flags.local_flags |= termios::LocalFlags::ECHO;
-                // termios::tcsetattr(io::stdin(), termios::SetArg::TCSANOW, &flags)?;
-
-                command.exec();
+                let _ = command.exec();
                 Err(nix::Error::last())
             }
             ForkResult::Parent { child: child_pid } => Ok(PtyProcess {
@@ -132,40 +128,18 @@ impl PtyProcess {
         unsafe { Ok(File::from_raw_fd(fd)) }
     }
 
-    /// At the drop of PtyProcess the running process is killed. This is blocking forever if
-    /// the process does not react to a normal kill. If kill_timeout is set the process is
-    /// `kill -9`ed after duration
-    pub fn set_kill_timeout(&mut self, timeout_ms: Option<u64>) {
-        self.kill_timeout = timeout_ms.map(time::Duration::from_millis);
-    }
-
     /// Get status of child process, non-blocking.
     ///
     /// This method runs waitpid on the process.
     /// This means: If you ran `exit()` before or `status()` this method will
     /// return `None`
     pub fn status(&self) -> Option<wait::WaitStatus> {
-        if let Ok(status) = wait::waitpid(self.child_pid, Some(wait::WaitPidFlag::WNOHANG)) {
-            Some(status)
-        } else {
-            None
-        }
-    }
-
-    /// Wait until process has exited. This is a blocking call.
-    /// If the process doesn't terminate this will block forever.
-    pub fn wait(&self) -> nix::Result<wait::WaitStatus> {
-        wait::waitpid(self.child_pid, None)
+        wait::waitpid(self.child_pid, Some(wait::WaitPidFlag::WNOHANG)).ok()
     }
 
     /// Regularly exit the process, this method is blocking until the process is dead
     pub fn exit(&mut self) -> nix::Result<wait::WaitStatus> {
         self.kill(signal::SIGTERM)
-    }
-
-    /// Non-blocking variant of `kill()` (doesn't wait for process to be killed)
-    pub fn signal(&mut self, sig: signal::Signal) -> nix::Result<()> {
-        signal::kill(self.child_pid, sig)
     }
 
     /// Kill the process with a specific signal. This method blocks, until the process is dead
@@ -193,10 +167,10 @@ impl PtyProcess {
                 Some(_) | None => thread::sleep(time::Duration::from_millis(100)),
             }
             // kill -9 if timeout is reached
-            if let Some(timeout) = self.kill_timeout {
-                if start.elapsed() > timeout {
-                    signal::kill(self.child_pid, signal::Signal::SIGKILL)?
-                }
+            if let Some(timeout) = self.kill_timeout
+                && start.elapsed() > timeout
+            {
+                signal::kill(self.child_pid, signal::Signal::SIGKILL)?
             }
         }
     }

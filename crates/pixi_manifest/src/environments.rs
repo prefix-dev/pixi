@@ -18,9 +18,9 @@ pub struct Environments {
 impl Environments {
     /// Returns the environment with the given name or `None` if it does not
     /// exist.
-    pub fn find<Q: ?Sized>(&self, name: &Q) -> Option<&Environment>
+    pub fn find<Q>(&self, name: &Q) -> Option<&Environment>
     where
-        Q: Hash + Equivalent<EnvironmentName>,
+        Q: ?Sized + Hash + Equivalent<EnvironmentName>,
     {
         let index = self.by_name.get(name)?;
         self.environments[index.0].as_ref()

@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foobar\"\n        channels = []\n        platforms = []\n\n        [build-backend.backend]\n        \"#,)"
+---
+  × Cannot use [build-backend] without [build-system]
+   ╭─[pixi.toml:7:24]
+ 6 │
+ 7 │         [build-backend.backend]
+   ·                        ───────
+ 8 │
+   ╰────

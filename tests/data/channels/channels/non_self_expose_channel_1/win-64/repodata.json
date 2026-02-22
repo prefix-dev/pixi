@@ -1,0 +1,39 @@
+{
+  "info": {
+    "subdir": "win-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "jupyter-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [
+        "jupyter-core"
+      ],
+      "md5": "b084adf91a0b0cc9248389c203e6b0c6",
+      "name": "jupyter",
+      "platform": "win",
+      "sha256": "484c47d5b5715943af1589f08764eaed7fbd9a9eb156c76d8c195a8f4744ba03",
+      "size": 992,
+      "subdir": "win-64",
+      "timestamp": 1730898133106,
+      "version": "0.1.0"
+    },
+    "jupyter-core-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "2ccc77fec0a0a6bd881e1114f2ac4ae8",
+      "name": "jupyter-core",
+      "platform": "win",
+      "sha256": "823222c9ea2f41898aec542eda9f68867f6f21b33d775f215be68568494690e5",
+      "size": 1184,
+      "subdir": "win-64",
+      "timestamp": 1730898133106,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}
