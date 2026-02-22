@@ -100,6 +100,93 @@ async fn conda_solve_group_functionality() {
     );
 }
 
+#[tokio::test]
+async fn conda_solve_group_heterogeneous_platforms() {
+    let mut package_database = PackageDatabase::default();
+
+    // Add `foo` available on both linux-64 and win-64
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_subdir(Platform::Linux64)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_subdir(Platform::Win64)
+            .finish(),
+    );
+
+    // Add `bar` available only on linux-64
+    package_database.add_package(
+        Package::build("bar", "1")
+            .with_subdir(Platform::Linux64)
+            .finish(),
+    );
+
+    // Write the repodata to disk
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let channel = Url::from_file_path(channel_dir.path()).unwrap();
+
+    // The `linux-only` feature restricts to linux-64 and adds `bar`.
+    // Before the fix, solving for win-64 would fail because the solver
+    // collected `bar` from the `linux-only` feature even for win-64.
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-heterogeneous-platforms"
+    channels = ["{channel}"]
+    platforms = ["linux-64", "win-64"]
+
+    [dependencies]
+    foo = "*"
+
+    [feature.linux-only]
+    platforms = ["linux-64"]
+
+    [feature.linux-only.dependencies]
+    bar = "*"
+
+    [environments]
+    full = {{ solve-group = "group1" }}
+    restricted = {{ features = ["linux-only"], solve-group = "group1" }}
+    "#
+    ))
+    .unwrap();
+
+    // This should succeed; before the fix it would fail with
+    // "No candidates were found for bar" when solving for win-64.
+    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+
+    // `full` environment: has `foo` on both platforms, no `bar`
+    assert!(
+        lock_file.contains_match_spec("full", Platform::Linux64, "foo ==1"),
+        "full/linux-64 should have foo"
+    );
+    assert!(
+        lock_file.contains_match_spec("full", Platform::Win64, "foo ==1"),
+        "full/win-64 should have foo"
+    );
+    assert!(
+        !lock_file.contains_conda_package("full", Platform::Win64, "bar"),
+        "full/win-64 should not have bar"
+    );
+
+    // `restricted` environment: only supports linux-64, should have both foo and bar
+    assert!(
+        lock_file.contains_match_spec("restricted", Platform::Linux64, "foo ==1"),
+        "restricted/linux-64 should have foo"
+    );
+    assert!(
+        lock_file.contains_match_spec("restricted", Platform::Linux64, "bar ==1"),
+        "restricted/linux-64 should have bar"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
