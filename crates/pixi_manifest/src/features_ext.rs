@@ -122,6 +122,7 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
     /// requirements per package are sorted in the same order as the features they came from.
     fn pypi_dependencies(&self, platform: Option<Platform>) -> PyPiDependencies {
         self.features()
+            .filter(|f| f.supports_platform(platform))
             .filter_map(|f| f.pypi_dependencies(platform))
             .into()
     }
@@ -137,6 +138,7 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
         platform: Option<Platform>,
     ) -> CondaDependencies {
         self.features()
+            .filter(|f| f.supports_platform(platform))
             .filter_map(|f| f.dependencies(kind, platform))
             .into()
     }
