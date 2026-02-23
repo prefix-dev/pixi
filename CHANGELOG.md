@@ -5,6 +5,66 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.64.0] - 2026-02-23
+#### ✨ Highlights
+
+Big release with lots of different fixes and small features, but no overarching theme this time.
+
+#### Added
+
+- Add `--dry-run` flag to `pixi lock` command by @akshatsrivastava11 in [#5288](https://github.com/prefix-dev/pixi/pull/5288)
+- Add `--executable` flag to `pixi run` by @kajal-jotwani in [#5253](https://github.com/prefix-dev/pixi/pull/5253)
+- `pixi workspace export conda-environment` handles env variables by @SrisharanVS in [#5425](https://github.com/prefix-dev/pixi/pull/5425)
+- Add `--templated` flag to `pixi run` by @pavelzw in [#5489](https://github.com/prefix-dev/pixi/pull/5489)
+- Add `{{ pixi.init_cwd }}` template variable for task inputs/outputs by @Premkumar-2004 in [#5505](https://github.com/prefix-dev/pixi/pull/5505)
+
+#### Documentation
+
+- ROS2 tutorial commands for building C++ nodes by @wjwwood in [#5320](https://github.com/prefix-dev/pixi/pull/5320)
+- Clarify which installation method to use for local development by @Hofer-Julian in [#5392](https://github.com/prefix-dev/pixi/pull/5392)
+- Task default-environment field by @JeppeKlitgaard in [#5400](https://github.com/prefix-dev/pixi/pull/5400)
+- Fix some minor typos by @kurtmckee in [#5427](https://github.com/prefix-dev/pixi/pull/5427)
+- Extend setup-pixi documentation with working-directory by @pavelzw in [#5416](https://github.com/prefix-dev/pixi/pull/5416)
+- Add snakedown to community list by @savente93 in [#5436](https://github.com/prefix-dev/pixi/pull/5436)
+- Small typo fix by @zuble in [#5460](https://github.com/prefix-dev/pixi/pull/5460)
+- Add Artifactory documentation by @pavelzw in [#5451](https://github.com/prefix-dev/pixi/pull/5451)
+- Add `pixi-skills` extension by @pavelzw in [#5471](https://github.com/prefix-dev/pixi/pull/5471)
+- Document `description` field for tasks by @VeckoTheGecko in [#5479](https://github.com/prefix-dev/pixi/pull/5479)
+- Explain de-duplication via hard links and reflinks by @Hofer-Julian in [#5485](https://github.com/prefix-dev/pixi/pull/5485)
+- Mention `bun` in available software by @pavelzw in [#5496](https://github.com/prefix-dev/pixi/pull/5496)
+- Add Xarray and Parcels by @VeckoTheGecko in [#5499](https://github.com/prefix-dev/pixi/pull/5499)
+- Pin `click` package by @Hofer-Julian in [#5532](https://github.com/prefix-dev/pixi/pull/5532)
+- Fix typo by @pavelzw in [#5533](https://github.com/prefix-dev/pixi/pull/5533)
+
+#### Fixed
+
+- Fish shell integration is broken on older version of fish by @tdejager in [#5225](https://github.com/prefix-dev/pixi/pull/5225)
+- Extend catch_unwind to cover lock_pypi_packages for proper panic handling by @nichmor in [#5324](https://github.com/prefix-dev/pixi/pull/5324)
+- Skip license-file validation when build.source is git or URL by @baszalmstra in [#4994](https://github.com/prefix-dev/pixi/pull/4994)
+- Adjust license file paths for subdirectory manifests by @nichmor in [#5327](https://github.com/prefix-dev/pixi/pull/5327)
+- Changing `package.build.config` does not invalidate caches by @baszalmstra in [#5371](https://github.com/prefix-dev/pixi/pull/5371)
+- Add back `is_explicit` to `pixi list --json` by @renan-r-santos in [#5391](https://github.com/prefix-dev/pixi/pull/5391)
+- Installing mallformed wheels by @nichmor in [#5387](https://github.com/prefix-dev/pixi/pull/5387)
+- Indicate pixi self-update in requires-pixi error message by @varun-kht in [#5399](https://github.com/prefix-dev/pixi/pull/5399)
+- Prevent package updates when appending channels by @benmoss in [#5405](https://github.com/prefix-dev/pixi/pull/5405)
+- Add `compiler(c)` per default with `pixi-build-rust` by @Hofer-Julian in [#5457](https://github.com/prefix-dev/pixi/pull/5457)
+- Ignore `PIXI_` env vars when --manifest-path is different to `PIXI_PROJECT_ROOT` by @Hofer-Julian in [#5441](https://github.com/prefix-dev/pixi/pull/5441)
+- Deadlock for duplicate packages from different sources by @baszalmstra in [#5447](https://github.com/prefix-dev/pixi/pull/5447)
+- Reuse existing `tool.pixi.feature.pypi-dependencies` table by @Premkumar-2004 in [#5504](https://github.com/prefix-dev/pixi/pull/5504)
+- Follow symlinks to directories in glob pattern matching by @baszalmstra in [#5502](https://github.com/prefix-dev/pixi/pull/5502)
+
+#### New Contributors
+* @Premkumar-2004 made their first contribution in [#5505](https://github.com/prefix-dev/pixi/pull/5505)
+* @zuble made their first contribution in [#5460](https://github.com/prefix-dev/pixi/pull/5460)
+* @SrisharanVS made their first contribution in [#5425](https://github.com/prefix-dev/pixi/pull/5425)
+* @kurtmckee made their first contribution in [#5427](https://github.com/prefix-dev/pixi/pull/5427)
+* @benmoss made their first contribution in [#5405](https://github.com/prefix-dev/pixi/pull/5405)
+* @varun-kht made their first contribution in [#5399](https://github.com/prefix-dev/pixi/pull/5399)
+* @kajal-jotwani made their first contribution in [#5253](https://github.com/prefix-dev/pixi/pull/5253)
+* @JeppeKlitgaard made their first contribution in [#5400](https://github.com/prefix-dev/pixi/pull/5400)
+* @wjwwood made their first contribution in [#5320](https://github.com/prefix-dev/pixi/pull/5320)
+* @akshatsrivastava11 made their first contribution in [#5288](https://github.com/prefix-dev/pixi/pull/5288)
+
 ### [0.63.2] - 2026-01-19
 #### ✨ Highlights
 
