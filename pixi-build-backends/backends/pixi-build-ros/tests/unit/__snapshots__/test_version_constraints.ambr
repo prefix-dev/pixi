@@ -7,7 +7,6 @@
     version: 0.0.1
   source: []
   build:
-    number: null
     script:
       content: ''
       env: {}
@@ -65,14 +64,9 @@
     run_constraints: []
   tests: []
   about:
-    homepage: null
     license: LicenseRef-Apache License 2.0
-    license_file: null
     summary: Demo
     description: Demo
-    documentation: null
-    repository: null
-  extra: null
   
   '''
 # ---
@@ -84,7 +78,6 @@
     version: 0.0.1
   source: []
   build:
-    number: null
     script:
       content: ''
       env: {}
@@ -143,14 +136,9 @@
     run_constraints: []
   tests: []
   about:
-    homepage: null
     license: LicenseRef-Apache License 2.0
-    license_file: null
     summary: Demo
     description: Demo
-    documentation: null
-    repository: null
-  extra: null
   
   '''
 # ---
@@ -162,7 +150,6 @@
     version: 0.0.1
   source: []
   build:
-    number: null
     script:
       content: ''
       env: {}
@@ -220,14 +207,9 @@
     run_constraints: []
   tests: []
   about:
-    homepage: null
     license: LicenseRef-Apache License 2.0
-    license_file: null
     summary: Demo
     description: Demo
-    documentation: null
-    repository: null
-  extra: null
   
   '''
 # ---
@@ -239,7 +221,6 @@
     version: 0.0.1
   source: []
   build:
-    number: null
     script:
       content: ''
       env: {}
@@ -297,14 +278,9 @@
     run_constraints: []
   tests: []
   about:
-    homepage: null
     license: LicenseRef-Apache License 2.0
-    license_file: null
     summary: Demo
     description: Demo
-    documentation: null
-    repository: null
-  extra: null
   
   '''
 # ---
