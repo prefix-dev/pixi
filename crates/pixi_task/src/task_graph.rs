@@ -654,6 +654,7 @@ pub enum TaskGraphError {
 mod test {
     use std::path::Path;
 
+    use assert_matches::assert_matches;
     use pixi_core::Workspace;
     use pixi_manifest::EnvironmentName;
     use rattler_conda_types::Platform;
@@ -663,154 +664,201 @@ mod test {
         task_graph::{PreferExecutable, TaskGraph, TaskGraphError, join_args_with_single_quotes},
     };
 
-    fn commands_in_order(
-        project_str: &str,
-        run_args: &[&str],
+    struct TaskGraphTest<'a> {
+        workspace_str: &'a str,
+        run_args: Vec<&'a str>,
         platform: Option<Platform>,
         environment_name: Option<EnvironmentName>,
         skip_deps: bool,
         prefer_executable: PreferExecutable,
         templated: bool,
-    ) -> Vec<String> {
-        let project = Workspace::from_str(Path::new("pixi.toml"), project_str).unwrap();
+    }
 
-        let environment = environment_name.map(|name| project.environment(&name).unwrap());
-        let search_envs = SearchEnvironments::from_opt_env(&project, environment, platform);
+    impl<'a> TaskGraphTest<'a> {
+        fn new(workspace_str: &'a str, run_args: &[&'a str]) -> Self {
+            Self {
+                workspace_str,
+                run_args: run_args.to_vec(),
+                platform: None,
+                environment_name: None,
+                skip_deps: false,
+                prefer_executable: PreferExecutable::TaskFirst,
+                templated: false,
+            }
+        }
 
-        let graph = TaskGraph::from_cmd_args(
-            &project,
-            &search_envs,
-            run_args.iter().map(|arg| arg.to_string()).collect(),
-            skip_deps,
-            prefer_executable,
-            templated,
-        )
-        .unwrap();
+        fn platform(mut self, platform: Platform) -> Self {
+            self.platform = Some(platform);
+            self
+        }
 
-        graph
-            .topological_order()
-            .into_iter()
-            .map(|task_id| &graph[task_id])
-            .filter_map(|task| {
-                let context = pixi_manifest::task::TaskRenderContext {
-                    platform: task.run_environment.best_platform(),
-                    environment_name: task.run_environment.name(),
-                    manifest_path: Some(&project.workspace.provenance.path),
-                    args: task.args.as_ref(),
-                    init_cwd: None,
-                };
-                task.full_command(&context).ok().flatten()
-            })
-            .collect()
+        fn environment(mut self, name: &str) -> Self {
+            self.environment_name = Some(EnvironmentName::Named(name.to_string()));
+            self
+        }
+
+        fn skip_deps(mut self) -> Self {
+            self.skip_deps = true;
+            self
+        }
+
+        #[expect(unused)]
+        fn prefer_executable(mut self) -> Self {
+            self.prefer_executable = PreferExecutable::Always;
+            self
+        }
+
+        #[expect(unused)]
+        fn templated(mut self) -> Self {
+            self.templated = true;
+            self
+        }
+
+        fn build_graph(&self) -> Result<(Workspace, Vec<String>), TaskGraphError> {
+            let project = Workspace::from_str(Path::new("pixi.toml"), self.workspace_str).unwrap();
+            let environment = self
+                .environment_name
+                .as_ref()
+                .map(|name| project.environment(name).unwrap());
+            let search_envs =
+                SearchEnvironments::from_opt_env(&project, environment, self.platform);
+
+            let graph = TaskGraph::from_cmd_args(
+                &project,
+                &search_envs,
+                self.run_args.iter().map(|arg| arg.to_string()).collect(),
+                self.skip_deps,
+                self.prefer_executable,
+                self.templated,
+            )?;
+
+            let commands = graph
+                .topological_order()
+                .into_iter()
+                .map(|task_id| &graph[task_id])
+                .filter_map(|task| {
+                    let context = pixi_manifest::task::TaskRenderContext {
+                        platform: task.run_environment.best_platform(),
+                        environment_name: task.run_environment.name(),
+                        manifest_path: Some(&project.workspace.provenance.path),
+                        args: task.args.as_ref(),
+                        init_cwd: None,
+                    };
+                    task.full_command(&context).ok().flatten()
+                })
+                .collect();
+
+            Ok((project, commands))
+        }
+
+        fn commands_in_order(&self) -> Vec<String> {
+            self.build_graph().unwrap().1
+        }
+
+        fn expect_error(&self) -> TaskGraphError {
+            self.build_graph().unwrap_err()
+        }
     }
 
     #[test]
     fn test_ordered_commands() {
-        assert_eq!(
-            commands_in_order(
-                r#"
-        [project]
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+
         [tasks]
         root = "echo root"
-        task1 = {cmd="echo task1", depends-on=["root"]}
-        task2 = {cmd="echo task2", depends-on=["root"]}
-        top = {cmd="echo top", depends-on=["task1","task2"]}
-    "#,
-                &["top", "--test"],
-                None,
-                None,
-                false,
-                PreferExecutable::TaskFirst,
-                false,
-            ),
+        task1 = { cmd = "echo task1", depends-on = ["root"] }
+        task2 = { cmd = "echo task2", depends-on = ["root"] }
+        top = { cmd = "echo top", depends-on = ["task1", "task2"] }
+    "#;
+        let run_args = &["top", "--test"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(
+            commands,
             vec!["echo root", "echo task1", "echo task2", "echo top '--test'"]
         );
     }
 
     #[test]
     fn test_cycle_ordered_commands() {
-        assert_eq!(
-            commands_in_order(
-                r#"
-        [project]
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+
         [tasks]
-        root = {cmd="echo root", depends-on=["task1"]}
-        task1 = {cmd="echo task1", depends-on=["root"]}
-        task2 = {cmd="echo task2", depends-on=["root"]}
-        top = {cmd="echo top", depends-on=["task1","task2"]}
-    "#,
-                &["top"],
-                None,
-                None,
-                false,
-                PreferExecutable::TaskFirst,
-                false,
-            ),
+        root = { cmd = "echo root", depends-on = ["task1"] }
+        task1 = { cmd = "echo task1", depends-on = ["root"] }
+        task2 = { cmd = "echo task2", depends-on = ["root"] }
+        top = { cmd = "echo top", depends-on = ["task1", "task2"] }
+    "#;
+        let run_args = &["top"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(
+            commands,
             vec!["echo root", "echo task1", "echo task2", "echo top"]
         );
     }
 
     #[test]
     fn test_platform_ordered_commands() {
-        assert_eq!(
-            commands_in_order(
-                r#"
-        [project]
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+
         [tasks]
         root = "echo root"
-        task1 = {cmd="echo task1", depends-on=["root"]}
-        task2 = {cmd="echo task2", depends-on=["root"]}
-        top = {cmd="echo top", depends-on=["task1","task2"]}
+        task1 = { cmd = "echo task1", depends-on = ["root"] }
+        task2 = { cmd = "echo task2", depends-on = ["root"] }
+        top = { cmd = "echo top", depends-on = ["task1", "task2"] }
+
         [target.linux-64.tasks]
-        root = {cmd="echo linux", depends-on=["task1"]}
-    "#,
-                &["top"],
-                Some(Platform::Linux64),
-                None,
-                false,
-                PreferExecutable::TaskFirst,
-                false,
-            ),
-            vec!["echo linux", "echo task1", "echo task2", "echo top",]
+        root = { cmd = "echo linux", depends-on = ["task1"] }
+    "#;
+        let run_args = &["top"];
+
+        // Linux should give hello linux
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .platform(Platform::Linux64)
+            .commands_in_order();
+        assert_eq!(
+            commands,
+            vec!["echo linux", "echo task1", "echo task2", "echo top"]
+        );
+
+        // On other platforms we should get echo root
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .platform(Platform::OsxArm64)
+            .commands_in_order();
+        assert_eq!(
+            commands,
+            vec!["echo root", "echo task1", "echo task2", "echo top"]
         );
     }
 
     #[test]
     fn test_custom_command() {
-        assert_eq!(
-            commands_in_order(
-                r#"
-        [project]
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
-    "#,
-                &["echo bla"],
-                None,
-                None,
-                false,
-                PreferExecutable::TaskFirst,
-                false,
-            ),
-            vec![r#"echo bla"#]
-        );
+    "#;
+        let run_args = &["echo bla"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo bla"]);
     }
 
     #[test]
     fn test_multi_env() {
-        assert_eq!(
-            commands_in_order(
-                r#"
-        [project]
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = ["conda-forge"]
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
@@ -820,24 +868,16 @@ mod test {
 
         [environments]
         build = ["build"]
-    "#,
-                &["build"],
-                None,
-                None,
-                false,
-                PreferExecutable::TaskFirst,
-                false,
-            ),
-            vec![r#"echo build"#]
-        );
+    "#;
+        let run_args = &["build"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo build"]);
     }
 
     #[test]
     fn test_multi_env_default() {
-        assert_eq!(
-            commands_in_order(
-                r#"
-        [project]
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
@@ -850,24 +890,16 @@ mod test {
 
         [environments]
         build = ["build"]
-    "#,
-                &["start"],
-                None,
-                None,
-                false,
-                PreferExecutable::TaskFirst,
-                false,
-            ),
-            vec![r#"hello world"#]
-        );
+    "#;
+        let run_args = &["start"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["hello world"]);
     }
 
     #[test]
-    fn test_multi_env_cuda() {
-        assert_eq!(
-            commands_in_order(
-                r#"
-        [project]
+    fn test_cross_env_task_dependency() {
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
@@ -875,7 +907,7 @@ mod test {
         [tasks]
         train = "python train.py"
         test = "python test.py"
-        start = {depends-on = ["train", "test"]}
+        start = { depends-on = ["train", "test"] }
 
         [feature.cuda.tasks]
         train = "python train.py --cuda"
@@ -884,25 +916,21 @@ mod test {
         [environments]
         cuda = ["cuda"]
 
-    "#,
-                &["start"],
-                None,
-                Some(EnvironmentName::Named("cuda".to_string())),
-                false,
-                PreferExecutable::TaskFirst,
-                false,
-            ),
-            vec![r#"python train.py --cuda"#, r#"python test.py --cuda"#]
+    "#;
+        let run_args = &["start"];
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .environment("cuda")
+            .commands_in_order();
+        assert_eq!(
+            commands,
+            vec!["python train.py --cuda", "python test.py --cuda"]
         );
     }
 
     #[test]
     fn test_multi_env_defaults() {
-        // It should select foobar and foo in the default environment
-        assert_eq!(
-            commands_in_order(
-                r#"
-        [project]
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
@@ -916,25 +944,16 @@ mod test {
 
         [environments]
         build = ["build"]
-    "#,
-                &["foobar"],
-                None,
-                None,
-                false,
-                PreferExecutable::TaskFirst,
-                false,
-            ),
-            vec![r#"echo foo"#, r#"echo bar"#]
-        );
+    "#;
+        let run_args = &["foobar"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo foo", "echo bar"]);
     }
 
     #[test]
-    #[should_panic]
-    fn test_multi_env_defaults_ambigu() {
-        // As foo is really ambiguous it should panic
-        commands_in_order(
-            r#"
-        [project]
+    fn test_multi_env_defaults_ambiguity() {
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
@@ -949,20 +968,18 @@ mod test {
 
         [environments]
         build = ["build"]
-    "#,
-            &["foobar"],
-            None,
-            None,
-            false,
-            PreferExecutable::TaskFirst,
-            false,
-        );
+    "#;
+        let run_args = &["foobar"];
+
+        // As foo is really ambiguous it should error
+        let error = TaskGraphTest::new(workspace_str, run_args).expect_error();
+        assert_matches!(error, TaskGraphError::AmbiguousTask(_));
     }
 
     #[test]
     fn test_skip_deps() {
-        let project = r#"
-        [project]
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
@@ -971,30 +988,14 @@ mod test {
         foo = "echo foo"
         bar = { cmd = "echo bar", depends-on = ["foo"] }
     "#;
-        assert_eq!(
-            commands_in_order(
-                project,
-                &["bar"],
-                None,
-                None,
-                true,
-                PreferExecutable::TaskFirst,
-                false,
-            ),
-            vec![r#"echo bar"#]
-        );
-        assert_eq!(
-            commands_in_order(
-                project,
-                &["bar"],
-                None,
-                None,
-                false,
-                PreferExecutable::TaskFirst,
-                false,
-            ),
-            vec!["echo foo", "echo bar"]
-        );
+        let run_args = &["bar"];
+        let with_skip = TaskGraphTest::new(workspace_str, run_args)
+            .skip_deps()
+            .commands_in_order();
+        assert_eq!(with_skip, vec!["echo bar"]);
+
+        let without_skip = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(without_skip, vec!["echo foo", "echo bar"]);
     }
 
     /// Regression test for https://github.com/prefix-dev/pixi/issues/5054
@@ -1024,15 +1025,15 @@ mod test {
     /// templating is disabled (the default for CLI commands).
     #[test]
     fn test_custom_command_with_braces_no_template() {
-        let project = r#"
-        [project]
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
         "#;
 
         let project =
-            Workspace::from_str(Path::new("pixi.toml"), project).expect("valid workspace");
+            Workspace::from_str(Path::new("pixi.toml"), workspace_str).expect("valid workspace");
 
         let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
 
@@ -1072,15 +1073,15 @@ mod test {
     /// renders template variables.
     #[test]
     fn test_custom_command_with_templated_flag() {
-        let project = r#"
-        [project]
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
         "#;
 
         let project =
-            Workspace::from_str(Path::new("pixi.toml"), project).expect("valid workspace");
+            Workspace::from_str(Path::new("pixi.toml"), workspace_str).expect("valid workspace");
 
         let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
 
@@ -1116,102 +1117,65 @@ mod test {
         assert!(!cmd.contains("{{"));
     }
 
-    fn graph_error(project_str: &str, run_args: &[&str]) -> TaskGraphError {
-        let project = Workspace::from_str(Path::new("pixi.toml"), project_str).unwrap();
-        let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
-        TaskGraph::from_cmd_args(
-            &project,
-            &search_envs,
-            run_args.iter().map(|arg| arg.to_string()).collect(),
-            false,
-            PreferExecutable::TaskFirst,
-            false,
-        )
-        .unwrap_err()
-    }
-
     #[test]
     fn test_choices_valid_value() {
-        assert_eq!(
-            commands_in_order(
-                r#"
-        [project]
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = ["linux-64"]
+
         [tasks.build]
         cmd = "echo {{ target }}"
         args = [{ arg = "target", choices = ["debug", "release"] }]
-    "#,
-                &["build", "debug"],
-                None,
-                None,
-                false,
-                PreferExecutable::TaskFirst,
-                false,
-            ),
-            vec!["echo debug"]
-        );
+    "#;
+        let run_args = &["build", "debug"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo debug"]);
     }
 
     #[test]
     fn test_choices_invalid_value() {
-        let err = graph_error(
-            r#"
-        [project]
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = ["linux-64"]
+
         [tasks.build]
         cmd = "echo {{ target }}"
         args = [{ arg = "target", choices = ["debug", "release"] }]
-    "#,
-            &["build", "profile"],
-        );
-        let msg = err.to_string();
-        assert!(
-            msg.contains("target"),
-            "error should mention arg name: {msg}"
-        );
-        assert!(
-            msg.contains("profile"),
-            "error should mention provided value: {msg}"
-        );
-        assert!(msg.contains("debug"), "error should mention choices: {msg}");
-        assert!(
-            msg.contains("release"),
-            "error should mention choices: {msg}"
-        );
+    "#;
+        let run_args = &["build", "profile"];
+        let error = TaskGraphTest::new(workspace_str, run_args).expect_error();
+        assert_matches!(error, TaskGraphError::InvalidArgValue { arg, task, value, choices, .. } => {
+            assert_eq!(arg, "target");
+            assert_eq!(task, "build");
+            assert_eq!(value, "profile");
+            assert_eq!(choices, "debug, release");
+        });
     }
 
     #[test]
     fn test_choices_with_valid_default() {
-        assert_eq!(
-            commands_in_order(
-                r#"
-        [project]
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = ["linux-64"]
         [tasks.build]
         cmd = "echo {{ target }}"
         args = [{ arg = "target", default = "debug", choices = ["debug", "release"] }]
-    "#,
-                &["build"],
-                None,
-                None,
-                false,
-                PreferExecutable::TaskFirst,
-                false,
-            ),
-            vec!["echo debug"]
-        );
+    "#;
+        let run_args = &["build"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo debug"]);
     }
 
     #[test]
     fn test_prefer_executable_always() {
-        let project = r#"
-        [project]
+        let workspace_str = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = ["linux-64"]
@@ -1221,7 +1185,7 @@ mod test {
         "#;
 
         let project =
-            Workspace::from_str(Path::new("pixi.toml"), project).expect("valid workspace");
+            Workspace::from_str(Path::new("pixi.toml"), workspace_str).expect("valid workspace");
 
         let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
 
