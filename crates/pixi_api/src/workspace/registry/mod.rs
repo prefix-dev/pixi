@@ -124,3 +124,48 @@ impl WorkspaceRegistry {
         self.named_workspaces.contains_key(name)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_registry() {
+        let registry = WorkspaceRegistry::default();
+        assert!(registry.named_workspaces.is_empty());
+        assert_eq!(registry.named_workspaces_map().len(), 0);
+    }
+
+    #[test]
+    fn test_contains_workspace() {
+        let mut registry = WorkspaceRegistry::default();
+
+        registry
+            .named_workspaces
+            .insert("test-ws".to_string(), PathBuf::from("/tmp/workspace"));
+
+        assert!(registry.contains_workspace(&"test-ws".to_string()));
+        assert!(!registry.contains_workspace(&"other-ws".to_string()));
+    }
+
+    #[test]
+    fn test_named_workspace() {
+        let mut registry = WorkspaceRegistry::default();
+        let path = PathBuf::from("/tmp/workspace");
+
+        registry
+            .named_workspaces
+            .insert("test-ws".to_string(), path.clone());
+
+        let result = registry.named_workspace(&"test-ws".to_string());
+        assert_eq!(result.unwrap(), path);
+    }
+
+
+    #[test]
+    fn test_named_workspace_not_found() {
+        let registry = WorkspaceRegistry::default();
+        let result = registry.named_workspace(&"non-existent".to_string());
+        assert!(result.is_err());
+    }
+}
