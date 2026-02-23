@@ -15,6 +15,10 @@ The temporary script that we generate ends with `echo "PIXI_ENV_ACTIVATED"` whic
 if the environment was activated successfully. If we do not receive this string after
 three seconds, we will issue a warning to the user.
 
+## Shell Completions
+
+Shell completions are automatically available inside `pixi shell` for all packages in your environment that support them.
+
 ## Issues With Pixi Shell
 
 As explained, `pixi shell` only works well if we execute the activation script _after_ launching shell.

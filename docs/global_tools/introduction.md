@@ -138,6 +138,7 @@ Then, your shell will present you all the flags `git` offers.
 However, that only works if you have the completions installed for the tool in question.
 If the tool you installed via `pixi global` contains completions they will be automatically installed.
 At the moment, only Linux and macOS are supported.
+Completions also work inside a [`pixi shell`](../advanced/pixi_shell.md), where they are loaded automatically.
 
 First install a tool with `pixi global`:
 
@@ -173,6 +174,10 @@ end
 !!! note
 
     Completions of packages are installed as long as their binaries are exposed under the same name: e.g. `exposed = { git = "git" }`.
+
+!!! tip
+
+    Are you missing shell completions for your favorite CLI tool? Add them similar to [conda-forge/crush-feedstock #37](https://github.com/conda-forge/crush-feedstock/pull/37/changes).
 
 ## Adding a Series of Tools at Once
 
