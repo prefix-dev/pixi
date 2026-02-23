@@ -215,33 +215,33 @@ test-common-wheels = { cmd = "pytest -s --numprocesses=logical tests/wheel_tests
 test-common-wheels-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --verbose tests/wheel_tests/", description = "Run common wheel tests in CI" }
 test-integration-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --durations=0 --timeout=600 --verbose -m 'not extra_slow' tests/integration_python", description = "Run integration tests in CI" }
 test-integration-extra-slow = { cmd = "pytest --numprocesses=logical --durations=0 --timeout=600 tests/integration_python", depends-on = [
-  "build-release",
+  "build-workspace-release",
 ], description = "Run all integration tests including extra slow" }
 test-integration-extra-slow-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --durations=0 --timeout=600 tests/integration_python", description = "Run all integration tests in CI" }
 test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=logical --durations=0 --timeout=600 -m 'not slow and not extra_slow' tests/integration_python", depends-on = [
-  "build-debug",
+  "build-workspace-debug",
 ], description = "Run fast integration tests with debug build" }
 test-integration-slow = { cmd = "pytest --numprocesses=logical --dist loadgroup --durations=0 --timeout=600 -m 'not extra_slow' tests/integration_python", depends-on = [
-  "build-release",
+  "build-workspace-release",
 ], description = "Run integration tests excluding extra slow" }
 test-pixi-build = { cmd = "pytest --numprocesses=logical --durations=0 --timeout=300 tests/integration_python/pixi_build/", depends-on = [
-  "build-release",
+  "build-workspace-release",
 ], description = "Run pixi-build integration tests" }
 test-pixi-build-debug = { cmd = "pytest --pixi-build=debug --numprocesses=logical --durations=0 --timeout=300 tests/integration_python/pixi_build/", depends-on = [
-  "build-debug",
+  "build-workspace-debug",
 ], description = "Run pixi-build integration tests with debug build" }
 
 
 [feature.pytest.tasks.test-specific-test]
 args = ["test_substring"]
 cmd = "pytest -k '{{ test_substring }}'"
-depends-on = ["build-release"]
+depends-on = ["build-workspace-release"]
 description = "Run specific test by substring match (e.g. test_substring or path/to/test.py::test_function)"
 
 [feature.pytest.tasks.test-specific-test-debug]
 args = ["test_substring"]
 cmd = "pytest --pixi-build=debug -k '{{ test_substring }}'"
-depends-on = ["build-debug"]
+depends-on = ["build-workspace-debug"]
 description = "Run specific test by substring match with debug build"
 
 [feature.pytest.tasks.update-test-channel]
@@ -291,6 +291,8 @@ git = ">=2.51.0,<3"
 [feature.rust-build.tasks]
 build-debug = { cmd = "cargo build", description = "Build pixi in debug mode" }
 build-release = { cmd = "cargo build --release", description = "Build pixi in release mode" }
+build-workspace-debug = { cmd = "cargo build --workspace", description = "Build all workspace members in debug mode" }
+build-workspace-release = { cmd = "cargo build --workspace --release", description = "Build all workspace members in release mode" }
 install = { cmd = "cargo install --path crates/pixi --locked", description = "Install pixi itself locally using cargo" }
 install-as = { cmd = "python scripts/install.py", depends-on = [
   "build-release",

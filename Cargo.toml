@@ -1,11 +1,6 @@
 [workspace]
 default-members = [
   "crates/pixi",
-  "crates/pixi_build_cmake",
-  "crates/pixi_build_mojo",
-  "crates/pixi_build_python",
-  "crates/pixi_build_rattler_build",
-  "crates/pixi_build_rust",
 ]
 exclude = [
   # Only pulled in when enabling certain features. We do not want to include
