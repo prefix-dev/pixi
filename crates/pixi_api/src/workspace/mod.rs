@@ -21,6 +21,3 @@ pub(crate) mod task;
 #[allow(clippy::module_inception)]
 pub(crate) mod workspace;
 pub use workspace::channel::ChannelOptions;
-
-pub(crate) mod registry;
-pub use registry::WorkspaceRegistry;

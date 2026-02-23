@@ -1,12 +1,10 @@
 use std::collections::HashMap;
-
-use miette::{Context, IntoDiagnostic};
-use serde::{Deserialize, Serialize};
-
 use std::path::PathBuf;
 
+use miette::{Context, IntoDiagnostic};
 use pixi_config::pixi_home;
 use pixi_consts::consts;
+use serde::{Deserialize, Serialize};
 
 /// Returns the path to the workspace registry file
 pub fn workspace_registry_path() -> Option<PathBuf> {
@@ -160,7 +158,6 @@ mod tests {
         let result = registry.named_workspace(&"test-ws".to_string());
         assert_eq!(result.unwrap(), path);
     }
-
 
     #[test]
     fn test_named_workspace_not_found() {

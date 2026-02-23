@@ -218,9 +218,6 @@ pub enum DiscoveryStart {
 
 impl DiscoveryStart {
     /// Returns the path of the directory or file to start the search from.
-    ///
-    /// For `Named` discovery starts, this resolves the workspace name from the
-    /// global config.
     pub fn root(&self) -> &Path {
         match self {
             DiscoveryStart::SearchRoot(root) => root.as_path(),

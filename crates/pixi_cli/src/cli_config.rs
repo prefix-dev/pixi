@@ -5,7 +5,6 @@ use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
-use pixi_api::workspace::WorkspaceRegistry;
 use pixi_build_frontend::BackendOverride;
 use pixi_config::Config;
 use pixi_consts::consts;
@@ -48,12 +47,7 @@ impl WorkspaceConfig {
         if let Some(manifest_path) = &self.manifest_path {
             DiscoveryStart::ExplicitManifest(manifest_path.clone())
         } else if let Some(workspace) = &self.workspace {
-            let workspace_registry =
-                WorkspaceRegistry::load().expect("Unable to load workspace registry");
-            let path = workspace_registry
-                .named_workspace(workspace)
-                .expect("Unable to find workspace");
-            DiscoveryStart::ExplicitManifest(path)
+            DiscoveryStart::WorkspaceRegistry(workspace.clone())
         } else {
             DiscoveryStart::CurrentDir
         }

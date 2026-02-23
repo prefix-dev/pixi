@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use crate::cli_config::WorkspaceConfig;
 use clap::Parser;
 use miette::IntoDiagnostic;
-use pixi_api::workspace::WorkspaceRegistry;
 use pixi_core::WorkspaceLocator;
+use pixi_core::workspace::WorkspaceRegistry;
 
 /// Commands to manage the registry of workspaces. Default command will add a new workspace
 #[derive(Parser, Debug, Clone)]
