@@ -42,9 +42,8 @@ impl WorkspaceRegistry {
             }
         };
 
-        let de = toml_edit::de::Deserializer::parse(&contents).into_diagnostic()?;
-
         // Deserialize the contents
+        let de = toml_edit::de::Deserializer::parse(&contents).into_diagnostic()?;
         let registry: WorkspaceRegistry =
             serde_ignored::deserialize(de, |_| {}).into_diagnostic()?;
 
@@ -71,7 +70,7 @@ impl WorkspaceRegistry {
             .wrap_err(format!("failed to write config to '{}'", &path.display()))
     }
 
-    /// Remove the workspace from the registry given the workspace name
+    /// Remove the workspace from the registry given the workspace name.
     pub async fn remove_workspace(&mut self, name: &String) -> miette::Result<()> {
         if self.named_workspaces.contains_key(name) {
             self.named_workspaces.remove(name);
@@ -82,14 +81,32 @@ impl WorkspaceRegistry {
         Ok(())
     }
 
-    /// Add a workspace to the registry given the name and path association
+    /// Add a workspace to the registry given the name and path association.
     pub async fn add_workspace(&mut self, name: String, path: PathBuf) -> miette::Result<()> {
         self.named_workspaces.entry(name).or_insert(path);
         self.save().await?;
         Ok(())
     }
 
-    /// Get a hashmap of registered workspaces name to path association
+    /// Prune the workspace by removing entries whose path does not exist. Returns the
+    /// list of workspaces that have been removed.
+    pub async fn prune(&mut self) -> miette::Result<Vec<String>> {
+        let names_to_remove: Vec<_> = self
+            .named_workspaces
+            .iter()
+            .filter(|(_, path)| !path.exists())
+            .map(|(name, _)| name.clone())
+            .collect();
+
+        for name in &names_to_remove {
+            self.named_workspaces.remove(name);
+        }
+
+        self.save().await?;
+        Ok(names_to_remove)
+    }
+
+    /// Get a hashmap of registered workspaces name to path association.
     pub fn named_workspaces_map(&self) -> &std::collections::HashMap<String, PathBuf> {
         &self.named_workspaces
     }
@@ -100,5 +117,10 @@ impl WorkspaceRegistry {
             Some(path) => Ok(path.clone()),
             None => Err(miette::diagnostic!("Named workspace '{}' not found", name).into()),
         }
+    }
+
+    /// Check if the name of the workspace is already registered.
+    pub fn contains_workspace(&self, name: &String) -> bool {
+        self.named_workspaces.contains_key(name)
     }
 }

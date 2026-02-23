@@ -17,13 +17,17 @@ pub struct Args {
     #[clap(subcommand)]
     pub command: Option<Command>,
 
-    /// Name of the workspace to register.
+    /// Name of the workspace to register. Defaults to the name of the current workspace.
     #[arg(long, short)]
     pub name: Option<String>,
 
-    /// Path to register
+    /// Path to register. Defaults to the path to the current workspace.
     #[arg(long, short)]
     pub path: Option<PathBuf>,
+
+    /// Overwrite the workspace entry if the name of the workspace already exists in the registry.
+    #[arg(long, short)]
+    pub force: bool,
 }
 
 #[derive(Parser, Debug, Default, Clone)]
@@ -89,20 +93,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         Some(Command::Prune(_)) => {
             let mut workspace_registry = WorkspaceRegistry::load()?;
-            let workspace_map = workspace_registry.named_workspaces_map();
-
-            let names_to_remove: Vec<_> = workspace_map
-                .iter()
-                .filter(|(_, path)| !path.exists())
-                .map(|(name, _)| name.clone())
-                .collect();
-
-            for name in names_to_remove {
-                workspace_registry.remove_workspace(&name).await?;
+            let removed_workspaces = workspace_registry.prune().await?;
+            for name in removed_workspaces {
                 eprintln!("{} {}", console::style("removed workspace").green(), name);
             }
             eprintln!(
-                "{} Workspace registry cleaned",
+                "{} Workspace registry pruned",
                 console::style(console::Emoji("✔ ", "")).green(),
             );
         }
@@ -118,15 +114,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let target_path = args.path.unwrap_or_else(|| workspace.root().to_path_buf());
 
             let mut workspace_registry = WorkspaceRegistry::load()?;
-            workspace_registry
-                .add_workspace(target_name, target_path)
-                .await?;
-
-            eprintln!(
-                "{} {}",
-                console::style(console::Emoji("✔ ", "")).green(),
-                console::style("Workspace registered successfully.").bold()
-            );
+            if workspace_registry.contains_workspace(&target_name) && !args.force {
+                eprintln!(
+                    "{} {}",
+                    console::style(console::Emoji("❌ ", "")).yellow(),
+                    console::style("Workspace already exists. Use the `--force` flag to overwrite a named workspace.").bold()
+                );
+            } else {
+                workspace_registry
+                    .add_workspace(target_name, target_path)
+                    .await?;
+                eprintln!(
+                    "{} {}",
+                    console::style(console::Emoji("✔ ", "")).green(),
+                    console::style("Workspace registered successfully.").bold()
+                );
+            }
         }
     };
     Ok(())
