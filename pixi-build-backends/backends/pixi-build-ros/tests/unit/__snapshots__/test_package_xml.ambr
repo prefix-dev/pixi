@@ -83,7 +83,6 @@
     version: 0.0.1
   source: []
   build:
-    number: null
     script:
       content: ''
       env: {}
@@ -124,12 +123,9 @@
   about:
     homepage: https://test.io/custom_ros
     license: LicenseRef-Apache License 2.0
-    license_file: null
     summary: Demo
     description: Demo
-    documentation: null
     repository: https://github.com/test/custom_ros
-  extra: null
   
   '''
 # ---
