@@ -8,16 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### [0.64.0] - 2026-02-23
 #### ✨ Highlights
 
-
+Big release with lots of different fixes and small features, but no overarching theme this time.
 
 #### Added
 
-- Add --dry-run flag to pixi lock command by @akshatsrivastava11 in [#5288](https://github.com/prefix-dev/pixi/pull/5288)
-- Add executable flag to pixi run by @kajal-jotwani in [#5253](https://github.com/prefix-dev/pixi/pull/5253)
-- Pixi workspace export conda-environment handles env variables by @SrisharanVS in [#5425](https://github.com/prefix-dev/pixi/pull/5425)
+- Add `--dry-run` flag to `pixi lock` command by @akshatsrivastava11 in [#5288](https://github.com/prefix-dev/pixi/pull/5288)
+- Add `--executable` flag to `pixi run` by @kajal-jotwani in [#5253](https://github.com/prefix-dev/pixi/pull/5253)
+- `pixi workspace export conda-environment` handles env variables by @SrisharanVS in [#5425](https://github.com/prefix-dev/pixi/pull/5425)
 - Add `--templated` flag to `pixi run` by @pavelzw in [#5489](https://github.com/prefix-dev/pixi/pull/5489)
 - Add `{{ pixi.init_cwd }}` template variable for task inputs/outputs by @Premkumar-2004 in [#5505](https://github.com/prefix-dev/pixi/pull/5505)
-
 
 #### Documentation
 
@@ -36,7 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add Xarray and Parcels by @VeckoTheGecko in [#5499](https://github.com/prefix-dev/pixi/pull/5499)
 - Pin `click` package by @Hofer-Julian in [#5532](https://github.com/prefix-dev/pixi/pull/5532)
 - Fix typo by @pavelzw in [#5533](https://github.com/prefix-dev/pixi/pull/5533)
-
 
 #### Fixed
 
