@@ -233,7 +233,7 @@ pixi run deploy auth-service production
 ```
 ### Restricting Values with Choices
 
-You can restrict the allowed values of an argument using the `choices` field. If a value is provided that is not in the list, Pixi will report an error before running the task.
+You can restrict the allowed values of an argument using the `choices` field. If a value is provided that is not in the list, Pixi will report an error instead of running the task.
 
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_tomls/task_arguments.toml:project_tasks_choices"
