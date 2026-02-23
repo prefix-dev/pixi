@@ -3771,9 +3771,10 @@
 
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">#</a></h2>
 <p>Sometimes our direct dependency declares outdated intermediate dependency or is too tight to solve with other direct dependencies. In this case, we can override the intermediate dependency in our <code>pyproject.toml</code>or <code>pixi.toml</code> file.</p>
-<blockquote>
-<p>[!Note] This option is not recommended unless you know what you are doing, as uv will ignore all the version constraints of the dependency and use the version you specified.</p>
-</blockquote>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This option is not recommended unless you know what you are doing, as uv will ignore all the version constraints of the dependency and use the version you specified.</p>
+</div>
 <h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">#</a></h2>
 <h3 id="override-a-dependency-version">Override a dependency version<a class="headerlink" href="#override-a-dependency-version" title="Permanent link">#</a></h3>
 <p><div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># pyproject.toml</span>
