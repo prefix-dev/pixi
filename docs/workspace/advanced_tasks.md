@@ -195,6 +195,7 @@ Arguments can be:
 
 - **Required**: must be provided when running the task
 - **Optional**: can have default values that are used when not explicitly provided
+- **Constrained**: can be restricted to a set of allowed values using `choices`
 
 ### Defining Task Arguments
 
@@ -230,6 +231,30 @@ pixi run deploy auth-service
 pixi run deploy auth-service production
 ✨ Pixi task (deploy in default): echo Deploying auth-service to production
 ```
+### Restricting Values with Choices
+
+You can restrict the allowed values of an argument using the `choices` field. If a value is provided that is not in the list, Pixi will report an error before running the task.
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_arguments.toml:project_tasks_choices"
+```
+
+```shell
+# Providing a valid choice
+pixi run compile debug
+✨ Pixi task (compile): echo 'Compiling in debug mode'
+Compiling in debug mode
+
+# Default value must also be one of the choices
+pixi run test
+✨ Pixi task (test): echo 'Running unit tests'
+Running unit tests
+
+# Providing an invalid value results in an error
+pixi run compile fast
+× invalid value for argument 'mode' of task 'compile': received 'fast', expected one of: debug, release
+```
+
 ### Passing Arguments to Dependent Tasks
 
 You can pass arguments to tasks that are dependencies of other tasks:

@@ -1022,7 +1022,7 @@ def test_pixi_task_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
                                 "cmd": "echo 'Hello {{name | title}}'",
                                 "description": None,
                                 "depends_on": [],
-                                "args": [{"name": "name", "default": "World"}],
+                                "args": [{"name": "name", "default": "World", "choices": None}],
                                 "cwd": None,
                                 "default_environment": None,
                                 "env": None,

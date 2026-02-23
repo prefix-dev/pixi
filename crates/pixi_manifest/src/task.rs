@@ -414,6 +414,25 @@ pub struct TaskArg {
 
     /// The default value of the argument
     pub default: Option<String>,
+
+    /// The allowed values for the argument
+    pub choices: Option<Vec<String>>,
+}
+
+impl TaskArg {
+    pub fn validate_value(&self, value: &str) -> Result<(), String> {
+        if let Some(choices) = &self.choices
+            && !choices.iter().any(|c| c == value)
+        {
+            return Err(format!(
+                "argument '{}' received '{}', but must be one of: {}",
+                self.name.as_str(),
+                value,
+                choices.join(", "),
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl std::str::FromStr for TaskArg {
@@ -423,6 +442,7 @@ impl std::str::FromStr for TaskArg {
         Ok(TaskArg {
             name: ArgName::from_str(s)?,
             default: None,
+            choices: None,
         })
     }
 }
@@ -871,10 +891,18 @@ impl From<Task> for Item {
                 if let Some(args) = &process.args {
                     let mut args_array = Array::new();
                     for arg in args {
-                        if let Some(default) = &arg.default {
+                        if arg.default.is_some() || arg.choices.is_some() {
                             let mut arg_table = Table::new().into_inline_table();
                             arg_table.insert("arg", arg.name.as_str().into());
-                            arg_table.insert("default", default.into());
+                            if let Some(default) = &arg.default {
+                                arg_table.insert("default", default.into());
+                            }
+                            if let Some(choices) = &arg.choices {
+                                arg_table.insert(
+                                    "choices",
+                                    Value::Array(Array::from_iter(choices.iter())),
+                                );
+                            }
                             args_array.push(Value::InlineTable(arg_table));
                         } else {
                             args_array.push(Value::String(toml_edit::Formatted::new(
@@ -943,10 +971,18 @@ impl From<Task> for Item {
                     if let Some(args_vec) = &alias.args {
                         let mut args = Vec::new();
                         for arg in args_vec {
-                            if let Some(default) = &arg.default {
+                            if arg.default.is_some() || arg.choices.is_some() {
                                 let mut arg_table = Table::new().into_inline_table();
                                 arg_table.insert("arg", arg.name.as_str().into());
-                                arg_table.insert("default", default.into());
+                                if let Some(default) = &arg.default {
+                                    arg_table.insert("default", default.into());
+                                }
+                                if let Some(choices) = &arg.choices {
+                                    arg_table.insert(
+                                        "choices",
+                                        Value::Array(Array::from_iter(choices.iter())),
+                                    );
+                                }
                                 args.push(Value::InlineTable(arg_table));
                             } else {
                                 args.push(Value::String(toml_edit::Formatted::new(

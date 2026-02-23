@@ -553,6 +553,20 @@ impl<'p> TaskGraph<'p> {
                 ));
             };
 
+            if let Err(msg) = arg.validate_value(&arg_value) {
+                return Err(TaskGraphError::InvalidArgValue {
+                    arg: arg_name.to_owned(),
+                    task: task_name.to_string(),
+                    value: arg_value,
+                    choices: arg
+                        .choices
+                        .as_ref()
+                        .map(|c| c.join(", "))
+                        .unwrap_or_default(),
+                    message: msg,
+                });
+            }
+
             typed_args.push(TypedArg {
                 name: arg_name.to_owned(),
                 value: arg_value,
@@ -623,6 +637,17 @@ pub enum TaskGraphError {
 
     #[error("Positional argument '{0}' found after named argument for task {1}")]
     PositionalAfterNamedArgument(String, String),
+
+    #[error(
+        "invalid value for argument '{arg}' of task '{task}': received '{value}', expected one of: {choices}"
+    )]
+    InvalidArgValue {
+        arg: String,
+        task: String,
+        value: String,
+        choices: String,
+        message: String,
+    },
 }
 
 #[cfg(test)]
@@ -635,7 +660,7 @@ mod test {
 
     use crate::{
         task_environment::SearchEnvironments,
-        task_graph::{PreferExecutable, TaskGraph, join_args_with_single_quotes},
+        task_graph::{PreferExecutable, TaskGraph, TaskGraphError, join_args_with_single_quotes},
     };
 
     fn commands_in_order(
@@ -1089,6 +1114,98 @@ mod test {
             .expect("should have a command");
         // The platform should be resolved, not the raw template
         assert!(!cmd.contains("{{"));
+    }
+
+    fn graph_error(project_str: &str, run_args: &[&str]) -> TaskGraphError {
+        let project = Workspace::from_str(Path::new("pixi.toml"), project_str).unwrap();
+        let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
+        TaskGraph::from_cmd_args(
+            &project,
+            &search_envs,
+            run_args.iter().map(|arg| arg.to_string()).collect(),
+            false,
+            PreferExecutable::TaskFirst,
+            false,
+        )
+        .unwrap_err()
+    }
+
+    #[test]
+    fn test_choices_valid_value() {
+        assert_eq!(
+            commands_in_order(
+                r#"
+        [project]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+        [tasks.build]
+        cmd = "echo {{ target }}"
+        args = [{ arg = "target", choices = ["debug", "release"] }]
+    "#,
+                &["build", "debug"],
+                None,
+                None,
+                false,
+                PreferExecutable::TaskFirst,
+                false,
+            ),
+            vec!["echo debug"]
+        );
+    }
+
+    #[test]
+    fn test_choices_invalid_value() {
+        let err = graph_error(
+            r#"
+        [project]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+        [tasks.build]
+        cmd = "echo {{ target }}"
+        args = [{ arg = "target", choices = ["debug", "release"] }]
+    "#,
+            &["build", "profile"],
+        );
+        let msg = err.to_string();
+        assert!(
+            msg.contains("target"),
+            "error should mention arg name: {msg}"
+        );
+        assert!(
+            msg.contains("profile"),
+            "error should mention provided value: {msg}"
+        );
+        assert!(msg.contains("debug"), "error should mention choices: {msg}");
+        assert!(
+            msg.contains("release"),
+            "error should mention choices: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_choices_with_valid_default() {
+        assert_eq!(
+            commands_in_order(
+                r#"
+        [project]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+        [tasks.build]
+        cmd = "echo {{ target }}"
+        args = [{ arg = "target", default = "debug", choices = ["debug", "release"] }]
+    "#,
+                &["build"],
+                None,
+                None,
+                false,
+                PreferExecutable::TaskFirst,
+                false,
+            ),
+            vec!["echo debug"]
+        );
     }
 
     #[test]
