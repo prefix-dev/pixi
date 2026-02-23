@@ -76,7 +76,7 @@ jobs:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build trampoline binary
-        run: pixi run build-trampoline --target ${{ matrix.target }} --no-compress
+        run: pixi run build-trampoline --target ${{ matrix.target }}
 
       - name: Azure login (OIDC)
         if: runner.os == 'Windows' && github.ref == 'refs/heads/trampoline-build-branch'
@@ -100,7 +100,7 @@ jobs:
           timestamp-digest: SHA256
 
       - name: Compress trampoline binary
-        run: pixi run build-trampoline --target ${{ matrix.target }} --compress-only
+        run: pixi run compress-trampoline --target ${{ matrix.target }}
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

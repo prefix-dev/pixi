@@ -11,30 +11,25 @@ def get_default_target() -> str:
     raise RuntimeError("Unable to determine default target")
 
 
-def build_trampoline_binary(target: str, target_dir: Path) -> None:
-    subprocess.run(
-        [
-            "cargo",
-            "build",
-            "--release",
-            "--target",
-            target,
-            "--target-dir",
-            target_dir,
-            "--manifest-path",
-            "trampoline/Cargo.toml",
-        ],
-        check=True,
-    )
+def compress_binary(target: str, target_dir: Path) -> None:
+    is_windows = target.endswith("windows-msvc")
+    trampolines_dir = Path("trampoline", "binaries")
+    trampolines_dir.mkdir(parents=True, exist_ok=True)
+
+    extension = ".exe" if is_windows else ""
+    binary_path = target_dir.joinpath(target, "release", f"pixi_trampoline{extension}")
+    compressed_path = trampolines_dir.joinpath(f"pixi-trampoline-{target}{extension}.zst")
+
+    subprocess.run(["zstd", binary_path, "-o", compressed_path, "--force"], check=True)
 
 
 def main(target: str) -> None:
     target_dir = Path("target/trampoline")
-    build_trampoline_binary(target, target_dir)
+    compress_binary(target, target_dir)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Build trampoline binaries.")
+    parser = argparse.ArgumentParser(description="Compress trampoline binaries.")
     parser.add_argument(
         "--target",
         type=str,

@@ -350,6 +350,7 @@ zstd = ">=1.5.7,<2"
 
 [feature.trampoline.tasks]
 build-trampoline = { cmd = "python trampoline/build-trampoline.py", description = "Build the trampolines" }
+compress-trampoline = { cmd = "python trampoline/compress-trampoline.py", description = "Compress the trampolines" }
 
 #
 # Feature for running lefthook (lint orchestration)
