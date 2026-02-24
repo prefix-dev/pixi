@@ -320,6 +320,7 @@ jobs:
           --target x86_64-unknown-linux-musl
           --profile $CARGO_BUILD_PROFILE
           --features pixi/self_update
+          --workspace
       - name: "Upload binary"
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
@@ -357,6 +358,7 @@ jobs:
           --target riscv64gc-unknown-linux-gnu
           --profile $CARGO_BUILD_PROFILE
           --features self_update
+          --workspace
       - name: "Upload binary"
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
@@ -382,6 +384,7 @@ jobs:
           --locked
           --profile $CARGO_BUILD_PROFILE
           --features pixi/self_update
+          --workspace
       - name: "Upload binary"
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
@@ -409,6 +412,7 @@ jobs:
           --locked
           --profile $CARGO_BUILD_PROFILE
           --features pixi/self_update
+          --workspace
       - name: "Upload binary"
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
@@ -443,6 +447,7 @@ jobs:
           --locked
           --profile $env:CARGO_BUILD_PROFILE
           --features pixi/self_update
+          --workspace
       - name: "Upload binary"
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
