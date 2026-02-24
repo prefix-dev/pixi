@@ -1,7 +1,7 @@
 rules:
   template-injection:
     ignore:
-      # cargo-dist generated workflow - matrix values come from trusted dist plan output
+      # release workflow - matrix values are hardcoded, template expressions are safe
       - release.yml
   artipacked:
     ignore:
