@@ -388,7 +388,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let locked_deps_ext = locked_deps
         .into_iter()
         .map(|p| match p {
-            LockedPackageRef::Pypi(pypi_data, _) => {
+            LockedPackageRef::Pypi(pypi_data) => {
                 let name = to_uv_normalize(&pypi_data.name)?;
                 Ok(PackageExt::PyPI(pypi_data.clone(), name))
             }

@@ -531,8 +531,7 @@ impl WorkspaceMut {
             // platforms
             .filter_map(|(env, platform)| {
                 let locked_env = updated_lock_file.environment(&env)?;
-                let lock_platform =
-                    updated_lock_file.platform(&platform.to_string())?;
+                let lock_platform = updated_lock_file.platform(&platform.to_string())?;
                 locked_env.conda_repodata_records(lock_platform).ok()?
             })
             .flatten()
@@ -636,7 +635,7 @@ impl WorkspaceMut {
             let version_constraint = pinning_strategy.determine_version_constraint(
                 pypi_records
                     .iter()
-                    .filter_map(|(data, _)| {
+                    .filter_map(|data| {
                         if &data.name == name.as_normalized() {
                             Version::from_str(&data.version.to_string()).ok()
                         } else {

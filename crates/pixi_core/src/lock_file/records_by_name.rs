@@ -1,5 +1,5 @@
 use super::package_identifier::ConversionError;
-use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
+use crate::lock_file::{PypiPackageData, PypiPackageIdentifier};
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::to_uv_normalize;
 use pypi_modifiers::pypi_tags::is_python_record;
@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::hash::Hash;
 
-pub type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;
+pub type PypiRecordsByName = DependencyRecordsByName<PypiPackageData>;
 pub type PixiRecordsByName = DependencyRecordsByName<PixiRecord>;
 
 /// A trait required from the dependencies stored in DependencyRecordsByName
@@ -24,15 +24,15 @@ pub trait HasNameVersion {
     fn version(&self) -> &Self::V;
 }
 
-impl HasNameVersion for PypiRecord {
+impl HasNameVersion for PypiPackageData {
     type N = pep508_rs::PackageName;
     type V = pep440_rs::Version;
 
     fn name(&self) -> &pep508_rs::PackageName {
-        &self.0.name
+        &self.name
     }
     fn version(&self) -> &Self::V {
-        &self.0.version
+        &self.version
     }
 }
 

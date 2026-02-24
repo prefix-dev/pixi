@@ -439,7 +439,7 @@ fn find_inconsistent_solve_groups<'p>(
                             _ => {}
                         }
                     }
-                    LockedPackageRef::Pypi(pkg, _) => match pypi_packages_by_name.get(&pkg.name) {
+                    LockedPackageRef::Pypi(pkg) => match pypi_packages_by_name.get(&pkg.name) {
                         None => {
                             pypi_packages_by_name.insert(pkg.name.clone(), pkg.location.clone());
                         }

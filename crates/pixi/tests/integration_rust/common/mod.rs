@@ -173,7 +173,7 @@ impl LockFileExt for LockFile {
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_pypi)
-            .any(|(data, _)| data.name.as_ref() == name)
+            .any(|data| data.name.as_ref() == name)
     }
 
     fn contains_match_spec(
@@ -215,7 +215,7 @@ impl LockFileExt for LockFile {
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_pypi)
-            .any(move |(data, _)| data.satisfies(&requirement))
+            .any(move |data| data.satisfies(&requirement))
     }
 
     fn get_pypi_package_version(
@@ -227,11 +227,10 @@ impl LockFileExt for LockFile {
         let p = self.platform(&platform.to_string())?;
         self.environment(environment)
             .and_then(|env| {
-                env.pypi_packages(p).and_then(|mut packages| {
-                    packages.find(|(data, _)| data.name.as_ref() == package)
-                })
+                env.pypi_packages(p)
+                    .and_then(|mut packages| packages.find(|data| data.name.as_ref() == package))
             })
-            .map(|(data, _)| data.version.to_string())
+            .map(|data| data.version.to_string())
     }
 
     fn get_pypi_package(

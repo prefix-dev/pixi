@@ -205,7 +205,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
         )
         .unwrap();
 
-    let pkg_version = pkg.as_pypi().unwrap().0.version.to_string();
+    let pkg_version = pkg.as_pypi().unwrap().version.to_string();
 
     let mut lock_file_str = lock.render_to_string().unwrap();
 
@@ -213,7 +213,6 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
     let fragment = pkg
         .as_pypi()
         .unwrap()
-        .0
         .location
         .as_url()
         .unwrap()

@@ -224,7 +224,7 @@ index-url = "{index_url}"
         rattler_lock::LockedPackageRef::Conda(_) => {
             panic!("Got a Conda package when I expected a pypi one")
         }
-        rattler_lock::LockedPackageRef::Pypi(pkg, _) => {
+        rattler_lock::LockedPackageRef::Pypi(pkg) => {
             assert_eq!(pkg.name.as_dist_info_name(), "mine");
             assert_eq!(pkg.location.given(), Some("./mine"));
         }
@@ -236,7 +236,7 @@ index-url = "{index_url}"
         rattler_lock::LockedPackageRef::Conda(_) => {
             panic!("Got a Conda package when I expected a pypi one")
         }
-        rattler_lock::LockedPackageRef::Pypi(pkg, _) => {
+        rattler_lock::LockedPackageRef::Pypi(pkg) => {
             assert_eq!(pkg.name.as_dist_info_name(), "also_mine");
             assert_eq!(pkg.location.given(), Some("./also_mine"));
         }

@@ -195,9 +195,7 @@ impl LockedEnvironmentHash {
                             md5.hash(&mut hasher);
                         }
                     }
-                    LockedPackageRef::Pypi(_, env) => {
-                        env.extras.hash(&mut hasher);
-                    }
+                    LockedPackageRef::Pypi(_) => {}
                 }
             }
         }

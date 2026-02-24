@@ -31,7 +31,7 @@ use pypi_modifiers::{
     pypi_tags::{get_pypi_tags, is_python_record},
 };
 use rattler_conda_types::Platform;
-use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{PypiIndexes, PypiPackageData};
 use rayon::prelude::*;
 use utils::elapsed;
 use uv_auth::store_credentials_from_url;
@@ -56,7 +56,7 @@ pub struct ManifestData {
     pub editable: bool,
 }
 
-pub type PyPIRecords = (PypiPackageData, PypiPackageEnvironmentData, ManifestData);
+pub type PyPIRecords = (PypiPackageData, ManifestData);
 
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
@@ -440,10 +440,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         setup: &UvInstallerConfig,
     ) -> miette::Result<PyPIInstallationPlan> {
         // Create required distributions with pre-created Dist objects
-        let required_packages: Vec<_> = pypi_records
-            .iter()
-            .map(|(pkg, _, spec)| (pkg, spec))
-            .collect();
+        let required_packages: Vec<_> =
+            pypi_records.iter().map(|(pkg, spec)| (pkg, spec)).collect();
         let required_dists =
             RequiredDists::from_packages(&required_packages, self.config.lock_file_dir)
                 .into_diagnostic()

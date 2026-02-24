@@ -1086,14 +1086,16 @@ platforms = ["{platform}"]
     });
 
     let lock_file = pixi.lock_file().await.unwrap();
-    let p = lock_file.platform(&Platform::current().to_string()).unwrap();
+    let p = lock_file
+        .platform(&Platform::current().to_string())
+        .unwrap();
 
-    let (boltons, _) = lock_file
+    let boltons = lock_file
         .default_environment()
         .unwrap()
         .pypi_packages(p)
         .unwrap()
-        .find(|(p, _)| p.name.to_string() == "boltons")
+        .find(|p| p.name.to_string() == "boltons")
         .unwrap();
 
     insta::with_settings!( {filters => vec![

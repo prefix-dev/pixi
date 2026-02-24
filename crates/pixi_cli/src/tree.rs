@@ -140,7 +140,7 @@ pub(crate) fn extract_package_info(
             dependencies,
             source: PackageSource::Conda,
         })
-    } else if let Some((pypi_package_data, _pypi_env_data)) = package.as_pypi() {
+    } else if let Some(pypi_package_data) = package.as_pypi() {
         let name = pypi_package_data.name.as_dist_info_name().into_owned();
         let dependencies = pypi_package_data
             .requires_dist
@@ -184,7 +184,7 @@ pub fn generate_dependency_map(locked_deps: &[LockedPackageRef<'_>]) -> HashMap<
                         LockedPackageRef::Conda(conda_data) => {
                             conda_data.record().version.to_string()
                         }
-                        LockedPackageRef::Pypi(pypi_data, _) => pypi_data.version.to_string(),
+                        LockedPackageRef::Pypi(pypi_data) => pypi_data.version.to_string(),
                     },
                     dependencies: package_info
                         .dependencies

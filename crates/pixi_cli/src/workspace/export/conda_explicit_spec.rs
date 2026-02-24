@@ -131,7 +131,7 @@ fn render_env_platform(
                         a spec file containing only the binary conda dependencies from the lockfile."
                 );
             }
-            LockedPackageRef::Pypi(pypi, _) => {
+            LockedPackageRef::Pypi(pypi) => {
                 if ignore_pypi_errors {
                     tracing::warn!(
                         "ignoring PyPI package {} since PyPI packages are not supported",
@@ -205,8 +205,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut env_platform = Vec::new();
 
     for (env_name, env) in environments {
-        let available_platforms: HashSet<Platform> =
-            env.platforms().map(|p| p.subdir()).collect();
+        let available_platforms: HashSet<Platform> = env.platforms().map(|p| p.subdir()).collect();
 
         if let Some(ref platforms) = args.platform {
             for plat in platforms {

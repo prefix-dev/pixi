@@ -14,8 +14,8 @@ pub use install_subset::{FilteredPackages, InstallSubset};
 pub use package_identifier::PypiPackageIdentifier;
 use pixi_record::PixiRecord;
 pub use pixi_uv_context::UvResolutionContext;
+use rattler_lock::PypiPackageData;
 pub use rattler_lock::Verbatim;
-use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 pub use records_by_name::{PixiRecordsByName, PypiRecordsByName};
 pub use resolve::pypi::resolve_pypi;
 pub use satisfiability::{
@@ -34,11 +34,7 @@ pub use utils::IoConcurrencyLimit;
 pub type LockedCondaPackages = Vec<PixiRecord>;
 
 /// A list of Pypi packages that are locked for a specific platform.
-pub type LockedPypiPackages = Vec<PypiRecord>;
-
-/// A single Pypi record that contains both the package data and the environment
-/// data. In Pixi we basically always need both.
-pub type PypiRecord = (PypiPackageData, PypiPackageEnvironmentData);
+pub type LockedPypiPackages = Vec<PypiPackageData>;
 
 #[cfg(test)]
 mod tests {

@@ -38,10 +38,7 @@ use pypi_modifiers::{
     pypi_tags::{get_pypi_tags, is_python_record},
 };
 use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
-use rattler_lock::{
-    PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
-    Verbatim,
-};
+use rattler_lock::{PackageHashes, PypiPackageData, PypiSourceTreeHashable, UrlOrPath, Verbatim};
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
@@ -67,7 +64,6 @@ use crate::{
     environment::CondaPrefixUpdated,
     lock_file::{
         CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
-        PypiRecord,
         records_by_name::HasNameVersion,
         resolve::{
             build_dispatch::{
@@ -289,7 +285,7 @@ pub async fn resolve_pypi(
     dependencies: IndexMap<uv_normalize::PackageName, IndexSet<PixiPypiSpec>>,
     system_requirements: SystemRequirements,
     locked_pixi_records: &[PixiRecord],
-    locked_pypi_packages: &[PypiRecord],
+    locked_pypi_packages: &[PypiPackageData],
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
     project_root: &Path,
@@ -368,7 +364,7 @@ pub async fn resolve_pypi(
     // Pre-populate the git resolver with locked git references.
     // This ensures that when uv resolves git dependencies, it will find the cached commit
     // and not panic in `url_to_precise` function.
-    for (package_data, _) in locked_pypi_packages {
+    for package_data in locked_pypi_packages {
         if let Some(location) = package_data.location.as_url()
             && LockedGitUrl::is_locked_git_url(location)
         {
@@ -618,14 +614,13 @@ pub async fn resolve_pypi(
     let preferences = locked_pypi_packages
         .iter()
         .map(|record| {
-            let (package_data, _) = record;
             let requirement = uv_pep508::Requirement {
-                name: to_uv_normalize(&package_data.name)?,
+                name: to_uv_normalize(&record.name)?,
                 extras: Vec::new().into(),
                 version_or_url: Some(uv_pep508::VersionOrUrl::VersionSpecifier(
                     uv_pep440::VersionSpecifiers::from(
                         uv_pep440::VersionSpecifier::equals_version(to_uv_version(
-                            &package_data.version,
+                            &record.version,
                         )?),
                     ),
                 )),
@@ -637,7 +632,7 @@ pub async fn resolve_pypi(
             // because they are resolved based on the reference (branch/tag/rev) in the manifest.
             // This matches how uv handles git dependencies - it doesn't try to pin them via preferences.
             // The git resolver cache (pre-populated above) ensures the locked commit is preferred.
-            if let Some(location) = package_data.location.as_url()
+            if let Some(location) = record.location.as_url()
                 && LockedGitUrl::is_locked_git_url(location)
             {
                 // Skip git packages - they'll be resolved based on manifest reference
@@ -944,7 +939,7 @@ async fn lock_pypi_packages(
     concurrent_downloads: usize,
     abs_project_root: &Path,
     original_git_references: &HashMap<uv_normalize::PackageName, pixi_spec::GitReference>,
-) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
+) -> miette::Result<Vec<PypiPackageData>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     let database =
         DistributionDatabase::new(registry_client, pixi_build_dispatch, concurrent_downloads);
@@ -1158,8 +1153,7 @@ async fn lock_pypi_packages(
             },
         };
 
-        // TODO: Store extras in the lock-file
-        locked_packages.push((pypi_package_data, PypiPackageEnvironmentData::default()));
+        locked_packages.push(pypi_package_data);
     }
 
     Ok(locked_packages)

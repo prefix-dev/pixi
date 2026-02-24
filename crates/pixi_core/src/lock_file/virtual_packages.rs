@@ -271,8 +271,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
 
     // Check if the wheel tags match the system virtual packages if there are any
     if lock_platform.is_some_and(|p| environment.has_pypi_packages(p))
-        && let Some(pypi_packages) =
-            lock_platform.and_then(|p| environment.pypi_packages(p))
+        && let Some(pypi_packages) = lock_platform.and_then(|p| environment.pypi_packages(p))
     {
         // Get python record from conda packages
         let python_record = conda_records
@@ -281,9 +280,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
             .ok_or(MachineValidationError::NoPythonRecordFound(platform))?;
 
         // Check if all the wheel tags match the system virtual packages
-        let pypi_packages = pypi_packages
-            .map(|(pkg_data, _)| pkg_data.clone())
-            .collect_vec();
+        let pypi_packages = pypi_packages.map(|pkg_data| pkg_data.clone()).collect_vec();
 
         let wheels = get_wheels_from_pypi_package_data(pypi_packages);
 

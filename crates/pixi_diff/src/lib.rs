@@ -65,11 +65,8 @@ impl LockFileDiff {
                             conda_package_data.record().name.clone(),
                             conda_package_data,
                         )),
-                        LockedPackageRef::Pypi(pypi_package_data, pypi_env_data) => {
-                            Either::Right((
-                                pypi_package_data.name.clone(),
-                                (pypi_package_data, pypi_env_data),
-                            ))
+                        LockedPackageRef::Pypi(pypi_package_data) => {
+                            Either::Right((pypi_package_data.name.clone(), pypi_package_data))
                         }
                     });
 
@@ -91,19 +88,15 @@ impl LockFileDiff {
                                 _ => {}
                             }
                         }
-                        LockedPackageRef::Pypi(data, env) => {
+                        LockedPackageRef::Pypi(data) => {
                             let name = &data.name;
                             match previous_pypi_packages.remove(name) {
-                                Some((previous_data, previous_env))
-                                    if previous_data.location != data.location =>
-                                {
-                                    diff.changed.push((
-                                        (previous_data.clone(), previous_env.clone()).into(),
-                                        (data.clone(), env.clone()).into(),
-                                    ));
+                                Some(previous_data) if previous_data.location != data.location => {
+                                    diff.changed
+                                        .push((previous_data.clone().into(), data.clone().into()));
                                 }
                                 None => {
-                                    diff.added.push((data.clone(), env.clone()).into());
+                                    diff.added.push(data.clone().into());
                                 }
                                 _ => {}
                             }
@@ -115,8 +108,8 @@ impl LockFileDiff {
                 for (_, p) in previous_conda_packages {
                     diff.removed.push(p.clone().into());
                 }
-                for (_, (data, env)) in previous_pypi_packages {
-                    diff.removed.push((data.clone(), env.clone()).into());
+                for (_, data) in previous_pypi_packages {
+                    diff.removed.push(data.clone().into());
                 }
 
                 environment_diff.insert(platform, diff);
@@ -262,7 +255,7 @@ impl LockFileDiff {
                 LockedPackage::Conda(p) => {
                     format!("{} {}", &p.record().version.as_str(), &p.record().build)
                 }
-                LockedPackage::Pypi(p, _) => p.version.to_string(),
+                LockedPackage::Pypi(p) => p.version.to_string(),
             }
         }
 
@@ -329,7 +322,7 @@ impl LockFileDiff {
                             choose_style(current.build.as_str(), previous.build.as_str()),
                         )
                     }
-                    (LockedPackage::Pypi(previous, _), LockedPackage::Pypi(current, _)) => {
+                    (LockedPackage::Pypi(previous), LockedPackage::Pypi(current)) => {
                         format!(
                             "{} {} {}\t{}\t->\t{}",
                             console::style("~").yellow(),
@@ -417,7 +410,7 @@ impl LockFileJsonDiff {
                         ty: JsonPackageType::Conda,
                         explicit: conda_dependencies.contains_key(&pkg.record().name),
                     },
-                    LockedPackage::Pypi(pkg, _) => JsonPackageDiff {
+                    LockedPackage::Pypi(pkg) => JsonPackageDiff {
                         name: pkg.name.as_dist_info_name().into_owned(),
                         before: None,
                         after: Some(
@@ -439,7 +432,7 @@ impl LockFileJsonDiff {
                         explicit: conda_dependencies.contains_key(&pkg.record().name),
                     },
 
-                    LockedPackage::Pypi(pkg, _) => JsonPackageDiff {
+                    LockedPackage::Pypi(pkg) => JsonPackageDiff {
                         name: pkg.name.as_dist_info_name().into_owned(),
                         before: Some(
                             serde_json::to_value(&pkg).expect("should be able to serialize"),
@@ -464,7 +457,7 @@ impl LockFileJsonDiff {
                                 explicit: conda_dependencies.contains_key(&old.record().name),
                             }
                         }
-                    (LockedPackage::Pypi(old, _), LockedPackage::Pypi(new, _)) => {
+                    (LockedPackage::Pypi(old), LockedPackage::Pypi(new)) => {
                         let before = serde_json::to_value(&old).expect("should be able to serialize");
                         let after = serde_json::to_value(&new).expect("should be able to serialize");
                         let (before, after) = compute_json_diff(before, after);

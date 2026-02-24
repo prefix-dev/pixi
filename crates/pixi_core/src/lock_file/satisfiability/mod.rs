@@ -52,9 +52,7 @@ use uv_distribution_types::{RequirementSource, RequiresPython};
 use uv_git_types::GitReference;
 use uv_pypi_types::ParsedUrlError;
 
-use super::{
-    PixiRecordsByName, PypiRecord, PypiRecordsByName, package_identifier::ConversionError,
-};
+use super::{PixiRecordsByName, PypiRecordsByName, package_identifier::ConversionError};
 use crate::workspace::{
     Environment, HasWorkspaceRef, errors::VariantsError, grouped_environment::GroupedEnvironment,
 };
@@ -570,7 +568,7 @@ pub fn verify_environment_satisfiability(
         // Actually check all pypi packages in one iteration
         for (lock_platform, package_it) in locked_environment.pypi_packages_by_platform() {
             let platform = lock_platform.subdir();
-            for (package_data, _) in package_it {
+            for package_data in package_it {
                 let pypi_source = pypi_dependencies
                     .get(&package_data.name)
                     .and_then(|specs| specs.last())
@@ -866,7 +864,7 @@ pub async fn verify_platform_satisfiability(
 ) -> Result<VerifiedIndividualEnvironment, Box<PlatformUnsat>> {
     // Convert the lock file into a list of conda and pypi packages
     let mut pixi_records: Vec<PixiRecord> = Vec::new();
-    let mut pypi_packages: Vec<PypiRecord> = Vec::new();
+    let mut pypi_packages: Vec<PypiPackageData> = Vec::new();
     let lock_platform = locked_environment
         .lock_file()
         .platform(&platform.to_string());
@@ -883,8 +881,8 @@ pub async fn verify_platform_satisfiability(
                         .map_err(|e| PlatformUnsat::CorruptedEntry(url.to_string(), e))?,
                 );
             }
-            LockedPackageRef::Pypi(pypi, env) => {
-                pypi_packages.push((pypi.clone(), env.clone()));
+            LockedPackageRef::Pypi(pypi) => {
+                pypi_packages.push(pypi.clone());
             }
         }
     }
@@ -921,7 +919,7 @@ pub async fn verify_platform_satisfiability(
         Ok(pypi_packages) => pypi_packages,
         Err(duplicate) => {
             return Err(Box::new(PlatformUnsat::DuplicateEntry(
-                duplicate.0.name.to_string(),
+                duplicate.name.to_string(),
             )));
         }
     };
@@ -2036,18 +2034,16 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
                             if requirement.is_editable() {
                                 if let Err(err) =
-                                    pypi_satisfies_editable(&requirement, &record.0, project_root)
+                                    pypi_satisfies_editable(&requirement, &record, project_root)
                                 {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
 
                                 FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras.to_vec())
                             } else {
-                                if let Err(err) = pypi_satisfies_requirement(
-                                    &requirement,
-                                    &record.0,
-                                    project_root,
-                                ) {
+                                if let Err(err) =
+                                    pypi_satisfies_requirement(&requirement, &record, project_root)
+                                {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
 
@@ -2145,7 +2141,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 if pypi_packages_visited.insert(idx) {
                     // If this is path based package we need to check if the source tree hash still
                     // matches. and if it is a directory
-                    if let UrlOrPath::Path(path) = &*record.0.location {
+                    if let UrlOrPath::Path(path) = &*record.location {
                         let absolute_path = if path.is_absolute() {
                             Cow::Borrowed(Path::new(path.as_str()))
                         } else {
@@ -2156,13 +2152,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             match PypiSourceTreeHashable::from_directory(&absolute_path)
                                 .map(|hashable| hashable.hash())
                             {
-                                Ok(hashable) if Some(&hashable) != record.0.hash.as_ref() => {
+                                Ok(hashable) if Some(&hashable) != record.hash.as_ref() => {
                                     delayed_pypi_error.get_or_insert_with(|| {
                                         Box::new(PlatformUnsat::SourceTreeHashMismatch(
-                                            record.0.name.clone(),
+                                            record.name.clone(),
                                             SourceTreeHashMismatch {
                                                 computed: hashable,
-                                                locked: record.0.hash.clone(),
+                                                locked: record.hash.clone(),
                                             },
                                         ))
                                     });
@@ -2171,7 +2167,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                 Err(err) => {
                                     delayed_pypi_error.get_or_insert_with(|| {
                                         Box::new(PlatformUnsat::FailedToDetermineSourceTreeHash(
-                                            record.0.name.clone(),
+                                            record.name.clone(),
                                             err,
                                         ))
                                     });
@@ -2181,7 +2177,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     }
 
                     // Ensure that the record matches the currently selected interpreter.
-                    if let Some(requires_python) = &record.0.requires_python {
+                    if let Some(requires_python) = &record.requires_python {
                         let uv_specifier_requires_python = to_uv_specifiers(requires_python)
                             .expect("pep440 conversion should never fail");
 
@@ -2199,7 +2195,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         if !marker_requires_python.is_contained_by(&uv_specifier_requires_python) {
                             delayed_pypi_error.get_or_insert_with(|| {
                                 Box::new(PlatformUnsat::PythonVersionMismatch(
-                                    record.0.name.clone(),
+                                    record.name.clone(),
                                     requires_python.clone(),
                                     marker_version.into(),
                                 ))
@@ -2209,7 +2205,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 }
 
                 // Add all the requirements of the package to the queue.
-                for requirement in &record.0.requires_dist {
+                for requirement in &record.requires_dist {
                     let requirement =
                         match pep508_requirement_to_uv_requirement(requirement.clone()) {
                             Ok(requirement) => requirement,
@@ -2233,7 +2229,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
                     pypi_queue.push(Dependency::PyPi(
                         requirement.clone(),
-                        record.0.name.as_ref().to_string().into(),
+                        record.name.as_ref().to_string().into(),
                     ));
                 }
             }
