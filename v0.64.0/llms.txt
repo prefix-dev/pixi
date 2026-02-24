@@ -1,0 +1,225 @@
+# Pixi
+
+> Pixi Documentation — Next-gen package manager for reproducible development setups
+
+Pixi is a fast, modern, and reproducible package management tool
+for developers of all backgrounds. Pixi is a cross-platform package manager
+and project management tool that creates reproducible environments using conda and PyPI packages.
+
+To use Pixi, start by running `pixi init my_project` to create a new project with a `pixi.toml` manifest file,
+then add dependencies using `pixi add package1 package2 ...` for conda packages
+or `pixi add --pypi python_package ...` for PyPI packages. Pixi automatically generates a lockfile (`pixi.lock`)
+to ensure reproducible environments across different systems.
+You can define and run tasks using `pixi task add task_name "command arg1 arg2"` and `pixi run task_name`,
+and work within the project's virtual environment using `pixi run` for single commands
+or `pixi shell` for an interactive session.
+
+The tool combines dependency management, task running, and environment isolation in a single workflow,
+making it easy to share consistent development environments with others. See other documentation sections
+for further details on how to use the software.
+
+## Getting Started documentation
+
+- [Home](https://prefix-dev.github.io/pixi/v0.64.0/index.md)
+- [Installation](https://prefix-dev.github.io/pixi/v0.64.0/installation/index.md)
+- [Basic Usage](https://prefix-dev.github.io/pixi/v0.64.0/getting_started/index.md)
+- [First Workspace](https://prefix-dev.github.io/pixi/v0.64.0/first_workspace/index.md)
+
+## Tutorials documentation
+
+- [pyproject.toml](https://prefix-dev.github.io/pixi/v0.64.0/python/pyproject_toml/index.md)
+- [Pytorch Installation](https://prefix-dev.github.io/pixi/v0.64.0/python/pytorch/index.md)
+- [Basic Usage](https://prefix-dev.github.io/pixi/v0.64.0/python/tutorial/index.md)
+- [Import Environments](https://prefix-dev.github.io/pixi/v0.64.0/tutorials/import/index.md)
+- [Multi Environment](https://prefix-dev.github.io/pixi/v0.64.0/tutorials/multi_environment/index.md)
+- [ROS 2](https://prefix-dev.github.io/pixi/v0.64.0/tutorials/ros2/index.md)
+- [Rust](https://prefix-dev.github.io/pixi/v0.64.0/tutorials/rust/index.md)
+- [Conda/Mamba](https://prefix-dev.github.io/pixi/v0.64.0/switching_from/conda/index.md)
+- [Poetry](https://prefix-dev.github.io/pixi/v0.64.0/switching_from/poetry/index.md)
+- [Global Tools](https://prefix-dev.github.io/pixi/v0.64.0/global_tools/introduction/index.md)
+
+## Concepts documentation
+
+- [Tasks](https://prefix-dev.github.io/pixi/v0.64.0/workspace/advanced_tasks/index.md)
+- [Environments](https://prefix-dev.github.io/pixi/v0.64.0/workspace/environment/index.md)
+- [Lock File](https://prefix-dev.github.io/pixi/v0.64.0/workspace/lockfile/index.md)
+- [Multi Environment](https://prefix-dev.github.io/pixi/v0.64.0/workspace/multi_environment/index.md)
+- [Multi Platform](https://prefix-dev.github.io/pixi/v0.64.0/workspace/multi_platform_configuration/index.md)
+- [System Requirements](https://prefix-dev.github.io/pixi/v0.64.0/workspace/system_requirements/index.md)
+- [Conda & PyPI](https://prefix-dev.github.io/pixi/v0.64.0/concepts/conda_pypi/index.md)
+- [Package Specifications](https://prefix-dev.github.io/pixi/v0.64.0/concepts/package_specifications/index.md)
+- [Manifest](https://prefix-dev.github.io/pixi/v0.64.0/global_tools/manifest/index.md)
+- [Trampolines](https://prefix-dev.github.io/pixi/v0.64.0/global_tools/trampolines/index.md)
+
+## Building documentation
+
+- [Advanced Building Using rattler-build](https://prefix-dev.github.io/pixi/v0.64.0/build/advanced_cpp/index.md)
+- [Overview](https://prefix-dev.github.io/pixi/v0.64.0/build/backends/index.md)
+- [Building a C++ Package](https://prefix-dev.github.io/pixi/v0.64.0/build/cpp/index.md)
+- [Dependency Types](https://prefix-dev.github.io/pixi/v0.64.0/build/dependency_types/index.md)
+- [Dev Packages](https://prefix-dev.github.io/pixi/v0.64.0/build/dev/index.md)
+- [Getting Started](https://prefix-dev.github.io/pixi/v0.64.0/build/getting_started/index.md)
+- [Package Source](https://prefix-dev.github.io/pixi/v0.64.0/build/package_source/index.md)
+- [Building a Python Package](https://prefix-dev.github.io/pixi/v0.64.0/build/python/index.md)
+- [Building a ROS Package](https://prefix-dev.github.io/pixi/v0.64.0/build/ros/index.md)
+- [Variants](https://prefix-dev.github.io/pixi/v0.64.0/build/variants/index.md)
+- [Multiple Packages in Workspace](https://prefix-dev.github.io/pixi/v0.64.0/build/workspace/index.md)
+- [CMake](https://prefix-dev.github.io/pixi/v0.64.0/build/backends/pixi-build-cmake/index.md)
+- [Mojo](https://prefix-dev.github.io/pixi/v0.64.0/build/backends/pixi-build-mojo/index.md)
+- [Python](https://prefix-dev.github.io/pixi/v0.64.0/build/backends/pixi-build-python/index.md)
+- [rattler-build](https://prefix-dev.github.io/pixi/v0.64.0/build/backends/pixi-build-rattler-build/index.md)
+- [ROS](https://prefix-dev.github.io/pixi/v0.64.0/build/backends/pixi-build-ros/index.md)
+- [Rust](https://prefix-dev.github.io/pixi/v0.64.0/build/backends/pixi-build-rust/index.md)
+- [Compilers](https://prefix-dev.github.io/pixi/v0.64.0/build/key_concepts/compilers/index.md)
+
+## Distributing documentation
+
+- [JFrog Artifactory](https://prefix-dev.github.io/pixi/v0.64.0/deployment/artifactory/index.md)
+- [Authentication](https://prefix-dev.github.io/pixi/v0.64.0/deployment/authentication/index.md)
+- [Container](https://prefix-dev.github.io/pixi/v0.64.0/deployment/container/index.md)
+- [Pixi Pack](https://prefix-dev.github.io/pixi/v0.64.0/deployment/pixi_pack/index.md)
+- [S3](https://prefix-dev.github.io/pixi/v0.64.0/deployment/s3/index.md)
+
+## Integration documentation
+
+- [GitHub Actions](https://prefix-dev.github.io/pixi/v0.64.0/integration/ci/github_actions/index.md)
+- [Pixi Diff-to-markdown](https://prefix-dev.github.io/pixi/v0.64.0/integration/ci/updates_github_actions/index.md)
+- [Jetbrains](https://prefix-dev.github.io/pixi/v0.64.0/integration/editor/jetbrains/index.md)
+- [JupyterLab](https://prefix-dev.github.io/pixi/v0.64.0/integration/editor/jupyterlab/index.md)
+- [RStudio](https://prefix-dev.github.io/pixi/v0.64.0/integration/editor/r_studio/index.md)
+- [VSCode](https://prefix-dev.github.io/pixi/v0.64.0/integration/editor/vscode/index.md)
+- [Zed](https://prefix-dev.github.io/pixi/v0.64.0/integration/editor/zed/index.md)
+- [Introduction](https://prefix-dev.github.io/pixi/v0.64.0/integration/extensions/introduction/index.md)
+- [Pixi Diff](https://prefix-dev.github.io/pixi/v0.64.0/integration/extensions/pixi_diff/index.md)
+- [Pixi Inject](https://prefix-dev.github.io/pixi/v0.64.0/integration/extensions/pixi_inject/index.md)
+- [Pixi Install-to-prefix](https://prefix-dev.github.io/pixi/v0.64.0/integration/extensions/pixi_install_to_prefix/index.md)
+- [Pixi Skills](https://prefix-dev.github.io/pixi/v0.64.0/integration/extensions/pixi_skills/index.md)
+- [Conda Deny](https://prefix-dev.github.io/pixi/v0.64.0/integration/third_party/conda_deny/index.md)
+- [Direnv](https://prefix-dev.github.io/pixi/v0.64.0/integration/third_party/direnv/index.md)
+- [Starship](https://prefix-dev.github.io/pixi/v0.64.0/integration/third_party/starship/index.md)
+
+## Advanced documentation
+
+- [Channel Logic](https://prefix-dev.github.io/pixi/v0.64.0/advanced/channel_logic/index.md)
+- [Info Command](https://prefix-dev.github.io/pixi/v0.64.0/advanced/explain_info_command/index.md)
+- [Dependency Overrides](https://prefix-dev.github.io/pixi/v0.64.0/advanced/override/index.md)
+- [Shell](https://prefix-dev.github.io/pixi/v0.64.0/advanced/pixi_shell/index.md)
+- [Shebang](https://prefix-dev.github.io/pixi/v0.64.0/advanced/shebang/index.md)
+
+## Reference documentation
+
+- [Environment Variables](https://prefix-dev.github.io/pixi/v0.64.0/reference/environment_variables/index.md)
+- [Pixi Configuration](https://prefix-dev.github.io/pixi/v0.64.0/reference/pixi_configuration/index.md)
+- [Pixi Manifest](https://prefix-dev.github.io/pixi/v0.64.0/reference/pixi_manifest/index.md)
+- [  README](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/__README/index.md)
+- [CLI](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/index.md)
+- [pixi add](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/add/index.md)
+- [pixi auth](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/auth/index.md)
+- [pixi build](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/build/index.md)
+- [pixi clean](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/clean/index.md)
+- [pixi completion](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/completion/index.md)
+- [pixi config](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/config/index.md)
+- [pixi exec](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/exec/index.md)
+- [pixi global](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/index.md)
+- [pixi import](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/import/index.md)
+- [pixi info](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/info/index.md)
+- [pixi init](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/init/index.md)
+- [pixi install](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/install/index.md)
+- [pixi list](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/list/index.md)
+- [pixi lock](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/lock/index.md)
+- [pixi reinstall](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/reinstall/index.md)
+- [pixi remove](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/remove/index.md)
+- [pixi run](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/run/index.md)
+- [pixi search](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/search/index.md)
+- [pixi self-update](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/self-update/index.md)
+- [pixi shell-hook](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/shell-hook/index.md)
+- [pixi shell](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/shell/index.md)
+- [pixi task](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/task/index.md)
+- [pixi tree](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/tree/index.md)
+- [pixi update](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/update/index.md)
+- [pixi upgrade](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/upgrade/index.md)
+- [pixi upload](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/upload/index.md)
+- [pixi workspace](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/index.md)
+- [pixi auth login](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/auth/login/index.md)
+- [pixi auth logout](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/auth/logout/index.md)
+- [pixi clean cache](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/clean/cache/index.md)
+- [pixi config append](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/config/append/index.md)
+- [pixi config edit](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/config/edit/index.md)
+- [pixi config list](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/config/list/index.md)
+- [pixi config prepend](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/config/prepend/index.md)
+- [pixi config set](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/config/set/index.md)
+- [pixi config unset](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/config/unset/index.md)
+- [pixi global add](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/add/index.md)
+- [pixi global edit](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/edit/index.md)
+- [pixi global expose](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/expose/index.md)
+- [pixi global install](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/install/index.md)
+- [pixi global list](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/list/index.md)
+- [pixi global remove](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/remove/index.md)
+- [pixi global shortcut](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/shortcut/index.md)
+- [pixi global sync](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/sync/index.md)
+- [pixi global tree](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/tree/index.md)
+- [pixi global uninstall](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/uninstall/index.md)
+- [pixi global update](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/update/index.md)
+- [pixi global upgrade-all](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/upgrade-all/index.md)
+- [pixi global upgrade](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/upgrade/index.md)
+- [pixi global expose add](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/expose/add/index.md)
+- [pixi global expose remove](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/expose/remove/index.md)
+- [pixi global shortcut add](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/shortcut/add/index.md)
+- [pixi global shortcut remove](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/global/shortcut/remove/index.md)
+- [pixi task add](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/task/add/index.md)
+- [pixi task alias](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/task/alias/index.md)
+- [pixi task list](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/task/list/index.md)
+- [pixi task remove](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/task/remove/index.md)
+- [pixi upload anaconda](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/upload/anaconda/index.md)
+- [pixi upload artifactory](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/upload/artifactory/index.md)
+- [pixi upload conda-forge](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/upload/conda-forge/index.md)
+- [pixi upload prefix](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/upload/prefix/index.md)
+- [pixi upload quetz](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/upload/quetz/index.md)
+- [pixi upload s3](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/upload/s3/index.md)
+- [pixi workspace channel](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/channel/index.md)
+- [pixi workspace description](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/description/index.md)
+- [pixi workspace environment](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/environment/index.md)
+- [pixi workspace export](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/export/index.md)
+- [pixi workspace feature](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/feature/index.md)
+- [pixi workspace name](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/name/index.md)
+- [pixi workspace platform](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/platform/index.md)
+- [pixi workspace requires-pixi](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/requires-pixi/index.md)
+- [pixi workspace system-requirements](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/system-requirements/index.md)
+- [pixi workspace version](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/version/index.md)
+- [pixi workspace channel add](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/channel/add/index.md)
+- [pixi workspace channel list](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/channel/list/index.md)
+- [pixi workspace channel remove](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/channel/remove/index.md)
+- [pixi workspace description get](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/description/get/index.md)
+- [pixi workspace description set](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/description/set/index.md)
+- [pixi workspace environment add](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/environment/add/index.md)
+- [pixi workspace environment list](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/environment/list/index.md)
+- [pixi workspace environment remove](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/environment/remove/index.md)
+- [pixi workspace export conda-environment](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/export/conda-environment/index.md)
+- [pixi workspace export conda-explicit-spec](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/export/conda-explicit-spec/index.md)
+- [pixi workspace feature list](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/feature/list/index.md)
+- [pixi workspace feature remove](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/feature/remove/index.md)
+- [pixi workspace name get](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/name/get/index.md)
+- [pixi workspace name set](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/name/set/index.md)
+- [pixi workspace platform add](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/platform/add/index.md)
+- [pixi workspace platform list](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/platform/list/index.md)
+- [pixi workspace platform remove](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/platform/remove/index.md)
+- [pixi workspace requires-pixi get](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/requires-pixi/get/index.md)
+- [pixi workspace requires-pixi set](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/requires-pixi/set/index.md)
+- [pixi workspace requires-pixi unset](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/requires-pixi/unset/index.md)
+- [pixi workspace requires-pixi verify](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/requires-pixi/verify/index.md)
+- [pixi workspace system-requirements add](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/system-requirements/add/index.md)
+- [pixi workspace system-requirements list](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/system-requirements/list/index.md)
+- [pixi workspace version get](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/version/get/index.md)
+- [pixi workspace version major](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/version/major/index.md)
+- [pixi workspace version minor](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/version/minor/index.md)
+- [pixi workspace version patch](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/version/patch/index.md)
+- [pixi workspace version set](https://prefix-dev.github.io/pixi/v0.64.0/reference/cli/pixi/workspace/version/set/index.md)
+
+## Miscellaneous documentation
+
+- [Changelog](https://prefix-dev.github.io/pixi/v0.64.0/CHANGELOG/index.md)
+- [Community](https://prefix-dev.github.io/pixi/v0.64.0/misc/Community/index.md)
+- [FAQ](https://prefix-dev.github.io/pixi/v0.64.0/misc/FAQ/index.md)
+- [Packaging Pixi](https://prefix-dev.github.io/pixi/v0.64.0/misc/packaging/index.md)
+- [Pixi Vision](https://prefix-dev.github.io/pixi/v0.64.0/misc/vision/index.md)
+
