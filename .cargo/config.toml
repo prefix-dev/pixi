@@ -26,3 +26,6 @@ CARGO_WORKSPACE_DIR = { value = "", relative = true }
 
 [target.aarch64-unknown-linux-musl]
 linker = "aarch64-linux-gnu-gcc"
+
+[target.riscv64gc-unknown-linux-gnu]
+linker = "riscv64-linux-gnu-gcc"

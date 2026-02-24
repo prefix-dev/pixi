@@ -163,29 +163,34 @@ jobs:
 
       # -- Cross-compilation tools (Linux only) --
       - name: Install zig
-        if: runner.os == 'Linux' && matrix.cross
+        if: runner.os == 'Linux' && matrix.cross && !contains(matrix.target, 'riscv64')
         uses: mlugg/setup-zig@v2
         with:
           version: 0.13.0
 
       - name: Install cargo-zigbuild
-        if: runner.os == 'Linux' && matrix.cross
+        if: runner.os == 'Linux' && matrix.cross && !contains(matrix.target, 'riscv64')
         uses: baptiste0928/cargo-install@v3
         with:
           crate: cargo-zigbuild
           version: "0.20.1"
 
-      - name: Install Linux cross-compilation dependencies
-        if: runner.os == 'Linux' && matrix.cross
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           sudo apt-get update
           case "${{ matrix.target }}" in
+            x86_64-*-musl)
+              # musl-tools provides musl-gcc needed by cc-rs for C dependencies
+              sudo apt-get install -y musl-tools
+              ;;
             aarch64-*)
               sudo apt-get install -y gcc-aarch64-linux-gnu
               ;;
             riscv64*)
-              sudo apt-get install -y gcc-riscv64-linux-gnu
+              # Use system cross-compiler (zig's glibc headers are incomplete for riscv64)
+              sudo apt-get install -y gcc-riscv64-linux-gnu g++-riscv64-linux-gnu libc6-dev-riscv64-cross
               ;;
           esac
 
@@ -212,11 +217,11 @@ jobs:
           export CARGO_PROFILE_RELEASE_OPT_LEVEL=3
           export CARGO_PROFILE_RELEASE_STRIP=symbols
 
-          if [[ "${{ runner.os }}" == "Linux" && "${{ matrix.cross }}" == "true" ]]; then
-            # Linux cross-compilation uses zigbuild
+          if [[ "${{ runner.os }}" == "Linux" && "${{ matrix.cross }}" == "true" && "${{ matrix.target }}" != riscv64* ]]; then
+            # Linux cross-compilation uses zigbuild (except riscv64 where zig headers are incomplete)
             cargo zigbuild "${CARGO_FLAGS[@]}"
           else
-            # Native build (macOS can cross-compile x86_64 natively, Windows uses MSVC)
+            # Native build, or riscv64 cross-compile with system gcc
             cargo build "${CARGO_FLAGS[@]}"
           fi
 
