@@ -379,9 +379,15 @@ jobs:
         id: msi
         shell: bash
         run: |
-          VERSION="${{ needs.metadata.outputs.version }}"
           TARGET="${{ matrix.target }}"
           MSI_FILE="pixi-${TARGET}.msi"
+
+          # The WXS references resources via relative paths like "wix\resources\Banner.bmp"
+          # and "LICENSE". These are relative to CWD, but cargo-wix runs from workspace root.
+          # Create the expected directory structure so WiX can find them.
+          mkdir -p wix/resources
+          cp crates/pixi/wix/resources/* wix/resources/
+          cp LICENSE wix/resources/ 2>/dev/null || true
 
           cargo wix --no-build \
             --nocapture \
