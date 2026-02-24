@@ -125,7 +125,7 @@ jobs:
           - target: x86_64-apple-darwin
             os: macos-latest
             runner: macos-latest
-            cross: true
+            cross: false
 
           # ---- Windows ----
           - target: x86_64-pc-windows-msvc
@@ -161,9 +161,15 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup target add ${{ matrix.target }}
 
-      # -- Cross-compilation tools --
+      # -- Cross-compilation tools (Linux only) --
+      - name: Install zig
+        if: runner.os == 'Linux' && matrix.cross
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.13.0
+
       - name: Install cargo-zigbuild
-        if: runner.os != 'Windows' && matrix.cross
+        if: runner.os == 'Linux' && matrix.cross
         uses: baptiste0928/cargo-install@v3
         with:
           crate: cargo-zigbuild
@@ -206,12 +212,11 @@ jobs:
           export CARGO_PROFILE_RELEASE_OPT_LEVEL=3
           export CARGO_PROFILE_RELEASE_STRIP=symbols
 
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            # Windows: native MSVC build (zigbuild doesn't support MSVC well)
-            cargo build "${CARGO_FLAGS[@]}"
-          elif [[ "${{ matrix.cross }}" == "true" ]]; then
+          if [[ "${{ runner.os }}" == "Linux" && "${{ matrix.cross }}" == "true" ]]; then
+            # Linux cross-compilation uses zigbuild
             cargo zigbuild "${CARGO_FLAGS[@]}"
           else
+            # Native build (macOS can cross-compile x86_64 natively, Windows uses MSVC)
             cargo build "${CARGO_FLAGS[@]}"
           fi
 
