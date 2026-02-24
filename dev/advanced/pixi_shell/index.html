@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#issues-with-pixi-shell" class="md-skip">
+        <a href="#shell-completions" class="md-skip">
           Skip to content
         </a>
       
@@ -3346,6 +3346,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#shell-completions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shell Completions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#issues-with-pixi-shell" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3790,6 +3801,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#shell-completions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shell Completions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#issues-with-pixi-shell" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3850,6 +3872,9 @@ would see that this is the first thing executed in the new shell session.</p>
 <p>The temporary script that we generate ends with <code>echo "PIXI_ENV_ACTIVATED"</code> which is used to detect
 if the environment was activated successfully. If we do not receive this string after
 three seconds, we will issue a warning to the user.</p>
+<h2 id="shell-completions">Shell Completions<a class="headerlink" href="#shell-completions" title="Permanent link">#</a></h2>
+<p>Shell completions for tools in your project are loaded automatically inside <code>pixi shell</code>.
+This means that if a package in your environment ships completions (e.g. for <code>git</code> or <code>cargo</code>), they will be available without any extra configuration.</p>
 <h2 id="issues-with-pixi-shell">Issues With Pixi Shell<a class="headerlink" href="#issues-with-pixi-shell" title="Permanent link">#</a></h2>
 <p>As explained, <code>pixi shell</code> only works well if we execute the activation script <em>after</em> launching shell.
 Certain commands that are run in the <code>~/.bashrc</code> might swallow the activation command, and the

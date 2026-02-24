@@ -8,6 +8,10 @@ On Unix systems the shell command works by creating a "fake" PTY session that wi
 
 The temporary script that we generate ends with `echo "PIXI_ENV_ACTIVATED"` which is used to detect if the environment was activated successfully. If we do not receive this string after three seconds, we will issue a warning to the user.
 
+## Shell Completions
+
+Shell completions for tools in your project are loaded automatically inside `pixi shell`. This means that if a package in your environment ships completions (e.g. for `git` or `cargo`), they will be available without any extra configuration.
+
 ## Issues With Pixi Shell
 
 As explained, `pixi shell` only works well if we execute the activation script *after* launching shell. Certain commands that are run in the `~/.bashrc` might swallow the activation command, and the environment won't be activated.

@@ -4110,6 +4110,10 @@ At the moment, only Linux and macOS are supported.</p>
 <p class="admonition-title">Note</p>
 <p>Completions of packages are installed as long as their binaries are exposed under the same name: e.g. <code>exposed = { git = "git" }</code>.</p>
 </div>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>Are you missing shell completions for your favorite CLI tool? Add them similar to <a href="https://github.com/conda-forge/crush-feedstock/pull/37/changes">conda-forge/crush-feedstock #37</a>.</p>
+</div>
 <h2 id="adding-a-series-of-tools-at-once">Adding a Series of Tools at Once<a class="headerlink" href="#adding-a-series-of-tools-at-once" title="Permanent link">#</a></h2>
 <p>Without specifying an installation environment, you can add multiple tools at once:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>pixi-pack<span class="w"> </span>rattler-build
