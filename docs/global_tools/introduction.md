@@ -138,7 +138,6 @@ Then, your shell will present you all the flags `git` offers.
 However, that only works if you have the completions installed for the tool in question.
 If the tool you installed via `pixi global` contains completions they will be automatically installed.
 At the moment, only Linux and macOS are supported.
-Completions also work inside a [`pixi shell`](../advanced/pixi_shell.md), where they are loaded automatically.
 
 First install a tool with `pixi global`:
 
