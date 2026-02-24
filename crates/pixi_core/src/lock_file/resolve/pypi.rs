@@ -958,7 +958,7 @@ async fn lock_pypi_packages(
 
             ResolvedDist::Installable { dist, .. } => match &**dist {
                 Dist::Built(dist) => {
-                    let (location, hash) = match &dist {
+                    let (location, hash, index_url) = match &dist {
                         BuiltDist::Registry(dist) => {
                             let best_wheel = dist.best_wheel();
                             let hash = parse_hashes_from_hash_vec(&dist.best_wheel().file.hashes)
@@ -971,7 +971,7 @@ async fn lock_pypi_packages(
                             )
                             .into_diagnostic()
                             .context("cannot convert registry dist")?;
-                            (url_or_path, hash)
+                            (url_or_path, hash, Some((*best_wheel.index).clone()))
                         }
                         BuiltDist::DirectUrl(dist) => {
                             let url = dist.url.to_url();
@@ -979,7 +979,7 @@ async fn lock_pypi_packages(
                                 .into_diagnostic()
                                 .context("cannot create direct url")?;
 
-                            (UrlOrPath::Url(direct_url), None)
+                            (UrlOrPath::Url(direct_url), None, None)
                         }
                         BuiltDist::Path(dist) => (
                             UrlOrPath::Path(
@@ -990,6 +990,7 @@ async fn lock_pypi_packages(
                                 )
                                 .into_diagnostic()?,
                             ),
+                            None,
                             None,
                         ),
                     };
@@ -1019,6 +1020,7 @@ async fn lock_pypi_packages(
                         .into_diagnostic()?,
                         location: Verbatim::new(location),
                         hash,
+                        index_url,
                     }
                 }
                 Dist::Source(source) => {
@@ -1044,20 +1046,20 @@ async fn lock_pypi_packages(
 
                     // Use the precise url if we got it back
                     // otherwise try to construct it from the source
-                    let (location, hash) = match source {
+                    let (location, hash, index_url) = match source {
                         SourceDist::Registry(reg) => {
                             let url_or_path =
                                 get_url_or_path(&reg.index, &reg.file.url, abs_project_root)
                                     .into_diagnostic()
                                     .context("cannot convert registry sdist")?;
-                            (Verbatim::new(url_or_path), hash)
+                            (Verbatim::new(url_or_path), hash, Some((*reg.index).clone()))
                         }
                         SourceDist::DirectUrl(direct) => {
                             let url = direct.url.to_url();
                             let direct_url = Url::parse(&format!("direct+{url}"))
                                 .into_diagnostic()
                                 .context("could not create direct-url")?;
-                            (Verbatim::new(direct_url.into()), hash)
+                            (Verbatim::new(direct_url.into()), hash, None)
                         }
                         SourceDist::Git(git) => {
                             // Look up the original git reference from the manifest dependencies
@@ -1074,6 +1076,7 @@ async fn lock_pypi_packages(
                                     pinned_git_spec.into_locked_git_url().to_url().into(),
                                 ),
                                 hash,
+                                None,
                             )
                         }
                         SourceDist::Path(path) => {
@@ -1101,7 +1104,7 @@ async fn lock_pypi_packages(
                             // instead of from the source path to copy the path that was passed in
                             // from the requirement.
                             let url_or_path = UrlOrPath::Path(install_path);
-                            (Verbatim::new(url_or_path), hash)
+                            (Verbatim::new(url_or_path), hash, None)
                         }
                         SourceDist::Directory(dir) => {
                             // Compute the hash of the package based on the source tree.
@@ -1134,7 +1137,7 @@ async fn lock_pypi_packages(
                             };
                             // Always set editable to false in lock file.
                             // Editability is looked up from manifest at install time.
-                            (url_or_path, hash)
+                            (url_or_path, hash, None)
                         }
                     };
 
@@ -1155,6 +1158,7 @@ async fn lock_pypi_packages(
                         requires_dist: to_requirements(metadata.requires_dist.iter())
                             .into_diagnostic()?,
                         hash,
+                        index_url,
                     }
                 }
             },

@@ -2791,6 +2791,7 @@ mod tests {
                 .parse()
                 .expect("failed to parse url"),
             hash: None,
+            index_url: None,
             requires_dist: vec![],
             requires_python: None,
         };
@@ -2810,6 +2811,7 @@ mod tests {
                 .parse()
                 .expect("failed to parse url"),
             hash: None,
+            index_url: None,
             requires_dist: vec![],
             requires_python: None,
         };
@@ -2848,6 +2850,7 @@ mod tests {
                 .parse()
                 .expect("failed to parse url"),
             hash: None,
+            index_url: None,
             requires_dist: vec![],
             requires_python: None,
         };
@@ -2873,6 +2876,7 @@ mod tests {
             version: Some(Version::from_str("0.1.0").unwrap()),
             location: Verbatim::new(UrlOrPath::Path("/home/username/mypkg.tar.gz".into())),
             hash: None,
+            index_url: None,
             requires_dist: vec![],
             requires_python: None,
         };

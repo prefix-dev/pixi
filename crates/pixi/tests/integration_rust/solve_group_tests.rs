@@ -115,7 +115,9 @@ async fn test_purl_are_added_for_pypi() {
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Check if boltons has a purl
-    let p = lock_file.platform(&Platform::current().to_string()).unwrap();
+    let p = lock_file
+        .platform(&Platform::current().to_string())
+        .unwrap();
     lock_file
         .default_environment()
         .unwrap()
@@ -136,7 +138,9 @@ async fn test_purl_are_added_for_pypi() {
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Check if boltons has a purl
-    let p = lock_file.platform(&Platform::current().to_string()).unwrap();
+    let p = lock_file
+        .platform(&Platform::current().to_string())
+        .unwrap();
     lock_file
         .default_environment()
         .unwrap()

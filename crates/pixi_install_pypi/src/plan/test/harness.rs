@@ -388,6 +388,7 @@ impl PyPIPackageDataBuilder {
             )
             .into(),
             hash: None,
+            index_url: None,
         }
     }
 
@@ -400,6 +401,7 @@ impl PyPIPackageDataBuilder {
             location: UrlOrPath::Path(Utf8TypedPathBuf::from(path.to_string_lossy().to_string()))
                 .into(),
             hash: None,
+            index_url: None,
         }
     }
 
@@ -417,6 +419,7 @@ impl PyPIPackageDataBuilder {
             requires_python: None,
             location: UrlOrPath::Url(url).into(),
             hash: None,
+            index_url: None,
         }
     }
 }

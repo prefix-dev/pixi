@@ -599,8 +599,12 @@ fn create_package_to_output<'a, 'b>(
                     // Handle case where the registry index is present
                     let entry = registry_index.get(name).find(|i| {
                         i.dist.filename.version
-                            == to_uv_version(p.version.as_ref().expect("registry packages always have a version"))
-                                .expect("invalid version")
+                            == to_uv_version(
+                                p.version
+                                    .as_ref()
+                                    .expect("registry packages always have a version"),
+                            )
+                            .expect("invalid version")
                     });
                     let size = entry.and_then(|e| get_dir_size(e.dist.path.clone()).ok());
                     let name = entry.map(|e| e.dist.filename.to_string());

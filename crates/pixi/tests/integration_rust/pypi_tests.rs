@@ -227,6 +227,11 @@ index-url = "{index_url}"
         rattler_lock::LockedPackageRef::Pypi(pkg) => {
             assert_eq!(pkg.name.as_dist_info_name(), "mine");
             assert_eq!(pkg.location.given(), Some("./mine"));
+            assert!(
+                pkg.index_url.is_none(),
+                "path-based source package should not have index_url, got: {:?}",
+                pkg.index_url
+            );
         }
     }
     match lock
@@ -239,6 +244,11 @@ index-url = "{index_url}"
         rattler_lock::LockedPackageRef::Pypi(pkg) => {
             assert_eq!(pkg.name.as_dist_info_name(), "also_mine");
             assert_eq!(pkg.location.given(), Some("./also_mine"));
+            assert!(
+                pkg.index_url.is_none(),
+                "path-based source package should not have index_url, got: {:?}",
+                pkg.index_url
+            );
         }
     }
 }
@@ -316,6 +326,11 @@ setup(version="42.23.12")
                 "expected no version for dynamic source dependency, got {:?}",
                 data.version
             );
+            assert!(
+                data.index_url.is_none(),
+                "path-based source package should not have index_url, got: {:?}",
+                data.index_url
+            );
         }
         _ => panic!("expected a pypi package"),
     }
@@ -332,6 +347,11 @@ setup(version="42.23.12")
                 data.version.is_none(),
                 "version should be None after round-trip, got {:?}",
                 data.version
+            );
+            assert!(
+                data.index_url.is_none(),
+                "index_url should be None after round-trip, got: {:?}",
+                data.index_url
             );
         }
         _ => panic!("expected a pypi package"),
@@ -376,6 +396,11 @@ version = "1.0.0"
                 data.version.is_none(),
                 "version should be None after re-resolve, got {:?}",
                 data.version
+            );
+            assert!(
+                data.index_url.is_none(),
+                "index_url should be None after re-resolve, got: {:?}",
+                data.index_url
             );
         }
         _ => panic!("expected a pypi package"),
@@ -1649,6 +1674,21 @@ version = "0.1.0"
     // First, update the lock file (this won't have editable field since we don't record it)
     let lock = pixi.update_lock_file().await.unwrap();
 
+    // Path-based source package should not have index_url
+    match lock
+        .get_pypi_package("default", platform, "editable-test")
+        .expect("editable-test should be in the lock file")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.index_url.is_none(),
+                "path-based source package should not have index_url, got: {:?}",
+                data.index_url
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
     // Manually modify the lock file to add editable: true, simulating an old lock file
     let lock_file_str = lock.render_to_string().unwrap();
 
@@ -1682,5 +1722,211 @@ version = "0.1.0"
     assert!(
         !has_editable_pth_file(&prefix_path, "editable_test"),
         "Package should NOT be installed as editable when manifest doesn't specify editable = true (even if lock file has editable: true)"
+    );
+}
+
+/// Test that packages from different indexes get distinct `index_url` values
+/// recorded in the lock file.
+#[tokio::test]
+async fn test_index_url_in_lock_file() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    // Default index with "rsa"
+    let default_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("rsa", "4.9.1"))
+        .into_simple_index()
+        .unwrap();
+
+    // Custom index with "torch"
+    let custom_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("torch", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "index-url-test"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        rsa = "*"
+        torch = {{ version = "*", index = "{custom_index_url}" }}
+
+        [pypi-options]
+        index-url = "{default_index_url}"
+        "#,
+        platform = platform,
+        channel_url = channel.url(),
+        default_index_url = default_index.index_url(),
+        custom_index_url = custom_index.index_url(),
+    ))
+    .unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    let p = lock_file
+        .platform(&platform.to_string())
+        .expect("platform should exist");
+    let env = lock_file
+        .environment("default")
+        .expect("default environment should exist");
+
+    // torch should have index_url set to the custom index
+    let torch = env
+        .pypi_packages(p)
+        .expect("should have pypi packages")
+        .find(|data| data.name.as_ref() == "torch")
+        .expect("torch should be in pypi packages");
+    assert_eq!(
+        torch.index_url.as_ref().map(|u| u.as_str()),
+        Some(custom_index.index_url().as_str()),
+        "torch should have index_url set to the custom index"
+    );
+
+    // rsa should have the default index URL, not the custom one
+    let rsa = env
+        .pypi_packages(p)
+        .expect("should have pypi packages")
+        .find(|data| data.name.as_ref() == "rsa")
+        .expect("rsa should be in pypi packages");
+    assert_eq!(
+        rsa.index_url.as_ref().map(|u| u.as_str()),
+        Some(default_index.index_url().as_str()),
+        "rsa should have the default index URL"
+    );
+
+}
+
+/// Test that the default PyPI index URL is elided from the serialized lock file
+/// while custom index URLs are preserved. Rattler handles the elision; pixi
+/// always passes through the index URL.
+///
+/// Requires network access for real PyPI resolution.
+#[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
+async fn test_index_url_omitted_for_default_pypi() {
+    setup_tracing();
+
+    // pytorch only has wheels for linux-64, so target that platform.
+    let platform = Platform::current();
+    let platforms = match platform {
+        Platform::Linux64 => "\"linux-64\"".to_string(),
+        _ => format!("\"{platform}\", \"linux-64\""),
+    };
+
+    // Create local conda channel with Python for all relevant platforms
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::Linux64)
+            .finish(),
+    );
+    if platform != Platform::Linux64 {
+        package_db.add_package(
+            Package::build("python", "3.12.0")
+                .with_subdir(platform)
+                .finish(),
+        );
+    }
+    let channel = package_db.into_channel().await.unwrap();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "index-url-pypi-test"
+        platforms = [{platforms}]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [target.linux-64.pypi-dependencies]
+        rsa = ">=4.9.1, <5"
+        torch = {{ version = "*", index = "https://download.pytorch.org/whl/cu124" }}
+        "#,
+        channel_url = channel.url(),
+    ))
+    .unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    let p = lock_file
+        .platform("linux-64")
+        .expect("linux-64 platform should exist");
+    let env = lock_file
+        .environment("default")
+        .expect("default environment should exist");
+
+    // torch should have index_url set to the pytorch index
+    let torch = env
+        .pypi_packages(p)
+        .expect("should have pypi packages")
+        .find(|data| data.name.as_ref() == "torch")
+        .expect("torch should be in pypi packages");
+    assert!(
+        torch
+            .index_url
+            .as_ref()
+            .expect("torch should have index_url")
+            .as_str()
+            .contains("download.pytorch.org"),
+        "torch index_url should point to pytorch: {:?}",
+        torch.index_url
+    );
+
+    // rsa comes from real PyPI — index_url is set but rattler elides it
+    // during serialization
+    let rsa = env
+        .pypi_packages(p)
+        .expect("should have pypi packages")
+        .find(|data| data.name.as_ref() == "rsa")
+        .expect("rsa should be in pypi packages");
+    assert!(
+        rsa.index_url
+            .as_ref()
+            .expect("rsa should have index_url")
+            .as_str()
+            .contains("pypi.org"),
+        "rsa index_url should point to pypi.org: {:?}",
+        rsa.index_url
+    );
+
+    // Verify the serialized lock file: pytorch index URL should appear,
+    // pypi.org should be elided by rattler
+    let lock_file_content = lock_file.render_to_string().unwrap();
+    assert!(
+        lock_file_content.contains("download.pytorch.org"),
+        "serialized lock file should contain the pytorch index URL"
+    );
+    assert!(
+        !lock_file_content.contains("index_url: https://pypi.org"),
+        "serialized lock file should not contain index_url for the default PyPI index"
+    );
+
+    // Round-trip: parse and re-serialize, the output should be identical
+    let lock_file_rt =
+        rattler_lock::LockFile::from_str_with_base_directory(&lock_file_content, None).unwrap();
+    assert_eq!(
+        lock_file_content,
+        lock_file_rt.render_to_string().unwrap(),
+        "lock file content should be identical after round-trip"
     );
 }

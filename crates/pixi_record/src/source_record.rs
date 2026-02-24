@@ -389,11 +389,7 @@ mod tests {
             let platform = Platform::from_str(&conda_data.record().subdir)
                 .expect("failed to parse platform from subdir");
             builder
-                .add_conda_package(
-                    DEFAULT_ENVIRONMENT_NAME,
-                    &platform.to_string(),
-                    conda_data,
-                )
+                .add_conda_package(DEFAULT_ENVIRONMENT_NAME, &platform.to_string(), conda_data)
                 .expect("platform was registered");
         }
 
