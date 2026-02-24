@@ -5427,6 +5427,8 @@ dependencies = [
  "pixi_pypi_spec",
  "pixi_spec",
  "pixi_utils",
+ "pixi_uv_conversions",
+ "pypi_modifiers",
  "rattler_conda_types",
  "rattler_lock",
  "rattler_repodata_gateway",
@@ -5438,7 +5440,10 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "uv-distribution",
+ "uv-distribution-types",
  "uv-normalize",
+ "uv-types",
 ]
 
 [[package]]
@@ -5759,9 +5764,7 @@ dependencies = [
  "pixi_spec",
  "pixi_task",
  "pixi_utils",
- "pixi_uv_context",
  "pixi_uv_conversions",
- "pypi_modifiers",
  "rattler",
  "rattler_conda_types",
  "rattler_lock",
@@ -5792,13 +5795,9 @@ dependencies = [
  "url",
  "uv-client",
  "uv-configuration",
- "uv-distribution",
- "uv-distribution-types",
- "uv-normalize",
  "uv-pep508",
  "uv-pypi-types",
  "uv-requirements-txt",
- "uv-types",
  "which",
  "zip 2.4.2",
 ]
