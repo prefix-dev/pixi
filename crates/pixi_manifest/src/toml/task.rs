@@ -10,7 +10,7 @@ use toml_span::{
 };
 
 use crate::{
-    EnvironmentName, Task, TaskName, WithWarnings,
+    EnvironmentName, Task, TaskGroup, TaskName, WithWarnings,
     task::{
         Alias, ArgName, CmdArgs, Dependency, DependencyArg, Execute, GlobPatterns, TaskArg,
         TemplateString,
@@ -296,6 +296,62 @@ impl<'de> toml_span::Deserialize<'de> for TaskName {
     }
 }
 
+impl<'de> toml_span::Deserialize<'de> for TaskGroup {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+        let description = th.optional::<String>("description");
+        let tasks = th.optional::<Vec<TaskName>>("tasks").unwrap_or_default();
+        th.finalize(None)?;
+        Ok(TaskGroup { description, tasks })
+    }
+}
+
+/// Helper enum to deserialize task groups from TOML.
+/// Supports both simple list syntax and full object form:
+/// ```toml
+/// # Simple list form
+/// [task-groups]
+/// ci = ["test", "lint"]
+///
+/// # Full object form
+/// [task-groups.dev]
+/// description = "Development tasks"
+/// tasks = ["build", "watch"]
+/// ```
+#[derive(Debug)]
+pub enum TomlTaskGroupList {
+    Map(TaskGroup),
+    Seq(Vec<TaskName>),
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlTaskGroupList {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        if value.as_array().is_some() {
+            Ok(TomlTaskGroupList::Seq(toml_span::Deserialize::deserialize(
+                value,
+            )?))
+        } else if value.as_table().is_some() {
+            Ok(TomlTaskGroupList::Map(toml_span::Deserialize::deserialize(
+                value,
+            )?))
+        } else {
+            Err(expected("either a map or a sequence", value.take(), value.span).into())
+        }
+    }
+}
+
+impl From<TomlTaskGroupList> for TaskGroup {
+    fn from(list: TomlTaskGroupList) -> Self {
+        match list {
+            TomlTaskGroupList::Map(group) => group,
+            TomlTaskGroupList::Seq(tasks) => TaskGroup {
+                description: None,
+                tasks,
+            },
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -371,5 +427,41 @@ mod test {
             depends-on = [{ task = "foo", args = [{ "foo" = "bar" }, { "baz" = "qux" }] }]
         "#
         ), @"test, depends-on = 'foo with args'");
+    }
+
+    #[test]
+    fn test_task_group_parsing() {
+        let input = r#"
+            description = "CI tasks"
+            tasks = ["test", "lint"]
+        "#;
+
+        let parsed = TaskGroup::from_toml_str(input).unwrap();
+        assert_eq!(parsed.description, Some("CI tasks".to_string()));
+        assert_eq!(parsed.tasks.len(), 2);
+        assert_eq!(parsed.tasks[0].as_str(), "test");
+        assert_eq!(parsed.tasks[1].as_str(), "lint");
+    }
+
+    #[test]
+    fn test_task_group_no_description() {
+        let input = r#"
+            tasks = ["build"]
+        "#;
+
+        let parsed = TaskGroup::from_toml_str(input).unwrap();
+        assert_eq!(parsed.description, None);
+        assert_eq!(parsed.tasks.len(), 1);
+    }
+
+    #[test]
+    fn test_task_group_empty_tasks() {
+        let input = r#"
+            description = "Empty group"
+        "#;
+
+        let parsed = TaskGroup::from_toml_str(input).unwrap();
+        assert_eq!(parsed.description, Some("Empty group".to_string()));
+        assert!(parsed.tasks.is_empty());
     }
 }

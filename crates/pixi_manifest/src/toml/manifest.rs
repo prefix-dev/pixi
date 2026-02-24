@@ -18,8 +18,8 @@ use url::Url;
 
 use crate::{
     Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
-    KnownPreviewFeature, SolveGroups, SystemRequirements, TargetSelector, Targets, Task, TaskName,
-    TomlError, Warning, WithWarnings, WorkspaceManifest,
+    KnownPreviewFeature, SolveGroups, SystemRequirements, TargetSelector, Targets, Task, TaskGroup,
+    TaskGroups, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
@@ -27,7 +27,7 @@ use crate::{
     toml::{
         PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
         WorkspacePackageProperties, create_unsupported_selector_warning,
-        environment::TomlEnvironmentList, task::TomlTask,
+        environment::TomlEnvironmentList, task::TomlTask, task::TomlTaskGroupList,
     },
     utils::{PixiSpanned, package_map::UniquePackageMap},
     warning::Deprecation,
@@ -55,6 +55,9 @@ pub struct TomlManifest {
 
     /// Target specific tasks to run in the environment
     pub tasks: Option<PixiSpanned<HashMap<TaskName, Task>>>,
+
+    /// Task groups for organizing tasks
+    pub task_groups: Option<PixiSpanned<TaskGroups>>,
 
     /// The features defined in the project.
     pub feature: Option<PixiSpanned<IndexMap<PixiSpanned<FeatureName>, TomlFeature>>>,
@@ -427,6 +430,7 @@ impl TomlManifest {
             features,
             environments,
             solve_groups,
+            task_groups: self.task_groups.map(|tg| tg.value).unwrap_or_default(),
         };
 
         let package_manifest = if let Some(PixiSpanned {
@@ -545,6 +549,17 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
                     span: inner.span,
                 }
             });
+        let task_groups: Option<PixiSpanned<TaskGroups>> = th
+            .optional::<PixiSpanned<TomlIndexMap<String, TomlTaskGroupList>>>("task-groups")
+            .map(|spanned| PixiSpanned {
+                value: spanned
+                    .value
+                    .into_inner()
+                    .into_iter()
+                    .map(|(k, v)| (k, TaskGroup::from(v)))
+                    .collect(),
+                span: spanned.span,
+            });
         let feature = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("feature")
             .map(TomlWith::into_inner);
@@ -588,6 +603,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             dev_dependencies: dev,
             activation,
             tasks,
+            task_groups,
             feature,
             environments,
             pypi_options,
@@ -1193,5 +1209,47 @@ mod test {
           ╰────
         "#
         );
+    }
+
+    #[test]
+    fn test_task_groups_mixed_syntax() {
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks]
+        test = "echo test"
+        lint = "echo lint"
+        build = "echo build"
+        watch = "echo watch"
+
+        [task-groups]
+        ci = ["test", "lint"]
+
+        [task-groups.dev]
+        description = "Development tasks"
+        tasks = ["build", "watch"]
+        "#,
+        )
+        .unwrap();
+
+        // Check ci group (simple list syntax)
+        let ci_group = manifest
+            .task_groups
+            .get("ci")
+            .expect("should have ci group");
+        assert_eq!(ci_group.description, None);
+        assert_eq!(ci_group.tasks.len(), 2);
+
+        // Check dev group (object syntax)
+        let dev_group = manifest
+            .task_groups
+            .get("dev")
+            .expect("should have dev group");
+        assert_eq!(dev_group.description, Some("Development tasks".to_string()));
+        assert_eq!(dev_group.tasks.len(), 2);
     }
 }
