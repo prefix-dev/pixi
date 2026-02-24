@@ -252,7 +252,7 @@ Running unit tests
 
 # Providing an invalid value results in an error
 pixi run compile fast
-× invalid value for argument 'mode' of task 'compile': received 'fast', expected one of: debug, release
+× got 'fast' for argument 'mode' of task 'compile', choose from: debug, release
 ```
 
 ### Passing Arguments to Dependent Tasks

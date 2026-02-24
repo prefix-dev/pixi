@@ -20,7 +20,7 @@ use thiserror::Error;
 
 use crate::{
     TaskDisambiguation,
-    error::{AmbiguousTaskError, MissingTaskError},
+    error::{AmbiguousTaskError, InvalidArgValueError, MissingArgError, MissingTaskError},
     task_environment::{FindTaskError, FindTaskSource, SearchEnvironments},
 };
 
@@ -537,24 +537,28 @@ impl<'p> TaskGraph<'p> {
                         if let Some(default) = &arg.default {
                             default.clone()
                         } else {
-                            return Err(TaskGraphError::MissingArgument(
-                                arg_name.to_string(),
-                                task_name.to_string(),
-                            ));
+                            return Err(MissingArgError {
+                                arg: arg_name.to_string(),
+                                task: task_name.to_string(),
+                                choices: arg.choices.as_ref().map(|c| c.join(", ")),
+                            }
+                            .into());
                         }
                     }
                 }
             } else if let Some(default) = &arg.default {
                 default.clone()
             } else {
-                return Err(TaskGraphError::MissingArgument(
-                    arg_name.to_owned(),
-                    task_name.to_string(),
-                ));
+                return Err(MissingArgError {
+                    arg: arg_name.to_owned(),
+                    task: task_name.to_string(),
+                    choices: arg.choices.as_ref().map(|c| c.join(", ")),
+                }
+                .into());
             };
 
-            if let Err(msg) = arg.validate_value(&arg_value) {
-                return Err(TaskGraphError::InvalidArgValue {
+            if !arg.is_valid_value(&arg_value) {
+                return Err(InvalidArgValueError {
                     arg: arg_name.to_owned(),
                     task: task_name.to_string(),
                     value: arg_value,
@@ -563,8 +567,8 @@ impl<'p> TaskGraph<'p> {
                         .as_ref()
                         .map(|c| c.join(", "))
                         .unwrap_or_default(),
-                    message: msg,
-                });
+                }
+                .into());
             }
 
             typed_args.push(TypedArg {
@@ -625,8 +629,8 @@ pub enum TaskGraphError {
     #[error("task '{0}' received more arguments than expected")]
     TooManyArguments(String),
 
-    #[error("no value provided for argument '{0}' for task '{1}'")]
-    MissingArgument(String, String),
+    #[error(transparent)]
+    MissingArgument(#[from] MissingArgError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -638,16 +642,8 @@ pub enum TaskGraphError {
     #[error("Positional argument '{0}' found after named argument for task {1}")]
     PositionalAfterNamedArgument(String, String),
 
-    #[error(
-        "invalid value for argument '{arg}' of task '{task}': received '{value}', expected one of: {choices}"
-    )]
-    InvalidArgValue {
-        arg: String,
-        task: String,
-        value: String,
-        choices: String,
-        message: String,
-    },
+    #[error(transparent)]
+    InvalidArgValue(#[from] InvalidArgValueError),
 }
 
 #[cfg(test)]
@@ -1148,11 +1144,32 @@ mod test {
     "#;
         let run_args = &["build", "profile"];
         let error = TaskGraphTest::new(workspace_str, run_args).expect_error();
-        assert_matches!(error, TaskGraphError::InvalidArgValue { arg, task, value, choices, .. } => {
-            assert_eq!(arg, "target");
-            assert_eq!(task, "build");
-            assert_eq!(value, "profile");
-            assert_eq!(choices, "debug, release");
+        assert_matches!(error, TaskGraphError::InvalidArgValue(err) => {
+            assert_eq!(err.arg, "target");
+            assert_eq!(err.task, "build");
+            assert_eq!(err.value, "profile");
+            assert_eq!(err.choices, "debug, release");
+        });
+    }
+
+    #[test]
+    fn test_choices_missing_value() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.build]
+        cmd = "echo {{ target }}"
+        args = [{ arg = "target", choices = ["debug", "release"] }]
+    "#;
+        let run_args = &["build"];
+        let error = TaskGraphTest::new(workspace_str, run_args).expect_error();
+        assert_matches!(error, TaskGraphError::MissingArgument(err) => {
+            assert_eq!(err.arg, "target");
+            assert_eq!(err.task, "build");
+            assert_eq!(err.choices, Some("debug, release".to_string()));
         });
     }
 

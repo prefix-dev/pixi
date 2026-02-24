@@ -420,18 +420,11 @@ pub struct TaskArg {
 }
 
 impl TaskArg {
-    pub fn validate_value(&self, value: &str) -> Result<(), String> {
-        if let Some(choices) = &self.choices
-            && !choices.iter().any(|c| c == value)
-        {
-            return Err(format!(
-                "argument '{}' received '{}', but must be one of: {}",
-                self.name.as_str(),
-                value,
-                choices.join(", "),
-            ));
-        }
-        Ok(())
+    /// Returns whether `value` is allowed by this argument's choices (if any).
+    pub fn is_valid_value(&self, value: &str) -> bool {
+        self.choices
+            .as_ref()
+            .is_none_or(|choices| choices.iter().any(|c| c == value))
     }
 }
 
