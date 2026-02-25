@@ -209,7 +209,13 @@ impl Task {
                 Ok(rendered) => Ok(Some(Cow::Owned(rendered))),
                 Err(e) => Err(e),
             },
-            Task::Custom(custom) => custom.cmd.as_single(context),
+            Task::Custom(custom) => {
+                if custom.templated {
+                    custom.cmd.as_single(context)
+                } else {
+                    custom.cmd.as_single_no_render()
+                }
+            }
             Task::Execute(exe) => exe.cmd.as_single(context),
             Task::Alias(_) => Ok(None),
         }
@@ -425,6 +431,18 @@ pub struct TaskArg {
 
     /// The default value of the argument
     pub default: Option<String>,
+
+    /// The allowed values for the argument
+    pub choices: Option<Vec<String>>,
+}
+
+impl TaskArg {
+    /// Returns whether `value` is allowed by this argument's choices (if any).
+    pub fn is_valid_value(&self, value: &str) -> bool {
+        self.choices
+            .as_ref()
+            .is_none_or(|choices| choices.iter().any(|c| c == value))
+    }
 }
 
 impl std::str::FromStr for TaskArg {
@@ -434,6 +452,7 @@ impl std::str::FromStr for TaskArg {
         Ok(TaskArg {
             name: ArgName::from_str(s)?,
             default: None,
+            choices: None,
         })
     }
 }
@@ -449,6 +468,10 @@ pub struct Custom {
     /// The working directory for the command relative to the root of the
     /// project.
     pub cwd: Option<PathBuf>,
+
+    /// Whether to render the command through the template engine.
+    /// CLI commands default to false to avoid unexpected template errors.
+    pub templated: bool,
 }
 
 impl From<Custom> for Task {
@@ -490,6 +513,9 @@ pub struct TaskRenderContext<'a> {
 
     /// The arguments to use for rendering.
     pub args: Option<&'a ArgValues>,
+
+    /// The current working directory when pixi was invoked.
+    pub init_cwd: Option<&'a Path>,
 }
 
 impl Default for TaskRenderContext<'_> {
@@ -499,6 +525,7 @@ impl Default for TaskRenderContext<'_> {
             environment_name: &DEFAULT_ENV,
             manifest_path: None,
             args: None,
+            init_cwd: None,
         }
     }
 }
@@ -570,6 +597,13 @@ impl<'a> TaskRenderContext<'a> {
             "version".to_string(),
             minijinja::Value::from(pixi_consts::consts::PIXI_VERSION),
         );
+
+        if let Some(cwd) = self.init_cwd {
+            pixi_vars.insert(
+                "init_cwd".to_string(),
+                minijinja::Value::from(cwd.display().to_string()),
+            );
+        }
 
         context_map.insert(
             "pixi".to_string(),
@@ -867,10 +901,18 @@ impl From<Task> for Item {
                 if let Some(args) = &process.args {
                     let mut args_array = Array::new();
                     for arg in args {
-                        if let Some(default) = &arg.default {
+                        if arg.default.is_some() || arg.choices.is_some() {
                             let mut arg_table = Table::new().into_inline_table();
                             arg_table.insert("arg", arg.name.as_str().into());
-                            arg_table.insert("default", default.into());
+                            if let Some(default) = &arg.default {
+                                arg_table.insert("default", default.into());
+                            }
+                            if let Some(choices) = &arg.choices {
+                                arg_table.insert(
+                                    "choices",
+                                    Value::Array(Array::from_iter(choices.iter())),
+                                );
+                            }
                             args_array.push(Value::InlineTable(arg_table));
                         } else {
                             args_array.push(Value::String(toml_edit::Formatted::new(
@@ -939,10 +981,18 @@ impl From<Task> for Item {
                     if let Some(args_vec) = &alias.args {
                         let mut args = Vec::new();
                         for arg in args_vec {
-                            if let Some(default) = &arg.default {
+                            if arg.default.is_some() || arg.choices.is_some() {
                                 let mut arg_table = Table::new().into_inline_table();
                                 arg_table.insert("arg", arg.name.as_str().into());
-                                arg_table.insert("default", default.into());
+                                if let Some(default) = &arg.default {
+                                    arg_table.insert("default", default.into());
+                                }
+                                if let Some(choices) = &arg.choices {
+                                    arg_table.insert(
+                                        "choices",
+                                        Value::Array(Array::from_iter(choices.iter())),
+                                    );
+                                }
                                 args.push(Value::InlineTable(arg_table));
                             } else {
                                 args.push(Value::String(toml_edit::Formatted::new(
@@ -1122,6 +1172,7 @@ mod tests {
             environment_name: &env_name,
             manifest_path: Some(&manifest_path),
             args: Some(&args),
+            init_cwd: None,
         };
 
         // Test platform
@@ -1195,5 +1246,17 @@ mod tests {
             .expect("should render with platform and args");
 
         assert_eq!(rendered, "build-linux-64-1.0.0");
+    }
+
+    #[test]
+    fn test_template_string_renders_init_cwd() {
+        let t = TemplateString::from("{{ pixi.init_cwd }}/test");
+        let cwd = std::env::current_dir().unwrap();
+        let context = TaskRenderContext {
+            init_cwd: Some(&cwd),
+            ..TaskRenderContext::default()
+        };
+        let rendered = t.render(&context).expect("should render init_cwd");
+        assert_eq!(rendered, format!("{}/test", cwd.display()));
     }
 }

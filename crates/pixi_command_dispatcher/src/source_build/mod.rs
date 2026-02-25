@@ -34,8 +34,8 @@ use crate::{
     build::pin_compatible::PinCompatibleError,
     build::{
         BuildCacheError, BuildHostEnvironment, BuildHostPackage, CachedBuild,
-        CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, PixiRunExports,
-        SourceCodeLocation, SourceRecordOrCheckout, WorkDirKey, move_file,
+        CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError,
+        PinnedSourceCodeLocation, PixiRunExports, SourceRecordOrCheckout, WorkDirKey, move_file,
     },
     input_hash::{ConfigurationHash, ProjectModelHash},
     package_identifier::PackageIdentifier,
@@ -55,7 +55,7 @@ pub struct SourceBuildSpec {
     pub package: PackageIdentifier,
 
     /// The manifest and optional build source location.
-    pub source: SourceCodeLocation,
+    pub source: PinnedSourceCodeLocation,
 
     /// The channel configuration to use when resolving metadata
     pub channel_config: ChannelConfig,
@@ -522,7 +522,7 @@ impl SourceBuildSpec {
                         .expect("the source record should be present in the result sources");
                     BuildHostPackage {
                         repodata_record,
-                        source: Some(SourceCodeLocation::new(
+                        source: Some(PinnedSourceCodeLocation::new(
                             source.manifest_source,
                             source.build_source,
                         )),

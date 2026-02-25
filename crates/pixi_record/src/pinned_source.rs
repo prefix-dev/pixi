@@ -1,10 +1,4 @@
 #![deny(missing_docs)]
-use std::{
-    fmt::{Display, Formatter},
-    path::{Path, PathBuf},
-    str::FromStr,
-};
-
 use miette::IntoDiagnostic;
 use pixi_git::{
     GitUrl,
@@ -19,6 +13,11 @@ use rattler_digest::{Md5Hash, Sha256Hash};
 use rattler_lock::UrlOrPath;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::{
+    fmt::{Debug, Display, Formatter},
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 use thiserror::Error;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
@@ -407,7 +406,7 @@ impl PinnedGitSpec {
     pub fn into_locked_git_url(&self) -> LockedGitUrl {
         let mut url = self.git.clone();
 
-        // // Redact the credentials.
+        // Redact the credentials.
         redact_credentials(&mut url);
 
         // Clear out any existing state.
@@ -637,6 +636,12 @@ impl TryFrom<LockedGitUrl> for PinnedGitSpec {
 impl From<PinnedGitSpec> for LockedGitUrl {
     fn from(value: PinnedGitSpec) -> Self {
         value.into_locked_git_url()
+    }
+}
+
+impl Display for LockedGitUrl {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -899,23 +904,7 @@ impl Display for PinnedPathSpec {
 
 impl Display for PinnedGitSpec {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}@{}", self.git, self.source.commit)?;
-        if !self.source.subdirectory.is_empty() {
-            write!(f, " (subdir: {})", self.source.subdirectory)?;
-        }
-        // Only show reference if it provides additional information
-        match &self.source.reference {
-            GitReference::Rev(rev) if rev == &self.source.commit.to_string() => {
-                // Skip redundant reference that matches commit
-            }
-            GitReference::DefaultBranch => {
-                // Skip default branch as it's implicit
-            }
-            _ => {
-                write!(f, " (ref: {})", self.source.reference)?;
-            }
-        }
-        Ok(())
+        write!(f, "{}", self.into_locked_git_url())
     }
 }
 

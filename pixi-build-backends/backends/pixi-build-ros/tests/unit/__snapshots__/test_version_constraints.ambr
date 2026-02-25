@@ -1,0 +1,286 @@
+# serializer version: 1
+# name: test_generate_recipe_with_explicit_package_xml_path
+  '''
+  context: {}
+  package:
+    name: ros-noetic-custom-ros
+    version: 0.0.1
+  source: []
+  build:
+    script:
+      content: ''
+      env: {}
+      secrets: []
+  requirements:
+    build:
+    - ros-noetic-catkin
+    - libgl-devel
+    - libopengl-devel
+    - xorg-libx11
+    - xorg-libxext
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
+    - qt-main >=5.15.0,<5.16.0
+    - tinyxml2 ==10.0.0
+    - asio <10.0.0
+    - ninja
+    - python
+    - setuptools
+    - git
+    - git-lfs
+    - cmake
+    - cpython
+    - patch
+    - make
+    - coreutils
+    - ${{ compiler('c') }}
+    - ${{ compiler('cxx') }}
+    host:
+    - ros-noetic-catkin
+    - libgl-devel
+    - libopengl-devel
+    - xorg-libx11
+    - xorg-libxext
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
+    - qt-main >=5.15.0,<5.16.0
+    - tinyxml2 ==10.0.0
+    - asio <10.0.0
+    - python
+    - numpy
+    - pip
+    - pkg-config
+    - ros-distro-mutex
+    run:
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
+    - qt-main >=5.15.0,<5.16.0
+    - tinyxml2 ==10.0.0
+    - asio <10.0.0
+    - ros-distro-mutex
+    run_constraints: []
+  tests: []
+  about:
+    license: LicenseRef-Apache License 2.0
+    summary: Demo
+    description: Demo
+  
+  '''
+# ---
+# name: test_generate_recipe_with_mutex_version
+  '''
+  context: {}
+  package:
+    name: custom_ros
+    version: 0.0.1
+  source: []
+  build:
+    script:
+      content: ''
+      env: {}
+      secrets: []
+  requirements:
+    build:
+    - ros-noetic-catkin
+    - libgl-devel
+    - libopengl-devel
+    - xorg-libx11
+    - xorg-libxext
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
+    - qt-main >=5.15.0,<5.16.0
+    - tinyxml2 ==10.0.0
+    - asio <10.0.0
+    - ninja
+    - python
+    - setuptools
+    - git
+    - git-lfs
+    - cmake
+    - cpython
+    - patch
+    - make
+    - coreutils
+    - ${{ compiler('c') }}
+    - ${{ compiler('cxx') }}
+    host:
+    - ros-noetic-catkin
+    - libgl-devel
+    - libopengl-devel
+    - xorg-libx11
+    - xorg-libxext
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
+    - qt-main >=5.15.0,<5.16.0
+    - tinyxml2 ==10.0.0
+    - asio <10.0.0
+    - python
+    - numpy
+    - pip
+    - pkg-config
+    - ros-distro-mutex 0.5.*
+    run:
+    - rich >=10.0
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
+    - qt-main >=5.15.0,<5.16.0
+    - tinyxml2 ==10.0.0
+    - asio <10.0.0
+    - ros-distro-mutex
+    run_constraints: []
+  tests: []
+  about:
+    license: LicenseRef-Apache License 2.0
+    summary: Demo
+    description: Demo
+  
+  '''
+# ---
+# name: test_generate_recipe_with_versions
+  '''
+  context: {}
+  package:
+    name: ros-noetic-custom-ros
+    version: 0.0.1
+  source: []
+  build:
+    script:
+      content: ''
+      env: {}
+      secrets: []
+  requirements:
+    build:
+    - ros-noetic-catkin
+    - libgl-devel
+    - libopengl-devel
+    - xorg-libx11
+    - xorg-libxext
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
+    - qt-main >=5.15.0,<5.16.0
+    - tinyxml2 ==10.0.0
+    - asio <10.0.0
+    - ninja
+    - python
+    - setuptools
+    - git
+    - git-lfs
+    - cmake
+    - cpython
+    - patch
+    - make
+    - coreutils
+    - ${{ compiler('c') }}
+    - ${{ compiler('cxx') }}
+    host:
+    - ros-noetic-catkin
+    - libgl-devel
+    - libopengl-devel
+    - xorg-libx11
+    - xorg-libxext
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
+    - qt-main >=5.15.0,<5.16.0
+    - tinyxml2 ==10.0.0
+    - asio <10.0.0
+    - python
+    - numpy
+    - pip
+    - pkg-config
+    - ros-distro-mutex
+    run:
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
+    - qt-main >=5.15.0,<5.16.0
+    - tinyxml2 ==10.0.0
+    - asio <10.0.0
+    - ros-distro-mutex
+    run_constraints: []
+  tests: []
+  about:
+    license: LicenseRef-Apache License 2.0
+    summary: Demo
+    description: Demo
+  
+  '''
+# ---
+# name: test_generate_recipe_with_versions_in_model_and_package
+  '''
+  context: {}
+  package:
+    name: custom_ros
+    version: 0.0.1
+  source: []
+  build:
+    script:
+      content: ''
+      env: {}
+      secrets: []
+  requirements:
+    build:
+    - ros-noetic-catkin
+    - libgl-devel
+    - libopengl-devel
+    - xorg-libx11
+    - xorg-libxext
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
+    - qt-main >=5.15.0,<5.16.0
+    - tinyxml2 ==10.0.0
+    - asio <10.0.0
+    - ninja
+    - python
+    - setuptools
+    - git
+    - git-lfs
+    - cmake
+    - cpython
+    - patch
+    - make
+    - coreutils
+    - ${{ compiler('c') }}
+    - ${{ compiler('cxx') }}
+    host:
+    - ros-noetic-catkin
+    - libgl-devel
+    - libopengl-devel
+    - xorg-libx11
+    - xorg-libxext
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
+    - qt-main >=5.15.0,<5.16.0
+    - tinyxml2 ==10.0.0
+    - asio <10.0.0
+    - python
+    - numpy
+    - pip
+    - pkg-config
+    - ros-distro-mutex
+    run:
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
+    - qt-main >=5.15.0,<5.16.0
+    - tinyxml2 ==10.0.0
+    - asio >=9.0,<10.0.0,<10.0.0,<10.0.0
+    - ros-distro-mutex
+    run_constraints: []
+  tests: []
+  about:
+    license: LicenseRef-Apache License 2.0
+    summary: Demo
+    description: Demo
+  
+  '''
+# ---

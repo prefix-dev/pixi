@@ -1,0 +1,28 @@
+---
+source: crates/pixi_build_rattler_build/src/protocol.rs
+assertion_line: 723
+expression: conda_outputs_snapshot(result)
+input_file: tests/recipe/custom-build-string/recipe.yaml
+---
+{
+  "outputs": [
+    {
+      "metadata": {
+        "name": "python",
+        "version": "3.15",
+        "build": "0_cp315",
+        "buildNumber": 0,
+        "subdir": "linux-64",
+        "license": "Python-2.0",
+        "noarch": false,
+        "variant": {
+          "target_platform": "linux-64"
+        }
+      }
+    }
+  ],
+  "inputGlobs": [
+    "recipe.yaml",
+    "variants.yaml"
+  ]
+}

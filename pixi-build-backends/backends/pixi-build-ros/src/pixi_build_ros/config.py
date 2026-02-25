@@ -168,8 +168,10 @@ class ROSBackendConfig(pydantic.BaseModel, extra="forbid", arbitrary_types_allow
 
         # If we couldn't detect a distro, raise an error
         raise ValueError(
-            "ROS distro must be either explicitly configured or auto-detected from robostack channels."
-            f"A 'robostack-<distro>' channel (e.g. 'robostack-kilted') was not found in the provided channels: {channels}."
+            "ROS distro must be either explicitly configured or "
+            "auto-detected from robostack channels."
+            "A 'robostack-<distro>' channel (e.g. 'robostack-kilted') was not"
+            f" found in the provided channels: {channels}."
         )
 
     @pydantic.model_validator(mode="after")

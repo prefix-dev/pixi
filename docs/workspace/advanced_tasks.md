@@ -20,6 +20,9 @@ configure = { cmd = [
     ".build",
 ] }
 
+# Add task descriptions, to be surfaced when the tasks are listed
+say-hello = { cmd = ["echo", "hello world"], description = "Greet the world." }
+
 # Depend on other tasks
 build = { cmd = ["ninja", "-C", ".build"], depends-on = ["configure"] }
 
@@ -192,6 +195,7 @@ Arguments can be:
 
 - **Required**: must be provided when running the task
 - **Optional**: can have default values that are used when not explicitly provided
+- **Constrained**: can be restricted to a set of allowed values using `choices`
 
 ### Defining Task Arguments
 
@@ -227,6 +231,30 @@ pixi run deploy auth-service
 pixi run deploy auth-service production
 ✨ Pixi task (deploy in default): echo Deploying auth-service to production
 ```
+### Restricting Values with Choices
+
+You can restrict the allowed values of an argument using the `choices` field. If a value is provided that is not in the list, Pixi will report an error instead of running the task.
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_arguments.toml:project_tasks_choices"
+```
+
+```shell
+# Providing a valid choice
+pixi run compile debug
+✨ Pixi task (compile): echo 'Compiling in debug mode'
+Compiling in debug mode
+
+# Default value must also be one of the choices
+pixi run test
+✨ Pixi task (test): echo 'Running unit tests'
+Running unit tests
+
+# Providing an invalid value results in an error
+pixi run compile fast
+× got 'fast' for argument 'mode' of task 'compile', choose from: debug, release
+```
+
 ### Passing Arguments to Dependent Tasks
 
 You can pass arguments to tasks that are dependencies of other tasks:
@@ -272,7 +300,17 @@ pixi run partial-override-with-arg cli-arg
 
 ### MiniJinja Templating for Task Arguments
 
-Task commands support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.
+Task commands defined in the manifest support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.
+
+!!! note "Templating and ad-hoc CLI commands"
+    MiniJinja templating is only applied to tasks defined in your manifest file (`pixi.toml` / `pyproject.toml`).
+    Ad-hoc commands passed directly to `pixi run` on the command line are **not** templated by default,
+    so commands like `pixi run echo '{{ hello }}'` are passed through as-is.
+    Use the `--templated` flag to opt in to template rendering for CLI commands:
+
+    ```shell
+    pixi run --templated echo '{{ pixi.platform }}'
+    ```
 
 Basic syntax for using an argument in your command:
 
@@ -296,6 +334,7 @@ In addition to task arguments, Pixi automatically provides a `pixi` object in th
 | `pixi.environment.name` | The name of the current environment (when available) | `default`, `prod`, `test` |
 | `pixi.manifest_path` | Absolute path to the manifest file | `/path/to/project/pixi.toml` |
 | `pixi.version` | The version of pixi being used | `0.59.0` |
+| `pixi.init_cwd` | The current working directory when pixi was invoked | `/path/to/cwd` |
 | `pixi.is_win` | Boolean flag indicating if the platform is Windows | `true` or `false` |
 | `pixi.is_unix` | Boolean flag indicating if the platform is Unix-like | `true` or `false` |
 | `pixi.is_linux` | Boolean flag indicating if the platform is Linux | `true` or `false` |
@@ -317,6 +356,9 @@ deploy = { cmd = "deploy.sh --env {{ pixi.environment.name }}", args = [] }
 
 # Using manifest path
 validate = { cmd = "validator --manifest {{ pixi.manifest_path }}", args = [] }
+
+# Using init_cwd in inputs/outputs for caching
+mkdir_test = { cmd = "mkdir -p {{ pixi.init_cwd }}/test", outputs = ["{{ pixi.init_cwd }}/test"] }
 ```
 
 The pixi variables can also be combined with task arguments:

@@ -748,15 +748,16 @@ impl PypiNoBuildCheck {
                 }
             }
             UrlOrPath::Path(path) => {
+                // Editables are allowed with no-build
+                // Check this before is_dir() because the path may be relative
+                // and not resolve correctly from the current working directory
+                if package_data.editable {
+                    return Ok(());
+                }
                 let path = Path::new(path.as_str());
                 if path.is_dir() {
-                    // Editables are allowed with no-build
-                    if package_data.editable {
-                        return Ok(());
-                    } else {
-                        // Non-editable source packages might not be allowed
-                        Ok(DistExtension::Source(SourceDistExtension::TarGz))
-                    }
+                    // Non-editable source packages might not be allowed
+                    Ok(DistExtension::Source(SourceDistExtension::TarGz))
                 } else {
                     // Could be a reference to a wheel or sdist
                     DistExtension::from_path(path)
@@ -1243,7 +1244,7 @@ async fn verify_source_metadata(
                     .await
                     .map_err(|e| Box::new(PlatformUnsat::SourceMetadata(e)))?;
 
-                if current_source_metadata.cached_metadata.records.is_empty() {
+                if current_source_metadata.records.is_empty() {
                     return Err(Box::new(PlatformUnsat::SourcePackageNotFoundInMetadata {
                         package_name: source_record.package_record.name.as_source().to_string(),
                         manifest_path: source_record
@@ -1258,7 +1259,7 @@ async fn verify_source_metadata(
                 // When there are variants, there can be multiple source metadata entries
                 // with the same package name, so we also match on the build string which
                 // encodes the variant information.
-                let current_records = &current_source_metadata.cached_metadata.records;
+                let current_records = &current_source_metadata.records;
                 let current_record = current_records
                     .iter()
                     .find(|r| source_record.refers_to_same_output(r));
@@ -2540,6 +2541,7 @@ mod tests {
     use insta::Settings;
     use miette::{IntoDiagnostic, NarratableReportHandler};
     use pep440_rs::{Operator, Version};
+    use pep508_rs::PackageName;
     use pixi_build_backend_passthrough::PassthroughBackend;
     use pixi_build_frontend::BackendOverride;
     use pixi_command_dispatcher::CacheDirs;
@@ -2871,5 +2873,23 @@ mod tests {
                 .position(|specifier| *specifier.operator() == Operator::LessThan),
             Some(1)
         );
+    }
+
+    // Regression test for https://github.com/prefix-dev/pixi/issues/5553
+    #[test]
+    fn pypi_editable_satisfied() {
+        let pypi_no_build_check = PypiNoBuildCheck::new(Some(&NoBuild::All));
+
+        pypi_no_build_check
+            .check(&PypiPackageData {
+                name: PackageName::from_str("sdist").expect("invalid name"),
+                version: pep440_rs::Version::from_str("0.0.0").expect("invalid version"),
+                location: UrlOrPath::from_str(".").expect("invalid path"),
+                hash: None,
+                requires_dist: vec![],
+                requires_python: None,
+                editable: true,
+            })
+            .expect("check must pass");
     }
 }

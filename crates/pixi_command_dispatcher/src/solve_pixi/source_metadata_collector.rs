@@ -123,7 +123,7 @@ impl SourceMetadataCollector {
             let (source_metadata, mut chain) = source_metadata?;
 
             // Process transitive dependencies
-            for record in &source_metadata.cached_metadata.records {
+            for record in &source_metadata.records {
                 chain.push(record.package_record.name.clone());
                 let anchor =
                     SourceAnchor::from(SourceLocationSpec::from(record.manifest_source.clone()));
@@ -168,7 +168,7 @@ impl SourceMetadataCollector {
         (Arc<SourceMetadata>, Vec<rattler_conda_types::PackageName>),
         CommandDispatcherError<CollectSourceMetadataError>,
     > {
-        tracing::trace!("Collecting source metadata for {name:#?}");
+        tracing::trace!("Collecting source metadata for {}", name.as_source());
 
         // Determine if we should override the build_source pin for this package.
         let preferred_build_source = self.preferred_build_sources.get(&name).cloned();

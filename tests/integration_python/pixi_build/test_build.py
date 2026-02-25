@@ -188,6 +188,7 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
 
 
 @pytest.mark.slow
+@pytest.mark.xdist_group("serial")
 def test_non_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     """
     This one tries to run the Python based rich example project,

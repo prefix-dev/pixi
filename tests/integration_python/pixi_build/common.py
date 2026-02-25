@@ -167,4 +167,4 @@ def git_test_repo(source_dir: Path, repo_name: str, target_dir: Path) -> str:
         capture_output=True,
     )
 
-    return f"file://{repo_path}"
+    return repo_path.as_uri()
