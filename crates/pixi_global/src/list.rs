@@ -40,14 +40,23 @@ struct GlobalEnvironmentJson {
 /// Print global environments as JSON to stdout.
 pub async fn list_global_environments_json(
     project: &Project,
+    environment: Option<&EnvironmentName>,
     regex: Option<String>,
 ) -> miette::Result<()> {
     let mut project_envs = project.environments().clone();
     project_envs.sort_by(|a, _, b, _| a.to_string().cmp(&b.to_string()));
 
-    project_envs.retain(|_, parsed_environment| {
-        !parsed_environment.dependencies.specs.is_empty()
-    });
+    project_envs.retain(|_, parsed_environment| !parsed_environment.dependencies.specs.is_empty());
+
+    if let Some(env_name) = environment {
+        project_envs.retain(|name, _| name == env_name);
+        if project_envs.is_empty() {
+            return Err(miette!(
+                "environment {} not found",
+                env_name.fancy_display()
+            ));
+        }
+    }
 
     if let Some(regex) = regex {
         let regex = regex::Regex::new(&regex).into_diagnostic()?;

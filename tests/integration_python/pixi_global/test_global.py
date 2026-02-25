@@ -1446,6 +1446,21 @@ def test_list_json(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
         ]
     )
 
+    # Verify JSON list with environment filter
+    result = verify_cli_command(
+        [pixi, "global", "list", "--json", "--environment", "dummy-b"],
+        env=env,
+    )
+    assert json.loads(result.stdout) == snapshot(
+        [
+            {
+                "name": "dummy-b",
+                "dependencies": [{"name": "dummy-b", "version": "0.1.0"}],
+                "exposed": [{"exposed_name": "dummy-b", "executable": "dummy-b"}],
+            }
+        ]
+    )
+
 
 # Test that we correctly uninstall the required packages
 # - Checking that the binaries are removed
