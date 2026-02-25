@@ -26,20 +26,6 @@ use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 ///
 /// You can source the script to activate the environment without needing pixi
 /// itself.
-///
-/// # Examples
-///
-/// To activate the environment in Bash or Zsh:
-/// ```bash
-/// eval "$(pixi shell-hook)"
-/// ```
-///
-/// To activate the environment in PowerShell:
-/// ```powershell
-/// pixi shell-hook | Invoke-Expression
-/// ```
-///
-/// **Warning:** If you are using PowerShell on Windows, you may encounter issues where the environment variables fail to apply properly or return empty strings. Using `Invoke-Expression` is required to ensure the activation script executes securely in the current session context.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Sets the shell, options: [`bash`,  `zsh`,  `xonsh`,  `cmd`,
