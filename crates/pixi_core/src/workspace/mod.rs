@@ -59,7 +59,7 @@ use rattler_lock::{LockFile, LockedPackageRef};
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
-pub use registry::WorkspaceRegistry;
+pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
 use url::Url;

@@ -2,10 +2,11 @@ use std::path::PathBuf;
 use std::{cmp::Ordering, collections::HashMap};
 
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic, MietteDiagnostic};
+use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi_config::pixi_home;
 use pixi_consts::consts;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 /// Returns the path to the workspace registry file
 pub fn workspace_registry_path() -> Option<PathBuf> {
@@ -19,6 +20,17 @@ pub struct WorkspaceRegistry {
     #[serde(default)]
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub named_workspaces: HashMap<String, PathBuf>,
+}
+
+/// Errors that may occur when loading the workspace registry
+#[derive(Debug, Error, Diagnostic)]
+pub enum WorkspaceRegistryError {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+
+    #[error("could not find workspace '{}'", .name)]
+    #[diagnostic(help("{help}"))]
+    MissingWorkspace { name: String, help: String },
 }
 
 impl WorkspaceRegistry {
@@ -114,7 +126,10 @@ impl WorkspaceRegistry {
     }
 
     /// Retrieve the path to the manifest file for a named workspaces.
-    pub fn named_workspace(&self, name: &String) -> miette::Result<PathBuf> {
+    pub fn named_workspace(
+        &self,
+        name: &String,
+    ) -> miette::Result<PathBuf, WorkspaceRegistryError> {
         match self.named_workspaces.get(name) {
             Some(path) => Ok(path.clone()),
             None => {
@@ -123,9 +138,9 @@ impl WorkspaceRegistry {
                     .iter()
                     .map(|p| p.0.to_string())
                     .filter_map(|workspace_name: String| {
-                        let distance = strsim::jaro(name, &workspace_name);
+                        let distance = strsim::jaro(&workspace_name, name);
                         if distance > 0.6 {
-                            Some((name, distance))
+                            Some((workspace_name, distance))
                         } else {
                             None
                         }
@@ -135,27 +150,16 @@ impl WorkspaceRegistry {
                     .map(|(name, _)| name)
                     .collect_vec();
 
-                let message = format!("could not find a workspace named '{name}'");
-
-                Err(MietteDiagnostic {
-                    message,
-                    code: None,
-                    severity: None,
-                    url: None,
-                    labels: None,
-                    help: if !similar_names.is_empty() {
-                        Some(format!(
-                            "did you mean '{}'?",
-                            similar_names.iter().format("', '")
-                        ))
-                    } else {
-                        Some(
-                            "use `pixi workspace registry list` to view all available workspaces."
-                                .to_string(),
-                        )
-                    },
-                }
-                .into())
+                let help = if !similar_names.is_empty() {
+                    format!("did you mean '{}'?", similar_names.iter().format("', '"))
+                } else {
+                    "use `pixi workspace register list` to view all available workspaces."
+                        .to_string()
+                };
+                Err(WorkspaceRegistryError::MissingWorkspace {
+                    name: name.to_string(),
+                    help,
+                })
             }
         }
     }

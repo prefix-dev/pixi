@@ -9,8 +9,8 @@ use pixi_manifest::{
 };
 use thiserror::Error;
 
-use crate::workspace::Workspace;
 use crate::workspace::WorkspaceRegistry;
+use crate::workspace::{Workspace, WorkspaceRegistryError};
 
 /// Defines where the search for the workspace should start.
 #[derive(Debug, Clone, Default)]
@@ -50,7 +50,7 @@ impl DiscoveryStart {
                     .map_err(|_| WorkspaceLocatorError::MissingRegistry())?;
                 let path = registry
                     .named_workspace(name)
-                    .map_err(|_| WorkspaceLocatorError::MissingWorkspace(name.clone()))?;
+                    .map_err(WorkspaceLocatorError::MissingWorkspace)?;
                 if !path.exists() {
                     return Err(WorkspaceLocatorError::MissingWorkspacePath {
                         name: name.to_string(),
@@ -122,8 +122,9 @@ pub enum WorkspaceLocatorError {
     #[error("unable to load the workspace registry")]
     MissingRegistry(),
 
-    #[error("could not find workspace '{}'", .0)]
-    MissingWorkspace(String),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingWorkspace(#[from] WorkspaceRegistryError),
 
     #[error("could not find workspace '{}' at '{}'", .name, .path.display())]
     #[diagnostic(help = "clean the registry with `pixi workspace register prune`")]
@@ -203,7 +204,7 @@ impl WorkspaceLocator {
                     .map_err(|_| WorkspaceLocatorError::MissingRegistry())?;
                 let path = registry
                     .named_workspace(&name)
-                    .map_err(|_| WorkspaceLocatorError::MissingWorkspace(name.clone()))?;
+                    .map_err(WorkspaceLocatorError::MissingWorkspace)?;
 
                 if !path.exists() {
                     return Err(WorkspaceLocatorError::MissingWorkspacePath { name, path });
