@@ -65,7 +65,10 @@ impl WorkspaceRegistry {
         let contents = toml_edit::ser::to_string_pretty(&self).into_diagnostic()?;
         fs_err::write(&path, contents)
             .into_diagnostic()
-            .wrap_err(format!("failed to write config to '{}'", &path.display()))
+            .wrap_err(format!(
+                "failed to write workspace registry config to '{}'",
+                &path.display()
+            ))
     }
 
     /// Remove the workspace from the registry given the workspace name.
