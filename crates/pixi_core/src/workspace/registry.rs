@@ -1,7 +1,8 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
+use std::{cmp::Ordering, collections::HashMap};
 
-use miette::{Context, IntoDiagnostic};
+use itertools::Itertools;
+use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use pixi_config::pixi_home;
 use pixi_consts::consts;
 use serde::{Deserialize, Serialize};
@@ -116,7 +117,46 @@ impl WorkspaceRegistry {
     pub fn named_workspace(&self, name: &String) -> miette::Result<PathBuf> {
         match self.named_workspaces.get(name) {
             Some(path) => Ok(path.clone()),
-            None => Err(miette::diagnostic!("Named workspace '{}' not found", name).into()),
+            None => {
+                let similar_names = self
+                    .named_workspaces
+                    .iter()
+                    .map(|p| p.0.to_string())
+                    .filter_map(|workspace_name: String| {
+                        let distance = strsim::jaro(name, &workspace_name);
+                        if distance > 0.6 {
+                            Some((name, distance))
+                        } else {
+                            None
+                        }
+                    })
+                    .sorted_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap_or(Ordering::Equal))
+                    .take(5)
+                    .map(|(name, _)| name)
+                    .collect_vec();
+
+                let message = format!("could not find a workspace named '{name}'");
+
+                Err(MietteDiagnostic {
+                    message,
+                    code: None,
+                    severity: None,
+                    url: None,
+                    labels: None,
+                    help: if !similar_names.is_empty() {
+                        Some(format!(
+                            "did you mean '{}'?",
+                            similar_names.iter().format("', '")
+                        ))
+                    } else {
+                        Some(
+                            "use `pixi workspace registry list` to view all available workspaces."
+                                .to_string(),
+                        )
+                    },
+                }
+                .into())
+            }
         }
     }
 

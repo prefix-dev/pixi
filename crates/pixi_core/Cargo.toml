@@ -70,6 +70,7 @@ rstest = { workspace = true }
 serde = { workspace = true }
 serde_ignored = { workspace = true }
 serde_json = { workspace = true }
+strsim = { workspace = true }
 tabwriter = { workspace = true }
 tempfile = { workspace = true }
 temp-env = { workspace = true }
