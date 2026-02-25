@@ -394,6 +394,9 @@ class TaskArgs(StrictBaseModel):
 
     arg: TaskArgName = Field(description="The name of the argument")
     default: str | None = Field(None, description="The default value of the argument")
+    choices: list[str] | None = Field(
+        None, description="Allowed values for the argument", min_length=1
+    )
 
 
 class DependsOn(StrictBaseModel):
