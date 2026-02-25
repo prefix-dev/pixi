@@ -1,7 +1,5 @@
 [workspace]
-default-members = [
-  "crates/pixi",
-]
+default-members = ["crates/pixi"]
 exclude = [
   # Only pulled in when enabling certain features. We do not want to include
   # these crates when running workspace wide commands.
