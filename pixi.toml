@@ -169,6 +169,7 @@ go-shfmt = ">=3.12.0,<4"
 ruff = ">=0.14.0,<0.15"
 shellcheck = ">=0.10.0,<0.11"
 taplo = ">=0.10.0,<0.11"
+types-jsonschema = "*"
 typos = ">=1.38.1,<2"
 zizmor = ">=1.18.0,<2"
 
@@ -319,13 +320,14 @@ test-slow = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspa
 # Feature for JSON schema generation and testing
 #
 [feature.schema.dependencies]
-jsonschema = ">=3.2.0,<4"
+jsonschema-with-format = ">=4.18,<5"
 pydantic = ">=2.11.10,<3"
 pytest = ">=9.0.2,<10"
 pyyaml = ">=6.0.3,<7"
+types-jsonschema = "*"
 
 [feature.schema.tasks]
-generate-schema = { cmd = "python model.py > schema.json", cwd = "schema", description = "Generate JSON schema from model" }
+generate-schema = { cmd = "python model.py", cwd = "schema", description = "Generate JSON schema from model" }
 test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema", description = "Test the manifest JSON schema" }
 
 #
