@@ -65,7 +65,7 @@ RUSTC_WRAPPER = "sccache"
 
 [feature.backends-release.dependencies]
 questionary = ">=2.1,<3"
-rattler-build = { git = "https://github.com/prefix-dev/rattler-build.git", branch = "main" }
+rattler-build = ">=0.58.0,<0.59"
 rich = ">=14,<15"
 sccache = ">=0.13.0,<0.14"
 tomlkit = ">=0.13,<0.14"
@@ -264,7 +264,7 @@ pytest-rerunfailures = ">=16.0.1,<17"
 pytest-timeout = ">=2.4.0,<3"
 pytest-xdist = ">=3.8.0,<4"
 pyyaml = ">=6.0.3,<7"
-rattler-build = ">=0.55,<0.56"
+rattler-build = ">=0.58.0,<0.59"
 rich = ">=14.1.0,<15"
 tomli-w = ">=1.2.0,<2"
 types-pyyaml = ">=6.0.12.20250915,<7"
@@ -277,7 +277,7 @@ python-build = ">=1.3.0,<2"
 # Feature for building rattler-build recipes
 #
 [feature.recipes.dependencies]
-rattler-build = ">=0.55,<0.56"
+rattler-build = ">=0.58.0,<0.59"
 
 [feature.recipes.tasks]
 build-backends = { cmd = "rattler-build build --recipe-dir empty --output-dir .", cwd = "tests/build-backends", description = "Build build-backends used for testing purposes" }
