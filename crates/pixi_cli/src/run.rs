@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, hash_map::Entry},
+    collections::{HashMap, hash_map::Entry},
     convert::identity,
     ffi::OsString,
     string::String,
@@ -22,7 +22,7 @@ use pixi_core::{
     lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     workspace::{Environment, errors::UnsupportedPlatformError},
 };
-use pixi_manifest::{FeaturesExt, TaskName};
+use pixi_manifest::{FeaturesExt};
 use pixi_progress::global_multi_progress;
 use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
@@ -34,6 +34,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
 use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
+use crate::task::print_tasks;
 
 /// Runs task in the pixi environment.
 ///
@@ -378,33 +379,44 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-/// Called when a command was not found.
-fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<Environment<'p>>) {
-    let available_tasks: HashSet<TaskName> =
-        if let Some(explicit_environment) = explicit_environment {
-            explicit_environment.get_filtered_tasks()
-        } else {
-            workspace
-                .environments()
-                .into_iter()
-                .flat_map(|env| env.get_filtered_tasks())
-                .collect()
-        };
+fn command_not_found<'p>(
+    workspace: &'p Workspace,
+    explicit_environment: Option<Environment<'p>>,
+) {
+    use std::collections::HashMap;
 
-    if !available_tasks.is_empty() {
-        pixi_progress::println!(
-            "\nAvailable tasks:\n{}",
-            available_tasks
-                .into_iter()
-                .sorted()
-                .format_with("\n", |name, f| {
-                    f(&format_args!("\t{}", name.fancy_display().bold()))
-                })
-        );
+    let environments = if let Some(env) = explicit_environment {
+        vec![env]
+    } else {
+        workspace.environments()
+    };
+
+    let mut task_map = HashMap::new();
+
+    for env in environments {
+        let allowed = env.get_filtered_tasks();
+
+        let mut tasks = HashMap::new();
+
+        for name in allowed {
+            if let Some(task) = env
+                .tasks(None)
+                .ok()
+                .and_then(|mut t| t.shift_remove(&name))
+            {
+                tasks.insert(name, task.clone());  
+            }
+        }
+
+        if !tasks.is_empty() {
+            task_map.insert(env.name().clone(), tasks);
+        }
     }
 
-    // Help user when there is no task available because the platform is not
-    // supported
+    if !task_map.is_empty() {
+        let _ = print_tasks(task_map, false);
+    }
+
     if workspace
         .environments()
         .iter()
