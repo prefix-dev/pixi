@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.65.0] - 2026-02-26
+
+#### ✨ Highlights
+
+We're now properly signing our own Windows binaries resulting in no errors from the "smart screen".
+
+#### Added
+
+- Add list_packages for `pixi-gui` by @haecker-felix in [#4930](https://github.com/prefix-dev/pixi/pull/4930)
+- Add `choices` to tasks args, with arg validation by @Hofer-Julian in [#5543](https://github.com/prefix-dev/pixi/pull/5543)
+- Build new trampoline binaries with signing, integrate windows signing by @wolfv in [#5523](https://github.com/prefix-dev/pixi/pull/5523)
+- Add `--json` flag to `pixi global list` by @Hofer-Julian in [#5530](https://github.com/prefix-dev/pixi/pull/5530)
+
+#### Documentation
+
+- Improve sidebar rendering by @Hofer-Julian in [#5550](https://github.com/prefix-dev/pixi/pull/5550)
+- Improve documentation for shell completions by @pavelzw in [#5546](https://github.com/prefix-dev/pixi/pull/5546)
+
+#### Fixed
+
+- `tool.pixi.pypi-options.no-build = true` in combination with `--locked` by @hameerabbasi in [#5554](https://github.com/prefix-dev/pixi/pull/5554)
+
 ### [0.64.0] - 2026-02-23
 
 #### ✨ Highlights

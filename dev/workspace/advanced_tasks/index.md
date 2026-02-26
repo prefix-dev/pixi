@@ -301,7 +301,13 @@ cmd = "echo 'Compiling in {{ mode }} mode'"
 
 # Task with choices and a default value
 [tasks.test]
-args = [{ "arg" = "suite", "default" = "unit", "choices" = ["unit", "integration", "e2e"] }]
+args = [
+  { "arg" = "suite", "default" = "unit", "choices" = [
+    "unit",
+    "integration",
+    "e2e",
+  ] },
+]
 cmd = "echo 'Running {{ suite }} tests'"
 ```
 
