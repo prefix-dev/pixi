@@ -206,11 +206,22 @@ impl Workspace {
     /// Constructs a new instance from an internal manifest representation
     pub(crate) fn from_manifests(manifest: Manifests) -> Self {
         let env_vars = Workspace::init_env_vars(&manifest.workspace.value.environments);
-        // Get the absolute path of the manifest, preserving symlinks by only
-        // canonicalizing the parent directory
-        let manifest_path = manifest.workspace.provenance.absolute_path();
-        // Take the parent after canonicalizing to ensure this works even when the
-        // manifest
+        // Determine the manifest path based on whether symlinks should be resolved.
+        // When resolve_symlinks is None or true (default), fully canonicalize the path (resolving symlinks).
+        // When false, only canonicalize the parent directory to preserve symlinks.
+        let manifest_path = if manifest
+            .workspace
+            .value
+            .workspace
+            .resolve_symlinks
+            .unwrap_or(true)
+        {
+            dunce::canonicalize(&manifest.workspace.provenance.path)
+                .unwrap_or_else(|_| manifest.workspace.provenance.absolute_path())
+        } else {
+            manifest.workspace.provenance.absolute_path()
+        };
+
         let root = manifest_path
             .parent()
             .expect("manifest path should always have a parent")
@@ -1322,15 +1333,19 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn test_workspace_root_preserves_symlink_location() {
+    fn test_workspace_root_resolves_symlinks_by_default() {
+        // This test reflects a package development workflow where a user symlinks
+        // a manifest from a parent directory to a package subdirectory, and wants
+        // path resolution to happen relative to the package (real file location).
+        // https://github.com/prefix-dev/pixi/issues/5148
         let temp_dir = tempfile::tempdir().unwrap();
-        let dotfiles_dir = temp_dir.path().join("dotfiles");
-        let home_dir = temp_dir.path().join("home");
-        fs_err::create_dir_all(&dotfiles_dir).unwrap();
-        fs_err::create_dir_all(&home_dir).unwrap();
+        let parent_dir = temp_dir.path().join("parent");
+        let pkg_dir = parent_dir.join("pkg");
+        fs_err::create_dir_all(&parent_dir).unwrap();
+        fs_err::create_dir_all(&pkg_dir).unwrap();
 
-        // Real manifest lives inside the dotfiles directory
-        let real_manifest = dotfiles_dir.join("pixi.toml");
+        // Real manifest lives inside the package directory
+        let real_manifest = pkg_dir.join("pixi.toml");
         fs_err::write(
             &real_manifest,
             r#"
@@ -1342,20 +1357,72 @@ mod tests {
         )
         .unwrap();
 
-        // Home directory contains a symlink that points at the real manifest
+        // Parent directory contains a symlink that points at the package manifest
+        let symlink_manifest = parent_dir.join("pixi.toml");
+        std::os::unix::fs::symlink(&real_manifest, &symlink_manifest).unwrap();
+
+        // Load workspace from the symlinked manifest path
+        let workspace = Workspace::from_path(&symlink_manifest).unwrap();
+
+        // By default (resolve-symlinks = true), the workspace root should be the
+        // pkg_dir (where the real file lives), NOT parent_dir (where the symlink lives)
+        let canonical_pkg = dunce::canonicalize(&pkg_dir).unwrap();
+        assert_eq!(
+            workspace.root(),
+            canonical_pkg,
+            "workspace root should be the real file location by default"
+        );
+
+        // The .pixi directory should be created in the package directory
+        let expected_pixi_dir = canonical_pkg.join(consts::PIXI_DIR);
+        assert_eq!(
+            workspace.pixi_dir(),
+            expected_pixi_dir,
+            ".pixi directory should be in the real file's parent directory"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_workspace_root_preserves_symlinks_when_disabled() {
+        // This test reflects a dotfiles workflow where the real manifest lives in
+        // a dotfiles repo but is symlinked to the home directory, and the user wants
+        // .pixi/ and path resolution to happen at the home directory (symlink location).
+        // https://github.com/prefix-dev/pixi/issues/4907
+        let temp_dir = tempfile::tempdir().unwrap();
+        let dotfiles_dir = temp_dir.path().join("dotfiles");
+        let home_dir = temp_dir.path().join("home");
+        fs_err::create_dir_all(&dotfiles_dir).unwrap();
+        fs_err::create_dir_all(&home_dir).unwrap();
+
+        // Real manifest lives inside the dotfiles directory with resolve-symlinks = false
+        let real_manifest = dotfiles_dir.join("pixi.toml");
+        fs_err::write(
+            &real_manifest,
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = []
+            resolve-symlinks = false
+            "#,
+        )
+        .unwrap();
+
+        // Home directory contains a symlink that points at the dotfiles manifest
         let symlink_manifest = home_dir.join("pixi.toml");
         std::os::unix::fs::symlink(&real_manifest, &symlink_manifest).unwrap();
 
         // Load workspace from the symlinked manifest path
         let workspace = Workspace::from_path(&symlink_manifest).unwrap();
 
-        // The workspace root should be the home_dir (where the symlink lives),
-        // NOT the dotfiles_dir (where the real file lives)
+        // With resolve-symlinks = false, the workspace root should be the home_dir
+        // (where the symlink lives), NOT dotfiles_dir (where the real file lives)
         let canonical_home = dunce::canonicalize(&home_dir).unwrap();
         assert_eq!(
             workspace.root(),
             canonical_home,
-            "workspace root should be relative to symlink location, not the real file location"
+            "workspace root should be the symlink location when resolve-symlinks = false"
         );
 
         // The .pixi directory should be created in the home directory
