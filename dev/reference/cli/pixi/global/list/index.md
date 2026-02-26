@@ -24,6 +24,8 @@ pixi global list [OPTIONS] [REGEX]
   **options**: `size`, `name`
   ```
 
+- [`--json`](#arg---json) : Whether to output in JSON format
+
 ## Config Options
 
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
