@@ -200,7 +200,7 @@ tbump = ">=6.9.0,<7"
 
 [feature.release.tasks]
 bump = { cmd = "tbump --only-patch $RELEASE_VERSION", description = "Bump the version using tbump" }
-bump-changelog = { cmd = "git-cliff --unreleased --prepend CHANGELOG.md --tag $RELEASE_VERSION", description = "Update changelog with unreleased changes" }
+bump-changelog = { cmd = "git-cliff --unreleased --prepend CHANGELOG.md --token $(gh auth token) --tag $RELEASE_VERSION", description = "Update changelog with unreleased changes" }
 release = { cmd = "python scripts/release.py", description = "Run the release script" }
 
 #
