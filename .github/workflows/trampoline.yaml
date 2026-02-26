@@ -13,6 +13,9 @@ permissions:
 
 jobs:
   build:
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
@@ -75,6 +78,30 @@ jobs:
       - name: Build trampoline binary
         run: pixi run build-trampoline --target ${{ matrix.target }}
 
+      - name: Azure login (OIDC)
+        if: runner.os == 'Windows' && github.ref == 'refs/heads/trampoline-build-branch'
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Sign Windows trampoline
+        if: runner.os == 'Windows' && github.ref == 'refs/heads/trampoline-build-branch'
+        uses: azure/trusted-signing-action@87c2e83e6868da99d3380aa309851b32ed9a8346 # v1.1.0
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE_NAME }}
+          files-folder: target/trampoline/${{ matrix.target }}/release
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Compress trampoline binary
+        run: pixi run compress-trampoline --target ${{ matrix.target }}
+
       - name: Upload binary artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
@@ -109,7 +136,7 @@ jobs:
 
       - name: Commit and push updated binaries
         # Don't run on forks
-        if: github.repository == 'prefix-dev/pixi' && startsWith(github.ref, 'refs/heads')
+        if: github.repository == 'prefix-dev/pixi' && github.ref == 'refs/heads/trampoline-build-branch'
         run: |
           # Set the repository to push to the repository the workflow is running on
           git config user.name "GitHub Actions"
