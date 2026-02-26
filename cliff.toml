@@ -90,8 +90,10 @@ commit_preprocessors = [
 ]
 # regex for parsing and grouping commits
 commit_parsers = [
+  { field = "github.pr_labels", pattern = "breaking", group = "<!-- 0 --> Breaking changes" },
   { message = "^feat.*", group = "Added" },
-  { message = "^docs:.*", group = "Documentation" },
+  { message = "^fix:.*", group = "Fixed" },
+  { message = "^doc.*:.*", group = "Documentation" },
   { message = "^style:.*", group = "Style" },
   { message = "^refactor:.*", group = "Refactor" },
   { message = "^perf:.*", group = "Performance" },
@@ -102,17 +104,16 @@ commit_parsers = [
   { message = "^.*: remove", group = "Removed" },
   { message = "^.*: delete", group = "Removed" },
   { message = "^test", group = "Fixed" },
-  { message = "^fix", group = "Fixed" },
   { message = "^.*: fix", group = "Fixed" },
-  { message = "^chore|ci", skip = true },
+  { message = "^chore|ci:", skip = true },
   { message = "^.*", group = "Changed" },
 ]
 # protect breaking changes from being skipped due to matching a skipping commit_parser
-protect_breaking_commits = false
+protect_breaking_commits = true
 # filter out the commits that are not matched by commit parsers
 filter_commits = false
 # regex for matching git tags
-tag_pattern = "v[0-9].*"
+tag_pattern = "^v[0-9].*"
 # regex for skipping tags
 skip_tags = ""
 # regex for ignoring tags

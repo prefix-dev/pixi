@@ -1,3 +1,4 @@
+import json
 import os
 import platform
 import shutil
@@ -6,6 +7,7 @@ from pathlib import Path
 
 import pytest
 import tomli_w
+from inline_snapshot import snapshot
 
 from ..common import ExitCode, bat_extension, exec_extension, verify_cli_command
 
@@ -1374,6 +1376,89 @@ def test_list_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
         env=env,
         stdout_contains=["The dummy-a environment", "dummy-a", "0.1.0"],
         stdout_excludes=["dummy-b"],
+    )
+
+
+def test_list_json(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+
+    # Verify empty JSON list
+    result = verify_cli_command(
+        [pixi, "global", "list", "--json"],
+        env=env,
+    )
+    assert json.loads(result.stdout) == []
+
+    # Install dummy-a and dummy-b
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-b==0.1.0",
+            "dummy-a==0.1.0",
+        ],
+        env=env,
+    )
+
+    # Verify JSON output
+    result = verify_cli_command(
+        [pixi, "global", "list", "--json"],
+        env=env,
+    )
+    assert json.loads(result.stdout) == snapshot(
+        [
+            {
+                "name": "dummy-a",
+                "dependencies": [{"name": "dummy-a", "version": "0.1.0"}],
+                "exposed": [
+                    {"exposed_name": "dummy-a", "executable": "dummy-a"},
+                    {"exposed_name": "dummy-aa", "executable": "dummy-aa"},
+                ],
+            },
+            {
+                "name": "dummy-b",
+                "dependencies": [{"name": "dummy-b", "version": "0.1.0"}],
+                "exposed": [{"exposed_name": "dummy-b", "executable": "dummy-b"}],
+            },
+        ]
+    )
+
+    # Verify JSON list with regex filter
+    result = verify_cli_command(
+        [pixi, "global", "list", "--json", "dummy-a"],
+        env=env,
+    )
+    assert json.loads(result.stdout) == snapshot(
+        [
+            {
+                "name": "dummy-a",
+                "dependencies": [{"name": "dummy-a", "version": "0.1.0"}],
+                "exposed": [
+                    {"exposed_name": "dummy-a", "executable": "dummy-a"},
+                    {"exposed_name": "dummy-aa", "executable": "dummy-aa"},
+                ],
+            }
+        ]
+    )
+
+    # Verify JSON list with environment filter
+    result = verify_cli_command(
+        [pixi, "global", "list", "--json", "--environment", "dummy-b"],
+        env=env,
+    )
+    assert json.loads(result.stdout) == snapshot(
+        [
+            {
+                "name": "dummy-b",
+                "dependencies": [{"name": "dummy-b", "version": "0.1.0"}],
+                "exposed": [{"exposed_name": "dummy-b", "executable": "dummy-b"}],
+            }
+        ]
     )
 
 

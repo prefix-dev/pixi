@@ -23,3 +23,22 @@ args = ["service", { "arg" = "environment", "default" = "staging" }]
 cmd = "echo Deploying {{ service }} to {{ environment }}"
 
 # --8<-- [end:project_tasks]
+
+# --8<-- [start:project_tasks_choices]
+# Task with choices to restrict allowed values
+[tasks.compile]
+args = [{ "arg" = "mode", "choices" = ["debug", "release"] }]
+cmd = "echo 'Compiling in {{ mode }} mode'"
+
+# Task with choices and a default value
+[tasks.test]
+args = [
+  { "arg" = "suite", "default" = "unit", "choices" = [
+    "unit",
+    "integration",
+    "e2e",
+  ] },
+]
+cmd = "echo 'Running {{ suite }} tests'"
+
+# --8<-- [end:project_tasks_choices]
