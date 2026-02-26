@@ -20,6 +20,7 @@ jobs:
        contains(github.event.comment.body, '/recheck'))
     steps:
       - uses: mitchellh/vouch/action/check-pr@c6d80ead49839655b61b422700b7a3bc9d0804a9 # v1.4.2
+        id: check-pr
         with:
           pr-number: ${{ github.event.pull_request.number || github.event.issue.number }}
           auto-close: true
@@ -28,3 +29,27 @@ jobs:
           require-vouch: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Label PR
+        if: steps.check-pr.outputs.status == 'vouched'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['vouched']
+            })
+
+      - name: Label PR
+        if: steps.check-pr.outputs.status == 'closed'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['denounced']
+            })
