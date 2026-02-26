@@ -58,15 +58,16 @@ impl WorkDirKey {
         self.build_backend.hash(&mut hasher);
         let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
 
-        let name = match &self.source {
+        let name: Option<String> = match &self.source {
             SourceRecordOrCheckout::Record { package_name, .. } => {
-                Some(package_name.as_normalized())
+                Some(package_name.as_normalized().to_string())
             }
             SourceRecordOrCheckout::Checkout { checkout } => checkout
                 .path
                 .as_std_path()
                 .file_name()
-                .and_then(OsStr::to_str),
+                .and_then(OsStr::to_str)
+                .map(|s| s.to_lowercase()),
         };
 
         match name {
@@ -82,5 +83,75 @@ impl WorkDirKey {
             value.hash(&mut hasher);
         }
         URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_git::sha::GitSha;
+    use pixi_path::AbsPathBuf;
+    use pixi_record::{PinnedGitCheckout, PinnedGitSpec, PinnedSourceSpec};
+    use pixi_spec::GitReference;
+    use rattler_conda_types::Platform;
+    use url::Url;
+
+    #[test]
+    fn test_work_dir_key_case_insensitive() {
+        // Test that work directory keys are consistent regardless of path casing
+        // This is important on macOS where the filesystem is case-insensitive
+
+        let platform = Platform::Linux64;
+        let backend = "pixi-build-backend".to_string();
+
+        // Use a valid 40-character commit hash for testing
+        let commit_hash = "0123456789abcdef0123456789abcdef01234567";
+        let commit: GitSha = commit_hash.parse().unwrap();
+
+        // Create a checkout with uppercase path
+        let uppercase_checkout = SourceCheckout {
+            path: AbsPathBuf::new("/tmp/IGoR").unwrap(),
+            pinned: PinnedSourceSpec::Git(PinnedGitSpec {
+                git: Url::parse("https://example.com/repo.git").unwrap(),
+                source: PinnedGitCheckout {
+                    commit: commit.clone(),
+                    subdirectory: None,
+                    reference: GitReference::DefaultBranch,
+                },
+            }),
+        };
+
+        let key_uppercase = WorkDirKey {
+            source: SourceRecordOrCheckout::Checkout {
+                checkout: uppercase_checkout,
+            },
+            host_platform: platform,
+            build_backend: backend.clone(),
+        };
+
+        // Create a checkout with lowercase path
+        let lowercase_checkout = SourceCheckout {
+            path: AbsPathBuf::new("/tmp/igor").unwrap(),
+            pinned: PinnedSourceSpec::Git(PinnedGitSpec {
+                git: Url::parse("https://example.com/repo.git").unwrap(),
+                source: PinnedGitCheckout {
+                    commit,
+                    subdirectory: None,
+                    reference: GitReference::DefaultBranch,
+                },
+            }),
+        };
+
+        let key_lowercase = WorkDirKey {
+            source: SourceRecordOrCheckout::Checkout {
+                checkout: lowercase_checkout,
+            },
+            host_platform: platform,
+            build_backend: backend,
+        };
+
+        // Both should generate the same key (with lowercase directory name)
+        assert_eq!(key_uppercase.key(), key_lowercase.key());
+        assert!(key_uppercase.key().starts_with("igor-"));
     }
 }
