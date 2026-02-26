@@ -33,6 +33,7 @@ jobs:
         with:
           repository: prefix-dev/vouched
           token: ${{ steps.generate-token.outputs.token }}
+          persist-credentials: true
 
       - uses: mitchellh/vouch/action/manage-by-issue@c6d80ead49839655b61b422700b7a3bc9d0804a9 # v1.4.2
         with:
