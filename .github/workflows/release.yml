@@ -1,13 +1,16 @@
 name: Release
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/pixi/Cargo.toml"
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Release tag (e.g. v0.65.0, or 'dry-run' for testing)"
-        required: true
-        default: dry-run
-        type: string
+      dry-run:
+        description: "Dry run (build everything but don't create release)"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -21,15 +24,16 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Metadata: determine version, prerelease status, generate changelog
+  # Metadata: read version from Cargo.toml, detect if it changed, generate changelog
   # ---------------------------------------------------------------------------
   metadata:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
       is-prerelease: ${{ steps.meta.outputs.is-prerelease }}
-      publishing: ${{ inputs.tag != 'dry-run' }}
-      tag: ${{ inputs.tag != 'dry-run' && inputs.tag || '' }}
+      publishing: ${{ steps.meta.outputs.publishing }}
+      should-run: ${{ steps.meta.outputs.should-run }}
       changelog: ${{ steps.changelog.outputs.content }}
     steps:
       - uses: actions/checkout@v4
@@ -37,27 +41,42 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Extract metadata
+      - name: Extract version and determine if release is needed
         id: meta
         shell: bash
         run: |
-          TAG="${{ inputs.tag }}"
-          if [[ "$TAG" == "dry-run" ]]; then
-            # Read version from Cargo.toml for dry-run
-            VERSION=$(grep -m1 '^version' crates/pixi/Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
-          else
-            VERSION="${TAG#v}"
-          fi
+          # Always read version from the source of truth: Cargo.toml
+          VERSION=$(grep -m1 '^version' crates/pixi/Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          TAG="v${VERSION}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-          # Check if prerelease (contains hyphen after version, e.g. 0.65.0-rc.1)
+          # Check if prerelease (contains hyphen, e.g. 0.65.0-rc.1)
           if [[ "$VERSION" == *-* ]]; then
             echo "is-prerelease=true" >> "$GITHUB_OUTPUT"
           else
             echo "is-prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
+          # Determine if we should actually run and publish
+          DRY_RUN="${{ inputs.dry-run }}"
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "should-run=true" >> "$GITHUB_OUTPUT"
+            echo "publishing=false" >> "$GITHUB_OUTPUT"
+            echo "Dry run mode: will build but not publish"
+          elif git rev-parse "$TAG" >/dev/null 2>&1; then
+            # Tag already exists — this version was already released
+            echo "should-run=false" >> "$GITHUB_OUTPUT"
+            echo "publishing=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG already exists, skipping release"
+          else
+            echo "should-run=true" >> "$GITHUB_OUTPUT"
+            echo "publishing=true" >> "$GITHUB_OUTPUT"
+            echo "New version $VERSION detected, will build and publish as $TAG"
+          fi
+
       - name: Generate changelog
+        if: steps.meta.outputs.should-run == 'true'
         id: changelog
         shell: bash
         run: |
@@ -65,7 +84,6 @@ jobs:
           if command -v git-cliff &>/dev/null; then
             CHANGELOG=$(git-cliff --latest --strip header 2>/dev/null || echo "")
           else
-            # Install git-cliff
             cargo install git-cliff --locked 2>/dev/null || true
             if command -v git-cliff &>/dev/null; then
               CHANGELOG=$(git-cliff --latest --strip header 2>/dev/null || echo "")
@@ -73,12 +91,12 @@ jobs:
           fi
 
           if [[ -z "$CHANGELOG" ]]; then
-            # Fallback: generate from git log
+            # Fallback: generate from git log since last tag
             PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
             if [[ -n "$PREV_TAG" ]]; then
               CHANGELOG=$(git log "$PREV_TAG"..HEAD --pretty=format:"- %s (%h)" --no-merges)
             else
-              CHANGELOG="Release ${{ inputs.tag }}"
+              CHANGELOG="Release v${{ steps.meta.outputs.version }}"
             fi
           fi
 
@@ -96,6 +114,7 @@ jobs:
   build:
     name: build (${{ matrix.target }})
     needs: [metadata]
+    if: ${{ needs.metadata.outputs.should-run == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -510,7 +529,7 @@ jobs:
       - name: List release artifacts
         run: ls -laR release-artifacts/
 
-      - name: Create GitHub Release
+      - name: Create tag and GitHub Release
         env:
           TAG: ${{ needs.metadata.outputs.tag }}
           VERSION: ${{ needs.metadata.outputs.version }}
@@ -525,6 +544,8 @@ jobs:
           # Write release notes from env var (avoids quoting issues)
           echo "$CHANGELOG" > "$RUNNER_TEMP/release-notes.md"
 
+          # gh release create will create the tag on the target commit
+          # if it doesn't exist yet — tag + release are created atomically
           gh release create "$TAG" \
             --target "${{ github.sha }}" \
             --title "pixi $VERSION" \
