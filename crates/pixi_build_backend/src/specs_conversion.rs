@@ -420,4 +420,90 @@ mod test {
         let match_spec = binary_package_spec_to_package_dependency(name, spec);
         assert_eq!(match_spec.to_string(), "python");
     }
+
+    /// Regression test for https://github.com/prefix-dev/pixi/issues/5562
+    ///
+    /// Target-specific build dependencies should use build_platform selectors,
+    /// not host_platform, because build deps run on the build machine.
+    /// Host and run deps should use host_platform selectors.
+    #[test]
+    fn test_target_specific_build_deps_use_build_platform_selector() {
+        use ordermap::OrderMap;
+
+        // Create targets with a platform-specific build dependency (e.g., sigtool on osx-64)
+        let targets = Targets {
+            default_target: Some(Target {
+                build_dependencies: None,
+                host_dependencies: None,
+                run_dependencies: None,
+            }),
+            targets: Some(OrderMap::from([(
+                TargetSelector::Platform("osx-64".to_string()),
+                Target {
+                    build_dependencies: Some(OrderMap::from([(
+                        "sigtool".to_string(),
+                        PackageSpec::Binary(BinaryPackageSpec {
+                            version: Some(">=0.1.3,<0.2".parse().unwrap()),
+                            ..BinaryPackageSpec::default()
+                        }),
+                    )])),
+                    host_dependencies: Some(OrderMap::from([(
+                        "some-host-lib".to_string(),
+                        PackageSpec::Binary(BinaryPackageSpec::default()),
+                    )])),
+                    run_dependencies: Some(OrderMap::from([(
+                        "some-run-dep".to_string(),
+                        PackageSpec::Binary(BinaryPackageSpec::default()),
+                    )])),
+                },
+            )])),
+        };
+
+        let requirements = from_targets_v1_to_conditional_requirements(&targets);
+
+        // Check that build dependencies use build_platform selector
+        let build_conditionals: Vec<_> = requirements
+            .build
+            .iter()
+            .filter_map(|item| match item {
+                Item::Conditional(c) => Some(c.condition.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(build_conditionals.len(), 1);
+        assert_eq!(
+            build_conditionals[0], "build_platform == 'osx-64'",
+            "Build dependencies should use build_platform selector"
+        );
+
+        // Check that host dependencies use host_platform selector
+        let host_conditionals: Vec<_> = requirements
+            .host
+            .iter()
+            .filter_map(|item| match item {
+                Item::Conditional(c) => Some(c.condition.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(host_conditionals.len(), 1);
+        assert_eq!(
+            host_conditionals[0], "host_platform == 'osx-64'",
+            "Host dependencies should use host_platform selector"
+        );
+
+        // Check that run dependencies use host_platform selector
+        let run_conditionals: Vec<_> = requirements
+            .run
+            .iter()
+            .filter_map(|item| match item {
+                Item::Conditional(c) => Some(c.condition.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(run_conditionals.len(), 1);
+        assert_eq!(
+            run_conditionals[0], "host_platform == 'osx-64'",
+            "Run dependencies should use host_platform selector"
+        );
+    }
 }
