@@ -126,5 +126,8 @@ secrets.json
 *_pb2_grpc.py
 files.txt
 
+# AI agent related folders and files
+.claude
+
 # Rattler build output
 output/*
