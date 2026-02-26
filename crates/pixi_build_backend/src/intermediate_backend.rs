@@ -39,6 +39,8 @@ use rattler_conda_types::{
 use serde::Deserialize;
 use tracing::warn;
 
+use recipe_stage0::recipe::Value;
+
 use crate::{
     consts::DEBUG_OUTPUT_DIR,
     dependencies::{
@@ -256,7 +258,7 @@ where
         variant_config.variants.append(&mut param_variants);
 
         // Construct the intermediate recipe
-        let generated_recipe = self
+        let mut generated_recipe = self
             .generate_recipe
             .generate_recipe(
                 &self.project_model,
@@ -275,6 +277,20 @@ where
         // immediately use the intermediate recipe for some of this rattler-build
         // functions.
         let recipe_path = self.source_dir.join(&self.manifest_rel_path);
+        let recipe_dir = recipe_path
+            .parent()
+            .expect("recipe path must have a parent");
+
+        // Adjust license file paths to be relative to the recipe directory.
+        // License files from metadata providers are relative to the source
+        // directory, but rattler-build resolves them relative to the recipe
+        // directory.
+        adjust_license_file_paths_for_recipe_dir(
+            &mut generated_recipe.recipe.about,
+            &self.source_dir,
+            recipe_dir,
+        );
+
         let named_source = Source {
             name: self.manifest_rel_path.display().to_string(),
             code: Arc::from(
@@ -613,6 +629,20 @@ where
         // immediately use the intermediate recipe for some of this rattler-build
         // functions.
         let recipe_path = self.source_dir.join(&self.manifest_rel_path);
+        let recipe_dir = recipe_path
+            .parent()
+            .expect("recipe path must have a parent");
+
+        // Adjust license file paths to be relative to the recipe directory.
+        // License files from metadata providers are relative to the source
+        // directory, but rattler-build resolves them relative to the recipe
+        // directory.
+        adjust_license_file_paths_for_recipe_dir(
+            &mut recipe.recipe.about,
+            &self.source_dir,
+            recipe_dir,
+        );
+
         let recipe_code: Arc<str> =
             Arc::from(recipe.recipe.to_yaml_pretty().into_diagnostic()?.as_str());
 
@@ -914,10 +944,198 @@ pub fn conda_build_v1_directories(
     }
 }
 
+/// Adjusts license file paths in the recipe's about section to be relative to
+/// the recipe directory instead of the source directory.
+///
+/// Metadata providers (e.g., pyproject.toml, Cargo.toml) return license file
+/// paths relative to the source directory. However, rattler-build resolves
+/// these paths relative to the recipe directory (the parent of the recipe
+/// path). When the manifest resides in a subdirectory, these directories differ
+/// and the paths need adjustment.
+fn adjust_license_file_paths_for_recipe_dir(
+    about: &mut Option<recipe_stage0::recipe::About>,
+    source_dir: &Path,
+    recipe_dir: &Path,
+) {
+    // No adjustment needed if source_dir and recipe_dir are the same
+    if source_dir == recipe_dir {
+        return;
+    }
+
+    let Some(about) = about else {
+        return;
+    };
+    let Some(license_files) = &mut about.license_file else {
+        return;
+    };
+
+    for license_file in license_files.iter_mut() {
+        if let Value::Concrete(path_str) = license_file {
+            let path = Path::new(path_str.as_str());
+            // Only adjust relative paths
+            if !path.is_absolute() {
+                let abs_path = source_dir.join(path);
+                if let Some(rel_path) = pathdiff::diff_paths(&abs_path, recipe_dir) {
+                    *path_str = rel_path.to_string_lossy().to_string();
+                }
+            }
+        }
+    }
+}
+
 /// Returns the capabilities for this backend
 fn default_capabilities() -> BackendCapabilities {
     BackendCapabilities {
         provides_conda_outputs: Some(true),
         provides_conda_build_v1: Some(true),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use recipe_stage0::recipe::About;
+
+    #[test]
+    fn test_adjust_license_file_paths_subdirectory() {
+        let mut about = Some(About {
+            license_file: Some(vec![Value::Concrete("LICENSE.txt".to_string())]),
+            ..Default::default()
+        });
+
+        let source_dir = Path::new("/project");
+        let recipe_dir = Path::new("/project/subdir");
+
+        adjust_license_file_paths_for_recipe_dir(&mut about, source_dir, recipe_dir);
+
+        let license_files = about.unwrap().license_file.unwrap();
+        assert_eq!(license_files.len(), 1);
+        assert_eq!(
+            license_files[0],
+            Value::Concrete("../LICENSE.txt".to_string())
+        );
+    }
+
+    #[test]
+    fn test_adjust_license_file_paths_nested_subdirectory() {
+        let mut about = Some(About {
+            license_file: Some(vec![Value::Concrete("LICENSE.txt".to_string())]),
+            ..Default::default()
+        });
+
+        let source_dir = Path::new("/project");
+        let recipe_dir = Path::new("/project/pixi-packages/default");
+
+        adjust_license_file_paths_for_recipe_dir(&mut about, source_dir, recipe_dir);
+
+        let license_files = about.unwrap().license_file.unwrap();
+        assert_eq!(license_files.len(), 1);
+        assert_eq!(
+            license_files[0],
+            Value::Concrete("../../LICENSE.txt".to_string())
+        );
+    }
+
+    #[test]
+    fn test_adjust_license_file_paths_same_dir_is_noop() {
+        let mut about = Some(About {
+            license_file: Some(vec![Value::Concrete("LICENSE.txt".to_string())]),
+            ..Default::default()
+        });
+
+        let source_dir = Path::new("/project");
+        let recipe_dir = Path::new("/project");
+
+        adjust_license_file_paths_for_recipe_dir(&mut about, source_dir, recipe_dir);
+
+        let license_files = about.unwrap().license_file.unwrap();
+        assert_eq!(license_files.len(), 1);
+        assert_eq!(
+            license_files[0],
+            Value::Concrete("LICENSE.txt".to_string())
+        );
+    }
+
+    #[test]
+    fn test_adjust_license_file_paths_multiple_files() {
+        let mut about = Some(About {
+            license_file: Some(vec![
+                Value::Concrete("LICENSE.txt".to_string()),
+                Value::Concrete("COPYING".to_string()),
+            ]),
+            ..Default::default()
+        });
+
+        let source_dir = Path::new("/project");
+        let recipe_dir = Path::new("/project/subdir");
+
+        adjust_license_file_paths_for_recipe_dir(&mut about, source_dir, recipe_dir);
+
+        let license_files = about.unwrap().license_file.unwrap();
+        assert_eq!(license_files.len(), 2);
+        assert_eq!(
+            license_files[0],
+            Value::Concrete("../LICENSE.txt".to_string())
+        );
+        assert_eq!(
+            license_files[1],
+            Value::Concrete("../COPYING".to_string())
+        );
+    }
+
+    #[test]
+    fn test_adjust_license_file_paths_preserves_templates() {
+        let mut about = Some(About {
+            license_file: Some(vec![
+                Value::Concrete("LICENSE.txt".to_string()),
+                Value::Template("${{ license_path }}".to_string()),
+            ]),
+            ..Default::default()
+        });
+
+        let source_dir = Path::new("/project");
+        let recipe_dir = Path::new("/project/subdir");
+
+        adjust_license_file_paths_for_recipe_dir(&mut about, source_dir, recipe_dir);
+
+        let license_files = about.unwrap().license_file.unwrap();
+        assert_eq!(license_files.len(), 2);
+        assert_eq!(
+            license_files[0],
+            Value::Concrete("../LICENSE.txt".to_string())
+        );
+        assert_eq!(
+            license_files[1],
+            Value::Template("${{ license_path }}".to_string())
+        );
+    }
+
+    #[test]
+    fn test_adjust_license_file_paths_none_about() {
+        let mut about: Option<About> = None;
+
+        let source_dir = Path::new("/project");
+        let recipe_dir = Path::new("/project/subdir");
+
+        // Should not panic
+        adjust_license_file_paths_for_recipe_dir(&mut about, source_dir, recipe_dir);
+
+        assert!(about.is_none());
+    }
+
+    #[test]
+    fn test_adjust_license_file_paths_none_license_files() {
+        let mut about = Some(About {
+            license_file: None,
+            ..Default::default()
+        });
+
+        let source_dir = Path::new("/project");
+        let recipe_dir = Path::new("/project/subdir");
+
+        // Should not panic
+        adjust_license_file_paths_for_recipe_dir(&mut about, source_dir, recipe_dir);
+
+        assert!(about.unwrap().license_file.is_none());
     }
 }
