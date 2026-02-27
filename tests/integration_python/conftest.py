@@ -63,6 +63,7 @@ disable-sharded = false
         # Use no drive letter to avoid issues with different drives
         short_base = Path(r"\.r")
         short_base.mkdir(parents=True, exist_ok=True)
+        # suffix="x" prevents names ending with "_", which breaks some Windows tooling
         workspace = Path(tempfile.mkdtemp(dir=short_base, suffix="x"))
         workspace.joinpath(".pixi").mkdir()
         workspace.joinpath(".pixi/config.toml").write_text(pixi_config)
