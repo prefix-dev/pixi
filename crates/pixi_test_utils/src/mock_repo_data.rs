@@ -113,7 +113,7 @@ impl MockRepoData {
                 conda_packages: conda_packages.into_iter().collect(),
                 removed: Default::default(),
                 version: Some(1),
-                experimental_whl_packages: Default::default(),
+                experimental_v3: Default::default(),
             };
             let repodata_str = serde_json::to_string_pretty(&repodata).into_diagnostic()?;
 
