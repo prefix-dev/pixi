@@ -266,6 +266,9 @@ pub async fn execute() -> miette::Result<()> {
     // Setup logging for the application.
     setup_logging(&args, use_colors)?;
 
+    // Warn if LD_PRELOAD is set, as it can interfere with pixi environments
+    check_ld_preload();
+
     let (Some(command), global_options) = (args.command, args.global_options) else {
         // match CI expectations
         std::process::exit(2);
@@ -420,6 +423,19 @@ fn set_console_colors(args: &Args) {
         }
         ColorOutput::Auto => {} // Let `console` detect if colors should be enabled
     };
+}
+
+/// Check if LD_PRELOAD is set and emit a warning if it is.
+/// LD_PRELOAD can interfere with pixi environments and cause unexpected behavior.
+fn check_ld_preload() {
+    if let Ok(ld_preload) = env::var("LD_PRELOAD")
+        && !ld_preload.is_empty()
+    {
+        tracing::warn!(
+            "LD_PRELOAD environment variable is set to: {}. Pixi environments might not work correctly.",
+            ld_preload
+        );
+    }
 }
 
 pub fn get_styles() -> clap::builder::Styles {
@@ -612,5 +628,29 @@ mod tests {
                 ));
             },
         );
+    }
+
+    #[test]
+    fn test_check_ld_preload_not_set() {
+        // Test that check_ld_preload doesn't panic when LD_PRELOAD is not set
+        temp_env::with_var_unset("LD_PRELOAD", || {
+            check_ld_preload();
+        });
+    }
+
+    #[test]
+    fn test_check_ld_preload_empty() {
+        // Test that check_ld_preload doesn't panic when LD_PRELOAD is empty
+        temp_env::with_var("LD_PRELOAD", Some(""), || {
+            check_ld_preload();
+        });
+    }
+
+    #[test]
+    fn test_check_ld_preload_set() {
+        // Test that check_ld_preload works when LD_PRELOAD is set
+        temp_env::with_var("LD_PRELOAD", Some("/path/to/lib.so"), || {
+            check_ld_preload();
+        });
     }
 }
