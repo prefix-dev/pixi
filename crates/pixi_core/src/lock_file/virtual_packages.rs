@@ -167,7 +167,8 @@ pub(crate) fn validate_system_meets_environment_requirements(
     )?;
 
     // Retrieve all conda packages for the specified platform (both binary and source).
-    let Some(conda_packages) = environment.conda_packages(platform) else {
+    let lock_platform = environment.lock_file().platform(&platform.to_string());
+    let Some(conda_packages) = lock_platform.and_then(|p| environment.conda_packages(p)) else {
         // Early out if there are no packages, as we don't need to check for virtual packages
         return Ok(true);
     };
@@ -269,8 +270,8 @@ pub(crate) fn validate_system_meets_environment_requirements(
     }
 
     // Check if the wheel tags match the system virtual packages if there are any
-    if environment.has_pypi_packages(platform)
-        && let Some(pypi_packages) = environment.pypi_packages(platform)
+    if lock_platform.is_some_and(|p| environment.has_pypi_packages(p))
+        && let Some(pypi_packages) = lock_platform.and_then(|p| environment.pypi_packages(p))
     {
         // Get python record from conda packages
         let python_record = conda_records
@@ -279,9 +280,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
             .ok_or(MachineValidationError::NoPythonRecordFound(platform))?;
 
         // Check if all the wheel tags match the system virtual packages
-        let pypi_packages = pypi_packages
-            .map(|(pkg_data, _)| pkg_data.clone())
-            .collect_vec();
+        let pypi_packages = pypi_packages.map(|pkg_data| pkg_data.clone()).collect_vec();
 
         let wheels = get_wheels_from_pypi_package_data(pypi_packages);
 
@@ -319,8 +318,9 @@ mod test {
         let lockfile = LockFile::from_path(&lockfile_path).unwrap();
         let platform = Platform::Linux64;
         let env = lockfile.default_environment().unwrap();
+        let lock_platform = lockfile.platform(&platform.to_string()).unwrap();
         let conda_data = env
-            .conda_repodata_records(platform)
+            .conda_repodata_records(lock_platform)
             .map_err(MachineValidationError::RepodataConversionError)
             .unwrap()
             .unwrap();

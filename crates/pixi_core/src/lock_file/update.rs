@@ -61,7 +61,7 @@ use crate::{
         read_environment_file, write_environment_file,
     },
     lock_file::{
-        self, PypiRecord, reporter::SolveProgressBar,
+        self, PypiPackageData, reporter::SolveProgressBar,
         virtual_packages::validate_system_meets_environment_requirements,
     },
     workspace::{
@@ -615,7 +615,9 @@ impl<'p> LockFileDerivedData<'p> {
             // If we contain source packages from conda or PyPI we update the prefix by
             // default
             let contains_conda_source_pkgs = self.lock_file.environments().any(|(_, env)| {
-                env.conda_packages(Platform::current())
+                self.lock_file
+                    .platform(&Platform::current().to_string())
+                    .and_then(|p| env.conda_packages(p))
                     .is_some_and(|mut packages| {
                         packages.any(|package| package.as_source().is_some())
                     })
@@ -681,7 +683,8 @@ impl<'p> LockFileDerivedData<'p> {
                     &filter.skip_direct,
                     &filter.target_packages,
                 );
-                let result = subset.filter(locked_env.packages(platform))?;
+                let lock_platform = self.lock_file.platform(&platform.to_string());
+                let result = subset.filter(lock_platform.and_then(|p| locked_env.packages(p)))?;
                 let packages = result.install;
                 let ignored = result.ignore;
 
@@ -693,7 +696,7 @@ impl<'p> LockFileDerivedData<'p> {
                 let (ignored_conda, ignored_pypi): (HashSet<_>, HashSet<_>) =
                     ignored.into_iter().partition_map(|p| match p {
                         LockedPackageRef::Conda(data) => Either::Left(data.record().name.clone()),
-                        LockedPackageRef::Pypi(data, _) => Either::Right(data.name.clone()),
+                        LockedPackageRef::Pypi(data) => Either::Right(data.name.clone()),
                     });
 
                 let pixi_records =
@@ -707,10 +710,13 @@ impl<'p> LockFileDerivedData<'p> {
                 let pypi_records = pypi_packages
                     .into_iter()
                     .filter_map(LockedPackageRef::as_pypi)
-                    .map(|(data, env_data)| {
-                        let mut data = data.clone();
-                        data.editable = is_editable_from_manifest(&manifest_pypi_deps, &data.name);
-                        (data, env_data.clone())
+                    .map(move |data| {
+                        (
+                            data.clone(),
+                            pixi_install_pypi::ManifestData {
+                                editable: is_editable_from_manifest(&manifest_pypi_deps, &data.name),
+                            },
+                        )
                     })
                     .collect::<Vec<_>>();
 
@@ -880,7 +886,8 @@ impl<'p> LockFileDerivedData<'p> {
 
                 // Get the locked environment from the lock-file.
                 let locked_env = self.locked_env(environment)?;
-                let packages = locked_env.packages(platform);
+                let lock_platform = self.lock_file.platform(&platform.to_string());
+                let packages = lock_platform.and_then(|p| locked_env.packages(p));
                 let packages = if let Some(iter) = packages {
                     iter.collect_vec()
                 } else {
@@ -950,7 +957,10 @@ impl PackageFilterNames {
             &filter.skip_direct,
             &filter.target_packages,
         );
-        let filtered = subset.filter(environment.packages(platform)).ok()?;
+        let lock_platform = environment.lock_file().platform(&platform.to_string());
+        let filtered = subset
+            .filter(lock_platform.and_then(|p| environment.packages(p)))
+            .ok()?;
 
         // Map to names, dedupe and sort for stable output.
         let retained = filtered
@@ -1345,7 +1355,8 @@ impl<'p> UpdateContextBuilder<'p> {
                     .map(move |locked_env| {
                         locked_env
                             .conda_packages_by_platform()
-                            .map(|(platform, records)| {
+                            .map(|(lock_platform, records)| {
+                                let platform = lock_platform.subdir();
                                 records
                                     .cloned()
                                     .map(|data| {
@@ -1375,12 +1386,12 @@ impl<'p> UpdateContextBuilder<'p> {
                             env.clone(),
                             locked_env
                                 .pypi_packages_by_platform()
-                                .map(|(platform, records)| {
+                                .map(|(lock_platform, records)| {
                                     (
-                                        platform,
-                                        Arc::new(PypiRecordsByName::from_iter(records.map(
-                                            |(data, env_data)| (data.clone(), env_data.clone()),
-                                        ))),
+                                        lock_platform.subdir(),
+                                        Arc::new(PypiRecordsByName::from_iter(
+                                            records.map(|data| data.clone()),
+                                        )),
                                     )
                                 })
                                 .collect(),
@@ -2015,7 +2026,22 @@ impl<'p> UpdateContext<'p> {
         }
 
         // Construct a new lock-file containing all the updated or old records.
-        let mut builder = LockFile::builder();
+        // First, collect all platforms across all environments and register them.
+        let all_platforms: Vec<rattler_lock::PlatformData> = project
+            .environments()
+            .into_iter()
+            .flat_map(|env| env.platforms())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .map(|p| rattler_lock::PlatformData {
+                name: rattler_lock::PlatformName::from(&p),
+                subdir: p,
+                virtual_packages: Vec::new(),
+            })
+            .collect();
+        let mut builder = LockFile::builder()
+            .with_platforms(all_platforms)
+            .expect("all platforms should be unique");
 
         // Iterate over all environments and add their records to the lock-file.
         for environment in project.environments() {
@@ -2048,29 +2074,29 @@ impl<'p> UpdateContext<'p> {
                         .unwrap_or_default()
                         .into(),
                     exclude_newer: grouped_env.exclude_newer(),
-                    pypi_prerelease_mode: Some(pypi_prerelease_mode.into()),
+                    pypi_prerelease_mode: pypi_prerelease_mode.into(),
                 },
             );
 
             let mut has_pypi_records = false;
             for platform in environment.platforms() {
+                let platform_str = platform.to_string();
                 if let Some(records) = self.take_latest_repodata_records(&environment, platform) {
                     for record in records.into_inner() {
-                        builder.add_conda_package(
-                            &environment_name,
-                            platform,
-                            record.into_conda_package_data(project.root()),
-                        );
+                        builder
+                            .add_conda_package(
+                                &environment_name,
+                                &platform_str,
+                                record.into_conda_package_data(project.root()),
+                            )
+                            .expect("platform was registered");
                     }
                 }
                 if let Some(records) = self.take_latest_pypi_records(&environment, platform) {
-                    for (pkg_data, pkg_env_data) in records.into_inner() {
-                        builder.add_pypi_package(
-                            &environment_name,
-                            platform,
-                            pkg_data,
-                            pkg_env_data,
-                        );
+                    for pkg_data in records.into_inner() {
+                        builder
+                            .add_pypi_package(&environment_name, &platform_str, pkg_data)
+                            .expect("platform was registered");
                         has_pypi_records = true;
                     }
                 }
@@ -2354,7 +2380,7 @@ async fn spawn_extract_environment_task(
 
     enum PackageRecord<'a> {
         Conda(&'a PixiRecord),
-        Pypi((&'a PypiRecord, Option<ExtraName>)),
+        Pypi((&'a PypiPackageData, Option<ExtraName>)),
     }
 
     // Determine the conda packages we need.
@@ -2502,7 +2528,7 @@ async fn spawn_extract_environment_task(
                     .into_diagnostic()?
                     .unwrap_or_default();
 
-                for req in record.0.requires_dist.iter() {
+                for req in record.requires_dist.iter() {
                     // Evaluate the marker environment with the given extras
                     if let Some(marker_env) = &marker_environment {
                         // let marker_str = marker_env.to_string();
@@ -2535,7 +2561,7 @@ async fn spawn_extract_environment_task(
                 }
 
                 // Insert the record if it is not already present
-                pypi_records.entry(record.0.name.clone()).or_insert(record);
+                pypi_records.entry(record.name.clone()).or_insert(record);
             }
         }
     }

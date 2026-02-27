@@ -31,7 +31,7 @@ use pypi_modifiers::{
     pypi_tags::{get_pypi_tags, is_python_record},
 };
 use rattler_conda_types::Platform;
-use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{PypiIndexes, PypiPackageData};
 use rayon::prelude::*;
 use utils::elapsed;
 use uv_auth::store_credentials_from_url;
@@ -51,7 +51,12 @@ use uv_resolver::{ExcludeNewer, FlatIndex};
 
 use crate::plan::{CachedWheels, RequiredDists};
 
-pub type PyPIRecords = (PypiPackageData, PypiPackageEnvironmentData);
+/// Extra data available from the manifest, not the lockfile
+pub struct ManifestData {
+    pub editable: bool,
+}
+
+pub type PyPIRecords = (PypiPackageData, ManifestData);
 
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
@@ -354,6 +359,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &index_locations,
             index_strategy,
             None,
+            Connectivity::Online,
         );
 
         // Resolve the flat indexes from `--find-links`.
@@ -431,11 +437,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     /// Create the installation plan by analyzing current state vs requirements
     async fn create_installation_plan(
         &self,
-        pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
+        pypi_records: &[crate::PyPIRecords],
         setup: &UvInstallerConfig,
     ) -> miette::Result<PyPIInstallationPlan> {
         // Create required distributions with pre-created Dist objects
-        let required_packages: Vec<_> = pypi_records.iter().map(|(pkg, _)| pkg.clone()).collect();
+        let required_packages: Vec<_> =
+            pypi_records.iter().map(|(pkg, spec)| (pkg, spec)).collect();
         let required_dists =
             RequiredDists::from_packages(&required_packages, self.config.lock_file_dir)
                 .into_diagnostic()

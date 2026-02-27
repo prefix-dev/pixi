@@ -38,9 +38,7 @@ use pypi_modifiers::{
     pypi_tags::{get_pypi_tags, is_python_record},
 };
 use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
-use rattler_lock::{
-    PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
-};
+use rattler_lock::{PackageHashes, PypiPackageData, PypiSourceTreeHashable, UrlOrPath, Verbatim};
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
@@ -66,7 +64,6 @@ use crate::{
     environment::CondaPrefixUpdated,
     lock_file::{
         CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
-        PypiRecord,
         records_by_name::HasNameVersion,
         resolve::{
             build_dispatch::{
@@ -288,7 +285,7 @@ pub async fn resolve_pypi(
     dependencies: IndexMap<uv_normalize::PackageName, IndexSet<PixiPypiSpec>>,
     system_requirements: SystemRequirements,
     locked_pixi_records: &[PixiRecord],
-    locked_pypi_packages: &[PypiRecord],
+    locked_pypi_packages: &[PypiPackageData],
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
     project_root: &Path,
@@ -367,7 +364,7 @@ pub async fn resolve_pypi(
     // Pre-populate the git resolver with locked git references.
     // This ensures that when uv resolves git dependencies, it will find the cached commit
     // and not panic in `url_to_precise` function.
-    for (package_data, _) in locked_pypi_packages {
+    for package_data in locked_pypi_packages {
         if let Some(location) = package_data.location.as_url()
             && LockedGitUrl::is_locked_git_url(location)
         {
@@ -459,6 +456,7 @@ pub async fn resolve_pypi(
         &index_locations,
         index_strategy,
         Some(&marker_environment),
+        Connectivity::Online,
     );
 
     let build_options = pypi_options_to_build_options(
@@ -617,15 +615,15 @@ pub async fn resolve_pypi(
     let preferences = locked_pypi_packages
         .iter()
         .map(|record| {
-            let (package_data, _) = record;
+            let Some(version) = &record.version else {
+                return Ok(None);
+            };
             let requirement = uv_pep508::Requirement {
-                name: to_uv_normalize(&package_data.name)?,
+                name: to_uv_normalize(&record.name)?,
                 extras: Vec::new().into(),
                 version_or_url: Some(uv_pep508::VersionOrUrl::VersionSpecifier(
                     uv_pep440::VersionSpecifiers::from(
-                        uv_pep440::VersionSpecifier::equals_version(to_uv_version(
-                            &package_data.version,
-                        )?),
+                        uv_pep440::VersionSpecifier::equals_version(to_uv_version(version)?),
                     ),
                 )),
                 marker: uv_pep508::MarkerTree::TRUE,
@@ -636,7 +634,7 @@ pub async fn resolve_pypi(
             // because they are resolved based on the reference (branch/tag/rev) in the manifest.
             // This matches how uv handles git dependencies - it doesn't try to pin them via preferences.
             // The git resolver cache (pre-populated above) ensures the locked commit is preferred.
-            if let Some(location) = package_data.location.as_url()
+            if let Some(location) = record.location.as_url()
                 && LockedGitUrl::is_locked_git_url(location)
             {
                 // Skip git packages - they'll be resolved based on manifest reference
@@ -943,7 +941,7 @@ async fn lock_pypi_packages(
     concurrent_downloads: usize,
     abs_project_root: &Path,
     original_git_references: &HashMap<uv_normalize::PackageName, pixi_spec::GitReference>,
-) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
+) -> miette::Result<Vec<PypiPackageData>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     let database =
         DistributionDatabase::new(registry_client, pixi_build_dispatch, concurrent_downloads);
@@ -961,7 +959,7 @@ async fn lock_pypi_packages(
 
             ResolvedDist::Installable { dist, .. } => match &**dist {
                 Dist::Built(dist) => {
-                    let (location, hash) = match &dist {
+                    let (location, hash, index_url) = match &dist {
                         BuiltDist::Registry(dist) => {
                             let best_wheel = dist.best_wheel();
                             let hash = parse_hashes_from_hash_vec(&dist.best_wheel().file.hashes)
@@ -974,7 +972,7 @@ async fn lock_pypi_packages(
                             )
                             .into_diagnostic()
                             .context("cannot convert registry dist")?;
-                            (url_or_path, hash)
+                            (url_or_path, hash, Some((*best_wheel.index).clone()))
                         }
                         BuiltDist::DirectUrl(dist) => {
                             let url = dist.url.to_url();
@@ -982,7 +980,7 @@ async fn lock_pypi_packages(
                                 .into_diagnostic()
                                 .context("cannot create direct url")?;
 
-                            (UrlOrPath::Url(direct_url), None)
+                            (UrlOrPath::Url(direct_url), None, None)
                         }
                         BuiltDist::Path(dist) => (
                             UrlOrPath::Path(
@@ -993,6 +991,7 @@ async fn lock_pypi_packages(
                                 )
                                 .into_diagnostic()?,
                             ),
+                            None,
                             None,
                         ),
                     };
@@ -1006,9 +1005,11 @@ async fn lock_pypi_packages(
                         name: pep508_rs::PackageName::new(metadata.name.to_string())
                             .into_diagnostic()
                             .context("cannot convert name")?,
-                        version: pep440_rs::Version::from_str(&metadata.version.to_string())
-                            .into_diagnostic()
-                            .context("cannot convert version")?,
+                        version: Some(
+                            pep440_rs::Version::from_str(&metadata.version.to_string())
+                                .into_diagnostic()
+                                .context("cannot convert version")?,
+                        ),
                         requires_python: metadata
                             .requires_python
                             .map(|r| to_version_specifiers(&r))
@@ -1018,9 +1019,9 @@ async fn lock_pypi_packages(
                             metadata.requires_dist.iter(),
                         )
                         .into_diagnostic()?,
-                        editable: false,
-                        location,
+                        location: Verbatim::new(location),
                         hash,
+                        index_url,
                     }
                 }
                 Dist::Source(source) => {
@@ -1046,20 +1047,20 @@ async fn lock_pypi_packages(
 
                     // Use the precise url if we got it back
                     // otherwise try to construct it from the source
-                    let (location, hash, editable) = match source {
+                    let (location, hash, index_url) = match source {
                         SourceDist::Registry(reg) => {
                             let url_or_path =
                                 get_url_or_path(&reg.index, &reg.file.url, abs_project_root)
                                     .into_diagnostic()
                                     .context("cannot convert registry sdist")?;
-                            (url_or_path, hash, false)
+                            (Verbatim::new(url_or_path), hash, Some((*reg.index).clone()))
                         }
                         SourceDist::DirectUrl(direct) => {
                             let url = direct.url.to_url();
                             let direct_url = Url::parse(&format!("direct+{url}"))
                                 .into_diagnostic()
                                 .context("could not create direct-url")?;
-                            (direct_url.into(), hash, false)
+                            (Verbatim::new(direct_url.into()), hash, None)
                         }
                         SourceDist::Git(git) => {
                             // Look up the original git reference from the manifest dependencies
@@ -1072,9 +1073,11 @@ async fn lock_pypi_packages(
                             let pinned_git_spec =
                                 into_pinned_git_spec(git.clone(), original_reference);
                             (
-                                pinned_git_spec.into_locked_git_url().to_url().into(),
+                                Verbatim::new(
+                                    pinned_git_spec.into_locked_git_url().to_url().into(),
+                                ),
                                 hash,
-                                false,
+                                None,
                             )
                         }
                         SourceDist::Path(path) => {
@@ -1102,7 +1105,7 @@ async fn lock_pypi_packages(
                             // instead of from the source path to copy the path that was passed in
                             // from the requirement.
                             let url_or_path = UrlOrPath::Path(install_path);
-                            (url_or_path, hash, false)
+                            (Verbatim::new(url_or_path), hash, None)
                         }
                         SourceDist::Directory(dir) => {
                             // Compute the hash of the package based on the source tree.
@@ -1125,17 +1128,28 @@ async fn lock_pypi_packages(
                             // Create the url for the lock file. This is based on the passed in URL
                             // instead of from the source path to copy the path that was passed in
                             // from the requirement.
-                            let url_or_path = UrlOrPath::Path(install_path);
+                            let url_or_path = if let Some(given) = dir.url.given() {
+                                Verbatim::new_with_given(
+                                    UrlOrPath::Path(install_path),
+                                    given.to_string(),
+                                )
+                            } else {
+                                Verbatim::new(UrlOrPath::Path(install_path))
+                            };
                             // Always set editable to false in lock file.
                             // Editability is looked up from manifest at install time.
-                            (url_or_path, hash, false)
+                            (url_or_path, hash, None)
                         }
                     };
 
                     PypiPackageData {
                         name: to_normalize(&metadata.name).into_diagnostic()?,
-                        version: pep440_rs::Version::from_str(&metadata.version.to_string())
-                            .into_diagnostic()?,
+                        version: (!metadata.dynamic)
+                            .then(|| {
+                                pep440_rs::Version::from_str(&metadata.version.to_string())
+                                    .into_diagnostic()
+                            })
+                            .transpose()?,
                         requires_python: metadata
                             .requires_python
                             .map(|r| to_version_specifiers(&r))
@@ -1145,14 +1159,13 @@ async fn lock_pypi_packages(
                         requires_dist: to_requirements(metadata.requires_dist.iter())
                             .into_diagnostic()?,
                         hash,
-                        editable,
+                        index_url,
                     }
                 }
             },
         };
 
-        // TODO: Store extras in the lock-file
-        locked_packages.push((pypi_package_data, PypiPackageEnvironmentData::default()));
+        locked_packages.push(pypi_package_data);
     }
 
     Ok(locked_packages)

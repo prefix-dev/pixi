@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, hash::Hash, str::FromStr};
+use std::{collections::HashMap, fmt::Display, hash::Hash, path::Path, str::FromStr};
 
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
@@ -46,15 +46,16 @@ pub struct WorkspaceManifest {
 
 impl WorkspaceManifest {
     /// Parses a TOML string into a [`WorkspaceManifest`].
-    pub fn from_toml_str<S: AsRef<str> + SourceCode>(
+    pub fn from_toml_str_with_base_dir<S: AsRef<str> + SourceCode>(
         source: S,
+        root_directory: &Path,
     ) -> Result<Self, WithSourceCode<TomlError, S>> {
         TomlManifest::from_toml_str(source.as_ref())
             .and_then(|manifest| {
                 manifest.into_workspace_manifest(
                     ExternalWorkspaceProperties::default(),
                     PackageDefaults::default(),
-                    None,
+                    root_directory,
                 )
             })
             .map(|manifests| manifests.0)
@@ -899,7 +900,10 @@ fn handle_missing_target(
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, str::FromStr};
+    use std::{
+        path::{Path, PathBuf},
+        str::FromStr,
+    };
 
     use indexmap::{IndexMap, IndexSet};
     use insta::{assert_debug_snapshot, assert_snapshot, assert_yaml_snapshot};
@@ -975,9 +979,10 @@ start = "python -m flask run --port=5050"
                 panic!("{}", format_parse_error(source, TomlError::from(error)))
             });
 
-        let manifest = WorkspaceManifest::from_toml_str(source).unwrap_or_else(
-            |WithSourceCode { error, source }| panic!("{}", format_parse_error(source, error)),
-        );
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(source, Path::new(""))
+            .unwrap_or_else(|WithSourceCode { error, source }| {
+                panic!("{}", format_parse_error(source, error))
+            });
 
         Workspace {
             manifest,
@@ -994,7 +999,7 @@ start = "python -m flask run --port=5050"
 
         let manifest = PyProjectManifest::from_toml_str(source)
             .unwrap_or_else(|error| panic!("{}", format_parse_error(source, error)))
-            .into_workspace_manifest(None)
+            .into_workspace_manifest(Path::new(""))
             .unwrap_or_else(|error| panic!("{}", format_parse_error(source, error)))
             .0;
 
@@ -1395,7 +1400,7 @@ start = "python -m flask run --port=5050"
         );
 
         let WithSourceCode { error, source } =
-            WorkspaceManifest::from_toml_str(contents).unwrap_err();
+            WorkspaceManifest::from_toml_str_with_base_dir(contents, Path::new("")).unwrap_err();
         assert_snapshot!(format_parse_error(&source, error));
     }
 
@@ -3266,7 +3271,7 @@ channels = ["nvidia", "pytorch"]
         foo = { path = "./foo" }
         "#;
 
-        let manifest = WorkspaceManifest::from_toml_str(toml);
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(toml, Path::new(""));
         let err = manifest.unwrap_err();
         insta::assert_snapshot!(format_parse_error(toml, err.error), @r###"
          × conda source dependencies are not allowed without enabling the 'pixi-build' preview feature

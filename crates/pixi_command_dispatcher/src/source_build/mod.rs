@@ -85,7 +85,7 @@ pub struct SourceBuildSpec {
     /// If provided, output matching uses (name, subdir, variants) instead of
     /// (name, version, build, subdir). The variants must be a subset of the
     /// output's variants.
-    pub variants: Option<BTreeMap<String, VariantValue>>,
+    pub variants: BTreeMap<String, VariantValue>,
 
     /// The directory where to place the built package.
     pub output_directory: Option<PathBuf>,
