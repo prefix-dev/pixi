@@ -1,3 +1,4 @@
+pub mod atomic_write;
 pub mod cache;
 pub mod conda_environment_file;
 pub mod indicatif;
