@@ -231,6 +231,31 @@ pixi run deploy auth-service
 pixi run deploy auth-service production
 ✨ Pixi task (deploy in default): echo Deploying auth-service to production
 ```
+### Passing Extra Arguments with `--`
+
+When a task defines typed `args`, all command-line values are matched against those definitions. If you need to pass *additional* flags or arguments directly to the underlying command on top of the typed args, use `--` as a separator. Everything after `--` is forwarded verbatim to the command, regardless of the task's `args` definition.
+
+```shell
+# Without --, extra flags would cause an error:
+# × task 'pytest' received more arguments than expected
+pixi run pytest tests/unit -v
+
+# With --, the typed arg is filled and the rest is forwarded:
+pixi run pytest tests/unit -- -v --tb=short --maxfail=5
+✨ Pixi task (pytest in default): pytest tests/unit -v --tb=short --maxfail=5
+```
+
+You can also use `--` when relying on a default argument value:
+
+```shell
+# "target" uses its default, "--verbose" is forwarded to the command
+pixi run build -- --verbose
+✨ Pixi task (build in default): echo Building my-app in development mode --verbose
+```
+
+!!! note "Tasks without typed args"
+    For tasks that do **not** define `args`, `--` is passed through to the underlying command unchanged. This preserves its meaning for programs that use `--` themselves (e.g. `git log -- somefile`).
+
 ### Restricting Values with Choices
 
 You can restrict the allowed values of an argument using the `choices` field. If a value is provided that is not in the list, Pixi will report an error instead of running the task.

@@ -11,6 +11,9 @@ pixi run --locked python
 pixi run build
 # Extra arguments will be passed to the tasks command.
 pixi run task argument1 argument2
+# Use `--` to pass extra arguments directly to the underlying command,
+# even when the task defines typed `args`.
+pixi run task typed-arg-value -- --extra-flag --other=value
 # Skip dependencies of the task
 pixi run --skip-deps task
 # Run in dry-run mode to see the commands that would be run

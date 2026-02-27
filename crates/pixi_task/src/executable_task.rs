@@ -160,13 +160,18 @@ impl<'p> ExecutableTask<'p> {
             let export = get_export_specific_task_env(self.task.as_ref());
 
             // Append the command line arguments verbatim
-            let cli_args = if let ArgValues::FreeFormArgs(additional_args) = &self.args {
-                additional_args
+            let extra = match &self.args {
+                ArgValues::FreeFormArgs(args) => args.as_slice(),
+                ArgValues::TypedArgsWithExtra(_, extra) => extra.as_slice(),
+                ArgValues::TypedArgs(_) => &[],
+            };
+            let cli_args = if extra.is_empty() {
+                String::new()
+            } else {
+                extra
                     .iter()
                     .format_with(" ", |arg, f| f(&format_args!("'{arg}'")))
                     .to_string()
-            } else {
-                String::new()
             };
 
             // Skip the export if it's empty, to avoid newlines
@@ -234,9 +239,14 @@ impl<'p> ExecutableTask<'p> {
             .map(|c| c.into_owned());
 
         if let Some(mut cmd) = original_cmd {
-            if let ArgValues::FreeFormArgs(additional_args) = &self.args
-                && !additional_args.is_empty()
-            {
+            let extra = match &self.args {
+                ArgValues::FreeFormArgs(args) if !args.is_empty() => Some(args.as_slice()),
+                ArgValues::TypedArgsWithExtra(_, extra) if !extra.is_empty() => {
+                    Some(extra.as_slice())
+                }
+                _ => None,
+            };
+            if let Some(additional_args) = extra {
                 cmd.push(' ');
                 cmd.push_str(&additional_args.join(" "));
             }
@@ -463,9 +473,14 @@ impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
                         .apply_to(command.as_deref().unwrap_or("<alias>"))
                         .bold()
                 )?;
-                if let ArgValues::FreeFormArgs(additional_args) = &self.task.args
-                    && !additional_args.is_empty()
-                {
+                let extra = match &self.task.args {
+                    ArgValues::FreeFormArgs(args) if !args.is_empty() => Some(args.as_slice()),
+                    ArgValues::TypedArgsWithExtra(_, extra) if !extra.is_empty() => {
+                        Some(extra.as_slice())
+                    }
+                    _ => None,
+                };
+                if let Some(additional_args) = extra {
                     write!(
                         f,
                         " {}",
