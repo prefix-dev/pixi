@@ -426,7 +426,12 @@ fn find_inconsistent_solve_groups<'p>(
                 continue;
             };
 
-            for package in locked_env.packages(platform).into_iter().flatten() {
+            let lock_platform = locked_env.lock_file().platform(&platform.to_string());
+            for package in lock_platform
+                .and_then(|p| locked_env.packages(p))
+                .into_iter()
+                .flatten()
+            {
                 match package {
                     LockedPackageRef::Conda(pkg) => {
                         match conda_packages_by_name.get(&pkg.record().name) {
@@ -440,7 +445,7 @@ fn find_inconsistent_solve_groups<'p>(
                             _ => {}
                         }
                     }
-                    LockedPackageRef::Pypi(pkg, _) => match pypi_packages_by_name.get(&pkg.name) {
+                    LockedPackageRef::Pypi(pkg) => match pypi_packages_by_name.get(&pkg.name) {
                         None => {
                             pypi_packages_by_name.insert(pkg.name.clone(), pkg.location.clone());
                         }

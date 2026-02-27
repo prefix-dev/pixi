@@ -532,7 +532,8 @@ impl WorkspaceMut {
             // platforms
             .filter_map(|(env, platform)| {
                 let locked_env = updated_lock_file.environment(&env)?;
-                locked_env.conda_repodata_records(platform).ok()?
+                let lock_platform = updated_lock_file.platform(&platform.to_string())?;
+                locked_env.conda_repodata_records(lock_platform).ok()?
             })
             .flatten()
             .collect_vec();
@@ -617,7 +618,10 @@ impl WorkspaceMut {
             // Get all the conda and pypi records for the combination of environments and
             // platforms
             .iter()
-            .filter_map(|(env, platform)| env.pypi_packages(*platform))
+            .filter_map(|(env, platform)| {
+                let lock_platform = env.lock_file().platform(&platform.to_string())?;
+                env.pypi_packages(lock_platform)
+            })
             .flatten()
             .collect_vec();
 
@@ -632,9 +636,11 @@ impl WorkspaceMut {
             let version_constraint = pinning_strategy.determine_version_constraint(
                 pypi_records
                     .iter()
-                    .filter_map(|(data, _)| {
+                    .filter_map(|data| {
                         if &data.name == name.as_normalized() {
-                            Version::from_str(&data.version.to_string()).ok()
+                            data.version
+                                .as_ref()
+                                .and_then(|v| Version::from_str(&v.to_string()).ok())
                         } else {
                             None
                         }

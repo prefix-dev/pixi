@@ -41,6 +41,7 @@ miette = { workspace = true, features = ["fancy-no-backtrace"] }
 miette-arborium = { version = "2.5.0", features = ["lang-toml"] }
 pathdiff = { workspace = true }
 pep508_rs = { workspace = true }
+percent-encoding = { workspace = true }
 pixi_api = { workspace = true }
 pixi_auth = { workspace = true }
 pixi_build_frontend = { workspace = true }
@@ -96,6 +97,7 @@ uv-client = { workspace = true }
 uv-configuration = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
+uv-redacted = { workspace = true }
 uv-requirements-txt = { workspace = true }
 which = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }

@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use pixi_consts::consts;
 use rattler_conda_types::Platform;
 use rattler_lock::LockFile;
@@ -207,7 +205,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
         )
         .unwrap();
 
-    let pkg_version = pkg.as_pypi().unwrap().0.version.to_string();
+    let pkg_version = pkg.as_pypi().unwrap().version_string();
 
     let mut lock_file_str = lock.render_to_string().unwrap();
 
@@ -215,7 +213,6 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
     let fragment = pkg
         .as_pypi()
         .unwrap()
-        .0
         .location
         .as_url()
         .unwrap()
@@ -227,7 +224,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
 
     lock_file_str = lock_file_str.replace(&pkg_version, "0.1.0");
 
-    let lockfile = LockFile::from_str(&lock_file_str).unwrap();
+    let lockfile = LockFile::from_str_with_base_directory(&lock_file_str, None).unwrap();
 
     lockfile.to_path(&workspace.lock_file_path()).unwrap();
 

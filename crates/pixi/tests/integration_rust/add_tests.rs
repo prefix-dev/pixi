@@ -810,10 +810,11 @@ preview = ['pixi-build']
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
+    let p = lock.platform(&Platform::Win64.to_string()).unwrap();
     let git_package = lock
         .default_environment()
         .unwrap()
-        .packages(Platform::Win64)
+        .packages(p)
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
@@ -864,10 +865,11 @@ preview = ['pixi-build']
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
+    let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
     let git_package = lock
         .default_environment()
         .unwrap()
-        .packages(Platform::Linux64)
+        .packages(p)
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
@@ -923,10 +925,11 @@ preview = ['pixi-build']"#,
 
     // Check the lock file
     let lock = pixi.lock_file().await.unwrap();
+    let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
     let git_package = lock
         .default_environment()
         .unwrap()
-        .packages(Platform::Linux64)
+        .packages(p)
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
@@ -979,10 +982,11 @@ preview = ['pixi-build']"#,
 
     // Check the lock file
     let lock = pixi.lock_file().await.unwrap();
+    let p = lock.platform(&Platform::Win64.to_string()).unwrap();
     let git_package = lock
         .default_environment()
         .unwrap()
-        .packages(Platform::Win64)
+        .packages(p)
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
@@ -1082,13 +1086,16 @@ platforms = ["{platform}"]
     });
 
     let lock_file = pixi.lock_file().await.unwrap();
+    let p = lock_file
+        .platform(&Platform::current().to_string())
+        .unwrap();
 
-    let (boltons, _) = lock_file
+    let boltons = lock_file
         .default_environment()
         .unwrap()
-        .pypi_packages(Platform::current())
+        .pypi_packages(p)
         .unwrap()
-        .find(|(p, _)| p.name.to_string() == "boltons")
+        .find(|p| p.name.to_string() == "boltons")
         .unwrap();
 
     insta::with_settings!( {filters => vec![

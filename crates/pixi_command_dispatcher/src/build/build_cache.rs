@@ -68,7 +68,7 @@ pub struct BuildInput {
 
     /// The specific variant values for this build. Different variants result
     /// in different cache keys to ensure they are cached separately.
-    pub variants: Option<BTreeMap<String, VariantValue>>,
+    pub variants: BTreeMap<String, VariantValue>,
 }
 
 impl BuildInput {

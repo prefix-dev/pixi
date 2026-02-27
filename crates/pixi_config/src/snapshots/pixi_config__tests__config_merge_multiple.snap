@@ -77,9 +77,6 @@ Config {
     },
     repodata_config: RepodataConfig {
         default: RepodataChannelConfig {
-            disable_jlap: Some(
-                true,
-            ),
             disable_bzip2: None,
             disable_zstd: Some(
                 true,

@@ -285,10 +285,6 @@ impl ConfigCliActivation {
 #[derive(Clone, Default, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct RepodataChannelConfig {
-    /// Disable JLAP compression for repodata.
-    #[serde(alias = "disable_jlap")] // BREAK: remove to stop supporting snake_case alias
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub disable_jlap: Option<bool>,
     /// Disable bzip2 compression for repodata.
     #[serde(alias = "disable_bzip2")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -312,7 +308,6 @@ impl RepodataChannelConfig {
 
     pub fn merge(&self, other: Self) -> Self {
         Self {
-            disable_jlap: self.disable_jlap.or(other.disable_jlap),
             disable_zstd: self.disable_zstd.or(other.disable_zstd),
             disable_bzip2: self.disable_bzip2.or(other.disable_bzip2),
             disable_sharded: self.disable_sharded.or(other.disable_sharded),
@@ -1390,7 +1385,6 @@ impl Config {
             "pypi-config.keyring-provider",
             "repodata-config",
             "repodata-config.disable-bzip2",
-            "repodata-config.disable-jlap",
             "repodata-config.disable-sharded",
             "repodata-config.disable-zstd",
             "run-post-link-scripts",
@@ -1666,10 +1660,6 @@ impl Config {
 
                 let subkey = key.strip_prefix("repodata-config.").unwrap();
                 match subkey {
-                    "disable-jlap" => {
-                        self.repodata_config.default.disable_jlap =
-                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
-                    }
                     "disable-bzip2" => {
                         self.repodata_config.default.disable_bzip2 =
                             value.map(|v| v.parse()).transpose().into_diagnostic()?;
@@ -2306,7 +2296,6 @@ UNUSED = "unused"
             repodata_config: RepodataConfig {
                 default: RepodataChannelConfig {
                     disable_bzip2: Some(true),
-                    disable_jlap: Some(true),
                     disable_sharded: Some(true),
                     disable_zstd: Some(true),
                 },
@@ -2444,7 +2433,6 @@ UNUSED = "unused"
                 "https://prefix.dev/conda-forge"
             ]
             [repodata_config]
-            disable_jlap = true
             disable_bzip2 = true
             disable_zstd = true
         "#;
@@ -2466,7 +2454,6 @@ UNUSED = "unused"
             Some(&vec![Url::parse("https://prefix.dev/conda-forge").unwrap()])
         );
         let repodata_config = config.repodata_config;
-        assert_eq!(repodata_config.default.disable_jlap, Some(true));
         assert_eq!(repodata_config.default.disable_bzip2, Some(true));
         assert_eq!(repodata_config.default.disable_zstd, Some(true));
         assert_eq!(repodata_config.default.disable_sharded, None);
@@ -2481,7 +2468,6 @@ UNUSED = "unused"
                 "https://prefix.dev/conda-forge"
             ]
             [repodata-config]
-            disable-jlap = true
             disable-bzip2 = true
             disable-zstd = true
             disable-sharded = true
@@ -2544,12 +2530,6 @@ UNUSED = "unused"
                 .get(&Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
             Some(&vec![Url::parse("https://prefix.dev/conda-forge").unwrap()])
         );
-
-        config
-            .set("repodata-config.disable-jlap", Some("true".to_string()))
-            .unwrap();
-        let repodata_config = config.repodata_config();
-        assert_eq!(repodata_config.default.disable_jlap, Some(true));
 
         config
             .set(
@@ -2870,25 +2850,21 @@ UNUSED = "unused"
     fn test_repodata_config() {
         let toml = r#"
             [repodata-config]
-            disable-jlap = true
             disable-bzip2 = true
             disable-zstd = true
             disable-sharded = true
 
             [repodata-config."https://prefix.dev/conda-forge"]
-            disable-jlap = false
             disable-bzip2 = false
             disable-zstd = false
             disable-sharded = false
 
             [repodata-config."https://conda.anaconda.org/conda-forge"]
-            disable-jlap = false
             disable-bzip2 = false
             disable-zstd = false
         "#;
         let (config, _) = Config::from_toml(toml, None).unwrap();
         let repodata_config = config.repodata_config();
-        assert_eq!(repodata_config.default.disable_jlap, Some(true));
         assert_eq!(repodata_config.default.disable_bzip2, Some(true));
         assert_eq!(repodata_config.default.disable_zstd, Some(true));
         assert_eq!(repodata_config.default.disable_sharded, Some(true));
@@ -2899,7 +2875,6 @@ UNUSED = "unused"
         let prefix_config = per_channel
             .get(&Url::from_str("https://prefix.dev/conda-forge").unwrap())
             .unwrap();
-        assert_eq!(prefix_config.disable_jlap, Some(false));
         assert_eq!(prefix_config.disable_bzip2, Some(false));
         assert_eq!(prefix_config.disable_zstd, Some(false));
         assert_eq!(prefix_config.disable_sharded, Some(false));
@@ -2907,7 +2882,6 @@ UNUSED = "unused"
         let anaconda_config = per_channel
             .get(&Url::from_str("https://conda.anaconda.org/conda-forge").unwrap())
             .unwrap();
-        assert_eq!(anaconda_config.disable_jlap, Some(false));
         assert_eq!(anaconda_config.disable_bzip2, Some(false));
         assert_eq!(anaconda_config.disable_zstd, Some(false));
         assert_eq!(anaconda_config.disable_sharded, None);

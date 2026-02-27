@@ -95,10 +95,11 @@ pub enum ConvertToUvDistError {
 /// Convert from a PypiPackageData to a uv [`distribution_types::Dist`]
 pub fn convert_to_dist(
     pkg: &PypiPackageData,
+    manifest_data: &crate::ManifestData,
     lock_file_dir: &Path,
 ) -> Result<Dist, ConvertToUvDistError> {
     // Figure out if it is a url from the registry or a direct url
-    let dist = match &pkg.location {
+    let dist = match &*pkg.location {
         UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
             let url_without_direct = strip_direct_scheme(url);
             let pkg_name = to_uv_normalize(&pkg.name)?;
@@ -178,7 +179,11 @@ pub fn convert_to_dist(
                 }))
             } else {
                 let pkg_name = to_uv_normalize(&pkg.name)?;
-                let pkg_version = to_uv_version(&pkg.version)?;
+                let pkg_version = to_uv_version(
+                    pkg.version
+                        .as_ref()
+                        .expect("registry source dists always have a version"),
+                )?;
                 Dist::Source(SourceDist::Registry(RegistrySourceDist {
                     name: pkg_name,
                     version: pkg_version,
@@ -211,7 +216,7 @@ pub fn convert_to_dist(
                     pkg_name,
                     absolute_url,
                     &abs_path,
-                    Some(pkg.editable),
+                    Some(manifest_data.editable),
                     Some(false),
                 )?
             } else {
@@ -249,18 +254,22 @@ mod tests {
         // Pass into locked data
         let locked = PypiPackageData {
             name: "torch".parse().unwrap(),
-            version: Version::from_str("2.3.0+cu121").unwrap(),
-            location: UrlOrPath::Url(url),
+            version: Some(Version::from_str("2.3.0+cu121").unwrap()),
+            location: UrlOrPath::Url(url).into(),
             hash: None,
+            index_url: None,
             requires_dist: vec![],
             requires_python: None,
-            editable: false,
         };
 
         // Convert the locked data to a uv dist
         // check if it does not panic
-        let dist = convert_to_dist(&locked, &PathBuf::new())
-            .expect("could not convert wheel with special chars to dist");
+        let dist = convert_to_dist(
+            &locked,
+            &crate::ManifestData { editable: false },
+            &PathBuf::new(),
+        )
+        .expect("could not convert wheel with special chars to dist");
 
         // Check if the dist is a built dist
         assert!(!dist.filename().unwrap().contains("%2B"));

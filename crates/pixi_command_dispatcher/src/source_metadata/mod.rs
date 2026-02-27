@@ -476,14 +476,12 @@ impl SourceMetadataSpec {
                 .into_iter()
                 .map(|(name, source)| (name.as_source().to_string(), source))
                 .collect(),
-            variants: Some(
-                output
-                    .metadata
-                    .variant
-                    .iter()
-                    .map(|(k, v)| (k.clone(), pixi_record::VariantValue::from(v.clone())))
-                    .collect(),
-            ),
+            variants: output
+                .metadata
+                .variant
+                .iter()
+                .map(|(k, v)| (k.clone(), pixi_record::VariantValue::from(v.clone())))
+                .collect(),
         })
     }
 
