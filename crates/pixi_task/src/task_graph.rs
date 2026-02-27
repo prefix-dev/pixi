@@ -298,10 +298,18 @@ impl<'p> TaskGraph<'p> {
                             }
                         })
                     } else {
-                        // Task has no typed args — pass everything through verbatim,
-                        // including any `--` separator (it may be meaningful to the
-                        // underlying command, e.g. `git log -- somefile`).
-                        Some(ArgValues::FreeFormArgs(args.clone()))
+                        // Task has no typed args — strip the `--` separator if present.
+                        // For any pixi task, `--` is consumed by pixi and not forwarded
+                        // to the underlying command. Args before and after `--` are all
+                        // passed through as free-form args.
+                        let free_args = if let Some(pos) = args.iter().position(|a| a == "--") {
+                            let mut combined = args[..pos].to_vec();
+                            combined.extend_from_slice(&args[pos + 1..]);
+                            combined
+                        } else {
+                            args.clone()
+                        };
+                        Some(ArgValues::FreeFormArgs(free_args))
                     };
 
                     if skip_deps {
@@ -1303,8 +1311,8 @@ mod test {
     #[test]
     fn test_double_dash_with_free_form_args() {
         // Task has NO typed args. pixi run mytask arg1 -- arg2
-        // The "--" is preserved and passed through to the underlying command,
-        // because it may be meaningful (e.g. `git log -- somefile`).
+        // The "--" is stripped (consumed by pixi) and args before and after
+        // are both forwarded to the underlying command.
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1316,7 +1324,22 @@ mod test {
     "#;
         let run_args = &["mytask", "arg1", "--", "arg2"];
         let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
-        assert_eq!(commands, vec!["echo 'arg1' '--' 'arg2'"]);
+        assert_eq!(commands, vec!["echo 'arg1' 'arg2'"]);
+    }
+
+    #[test]
+    fn test_double_dash_custom_command_preserved() {
+        // Custom commands (no pixi task found) pass `--` through verbatim.
+        // e.g. `pixi run git log -- somefile`
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+    "#;
+        let run_args = &["git", "log", "--", "somefile"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["'git' 'log' '--' 'somefile'"]);
     }
 
     #[test]
