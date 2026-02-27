@@ -628,6 +628,112 @@ mod tests {
         );
     }
 
+    /// Regression test for https://github.com/prefix-dev/pixi/issues/5562
+    ///
+    /// When cross-compiling (e.g. building for osx-arm64 on osx-64), target-specific
+    /// build dependencies like `[package.target.osx-64.build-dependencies]` should
+    /// be resolved against build_platform, not host_platform.
+    #[tokio::test]
+    async fn test_cross_compile_target_specific_build_deps() {
+        use pixi_build_backend::utils::test::intermediate_conda_outputs_cross;
+
+        // Create a project with:
+        // - A default build dep (should always be included)
+        // - An osx-64 target-specific build dep (sigtool - should be included when
+        //   build_platform is osx-64)
+        // - An osx-arm64 target-specific host dep (should be included when
+        //   host_platform is osx-arm64)
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "defaultTarget": {
+                    "buildDependencies": {
+                        "make": {
+                            "binary": {}
+                        }
+                    },
+                    "hostDependencies": {
+                        "zlib": {
+                            "binary": {}
+                        }
+                    }
+                },
+                "targets": {
+                    "osx-64": {
+                        "buildDependencies": {
+                            "sigtool": {
+                                "binary": {
+                                    "version": ">=0.1.3,<0.2"
+                                }
+                            }
+                        }
+                    },
+                    "osx-arm64": {
+                        "hostDependencies": {
+                            "libfoo": {
+                                "binary": {}
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+
+        // Cross-compile: host=osx-arm64 (target), build=osx-64 (current machine)
+        let result = intermediate_conda_outputs_cross::<CMakeGenerator>(
+            Some(project_model),
+            Some(temp_dir.path().to_path_buf()),
+            Platform::OsxArm64, // host_platform (target)
+            Platform::Osx64,    // build_platform (current machine)
+            None,
+            None,
+        )
+        .await;
+
+        assert!(
+            !result.outputs.is_empty(),
+            "Should have at least one output"
+        );
+        let output = &result.outputs[0];
+
+        // Check build dependencies: should contain sigtool (from osx-64 build dep,
+        // since build_platform is osx-64) and make (from default target)
+        let build_dep_names: Vec<_> = output
+            .build_dependencies
+            .as_ref()
+            .unwrap()
+            .depends
+            .iter()
+            .map(|dep| dep.name.as_str())
+            .collect();
+
+        assert!(
+            build_dep_names.contains(&"sigtool"),
+            "sigtool should be in build dependencies when build_platform is osx-64, \
+             got: {build_dep_names:?}"
+        );
+
+        // Check host dependencies: should contain libfoo (from osx-arm64 host dep,
+        // since host_platform is osx-arm64) and zlib (from default target)
+        let host_dep_names: Vec<_> = output
+            .host_dependencies
+            .as_ref()
+            .unwrap()
+            .depends
+            .iter()
+            .map(|dep| dep.name.as_str())
+            .collect();
+
+        assert!(
+            host_dep_names.contains(&"libfoo"),
+            "libfoo should be in host dependencies when host_platform is osx-arm64, \
+             got: {host_dep_names:?}"
+        );
+    }
+
     #[tokio::test]
     async fn test_stdlib_is_added() {
         let project_model = project_fixture!({

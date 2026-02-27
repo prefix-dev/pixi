@@ -227,7 +227,7 @@ where
         &self,
         params: CondaOutputsParams,
     ) -> miette::Result<CondaOutputsResult> {
-        let build_platform = params.host_platform;
+        let build_platform = params.build_platform;
 
         let config = self
             .target_config

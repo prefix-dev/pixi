@@ -57,6 +57,31 @@ where
     T: GenerateRecipe + Default + Clone + Send + Sync + 'static,
     <T as GenerateRecipe>::Config: Send + Sync + 'static,
 {
+    intermediate_conda_outputs_cross::<T>(
+        project_model,
+        source_dir,
+        host_platform,
+        host_platform,
+        variant_configuration,
+        variant_files,
+    )
+    .await
+}
+
+/// Like [`intermediate_conda_outputs`] but allows specifying a different build
+/// platform (for cross-compilation testing).
+pub async fn intermediate_conda_outputs_cross<T>(
+    project_model: Option<pixi_build_types::ProjectModel>,
+    source_dir: Option<PathBuf>,
+    host_platform: Platform,
+    build_platform: Platform,
+    variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
+    variant_files: Option<Vec<PathBuf>>,
+) -> CondaOutputsResult
+where
+    T: GenerateRecipe + Default + Clone + Send + Sync + 'static,
+    <T as GenerateRecipe>::Config: Send + Sync + 'static,
+{
     let manifest_path = match &source_dir {
         Some(dir) => dir.join("pixi.toml"),
         None => PathBuf::from("pixi.toml"),
@@ -83,7 +108,7 @@ where
         .conda_outputs(CondaOutputsParams {
             channels: vec![],
             host_platform,
-            build_platform: host_platform,
+            build_platform,
             variant_configuration,
             variant_files,
             work_directory: current_dir,
