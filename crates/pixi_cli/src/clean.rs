@@ -1,6 +1,6 @@
-use pixi_config;
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
+use pixi_core::workspace::WorkspaceRegistry;
 use pixi_manifest::EnvironmentName;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -47,6 +47,10 @@ pub struct Args {
     /// Only remove the pixi-build cache
     #[arg(long)]
     pub build: bool,
+
+    /// Only remove disassociated workspace registries
+    #[arg(long)]
+    pub workspaces_registry: bool,
 }
 
 /// Clean the cache of your system which are touched by pixi.
@@ -131,7 +135,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 explicit_env.name().fancy_display()
             );
         }
-    } else if !args.activation_cache & !args.build {
+    } else if !args.activation_cache & !args.build & !args.workspaces_registry {
         // Remove all pixi related work from the workspace.
         if !workspace
             .environments_dir()
@@ -151,6 +155,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             false,
         )
         .await?;
+        clean_workspaces().await?;
     } else {
         if args.activation_cache {
             remove_folder_with_progress(workspace.activation_env_cache_folder(), true).await?;
@@ -161,6 +166,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 true,
             )
             .await?;
+        }
+        if args.workspaces_registry {
+            clean_workspaces().await?;
         }
     }
     Ok(())
@@ -218,6 +226,20 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
     for dir in dirs {
         remove_folder_with_progress(dir, true).await?;
     }
+    Ok(())
+}
+
+/// Clean disassociated workspaces from the workspace registry
+async fn clean_workspaces() -> miette::Result<()> {
+    let mut workspace_registry = WorkspaceRegistry::load()?;
+    let removed_workspaces = workspace_registry.prune().await?;
+    for name in removed_workspaces {
+        eprintln!("{} {}", console::style("pruned workspace").green(), name);
+    }
+    eprintln!(
+        "{} Workspace registry pruned",
+        console::style(console::Emoji("✔ ", "")).green(),
+    );
     Ok(())
 }
 

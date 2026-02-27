@@ -62,5 +62,7 @@ pixi shell [OPTIONS]
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- <a id="arg---workspace" href="#arg---workspace">`--workspace (-w) <WORKSPACE>`</a>
+:  Name of the workspace
 
 --8<-- "docs/reference/cli/pixi/shell_extender:example"

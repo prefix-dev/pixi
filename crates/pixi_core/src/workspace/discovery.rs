@@ -9,7 +9,8 @@ use pixi_manifest::{
 };
 use thiserror::Error;
 
-use crate::workspace::Workspace;
+use crate::workspace::WorkspaceRegistry;
+use crate::workspace::{Workspace, WorkspaceRegistryError};
 
 /// Defines where the search for the workspace should start.
 #[derive(Debug, Clone, Default)]
@@ -30,6 +31,11 @@ pub enum DiscoveryStart {
     ///
     /// If no manifest is found at the given path the search will abort.
     ExplicitManifest(PathBuf),
+
+    /// Search by name in the workspace registry.
+    ///
+    /// If the name is not found in the registry, abort.
+    WorkspaceRegistry(String),
 }
 
 impl DiscoveryStart {
@@ -39,6 +45,21 @@ impl DiscoveryStart {
             DiscoveryStart::CurrentDir => std::env::current_dir(),
             DiscoveryStart::SearchRoot(path) => Ok(path.clone()),
             DiscoveryStart::ExplicitManifest(path) => Ok(path.clone()),
+            DiscoveryStart::WorkspaceRegistry(name) => {
+                let registry = WorkspaceRegistry::load()
+                    .map_err(|_| WorkspaceLocatorError::MissingRegistry())?;
+                let path = registry
+                    .named_workspace(name)
+                    .map_err(WorkspaceLocatorError::MissingWorkspace)?;
+                if !path.exists() {
+                    return Err(WorkspaceLocatorError::MissingWorkspacePath {
+                        name: name.to_string(),
+                        path,
+                    }
+                    .into());
+                }
+                Ok(path.clone())
+            }
         }
     }
 }
@@ -97,6 +118,24 @@ pub enum WorkspaceLocatorError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     ExplicitManifestError(#[from] ExplicitManifestError),
+
+    #[error("unable to load the workspace registry")]
+    MissingRegistry(),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingWorkspace(#[from] WorkspaceRegistryError),
+
+    #[error("could not find workspace '{}' at '{}'", .name, .path.display())]
+    #[diagnostic(help = "clean the registry with `pixi workspace register prune`")]
+    MissingWorkspacePath { name: String, path: PathBuf },
+}
+
+impl From<WorkspaceLocatorError> for std::io::Error {
+    fn from(err: WorkspaceLocatorError) -> Self {
+        // Create a new std::io::Error, using Other kind and the source error
+        std::io::Error::other(err)
+    }
 }
 
 impl WorkspaceLocator {
@@ -160,6 +199,19 @@ impl WorkspaceLocator {
                 std::env::current_dir().map_err(WorkspaceLocatorError::CurrentDir)?,
             ),
             DiscoveryStart::SearchRoot(path) => pixi_manifest::DiscoveryStart::SearchRoot(path),
+            DiscoveryStart::WorkspaceRegistry(name) => {
+                let registry = WorkspaceRegistry::load()
+                    .map_err(|_| WorkspaceLocatorError::MissingRegistry())?;
+                let path = registry
+                    .named_workspace(&name)
+                    .map_err(WorkspaceLocatorError::MissingWorkspace)?;
+
+                if !path.exists() {
+                    return Err(WorkspaceLocatorError::MissingWorkspacePath { name, path });
+                }
+
+                pixi_manifest::DiscoveryStart::ExplicitManifest(path)
+            }
         };
 
         let discovery_source = discovery_start.root().to_path_buf();
@@ -290,6 +342,9 @@ impl WorkspaceLocator {
 mod test {
     use std::path::Path;
 
+    use temp_env;
+    use tempfile::tempdir;
+
     use super::*;
 
     #[test]
@@ -321,6 +376,92 @@ mod test {
         );
         let workspace = workspace_locator.locate().unwrap();
         assert_eq!(workspace.root, project_root);
+    }
+
+    #[tokio::test]
+    async fn test_workspace_locator_registered_workspace() {
+        // Equivalent to `pixi xxx --workspace ws`
+        let temp_dir = tempdir().unwrap();
+        let pixi_home_dir = temp_dir.path().join("pixi-home");
+        let crate_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let project_root = Path::new(&crate_root).parent().unwrap().parent().unwrap();
+        temp_env::async_with_vars(
+            [("PIXI_HOME", Some(pixi_home_dir.to_str().unwrap()))],
+            async {
+                WorkspaceRegistry::default()
+                    .add_workspace("ws".to_string(), project_root.to_path_buf())
+                    .await
+                    .unwrap();
+
+                let workspace_locator = WorkspaceLocator::default()
+                    .with_search_start(DiscoveryStart::WorkspaceRegistry("ws".to_string()));
+                let workspace = workspace_locator.locate().unwrap();
+                assert_eq!(workspace.root, project_root);
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_workspace_locator_registered_workspace_path_does_not_exist() {
+        // Equivalent to `pixi xxx --workspace ws`
+        let temp_dir = tempdir().unwrap();
+        let pixi_home_dir = temp_dir.path().join("pixi-home");
+        let crate_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let invalid_project_root = Path::new(&crate_root)
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("idontexist");
+        temp_env::async_with_vars(
+            [("PIXI_HOME", Some(pixi_home_dir.to_str().unwrap()))],
+            async {
+                WorkspaceRegistry::default()
+                    .add_workspace("ws".to_string(), invalid_project_root.to_path_buf())
+                    .await
+                    .unwrap();
+
+                let workspace_locator = WorkspaceLocator::default()
+                    .with_search_start(DiscoveryStart::WorkspaceRegistry("ws".to_string()));
+                let result = workspace_locator.locate();
+                assert!(result.is_err());
+
+                let error = result.unwrap_err();
+                assert!(matches!(
+                    error,
+                    WorkspaceLocatorError::MissingWorkspacePath { name: _, path: _ }
+                ));
+
+                // Check that the error message contains the suggestion
+                let error_message = error.to_string();
+                assert!(error_message.contains("could not find workspace "));
+                assert!(error_message.contains("ws"));
+            },
+        )
+        .await;
+    }
+
+    #[test]
+    fn test_workspace_locator_registered_workspace_does_not_exist() {
+        // Equivalent to `pixi xxx --workspace idontexist`
+        let temp_dir = tempdir().unwrap();
+        let pixi_home_dir = temp_dir.path().join("pixi-home");
+        temp_env::with_var("PIXI_HOME", Some(pixi_home_dir.to_str().unwrap()), || {
+            let workspace_locator = WorkspaceLocator::default()
+                .with_search_start(DiscoveryStart::WorkspaceRegistry("idontexist".to_string()));
+
+            let result = workspace_locator.locate();
+            assert!(result.is_err());
+
+            let error = result.unwrap_err();
+            assert!(matches!(error, WorkspaceLocatorError::MissingWorkspace(_)));
+
+            // Check that the error message contains the suggestion
+            let error_message = error.to_string();
+            assert!(error_message.contains("could not find workspace "));
+            assert!(error_message.contains("idontexist"));
+        });
     }
 
     #[test]
