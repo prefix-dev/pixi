@@ -150,9 +150,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.101"
+version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f0e0fee31ef5ed1ba1316088939cea399010ed7731dba877ed44aeb407a75ea"
+checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "arbitrary"
@@ -2736,9 +2736,9 @@ dependencies = [
 
 [[package]]
 name = "flickzeug"
-version = "0.4.5"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f874fe839fc904039c11cf7db845355b3ba58c672a295b3559009ebddf29eb2c"
+checksum = "c95ac51c7950d711fb128681fccb1dddd41c81eb230d78251e600a0296fdd30c"
 dependencies = [
  "nu-ansi-term 0.50.3",
  "strsim",
@@ -3464,7 +3464,8 @@ checksum = "66cdb727cec723cee65912a74a7f9f0c3ad0c6f9df4f03d05a5c7a15398bbad1"
 [[package]]
 name = "http-range-client"
 version = "0.9.1"
-source = "git+https://github.com/pka/http-range-client.git#fccfa852dbe7e875a50802c55ee6c5f69c634827"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d5f72a73344fc9576e74e42a0f1d7a05d7c6c50950a15f44faea133a91f622b"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -7374,8 +7375,8 @@ dependencies = [
 
 [[package]]
 name = "rattler-build"
-version = "0.57.2"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=b71bcb81a6a00d539d546531af4e49a17dae786a#b71bcb81a6a00d539d546531af4e49a17dae786a"
+version = "0.58.1"
+source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
 dependencies = [
  "anyhow",
  "async-once-cell",
@@ -7451,7 +7452,7 @@ dependencies = [
  "sevenz-rust2",
  "sha1",
  "sha2",
- "spdx 0.13.3",
+ "spdx 0.12.0",
  "strum",
  "tempfile",
  "terminal_size",
@@ -7472,7 +7473,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_jinja"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=b71bcb81a6a00d539d546531af4e49a17dae786a#b71bcb81a6a00d539d546531af4e49a17dae786a"
+source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
 dependencies = [
  "fs-err",
  "indexmap 2.13.0",
@@ -7493,7 +7494,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_networking"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=b71bcb81a6a00d539d546531af4e49a17dae786a#b71bcb81a6a00d539d546531af4e49a17dae786a"
+source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
 dependencies = [
  "rattler_networking",
  "reqwest 0.12.28",
@@ -7505,7 +7506,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_recipe"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=b71bcb81a6a00d539d546531af4e49a17dae786a#b71bcb81a6a00d539d546531af4e49a17dae786a"
+source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
 dependencies = [
  "fs-err",
  "globset",
@@ -7538,7 +7539,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_recipe_generator"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=b71bcb81a6a00d539d546531af4e49a17dae786a#b71bcb81a6a00d539d546531af4e49a17dae786a"
+source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
 dependencies = [
  "async-once-cell",
  "async-recursion",
@@ -7568,7 +7569,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_script"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=b71bcb81a6a00d539d546531af4e49a17dae786a#b71bcb81a6a00d539d546531af4e49a17dae786a"
+source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
 dependencies = [
  "clap",
  "console 0.16.2",
@@ -7590,7 +7591,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_source_cache"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=b71bcb81a6a00d539d546531af4e49a17dae786a#b71bcb81a6a00d539d546531af4e49a17dae786a"
+source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
 dependencies = [
  "async-trait",
  "bzip2 0.6.1",
@@ -7613,6 +7614,9 @@ dependencies = [
  "serde_json",
  "sevenz-rust2",
  "sha2",
+ "sigstore-trust-root",
+ "sigstore-types",
+ "sigstore-verify",
  "tar",
  "tempfile",
  "thiserror 2.0.18",
@@ -7627,7 +7631,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_types"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=b71bcb81a6a00d539d546531af4e49a17dae786a#b71bcb81a6a00d539d546531af4e49a17dae786a"
+source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
 dependencies = [
  "globset",
  "itertools 0.14.0",
@@ -7642,7 +7646,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_variant_config"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=b71bcb81a6a00d539d546531af4e49a17dae786a#b71bcb81a6a00d539d546531af4e49a17dae786a"
+source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
 dependencies = [
  "fs-err",
  "marked-yaml",
@@ -7662,7 +7666,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_yaml_parser"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=b71bcb81a6a00d539d546531af4e49a17dae786a#b71bcb81a6a00d539d546531af4e49a17dae786a"
+source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
 dependencies = [
  "marked-yaml",
  "miette 7.6.0",
@@ -7787,7 +7791,7 @@ dependencies = [
 [[package]]
 name = "rattler_git"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=b71bcb81a6a00d539d546531af4e49a17dae786a#b71bcb81a6a00d539d546531af4e49a17dae786a"
+source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
 dependencies = [
  "dashmap",
  "dunce",
@@ -7982,7 +7986,7 @@ dependencies = [
 [[package]]
 name = "rattler_prefix_guard"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=b71bcb81a6a00d539d546531af4e49a17dae786a#b71bcb81a6a00d539d546531af4e49a17dae786a"
+source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
 dependencies = [
  "fs-err",
  "libc",
@@ -9011,6 +9015,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
+name = "ryu-js"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd29631678d6fb0903b69223673e122c32e9ae559d0960a38d574695ebc0ea15"
+
+[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9333,6 +9343,17 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
+]
+
+[[package]]
+name = "serde_json_canonicalizer"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe52319a927259afbfa5180c5157cd8167edfd3e8c254f9558c7fef44c5649f2"
+dependencies = [
+ "ryu-js",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -9757,6 +9778,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "sigstore-verify"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d751d608afd334fb9d8c037ad9efef69f1954494eff99cd79a0a6fc8af34ccb"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "cms",
+ "const-oid",
+ "hex",
+ "pem",
+ "rustls-pki-types",
+ "rustls-webpki",
+ "serde",
+ "serde_json",
+ "serde_json_canonicalizer",
+ "sigstore-bundle",
+ "sigstore-crypto",
+ "sigstore-merkle",
+ "sigstore-rekor",
+ "sigstore-trust-root",
+ "sigstore-tsa",
+ "sigstore-types",
+ "thiserror 2.0.18",
+ "tls_codec",
+ "tracing",
+ "x509-cert",
+]
+
+[[package]]
 name = "simd-adler32"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9890,15 +9941,6 @@ name = "spdx"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41cf87c0efffc158b9dde4d6e0567a43e4383adc4c949e687a2039732db2f23a"
-dependencies = [
- "smallvec",
-]
-
-[[package]]
-name = "spdx"
-version = "0.13.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afd765179d12cdd06192e02b1d8c6b0d46bd26de9bf16ce04c881428ca2cc7ed"
 dependencies = [
  "smallvec",
 ]

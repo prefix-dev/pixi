@@ -56,7 +56,7 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
 }
 
 pub fn oci_middleware() -> OciMiddleware {
-    OciMiddleware
+    OciMiddleware::new(LazyClient::default())
 }
 
 static DEFAULT_REQWEST_USER_AGENT: LazyLock<String> =
