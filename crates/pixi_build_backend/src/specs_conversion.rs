@@ -75,7 +75,17 @@ pub fn convert_variant_to_pixi_build_types(
 
 pub fn to_rattler_build_selector(selector: &TargetSelector, platform_kind: PlatformKind) -> String {
     match selector {
-        TargetSelector::Platform(p) => format!("{platform_kind}_platform == '{p}'"),
+        TargetSelector::Platform(p) => {
+            // Only use `<kind>_platform == '<p>'` for fully-qualified platform strings
+            // (e.g. "linux-64", "osx-arm64"). For platform family names like "osx" that
+            // are not valid rattler Platform values, use the string directly as a selector
+            // (rattler-build evaluates them as boolean variables).
+            if p.parse::<rattler_conda_types::Platform>().is_ok() {
+                format!("{platform_kind}_platform == '{p}'")
+            } else {
+                p.to_string()
+            }
+        }
         _ => selector.to_string(),
     }
 }

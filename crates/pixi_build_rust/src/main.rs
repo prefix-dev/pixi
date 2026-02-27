@@ -819,10 +819,10 @@ mod tests {
                         "Found openssl conditional with condition: '{}'",
                         cond.condition
                     );
-                    // The condition should be exactly "host_platform == 'linux-64'"
+                    // The condition should be exactly "build_platform == 'linux-64'"
                     assert_eq!(
-                        cond.condition, "host_platform == 'linux-64'",
-                        "Condition should be exactly \"host_platform == 'linux-64'\""
+                        cond.condition, "build_platform == 'linux-64'",
+                        "Condition should be exactly \"build_platform == 'linux-64'\""
                     );
                     found_openssl_conditional = true;
                     break;
@@ -927,6 +927,221 @@ mod tests {
         assert!(
             found_gcc_conditional,
             "Recipe should contain conditional build dependency for gcc with unix condition"
+        );
+    }
+
+    /// Helper to extract conditional entries from a list of Items.
+    /// Returns a vec of (condition_string, package_name) tuples.
+    fn extract_conditionals(items: &[Item<PackageDependency>]) -> Vec<(String, String)> {
+        items
+            .iter()
+            .filter_map(|item| {
+                if let Item::Conditional(cond) = item {
+                    cond.then.0.first().map(|dep| {
+                        (
+                            cond.condition.clone(),
+                            dep.package_name().as_source().to_string(),
+                        )
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn test_host_vs_build_dependency_conditions_linux64() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "targets": {
+                    "linux-64": {
+                        "hostDependencies": {
+                            "openssl": {
+                                "binary": {
+                                    "version": ">=3.0"
+                                }
+                            }
+                        },
+                        "buildDependencies": {
+                            "pkg-config": {
+                                "binary": {
+                                    "version": "*"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let generated_recipe = RustGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RustBackendConfig::default_with_ignore_cargo_manifest(),
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let build_conds = extract_conditionals(&generated_recipe.recipe.requirements.build);
+        let host_conds = extract_conditionals(&generated_recipe.recipe.requirements.host);
+
+        // buildDependencies should use build_platform
+        let pkg_config_cond = build_conds
+            .iter()
+            .find(|(_, name)| name == "pkg-config")
+            .expect("pkg-config should be in build requirements");
+        assert_eq!(
+            pkg_config_cond.0, "build_platform == 'linux-64'",
+            "buildDependencies should use build_platform condition"
+        );
+
+        // hostDependencies should use host_platform
+        let openssl_cond = host_conds
+            .iter()
+            .find(|(_, name)| name == "openssl")
+            .expect("openssl should be in host requirements");
+        assert_eq!(
+            openssl_cond.0, "host_platform == 'linux-64'",
+            "hostDependencies should use host_platform condition"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_host_vs_build_dependency_conditions_osx() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "targets": {
+                    "osx": {
+                        "hostDependencies": {
+                            "libsodium": {
+                                "binary": {
+                                    "version": "*"
+                                }
+                            }
+                        },
+                        "buildDependencies": {
+                            "cmake": {
+                                "binary": {
+                                    "version": "*"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let generated_recipe = RustGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RustBackendConfig::default_with_ignore_cargo_manifest(),
+                PathBuf::from("."),
+                Platform::OsxArm64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let build_conds = extract_conditionals(&generated_recipe.recipe.requirements.build);
+        let host_conds = extract_conditionals(&generated_recipe.recipe.requirements.host);
+
+        // "osx" is not a fully-qualified platform (like "osx-64"), so it should
+        // be used as a plain selector for both build and host dependencies.
+        let cmake_cond = build_conds
+            .iter()
+            .find(|(_, name)| name == "cmake")
+            .expect("cmake should be in build requirements");
+        assert_eq!(
+            cmake_cond.0, "osx",
+            "buildDependencies with osx target should use plain 'osx' selector"
+        );
+
+        let libsodium_cond = host_conds
+            .iter()
+            .find(|(_, name)| name == "libsodium")
+            .expect("libsodium should be in host requirements");
+        assert_eq!(
+            libsodium_cond.0, "osx",
+            "hostDependencies with osx target should use plain 'osx' selector"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_host_vs_build_dependency_conditions_osx64() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "targets": {
+                    "osx-64": {
+                        "hostDependencies": {
+                            "libsodium": {
+                                "binary": {
+                                    "version": "*"
+                                }
+                            }
+                        },
+                        "buildDependencies": {
+                            "sigtool": {
+                                "binary": {
+                                    "version": "*"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let generated_recipe = RustGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RustBackendConfig::default_with_ignore_cargo_manifest(),
+                PathBuf::from("."),
+                Platform::Osx64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let build_conds = extract_conditionals(&generated_recipe.recipe.requirements.build);
+        let host_conds = extract_conditionals(&generated_recipe.recipe.requirements.host);
+
+        // buildDependencies should use build_platform for osx-64
+        let sigtool_cond = build_conds
+            .iter()
+            .find(|(_, name)| name == "sigtool")
+            .expect("sigtool should be in build requirements");
+        assert_eq!(
+            sigtool_cond.0, "build_platform == 'osx-64'",
+            "buildDependencies should use build_platform condition for osx-64"
+        );
+
+        // hostDependencies should use host_platform for osx-64
+        let libsodium_cond = host_conds
+            .iter()
+            .find(|(_, name)| name == "libsodium")
+            .expect("libsodium should be in host requirements");
+        assert_eq!(
+            libsodium_cond.0, "host_platform == 'osx-64'",
+            "hostDependencies should use host_platform condition for osx-64"
         );
     }
 }

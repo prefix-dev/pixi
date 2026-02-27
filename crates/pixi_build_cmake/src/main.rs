@@ -686,14 +686,17 @@ mod tests {
         let result = intermediate_conda_outputs_cross::<CMakeGenerator>(
             Some(project_model),
             Some(temp_dir.path().to_path_buf()),
-            Platform::OsxArm64,  // host_platform (target)
-            Platform::Osx64,      // build_platform (current machine)
+            Platform::OsxArm64, // host_platform (target)
+            Platform::Osx64,    // build_platform (current machine)
             None,
             None,
         )
         .await;
 
-        assert!(!result.outputs.is_empty(), "Should have at least one output");
+        assert!(
+            !result.outputs.is_empty(),
+            "Should have at least one output"
+        );
         let output = &result.outputs[0];
 
         // Check build dependencies: should contain sigtool (from osx-64 build dep,
