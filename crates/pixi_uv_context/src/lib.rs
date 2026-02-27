@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use fs_err::create_dir_all;
 use miette::{Context, IntoDiagnostic};
@@ -48,6 +49,43 @@ pub struct UvResolutionContext {
     pub extra_build_variables: ExtraBuildVariables,
     pub preview: Preview,
     pub workspace_cache: WorkspaceCache,
+    /// HTTP timeout for uv operations, read from UV_HTTP_TIMEOUT,
+    /// UV_REQUEST_TIMEOUT, or HTTP_TIMEOUT environment variables.
+    pub http_timeout: Option<Duration>,
+}
+
+/// Read the HTTP timeout from environment variables.
+///
+/// Checks `UV_HTTP_TIMEOUT`, `UV_REQUEST_TIMEOUT`, and `HTTP_TIMEOUT`
+/// (in that order of precedence), matching the behavior of the `uv` CLI.
+/// The value should be a number of seconds (e.g., `300` for 5 minutes).
+fn read_http_timeout_from_env() -> Option<Duration> {
+    let env_vars = ["UV_HTTP_TIMEOUT", "UV_REQUEST_TIMEOUT", "HTTP_TIMEOUT"];
+    for var in env_vars {
+        if let Ok(val) = std::env::var(var) {
+            match val.parse::<u64>() {
+                Ok(secs) => {
+                    debug!("using {var}={secs}s for HTTP timeout");
+                    return Some(Duration::from_secs(secs));
+                }
+                Err(_) => {
+                    // Also try parsing as float for values like "30.5"
+                    match val.parse::<f64>() {
+                        Ok(secs) if secs >= 0.0 => {
+                            debug!("using {var}={secs}s for HTTP timeout");
+                            return Some(Duration::from_secs_f64(secs));
+                        }
+                        _ => {
+                            tracing::warn!(
+                                "ignoring invalid value for {var}: {val:?} (expected a number of seconds)"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 impl UvResolutionContext {
@@ -86,6 +124,8 @@ impl UvResolutionContext {
             )
             .into_diagnostic()
             .context("failed to parse trusted host")?;
+        let http_timeout = read_http_timeout_from_env();
+
         Ok(Self {
             cache,
             in_flight: InFlight::default(),
@@ -106,6 +146,7 @@ impl UvResolutionContext {
             extra_build_variables: ExtraBuildVariables::default(),
             preview: Preview::default(),
             workspace_cache: WorkspaceCache::default(),
+            http_timeout,
         })
     }
 
@@ -143,6 +184,10 @@ impl UvResolutionContext {
             .built_in_root_certs(self.use_builtin_certs)
             .extra_middleware(self.extra_middleware.clone());
 
+        if let Some(timeout) = self.http_timeout {
+            base_client_builder = base_client_builder.timeout(timeout);
+        }
+
         if let Some(markers) = markers {
             base_client_builder = base_client_builder.markers(markers);
         }
@@ -157,5 +202,170 @@ impl UvResolutionContext {
         }
 
         Arc::new(uv_client_builder.build())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    // Mutex to prevent env var tests from interfering with each other
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
+    /// # Safety
+    /// This function manipulates environment variables which is inherently
+    /// unsafe in a multi-threaded context. The ENV_MUTEX must be held by the
+    /// caller (enforced by requiring it in this module's test helpers).
+    fn with_env_vars<F, R>(vars: &[(&str, Option<&str>)], f: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        let _lock = ENV_MUTEX.lock().unwrap();
+        // Save original values
+        let originals: Vec<_> = vars
+            .iter()
+            .map(|(k, _)| (*k, std::env::var(k).ok()))
+            .collect();
+
+        // SAFETY: We hold ENV_MUTEX to ensure no concurrent env var access
+        // within these tests.
+        unsafe {
+            for (k, v) in vars {
+                match v {
+                    Some(val) => std::env::set_var(k, val),
+                    None => std::env::remove_var(k),
+                }
+            }
+        }
+
+        let result = f();
+
+        // SAFETY: Same as above - restoring original values under mutex.
+        unsafe {
+            for (k, v) in &originals {
+                match v {
+                    Some(val) => std::env::set_var(k, val),
+                    None => std::env::remove_var(k),
+                }
+            }
+        }
+
+        result
+    }
+
+    #[test]
+    fn test_no_env_vars_returns_none() {
+        with_env_vars(
+            &[
+                ("UV_HTTP_TIMEOUT", None),
+                ("UV_REQUEST_TIMEOUT", None),
+                ("HTTP_TIMEOUT", None),
+            ],
+            || {
+                assert!(read_http_timeout_from_env().is_none());
+            },
+        );
+    }
+
+    #[test]
+    fn test_uv_http_timeout_integer() {
+        with_env_vars(
+            &[
+                ("UV_HTTP_TIMEOUT", Some("300")),
+                ("UV_REQUEST_TIMEOUT", None),
+                ("HTTP_TIMEOUT", None),
+            ],
+            || {
+                assert_eq!(
+                    read_http_timeout_from_env(),
+                    Some(Duration::from_secs(300))
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn test_uv_http_timeout_takes_precedence() {
+        with_env_vars(
+            &[
+                ("UV_HTTP_TIMEOUT", Some("100")),
+                ("UV_REQUEST_TIMEOUT", Some("200")),
+                ("HTTP_TIMEOUT", Some("300")),
+            ],
+            || {
+                assert_eq!(
+                    read_http_timeout_from_env(),
+                    Some(Duration::from_secs(100))
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn test_uv_request_timeout_fallback() {
+        with_env_vars(
+            &[
+                ("UV_HTTP_TIMEOUT", None),
+                ("UV_REQUEST_TIMEOUT", Some("200")),
+                ("HTTP_TIMEOUT", Some("300")),
+            ],
+            || {
+                assert_eq!(
+                    read_http_timeout_from_env(),
+                    Some(Duration::from_secs(200))
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn test_http_timeout_last_fallback() {
+        with_env_vars(
+            &[
+                ("UV_HTTP_TIMEOUT", None),
+                ("UV_REQUEST_TIMEOUT", None),
+                ("HTTP_TIMEOUT", Some("300")),
+            ],
+            || {
+                assert_eq!(
+                    read_http_timeout_from_env(),
+                    Some(Duration::from_secs(300))
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn test_invalid_value_is_ignored() {
+        with_env_vars(
+            &[
+                ("UV_HTTP_TIMEOUT", Some("not_a_number")),
+                ("UV_REQUEST_TIMEOUT", Some("200")),
+                ("HTTP_TIMEOUT", None),
+            ],
+            || {
+                // Invalid UV_HTTP_TIMEOUT is skipped, falls back to UV_REQUEST_TIMEOUT
+                assert_eq!(
+                    read_http_timeout_from_env(),
+                    Some(Duration::from_secs(200))
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn test_float_seconds() {
+        with_env_vars(
+            &[
+                ("UV_HTTP_TIMEOUT", Some("30.5")),
+                ("UV_REQUEST_TIMEOUT", None),
+                ("HTTP_TIMEOUT", None),
+            ],
+            || {
+                let timeout = read_http_timeout_from_env().unwrap();
+                assert_eq!(timeout, Duration::from_secs_f64(30.5));
+            },
+        );
     }
 }
