@@ -2120,7 +2120,11 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             Cow::Owned(project_root.join(Path::new(path.as_str())))
                         };
 
-                        if absolute_path.is_dir() {
+                        // Only validate hash if one was stored in the lockfile.
+                        // Workspace packages (path = ".") don't store hashes to avoid
+                        // lockfile invalidation on metadata-only changes.
+                        // See: https://github.com/prefix-dev/pixi/discussions/3627
+                        if absolute_path.is_dir() && record.0.hash.is_some() {
                             match PypiSourceTreeHashable::from_directory(&absolute_path)
                                 .map(|hashable| hashable.hash())
                             {
