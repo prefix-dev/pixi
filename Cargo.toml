@@ -29,7 +29,7 @@ rust-version = "1.90"
 
 [workspace.dependencies]
 ahash = "0.8.11"
-anyhow = "1.0.97"
+anyhow = "1.0.102"
 assert_matches = "1.5.0"
 async-fd-lock = "0.2.0"
 async-once-cell = "0.5.4"
@@ -219,37 +219,37 @@ zstd = { version = "0.13.3", default-features = false }
 
 # Rattler crates
 coalesced_map = "0.1.2"
-file_url = "0.2.6"
-rattler = { version = "0.39.12", default-features = false }
-rattler_cache = { version = "0.6.11", default-features = false }
-rattler_conda_types = { version = "0.43.2", default-features = false, features = [
+file_url = "0.2.7"
+rattler = { version = "0.39.15", default-features = false }
+rattler_cache = { version = "0.6.14", default-features = false }
+rattler_conda_types = { version = "0.43.5", default-features = false, features = [
   "rayon",
 ] }
 rattler_digest = { version = "1.2.2", default-features = false }
-rattler_lock = { version = "0.26.13", default-features = false }
-rattler_menuinst = { version = "0.2.46", default-features = false }
-rattler_networking = { version = "0.25.33", default-features = false, features = [
+rattler_lock = { version = "0.26.16", default-features = false }
+rattler_menuinst = { version = "0.2.49", default-features = false }
+rattler_networking = { version = "0.26.2", default-features = false, features = [
   "dirs",
   "google-cloud-auth",
 ] }
-rattler_package_streaming = { version = "0.23.26", default-features = false }
-rattler_repodata_gateway = { version = "0.25.12", default-features = false }
-rattler_shell = { version = "0.25.19", default-features = false }
-rattler_solve = { version = "4.2.3", default-features = false }
-rattler_upload = { version = "0.4.12", default-features = false, features = [
+rattler_package_streaming = { version = "0.24.2", default-features = false }
+rattler_repodata_gateway = { version = "0.26.2", default-features = false }
+rattler_shell = { version = "0.26.2", default-features = false }
+rattler_solve = { version = "4.2.6", default-features = false }
+rattler_upload = { version = "0.4.15", default-features = false, features = [
   "s3",
 ] }
-rattler_virtual_packages = { version = "2.3.8", default-features = false }
+rattler_virtual_packages = { version = "2.3.11", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Rattler build crates
-rattler-build = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9", default-features = false, features = [
+rattler-build = { git = "https://github.com/prefix-dev/rattler-build", rev = "v0.58.1", default-features = false, features = [
   "s3",
 ] }
-rattler_build_jinja = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
-rattler_build_recipe = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
-rattler_build_types = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
-rattler_build_variant_config = { git = "https://github.com/prefix-dev/rattler-build", rev = "d144acdd068b00d9a6bac5fcbd418f34b796fdf9" }
+rattler_build_jinja = { git = "https://github.com/prefix-dev/rattler-build", rev = "v0.58.1" }
+rattler_build_recipe = { git = "https://github.com/prefix-dev/rattler-build", rev = "v0.58.1" }
+rattler_build_types = { git = "https://github.com/prefix-dev/rattler-build", rev = "v0.58.1" }
+rattler_build_variant_config = { git = "https://github.com/prefix-dev/rattler-build", rev = "v0.58.1" }
 
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.

@@ -44,7 +44,6 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
         for v in value {
             mirrors.push(Mirror {
                 url: ensure_trailing_slash(v),
-                no_jlap: false,
                 no_bz2: false,
                 no_zstd: false,
                 max_failures: None,
@@ -57,7 +56,7 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
 }
 
 pub fn oci_middleware() -> OciMiddleware {
-    OciMiddleware
+    OciMiddleware::new(LazyClient::default())
 }
 
 static DEFAULT_REQWEST_USER_AGENT: LazyLock<String> =

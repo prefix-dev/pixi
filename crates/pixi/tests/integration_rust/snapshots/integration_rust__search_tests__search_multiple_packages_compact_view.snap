@@ -1,0 +1,11 @@
+---
+source: crates/pixi/tests/integration_rust/search_tests.rs
+expression: output
+---
+alpha (3 versions)
+  3.0.0 h1_0 [noarch] <channel>
+  2.0.0 h1_0 [noarch] <channel>
+  ... and 1 more version (use -l to show more)
+
+beta (1 version)
+  0.5.0 h2_0 [noarch] <channel>
