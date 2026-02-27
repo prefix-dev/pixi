@@ -266,9 +266,23 @@ impl ManifestDocument {
             .with_platform(platform.as_ref())
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-        self.manifest_mut()
-            .get_or_insert_nested_table(&table_name.as_keys())
-            .map(|t| t.remove(dep.as_source()))?;
+        let table = self
+            .manifest_mut()
+            .get_or_insert_nested_table(&table_name.as_keys())?;
+        // Find and remove the package by normalized name comparison. This allows
+        // inputs like `jax[cuda12]` to correctly remove `jax`, since extras and
+        // version constraints are not part of the TOML key.
+        let key_to_remove = table.iter_mut().find_map(|(key, _)| {
+            let name = pep508_rs::PackageName::from_str(key.get()).ok()?;
+            if &name == dep.as_normalized() {
+                Some(key.get().to_string())
+            } else {
+                None
+            }
+        });
+        if let Some(key) = key_to_remove {
+            table.remove(&key);
+        }
         Ok(())
     }
 
@@ -1016,8 +1030,9 @@ pixi_demo = { path = ".", editable = true }
         insta::assert_snapshot!(document.to_string());
     }
 
-    /// This test checks that removing a pypi dependency
-    /// with a different name casing will not remove it.
+    /// This test checks that removing a pypi dependency using a name in a
+    /// different normalized form (e.g. dash vs underscore) still correctly
+    /// removes the package, since PyPI treats them as the same package.
     #[test]
     pub fn remove_pypi_dependency_with_different_name() {
         let manifest_content = r#"
@@ -1038,9 +1053,46 @@ pixi_demo = { path = ".", editable = true }
             DocumentMut::from_str(manifest_content).unwrap(),
         ));
 
-        // Important bit here that is different from `remove_pypi_dependency` test:
-        // using a dash instead of an underscore
+        // Using a dash instead of an underscore: PyPI treats these as the same
+        // package (PEP 503 normalization), so the removal should succeed.
         let pypi_name = PypiPackageName::from_str("pixi-demo").unwrap();
+
+        document
+            .remove_pypi_dependency(&pypi_name, None, &FeatureName::default())
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// This test checks that removing a pypi dependency specified with extras
+    /// (e.g. `jax[cuda12]`) correctly removes the base package (`jax`) from
+    /// the manifest, since extras are not part of the TOML key.
+    #[test]
+    pub fn remove_pypi_dependency_with_extras() {
+        let manifest_content = r#"
+[project]
+name = "test"
+requires-python = ">= 3.11"
+version = "0.1.0"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.pypi-dependencies]
+jax = { version = "*", extras = ["cuda12"] }
+"#;
+
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        // Simulate a user specifying `pixi remove --pypi jax[cuda12]`:
+        // the PypiPackageName source includes the extras as the CLI would produce.
+        let pypi_name = PypiPackageName::from_normalized(
+            pep508_rs::PackageName::from_str("jax").unwrap(),
+        )
+        .with_source("jax[cuda12]".to_string());
 
         document
             .remove_pypi_dependency(&pypi_name, None, &FeatureName::default())
