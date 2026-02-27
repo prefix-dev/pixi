@@ -97,7 +97,7 @@ mod tests {
 
     use itertools::Itertools;
     use pixi_manifest::FeaturesExt;
-    use rattler_conda_types::PackageName;
+    use rattler_conda_types::{PackageName, Platform};
 
     use crate::Workspace;
 
@@ -199,6 +199,71 @@ mod tests {
                 .into_iter()
                 .map(PackageName::new_unchecked)
                 .collect::<HashSet<_>>()
+        );
+    }
+
+    #[test]
+    fn test_solve_group_heterogeneous_platforms() {
+        // Create a project where two environments share a solve group but one
+        // feature restricts platforms. When solving for win-64, the restricted
+        // feature's dependencies should not be included.
+        let project = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "osx-arm64", "win-64"]
+
+        [dependencies]
+        a = "*"
+
+        [feature.linux-osx-only]
+        platforms = ["linux-64", "osx-arm64"]
+
+        [feature.linux-osx-only.dependencies]
+        b = "*"
+
+        [environments]
+        full = { features=[], solve-group="group1" }
+        restricted = { features=["linux-osx-only"], solve-group="group1" }
+        "#,
+        )
+        .unwrap();
+
+        let solve_groups = project.solve_groups();
+        assert_eq!(solve_groups.len(), 1);
+        let solve_group = solve_groups[0].clone();
+
+        // For win-64, only 'a' should be present because 'b' belongs to a
+        // feature that restricts to linux-64/osx-arm64.
+        let win64_deps: HashSet<_> = solve_group
+            .combined_dependencies(Some(Platform::Win64))
+            .names()
+            .cloned()
+            .collect();
+        assert_eq!(
+            win64_deps,
+            ["a"]
+                .into_iter()
+                .map(PackageName::new_unchecked)
+                .collect::<HashSet<_>>(),
+            "win-64 solve should not include deps from linux-osx-only feature"
+        );
+
+        // For linux-64, both 'a' and 'b' should be present.
+        let linux64_deps: HashSet<_> = solve_group
+            .combined_dependencies(Some(Platform::Linux64))
+            .names()
+            .cloned()
+            .collect();
+        assert_eq!(
+            linux64_deps,
+            ["a", "b"]
+                .into_iter()
+                .map(PackageName::new_unchecked)
+                .collect::<HashSet<_>>(),
+            "linux-64 solve should include deps from linux-osx-only feature"
         );
     }
 }
