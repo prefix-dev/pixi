@@ -520,15 +520,13 @@ impl<'a> TaskRenderContext<'a> {
     /// User arguments are added when TypedArgs are provided.
     pub fn to_jinja_context(&self) -> minijinja::Value {
         // Build the context map with user arguments if available
-        let mut context_map: HashMap<String, minijinja::Value> =
-            match self.args {
-                Some(ArgValues::TypedArgs(args)) | Some(ArgValues::TypedArgsWithExtra(args, _)) => {
-                    args.iter()
-                        .map(|arg| (arg.name.clone(), minijinja::Value::from(arg.value.as_str())))
-                        .collect()
-                }
-                _ => HashMap::new(),
-            };
+        let mut context_map: HashMap<String, minijinja::Value> = match self.args {
+            Some(ArgValues::TypedArgs(args)) | Some(ArgValues::TypedArgsWithExtra(args, _)) => args
+                .iter()
+                .map(|arg| (arg.name.clone(), minijinja::Value::from(arg.value.as_str())))
+                .collect(),
+            _ => HashMap::new(),
+        };
 
         // Create the pixi object with system-provided variables
         let mut pixi_vars: HashMap<String, minijinja::Value> = HashMap::new();
@@ -703,7 +701,12 @@ impl Display for ArgValues {
             ArgValues::FreeFormArgs(args) => write!(f, "{}", args.iter().join(", ")),
             ArgValues::TypedArgs(args) => write!(f, "{}", args.iter().join(", ")),
             ArgValues::TypedArgsWithExtra(args, extra) => {
-                write!(f, "{} -- {}", args.iter().join(", "), extra.iter().join(", "))
+                write!(
+                    f,
+                    "{} -- {}",
+                    args.iter().join(", "),
+                    extra.iter().join(", ")
+                )
             }
         }
     }
