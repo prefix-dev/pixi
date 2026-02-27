@@ -137,7 +137,7 @@ rand = { version = "0.9.1", default-features = false }
 rayon = "1.10.0"
 recipe_stage0 = { path = "crates/recipe_stage0" }
 regex = "1.11.1"
-reqwest = { version = "0.12.12", default-features = false }
+reqwest = { version = "0.13.0", default-features = false }
 retry-policies = "0.4"
 # reqwest-middleware = "0.4"
 # reqwest-retry = "0.7.0"
