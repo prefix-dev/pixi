@@ -6288,6 +6288,7 @@ dependencies = [
  "pixi_manifest",
  "pixi_path",
  "pixi_progress",
+ "pixi_record",
  "pixi_reporters",
  "pixi_spec",
  "pixi_spec_containers",

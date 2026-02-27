@@ -203,6 +203,7 @@ def test_sync_migrate(
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
+    lock_file = manifests.joinpath("pixi-global.lock")
     toml = f"""\
 version = {MANIFEST_VERSION}
 # Test with special channel
@@ -230,6 +231,8 @@ exposed = {{ xz = "xz" }}
     # Test migration from existing environments
     original_manifest = manifest.read_text()
     manifest.unlink()
+    if lock_file.exists():
+        lock_file.unlink()
     manifests.rmdir()
     verify_cli_command([pixi, "global", "sync"], env=env)
     migrated_manifest = manifest.read_text()
@@ -780,7 +783,10 @@ def test_install_twice_with_same_env_name_as_expose(
             "customdummyb=dummy-b",
         ],
         env=env,
-        stdout_contains=["customdummyb (installed)", "exposes: customdummyb -> dummy-b"],
+        stdout_contains=[
+            "customdummyb (installed)",
+            "exposes: customdummyb -> dummy-b",
+        ],
     )
     assert dummy_b.is_file()
 
@@ -799,7 +805,10 @@ def test_install_twice_with_same_env_name_as_expose(
             "customdummyb=dummy-b",
         ],
         env=env,
-        stdout_contains=["customdummyb (already installed)", "exposes: customdummyb -> dummy-b"],
+        stdout_contains=[
+            "customdummyb (already installed)",
+            "exposes: customdummyb -> dummy-b",
+        ],
     )
     assert dummy_b.is_file()
 
@@ -1862,7 +1871,14 @@ def test_pixi_update_cleanup(pixi: Path, tmp_path: Path, multiple_versions_chann
     package0_2_0 = tmp_path / "bin" / exec_extension("package0.2.0")
 
     verify_cli_command(
-        [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package==0.1.0"],
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            multiple_versions_channel_1,
+            "package==0.1.0",
+        ],
         env=env,
     )
     assert package0_1_0.is_file()
@@ -2317,7 +2333,9 @@ class TestCondaFile:
         def check_install(conda_file_path: Path, cwd: Path):
             if path_arg:
                 verify_cli_command(
-                    [pixi, "global", "install", "--path", conda_file_path], env=env, cwd=cwd
+                    [pixi, "global", "install", "--path", conda_file_path],
+                    env=env,
+                    cwd=cwd,
                 )
             else:
                 verify_cli_command(

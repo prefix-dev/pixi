@@ -84,7 +84,9 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
         for mapping in &args.mappings {
             project.manifest.add_exposed_mapping(env_name, mapping)?;
         }
-        state_changes |= project.sync_environment(env_name, None).await?;
+        let sync_changes = project.sync_environment(env_name, None).await?;
+        state_changes |= sync_changes;
+
         project.manifest.save().await?;
         Ok(state_changes)
     }
@@ -97,8 +99,9 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
             Ok(())
         }
         Err(err) => {
+            let mut project_to_revert_to = project_original;
             if let Err(revert_err) =
-                revert_environment_after_error(&args.environment, &project_original).await
+                revert_environment_after_error(&args.environment, &mut project_to_revert_to).await
             {
                 tracing::warn!("Reverting of the operation failed");
                 tracing::info!("Reversion error: {:?}", revert_err);
@@ -123,7 +126,9 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
         project
             .manifest
             .remove_exposed_name(env_name, exposed_name)?;
-        state_changes |= project.sync_environment(env_name, None).await?;
+        let sync_changes = project.sync_environment(env_name, None).await?;
+        state_changes |= sync_changes;
+
         project.manifest.save().await?;
         Ok(state_changes)
     }
@@ -152,7 +157,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
             }
             Err(err) => {
                 if let Err(revert_err) =
-                    revert_environment_after_error(&env_name, &last_updated_project).await
+                    revert_environment_after_error(&env_name, &mut last_updated_project).await
                 {
                     tracing::warn!("Reverting of the operation failed");
                     tracing::info!("Reversion error: {:?}", revert_err);
