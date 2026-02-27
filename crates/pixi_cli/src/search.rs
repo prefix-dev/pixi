@@ -43,7 +43,7 @@ pub struct Args {
     /// By default, searches all platforms from the manifest (or all known
     /// platforms if no manifest is found).
     #[arg(short, long)]
-    pub platform: Option<Vec<Platform>>,
+    pub platform: Option<Platform>,
 
     /// Limit the number of versions shown per package, -1 for no limit
     #[clap(short, long, default_value = "5", allow_hyphen_values = true)]
@@ -109,8 +109,8 @@ pub async fn execute_impl<W: Write>(
     );
 
     // Resolve platforms
-    let platforms = if let Some(platforms) = args.platform {
-        platforms
+    let platforms = if let Some(platform) = args.platform {
+        vec![platform, Platform::NoArch]
     } else if let Some(ref workspace) = workspace {
         let mut platforms: Vec<Platform> = workspace
             .default_environment()
