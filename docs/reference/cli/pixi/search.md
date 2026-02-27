@@ -24,7 +24,6 @@ pixi search [OPTIONS] <PACKAGE>
 <br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platform(s) to search for. By default, searches all platforms from the manifest (or all known platforms if no manifest is found)
-<br>May be provided more than once.
 - <a id="arg---limit" href="#arg---limit">`--limit (-l) <LIMIT>`</a>
 :  Limit the number of versions shown per package, -1 for no limit
 <br>**default**: `5`
