@@ -235,16 +235,6 @@ impl<'p> TaskGraph<'p> {
             (args, true)
         };
 
-        // Extract any arguments after `--`. These are passed directly to the
-        // underlying command regardless of typed arg definitions.
-        let extra_args = if let Some(pos) = args.iter().position(|a| a == "--") {
-            let extra = args[pos + 1..].to_vec();
-            args.truncate(pos);
-            extra
-        } else {
-            vec![]
-        };
-
         if prefer_executable == PreferExecutable::TaskFirst
             && let Some(name) = args.first()
         {
@@ -265,6 +255,16 @@ impl<'p> TaskGraph<'p> {
                     let task_name = args.remove(0);
 
                     let arg_values = if let Some(task_arguments) = task.args() {
+                        // Extract any arguments after `--`. These are passed directly to the
+                        // underlying command on top of the typed args.
+                        let extra_args = if let Some(pos) = args.iter().position(|a| a == "--") {
+                            let extra = args[pos + 1..].to_vec();
+                            args.truncate(pos);
+                            extra
+                        } else {
+                            vec![]
+                        };
+
                         // Check if we don't have more arguments than the task expects
                         if args.len() > task_arguments.len() {
                             return Err(TaskGraphError::TooManyArguments(task_name.to_string()));
@@ -288,10 +288,10 @@ impl<'p> TaskGraph<'p> {
                         } else {
                             match merged {
                                 ArgValues::TypedArgs(typed) => {
-                                    ArgValues::TypedArgsWithExtra(typed, extra_args.clone())
+                                    ArgValues::TypedArgsWithExtra(typed, extra_args)
                                 }
                                 ArgValues::FreeFormArgs(mut free) => {
-                                    free.extend(extra_args.clone());
+                                    free.extend(extra_args);
                                     ArgValues::FreeFormArgs(free)
                                 }
                                 other => other,
@@ -299,14 +299,9 @@ impl<'p> TaskGraph<'p> {
                         })
                     } else {
                         // Task has no typed args — pass everything through verbatim,
-                        // including the `--` separator (it may be meaningful to the
+                        // including any `--` separator (it may be meaningful to the
                         // underlying command, e.g. `git log -- somefile`).
-                        let mut free_args = args.clone();
-                        if !extra_args.is_empty() {
-                            free_args.push("--".to_string());
-                            free_args.extend(extra_args.clone());
-                        }
-                        Some(ArgValues::FreeFormArgs(free_args))
+                        Some(ArgValues::FreeFormArgs(args.clone()))
                     };
 
                     if skip_deps {
