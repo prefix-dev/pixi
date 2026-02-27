@@ -59,6 +59,10 @@ pixi self-update --version x.y.z
 
 Although we recommend installing Pixi through the above method we also provide additional installation methods.
 
+!!! note "PATH Configuration for Alternative Installations"
+    When installing Pixi through alternative methods (such as Homebrew, Scoop, Winget, or from source), you may need to manually configure your `PATH` environment variable to make `pixi` and executables installed via `pixi global` available in your shell.
+    The executables are located in [`PIXI_HOME`](reference/environment_variables.md)/bin (default: `~/.pixi/bin` on Unix or `%UserProfile%\.pixi\bin` on Windows).
+
 ### Homebrew
 
 Pixi is available via homebrew. To install Pixi via homebrew simply run:
