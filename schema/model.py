@@ -116,9 +116,26 @@ PixiBuildFeature = Annotated[
 KnownPreviewFeature = PixiBuildFeature
 
 
-# class KnownPreviewFeature(Enum):
-#     """The preview features of the project."""
-#     PixiBuild: Annotated[str, Field(description="Enables building of source records")] = "pixi-build"
+class WarningAction(str, Enum):
+    """The action to take when a warning is encountered."""
+
+    hide = "hide"
+    log = "log"
+    verbose = "verbose"
+    fail = "fail"
+
+
+class WarningFatAction(StrictBaseModel):
+    """A detailed warning configuration."""
+
+    pattern: str | None = Field(None, description="The pattern to match against warning codes")
+    level: WarningAction = Field(WarningAction.log, description="The action to take")
+    description: str | None = Field(
+        None, description="A description of why this warning is configured this way"
+    )
+
+
+WarningBehavior = WarningAction | WarningFatAction
 
 
 class Workspace(StrictBaseModel):
@@ -205,6 +222,9 @@ class Workspace(StrictBaseModel):
     )
     target: dict[TargetName, WorkspaceTarget] | None = Field(
         None, description="The workspace targets"
+    )
+    warnings: dict[str, WarningBehavior] | None = Field(
+        None, description="Configuration for modern warning codes"
     )
 
 

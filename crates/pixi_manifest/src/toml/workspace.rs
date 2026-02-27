@@ -13,7 +13,7 @@ use url::Url;
 use crate::exclude_newer::ExcludeNewer;
 use crate::{
     PrioritizedChannel, S3Options, TargetSelector, Targets, TomlError, WithWarnings, Workspace,
-    error::GenericError,
+    error::GenericError, warning::WarningConfig,
     pypi::pypi_options::PypiOptions,
     toml::{manifest::ExternalWorkspaceProperties, platform::TomlPlatform, preview::TomlPreview},
     utils::PixiSpanned,
@@ -54,6 +54,7 @@ pub struct TomlWorkspace {
     pub build_variant_files: Option<Vec<Spanned<TomlFromStr<PathBuf>>>>,
     pub requires_pixi: Option<VersionSpec>,
     pub exclude_newer: Option<ExcludeNewer>,
+    pub warnings: Option<WarningConfig>,
 
     pub span: Span,
 }
@@ -147,6 +148,7 @@ impl TomlWorkspace {
             ),
             requires_pixi: self.requires_pixi,
             exclude_newer: self.exclude_newer,
+            warnings: self.warnings.unwrap_or_default(),
         })
         .with_warnings(warnings))
     }
@@ -246,6 +248,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let exclude_newer = th
             .optional::<TomlWith<_, TomlFromStr<_>>>("exclude-newer")
             .map(TomlWith::into_inner);
+        let warnings = th.optional("warnings");
 
         th.finalize(None)?;
 
@@ -273,6 +276,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             build_variant_files,
             requires_pixi,
             exclude_newer,
+            warnings,
             span: value.span,
         })
     }
