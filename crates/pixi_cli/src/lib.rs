@@ -399,14 +399,24 @@ pub enum ColorOutput {
 }
 
 fn set_console_colors(args: &Args) {
-    // Honor FORCE_COLOR and NO_COLOR environment variables.
-    // Those take precedence over the CLI flag and PIXI_COLOR
-    let color = match env::var("FORCE_COLOR") {
-        Ok(_) => &ColorOutput::Always,
-        Err(_) => match env::var("NO_COLOR") {
-            Ok(_) => &ColorOutput::Never,
-            Err(_) => &args.global_options.color,
-        },
+    // Honor standard color environment variables.
+    // Precedence (highest to lowest):
+    //   1. FORCE_COLOR          – force colors on (any value)
+    //   2. CLICOLOR_FORCE       – force colors on (non-"0" value)
+    //   3. NO_COLOR             – force colors off (any value, see https://no-color.org)
+    //   4. CLICOLOR=0           – force colors off
+    //   5. --color / PIXI_COLOR – explicit CLI/env preference
+    //   6. Auto-detection       – let `console` crate decide based on TTY
+    let color = if env::var("FORCE_COLOR").is_ok() {
+        &ColorOutput::Always
+    } else if matches!(env::var("CLICOLOR_FORCE").as_deref(), Ok(v) if v != "0") {
+        &ColorOutput::Always
+    } else if env::var("NO_COLOR").is_ok() {
+        &ColorOutput::Never
+    } else if matches!(env::var("CLICOLOR").as_deref(), Ok("0")) {
+        &ColorOutput::Never
+    } else {
+        &args.global_options.color
     };
 
     match color {

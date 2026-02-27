@@ -429,7 +429,7 @@ impl Protocol for RattlerBuildBackend {
                     CompressionLevel::default(),
                 ),
                 store_recipe: false,
-                force_colors: true,
+                force_colors: pixi_build_backend::common::should_force_colors(),
                 sandbox_config: None,
                 debug: Debug::new(false),
                 exclude_newer: None,

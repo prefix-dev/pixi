@@ -42,6 +42,22 @@ Pixi can also be configured via environment variables.
   </tbody>
 </table>
 
+### Color Output
+
+Pixi respects the standard color environment variables, in the following order of precedence:
+
+| Variable | Effect |
+|----------|--------|
+| `FORCE_COLOR` (any value) | Force colored output |
+| `CLICOLOR_FORCE` (non-`0` value) | Force colored output |
+| `NO_COLOR` (any value) | Disable colored output (see [no-color.org](https://no-color.org)) |
+| `CLICOLOR=0` | Disable colored output |
+| `PIXI_COLOR` (`always`, `never`, `auto`) | Set color mode (same as `--color` flag) |
+
+When none of the above are set, pixi auto-detects color support based on whether stderr is a terminal.
+
+These variables also apply to build backend output (e.g. `pixi build`), so setting `FORCE_COLOR=1` in a CI environment will enable colored output everywhere.
+
 
 ## Environment Variables Set By Pixi
 

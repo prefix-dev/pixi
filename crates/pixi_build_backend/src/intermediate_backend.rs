@@ -770,7 +770,7 @@ where
                     CompressionLevel::default(),
                 ),
                 store_recipe: false,
-                force_colors: true,
+                force_colors: crate::common::should_force_colors(),
                 sandbox_config: None,
                 debug: Debug::new(false),
                 exclude_newer: None,

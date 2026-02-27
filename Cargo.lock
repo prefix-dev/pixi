@@ -5748,6 +5748,7 @@ dependencies = [
 name = "pixi_build_frontend"
 version = "0.1.0"
 dependencies = [
+ "console 0.16.2",
  "fs-err",
  "futures",
  "jsonrpsee",

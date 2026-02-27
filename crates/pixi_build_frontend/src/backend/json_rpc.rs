@@ -155,7 +155,19 @@ impl JsonRpcBackend {
         debug_assert!(manifest_path.is_absolute());
         debug_assert!(workspace_root.is_absolute());
         // Spawn the tool and capture stdin/stdout.
-        let command = tool.command();
+        let mut command = tool.command();
+
+        // Propagate the parent process's color preference to the backend subprocess
+        // via standard environment variables. The backend's stderr is piped (not a
+        // TTY), so auto-detection alone would always disable colors. By forwarding
+        // the resolved setting we ensure `--color`, `FORCE_COLOR`, `CLICOLOR_FORCE`,
+        // `NO_COLOR`, etc. are respected end-to-end.
+        if console::colors_enabled_stderr() {
+            command.env("FORCE_COLOR", "1");
+        } else {
+            command.env("NO_COLOR", "1");
+        }
+
         let program_name = command.get_program().to_string_lossy().into_owned();
         let mut process = match tokio::process::Command::from(command)
             .stdout(std::process::Stdio::piped())

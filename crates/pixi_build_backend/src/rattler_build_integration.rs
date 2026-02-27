@@ -192,7 +192,7 @@ pub async fn get_build_output(
                     CompressionLevel::default(),
                 ),
                 store_recipe: false,
-                force_colors: false,
+                force_colors: crate::common::should_force_colors(),
                 sandbox_config: None,
                 debug: Debug::default(),
                 solve_strategy: Default::default(),
