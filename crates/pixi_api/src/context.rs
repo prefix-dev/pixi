@@ -131,14 +131,14 @@ impl<I: Interface> WorkspaceContext<I> {
 
     pub async fn add_platforms(
         &self,
-        platform: Vec<Platform>,
+        platforms: Vec<Platform>,
         no_install: bool,
         feature: Option<String>,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::add(
             &self.interface,
             self.workspace_mut()?,
-            platform,
+            platforms,
             no_install,
             feature,
         )
