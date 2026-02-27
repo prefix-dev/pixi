@@ -575,7 +575,7 @@ fn test_installed_editable_required_non_editable() {
     assert_matches!(
         installs.reinstalls[0].1,
         NeedReinstall::EditableStatusChanged {
-            locked_editable: false,
+            required_editable: false,
             installed_editable: true
         }
     );

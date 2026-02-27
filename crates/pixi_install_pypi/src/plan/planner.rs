@@ -135,9 +135,8 @@ impl InstallPlanner {
                     ));
                 } else {
                     // Check if we need to reinstall
-                    match need_reinstall(dist, required_pkg, &self.lock_file_dir)? {
+                    match need_reinstall(dist, required_pkg, required_dist, &self.lock_file_dir)? {
                         ValidateCurrentInstall::Keep => {
-                            //
                             if self.uv_cache.must_revalidate_package(dist.name()) {
                                 reinstalls
                                     .push((dist.clone(), NeedReinstall::ReinstallationRequested));

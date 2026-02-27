@@ -71,6 +71,9 @@ impl PixiRecord {
                     ConversionError::LocationToUrlConversionError(err) => {
                         ParseLockFileError::InvalidRecordUrl(location, err)
                     }
+                    ConversionError::InvalidBinaryPackageLocation => {
+                        ParseLockFileError::InvalidArchiveFilename(location)
+                    }
                 })?)
             }
             CondaPackageData::Source(value) => {
@@ -138,6 +141,9 @@ impl From<RepoDataRecord> for PixiRecord {
 pub enum ParseLockFileError {
     #[error("missing field/fields '{1}' for package {0}")]
     Missing(UrlOrPath, String),
+
+    #[error("Invalid archive file name for package {0}")]
+    InvalidArchiveFilename(UrlOrPath),
 
     #[error("invalid url for package {0}")]
     InvalidRecordUrl(UrlOrPath, #[source] file_url::FileURLParseError),

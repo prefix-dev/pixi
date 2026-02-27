@@ -63,7 +63,7 @@ impl<'a> From<LockedPackageRef<'a>> for PackageNode {
                     })
                     .collect()
             }
-            LockedPackageRef::Pypi(pypi_data, _env_data) => {
+            LockedPackageRef::Pypi(pypi_data) => {
                 // For PyPI, use the requirement directly to get the name
                 pypi_data
                     .requires_dist
@@ -78,7 +78,7 @@ impl<'a> From<LockedPackageRef<'a>> for PackageNode {
             dependencies: dependency_names,
             source: match package_ref {
                 LockedPackageRef::Conda(_) => PackageSource::Conda,
-                LockedPackageRef::Pypi(_, _) => PackageSource::Pypi,
+                LockedPackageRef::Pypi(_) => PackageSource::Pypi,
             },
         }
     }

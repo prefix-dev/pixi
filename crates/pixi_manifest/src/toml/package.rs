@@ -311,7 +311,7 @@ impl TomlPackage {
         workspace: WorkspacePackageProperties,
         package_defaults: PackageDefaults,
         preview: &Preview,
-        root_directory: Option<&Path>,
+        root_directory: &Path,
     ) -> Result<WithWarnings<PackageManifest>, TomlError> {
         let mut warnings = Vec::new();
 
@@ -413,13 +413,12 @@ impl TomlPackage {
                 (Some(pixi_spec::SourceLocationSpec::Git(_)), _)
                 | (Some(pixi_spec::SourceLocationSpec::Url(_)), _) => None,
                 // Path source: resolve the path and use that directory for validation
-                (Some(pixi_spec::SourceLocationSpec::Path(path_spec)), Some(root_dir)) => {
+                (Some(pixi_spec::SourceLocationSpec::Path(path_spec)), root_dir) => {
                     path_spec.resolve(root_dir).ok()
                 }
                 // No source: use the manifest directory
-                (None, Some(root_dir)) => Some(root_dir.to_path_buf()),
+                (None, root_dir) => Some(root_dir.to_path_buf()),
                 // No root directory provided: skip validation
-                (_, None) => None,
             };
 
         let license_file = check_resolved_file(
@@ -549,7 +548,7 @@ mod test {
                     WorkspacePackageProperties::default(),
                     PackageDefaults::default(),
                     &Preview::default(),
-                    Some(path),
+                    path,
                 )
             })
             .unwrap_err();
@@ -581,7 +580,7 @@ mod test {
                     WorkspacePackageProperties::default(),
                     PackageDefaults::default(),
                     &Preview::default(),
-                    Some(path),
+                    path,
                 )
             })
             .unwrap_err();
@@ -620,7 +619,7 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap();
         assert_eq!(manifest.value.package.name.unwrap(), "workspace-name");
@@ -674,7 +673,7 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap();
         assert_eq!(manifest.value.package.name.unwrap(), "workspace-name");
@@ -711,7 +710,7 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
@@ -739,7 +738,7 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
@@ -765,7 +764,12 @@ mod test {
         };
 
         let manifest = package
-            .into_manifest(workspace, package_defaults, &Preview::default(), None)
+            .into_manifest(
+                workspace,
+                package_defaults,
+                &Preview::default(),
+                Path::new(""),
+            )
             .unwrap();
         // Should use package defaults for name and version
         assert_eq!(manifest.value.package.name.unwrap(), "default-name");
@@ -806,7 +810,12 @@ mod test {
         };
 
         let manifest = package
-            .into_manifest(workspace, package_defaults, &Preview::default(), None)
+            .into_manifest(
+                workspace,
+                package_defaults,
+                &Preview::default(),
+                Path::new(""),
+            )
             .unwrap();
         // Should use workspace values for name and version (overrides defaults)
         assert_eq!(manifest.value.package.name.unwrap(), "workspace-name");
@@ -842,7 +851,12 @@ mod test {
         };
 
         let parse_error = package
-            .into_manifest(workspace, package_defaults, &Preview::default(), None)
+            .into_manifest(
+                workspace,
+                package_defaults,
+                &Preview::default(),
+                Path::new(""),
+            )
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
     }
@@ -870,7 +884,7 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap();
 
@@ -896,7 +910,7 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap();
 
@@ -925,7 +939,7 @@ mod test {
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
                 &Preview::default(),
-                Some(path),
+                path,
             )
         });
         assert!(result.is_ok(), "Expected success but got: {result:?}");
@@ -952,7 +966,7 @@ mod test {
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
                 &Preview::default(),
-                Some(path),
+                path,
             )
         });
         assert!(result.is_ok(), "Expected success but got: {result:?}");
@@ -977,7 +991,7 @@ mod test {
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
                 &Preview::default(),
-                Some(path),
+                path,
             )
         });
         assert!(result.is_ok(), "Expected success but got: {result:?}");
@@ -1003,7 +1017,7 @@ mod test {
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
                 &Preview::default(),
-                Some(path),
+                path,
             )
         });
         assert!(result.is_err(), "Expected failure for path source");
@@ -1031,7 +1045,7 @@ mod test {
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
                 &Preview::default(),
-                Some(temp_dir.path()),
+                temp_dir.path(),
             )
         });
         assert!(result.is_ok(), "Expected success but got: {result:?}");
@@ -1073,7 +1087,7 @@ mod test {
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
                 &Preview::default(),
-                Some(manifest_dir.path()),
+                manifest_dir.path(),
             )
         });
         assert!(result.is_ok(), "Expected success but got: {result:?}");
@@ -1105,7 +1119,7 @@ mod test {
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
                 &Preview::default(),
-                Some(temp_dir.path()),
+                temp_dir.path(),
             )
         });
         assert!(result.is_ok(), "Expected success but got: {result:?}");

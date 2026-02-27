@@ -37,7 +37,18 @@ pub fn filter_lock_file<
     lock_file: &'lock LockFile,
     mut filter: F,
 ) -> LockFile {
-    let mut builder = LockFileBuilder::new();
+    // Register all platforms from the original lock file.
+    let platforms: Vec<rattler_lock::PlatformData> = lock_file
+        .platforms()
+        .map(|p| rattler_lock::PlatformData {
+            name: p.name().clone(),
+            subdir: p.subdir(),
+            virtual_packages: p.virtual_packages().to_vec(),
+        })
+        .collect();
+    let mut builder = LockFileBuilder::new()
+        .with_platforms(platforms)
+        .expect("lock file platforms should be unique");
 
     for (environment_name, environment) in lock_file.environments() {
         // Find the environment in the project
@@ -58,10 +69,14 @@ pub fn filter_lock_file<
         builder.set_pypi_indexes(environment_name, indexes);
 
         // Copy all packages that don't need to be relaxed
-        for (platform, packages) in environment.packages_by_platform() {
+        for (lock_platform, packages) in environment.packages_by_platform() {
+            let platform = lock_platform.subdir();
+            let platform_str = platform.to_string();
             for package in packages {
                 if filter(&project_env, platform, package) {
-                    builder.add_package(environment_name, platform, package.into());
+                    builder
+                        .add_package(environment_name, &platform_str, package.into())
+                        .expect("platform was registered");
                 }
             }
         }
