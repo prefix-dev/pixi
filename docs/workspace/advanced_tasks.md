@@ -235,22 +235,28 @@ pixi run deploy auth-service production
 
 When a task defines typed `args`, all command-line values are matched against those definitions. If you need to pass *additional* flags or arguments directly to the underlying command on top of the typed args, use `--` as a separator. Everything after `--` is forwarded verbatim to the command, regardless of the task's `args` definition.
 
+```toml
+[tasks.test]
+cmd = "pytest {{ target }} -v"
+args = [{ arg = "target", default = "tests/unit" }]
+```
+
 ```shell
 # Without --, extra flags would cause an error:
 # × task 'pytest' received more arguments than expected
-pixi run pytest tests/unit -v
+pixi run test tests/integration --tb=short --maxfail=5
 
 # With --, the typed arg is filled and the rest is forwarded:
-pixi run pytest tests/unit -- -v --tb=short --maxfail=5
-✨ Pixi task (pytest in default): pytest tests/unit -v --tb=short --maxfail=5
+pixi run test tests/integration -- --tb=short --maxfail=5
+✨ Pixi task (pytest in default): pytest tests/integration -v --tb=short --maxfail=5
 ```
 
 You can also use `--` when relying on a default argument value:
 
 ```shell
-# "target" uses its default, "--verbose" is forwarded to the command
-pixi run build -- --verbose
-✨ Pixi task (build in default): echo Building my-app in development mode --verbose
+# "target" uses its default, "--maxfail=5" is forwarded to the command
+pixi run test -- --maxfail=5
+✨ Pixi task (test in default): pytest tests/unit -v --maxfail=5
 ```
 
 !!! note "Tasks without typed args"
