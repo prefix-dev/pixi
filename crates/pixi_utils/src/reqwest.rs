@@ -84,7 +84,7 @@ pub fn should_use_builtin_certs_uv(config: &Config) -> bool {
 pub fn tls_backend() -> &'static str {
     #[cfg(feature = "native-tls")]
     {
-        return "native-tls";
+        "native-tls"
     }
 
     #[cfg(not(feature = "native-tls"))]

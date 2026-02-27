@@ -1,16 +1,18 @@
+use crate::{
+    cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
+    cli_interface::CliInterface,
+    has_specs::HasSpecs,
+};
 use clap::Parser;
+use miette::{IntoDiagnostic, WrapErr};
 use pixi_api::{
     WorkspaceContext,
     workspace::{DependencyOptions, GitOptions},
 };
 use pixi_config::ConfigCli;
 use pixi_core::{DependencyType, WorkspaceLocator};
-
-use crate::{
-    cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
-    cli_interface::CliInterface,
-    has_specs::HasSpecs,
-};
+use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, VersionOrStar};
+use url::Url;
 
 /// Adds dependencies to the workspace
 ///
@@ -92,6 +94,10 @@ pub struct Args {
     /// Whether the pypi requirement should be editable
     #[arg(long, requires = "pypi")]
     pub editable: bool,
+
+    /// The URL of the PyPI index to use for this dependency
+    #[arg(long, requires = "pypi")]
+    pub index: Option<String>,
 }
 
 impl TryFrom<&Args> for DependencyOptions {
@@ -158,6 +164,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .await?
         }
         DependencyType::PypiDependency => {
+            let index_url = args
+                .index
+                .as_ref()
+                .map(|url_str| Url::parse(url_str))
+                .transpose()
+                .into_diagnostic()
+                .wrap_err("Failed to parse index URL")?;
+
+            let pixi_spec = index_url.map(|url| {
+                PixiPypiSpec::new(PixiPypiSource::Registry {
+                    version: VersionOrStar::Star,
+                    index: Some(url),
+                })
+            });
             let pypi_deps = match args
                 .dependency_config
                 .vcs_pep508_requirements(&workspace)
@@ -165,13 +185,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             {
                 Some(vcs_reqs) => vcs_reqs
                     .into_iter()
-                    .map(|(name, req)| (name, (req, None, None)))
+                    .map(|(name, req)| (name, (req, pixi_spec.clone(), None)))
                     .collect(),
                 None => args
                     .dependency_config
                     .pypi_deps(&workspace)?
                     .into_iter()
-                    .map(|(name, req)| (name, (req, None, None)))
+                    .map(|(name, req)| (name, (req, pixi_spec.clone(), None)))
                     .collect(),
             };
 
