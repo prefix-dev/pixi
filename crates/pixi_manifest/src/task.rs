@@ -520,14 +520,13 @@ impl<'a> TaskRenderContext<'a> {
     /// User arguments are added when TypedArgs are provided.
     pub fn to_jinja_context(&self) -> minijinja::Value {
         // Build the context map with user arguments if available
-        let mut context_map: HashMap<String, minijinja::Value> =
-            if let Some(ArgValues::TypedArgs(args)) = self.args {
-                args.iter()
-                    .map(|arg| (arg.name.clone(), minijinja::Value::from(arg.value.as_str())))
-                    .collect()
-            } else {
-                HashMap::new()
-            };
+        let mut context_map: HashMap<String, minijinja::Value> = match self.args {
+            Some(ArgValues::TypedArgs(args)) | Some(ArgValues::TypedArgsWithExtra(args, _)) => args
+                .iter()
+                .map(|arg| (arg.name.clone(), minijinja::Value::from(arg.value.as_str())))
+                .collect(),
+            _ => HashMap::new(),
+        };
 
         // Create the pixi object with system-provided variables
         let mut pixi_vars: HashMap<String, minijinja::Value> = HashMap::new();
@@ -676,6 +675,8 @@ impl RenderedString {
 pub enum ArgValues {
     FreeFormArgs(Vec<String>),
     TypedArgs(Vec<TypedArg>),
+    /// Typed args for template substitution + extra passthrough args appended after `--`
+    TypedArgsWithExtra(Vec<TypedArg>, Vec<String>),
 }
 
 impl ArgValues {
@@ -683,6 +684,7 @@ impl ArgValues {
         match self {
             ArgValues::FreeFormArgs(args) => args.is_empty(),
             ArgValues::TypedArgs(args) => args.is_empty(),
+            ArgValues::TypedArgsWithExtra(args, extra) => args.is_empty() && extra.is_empty(),
         }
     }
 }
@@ -698,6 +700,14 @@ impl Display for ArgValues {
         match self {
             ArgValues::FreeFormArgs(args) => write!(f, "{}", args.iter().join(", ")),
             ArgValues::TypedArgs(args) => write!(f, "{}", args.iter().join(", ")),
+            ArgValues::TypedArgsWithExtra(args, extra) => {
+                write!(
+                    f,
+                    "{} -- {}",
+                    args.iter().join(", "),
+                    extra.iter().join(", ")
+                )
+            }
         }
     }
 }
