@@ -33,10 +33,12 @@ pixi_utils = { workspace = true }
 pixi_uv_conversions = { workspace = true }
 pypi_modifiers = { workspace = true }
 rattler_conda_types = { workspace = true }
+rattler_lock = { workspace = true }
 rattler_repodata_gateway = { workspace = true, features = [
   "sparse",
   "gateway",
 ] }
+regex = { workspace = true }
 same-file = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }
