@@ -361,6 +361,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Err(err) => return Err(err.into()),
         }
 
+        // Invalidate cached environment if task modifies it
+        if executable_task.task().modifies_env() {
+            task_envs.remove(&executable_task.run_environment);
+        }
+
         // Compute post-run hash, warn on missing globs, and update the cache
         let post_hash = executable_task
             .compute_post_run_hash(lock_file.as_lock_file(), task_cache)

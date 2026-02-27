@@ -308,6 +308,14 @@ impl Task {
             _ => None,
         }
     }
+
+    /// Returns whether this task modifies the environment.
+    pub fn modifies_env(&self) -> bool {
+        match self {
+            Task::Execute(exe) => exe.modifies_env,
+            _ => false,
+        }
+    }
 }
 
 /// A list of glob patterns that can be used as input or output for a task
@@ -376,6 +384,9 @@ pub struct Execute {
 
     /// The arguments to pass to the task
     pub args: Option<Vec<TaskArg>>,
+
+    /// Indicates this task modifies the environment (e.g., generates files read by activation scripts)
+    pub modifies_env: bool,
 }
 
 impl From<Execute> for Task {
@@ -954,6 +965,9 @@ impl From<Task> for Item {
                 }
                 if let Some(description) = &process.description {
                     table.insert("description", description.into());
+                }
+                if process.modifies_env {
+                    table.insert("modifies-env", true.into());
                 }
                 Item::Value(Value::InlineTable(table))
             }
