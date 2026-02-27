@@ -255,11 +255,13 @@ impl<'p> TaskGraph<'p> {
                     let task_name = args.remove(0);
 
                     let arg_values = if let Some(task_arguments) = task.args() {
-                        // Extract any arguments after `--`. These are passed directly to the
-                        // underlying command on top of the typed args.
-                        let extra_args = if let Some(pos) = args.iter().position(|a| a == "--") {
-                            let extra = args[pos + 1..].to_vec();
-                            args.truncate(pos);
+                        // Extract any arguments after `--`, but only if `--` is the first
+                        // argument after the task name. A `--` that appears later is treated
+                        // as a regular argument (e.g. it may be meaningful to the underlying
+                        // command).
+                        let extra_args = if args.first().map(|s| s.as_str()) == Some("--") {
+                            let extra = args[1..].to_vec();
+                            args.truncate(0);
                             extra
                         } else {
                             vec![]
@@ -298,14 +300,12 @@ impl<'p> TaskGraph<'p> {
                             }
                         })
                     } else {
-                        // Task has no typed args — strip the `--` separator if present.
-                        // For any pixi task, `--` is consumed by pixi and not forwarded
-                        // to the underlying command. Args before and after `--` are all
-                        // passed through as free-form args.
-                        let free_args = if let Some(pos) = args.iter().position(|a| a == "--") {
-                            let mut combined = args[..pos].to_vec();
-                            combined.extend_from_slice(&args[pos + 1..]);
-                            combined
+                        // Task has no typed args — strip the `--` separator only if it is
+                        // the first argument after the task name. A `--` that appears later
+                        // is passed through verbatim (it may be meaningful to the underlying
+                        // command, e.g. `git log -- somefile`).
+                        let free_args = if args.first().map(|s| s.as_str()) == Some("--") {
+                            args[1..].to_vec()
                         } else {
                             args.clone()
                         };
@@ -1272,8 +1272,9 @@ mod test {
 
     #[test]
     fn test_double_dash_separator_with_typed_args() {
-        // pixi run build release -- --verbose
-        // "release" fills the typed arg; "--verbose" is appended to the command
+        // `--` is only recognised as a separator when it's the first arg after the
+        // task name. Here "release" comes first, so `--` is treated as a regular
+        // argument and the call fails with TooManyArguments.
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1285,8 +1286,8 @@ mod test {
         args = [{ arg = "target", choices = ["debug", "release"] }]
     "#;
         let run_args = &["build", "release", "--", "--verbose"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
-        assert_eq!(commands, vec!["echo release '--verbose'"]);
+        let error = TaskGraphTest::new(workspace_str, run_args).expect_error();
+        assert!(matches!(error, TaskGraphError::TooManyArguments(_)));
     }
 
     #[test]
@@ -1310,9 +1311,9 @@ mod test {
 
     #[test]
     fn test_double_dash_with_free_form_args() {
-        // Task has NO typed args. pixi run mytask arg1 -- arg2
-        // The "--" is stripped (consumed by pixi) and args before and after
-        // are both forwarded to the underlying command.
+        // Task has NO typed args. `--` only acts as a separator when it is the
+        // first arg after the task name. Here "arg1" comes first, so `--` is
+        // passed through verbatim to the underlying command.
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1323,6 +1324,24 @@ mod test {
         cmd = "echo"
     "#;
         let run_args = &["mytask", "arg1", "--", "arg2"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo 'arg1' '--' 'arg2'"]);
+    }
+
+    #[test]
+    fn test_double_dash_first_with_free_form_args() {
+        // Task has NO typed args. `--` is the first arg after the task name, so
+        // it is consumed by pixi and the remaining args are forwarded.
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.mytask]
+        cmd = "echo"
+    "#;
+        let run_args = &["mytask", "--", "arg1", "arg2"];
         let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
         assert_eq!(commands, vec!["echo 'arg1' 'arg2'"]);
     }
@@ -1344,7 +1363,8 @@ mod test {
 
     #[test]
     fn test_double_dash_no_extra_args() {
-        // Trailing "--" with nothing after it works the same as without "--"
+        // Trailing "--" with nothing after it, and `--` is the first arg after
+        // the task name, so it is consumed. Task uses its default value.
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1353,10 +1373,29 @@ mod test {
 
         [tasks.build]
         cmd = "echo {{ target }}"
-        args = [{ arg = "target", choices = ["debug", "release"] }]
+        args = [{ arg = "target", default = "debug", choices = ["debug", "release"] }]
     "#;
-        let run_args = &["build", "release", "--"];
+        let run_args = &["build", "--"];
         let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
-        assert_eq!(commands, vec!["echo release"]);
+        assert_eq!(commands, vec!["echo debug"]);
+    }
+
+    #[test]
+    fn test_double_dash_prefix_not_separator() {
+        // `--verbose` is NOT the `--` separator — only the exact token `--`
+        // (with a space after it) is recognised. A flag like `--verbose` as the
+        // first arg is forwarded to the underlying command unchanged.
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.mytask]
+        cmd = "echo"
+    "#;
+        let run_args = &["mytask", "--verbose"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo '--verbose'"]);
     }
 }
