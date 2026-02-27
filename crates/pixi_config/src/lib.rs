@@ -810,6 +810,14 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_platform: Option<Platform>,
 
+    /// If true, tasks whose `inputs` or `outputs` glob patterns match no files
+    /// will fail with an error instead of emitting a warning.
+    /// This is a global fallback; individual tasks can override it with their
+    /// own `error-on-missing-globs` field.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_on_missing_globs: Option<bool>,
+
     //////////////////////
     // Deprecated fields //
     //////////////////////
@@ -845,6 +853,7 @@ impl Default for Config {
             proxy_config: ProxyConfig::default(),
             build: BuildConfig::default(),
             tool_platform: None,
+            error_on_missing_globs: None,
 
             // Deprecated fields
             change_ps1: None,
@@ -1455,6 +1464,7 @@ impl Config {
             proxy_config: self.proxy_config.merge(other.proxy_config),
             build: self.build.merge(other.build),
             tool_platform: self.tool_platform.or(other.tool_platform),
+            error_on_missing_globs: other.error_on_missing_globs.or(self.error_on_missing_globs),
 
             // Deprecated fields that we can ignore as we handle them inside `shell.` field
             change_ps1: None,
@@ -1539,6 +1549,12 @@ impl Config {
     /// The platform to use to install tools.
     pub fn tool_platform(&self) -> Platform {
         self.tool_platform.unwrap_or(Platform::current())
+    }
+
+    /// Returns `true` when missing input/output glob matches should produce an
+    /// error. Defaults to `false` (warning-only behavior).
+    pub fn error_on_missing_globs(&self) -> bool {
+        self.error_on_missing_globs.unwrap_or(false)
     }
 
     pub fn get_proxies(&self) -> reqwest::Result<Vec<Proxy>> {
@@ -2323,6 +2339,7 @@ UNUSED = "unused"
             // Deprecated keys
             change_ps1: None,
             force_activate: None,
+            error_on_missing_globs: Some(true),
         };
         let original_other = other.clone();
         config = config.merge_config(other);

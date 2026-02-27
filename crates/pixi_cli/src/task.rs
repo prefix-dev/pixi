@@ -223,6 +223,7 @@ impl From<AddArgs> for Task {
                 description,
                 clean_env,
                 args,
+                error_on_missing_globs: None,
             }))
         }
     }

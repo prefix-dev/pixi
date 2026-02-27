@@ -367,7 +367,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .await
             .into_diagnostic()?;
         if let Some(ref hash) = post_hash {
-            executable_task.warn_on_missing_globs(hash);
+            let error_on_missing = executable_task
+                .task()
+                .error_on_missing_globs()
+                .unwrap_or(workspace.config().error_on_missing_globs());
+            executable_task.check_missing_globs(hash, error_on_missing)?;
         }
         executable_task
             .save_cache(post_hash)

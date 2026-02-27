@@ -308,6 +308,16 @@ impl Task {
             _ => None,
         }
     }
+
+    /// Returns whether missing input/output glob matches should produce an
+    /// error (when `Some(true)`) or fall back to the global config / warning
+    /// behavior (when `None`).
+    pub fn error_on_missing_globs(&self) -> Option<bool> {
+        match self {
+            Task::Execute(exe) => exe.error_on_missing_globs,
+            _ => None,
+        }
+    }
 }
 
 /// A list of glob patterns that can be used as input or output for a task
@@ -376,6 +386,13 @@ pub struct Execute {
 
     /// The arguments to pass to the task
     pub args: Option<Vec<TaskArg>>,
+
+    /// If set to true, missing input or output globs will cause an error
+    /// instead of a warning. When not set, falls back to the global
+    /// `error-on-missing-globs` config option (default: false).
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_on_missing_globs: Option<bool>,
 }
 
 impl From<Execute> for Task {
