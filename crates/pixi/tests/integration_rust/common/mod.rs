@@ -468,8 +468,7 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                     ..Default::default()
                 },
-                platform: vec![Platform::current(), Platform::NoArch],
-                all_platforms: false,
+                platform: None,
                 limit: 5,
                 limit_packages: 10,
                 json: false,

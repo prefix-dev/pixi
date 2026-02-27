@@ -39,13 +39,11 @@ pub struct Args {
     #[clap(flatten)]
     pub project_config: WorkspaceConfig,
 
-    /// The platform(s) to search for
-    #[arg(short, long, default_values_t = [Platform::current(), Platform::NoArch])]
-    pub platform: Vec<Platform>,
-
-    /// Search across all platforms (from manifest if available, otherwise all known platforms)
-    #[arg(long, conflicts_with = "platform")]
-    pub all_platforms: bool,
+    /// The platform(s) to search for.
+    /// By default, searches all platforms from the manifest (or all known
+    /// platforms if no manifest is found).
+    #[arg(short, long)]
+    pub platform: Option<Vec<Platform>>,
 
     /// Limit the number of versions shown per package, -1 for no limit
     #[clap(short, long, default_value = "5", allow_hyphen_values = true)]
@@ -111,22 +109,20 @@ pub async fn execute_impl<W: Write>(
     );
 
     // Resolve platforms
-    let platforms = if args.all_platforms {
-        if let Some(ref workspace) = workspace {
-            let mut platforms: Vec<Platform> = workspace
-                .default_environment()
-                .platforms()
-                .into_iter()
-                .collect();
-            if !platforms.contains(&Platform::NoArch) {
-                platforms.push(Platform::NoArch);
-            }
-            platforms
-        } else {
-            Platform::all().collect()
+    let platforms = if let Some(platforms) = args.platform {
+        platforms
+    } else if let Some(ref workspace) = workspace {
+        let mut platforms: Vec<Platform> = workspace
+            .default_environment()
+            .platforms()
+            .into_iter()
+            .collect();
+        if !platforms.contains(&Platform::NoArch) {
+            platforms.push(Platform::NoArch);
         }
+        platforms
     } else {
-        args.platform
+        Platform::all().collect()
     };
 
     let matchspec = MatchSpec::from_str(

@@ -23,11 +23,8 @@ pixi search [OPTIONS] <PACKAGE>
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 <br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
-:  The platform(s) to search for
+:  The platform(s) to search for. By default, searches all platforms from the manifest (or all known platforms if no manifest is found).
 <br>May be provided more than once.
-<br>**default**: `current_platform, current_platform`
-- <a id="arg---all-platforms" href="#arg---all-platforms">`--all-platforms`</a>
-:  Search across all platforms (from manifest if available, otherwise all known platforms)
 - <a id="arg---limit" href="#arg---limit">`--limit (-l) <LIMIT>`</a>
 :  Limit the number of versions shown per package, -1 for no limit
 <br>**default**: `5`
