@@ -246,7 +246,7 @@ simple_spawn_blocking = { version = "1.1.0", default-features = false }
 rattler-build = { git = "https://github.com/prefix-dev/rattler-build", rev = "v0.58.1", default-features = false, features = [
   "s3",
 ] }
-rattler_build_jinja = { git = "https://github.com/prefix-dev/rattler-build", rev = "v0.58.1" }
+rattler_build_jinja = { git = "https://github.com/prefix-dev/rattler-build", rev = "5ed7d7a3e5ccf947cf0db3241f9237b019201dd8" }
 rattler_build_recipe = { git = "https://github.com/prefix-dev/rattler-build", rev = "v0.58.1" }
 rattler_build_types = { git = "https://github.com/prefix-dev/rattler-build", rev = "v0.58.1" }
 rattler_build_variant_config = { git = "https://github.com/prefix-dev/rattler-build", rev = "v0.58.1" }
