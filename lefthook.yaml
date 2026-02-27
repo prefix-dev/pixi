@@ -23,7 +23,7 @@ pre-commit:
     - name: actionlint
       run: pixi {run} -e default actionlint
     - name: zizmor
-      run: pixi {run} -e default zizmor
+      run: pixi {run} -e default zizmor --no-progress
     - name: cargo-fmt
       glob: "*.rs"
       stage_fixed: true
