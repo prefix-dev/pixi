@@ -65,6 +65,13 @@ impl From<String> for FeatureName {
 impl FeatureName {
     pub const DEFAULT: Self = FeatureName(Cow::Borrowed(consts::DEFAULT_FEATURE_NAME));
 
+    /// Creates a feature name for an inline environment feature.
+    /// Inline features use a dot-prefix to avoid collisions with named
+    /// features.
+    pub fn inline(environment_name: &str) -> Self {
+        FeatureName::from(format!(".{}", environment_name))
+    }
+
     /// Returns the string representation of the feature.
     pub fn as_str(&self) -> &str {
         &self.0

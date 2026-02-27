@@ -504,6 +504,7 @@ SolveGroupName = NonEmptyStr
 class Environment(StrictBaseModel):
     """A composition of the dependencies of features which can be activated to run tasks or provide a shell"""
 
+    # Existing environment-specific fields
     features: list[FeatureName] | None = Field(
         None, description="The features that define the environment"
     )
@@ -515,6 +516,50 @@ class Environment(StrictBaseModel):
         False,
         description="Whether to add the default feature to this environment",
     )
+
+    # Inline feature config (same as Feature class)
+    channels: list[Channel] | None = Field(
+        None,
+        description="The `conda` channels for this environment's inline dependencies",
+    )
+    channel_priority: ChannelPriority | None = Field(
+        None,
+        examples=["strict", "disabled"],
+        description="The channel priority strategy for this environment",
+    )
+    solve_strategy: SolveStrategy | None = Field(
+        None,
+        examples=["lowest", "lowest-direct", "highest"],
+        description="The dependency solving strategy for this environment",
+    )
+    platforms: list[Platform] | None = Field(
+        None,
+        description="The platforms that this environment's inline config supports",
+    )
+    dependencies: Dependencies = DependenciesField
+    host_dependencies: Dependencies = HostDependenciesField
+    build_dependencies: Dependencies = BuildDependenciesField
+    pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
+        None, description="The PyPI dependencies for this environment"
+    )
+    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
+        None,
+        description="Source packages for development in this environment",
+    )
+    tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
+        None, description="The tasks provided by this environment"
+    )
+    activation: Activation | None = Field(
+        None, description="The activation scripts for this environment"
+    )
+    system_requirements: SystemRequirements | None = Field(
+        None, description="The system requirements for this environment"
+    )
+    target: dict[TargetName, Target] | None = Field(
+        None,
+        description="Platform-specific configuration for this environment",
+    )
+    pypi_options: PyPIOptions | None = Field(None, description="PyPI options for this environment")
 
 
 ######################
