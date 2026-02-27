@@ -17,10 +17,16 @@ use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
 use rattler_lock::{CondaPackageData, LockedPackageRef, PypiPackageData, UrlOrPath};
 use serde::Serialize;
+use uv_client::{Connectivity, MetadataFormat, OwnedArchive, RegistryClient};
+use uv_configuration::IndexStrategy;
 use uv_distribution::RegistryWheelIndex;
 use uv_distribution_types::{
-    ConfigSettings, ExtraBuildRequires, ExtraBuildVariables, PackageConfigSettings,
+    ConfigSettings, ExtraBuildRequires, ExtraBuildVariables, IndexCapabilities, IndexFormat,
+    IndexMetadataRef, IndexUrl, PackageConfigSettings,
 };
+use uv_pep508::VerbatimUrl;
+use uv_pypi_types::HashAlgorithm;
+use uv_redacted::DisplaySafeUrl;
 
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
@@ -324,6 +330,111 @@ where
     Ok(result)
 }
 
+/// Metadata extracted from the cached Simple API index for a single file.
+struct PypiIndexFileInfo {
+    size: Option<u64>,
+    filename: String,
+    upload_time_utc_ms: Option<i64>,
+}
+
+/// Look up PyPI file metadata from cached Simple API index data.
+///
+/// Groups packages by (name, index_url) so each query targets the
+/// specific index that served the package, then builds a
+/// sha256-hex → file-info map for matching in output.
+async fn fetch_pypi_file_info_from_cache(
+    packages: &[PackageExt],
+    registry_client: &RegistryClient,
+    capabilities: &IndexCapabilities,
+) -> HashMap<String, PypiIndexFileInfo> {
+    let mut info_map = HashMap::new();
+    let semaphore = tokio::sync::Semaphore::new(50);
+
+    let mut queries: HashMap<IndexUrl, Vec<uv_normalize::PackageName>> = HashMap::new();
+    for p in packages {
+        let PackageExt::PyPI(data, name) = p else {
+            continue;
+        };
+        let Some(index_url) = &data.index_url else {
+            continue;
+        };
+        if data.hash.is_none() {
+            continue;
+        }
+        let index_url = IndexUrl::from(VerbatimUrl::from_url(DisplaySafeUrl::from(
+            index_url.clone(),
+        )));
+        queries.entry(index_url).or_default().push(name.clone());
+    }
+
+    for (index_url, packages) in &queries {
+        let index_hint = IndexMetadataRef {
+            url: index_url,
+            format: IndexFormat::Simple,
+        };
+
+        for name in packages {
+            match registry_client
+                .package_metadata(name, Some(index_hint), capabilities, &semaphore)
+                .await
+            {
+                Ok(results) => {
+                    for (result_index_url, metadata) in &results {
+                        if *result_index_url != index_url {
+                            continue;
+                        }
+                        let MetadataFormat::Simple(archive) = metadata else {
+                            continue;
+                        };
+                        let metadata = OwnedArchive::deserialize(archive);
+                        for datum in metadata {
+                            collect_file_info(&datum.files, &mut info_map);
+                        }
+                    }
+                }
+                Err(err) => {
+                    tracing::debug!("Failed to fetch cached metadata for {name}: {err}");
+                    continue;
+                }
+            };
+        }
+    }
+
+    info_map
+}
+
+/// Extract sha256 → file info mappings from a set of version files.
+fn collect_file_info(
+    files: &uv_client::VersionFiles,
+    info_map: &mut HashMap<String, PypiIndexFileInfo>,
+) {
+    for wheel in &files.wheels {
+        insert_file_info(&wheel.file, info_map);
+    }
+    for sdist in &files.source_dists {
+        insert_file_info(&sdist.file, info_map);
+    }
+}
+
+/// If the file has a sha256 hash, record its metadata.
+fn insert_file_info(
+    file: &uv_distribution_types::File,
+    info_map: &mut HashMap<String, PypiIndexFileInfo>,
+) {
+    for hash in file.hashes.iter() {
+        if hash.algorithm() == HashAlgorithm::Sha256 {
+            info_map.insert(
+                hash.digest.to_string(),
+                PypiIndexFileInfo {
+                    size: file.size,
+                    filename: file.filename.to_string(),
+                    upload_time_utc_ms: file.upload_time_utc_ms,
+                },
+            );
+        }
+    }
+}
+
 /// Associate with a uv_normalize::PackageName
 #[allow(clippy::large_enum_variant)]
 enum PackageExt {
@@ -410,7 +521,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let extra_build_requires = ExtraBuildRequires::default();
     let extra_build_variables = ExtraBuildVariables::default();
 
-    let mut registry_index = if let Some(python_record) = python_record {
+    let (mut registry_index, pypi_file_info) = if let Some(python_record) = python_record {
         if environment.has_pypi_dependencies() {
             uv_context = UvResolutionContext::from_config(workspace.config())?;
             index_locations =
@@ -421,7 +532,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &environment.system_requirements(),
                 python_record.record(),
             )?;
-            Some(RegistryWheelIndex::new(
+
+            // Look up PyPI file sizes from cached Simple API data
+            let registry_client = uv_context.build_registry_client(
+                uv_context.allow_insecure_host.clone(),
+                &index_locations,
+                IndexStrategy::default(),
+                None,
+                Connectivity::Offline,
+            );
+            let pypi_file_info = fetch_pypi_file_info_from_cache(
+                &locked_deps_ext,
+                &registry_client,
+                &uv_context.capabilities,
+            )
+            .await;
+
+            let idx = RegistryWheelIndex::new(
                 &uv_context.cache,
                 &tags,
                 &index_locations,
@@ -430,12 +557,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &package_config_settings,
                 &extra_build_requires,
                 &extra_build_variables,
-            ))
+            );
+            (Some(idx), pypi_file_info)
         } else {
-            None
+            (None, HashMap::new())
         }
     } else {
-        None
+        (None, HashMap::new())
     };
 
     // Get the explicit project dependencies with their requested specs
@@ -462,7 +590,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut packages_to_output = locked_deps_ext
         .iter()
-        .map(|p| create_package_to_output(p, &requested_specs, registry_index.as_mut()))
+        .map(|p| {
+            create_package_to_output(
+                p,
+                &requested_specs,
+                registry_index.as_mut(),
+                &pypi_file_info,
+            )
+        })
         .collect::<Result<Vec<PackageToOutput>, _>>()?;
 
     // Filter packages by regex if needed
@@ -550,6 +685,17 @@ fn json_packages(packages: &Vec<PackageToOutput>) {
     println!("{json_string}");
 }
 
+/// Look up cached index metadata for a PyPI package by its sha256 hash.
+fn lookup_pypi_file_info<'a>(
+    pkg: &PypiPackageData,
+    pypi_file_info: &'a HashMap<String, PypiIndexFileInfo>,
+) -> Option<&'a PypiIndexFileInfo> {
+    pkg.hash
+        .as_ref()
+        .and_then(|h| h.sha256())
+        .and_then(|sha| pypi_file_info.get(&format!("{sha:x}")))
+}
+
 /// Return the size and source location of the pypi package
 fn get_pypi_location_information(location: &UrlOrPath) -> (Option<u64>, Option<String>) {
     match location {
@@ -565,6 +711,7 @@ fn create_package_to_output<'a, 'b>(
     package: &'b PackageExt,
     requested_specs: &'a HashMap<String, String>,
     registry_index: Option<&'a mut RegistryWheelIndex<'b>>,
+    pypi_file_info: &HashMap<String, PypiIndexFileInfo>,
 ) -> miette::Result<PackageToOutput> {
     let name = package.name().to_string();
     let version = package.version().into_owned();
@@ -592,11 +739,13 @@ fn create_package_to_output<'a, 'b>(
             },
         ),
         PackageExt::PyPI(p, name) => {
-            // Check the hash to avoid non index packages to be handled by the registry
-            // index as wheels
+            let index_info = lookup_pypi_file_info(p, pypi_file_info);
+            let source = p
+                .index_url
+                .as_ref()
+                .map(|u| u.as_str().trim_end_matches('/').to_string());
             if p.hash.is_some() {
                 if let Some(registry_index) = registry_index {
-                    // Handle case where the registry index is present
                     let entry = registry_index.get(name).find(|i| {
                         i.dist.filename.version
                             == to_uv_version(
@@ -606,14 +755,18 @@ fn create_package_to_output<'a, 'b>(
                             )
                             .expect("invalid version")
                     });
-                    let size = entry.and_then(|e| get_dir_size(e.dist.path.clone()).ok());
-                    let name = entry.map(|e| e.dist.filename.to_string());
-                    (size, name)
+                    let size = entry
+                        .and_then(|e| get_dir_size(e.dist.path.clone()).ok())
+                        .or_else(|| index_info.and_then(|i| i.size));
+                    (size, source)
                 } else {
-                    get_pypi_location_information(&p.location)
+                    let size = index_info.and_then(|i| i.size);
+                    let fallback_size = get_pypi_location_information(&p.location).0;
+                    (size.or(fallback_size), source)
                 }
             } else {
-                get_pypi_location_information(&p.location)
+                let (size, fallback_source) = get_pypi_location_information(&p.location);
+                (size, source.or(fallback_source))
             }
         }
     };
@@ -661,7 +814,9 @@ fn create_package_to_output<'a, 'b>(
 
     let timestamp = match package {
         PackageExt::Conda(pkg) => pkg.record().timestamp.map(|ts| ts.timestamp_millis()),
-        PackageExt::PyPI(_, _) => None,
+        PackageExt::PyPI(p, _) => {
+            lookup_pypi_file_info(p, pypi_file_info).and_then(|i| i.upload_time_utc_ms)
+        }
     };
 
     let noarch = match package {
@@ -686,10 +841,28 @@ fn create_package_to_output<'a, 'b>(
             ),
             CondaPackageData::Source(source) => (None, Some(source.location.to_string())),
         },
-        PackageExt::PyPI(p, _) => match &*p.location {
-            UrlOrPath::Url(url) => (None, Some(url.to_string())),
-            UrlOrPath::Path(path) => (None, Some(path.to_string())),
-        },
+        PackageExt::PyPI(p, _) => {
+            let file_name = lookup_pypi_file_info(p, pypi_file_info)
+                .map(|i| i.filename.clone())
+                .or_else(|| {
+                    // Fall back to extracting the filename from the URL
+                    match &*p.location {
+                        UrlOrPath::Url(url) => {
+                            url.path_segments().and_then(|s| s.last()).map(|s| {
+                                percent_encoding::percent_decode_str(s)
+                                    .decode_utf8()
+                                    .map_or_else(|_| s.to_string(), |d| d.into_owned())
+                            })
+                        }
+                        UrlOrPath::Path(_) => None,
+                    }
+                });
+            let url = match &*p.location {
+                UrlOrPath::Url(url) => Some(url.to_string()),
+                UrlOrPath::Path(path) => Some(path.to_string()),
+            };
+            (file_name, url)
+        }
     };
 
     let requested_spec = requested_specs.get(&name).cloned();

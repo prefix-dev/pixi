@@ -456,6 +456,7 @@ pub async fn resolve_pypi(
         &index_locations,
         index_strategy,
         Some(&marker_environment),
+        Connectivity::Online,
     );
 
     let build_options = pypi_options_to_build_options(

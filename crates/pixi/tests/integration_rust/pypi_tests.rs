@@ -1811,7 +1811,6 @@ async fn test_index_url_in_lock_file() {
         Some(default_index.index_url().as_str()),
         "rsa should have the default index URL"
     );
-
 }
 
 /// Test that the default PyPI index URL is elided from the serialized lock file

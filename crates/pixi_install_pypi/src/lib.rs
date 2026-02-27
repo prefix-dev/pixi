@@ -359,6 +359,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &index_locations,
             index_strategy,
             None,
+            Connectivity::Online,
         );
 
         // Resolve the flat indexes from `--find-links`.
