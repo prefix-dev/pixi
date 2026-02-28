@@ -307,6 +307,11 @@ pub struct DependencyConfig {
     /// The subdirectory of the git repository to use
     #[clap(long, short, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
     pub subdir: Option<String>,
+
+    /// The PyPI index URL to use for this dependency.
+    /// Only applicable when adding pypi dependencies.
+    #[clap(long, requires = "pypi")]
+    pub index: Option<Url>,
 }
 
 impl DependencyConfig {

@@ -5,6 +5,7 @@ use pixi_api::{
 };
 use pixi_config::ConfigCli;
 use pixi_core::{DependencyType, WorkspaceLocator};
+use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec};
 
 use crate::{
     cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
@@ -158,6 +159,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .await?
         }
         DependencyType::PypiDependency => {
+            let index = args.dependency_config.index.clone();
             let pypi_deps = match args
                 .dependency_config
                 .vcs_pep508_requirements(&workspace)
@@ -165,14 +167,40 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             {
                 Some(vcs_reqs) => vcs_reqs
                     .into_iter()
-                    .map(|(name, req)| (name, (req, None, None)))
-                    .collect(),
+                    .map(|(name, req)| {
+                        let pixi_spec = if let Some(ref index_url) = index {
+                            let mut spec = PixiPypiSpec::try_from(req.clone()).map_err(|e| {
+                                miette::miette!("failed to convert requirement: {}", e)
+                            })?;
+                            if let PixiPypiSource::Registry { index: idx, .. } = spec.source_mut() {
+                                *idx = Some(index_url.clone());
+                            }
+                            Some(spec)
+                        } else {
+                            None
+                        };
+                        Ok((name, (req, pixi_spec, None)))
+                    })
+                    .collect::<miette::Result<_>>()?,
                 None => args
                     .dependency_config
                     .pypi_deps(&workspace)?
                     .into_iter()
-                    .map(|(name, req)| (name, (req, None, None)))
-                    .collect(),
+                    .map(|(name, req)| {
+                        let pixi_spec = if let Some(ref index_url) = index {
+                            let mut spec = PixiPypiSpec::try_from(req.clone()).map_err(|e| {
+                                miette::miette!("failed to convert requirement: {}", e)
+                            })?;
+                            if let PixiPypiSource::Registry { index: idx, .. } = spec.source_mut() {
+                                *idx = Some(index_url.clone());
+                            }
+                            Some(spec)
+                        } else {
+                            None
+                        };
+                        Ok((name, (req, pixi_spec, None)))
+                    })
+                    .collect::<miette::Result<_>>()?,
             };
 
             workspace_ctx
