@@ -54,6 +54,81 @@ You can modify the activation with the `activation` table in the manifest, you c
 ```
 Find the reference for the `activation` table [here](../reference/pixi_manifest.md#the-activation-table).
 
+### Default Activation Behavior
+
+Besides `[activation.env]` and `activation.scripts`, pixi also prepends some values to `PATH` implicitly.
+
+For Windows:
+
+- `$PREFIX/Library/mingw-w64/bin`
+- `$PREFIX/Library/usr/bin`
+- `$PREFIX/Library/bin`
+- `$PREFIX/Scripts`
+- `$PREFIX/bin`
+
+For other systems:
+
+- `$PREFIX/bin`
+
+Under some very edge cases, this will cause unexpected result. Here is a example `pixi-global.toml` on Windows and we assume `$PIXI_HOME/bin`
+already exists in `PATH`.
+
+```toml
+version = 1
+[envs.tools]
+channels = ["conda-forge"]
+platform = "win-64"
+[envs.tools.dependencies]
+powershell = "*"
+git = "*"
+ripgrep = "*"
+[envs.tools.exposed]
+pwsh = "pwsh"
+git = "git"
+grep = "rg" # (1)!
+```
+
+1. I prefer `ripgrep` than the GNU `grep`
+
+
+After install the global tools with `pixi global update`, there comes two problems if you use the `pwsh` as your shell, though its valid to pixi.
+
+1. Pixi silently **"exposes"** all GNU coreutils by prepending `$PIXI_HOME/envs/tool/Library/mingw-w64/bin` to `PATH`, and `pwsh` inherits `PATH`.
+2. The `grep` in `pwsh` is not the `ripgrep` one, but the GNU `grep` installed with `git`, because `$PIXI_HOME/envs/tool/Library/mingw-w64/bin`
+   (where the GNU `grep` locates) in `PATH` has the higher priority than `$PIXI_HOME/bin`.
+
+The solution is to install `powershell` in a isolated environment. Though pixi prepend the `$PIXI_HOME/envs/shell/Library/mingw-w64/bin` to `PATH`, but there is nothing under it.
+
+```toml
+version = 1
+[envs.tools]
+channels = ["conda-forge"]
+platform = "win-64"
+[envs.tools.dependencies]
+git = "*"
+ripgrep = "*"
+[envs.tools.exposed]
+git = "git"
+grep = "rg"
+
+[envs.shell]
+channels = ["conda-forge"]
+platform = "win-64"
+[envs.shell.dependencies]
+powershell = "*"
+[envs.shell.exposed]
+pwsh = "pwsh"
+```
+
+!!! tip "danger"
+    - **Use Windows** More paths prepends to `PATH` than other system and there might be some executables with the same name in these
+      paths.
+    - **Use Global Tools** Global tools allow you to modify the executable name, which will be omitted if there is a executable or shell
+      alias with the same name and has higher priority than the one in `$PIXI_HOME/bin`.
+    - **Use Shell or Editor** The shell or editor that installed in a `pixi` environment will inherit the `PATH` that effected by `pixi`.
+      Calling another executables in the same environment from the shell or editor, like the example above, tends to cause unexpected
+      behavior.
+
 --8<-- "docs/partials/conda-style-activation.md"
 
 
