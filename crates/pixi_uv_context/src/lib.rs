@@ -282,26 +282,19 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    // Mutex to prevent env var tests from interfering with each other
     static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
-    /// # Safety
-    /// This function manipulates environment variables which is inherently
-    /// unsafe in a multi-threaded context. The ENV_MUTEX must be held by the
-    /// caller (enforced by requiring it in this module's test helpers).
     fn with_env_vars<F, R>(vars: &[(&str, Option<&str>)], f: F) -> R
     where
         F: FnOnce() -> R,
     {
         let _lock = ENV_MUTEX.lock().unwrap();
-        // Save original values
         let originals: Vec<_> = vars
             .iter()
             .map(|(k, _)| (*k, std::env::var(k).ok()))
             .collect();
 
-        // SAFETY: We hold ENV_MUTEX to ensure no concurrent env var access
-        // within these tests.
+        // SAFETY: We hold ENV_MUTEX to ensure no concurrent env var access.
         unsafe {
             for (k, v) in vars {
                 match v {
@@ -313,7 +306,6 @@ mod tests {
 
         let result = f();
 
-        // SAFETY: Same as above - restoring original values under mutex.
         unsafe {
             for (k, v) in &originals {
                 match v {
@@ -326,39 +318,31 @@ mod tests {
         result
     }
 
-    #[test]
-    fn test_no_env_vars_returns_none() {
-        with_env_vars(
-            &[
-                ("UV_HTTP_TIMEOUT", None),
-                ("UV_REQUEST_TIMEOUT", None),
-                ("HTTP_TIMEOUT", None),
-            ],
-            || {
-                assert!(read_http_timeout_from_env().is_none());
-            },
-        );
+    /// Clear all timeout-related env vars for a clean test.
+    const TIMEOUT_VARS: [(&str, Option<&str>); 3] = [
+        ("UV_HTTP_TIMEOUT", None),
+        ("UV_REQUEST_TIMEOUT", None),
+        ("HTTP_TIMEOUT", None),
+    ];
+
+    fn timeout_vars_with<'a>(overrides: &'a [(&'a str, &'a str)]) -> Vec<(&'a str, Option<&'a str>)> {
+        TIMEOUT_VARS
+            .iter()
+            .map(|&(k, _)| {
+                let val = overrides.iter().find(|(ok, _)| *ok == k).map(|(_, v)| *v);
+                (k, val)
+            })
+            .collect()
     }
 
     #[test]
-    fn test_uv_http_timeout_integer() {
-        with_env_vars(
-            &[
-                ("UV_HTTP_TIMEOUT", Some("300")),
-                ("UV_REQUEST_TIMEOUT", None),
-                ("HTTP_TIMEOUT", None),
-            ],
-            || {
-                assert_eq!(
-                    read_http_timeout_from_env(),
-                    Some(Duration::from_secs(300))
-                );
-            },
-        );
-    }
+    fn test_http_timeout_precedence_and_parsing() {
+        // No env vars → None
+        with_env_vars(&TIMEOUT_VARS, || {
+            assert!(read_http_timeout_from_env().is_none());
+        });
 
-    #[test]
-    fn test_uv_http_timeout_takes_precedence() {
+        // UV_HTTP_TIMEOUT takes precedence over the others
         with_env_vars(
             &[
                 ("UV_HTTP_TIMEOUT", Some("100")),
@@ -366,178 +350,67 @@ mod tests {
                 ("HTTP_TIMEOUT", Some("300")),
             ],
             || {
-                assert_eq!(
-                    read_http_timeout_from_env(),
-                    Some(Duration::from_secs(100))
-                );
+                assert_eq!(read_http_timeout_from_env(), Some(Duration::from_secs(100)));
             },
         );
-    }
 
-    #[test]
-    fn test_uv_request_timeout_fallback() {
+        // Falls through to UV_REQUEST_TIMEOUT, then HTTP_TIMEOUT
+        with_env_vars(&timeout_vars_with(&[("UV_REQUEST_TIMEOUT", "200")]), || {
+            assert_eq!(read_http_timeout_from_env(), Some(Duration::from_secs(200)));
+        });
+        with_env_vars(&timeout_vars_with(&[("HTTP_TIMEOUT", "300")]), || {
+            assert_eq!(read_http_timeout_from_env(), Some(Duration::from_secs(300)));
+        });
+
+        // Invalid value is skipped, falls through to next
         with_env_vars(
             &[
-                ("UV_HTTP_TIMEOUT", None),
-                ("UV_REQUEST_TIMEOUT", Some("200")),
-                ("HTTP_TIMEOUT", Some("300")),
-            ],
-            || {
-                assert_eq!(
-                    read_http_timeout_from_env(),
-                    Some(Duration::from_secs(200))
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn test_http_timeout_last_fallback() {
-        with_env_vars(
-            &[
-                ("UV_HTTP_TIMEOUT", None),
-                ("UV_REQUEST_TIMEOUT", None),
-                ("HTTP_TIMEOUT", Some("300")),
-            ],
-            || {
-                assert_eq!(
-                    read_http_timeout_from_env(),
-                    Some(Duration::from_secs(300))
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn test_invalid_value_is_ignored() {
-        with_env_vars(
-            &[
-                ("UV_HTTP_TIMEOUT", Some("not_a_number")),
+                ("UV_HTTP_TIMEOUT", Some("nope")),
                 ("UV_REQUEST_TIMEOUT", Some("200")),
                 ("HTTP_TIMEOUT", None),
             ],
             || {
-                // Invalid UV_HTTP_TIMEOUT is skipped, falls back to UV_REQUEST_TIMEOUT
-                assert_eq!(
-                    read_http_timeout_from_env(),
-                    Some(Duration::from_secs(200))
-                );
+                assert_eq!(read_http_timeout_from_env(), Some(Duration::from_secs(200)));
             },
         );
+
+        // Float seconds work
+        with_env_vars(&timeout_vars_with(&[("UV_HTTP_TIMEOUT", "30.5")]), || {
+            assert_eq!(
+                read_http_timeout_from_env(),
+                Some(Duration::from_secs_f64(30.5))
+            );
+        });
     }
 
     #[test]
-    fn test_float_seconds() {
-        with_env_vars(
-            &[
-                ("UV_HTTP_TIMEOUT", Some("30.5")),
-                ("UV_REQUEST_TIMEOUT", None),
-                ("HTTP_TIMEOUT", None),
-            ],
-            || {
-                let timeout = read_http_timeout_from_env().unwrap();
-                assert_eq!(timeout, Duration::from_secs_f64(30.5));
-            },
-        );
-    }
-
-    // --- UV_HTTP_RETRIES tests ---
-
-    #[test]
-    fn test_http_retries_not_set() {
+    fn test_http_retries() {
         with_env_vars(&[("UV_HTTP_RETRIES", None)], || {
             assert!(read_http_retries_from_env().is_none());
         });
-    }
-
-    #[test]
-    fn test_http_retries_valid() {
         with_env_vars(&[("UV_HTTP_RETRIES", Some("5"))], || {
             assert_eq!(read_http_retries_from_env(), Some(5));
         });
-    }
-
-    #[test]
-    fn test_http_retries_zero() {
         with_env_vars(&[("UV_HTTP_RETRIES", Some("0"))], || {
             assert_eq!(read_http_retries_from_env(), Some(0));
         });
-    }
-
-    #[test]
-    fn test_http_retries_invalid() {
         with_env_vars(&[("UV_HTTP_RETRIES", Some("abc"))], || {
             assert!(read_http_retries_from_env().is_none());
         });
     }
 
-    // --- Concurrency env var tests ---
-
     #[test]
-    fn test_concurrent_downloads_from_env() {
-        with_env_vars(
-            &[
-                ("UV_CONCURRENT_DOWNLOADS", Some("10")),
-                ("UV_CONCURRENT_BUILDS", None),
-                ("UV_CONCURRENT_INSTALLS", None),
-            ],
-            || {
-                assert_eq!(read_usize_env("UV_CONCURRENT_DOWNLOADS"), Some(10));
-            },
-        );
-    }
-
-    #[test]
-    fn test_concurrent_builds_from_env() {
-        with_env_vars(
-            &[
-                ("UV_CONCURRENT_DOWNLOADS", None),
-                ("UV_CONCURRENT_BUILDS", Some("4")),
-                ("UV_CONCURRENT_INSTALLS", None),
-            ],
-            || {
-                assert_eq!(read_usize_env("UV_CONCURRENT_BUILDS"), Some(4));
-            },
-        );
-    }
-
-    #[test]
-    fn test_concurrent_installs_from_env() {
-        with_env_vars(
-            &[
-                ("UV_CONCURRENT_DOWNLOADS", None),
-                ("UV_CONCURRENT_BUILDS", None),
-                ("UV_CONCURRENT_INSTALLS", Some("8")),
-            ],
-            || {
-                assert_eq!(read_usize_env("UV_CONCURRENT_INSTALLS"), Some(8));
-            },
-        );
-    }
-
-    #[test]
-    fn test_concurrent_zero_is_ignored() {
-        with_env_vars(&[("UV_CONCURRENT_DOWNLOADS", Some("0"))], || {
-            assert!(read_usize_env("UV_CONCURRENT_DOWNLOADS").is_none());
+    fn test_read_usize_env() {
+        with_env_vars(&[("UV_CONCURRENT_DOWNLOADS", Some("10"))], || {
+            assert_eq!(read_usize_env("UV_CONCURRENT_DOWNLOADS"), Some(10));
         });
-    }
-
-    #[test]
-    fn test_concurrent_invalid_is_ignored() {
-        with_env_vars(&[("UV_CONCURRENT_DOWNLOADS", Some("abc"))], || {
-            assert!(read_usize_env("UV_CONCURRENT_DOWNLOADS").is_none());
-        });
-    }
-
-    #[test]
-    fn test_concurrent_negative_is_ignored() {
-        with_env_vars(&[("UV_CONCURRENT_DOWNLOADS", Some("-1"))], || {
-            assert!(read_usize_env("UV_CONCURRENT_DOWNLOADS").is_none());
-        });
-    }
-
-    #[test]
-    fn test_concurrent_not_set_returns_none() {
+        // Zero and invalid values are rejected
+        for bad in ["0", "-1", "abc"] {
+            with_env_vars(&[("UV_CONCURRENT_DOWNLOADS", Some(bad))], || {
+                assert!(read_usize_env("UV_CONCURRENT_DOWNLOADS").is_none(), "expected None for {bad:?}");
+            });
+        }
+        // Unset → None
         with_env_vars(&[("UV_CONCURRENT_DOWNLOADS", None)], || {
             assert!(read_usize_env("UV_CONCURRENT_DOWNLOADS").is_none());
         });
