@@ -1,0 +1,10 @@
+[project]
+authors = []
+dependencies = []
+name = "implicit-tables-test"
+requires-python = ">= 3.11"
+version = "0.1.0"
+
+[tool.pixi]
+workspace.channels = ["conda-forge"]
+workspace.platforms = ["osx-arm64"]
