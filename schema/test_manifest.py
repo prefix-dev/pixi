@@ -19,7 +19,7 @@ TValidators = dict[str, dict[str, Validator]]
 
 HERE = Path(__file__).parent
 EXAMPLES = HERE / "examples"
-EXAMPLES_PY = HERE / "pyproject_toml/examples"
+EXAMPLES_PY = HERE / "pyproject/examples"
 DOC_EXAMPLES = HERE.joinpath("..", "docs", "source_files", "pixi_tomls")
 VALID = {ex.stem: ex for ex in (EXAMPLES / "valid").glob("*.toml")} | {
     ex.stem: ex for ex in DOC_EXAMPLES.glob("*.toml")
@@ -31,8 +31,8 @@ INVALID_PY = {ex.stem: ex for ex in (EXAMPLES_PY / "invalid").glob("*.toml")}
 PIXI_TOML = "pixi.toml"
 PYPROJECT_TOML = "pyproject.toml"
 PIXI_SCHEMA = "schema.json"
-PYPROJECT_SCHEMA = "pyproject_toml/schema.json"
-PYPROJECT_PARTIAL_SCHEMA = "pyproject_toml/partial-pixi.json"
+PYPROJECT_SCHEMA = "pyproject/schema.json"
+PYPROJECT_PARTIAL_SCHEMA = "pyproject/partial-pixi.json"
 
 SCHEMAS_FOR_FILE: dict[str, dict[str, list[str]]] = {
     PIXI_TOML: {PIXI_SCHEMA: []},

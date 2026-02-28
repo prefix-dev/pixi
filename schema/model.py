@@ -24,8 +24,8 @@ if TYPE_CHECKING:
 
 HERE = Path(__file__).parent
 PIXI_SCHEMA = HERE / "schema.json"
-PYPROJECT_SCHEMA = HERE / "pyproject_toml/schema.json"
-PYPROJECT_PARTIAL_SCHEMA = HERE / "pyproject_toml/partial-pixi.json"
+PYPROJECT_SCHEMA = HERE / "pyproject/schema.json"
+PYPROJECT_PARTIAL_SCHEMA = HERE / "pyproject/partial-pixi.json"
 
 #: latest version currently supported by the `taplo` TOML linter and language server
 SCHEMA_DRAFT = "http://json-schema.org/draft-07/schema#"
@@ -36,7 +36,7 @@ VERSION = CARGO_TOML_DATA["package"]["version"]
 URI_TEMPLATE = "https://pixi.sh/v{}/schema/manifest/{}schema.json"
 
 SCHEMA_URI = URI_TEMPLATE.format(VERSION, "")
-PYPROJECT_SCHEMA_URI = URI_TEMPLATE.format(VERSION, "pyproject.")
+PYPROJECT_SCHEMA_URI = URI_TEMPLATE.format(VERSION, "pyproject/")
 PARTIAL_PYPROJECT_SCHEMA_URI = "https://json.schemastore.org/partial-pixi.json"
 
 NonEmptyStr = Annotated[str, StringConstraints(min_length=1)]
