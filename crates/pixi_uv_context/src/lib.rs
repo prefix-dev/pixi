@@ -52,6 +52,26 @@ pub struct UvResolutionContext {
     /// HTTP timeout for uv operations, read from UV_HTTP_TIMEOUT,
     /// UV_REQUEST_TIMEOUT, or HTTP_TIMEOUT environment variables.
     pub http_timeout: Option<Duration>,
+    /// HTTP retry count for uv operations, read from UV_HTTP_RETRIES.
+    pub http_retries: Option<u32>,
+}
+
+/// Read a `usize` from an environment variable, logging on success or invalid
+/// values.
+fn read_usize_env(var: &str) -> Option<usize> {
+    let val = std::env::var(var).ok()?;
+    match val.parse::<usize>() {
+        Ok(n) if n > 0 => {
+            debug!("using {var}={n}");
+            Some(n)
+        }
+        _ => {
+            tracing::warn!(
+                "ignoring invalid value for {var}: {val:?} (expected a positive integer)"
+            );
+            None
+        }
+    }
 }
 
 /// Read the HTTP timeout from environment variables.
@@ -86,6 +106,51 @@ fn read_http_timeout_from_env() -> Option<Duration> {
         }
     }
     None
+}
+
+/// Read `UV_HTTP_RETRIES` from the environment.
+///
+/// The value should be a non-negative integer (e.g., `5`). The default in uv
+/// is 3.
+fn read_http_retries_from_env() -> Option<u32> {
+    let val = std::env::var("UV_HTTP_RETRIES").ok()?;
+    match val.parse::<u32>() {
+        Ok(n) => {
+            debug!("using UV_HTTP_RETRIES={n}");
+            Some(n)
+        }
+        Err(_) => {
+            tracing::warn!(
+                "ignoring invalid value for UV_HTTP_RETRIES: {val:?} (expected a non-negative integer)"
+            );
+            None
+        }
+    }
+}
+
+/// Build a [`Concurrency`] from pixi config and UV environment variables.
+///
+/// Precedence (highest wins):
+/// 1. `UV_CONCURRENT_DOWNLOADS` / `UV_CONCURRENT_BUILDS` /
+///    `UV_CONCURRENT_INSTALLS` environment variables
+/// 2. Pixi `concurrency.downloads` config value
+/// 3. uv defaults (50 downloads, system threads for builds/installs)
+fn build_concurrency(config: &Config) -> Concurrency {
+    let defaults = Concurrency::default();
+
+    // Start with pixi config for downloads (it defaults to 50, same as uv)
+    let downloads = config.max_concurrent_downloads();
+
+    // Apply UV_ env var overrides
+    let downloads = read_usize_env("UV_CONCURRENT_DOWNLOADS").unwrap_or(downloads);
+    let builds = read_usize_env("UV_CONCURRENT_BUILDS").unwrap_or(defaults.builds);
+    let installs = read_usize_env("UV_CONCURRENT_INSTALLS").unwrap_or(defaults.installs);
+
+    Concurrency {
+        downloads,
+        builds,
+        installs,
+    }
 }
 
 impl UvResolutionContext {
@@ -125,13 +190,15 @@ impl UvResolutionContext {
             .into_diagnostic()
             .context("failed to parse trusted host")?;
         let http_timeout = read_http_timeout_from_env();
+        let http_retries = read_http_retries_from_env();
+        let concurrency = build_concurrency(config);
 
         Ok(Self {
             cache,
             in_flight: InFlight::default(),
             hash_strategy: HashStrategy::None,
             keyring_provider,
-            concurrency: Concurrency::default(),
+            concurrency,
             source_strategy: SourceStrategy::Enabled,
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
@@ -147,6 +214,7 @@ impl UvResolutionContext {
             preview: Preview::default(),
             workspace_cache: WorkspaceCache::default(),
             http_timeout,
+            http_retries,
         })
     }
 
@@ -186,6 +254,10 @@ impl UvResolutionContext {
 
         if let Some(timeout) = self.http_timeout {
             base_client_builder = base_client_builder.timeout(timeout);
+        }
+
+        if let Some(retries) = self.http_retries {
+            base_client_builder = base_client_builder.retries(retries);
         }
 
         if let Some(markers) = markers {
@@ -367,5 +439,107 @@ mod tests {
                 assert_eq!(timeout, Duration::from_secs_f64(30.5));
             },
         );
+    }
+
+    // --- UV_HTTP_RETRIES tests ---
+
+    #[test]
+    fn test_http_retries_not_set() {
+        with_env_vars(&[("UV_HTTP_RETRIES", None)], || {
+            assert!(read_http_retries_from_env().is_none());
+        });
+    }
+
+    #[test]
+    fn test_http_retries_valid() {
+        with_env_vars(&[("UV_HTTP_RETRIES", Some("5"))], || {
+            assert_eq!(read_http_retries_from_env(), Some(5));
+        });
+    }
+
+    #[test]
+    fn test_http_retries_zero() {
+        with_env_vars(&[("UV_HTTP_RETRIES", Some("0"))], || {
+            assert_eq!(read_http_retries_from_env(), Some(0));
+        });
+    }
+
+    #[test]
+    fn test_http_retries_invalid() {
+        with_env_vars(&[("UV_HTTP_RETRIES", Some("abc"))], || {
+            assert!(read_http_retries_from_env().is_none());
+        });
+    }
+
+    // --- Concurrency env var tests ---
+
+    #[test]
+    fn test_concurrent_downloads_from_env() {
+        with_env_vars(
+            &[
+                ("UV_CONCURRENT_DOWNLOADS", Some("10")),
+                ("UV_CONCURRENT_BUILDS", None),
+                ("UV_CONCURRENT_INSTALLS", None),
+            ],
+            || {
+                assert_eq!(read_usize_env("UV_CONCURRENT_DOWNLOADS"), Some(10));
+            },
+        );
+    }
+
+    #[test]
+    fn test_concurrent_builds_from_env() {
+        with_env_vars(
+            &[
+                ("UV_CONCURRENT_DOWNLOADS", None),
+                ("UV_CONCURRENT_BUILDS", Some("4")),
+                ("UV_CONCURRENT_INSTALLS", None),
+            ],
+            || {
+                assert_eq!(read_usize_env("UV_CONCURRENT_BUILDS"), Some(4));
+            },
+        );
+    }
+
+    #[test]
+    fn test_concurrent_installs_from_env() {
+        with_env_vars(
+            &[
+                ("UV_CONCURRENT_DOWNLOADS", None),
+                ("UV_CONCURRENT_BUILDS", None),
+                ("UV_CONCURRENT_INSTALLS", Some("8")),
+            ],
+            || {
+                assert_eq!(read_usize_env("UV_CONCURRENT_INSTALLS"), Some(8));
+            },
+        );
+    }
+
+    #[test]
+    fn test_concurrent_zero_is_ignored() {
+        with_env_vars(&[("UV_CONCURRENT_DOWNLOADS", Some("0"))], || {
+            assert!(read_usize_env("UV_CONCURRENT_DOWNLOADS").is_none());
+        });
+    }
+
+    #[test]
+    fn test_concurrent_invalid_is_ignored() {
+        with_env_vars(&[("UV_CONCURRENT_DOWNLOADS", Some("abc"))], || {
+            assert!(read_usize_env("UV_CONCURRENT_DOWNLOADS").is_none());
+        });
+    }
+
+    #[test]
+    fn test_concurrent_negative_is_ignored() {
+        with_env_vars(&[("UV_CONCURRENT_DOWNLOADS", Some("-1"))], || {
+            assert!(read_usize_env("UV_CONCURRENT_DOWNLOADS").is_none());
+        });
+    }
+
+    #[test]
+    fn test_concurrent_not_set_returns_none() {
+        with_env_vars(&[("UV_CONCURRENT_DOWNLOADS", None)], || {
+            assert!(read_usize_env("UV_CONCURRENT_DOWNLOADS").is_none());
+        });
     }
 }
