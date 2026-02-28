@@ -334,9 +334,10 @@ impl WorkspaceDiscoverer {
             if let ManifestSource::PyProjectToml(source) = &contents {
                 if (source.contains("[tool.pixi")
                     || matches!(search_path.clone(), SearchPath::Explicit(_)))
-                    && !Self::REQUIRED_SECTIONS
-                        .iter()
-                        .any(|section| source.contains(&format!("[tool.pixi.{section}")))
+                    && !Self::REQUIRED_SECTIONS.iter().any(|section| {
+                        source.contains(&format!("[tool.pixi.{section}]"))
+                            || source.contains(&format!("{section}."))
+                    })
                 {
                     return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
                         error: TomlError::NoPixiTable(
@@ -660,6 +661,7 @@ mod test {
     #[case::missing_table_pixi_manifest("missing-tables/pixi.toml")]
     #[case::missing_table_pyproject_manifest("missing-tables-pyproject/pyproject.toml")]
     #[case::split_package("split_package/good/package")]
+    #[case::implicit_tables_pyproject("implicit-tables-pyproject/pyproject.toml")]
     fn test_explicit_workspace_discoverer(#[case] subdir: &str) {
         let test_data_root = dunce::canonicalize(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
