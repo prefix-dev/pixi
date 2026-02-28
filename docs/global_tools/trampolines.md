@@ -17,3 +17,5 @@ When you execute a globally installed executable, a trampoline performs the foll
 
 The trampoline will take care that the `PATH` contains the newest changes on your local `PATH` while avoiding caching temporary `PATH` changes during installation.
 If you want to control the base `PATH` pixi considers, you can set `export PIXI_BASE_PATH=$PATH` in your shell startup script.
+
+Under some very edge cases, you might meet some unexpected behaviors relate to environment activation and `PATH`. You can find the solution in [default activation behaviore document](../workspace/environment.md###default-activation-behavior).
