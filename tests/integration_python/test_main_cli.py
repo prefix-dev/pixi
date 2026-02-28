@@ -222,7 +222,7 @@ def test_search_wildcard(pixi: Path, dummy_channel_1: str) -> None:
     verify_cli_command(
         [pixi, "search", "this-will-not-be-found", "-c", dummy_channel_1],
         ExitCode.FAILURE,
-        stderr_contains="not found",
+        stderr_contains="No packages found matching",
     )
 
     verify_cli_command(

@@ -468,8 +468,10 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                     ..Default::default()
                 },
-                platform: Platform::current(),
-                limit: None,
+                platform: None,
+                limit: 5,
+                limit_packages: 10,
+                json: false,
                 channels: ChannelsConfig::default(),
             },
         }
