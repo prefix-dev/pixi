@@ -2,6 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://pixi.sh/v0.65.0/schema/manifest/pyproject/schema.json",
   "title": "`pyproject.toml` manifest file for `pixi`",
+  "description": "A `pyproject.toml` with `[tool.pixi]`.",
   "type": "object",
   "properties": {
     "tool": {
@@ -1507,7 +1508,7 @@
     },
     "PyProjectPixiTool": {
       "title": "PyProjectPixiTool",
-      "description": "All fields from `pixi.toml`.",
+      "description": "Fields from `pixi.toml` supported in `[tool.pixi]`.",
       "type": "object",
       "properties": {
         "activation": {
@@ -1747,6 +1748,7 @@
     },
     "PyProjectToolTable": {
       "title": "PyProjectToolTable",
+      "description": "A `[tool]` table which includes `pixi`.",
       "type": "object",
       "properties": {
         "pixi": {

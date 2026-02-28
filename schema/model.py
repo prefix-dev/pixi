@@ -969,16 +969,20 @@ class PixiTomlManifest(StrictBaseModel, BaseManifest):
 
 
 class PyProjectPixiTool(BaseManifest):
-    """All fields from `pixi.toml`."""
+    """Fields from `pixi.toml` supported in `[tool.pixi]`."""
 
     model_config: ClassVar[ConfigDict] = ConfigDict(json_schema_extra=ANY_OF_TOP_LEVEL)
 
 
 class PyProjectToolTable(BaseModel):
+    """A `[tool]` table which includes `pixi`."""
+
     pixi: PyProjectPixiTool | None = Field(None, description="`pixi` configuration")
 
 
 class PyProjectManifest(BaseModel):
+    """A `pyproject.toml` with `[tool.pixi]`."""
+
     model_config: ClassVar[ConfigDict] = ConfigDict(
         alias_generator=hyphenize,
         json_schema_extra={
@@ -1000,6 +1004,8 @@ class PyProjectManifest(BaseModel):
 
 
 class PyProjectPartial(PyProjectPixiTool):
+    """The `[tool.pixi]` section of a `pyproject.toml`."""
+
     model_config: ClassVar[ConfigDict] = ConfigDict(
         alias_generator=hyphenize,
         json_schema_extra={
