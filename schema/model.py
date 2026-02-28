@@ -24,8 +24,8 @@ if TYPE_CHECKING:
 
 HERE = Path(__file__).parent
 PIXI_SCHEMA = HERE / "schema.json"
-PYPROJECT_SCHEMA = HERE / "pyproject.schema.json"
-PYPROJECT_PARTIAL_SCHEMA = HERE / "pyproject.partial-pixi.json"
+PYPROJECT_SCHEMA = HERE / "pyproject_toml/schema.json"
+PYPROJECT_PARTIAL_SCHEMA = HERE / "pyproject_toml/partial-pixi.json"
 
 #: latest version currently supported by the `taplo` TOML linter and language server
 SCHEMA_DRAFT = "http://json-schema.org/draft-07/schema#"
@@ -474,6 +474,7 @@ class TaskInlineTable(StrictBaseModel):
         examples=[
             ["arg1", "arg2"],
             ["arg", {"arg": "arg2", "default": "2"}],
+            ["arg", {"arg": "arg2", "default": "2", "choices": ["1", "2", "4"]}],
         ],
     )
 
@@ -933,10 +934,10 @@ class BaseManifest(BaseModel):
 
 ANY_OF_TOP_LEVEL: JsonDict = {
     "anyOf": [
+        {"required": ["package"]},
         {"required": ["project"]},
         {"required": ["workspace"]},
-        {"required": ["package"]},
-    ],
+    ]
 }
 
 
@@ -970,11 +971,11 @@ class PixiTomlManifest(StrictBaseModel, BaseManifest):
 class PyProjectPixiTool(BaseManifest):
     """All fields from `pixi.toml`."""
 
+    model_config: ClassVar[ConfigDict] = ConfigDict(json_schema_extra=ANY_OF_TOP_LEVEL)
+
 
 class PyProjectToolTable(BaseModel):
-    pixi: PyProjectPixiTool | None = Field(
-        None, description="`pixi` configuration", json_schema_extra=ANY_OF_TOP_LEVEL
-    )
+    pixi: PyProjectPixiTool | None = Field(None, description="`pixi` configuration")
 
 
 class PyProjectManifest(BaseModel):
@@ -987,7 +988,15 @@ class PyProjectManifest(BaseModel):
         },
     )
 
-    tool: PyProjectToolTable | None
+    tool: PyProjectToolTable | None = Field(
+        None,
+        description=(
+            "Every tool that is used by the project can have users specify"
+            " configuration data as long as they use a sub-table within `[tool]`."
+            " Generally a project can use the subtable `tool.$NAME` if, and only"
+            " if, they own the entry for `$NAME` in the Cheeseshop/PyPI."
+        ),
+    )
 
 
 class PyProjectPartial(PyProjectPixiTool):
@@ -1142,9 +1151,10 @@ class SchemaJsonEncoder(json.JSONEncoder):
 
 def dump_schema(path: Path, raw: dict[str, Any]) -> None:
     """Write out a raw Pydantic JSON object to disk."""
-    path.write_text(
-        json.dumps(raw, indent=2, cls=SchemaJsonEncoder) + "\n", encoding="utf-8", newline="\n"
-    )
+    raw_json = json.dumps(raw, indent=2, cls=SchemaJsonEncoder) + "\n"
+    path.write_text(raw_json, encoding="utf-8", newline="\n")
+    kb = round(len(raw_json) / 1024, 2)
+    print(f"... wrote {kb}kb to {path}", file=sys.stderr)
 
 
 def update_schema_files() -> int:

@@ -1,227 +1,14 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://json.schemastore.org/partial-pixi.json",
-  "title": "`[tool.pixi]` for `pyproject.toml`",
+  "$id": "https://pixi.sh/v0.65.0/schema/manifest/pyproject.schema.json",
+  "title": "`pyproject.toml` manifest file for `pixi`",
   "type": "object",
   "properties": {
-    "activation": {
-      "$ref": "#/$defs/Activation",
-      "description": "The scripts used on the activation of the project"
-    },
-    "build-dependencies": {
-      "title": "Build-Dependencies",
-      "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-      "type": "object",
-      "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "$ref": "#/$defs/MatchspecTable"
-          }
-        ]
-      },
-      "propertyNames": {
-        "minLength": 1
-      }
-    },
-    "dependencies": {
-      "title": "Dependencies",
-      "description": "The `conda` dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
-      "type": "object",
-      "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "$ref": "#/$defs/MatchspecTable"
-          }
-        ]
-      },
-      "propertyNames": {
-        "minLength": 1
-      }
-    },
-    "dev": {
-      "title": "Dev",
-      "description": "Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
-      "type": "object",
-      "additionalProperties": {
-        "$ref": "#/$defs/SourceSpecTable"
-      },
-      "propertyNames": {
-        "minLength": 1
-      }
-    },
-    "environments": {
-      "title": "Environments",
-      "description": "The environments of the project, defined as a full object or a list of feature names.",
-      "type": "object",
-      "patternProperties": {
-        "^[a-z\\d\\-]+$": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Environment"
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
-            }
-          ]
-        }
-      }
-    },
-    "feature": {
-      "title": "Feature",
-      "description": "The features of the project",
-      "type": "object",
-      "additionalProperties": {
-        "$ref": "#/$defs/Feature"
-      },
-      "propertyNames": {
-        "minLength": 1
-      }
-    },
-    "host-dependencies": {
-      "title": "Host-Dependencies",
-      "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-      "type": "object",
-      "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "$ref": "#/$defs/MatchspecTable"
-          }
-        ]
-      },
-      "propertyNames": {
-        "minLength": 1
-      },
-      "examples": [
-        {
-          "python": ">=3.8"
-        }
-      ]
-    },
-    "package": {
-      "$ref": "#/$defs/Package",
-      "description": "The package's metadata information"
-    },
-    "project": {
-      "$ref": "#/$defs/Workspace",
-      "description": "The project's metadata information"
-    },
-    "pypi-dependencies": {
-      "title": "Pypi-Dependencies",
-      "description": "The PyPI dependencies",
-      "type": "object",
-      "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "$ref": "#/$defs/PyPIVersion"
-          },
-          {
-            "$ref": "#/$defs/PyPIGitBranchRequirement"
-          },
-          {
-            "$ref": "#/$defs/PyPIGitTagRequirement"
-          },
-          {
-            "$ref": "#/$defs/PyPIGitRevRequirement"
-          },
-          {
-            "$ref": "#/$defs/PyPIPathRequirement"
-          },
-          {
-            "$ref": "#/$defs/PyPIUrlRequirement"
-          }
-        ]
-      },
-      "propertyNames": {
-        "minLength": 1
-      }
-    },
-    "pypi-options": {
-      "$ref": "#/$defs/PyPIOptions",
-      "description": "Options related to PyPI indexes, on the default feature"
-    },
-    "system-requirements": {
-      "$ref": "#/$defs/SystemRequirements",
-      "description": "The system requirements of the project"
-    },
-    "target": {
-      "title": "Target",
-      "description": "The targets of the project",
-      "type": "object",
-      "additionalProperties": {
-        "$ref": "#/$defs/Target"
-      },
-      "propertyNames": {
-        "minLength": 1
-      },
-      "examples": [
-        {
-          "linux": {
-            "dependencies": {
-              "python": "3.8"
-            }
-          }
-        }
-      ]
-    },
-    "tasks": {
-      "title": "Tasks",
-      "description": "The tasks of the project",
-      "type": "object",
-      "patternProperties": {
-        "^[^\\s\\$]+$": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TaskInlineTable"
-            },
-            {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/DependsOn"
-              }
-            },
-            {
-              "type": "string",
-              "minLength": 1
-            }
-          ]
-        }
-      },
-      "propertyNames": {
-        "description": "A valid task name."
-      }
-    },
     "tool": {
-      "title": "Tool",
-      "description": "Third-party tool configurations, ignored by pixi",
-      "type": "object",
-      "additionalProperties": true
-    },
-    "workspace": {
-      "$ref": "#/$defs/Workspace",
-      "description": "The workspace's metadata information"
+      "$ref": "#/$defs/PyProjectToolTable",
+      "description": "Every tool that is used by the project can have users specify configuration data as long as they use a sub-table within `[tool]`. Generally a project can use the subtable `tool.$NAME` if, and only if, they own the entry for `$NAME` in the Cheeseshop/PyPI."
     }
   },
-  "$comment": "Generated from `pixi` v0.64.0",
   "$defs": {
     "Activation": {
       "title": "Activation",
@@ -1718,6 +1505,256 @@
         }
       }
     },
+    "PyProjectPixiTool": {
+      "title": "PyProjectPixiTool",
+      "description": "All fields from `pixi.toml`.",
+      "type": "object",
+      "properties": {
+        "activation": {
+          "$ref": "#/$defs/Activation",
+          "description": "The scripts used on the activation of the project"
+        },
+        "build_dependencies": {
+          "title": "Build Dependencies",
+          "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "dependencies": {
+          "title": "Dependencies",
+          "description": "The `conda` dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "dev": {
+          "title": "Dev",
+          "description": "Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/SourceSpecTable"
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "environments": {
+          "title": "Environments",
+          "description": "The environments of the project, defined as a full object or a list of feature names.",
+          "type": "object",
+          "patternProperties": {
+            "^[a-z\\d\\-]+$": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Environment"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "feature": {
+          "title": "Feature",
+          "description": "The features of the project",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Feature"
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "host_dependencies": {
+          "title": "Host Dependencies",
+          "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "python": ">=3.8"
+            }
+          ]
+        },
+        "package": {
+          "$ref": "#/$defs/Package",
+          "description": "The package's metadata information"
+        },
+        "project": {
+          "$ref": "#/$defs/Workspace",
+          "description": "The project's metadata information"
+        },
+        "pypi_dependencies": {
+          "title": "Pypi Dependencies",
+          "description": "The PyPI dependencies",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/PyPIVersion"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitBranchRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitTagRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitRevRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIPathRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIUrlRequirement"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "pypi_options": {
+          "$ref": "#/$defs/PyPIOptions",
+          "description": "Options related to PyPI indexes, on the default feature"
+        },
+        "system_requirements": {
+          "$ref": "#/$defs/SystemRequirements",
+          "description": "The system requirements of the project"
+        },
+        "target": {
+          "title": "Target",
+          "description": "The targets of the project",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Target"
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "linux": {
+                "dependencies": {
+                  "python": "3.8"
+                }
+              }
+            }
+          ]
+        },
+        "tasks": {
+          "title": "Tasks",
+          "description": "The tasks of the project",
+          "type": "object",
+          "patternProperties": {
+            "^[^\\s\\$]+$": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TaskInlineTable"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/DependsOn"
+                  }
+                },
+                {
+                  "type": "string",
+                  "minLength": 1
+                }
+              ]
+            }
+          },
+          "propertyNames": {
+            "description": "A valid task name."
+          }
+        },
+        "tool": {
+          "title": "Tool",
+          "description": "Third-party tool configurations, ignored by pixi",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "workspace": {
+          "$ref": "#/$defs/Workspace",
+          "description": "The workspace's metadata information"
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "package"
+          ]
+        },
+        {
+          "required": [
+            "project"
+          ]
+        },
+        {
+          "required": [
+            "workspace"
+          ]
+        }
+      ]
+    },
+    "PyProjectToolTable": {
+      "title": "PyProjectToolTable",
+      "type": "object",
+      "properties": {
+        "pixi": {
+          "$ref": "#/$defs/PyProjectPixiTool",
+          "description": "`pixi` configuration"
+        }
+      }
+    },
     "S3Options": {
       "title": "S3Options",
       "description": "Options related to S3 for this project",
@@ -2175,6 +2212,18 @@
               "arg",
               {
                 "arg": "arg2",
+                "default": "2"
+              }
+            ],
+            [
+              "arg",
+              {
+                "arg": "arg2",
+                "choices": [
+                  "1",
+                  "2",
+                  "4"
+                ],
                 "default": "2"
               }
             ]

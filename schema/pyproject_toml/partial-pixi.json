@@ -1,18 +1,9 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.65.0/schema/manifest/schema.json",
-  "title": "`pixi.toml` manifest file",
-  "description": "The configuration for a [`pixi`](https://pixi.sh) project.",
+  "$id": "https://json.schemastore.org/partial-pixi.json",
+  "title": "`[tool.pixi]` for `pyproject.toml`",
   "type": "object",
-  "additionalProperties": false,
   "properties": {
-    "$schema": {
-      "title": "Schema",
-      "description": "The schema identifier for the project's configuration",
-      "type": "string",
-      "default": "https://pixi.sh/v0.65.0/schema/manifest/schema.json",
-      "format": "uri-reference"
-    },
     "activation": {
       "$ref": "#/$defs/Activation",
       "description": "The scripts used on the activation of the project"
@@ -230,23 +221,7 @@
       "description": "The workspace's metadata information"
     }
   },
-  "anyOf": [
-    {
-      "required": [
-        "package"
-      ]
-    },
-    {
-      "required": [
-        "project"
-      ]
-    },
-    {
-      "required": [
-        "workspace"
-      ]
-    }
-  ],
+  "$comment": "Generated from `pixi` v0.65.0",
   "$defs": {
     "Activation": {
       "title": "Activation",
