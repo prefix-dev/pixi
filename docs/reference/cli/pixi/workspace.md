@@ -26,6 +26,7 @@ pixi workspace [OPTIONS] <COMMAND>
 | [`name`](workspace/name.md) | Commands to manage workspace name |
 | [`register`](workspace/register.md) | Commands to manage the registry of workspaces. Default command will add a new workspace |
 | [`requires-pixi`](workspace/requires-pixi.md) | Commands to manage the pixi minimum version requirement |
+| [`requires-python`](workspace/requires-python.md) | Commands to manage the Python version requirement |
 
 
 ## Global Options
