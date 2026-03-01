@@ -9,9 +9,9 @@ use thiserror::Error;
 use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
 
 use crate::{
-    FeatureName, error::GenericError, LibCSystemRequirement, ManifestKind, ManifestProvenance, PypiDependencyLocation,
-    SpecType, SystemRequirements, Task, TomlError, manifests::table_name::TableName,
-    toml::TomlDocument, utils::WithSourceCode,
+    FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance, PypiDependencyLocation,
+    SpecType, SystemRequirements, Task, TomlError, error::GenericError,
+    manifests::table_name::TableName, toml::TomlDocument, utils::WithSourceCode,
 };
 
 /// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
@@ -881,10 +881,10 @@ impl ManifestDocument {
 
         if let Some(version) = version {
             if let Some(item) = table.get_mut("requires-python") {
-            *item = value(version);
-        } else {
-            table.insert("requires-python", value(version));
-        }
+                *item = value(version);
+            } else {
+                table.insert("requires-python", value(version));
+            }
         } else {
             table.remove("requires-python");
         }
