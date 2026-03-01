@@ -1316,6 +1316,10 @@ impl WorkspaceManifestMut<'_> {
         };
         self.document.set_requires_pixi(version).into_diagnostic()
     }
+    /// Set the `requires-python` version specifier (pyproject.toml only)
+        pub fn set_requires_python(&mut self, version: Option<&str>) -> miette::Result<()> {
+        self.document.set_requires_python(version).into_diagnostic()
+    }
 }
 
 /// Error for a workspace platform lookup by name that found nothing.
