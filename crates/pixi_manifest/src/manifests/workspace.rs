@@ -872,6 +872,10 @@ impl WorkspaceManifestMut<'_> {
         };
         self.document.set_requires_pixi(version).into_diagnostic()
     }
+    /// Set the `requires-python` version specifier (pyproject.toml only)
+        pub fn set_requires_python(&mut self, version: Option<&str>) -> miette::Result<()> {
+        self.document.set_requires_python(version).into_diagnostic()
+    }
 }
 
 // Handles the target missing error cases

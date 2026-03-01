@@ -11,6 +11,7 @@ pub mod name;
 pub mod platform;
 pub mod register;
 pub mod requires_pixi;
+pub mod requires_python;
 pub mod system_requirements;
 pub mod version;
 
@@ -27,6 +28,7 @@ pub enum Command {
     SystemRequirements(system_requirements::Args),
     Register(register::Args),
     RequiresPixi(requires_pixi::Args),
+    RequiresPython(requires_python::Args),
 }
 
 /// Modify the workspace configuration file through the command line.
@@ -52,6 +54,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::SystemRequirements(args) => system_requirements::execute(args).await?,
         Command::Register(args) => register::execute(args).await?,
         Command::RequiresPixi(args) => requires_pixi::execute(args).await?,
+        Command::RequiresPython(args) => requires_python::execute(args).await?,
     };
     Ok(())
 }
