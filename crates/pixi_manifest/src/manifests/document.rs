@@ -862,7 +862,7 @@ impl ManifestDocument {
 
         Ok(())
     }
-    
+
     /// Sets the `requires-python` field in a pyproject.toml manifest.
     /// Returns an error if called on a pixi.toml manifest.
     pub fn set_requires_python(&mut self, version: Option<&str>) -> Result<(), TomlError> {
