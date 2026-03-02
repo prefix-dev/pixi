@@ -739,7 +739,7 @@ impl PixiControl {
     pub fn build(&self) -> BuildBuilder {
         BuildBuilder {
             args: build::Args {
-                backend_override: Default::default(),
+                backend_override: self.backend_override.clone(),
                 config_cli: Default::default(),
                 lock_and_install_config: Default::default(),
                 target_platform: rattler_conda_types::Platform::current(),
@@ -748,6 +748,7 @@ impl PixiControl {
                 build_dir: None,
                 clean: false,
                 path: Some(self.manifest_path()),
+                build_string: None,
             },
         }
     }

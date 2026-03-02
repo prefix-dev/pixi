@@ -103,6 +103,11 @@ pub struct SourceBuildSpec {
 
     /// Force rebuild even if the build cache is up to date.
     pub force: bool,
+
+    /// An optional build string override provided by the user (e.g. via CLI).
+    /// When set, this overrides the `build_string` in the `ProjectModel` sent
+    /// to the build backend during initialization.
+    pub build_string: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -251,12 +256,19 @@ impl SourceBuildSpec {
             .await
             .map_err_with(|e| SourceBuildError::Discovery(Arc::new(e)))?;
 
+        // Apply the CLI build string override to the project model if provided.
+        // This must happen before computing the hash so the cache key reflects
+        // the override.
+        let project_model = {
+            let mut model = discovered_backend.init_params.project_model.clone();
+            if let (Some(m), Some(bs)) = (&mut model, &self.build_string) {
+                m.build_string = Some(bs.clone());
+            }
+            model
+        };
+
         // Compute the hashes for caching purposes.
-        let project_model_hash = discovered_backend
-            .init_params
-            .project_model
-            .as_ref()
-            .map(ProjectModelHash::from);
+        let project_model_hash = project_model.as_ref().map(ProjectModelHash::from);
         let configuration_hash = ConfigurationHash::compute(
             discovered_backend.init_params.configuration.as_ref(),
             discovered_backend.init_params.target_configuration.as_ref(),
@@ -321,7 +333,7 @@ impl SourceBuildSpec {
                     .expect("manifest path is not absolute")
                     .assume_file()
                     .to_path_buf(),
-                project_model: discovered_backend.init_params.project_model.clone(),
+                project_model,
                 configuration: discovered_backend.init_params.configuration.clone(),
                 target_configuration: discovered_backend.init_params.target_configuration.clone(),
             })

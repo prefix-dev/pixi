@@ -491,6 +491,7 @@ impl PyBuild {
             .map(|n| n.clone().inner);
 
         Build {
+            string: None,
             number: self
                 .number
                 .borrow(py)

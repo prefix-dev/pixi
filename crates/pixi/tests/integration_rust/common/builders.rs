@@ -683,6 +683,12 @@ impl BuildBuilder {
         self.args.path = Some(path.into());
         self
     }
+
+    /// Set the build string override
+    pub fn with_build_string(mut self, build_string: impl Into<String>) -> Self {
+        self.args.build_string = Some(build_string.into());
+        self
+    }
 }
 
 impl IntoFuture for BuildBuilder {

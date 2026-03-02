@@ -535,6 +535,10 @@ impl Display for Python {
 pub struct Build {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub number: Option<Value<u64>>,
+    /// Custom build string override. When set, rattler-build uses this
+    /// instead of auto-computing from the variant hash.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub string: Option<Value<String>>,
     pub script: Script,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub noarch: Option<NoArchKind>,
