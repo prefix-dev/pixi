@@ -222,7 +222,7 @@ def test_search_wildcard(pixi: Path, dummy_channel_1: str) -> None:
     verify_cli_command(
         [pixi, "search", "this-will-not-be-found", "-c", dummy_channel_1],
         ExitCode.FAILURE,
-        stderr_contains="not found",
+        stderr_contains="No packages found matching",
     )
 
     verify_cli_command(
@@ -1022,7 +1022,7 @@ def test_pixi_task_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
                                 "cmd": "echo 'Hello {{name | title}}'",
                                 "description": None,
                                 "depends_on": [],
-                                "args": [{"name": "name", "default": "World"}],
+                                "args": [{"name": "name", "default": "World", "choices": None}],
                                 "cwd": None,
                                 "default_environment": None,
                                 "env": None,

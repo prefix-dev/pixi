@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::Diagnostic;
+use pixi_consts::consts;
 use thiserror::Error;
 
 use pixi_manifest::{EnvironmentName, TaskName};
@@ -40,5 +41,48 @@ impl Diagnostic for AmbiguousTaskError {
                 .expect("there should be at least two environment"),
             task_name = &self.task_name
         )))
+    }
+}
+
+#[derive(Debug, Error)]
+pub struct MissingArgError {
+    pub arg: String,
+    pub task: String,
+    pub choices: Option<String>,
+}
+
+impl Display for MissingArgError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "no value provided for argument '{}' of task '{}'",
+            consts::TASK_STYLE.apply_to(&self.arg),
+            consts::TASK_STYLE.apply_to(&self.task),
+        )?;
+        if let Some(choices) = &self.choices {
+            write!(f, ", choose from: {}", consts::TASK_STYLE.apply_to(choices))?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Error)]
+pub struct InvalidArgValueError {
+    pub arg: String,
+    pub task: String,
+    pub value: String,
+    pub choices: String,
+}
+
+impl Display for InvalidArgValueError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "got '{}' for argument '{}' of task '{}', choose from: {}",
+            consts::TASK_ERROR_STYLE.apply_to(&self.value),
+            consts::TASK_STYLE.apply_to(&self.arg),
+            consts::TASK_STYLE.apply_to(&self.task),
+            consts::TASK_STYLE.apply_to(&self.choices),
+        )
     }
 }
