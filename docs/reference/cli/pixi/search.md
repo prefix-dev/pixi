@@ -15,7 +15,7 @@ pixi search [OPTIONS] <PACKAGE>
 
 ## Arguments
 - <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
-:  Name of package to search
+:  MatchSpec of a package to search
 <br>**required**: `true`
 
 ## Options
@@ -23,10 +23,15 @@ pixi search [OPTIONS] <PACKAGE>
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 <br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
-:  The platform to search for, defaults to current platform
-<br>**default**: `current_platform`
+:  The platform(s) to search for. By default, searches all platforms from the manifest (or all known platforms if no manifest is found)
 - <a id="arg---limit" href="#arg---limit">`--limit (-l) <LIMIT>`</a>
-:  Limit the number of search results
+:  Limit the number of versions shown per package, -1 for no limit
+<br>**default**: `5`
+- <a id="arg---limit-packages" href="#arg---limit-packages">`--limit-packages (-n) <LIMIT_PACKAGES>`</a>
+:  Limit the number of packages shown, -1 for no limit
+<br>**default**: `5`
+- <a id="arg---json" href="#arg---json">`--json`</a>
+:  Output in JSON format
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>
