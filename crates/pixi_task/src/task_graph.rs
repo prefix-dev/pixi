@@ -255,13 +255,13 @@ impl<'p> TaskGraph<'p> {
                     let task_name = args.remove(0);
 
                     let arg_values = if let Some(task_arguments) = task.args() {
-                        // Extract any arguments after `--`, but only if `--` is the first
-                        // argument after the task name. A `--` that appears later is treated
-                        // as a regular argument (e.g. it may be meaningful to the underlying
-                        // command).
-                        let extra_args = if args.first().map(|s| s.as_str()) == Some("--") {
-                            let extra = args[1..].to_vec();
-                            args.truncate(0);
+                        // Extract any arguments after `--`. For tasks with typed args, `--`
+                        // can appear anywhere after the task name (e.g. after providing all
+                        // typed arg values). Everything before `--` is treated as typed args;
+                        // everything after is forwarded verbatim to the underlying command.
+                        let extra_args = if let Some(pos) = args.iter().position(|a| a == "--") {
+                            let extra = args[pos + 1..].to_vec();
+                            args.truncate(pos);
                             extra
                         } else {
                             vec![]
@@ -1274,9 +1274,9 @@ mod test {
 
     #[test]
     fn test_double_dash_separator_with_typed_args() {
-        // `--` is only recognised as a separator when it's the first arg after the
-        // task name. Here "release" comes first, so `--` is treated as a regular
-        // argument and the call fails with TooManyArguments.
+        // pixi run build release -- --verbose
+        // "release" fills the typed arg; "--verbose" is forwarded to the command.
+        // `--` can appear anywhere after the task name for tasks with typed args.
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1288,8 +1288,8 @@ mod test {
         args = [{ arg = "target", choices = ["debug", "release"] }]
     "#;
         let run_args = &["build", "release", "--", "--verbose"];
-        let error = TaskGraphTest::new(workspace_str, run_args).expect_error();
-        assert!(matches!(error, TaskGraphError::TooManyArguments(_)));
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo release '--verbose'"]);
     }
 
     #[test]
