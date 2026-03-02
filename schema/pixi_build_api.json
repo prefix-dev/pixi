@@ -10,8 +10,8 @@
         "null"
       ]
     },
-    "buildString": {
-      "description": "A build string configured by the user.",
+    "buildStringPrefix": {
+      "description": "An optional prefix to prepend to the auto-generated build string.",
       "type": [
         "string",
         "null"

@@ -236,6 +236,8 @@ impl InstallPixiEnvironmentSpec {
                 force,
                 // When we install a pixi environment we always build in development mode.
                 build_profile: BuildProfile::Development,
+                build_string_prefix: None,
+                build_number: None,
             })
             .await?;
 
