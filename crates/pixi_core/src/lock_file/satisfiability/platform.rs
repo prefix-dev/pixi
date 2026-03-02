@@ -432,6 +432,8 @@ async fn resolve_single_dev_dependency(
             manifest_source: pinned_source.pinned,
             preferred_build_source: None,
             env_ref: EnvironmentRef::Workspace(workspace_env_ref),
+            build_string_prefix: None,
+            build_number: None,
         },
     };
 

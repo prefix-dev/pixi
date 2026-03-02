@@ -121,6 +121,8 @@ impl Key for ResolveSourcePackageKey {
                 manifest_source: checkout.pinned.clone(),
                 preferred_build_source: own_pin.clone(),
                 env_ref: spec.env_ref.clone(),
+                build_string_prefix: None,
+                build_number: None,
             },
             exclude_newer: None,
         };
