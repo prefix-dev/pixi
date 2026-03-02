@@ -325,7 +325,9 @@ mod tests {
         ("HTTP_TIMEOUT", None),
     ];
 
-    fn timeout_vars_with<'a>(overrides: &'a [(&'a str, &'a str)]) -> Vec<(&'a str, Option<&'a str>)> {
+    fn timeout_vars_with<'a>(
+        overrides: &'a [(&'a str, &'a str)],
+    ) -> Vec<(&'a str, Option<&'a str>)> {
         TIMEOUT_VARS
             .iter()
             .map(|&(k, _)| {
@@ -407,7 +409,10 @@ mod tests {
         // Zero and invalid values are rejected
         for bad in ["0", "-1", "abc"] {
             with_env_vars(&[("UV_CONCURRENT_DOWNLOADS", Some(bad))], || {
-                assert!(read_usize_env("UV_CONCURRENT_DOWNLOADS").is_none(), "expected None for {bad:?}");
+                assert!(
+                    read_usize_env("UV_CONCURRENT_DOWNLOADS").is_none(),
+                    "expected None for {bad:?}"
+                );
             });
         }
         // Unset → None
