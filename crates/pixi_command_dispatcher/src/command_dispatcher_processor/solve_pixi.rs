@@ -13,6 +13,10 @@ impl CommandDispatcherProcessor {
     /// Called when a [`crate::command_dispatcher::SolvePixiEnvironmentTask`]
     /// task was received.
     pub(crate) fn on_solve_pixi_environment(&mut self, task: SolvePixiEnvironmentTask) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         // Notify the reporter that a new solve has been queued.
         let parent_context = task
             .parent

@@ -24,6 +24,10 @@ impl CommandDispatcherProcessor {
     /// Called when a [`crate::command_dispatcher::SourceBuildTask`]
     /// task was received.
     pub(crate) fn on_source_build(&mut self, task: SourceBuildTask) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         // Lookup the id of the source metadata to avoid duplication.
         let source_build_id = {
             match self.source_build_ids.get(&task.spec) {

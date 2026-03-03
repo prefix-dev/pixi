@@ -23,6 +23,10 @@ impl CommandDispatcherProcessor {
     /// Called when a [`crate::command_dispatcher::DevSourceMetadataTask`]
     /// task was received.
     pub(crate) fn on_dev_source_metadata(&mut self, task: DevSourceMetadataTask) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         // Lookup the id of the request to avoid duplication.
         let dev_source_metadata_id = {
             match self.dev_source_metadata_ids.get(&task.spec) {
