@@ -15,6 +15,10 @@ use tokio_util::sync::CancellationToken;
 impl CommandDispatcherProcessor {
     /// Called when a [`ForegroundMessage::UrlCheckout`] task was received.
     pub(crate) fn on_checkout_url(&mut self, task: UrlCheckoutTask) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         let UrlCheckoutTask {
             spec,
             parent,
