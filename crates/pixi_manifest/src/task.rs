@@ -521,7 +521,7 @@ impl<'a> TaskRenderContext<'a> {
     pub fn to_jinja_context(&self) -> minijinja::Value {
         // Build the context map with user arguments if available
         let mut context_map: HashMap<String, minijinja::Value> = match self.args {
-            Some(ArgValues::TypedArgs(args)) | Some(ArgValues::TypedArgsWithExtra(args, _)) => args
+            Some(ArgValues::TypedArgs { args, .. }) => args
                 .iter()
                 .map(|arg| (arg.name.clone(), minijinja::Value::from(arg.value.as_str())))
                 .collect(),
@@ -674,17 +674,29 @@ impl RenderedString {
 #[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash)]
 pub enum ArgValues {
     FreeFormArgs(Vec<String>),
-    TypedArgs(Vec<TypedArg>),
-    /// Typed args for template substitution + extra passthrough args appended after `--`
-    TypedArgsWithExtra(Vec<TypedArg>, Vec<String>),
+    TypedArgs {
+        args: Vec<TypedArg>,
+        /// Extra passthrough args appended after `--` (empty if none)
+        extra: Vec<String>,
+    },
 }
 
 impl ArgValues {
     pub fn is_empty(&self) -> bool {
         match self {
             ArgValues::FreeFormArgs(args) => args.is_empty(),
-            ArgValues::TypedArgs(args) => args.is_empty(),
-            ArgValues::TypedArgsWithExtra(args, extra) => args.is_empty() && extra.is_empty(),
+            ArgValues::TypedArgs { args, extra } => args.is_empty() && extra.is_empty(),
+        }
+    }
+
+    /// Returns the extra passthrough arguments.
+    ///
+    /// For free-form args, this is the full list of args.
+    /// For typed args, this is only the extra args passed after `--`.
+    pub fn extra_args(&self) -> &[String] {
+        match self {
+            ArgValues::FreeFormArgs(args) => args,
+            ArgValues::TypedArgs { extra, .. } => extra,
         }
     }
 }
@@ -699,14 +711,12 @@ impl Display for ArgValues {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ArgValues::FreeFormArgs(args) => write!(f, "{}", args.iter().join(", ")),
-            ArgValues::TypedArgs(args) => write!(f, "{}", args.iter().join(", ")),
-            ArgValues::TypedArgsWithExtra(args, extra) => {
-                write!(
-                    f,
-                    "{} -- {}",
-                    args.iter().join(", "),
-                    extra.iter().join(", ")
-                )
+            ArgValues::TypedArgs { args, extra } => {
+                write!(f, "{}", args.iter().join(", "))?;
+                if !extra.is_empty() {
+                    write!(f, " -- {}", extra.iter().join(", "))?;
+                }
+                Ok(())
             }
         }
     }
@@ -1158,7 +1168,10 @@ mod tests {
 
         let env_name = EnvironmentName::from_str("test-env").unwrap();
         let manifest_path = PathBuf::from("/tmp/pixi.toml");
-        let args = ArgValues::TypedArgs(vec![]);
+        let args = ArgValues::TypedArgs {
+            args: vec![],
+            extra: vec![],
+        };
 
         let context = TaskRenderContext {
             platform: Platform::Linux64,
@@ -1196,10 +1209,13 @@ mod tests {
     #[test]
     fn test_template_string_renders_with_typed_args() {
         let t = TemplateString::from("echo {{ foo }}");
-        let args = ArgValues::TypedArgs(vec![TypedArg {
-            name: "foo".into(),
-            value: "bar".into(),
-        }]);
+        let args = ArgValues::TypedArgs {
+            args: vec![TypedArg {
+                name: "foo".into(),
+                value: "bar".into(),
+            }],
+            extra: vec![],
+        };
         let context = TaskRenderContext {
             args: Some(&args),
             ..TaskRenderContext::default()
@@ -1211,7 +1227,10 @@ mod tests {
     #[test]
     fn test_template_string_renders_platform_variable() {
         let t = TemplateString::from("echo {{ pixi.platform }}");
-        let args = ArgValues::TypedArgs(vec![]);
+        let args = ArgValues::TypedArgs {
+            args: vec![],
+            extra: vec![],
+        };
         let context = TaskRenderContext {
             platform: Platform::Linux64,
             args: Some(&args),
@@ -1225,10 +1244,13 @@ mod tests {
     #[test]
     fn test_template_string_renders_with_platform_and_args() {
         let t = TemplateString::from("build-{{ pixi.platform }}-{{ version }}");
-        let args = ArgValues::TypedArgs(vec![TypedArg {
-            name: "version".into(),
-            value: "1.0.0".into(),
-        }]);
+        let args = ArgValues::TypedArgs {
+            args: vec![TypedArg {
+                name: "version".into(),
+                value: "1.0.0".into(),
+            }],
+            extra: vec![],
+        };
         let context = TaskRenderContext {
             platform: Platform::Linux64,
             args: Some(&args),

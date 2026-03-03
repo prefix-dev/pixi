@@ -160,25 +160,23 @@ impl<'p> ExecutableTask<'p> {
             let export = get_export_specific_task_env(self.task.as_ref());
 
             // Append the command line arguments verbatim
-            let extra = match &self.args {
-                ArgValues::FreeFormArgs(args) => args.as_slice(),
-                ArgValues::TypedArgsWithExtra(_, extra) => extra.as_slice(),
-                ArgValues::TypedArgs(_) => &[],
-            };
+            let extra = self.args.extra_args();
             let cli_args = if extra.is_empty() {
                 String::new()
             } else {
-                extra
-                    .iter()
-                    .format_with(" ", |arg, f| f(&format_args!("'{arg}'")))
-                    .to_string()
+                format!(
+                    " {}",
+                    extra
+                        .iter()
+                        .format_with(" ", |arg, f| f(&format_args!("'{arg}'")))
+                )
             };
 
             // Skip the export if it's empty, to avoid newlines
             let full_script = if export.is_empty() {
-                format!("{task} {cli_args}")
+                format!("{task}{cli_args}")
             } else {
-                format!("{export}\n{task} {cli_args}")
+                format!("{export}\n{task}{cli_args}")
             };
 
             Ok(Some(full_script))
@@ -239,16 +237,10 @@ impl<'p> ExecutableTask<'p> {
             .map(|c| c.into_owned());
 
         if let Some(mut cmd) = original_cmd {
-            let extra = match &self.args {
-                ArgValues::FreeFormArgs(args) if !args.is_empty() => Some(args.as_slice()),
-                ArgValues::TypedArgsWithExtra(_, extra) if !extra.is_empty() => {
-                    Some(extra.as_slice())
-                }
-                _ => None,
-            };
-            if let Some(additional_args) = extra {
+            let extra = self.args.extra_args();
+            if !extra.is_empty() {
                 cmd.push(' ');
-                cmd.push_str(&additional_args.join(" "));
+                cmd.push_str(&extra.join(" "));
             }
             Ok(Some(cmd))
         } else {
@@ -473,18 +465,12 @@ impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
                         .apply_to(command.as_deref().unwrap_or("<alias>"))
                         .bold()
                 )?;
-                let extra = match &self.task.args {
-                    ArgValues::FreeFormArgs(args) if !args.is_empty() => Some(args.as_slice()),
-                    ArgValues::TypedArgsWithExtra(_, extra) if !extra.is_empty() => {
-                        Some(extra.as_slice())
-                    }
-                    _ => None,
-                };
-                if let Some(additional_args) = extra {
+                let extra = self.task.args.extra_args();
+                if !extra.is_empty() {
                     write!(
                         f,
                         " {}",
-                        consts::TASK_STYLE.apply_to(additional_args.iter().format(" "))
+                        consts::TASK_STYLE.apply_to(extra.iter().format(" "))
                     )?;
                 }
                 Ok(())
@@ -632,7 +618,7 @@ mod tests {
         };
 
         let script = executable_task.as_script().unwrap().unwrap();
-        assert_eq!(script, "export \"FOO=bar\";\n\ntest ");
+        assert_eq!(script, "export \"FOO=bar\";\n\ntest");
     }
 
     #[tokio::test]

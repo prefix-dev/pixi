@@ -243,12 +243,13 @@ args = [{ arg = "target", default = "tests/unit" }]
 
 ```shell
 # Without --, extra flags would cause an error:
-# × task 'pytest' received more arguments than expected
+# × task 'test' received more arguments than expected
+#   hint: use `--` to separate task arguments from extra passthrough arguments
 pixi run test tests/integration --tb=short --maxfail=5
 
 # With --, the typed arg is filled and the rest is forwarded:
 pixi run test tests/integration -- --tb=short --maxfail=5
-✨ Pixi task (pytest in default): pytest tests/integration -v --tb=short --maxfail=5
+✨ Pixi task (test in default): pytest tests/integration -v --tb=short --maxfail=5
 ```
 
 You can also use `--` when relying on a default argument value:

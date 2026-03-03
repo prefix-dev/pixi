@@ -151,11 +151,7 @@ impl TaskNode<'_> {
 
     /// Returns the extra passthrough args (free-form or after `--`)
     fn extra_passthrough_args(&self) -> &[String] {
-        match &self.args {
-            Some(ArgValues::FreeFormArgs(args)) => args.as_slice(),
-            Some(ArgValues::TypedArgsWithExtra(_, extra)) => extra.as_slice(),
-            _ => &[],
-        }
+        self.args.as_ref().map_or(&[], ArgValues::extra_args)
     }
 
     /// Format the additional arguments passed to this command
@@ -285,18 +281,14 @@ impl<'p> TaskGraph<'p> {
                         )?;
 
                         // Combine with any extra args passed after `--`
-                        Some(if extra_args.is_empty() {
-                            merged
-                        } else {
-                            match merged {
-                                ArgValues::TypedArgs(typed) => {
-                                    ArgValues::TypedArgsWithExtra(typed, extra_args)
-                                }
-                                ArgValues::FreeFormArgs(mut free) => {
-                                    free.extend(extra_args);
-                                    ArgValues::FreeFormArgs(free)
-                                }
-                                other => other,
+                        Some(match merged {
+                            ArgValues::TypedArgs { args: typed, .. } => ArgValues::TypedArgs {
+                                args: typed,
+                                extra: extra_args,
+                            },
+                            ArgValues::FreeFormArgs(mut free) => {
+                                free.extend(extra_args);
+                                ArgValues::FreeFormArgs(free)
                             }
                         })
                     } else {
@@ -623,7 +615,10 @@ impl<'p> TaskGraph<'p> {
             });
         }
 
-        Ok(ArgValues::TypedArgs(typed_args))
+        Ok(ArgValues::TypedArgs {
+            args: typed_args,
+            extra: vec![],
+        })
     }
 
     /// Returns the topological order of the tasks in the graph.
@@ -672,9 +667,8 @@ pub enum TaskGraphError {
     #[error("could not split task, assuming non valid task")]
     InvalidTask,
 
-    #[error(
-        "task '{0}' received more arguments than expected, use `--` to pass extra arguments to the underlying command"
-    )]
+    #[error("task '{0}' received more arguments than expected")]
+    #[diagnostic(help("use `--` to separate task arguments from extra passthrough arguments"))]
     TooManyArguments(String),
 
     #[error(transparent)]
