@@ -3743,10 +3743,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#options" class="md-nav__link">
+  <a href="#oauthoidc-authentication" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Options
+        OAuth/OIDC Authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#s3-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        S3 Authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#token-basic-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Token / Basic Authentication
       
     </span>
   </a>
@@ -3805,7 +3827,69 @@
 </dl>
 </li>
 </ul>
-<h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">#</a></h2>
+<h2 id="oauthoidc-authentication">OAuth/OIDC Authentication<a class="headerlink" href="#oauthoidc-authentication" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---oauth" href="#arg---oauth"><code>--oauth</code></a></dt>
+<dd>Use OAuth/OIDC authentication</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---oauth-issuer-url" href="#arg---oauth-issuer-url"><code>--oauth-issuer-url &lt;OAUTH_ISSUER_URL&gt;</code></a></dt>
+<dd>OIDC issuer URL (defaults to <a href="https://{host">https://{host</a>})</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---oauth-client-id" href="#arg---oauth-client-id"><code>--oauth-client-id &lt;OAUTH_CLIENT_ID&gt;</code></a></dt>
+<dd>OAuth client ID (defaults to "rattler")</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---oauth-client-secret" href="#arg---oauth-client-secret"><code>--oauth-client-secret &lt;OAUTH_CLIENT_SECRET&gt;</code></a></dt>
+<dd>OAuth client secret (for confidential clients)</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---oauth-flow" href="#arg---oauth-flow"><code>--oauth-flow &lt;OAUTH_FLOW&gt;</code></a></dt>
+<dd>OAuth flow: auto (default), auth-code, device-code
+<br><strong>options</strong>: <code>auto</code>, <code>auth-code</code>, <code>device-code</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---oauth-scope" href="#arg---oauth-scope"><code>--oauth-scope &lt;OAUTH_SCOPES&gt;</code></a></dt>
+<dd>Additional OAuth scopes to request (repeatable)
+<br>May be provided more than once.</dd>
+</dl>
+</li>
+</ul>
+<h2 id="s3-authentication">S3 Authentication<a class="headerlink" href="#s3-authentication" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---s3-access-key-id" href="#arg---s3-access-key-id"><code>--s3-access-key-id &lt;S3_ACCESS_KEY_ID&gt;</code></a></dt>
+<dd>The S3 access key ID</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---s3-secret-access-key" href="#arg---s3-secret-access-key"><code>--s3-secret-access-key &lt;S3_SECRET_ACCESS_KEY&gt;</code></a></dt>
+<dd>The S3 secret access key</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---s3-session-token" href="#arg---s3-session-token"><code>--s3-session-token &lt;S3_SESSION_TOKEN&gt;</code></a></dt>
+<dd>The S3 session token</dd>
+</dl>
+</li>
+</ul>
+<h2 id="token-basic-authentication">Token / Basic Authentication<a class="headerlink" href="#token-basic-authentication" title="Permanent link">#</a></h2>
 <ul>
 <li>
 <dl>
@@ -3829,24 +3913,6 @@
 <dl>
 <dt><a id="arg---conda-token" href="#arg---conda-token"><code>--conda-token &lt;CONDA_TOKEN&gt;</code></a></dt>
 <dd>The token to use on anaconda.org / quetz authentication</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---s3-access-key-id" href="#arg---s3-access-key-id"><code>--s3-access-key-id &lt;S3_ACCESS_KEY_ID&gt;</code></a></dt>
-<dd>The S3 access key ID</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---s3-secret-access-key" href="#arg---s3-secret-access-key"><code>--s3-secret-access-key &lt;S3_SECRET_ACCESS_KEY&gt;</code></a></dt>
-<dd>The S3 secret access key</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---s3-session-token" href="#arg---s3-session-token"><code>--s3-session-token &lt;S3_SESSION_TOKEN&gt;</code></a></dt>
-<dd>The S3 session token</dd>
 </dl>
 </li>
 </ul>

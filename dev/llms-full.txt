@@ -3667,6 +3667,39 @@ pixi run deploy auth-service production
 ✨ Pixi task (deploy in default): echo Deploying auth-service to production
 ```
 
+### Passing Extra Arguments with `--`
+
+When a task defines typed `args`, all command-line values are matched against those definitions. If you need to pass *additional* flags or arguments directly to the underlying command on top of the typed args, use `--` as a separator. Everything after `--` is forwarded verbatim to the command, regardless of the task's `args` definition.
+
+```toml
+[tasks.test]
+cmd = "pytest {{ target }} -v"
+args = [{ arg = "target", default = "tests/unit" }]
+```
+
+```shell
+# Without --, extra flags would cause an error:
+# × task 'test' received more arguments than expected
+#   hint: use `--` to separate task arguments from extra passthrough arguments
+pixi run test tests/integration --tb=short --maxfail=5
+
+# With --, the typed arg is filled and the rest is forwarded:
+pixi run test tests/integration -- --tb=short --maxfail=5
+✨ Pixi task (test in default): pytest tests/integration -v --tb=short --maxfail=5
+```
+
+You can also use `--` when relying on a default argument value:
+
+```shell
+# "target" uses its default, "--maxfail=5" is forwarded to the command
+pixi run test -- --maxfail=5
+✨ Pixi task (test in default): pytest tests/unit -v --maxfail=5
+```
+
+Tasks without typed args
+
+For tasks that do **not** define `args`, `--` is passed through to the underlying command unchanged. This preserves its meaning for programs that use `--` themselves (e.g. `git log -- somefile`).
+
 ### Restricting Values with Choices
 
 You can restrict the allowed values of an argument using the `choices` field. If a value is provided that is not in the list, Pixi will report an error instead of running the task.
@@ -15515,6 +15548,9 @@ pixi run --locked python
 pixi run build
 # Extra arguments will be passed to the tasks command.
 pixi run task argument1 argument2
+# Use `--` to pass extra arguments directly to the underlying command,
+# even when the task defines typed `args`.
+pixi run task typed-arg-value -- --extra-flag --other=value
 # Skip dependencies of the task
 pixi run --skip-deps task
 # Run in dry-run mode to see the commands that would be run
@@ -15576,7 +15612,7 @@ pixi search [OPTIONS] <PACKAGE>
 
 ## Arguments
 
-- [`<PACKAGE>`](#arg-%3CPACKAGE%3E) : Name of package to search
+- [`<PACKAGE>`](#arg-%3CPACKAGE%3E) : MatchSpec of a package to search
 
   ```
   **required**: `true`
@@ -15590,13 +15626,21 @@ pixi search [OPTIONS] <PACKAGE>
   May be provided more than once.
   ```
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to search for, defaults to current platform
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform(s) to search for. By default, searches all platforms from the manifest (or all known platforms if no manifest is found)
+
+- [`--limit (-l) <LIMIT>`](#arg---limit) : Limit the number of versions shown per package, -1 for no limit
 
   ```
-  **default**: `current_platform`
+  **default**: `5`
   ```
 
-- [`--limit (-l) <LIMIT>`](#arg---limit) : Limit the number of search results
+- [`--limit-packages (-n) <LIMIT_PACKAGES>`](#arg---limit-packages) : Limit the number of packages shown, -1 for no limit
+
+  ```
+  **default**: `5`
+  ```
+
+- [`--json`](#arg---json) : Output in JSON format
 
 ## Global Options
 
@@ -16485,15 +16529,40 @@ pixi auth login [OPTIONS] <HOST>
   **required**: `true`
   ```
 
-## Options
+## OAuth/OIDC Authentication
+
+- [`--oauth`](#arg---oauth) : Use OAuth/OIDC authentication
+
+- [`--oauth-issuer-url <OAUTH_ISSUER_URL>`](#arg---oauth-issuer-url) : OIDC issuer URL (defaults to <https://%7Bhost>})
+
+- [`--oauth-client-id <OAUTH_CLIENT_ID>`](#arg---oauth-client-id) : OAuth client ID (defaults to "rattler")
+
+- [`--oauth-client-secret <OAUTH_CLIENT_SECRET>`](#arg---oauth-client-secret) : OAuth client secret (for confidential clients)
+
+- [`--oauth-flow <OAUTH_FLOW>`](#arg---oauth-flow) : OAuth flow: auto (default), auth-code, device-code
+
+  ```
+  **options**: `auto`, `auth-code`, `device-code`
+  ```
+
+- [`--oauth-scope <OAUTH_SCOPES>`](#arg---oauth-scope) : Additional OAuth scopes to request (repeatable)
+
+  ```
+  May be provided more than once.
+  ```
+
+## S3 Authentication
+
+- [`--s3-access-key-id <S3_ACCESS_KEY_ID>`](#arg---s3-access-key-id) : The S3 access key ID
+- [`--s3-secret-access-key <S3_SECRET_ACCESS_KEY>`](#arg---s3-secret-access-key) : The S3 secret access key
+- [`--s3-session-token <S3_SESSION_TOKEN>`](#arg---s3-session-token) : The S3 session token
+
+## Token / Basic Authentication
 
 - [`--token <TOKEN>`](#arg---token) : The token to use (for authentication with prefix.dev)
 - [`--username <USERNAME>`](#arg---username) : The username to use (for basic HTTP authentication)
 - [`--password <PASSWORD>`](#arg---password) : The password to use (for basic HTTP authentication)
 - [`--conda-token <CONDA_TOKEN>`](#arg---conda-token) : The token to use on anaconda.org / quetz authentication
-- [`--s3-access-key-id <S3_ACCESS_KEY_ID>`](#arg---s3-access-key-id) : The S3 access key ID
-- [`--s3-secret-access-key <S3_SECRET_ACCESS_KEY>`](#arg---s3-secret-access-key) : The S3 secret access key
-- [`--s3-session-token <S3_SESSION_TOKEN>`](#arg---s3-session-token) : The S3 session token
 
 ## Examples
 

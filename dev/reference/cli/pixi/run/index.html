@@ -4025,22 +4025,25 @@
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>pixi<span class="w"> </span>run<span class="w"> </span>build
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="c1"># Extra arguments will be passed to the tasks command.</span>
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>pixi<span class="w"> </span>run<span class="w"> </span>task<span class="w"> </span>argument1<span class="w"> </span>argument2
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Skip dependencies of the task</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>pixi<span class="w"> </span>run<span class="w"> </span>--skip-deps<span class="w"> </span>task
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># Run in dry-run mode to see the commands that would be run</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>pixi<span class="w"> </span>run<span class="w"> </span>--dry-run<span class="w"> </span>task
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="c1"># If you have multiple environments you can select the right one with the --environment flag.</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>pixi<span class="w"> </span>run<span class="w"> </span>--environment<span class="w"> </span>cuda<span class="w"> </span>python
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Use `--` to pass extra arguments directly to the underlying command,</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="c1"># even when the task defines typed `args`.</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>pixi<span class="w"> </span>run<span class="w"> </span>task<span class="w"> </span>typed-arg-value<span class="w"> </span>--<span class="w"> </span>--extra-flag<span class="w"> </span>--other<span class="o">=</span>value
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="c1"># Skip dependencies of the task</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>pixi<span class="w"> </span>run<span class="w"> </span>--skip-deps<span class="w"> </span>task
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="c1"># Run in dry-run mode to see the commands that would be run</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>pixi<span class="w"> </span>run<span class="w"> </span>--dry-run<span class="w"> </span>task
 </span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="c1"># THIS DOESN&#39;T WORK ON WINDOWS</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1"># If you want to run a command in a clean environment you can use the --clean-env flag.</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="c1"># The PATH should only contain the pixi environment here.</span>
-</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>pixi<span class="w"> </span>run<span class="w"> </span>--clean-env<span class="w"> </span><span class="s2">&quot;echo \$PATH&quot;</span>
-</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>
-</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="c1"># By default, CLI commands are not processed by the template engine.</span>
-</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="c1"># Use --templated to enable template rendering for ad-hoc commands.</span>
-</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>pixi<span class="w"> </span>run<span class="w"> </span>--templated<span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s1">&#39;{{ pixi.platform }}&#39;</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="c1"># If you have multiple environments you can select the right one with the --environment flag.</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>pixi<span class="w"> </span>run<span class="w"> </span>--environment<span class="w"> </span>cuda<span class="w"> </span>python
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="c1"># THIS DOESN&#39;T WORK ON WINDOWS</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="c1"># If you want to run a command in a clean environment you can use the --clean-env flag.</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="c1"># The PATH should only contain the pixi environment here.</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>pixi<span class="w"> </span>run<span class="w"> </span>--clean-env<span class="w"> </span><span class="s2">&quot;echo \$PATH&quot;</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="c1"># By default, CLI commands are not processed by the template engine.</span>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="c1"># Use --templated to enable template rendering for ad-hoc commands.</span>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>pixi<span class="w"> </span>run<span class="w"> </span>--templated<span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s1">&#39;{{ pixi.platform }}&#39;</span>
 </span></code></pre></div>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">#</a></h2>
 <div class="admonition info">

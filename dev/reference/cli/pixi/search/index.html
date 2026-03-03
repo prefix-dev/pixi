@@ -3822,7 +3822,7 @@
 <li>
 <dl>
 <dt><a id="arg-\<PACKAGE>" href="#arg-\<PACKAGE>"><code>&lt;PACKAGE&gt;</code></a></dt>
-<dd>Name of package to search
+<dd>MatchSpec of a package to search
 <br><strong>required</strong>: <code>true</code></dd>
 </dl>
 </li>
@@ -3839,14 +3839,27 @@
 <li>
 <dl>
 <dt><a id="arg---platform" href="#arg---platform"><code>--platform (-p) &lt;PLATFORM&gt;</code></a></dt>
-<dd>The platform to search for, defaults to current platform
-<br><strong>default</strong>: <code>current_platform</code></dd>
+<dd>The platform(s) to search for. By default, searches all platforms from the manifest (or all known platforms if no manifest is found)</dd>
 </dl>
 </li>
 <li>
 <dl>
 <dt><a id="arg---limit" href="#arg---limit"><code>--limit (-l) &lt;LIMIT&gt;</code></a></dt>
-<dd>Limit the number of search results</dd>
+<dd>Limit the number of versions shown per package, -1 for no limit
+<br><strong>default</strong>: <code>5</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---limit-packages" href="#arg---limit-packages"><code>--limit-packages (-n) &lt;LIMIT_PACKAGES&gt;</code></a></dt>
+<dd>Limit the number of packages shown, -1 for no limit
+<br><strong>default</strong>: <code>5</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---json" href="#arg---json"><code>--json</code></a></dt>
+<dd>Output in JSON format</dd>
 </dl>
 </li>
 </ul>

@@ -10,7 +10,7 @@ pixi search [OPTIONS] <PACKAGE>
 
 ## Arguments
 
-- [`<PACKAGE>`](#arg-%3CPACKAGE%3E) : Name of package to search
+- [`<PACKAGE>`](#arg-%3CPACKAGE%3E) : MatchSpec of a package to search
 
   ```
   **required**: `true`
@@ -24,13 +24,21 @@ pixi search [OPTIONS] <PACKAGE>
   May be provided more than once.
   ```
 
-- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to search for, defaults to current platform
+- [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform(s) to search for. By default, searches all platforms from the manifest (or all known platforms if no manifest is found)
+
+- [`--limit (-l) <LIMIT>`](#arg---limit) : Limit the number of versions shown per package, -1 for no limit
 
   ```
-  **default**: `current_platform`
+  **default**: `5`
   ```
 
-- [`--limit (-l) <LIMIT>`](#arg---limit) : Limit the number of search results
+- [`--limit-packages (-n) <LIMIT_PACKAGES>`](#arg---limit-packages) : Limit the number of packages shown, -1 for no limit
+
+  ```
+  **default**: `5`
+  ```
+
+- [`--json`](#arg---json) : Output in JSON format
 
 ## Global Options
 
