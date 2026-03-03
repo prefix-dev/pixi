@@ -36,6 +36,9 @@ pixi_build_types = { workspace = true }
 
 recipe_stage0 = { workspace = true }
 
+[package.metadata.cargo-shear]
+ignored = ["rattler-build"]
+
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "redactions", "filters"] }
 rstest = { workspace = true }

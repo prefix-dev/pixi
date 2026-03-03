@@ -7,11 +7,11 @@ use config::RBackendConfig;
 use metadata::DescriptionMetadataProvider;
 use miette::IntoDiagnostic;
 use pixi_build_backend::{
+    Variable,
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     traits::ProjectModel,
     variants::NormalizedKey,
-    Variable,
 };
 use pixi_build_types::SourcePackageName;
 use rattler_conda_types::{ChannelUrl, Platform};

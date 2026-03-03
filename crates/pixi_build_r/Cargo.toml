@@ -25,8 +25,6 @@ miette = { workspace = true }
 minijinja = { workspace = true }
 once_cell = { workspace = true }
 rattler-build = { workspace = true }
-rattler_build_jinja = { workspace = true }
-rattler_build_types = { workspace = true }
 rattler_conda_types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -37,6 +35,9 @@ pixi_build_backend = { workspace = true }
 pixi_build_types = { workspace = true }
 
 recipe_stage0 = { workspace = true }
+
+[package.metadata.cargo-shear]
+ignored = ["rattler-build"]
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "redactions", "filters"] }

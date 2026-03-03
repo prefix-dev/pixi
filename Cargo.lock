@@ -5622,9 +5622,6 @@ dependencies = [
  "tracing",
  "url",
  "uv-distribution",
- "uv-distribution-types",
- "uv-normalize",
- "uv-types",
 ]
 
 [[package]]
@@ -5831,8 +5828,6 @@ dependencies = [
  "pixi_build_backend",
  "pixi_build_types",
  "rattler-build",
- "rattler_build_jinja",
- "rattler_build_types",
  "rattler_conda_types",
  "recipe_stage0",
  "rstest",

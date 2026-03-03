@@ -19,7 +19,7 @@ static CRAN_SPDX_MAP: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
 /// - Base packages (14): ship with every R installation
 /// - Recommended packages (15): included in all binary distributions of R
 ///
-/// See: https://cran.r-project.org/doc/FAQ/R-FAQ.html
+/// See: <https://cran.r-project.org/doc/FAQ/R-FAQ.html>
 pub const R_BUILTIN_PACKAGES: &[&str] = &[
     // Base packages (Priority: base)
     "base",
@@ -117,7 +117,7 @@ pub fn parse_r_license(license_str: &str) -> ParsedLicense {
 ///
 /// This uses the mapping from `cran_spdx_licenses.json`, which is generated
 /// by `cran_license_mapper.py` and covers 99.9% of CRAN packages.
-/// See: https://spdx.org/licenses/
+/// See: <https://spdx.org/licenses/>
 fn normalize_license_name(license: &str) -> String {
     let license = license.trim();
 
