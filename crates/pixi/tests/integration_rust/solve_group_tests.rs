@@ -135,8 +135,6 @@ async fn conda_solve_group_heterogeneous_platforms() {
     let channel = Url::from_file_path(channel_dir.path()).unwrap();
 
     // The `linux-only` feature restricts to linux-64 and adds `bar`.
-    // Before the fix, solving for win-64 would fail because the solver
-    // collected `bar` from the `linux-only` feature even for win-64.
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -160,8 +158,7 @@ async fn conda_solve_group_heterogeneous_platforms() {
     ))
     .unwrap();
 
-    // This should succeed; before the fix it would fail with
-    // "No candidates were found for bar" when solving for win-64.
+    // Solving should succeed for both platforms.
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // `full` environment: has `foo` on both platforms, no `bar`
@@ -176,6 +173,10 @@ async fn conda_solve_group_heterogeneous_platforms() {
     assert!(
         !lock_file.contains_conda_package("full", Platform::Win64, "bar"),
         "full/win-64 should not have bar"
+    );
+    assert!(
+        !lock_file.contains_conda_package("full", Platform::Linux64, "bar"),
+        "full/linux-64 should not have bar"
     );
 
     // `restricted` environment: only supports linux-64, should have both foo and bar

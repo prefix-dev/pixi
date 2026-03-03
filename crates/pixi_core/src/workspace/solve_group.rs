@@ -218,15 +218,15 @@ mod tests {
         [dependencies]
         a = "*"
 
-        [feature.linux-osx-only]
+        [feature.unix-only]
         platforms = ["linux-64", "osx-arm64"]
 
-        [feature.linux-osx-only.dependencies]
+        [feature.unix-only.dependencies]
         b = "*"
 
         [environments]
-        full = { features=[], solve-group="group1" }
-        restricted = { features=["linux-osx-only"], solve-group="group1" }
+        full = { solve-group="group1" }
+        restricted = { features=["unix-only"], solve-group="group1" }
         "#,
         )
         .unwrap();
@@ -248,7 +248,7 @@ mod tests {
                 .into_iter()
                 .map(PackageName::new_unchecked)
                 .collect::<HashSet<_>>(),
-            "win-64 solve should not include deps from linux-osx-only feature"
+            "win-64 solve should not include deps from unix-only feature"
         );
 
         // For linux-64, both 'a' and 'b' should be present.
@@ -263,7 +263,7 @@ mod tests {
                 .into_iter()
                 .map(PackageName::new_unchecked)
                 .collect::<HashSet<_>>(),
-            "linux-64 solve should include deps from linux-osx-only feature"
+            "linux-64 solve should include deps from unix-only feature"
         );
     }
 }
