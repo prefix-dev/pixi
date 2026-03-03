@@ -198,11 +198,7 @@ pub fn r_package_to_conda(name: &str) -> String {
 /// - ">= 1.5" -> ">=1.5"
 /// - "(>= 2.1.3)" -> ">=2.1.3"
 pub fn r_version_to_conda(version: &str) -> String {
-    version
-        .trim()
-        .replace('(', "")
-        .replace(')', "")
-        .replace(' ', "")
+    version.trim().replace(['(', ')', ' '], "")
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
