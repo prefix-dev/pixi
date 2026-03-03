@@ -4,7 +4,6 @@ expression: script
 ---
 ninja --version
 cmake --version
-SET SCCACHE_BASEDIRS="my-prefix-dir"
 
 if not exist build mkdir build
 pushd build

@@ -2,14 +2,6 @@
 {%- macro env(key) -%}
 {%- if is_cmd_exe %}{{ "%" ~ key ~ "%" }}{% else %}{{ "$" ~key }}{% endif -%}
 {% endmacro -%}
-{%- macro export(key, value) -%}
-{%- if is_cmd_exe -%}
-SET {{ key }}={{ value }}
-{%- else -%}
-export {{ key }}={{ value }}
-{%- endif -%}
-{%- endmacro -%}
-
 {# - Set up common variables -#}
 {%- set build_dir = "build" -%}
 {%- set library_prefix =  "%LIBRARY_PREFIX%" if build_platform == "windows" else "$PREFIX" -%}
@@ -44,10 +36,6 @@ export {{ key }}={{ value }}
 {#- Output version information -#}
 ninja --version
 cmake --version
-
-{%- if has_sccache %}
-{{ export("SCCACHE_BASEDIRS", "\"" ~ source_dir ~ "\"") }}
-{%- endif %}
 
 {# Set up the build directory -#}
 {% if is_cmd_exe -%}
