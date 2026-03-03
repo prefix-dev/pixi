@@ -32,12 +32,6 @@ fn collect_system_env() -> IndexMap<String, String> {
     std::env::vars().collect()
 }
 
-impl Default for CMakeBackendConfig {
-    fn default() -> Self {
-        Self::new_with_system_environment()
-    }
-}
-
 impl CMakeBackendConfig {
     /// Create a new `CMakeBackendConfig` with the current system environment.
     pub fn new_with_system_environment() -> Self {
