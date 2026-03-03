@@ -5,6 +5,7 @@ use build_script::{BuildPlatform, BuildScriptContext};
 use config::CMakeBackendConfig;
 use miette::IntoDiagnostic;
 use pixi_build_backend::{
+    cache::{sccache_envs, sccache_tools},
     generated_recipe::{DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     traits::ProjectModel,
@@ -13,8 +14,11 @@ use pixi_build_types::SourcePackageName;
 use rattler_build_jinja::Variable;
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Platform};
-use recipe_stage0::recipe::Script;
-use std::collections::HashSet;
+use recipe_stage0::{
+    matchspec::PackageDependency,
+    recipe::{Item, Script},
+};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -104,6 +108,61 @@ impl GenerateRecipe for CMakeGenerator {
             .host
             .contains_key(&SourcePackageName::from("python"));
 
+        let config_env = config.env.clone();
+
+        let system_env_vars = config
+            .system_env
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<HashMap<_, _>>();
+
+        let all_env_vars = config_env
+            .clone()
+            .into_iter()
+            .chain(system_env_vars.clone())
+            .collect();
+
+        let mut sccache_secrets = Vec::default();
+        let mut has_sccache = false;
+
+        // Verify if user has set any sccache environment variables
+        if sccache_envs(&all_env_vars).is_some() {
+            // check if we set some sccache in system env vars
+            if let Some(system_sccache_keys) = sccache_envs(&system_env_vars) {
+                // If sccache_envs are used in the system environment variables,
+                // we need to set them as secrets
+                let system_sccache_keys = system_env_vars
+                    .keys()
+                    // we set only those keys that are present in the system environment variables
+                    // and not in the config env
+                    .filter(|key| {
+                        system_sccache_keys.contains(&key.as_str())
+                            && !config_env.contains_key(*key)
+                    })
+                    .cloned()
+                    .collect();
+
+                sccache_secrets = system_sccache_keys;
+            };
+
+            let sccache_dep: Vec<Item<PackageDependency>> = sccache_tools()
+                .iter()
+                .map(|tool| tool.parse().into_diagnostic())
+                .collect::<miette::Result<Vec<_>>>()?;
+
+            // Add sccache tools to the build requirements
+            // only if they are not already present
+            let existing_reqs: Vec<_> = requirements.build.clone().into_iter().collect();
+
+            requirements.build.extend(
+                sccache_dep
+                    .into_iter()
+                    .filter(|dep| !existing_reqs.contains(dep)),
+            );
+
+            has_sccache = true;
+        }
+
         let build_script = BuildScriptContext {
             build_platform: if Platform::current().is_windows() {
                 BuildPlatform::Windows
@@ -113,13 +172,14 @@ impl GenerateRecipe for CMakeGenerator {
             source_dir: manifest_root.display().to_string(),
             extra_args: config.extra_args.clone(),
             has_host_python,
+            has_sccache,
         }
         .render();
 
         generated_recipe.recipe.build.script = Script {
             content: build_script,
-            env: config.env.clone(),
-            ..Default::default()
+            env: config_env,
+            secrets: sccache_secrets,
         };
 
         Ok(generated_recipe)
@@ -197,7 +257,7 @@ mod tests {
     fn test_input_globs_includes_extra_globs() {
         let config = CMakeBackendConfig {
             extra_input_globs: vec!["custom/*.c".to_string()],
-            ..Default::default()
+            ..CMakeBackendConfig::new_with_clean_environment()
         };
 
         let generator = CMakeGenerator::default();
@@ -237,7 +297,7 @@ mod tests {
         let generated_recipe = CMakeGenerator::default()
             .generate_recipe(
                 &project_model,
-                &CMakeBackendConfig::default(),
+                &CMakeBackendConfig::new_with_clean_environment(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
@@ -279,7 +339,7 @@ mod tests {
                 &project_model,
                 &CMakeBackendConfig {
                     env: env.clone(),
-                    ..Default::default()
+                    ..CMakeBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
@@ -318,7 +378,7 @@ mod tests {
         let generated_recipe = CMakeGenerator::default()
             .generate_recipe(
                 &project_model,
-                &CMakeBackendConfig::default(),
+                &CMakeBackendConfig::new_with_clean_environment(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
@@ -366,7 +426,7 @@ mod tests {
         let generated_recipe = CMakeGenerator::default()
             .generate_recipe(
                 &project_model,
-                &CMakeBackendConfig::default(),
+                &CMakeBackendConfig::new_with_clean_environment(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
@@ -538,7 +598,7 @@ mod tests {
                 &project_model,
                 &CMakeBackendConfig {
                     compilers: Some(vec!["c".to_string(), "cxx".to_string(), "cuda".to_string()]),
-                    ..Default::default()
+                    ..CMakeBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
@@ -594,7 +654,7 @@ mod tests {
                 &project_model,
                 &CMakeBackendConfig {
                     compilers: None,
-                    ..Default::default()
+                    ..CMakeBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
@@ -640,7 +700,7 @@ mod tests {
                 &project_model,
                 &CMakeBackendConfig {
                     compilers: None,
-                    ..Default::default()
+                    ..CMakeBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
@@ -668,5 +728,55 @@ mod tests {
             stdlib_templates[0], "${{ stdlib('c') }}",
             "Default stdlib should be c"
         );
+    }
+
+    #[tokio::test]
+    async fn test_sccache_is_enabled() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "defaultTarget": {
+                    "runDependencies": {
+                        "boltons": {
+                            "binary": {
+                                "version": "*"
+                            }
+                        }
+                    }
+                },
+            }
+        });
+
+        let env = IndexMap::from([("SCCACHE_BUCKET".to_string(), "my-bucket".to_string())]);
+        let system_env = IndexMap::from([
+            ("SCCACHE_SYSTEM".to_string(), "SOME_VALUE".to_string()),
+            ("SCCACHE_BUCKET".to_string(), "system-bucket".to_string()),
+        ]);
+
+        let generated_recipe = CMakeGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &CMakeBackendConfig {
+                    env,
+                    system_env,
+                    ..CMakeBackendConfig::new_with_clean_environment()
+                },
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        // Verify that sccache is added to the build requirements
+        // when some env variables are set
+        insta::assert_yaml_snapshot!(generated_recipe.recipe, {
+        ".source[0].path" => "[ ... path ... ]",
+        ".build.script.content" => "[ ... script ... ]",
+        });
     }
 }

@@ -2,6 +2,13 @@
 {%- macro env(key) -%}
 {%- if is_cmd_exe %}{{ "%" ~ key ~ "%" }}{% else %}{{ "$" ~key }}{% endif -%}
 {% endmacro -%}
+{%- macro export(key, value) -%}
+{%- if is_cmd_exe -%}
+SET {{ key }}={{ value }}
+{%- else -%}
+export {{ key }}={{ value }}
+{%- endif -%}
+{%- endmacro -%}
 
 {# - Set up common variables -#}
 {%- set build_dir = "build" -%}
@@ -26,9 +33,21 @@
 ] -%}
 {% endif -%}
 
+{# Add sccache compiler launchers if available -#}
+{%- if has_sccache -%}
+{%- set cmake_args = cmake_args + [
+    "-DCMAKE_C_COMPILER_LAUNCHER=sccache",
+    "-DCMAKE_CXX_COMPILER_LAUNCHER=sccache",
+] -%}
+{% endif -%}
+
 {#- Output version information -#}
 ninja --version
 cmake --version
+
+{%- if has_sccache %}
+{{ export("SCCACHE_BASEDIRS", "\"" ~ source_dir ~ "\"") }}
+{%- endif %}
 
 {# Set up the build directory -#}
 {% if is_cmd_exe -%}
@@ -56,3 +75,6 @@ fi
 
 cmake --build . --target install
 {% endif -%}
+{%- if has_sccache %}
+sccache --show-stats
+{%- endif %}
