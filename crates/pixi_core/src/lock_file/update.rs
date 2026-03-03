@@ -424,6 +424,18 @@ pub enum SolveCondaEnvironmentError {
     Variants(#[from] VariantsError),
 }
 
+impl SolveCondaEnvironmentError {
+    /// Returns true if this error is due to cancellation (e.g., a sibling
+    /// platform solve failed and this one was cancelled as a result).
+    fn is_cancelled(&self) -> bool {
+        matches!(
+            self,
+            Self::SolveFailed { source, .. }
+                if matches!(source.as_ref(), CommandDispatcherError::Cancelled)
+        )
+    }
+}
+
 /// Options to pass to [`Workspace::update_lock_file`].
 #[derive(Default)]
 pub struct UpdateLockFileOptions {
@@ -1645,16 +1657,26 @@ impl<'p> UpdateContext<'p> {
                 })()
                 .unwrap_or_default();
 
-                let group_solve_task = spawn_solve_conda_environment_task(
-                    source.clone(),
-                    locked_group_records,
-                    self.mapping_client.clone(),
-                    platform,
-                    channel_priority,
-                    self.command_dispatcher.clone(),
-                    pin_overrides,
-                )
-                .map_err(Report::new)
+                let mapping_client = self.mapping_client.clone();
+                let command_dispatcher = self.command_dispatcher.clone();
+                let source_clone = source.clone();
+                let group_solve_task = async move {
+                    match spawn_solve_conda_environment_task(
+                        source_clone,
+                        locked_group_records,
+                        mapping_client,
+                        platform,
+                        channel_priority,
+                        command_dispatcher,
+                        pin_overrides,
+                    )
+                    .await
+                    {
+                        Ok(result) => Ok(Some(result)),
+                        Err(err) if err.is_cancelled() => Ok(None),
+                        Err(err) => Err(Report::new(err)),
+                    }
+                }
                 .boxed_local();
 
                 // Store the task so we can poll it later.
@@ -1768,7 +1790,7 @@ impl<'p> UpdateContext<'p> {
                 self.no_install,
             );
 
-            pending_futures.push(pypi_solve_future.boxed_local());
+            pending_futures.push(pypi_solve_future.map_ok(Some).boxed_local());
 
             let previous_cell = self
                 .grouped_solved_pypi_records
@@ -1814,7 +1836,7 @@ impl<'p> UpdateContext<'p> {
                 grouped_pypi_records,
                 self.command_dispatcher.clone(),
             );
-            pending_futures.push(extract_resolution_task.boxed_local());
+            pending_futures.push(extract_resolution_task.map_ok(Some).boxed_local());
 
             // Create a cell that will be used to store the result of the extraction.
             let previous_cell = self
@@ -1865,8 +1887,13 @@ impl<'p> UpdateContext<'p> {
         // 2. The futures stored in `pending_futures` do not necessarily have to be
         //    `'static`. Which makes them easier to work with.
         while let Some(result) = pending_futures.next().await {
+            let Some(task_result) = result? else {
+                // Task was cancelled (a sibling solve failed) — skip.
+                top_level_progress.inc(1);
+                continue;
+            };
             top_level_progress.inc(1);
-            match result? {
+            match task_result {
                 TaskResult::CondaGroupSolved(group_name, platform, records, duration) => {
                     let group = GroupedEnvironment::from_name(project, &group_name)
                         .expect("group should exist");
