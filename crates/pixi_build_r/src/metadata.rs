@@ -425,13 +425,12 @@ impl MetadataProvider for DescriptionMetadataProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
     use tempfile::TempDir;
 
     fn create_test_description(content: &str) -> TempDir {
         let temp_dir = TempDir::new().unwrap();
         let desc_path = temp_dir.path().join("DESCRIPTION");
-        fs::write(desc_path, content).unwrap();
+        fs_err::write(desc_path, content).unwrap();
         temp_dir
     }
 
