@@ -5622,6 +5622,9 @@ dependencies = [
  "tracing",
  "url",
  "uv-distribution",
+ "uv-distribution-types",
+ "uv-normalize",
+ "uv-types",
 ]
 
 [[package]]
