@@ -652,8 +652,26 @@ impl CommandDispatcherProcessor {
         self.cancellation_tokens.insert(context, token);
     }
 
-    /// Removes the cancellation token for the given context.
+    /// Removes and cancels the cancellation token for the given context.
+    ///
+    /// Cancelling the token ensures that any child tasks that were spawned
+    /// with a child token linked to this context are also cancelled.
     fn remove_cancellation_token(&mut self, context: CommandDispatcherContext) {
-        self.cancellation_tokens.remove(&context);
+        if let Some(token) = self.cancellation_tokens.remove(&context) {
+            token.cancel();
+        }
+    }
+
+    /// Returns true if the parent context has been cancelled or cleaned up.
+    ///
+    /// Since `remove_cancellation_token` cancels tokens when removing them,
+    /// a missing or cancelled token means the parent is done and any child
+    /// task should be skipped.
+    fn is_parent_cancelled(&self, parent: Option<CommandDispatcherContext>) -> bool {
+        parent.is_some_and(|ctx| {
+            self.cancellation_tokens
+                .get(&ctx)
+                .is_none_or(|token| token.is_cancelled())
+        })
     }
 }
