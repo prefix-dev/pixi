@@ -1,15 +1,14 @@
-use std::borrow::Cow;
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
-use pixi_uv_conversions::to_uv_version;
 use rattler_lock::{CondaPackageData, PypiPackageData, UrlOrPath};
 use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
+use uv_pypi_types::HashAlgorithm;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Package {
     pub name: String,
-    pub version: String,
+    pub version: Option<String>,
     pub build: Option<String>,
     pub build_number: Option<u64>,
     pub size_bytes: Option<u64>,
@@ -49,7 +48,7 @@ impl Package {
         registry_index: Option<&'a mut RegistryWheelIndex<'b>>,
     ) -> Self {
         let name = package.name().to_string();
-        let version = package.version().into_owned();
+        let version = package.version();
         let kind = PackageKind::from(package);
 
         let build = match package {
@@ -76,12 +75,18 @@ impl Package {
             PackageExt::PyPI(p, name) => {
                 // Check the hash to avoid non index packages to be handled by the registry
                 // index as wheels
-                if p.hash.is_some() {
+                if let Some(hash) = &p.hash {
                     if let Some(registry_index) = registry_index {
                         // Handle case where the registry index is present
                         let entry = registry_index.get(name).find(|i| {
-                            i.dist.filename.version
-                                == to_uv_version(&p.version).expect("invalid version")
+                            i.dist.hashes.iter().any(|h| {
+                                (h.algorithm == HashAlgorithm::Sha256
+                                    && hash.sha256().map(|hash| format!("{hash:x}")).as_deref()
+                                        == Some(h.digest.as_ref()))
+                                    || (h.algorithm == HashAlgorithm::Md5
+                                        && hash.md5().map(|hash| format!("{hash:x}")).as_deref()
+                                            == Some(h.digest.as_ref()))
+                            })
                         });
                         let size = entry.and_then(|e| get_dir_size(e.dist.path.clone()).ok());
                         let name = entry.map(|e| e.dist.filename.to_string());
@@ -163,10 +168,14 @@ impl Package {
                 ),
                 CondaPackageData::Source(source) => (None, Some(source.location.to_string())),
             },
-            PackageExt::PyPI(p, _) => match &p.location {
-                UrlOrPath::Url(url) => (None, Some(url.to_string())),
-                UrlOrPath::Path(path) => (None, Some(path.to_string())),
-            },
+            PackageExt::PyPI(p, _) => (
+                None,
+                Some(
+                    p.location
+                        .given()
+                        .map_or_else(|| p.location.to_string(), ToOwned::to_owned),
+                ),
+            ),
         };
 
         let requested_spec = requested_specs.get(&name).cloned();
@@ -174,7 +183,10 @@ impl Package {
 
         let is_editable = match package {
             PackageExt::Conda(_) => false,
-            PackageExt::PyPI(p, _) => p.editable,
+            PackageExt::PyPI(_p, _) => {
+                // TODO: Should be derived from the input specs.
+                false
+            }
         };
 
         let constrains = match package {
@@ -291,10 +303,10 @@ impl PackageExt {
     }
 
     /// Returns the version string of the package
-    pub fn version(&self) -> Cow<'_, str> {
+    pub fn version(&self) -> Option<String> {
         match self {
-            Self::Conda(value) => value.record().version.as_str(),
-            Self::PyPI(value, _) => value.version.to_string().into(),
+            Self::Conda(value) => Some(value.record().version.to_string().into()),
+            Self::PyPI(value, _) => value.version.as_ref().map(|v| v.to_string().into()),
         }
     }
 }

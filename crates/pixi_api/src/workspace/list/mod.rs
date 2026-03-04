@@ -43,17 +43,22 @@ pub async fn list(
 
     // Load the platform
     let platform = platform.unwrap_or_else(|| environment.best_platform());
+    let locked_platform = lock_file.platform(platform.as_str());
+    let locked_environment = lock_file.environment(environment.name().as_str());
 
     // Get all the packages in the environment.
-    let locked_deps = lock_file
-        .environment(environment.name().as_str())
-        .and_then(|env| env.packages(platform).map(Vec::from_iter))
-        .unwrap_or_default();
+    let locked_deps = match (locked_platform, locked_environment) {
+        (Some(locked_platform), Some(locked_environment)) => locked_environment
+            .packages(locked_platform)
+            .map(Vec::from_iter)
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    };
 
     let locked_deps_ext = locked_deps
         .into_iter()
         .map(|p| match p {
-            LockedPackageRef::Pypi(pypi_data, _) => {
+            LockedPackageRef::Pypi(pypi_data) => {
                 let name = to_uv_normalize(&pypi_data.name)?;
                 Ok(PackageExt::PyPI(pypi_data.clone(), name))
             }
