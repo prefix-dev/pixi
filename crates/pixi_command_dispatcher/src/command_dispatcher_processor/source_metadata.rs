@@ -24,6 +24,10 @@ impl CommandDispatcherProcessor {
     /// Called when a [`crate::command_dispatcher::SourceMetadataTask`]
     /// task was received.
     pub(crate) fn on_source_metadata(&mut self, task: SourceMetadataTask) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         // Lookup the id of the source metadata to avoid deduplication.
         let source_metadata_id = {
             match self.source_metadata_ids.get(&task.spec) {
@@ -143,6 +147,7 @@ impl CommandDispatcherProcessor {
         result: Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
     ) {
         let context = CommandDispatcherContext::SourceMetadata(id);
+        self.parent_contexts.remove(&context);
         self.remove_cancellation_token(context);
 
         if let Some((reporter, reporter_id)) = self
