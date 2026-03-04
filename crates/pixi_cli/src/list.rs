@@ -269,7 +269,7 @@ fn get_field_cell(package: &Package, field: Field) -> Cell {
             };
             Cell::new(content)
         }
-        Field::Version => Cell::new(&package.version),
+        Field::Version => Cell::new(package.version.as_deref().unwrap_or_default()),
         Field::Build => Cell::new(package.build.as_deref().unwrap_or_default()),
         Field::BuildNumber => Cell::new(
             package

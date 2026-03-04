@@ -767,9 +767,7 @@ impl PypiNoBuildCheck {
                 // and not resolve correctly from the current working directory
                 let is_editable = source
                     .map(|source| match source {
-                        PixiPypiSource::Path { path: _, editable } => {
-                            editable.unwrap_or_default()
-                        }
+                        PixiPypiSource::Path { path: _, editable } => editable.unwrap_or_default(),
                         _ => false,
                     })
                     .unwrap_or_default();

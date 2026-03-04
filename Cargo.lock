@@ -5606,6 +5606,7 @@ dependencies = [
  "uv-distribution",
  "uv-distribution-types",
  "uv-normalize",
+ "uv-pypi-types",
  "uv-types",
 ]
 
