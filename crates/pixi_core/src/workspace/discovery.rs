@@ -40,23 +40,22 @@ pub enum DiscoveryStart {
 
 impl DiscoveryStart {
     /// Returns the path where the search should start.
-    pub fn path(&self) -> std::io::Result<PathBuf> {
+    pub fn path(&self) -> miette::Result<PathBuf, WorkspaceLocatorError> {
         match self {
-            DiscoveryStart::CurrentDir => std::env::current_dir(),
+            DiscoveryStart::CurrentDir => {
+                std::env::current_dir().map_err(WorkspaceLocatorError::CurrentDir)
+            }
             DiscoveryStart::SearchRoot(path) => Ok(path.clone()),
             DiscoveryStart::ExplicitManifest(path) => Ok(path.clone()),
             DiscoveryStart::WorkspaceRegistry(name) => {
                 let registry = WorkspaceRegistry::load()
                     .map_err(|_| WorkspaceLocatorError::MissingRegistry())?;
-                let path = registry
-                    .named_workspace(name)
-                    .map_err(WorkspaceLocatorError::MissingWorkspace)?;
+                let path = registry.named_workspace(name)?;
                 if !path.exists() {
                     return Err(WorkspaceLocatorError::MissingWorkspacePath {
                         name: name.to_string(),
                         path,
-                    }
-                    .into());
+                    });
                 }
                 Ok(path.clone())
             }
@@ -129,13 +128,6 @@ pub enum WorkspaceLocatorError {
     #[error("could not find workspace '{}' at '{}'", .name, .path.display())]
     #[diagnostic(help = "clean the registry with `pixi workspace register prune`")]
     MissingWorkspacePath { name: String, path: PathBuf },
-}
-
-impl From<WorkspaceLocatorError> for std::io::Error {
-    fn from(err: WorkspaceLocatorError) -> Self {
-        // Create a new std::io::Error, using Other kind and the source error
-        std::io::Error::other(err)
-    }
 }
 
 impl WorkspaceLocator {
