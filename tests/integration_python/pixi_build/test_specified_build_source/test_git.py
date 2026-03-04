@@ -59,7 +59,7 @@ def configure_local_git_source(
     source = manifest.setdefault("package", {}).setdefault("build", {}).setdefault("source", {})
     for key in ("branch", "tag", "rev"):
         source.pop(key, None)
-    source["git"] = "file://" + str(repo.path.as_posix())
+    source["git"] = repo.path.as_uri()
     source["subdirectory"] = subdirectory
     if rev is not None:
         source["rev"] = rev
@@ -90,6 +90,7 @@ def prepare_cpp_git_workspace(
 
 
 @pytest.mark.slow
+@pytest.mark.xdist_group("serial")
 def test_git_path_build(
     pixi: Path,
     build_data: Path,
@@ -124,6 +125,7 @@ def test_git_path_build(
 
 
 @pytest.mark.slow
+@pytest.mark.xdist_group("serial")
 def test_git_path_lock_behaviour(
     pixi: Path,
     build_data: Path,
@@ -169,6 +171,7 @@ def test_git_path_lock_behaviour(
 
 
 @pytest.mark.slow
+@pytest.mark.xdist_group("serial")
 def test_git_path_lock_update_preserves_git_source(
     pixi: Path,
     build_data: Path,
@@ -207,6 +210,7 @@ def test_git_path_lock_update_preserves_git_source(
 
 
 @pytest.mark.slow
+@pytest.mark.xdist_group("serial")
 def test_git_path_lock_branch_records_branch_metadata(
     pixi: Path,
     build_data: Path,
@@ -234,6 +238,7 @@ def test_git_path_lock_branch_records_branch_metadata(
 
 
 @pytest.mark.slow
+@pytest.mark.xdist_group("serial")
 def test_git_path_build_has_absolutely_no_respect_to_lock_file(
     pixi: Path,
     build_data: Path,
@@ -316,6 +321,7 @@ def test_git_path_build_has_absolutely_no_respect_to_lock_file(
 
 
 @pytest.mark.slow
+@pytest.mark.xdist_group("serial")
 def test_git_path_lock_tag_records_tag_metadata(
     pixi: Path,
     build_data: Path,
@@ -343,6 +349,7 @@ def test_git_path_lock_tag_records_tag_metadata(
 
 
 @pytest.mark.slow
+@pytest.mark.xdist_group("serial")
 def test_git_path_lock_rev_marks_explicit_rev(
     pixi: Path,
     build_data: Path,
@@ -364,6 +371,7 @@ def test_git_path_lock_rev_marks_explicit_rev(
 
 
 @pytest.mark.slow
+@pytest.mark.xdist_group("serial")
 def test_git_path_lock_consistent_across_platforms(
     pixi: Path,
     build_data: Path,
@@ -384,6 +392,7 @@ def test_git_path_lock_consistent_across_platforms(
 
 
 @pytest.mark.slow
+@pytest.mark.xdist_group("serial")
 def test_git_path_lock_detects_manual_rev_change(
     pixi: Path,
     build_data: Path,

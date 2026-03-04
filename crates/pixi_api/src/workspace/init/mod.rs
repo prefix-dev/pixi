@@ -207,17 +207,27 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
 
             // Create a 'pyproject.toml' manifest
         } else if pyproject {
-            // Python package names cannot contain '-', so we replace them with '_'
-            let pypi_package_name = PackageName::from_str(&default_name)
+            // PyPI package names must not start or end with '-', '_', or '.',
+            // so strip those boundary characters before normalizing.
+            let pypi_safe_name = {
+                let trimmed = default_name.trim_matches(|c: char| matches!(c, '_' | '-' | '.'));
+                if trimmed.is_empty() {
+                    "workspace".to_string()
+                } else {
+                    trimmed.to_string()
+                }
+            };
+            // Normalize separators to '-' as PyPI dist-info convention requires.
+            let pypi_package_name = PackageName::from_str(&pypi_safe_name)
                 .map(|name| name.as_dist_info_name().to_string())
-                .unwrap_or_else(|_| default_name.clone());
+                .unwrap_or_else(|_| pypi_safe_name.clone());
 
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,
                     template::NEW_PYROJECT_TEMPLATE,
                     context! {
-                        name => default_name,
+                        name => pypi_safe_name,
                         pypi_package_name,
                         version,
                         author,

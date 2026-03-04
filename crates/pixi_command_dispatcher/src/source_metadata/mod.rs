@@ -22,12 +22,12 @@ use thiserror::Error;
 use tracing::instrument;
 
 use crate::cache::build_backend_metadata::CachedCondaMetadataId;
-use crate::cache::source_metadata::CachedSourceMetadataId;
+use crate::cache::source_metadata::{CachedSourceMetadataId, CachedSourceRecord};
 use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt, PackageNotProvidedError,
     PixiEnvironmentSpec, SolvePixiEnvironmentError,
-    build::{Dependencies, DependenciesError, PixiRunExports, SourceCodeLocation},
+    build::{Dependencies, DependenciesError, PinnedSourceCodeLocation, PixiRunExports},
     cache::{
         common::MetadataCache,
         source_metadata::{self, CachedSourceMetadata, SourceMetadataCacheShard},
@@ -48,10 +48,10 @@ pub struct SourceMetadataSpec {
 #[derive(Debug)]
 pub struct SourceMetadata {
     /// Manifest and optional build source location for this metadata.
-    pub source: SourceCodeLocation,
+    pub source: PinnedSourceCodeLocation,
 
     /// The metadata that was acquired from the build backend.
-    pub cached_metadata: CachedSourceMetadata,
+    pub records: Vec<SourceRecord>,
 }
 
 impl SourceMetadataSpec {
@@ -83,14 +83,19 @@ impl SourceMetadataSpec {
             self.package.as_source()
         );
 
-        let cache_key = self.cache_key();
-
         // Get the skip_cache flag from the build backend metadata
         let skip_cache = build_backend_metadata.skip_cache;
 
+        let shard = SourceMetadataCacheShard {
+            package: self.package.clone(),
+            channel_urls: self.backend_metadata.channels.clone(),
+            build_environment: self.backend_metadata.build_environment.clone(),
+            enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
+            source: build_backend_metadata.source.clone().into(),
+        };
         let cache_read_result = command_dispatcher
             .source_metadata_cache()
-            .read(&cache_key)
+            .read(&shard)
             .await
             .map_err(SourceMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
@@ -107,9 +112,13 @@ impl SourceMetadataSpec {
                     .await?
         {
             tracing::debug!("Using cached source metadata for package",);
+
             return Ok(SourceMetadata {
                 source: build_backend_metadata.source.clone(),
-                cached_metadata,
+                records: Self::amend_cached_source_records(
+                    &build_backend_metadata.source,
+                    cached_metadata.records,
+                ),
             });
         }
 
@@ -127,7 +136,7 @@ impl SourceMetadataSpec {
             ));
         }
 
-        let records: Vec<SourceRecord> = futures.try_collect().await?;
+        let records: Vec<_> = futures.try_collect().await?;
 
         // Ensure the source provides the requested package
         if records.is_empty() {
@@ -149,14 +158,14 @@ impl SourceMetadataSpec {
         let cached_source_metadata = CachedSourceMetadata {
             id: CachedSourceMetadataId::random(),
             cache_version,
-            records,
+            records: records.clone(),
             cached_conda_metadata_id: build_backend_metadata.metadata.id,
         };
 
         // Try to store the metadata in the cache with version checking
         match command_dispatcher
             .source_metadata_cache()
-            .try_write(&cache_key, cached_source_metadata.clone(), cache_version)
+            .try_write(&shard, cached_source_metadata, cache_version)
             .await
             .map_err(SourceMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?
@@ -172,20 +181,33 @@ impl SourceMetadataSpec {
         }
 
         Ok(SourceMetadata {
-            cached_metadata: cached_source_metadata,
+            records: Self::amend_cached_source_records(&source_location, records),
             source: source_location,
         })
     }
 
-    /// Computes the cache key for this instance
-    pub(crate) fn cache_key(&self) -> SourceMetadataCacheShard {
-        SourceMetadataCacheShard {
-            package: self.package.clone(),
-            channel_urls: self.backend_metadata.channels.clone(),
-            build_environment: self.backend_metadata.build_environment.clone(),
-            enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
-            pinned_source: self.backend_metadata.manifest_source.clone(),
-        }
+    /// Records from the cache do not include the locations where their sources were checked out
+    /// because those are derived from the cache key, instead we derive them from the input source.
+    fn amend_cached_source_records(
+        source: &PinnedSourceCodeLocation,
+        records: Vec<CachedSourceRecord>,
+    ) -> Vec<SourceRecord> {
+        records
+            .into_iter()
+            .map(
+                |CachedSourceRecord {
+                     package_record,
+                     variants,
+                     sources,
+                 }| SourceRecord {
+                    package_record,
+                    variants,
+                    sources,
+                    manifest_source: source.manifest_source().clone(),
+                    build_source: source.build_source().cloned(),
+                },
+            )
+            .collect()
     }
 
     async fn verify_cache_freshness(
@@ -210,11 +232,10 @@ impl SourceMetadataSpec {
         &self,
         command_dispatcher: &CommandDispatcher,
         output: &CondaOutput,
-        source: SourceCodeLocation,
+        source: PinnedSourceCodeLocation,
         reporter: Option<Arc<dyn RunExportsReporter>>,
-    ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
+    ) -> Result<CachedSourceRecord, CommandDispatcherError<SourceMetadataError>> {
         let manifest_source = source.manifest_source().clone();
-        let build_source = source.build_source().cloned();
         let source_anchor = SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
 
         // Solve the build environment for the output.
@@ -398,7 +419,7 @@ impl SourceMetadataSpec {
             strong_constrains: binary_specs_to_match_spec(run_exports.strong_constrains)?,
         };
 
-        Ok(SourceRecord {
+        Ok(CachedSourceRecord {
             package_record: PackageRecord {
                 // We cannot now these values from the metadata because no actual package
                 // was built yet.
@@ -451,8 +472,6 @@ impl SourceMetadataSpec {
                 // These are not important at this point.
                 experimental_extra_depends: Default::default(),
             },
-            manifest_source,
-            build_source,
             sources: sources
                 .into_iter()
                 .map(|(name, source)| (name.as_source().to_string(), source))

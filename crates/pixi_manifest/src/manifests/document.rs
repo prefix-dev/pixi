@@ -449,6 +449,7 @@ impl ManifestDocument {
         //   - the [project.dependencies] array is selected for the default feature
         //   - the [dependency-groups.feature_name] array is selected unless
         //   - optional-dependencies is explicitly requested as location
+        //   - an existing [tool.pixi.feature.<feature>.pypi-dependencies] table exists
         let add_requirement = |source: &mut ManifestDocument,
                                table_parts: &[&str],
                                array: &str|
@@ -475,7 +476,50 @@ impl ManifestDocument {
             }
             Ok(())
         };
-        if feature_name.is_default()
+
+        // Reuse existing feature pypi-dependencies table if present
+        let has_existing_pixi_pypi_deps = if !feature_name.is_default() && location.is_none() {
+            let table_name = TableName::new()
+                .with_prefix(self.table_prefix())
+                .with_feature_name(Some(feature_name))
+                .with_table(Some(consts::PYPI_DEPENDENCIES));
+            self.manifest()
+                .get_nested_table(&table_name.as_keys())
+                .is_ok()
+        } else {
+            false
+        };
+
+        if has_existing_pixi_pypi_deps {
+            let pypi_requirement = PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?;
+
+            let dependency_table_name = TableName::new()
+                .with_prefix(self.table_prefix())
+                .with_feature_name(Some(feature_name))
+                .with_table(Some(consts::PYPI_DEPENDENCIES));
+
+            let table = self
+                .manifest_mut()
+                .get_or_insert_nested_table(&dependency_table_name.as_keys())?;
+
+            let mut new_value = Value::from(pypi_requirement);
+
+            let existing_value = table.iter_mut().find_map(|(key, value)| {
+                let existing_name = pep508_rs::PackageName::from_str(key.get()).ok()?;
+                if existing_name == requirement.name {
+                    value.as_value_mut()
+                } else {
+                    None
+                }
+            });
+
+            if let Some(existing_value) = existing_value {
+                *new_value.decor_mut() = existing_value.decor().clone();
+                *existing_value = new_value;
+            } else {
+                table.insert(requirement.name.as_ref(), Item::Value(new_value));
+            }
+        } else if feature_name.is_default()
             || matches!(location, Some(PypiDependencyLocation::Dependencies))
         {
             add_requirement(self, &["project"], "dependencies")?
@@ -1091,5 +1135,79 @@ channels = ["other-channel"]
 
         // Verify other feature is still there
         assert!(result.contains("[tool.pixi.feature.other]"));
+    }
+
+    /// Regression test for https://github.com/prefix-dev/pixi/issues/5492
+    #[test]
+    pub fn add_pypi_dependency_reuses_existing_feature_table() {
+        let manifest_content = r#"[project]
+name = "test"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+
+[tool.pixi.feature.cuda.pypi-dependencies]
+torch = ">=2.0.0"
+"#;
+
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        let numpy_req = pep508_rs::Requirement::from_str("numpy>=1.20.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &numpy_req,
+                None,
+                None,
+                &FeatureName::from_str("cuda").unwrap(),
+                None,
+                None,
+            )
+            .unwrap();
+
+        let result = document.to_string();
+
+        assert!(result.contains("[tool.pixi.feature.cuda.pypi-dependencies]"));
+        assert!(result.contains("numpy"));
+        assert!(!result.contains("[dependency-groups]"));
+
+        insta::assert_snapshot!(result);
+    }
+
+    #[test]
+    pub fn add_pypi_dependency_creates_dependency_groups_when_no_existing_table() {
+        let manifest_content = r#"[project]
+name = "test"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+"#;
+
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        let numpy_req = pep508_rs::Requirement::from_str("numpy>=1.20.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &numpy_req,
+                None,
+                None,
+                &FeatureName::from_str("cuda").unwrap(),
+                None,
+                None,
+            )
+            .unwrap();
+
+        let result = document.to_string();
+
+        assert!(result.contains("[dependency-groups]"));
+        assert!(result.contains("cuda"));
+        assert!(result.contains("numpy"));
+
+        insta::assert_snapshot!(result);
     }
 }

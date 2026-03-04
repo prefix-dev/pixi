@@ -4,7 +4,7 @@ use itertools::chain;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_glob::GlobSet;
-use pixi_record::{PinnedSourceSpec, VariantValue};
+use pixi_record::{CanonicalSourceLocation, PinnedSourceSpec, VariantValue};
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use tokio::sync::Mutex;
 use tracing::instrument;
@@ -12,7 +12,7 @@ use tracing::instrument;
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     PackageIdentifier, SourceCheckoutError,
-    build::{BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, SourceCodeLocation},
+    build::{BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, PinnedSourceCodeLocation},
     input_hash::{ConfigurationHash, ProjectModelHash},
 };
 
@@ -33,7 +33,7 @@ pub struct SourceBuildCacheStatusSpec {
     pub package: PackageIdentifier,
 
     /// Describes the source location of the package to query.
-    pub source: SourceCodeLocation,
+    pub source: PinnedSourceCodeLocation,
 
     /// The channels to use when building source packages.
     pub channels: Vec<ChannelUrl>,
@@ -117,7 +117,50 @@ pub struct SourceBuildCacheEntry {
     pub cache_dir: PathBuf,
 }
 
+/// A key that uniquely identifies a request. This is used to allow in memory
+/// caching of the `SourceBuildCacheStatusSpec`.
+///
+/// If two `SourceBuildCacheStatusSpec` have the same key, it means their
+/// entries in the on disk cache would also be the same.
+#[derive(Clone, Hash, Eq, PartialEq)]
+pub struct SourceBuildCacheKey {
+    manifest_source: CanonicalSourceLocation,
+    input: BuildInput,
+}
+
 impl SourceBuildCacheStatusSpec {
+    pub fn key(&self) -> SourceBuildCacheKey {
+        SourceBuildCacheKey {
+            manifest_source: self.source.manifest_source().into(),
+            input: self.build_input(),
+        }
+    }
+
+    fn build_input(&self) -> BuildInput {
+        BuildInput {
+            build_source: self.source.source_code().into(),
+            channel_urls: self.channels.clone(),
+            name: self.package.name.as_source().to_string(),
+            version: self.package.version.to_string(),
+            build: self.package.build.to_string(),
+            subdir: self.package.subdir.clone(),
+            host_platform: self.build_environment.host_platform,
+            host_virtual_packages: self
+                .build_environment
+                .host_virtual_packages
+                .iter()
+                .cloned()
+                .collect(),
+            build_virtual_packages: self
+                .build_environment
+                .build_virtual_packages
+                .iter()
+                .cloned()
+                .collect(),
+            variants: self.variants.clone(),
+        }
+    }
+
     /// Creates a new query for the source build cache.
     #[instrument(skip_all, fields(package = %self.package, source = %self.source))]
     pub async fn query(
@@ -125,20 +168,12 @@ impl SourceBuildCacheStatusSpec {
         command_dispatcher: CommandDispatcher,
     ) -> Result<SourceBuildCacheEntry, CommandDispatcherError<SourceBuildCacheStatusError>> {
         // Query the build cache directly.
-        let build_input = BuildInput {
-            channel_urls: self.channels.clone(),
-            name: self.package.name.as_source().to_string(),
-            version: self.package.version.to_string(),
-            build: self.package.build.to_string(),
-            subdir: self.package.subdir.clone(),
-            host_platform: self.build_environment.host_platform,
-            host_virtual_packages: self.build_environment.host_virtual_packages.clone(),
-            build_virtual_packages: self.build_environment.build_virtual_packages.clone(),
-            variants: self.variants.clone(),
-        };
         let (cached_build, build_cache_entry) = command_dispatcher
             .build_cache()
-            .entry(self.source.manifest_source(), &build_input)
+            .entry(
+                &CanonicalSourceLocation::from(self.source.manifest_source()),
+                &self.build_input(),
+            )
             .await
             .map_err(SourceBuildCacheStatusError::BuildCache)
             .map_err(CommandDispatcherError::Failed)?;

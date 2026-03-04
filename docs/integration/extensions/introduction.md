@@ -11,7 +11,7 @@ Pixi extensions are standalone executables that follow a simple naming conventio
 For example:
 
 - `pixi diff` → looks for `pixi-diff` executable
-- `pixi pack` → looks for `pixi-pack` executable  
+- `pixi pack` → looks for `pixi-pack` executable
 - `pixi deploy` → looks for `pixi-deploy` executable
 
 ## Extension Discovery
@@ -21,7 +21,7 @@ Pixi discovers extensions by searching for `pixi-*` executables in the following
 ### 1. PATH Environment Variable
 Pixi searches all directories in your `PATH` environment variable for executables with the `pixi-` prefix.
 
-### 2. `pixi global` Directories  
+### 2. `pixi global` Directories
 Pixi also searches in directories managed by `pixi global`, which allows for organized extension management without cluttering your system PATH.
 
 When you run `pixi --list`, all discovered extensions are automatically listed alongside all built-in commands, making the commands easily discoverable.
@@ -111,6 +111,7 @@ This works for both built-in commands and any extensions you have installed, mak
 
 ## See Also
 
-- [Pixi Diff](pixi_diff.md) - Compare lock files and environments  
+- [Pixi Diff](pixi_diff.md) - Compare lock files and environments
 - [Pixi Inject](pixi_inject.md) - Inject dependencies into existing environments
+- [Pixi Skills](pixi_skills.md) - Manage and install coding agent skills across LLM backends
 - [Global Tools](../../global_tools/introduction.md) - Managing global tool installations

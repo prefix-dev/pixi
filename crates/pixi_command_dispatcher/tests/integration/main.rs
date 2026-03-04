@@ -18,7 +18,7 @@ use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, CommandDispatcherError, Executor,
     InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PackageIdentifier,
-    PixiEnvironmentSpec, SourceBuildCacheStatusSpec, build::SourceCodeLocation,
+    PixiEnvironmentSpec, SourceBuildCacheStatusSpec, build::PinnedSourceCodeLocation,
 };
 use pixi_config::default_channel_config;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
@@ -194,10 +194,13 @@ pub async fn simple_test() {
     let output = event_tree.to_string();
     let output = regex::Regex::new(r"file:///[^@]+/multi-output-recipe/")
         .unwrap()
-        .replace_all(&output, "file://[LOCAL_GIT_REPO]/");
-    let output = regex::Regex::new(r"@[a-f0-9]{40}")
+        .replace_all(&output, "file://[LOCAL_GIT_REPO]");
+    let output = regex::Regex::new(r"rev=[a-z0-9]+")
         .unwrap()
-        .replace_all(&output, "@[GIT_HASH]");
+        .replace_all(&output, "rev=[GIT_REF]");
+    let output = regex::Regex::new(r"[#@][a-f0-9]{40}")
+        .unwrap()
+        .replace_all(&output, "#[GIT_HASH]");
     insta::assert_snapshot!(output);
 }
 
@@ -633,7 +636,7 @@ async fn source_build_cache_status_clear_works() {
 
     let spec = SourceBuildCacheStatusSpec {
         package: pkg,
-        source: SourceCodeLocation::new(
+        source: PinnedSourceCodeLocation::new(
             PinnedPathSpec {
                 path: tmp_dir.path().to_string_lossy().into_owned().into(),
             }

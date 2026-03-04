@@ -84,6 +84,14 @@ pub struct Args {
     #[arg(long)]
     pub skip_deps: bool,
 
+    /// Enable template rendering for the command arguments.
+    ///
+    /// By default, arguments passed to `pixi run` on the command line are not
+    /// processed by the template engine. Use this flag to enable rendering
+    /// of template variables like `{{ pixi.platform }}`.
+    #[arg(long)]
+    pub templated: bool,
+
     /// Run the task in dry-run mode (only print the command that would run)
     #[clap(short = 'n', long)]
     pub dry_run: bool,
@@ -194,6 +202,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         } else {
             PreferExecutable::TaskFirst
         },
+        args.templated,
     )?;
     tracing::debug!("Task graph: {}", task_graph);
 
@@ -216,8 +225,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // make sure that child processes are killed when pixi stops
     let _drop_guard = signal.clone().drop_guard();
 
+    let init_cwd = std::env::current_dir().ok();
     for task_id in task_graph.topological_order() {
-        let executable_task = ExecutableTask::from_task_graph(&task_graph, task_id);
+        let executable_task =
+            ExecutableTask::from_task_graph(&task_graph, task_id, init_cwd.clone());
 
         // If the task is not executable (e.g. an alias), we skip it. This ensures we
         // don't instantiate a prefix for an alias.

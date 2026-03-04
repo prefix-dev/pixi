@@ -12,6 +12,7 @@ ignore = [
   "pixi-build-backends",
   "tests/data",
   "site",
+  "output",
 ]
 pythonPlatform = "All"
 pythonVersion = "3.13"

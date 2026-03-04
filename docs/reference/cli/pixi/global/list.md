@@ -24,6 +24,8 @@ pixi global list [OPTIONS] [REGEX]
 :  Sorting strategy for the package table of an environment
 <br>**default**: `name`
 <br>**options**: `size`, `name`
+- <a id="arg---json" href="#arg---json">`--json`</a>
+:  Whether to output in JSON format
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>

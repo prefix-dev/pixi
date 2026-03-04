@@ -1,0 +1,26 @@
+---
+source: crates/pixi_build_rust/src/main.rs
+expression: generated_recipe.recipe
+---
+context: {}
+package:
+  name: foobar
+  version: 0.1.0
+source: []
+build:
+  script:
+    content: "[ ... script ... ]"
+    env:
+      SCCACHE_BUCKET: my-bucket
+    secrets:
+      - SCCACHE_SYSTEM
+requirements:
+  build:
+    - "${{ compiler('rust') }}"
+    - "${{ compiler('c') }}"
+    - sccache
+  host: []
+  run: []
+  run_constraints: []
+tests: []
+about: {}

@@ -10,7 +10,6 @@
   - url: https://github.com/mahmoud/boltons/archive/refs/tags/${{ version }}.tar.gz
     sha256: 9b2998cd9525ed472079c7dd90fbd216a887202e8729d5969d4f33878f0ff668
   build:
-    number: null
     script:
       content: python -m pip install . --no-deps -vv
       env: {}
@@ -27,15 +26,9 @@
     run_constraints: []
   tests: []
   about:
-    homepage: null
     license: BSD-3-Clause
     license_file:
     - LICENSE
-    summary: null
-    description: null
-    documentation: null
-    repository: null
-  extra: null
   
   '''
 # ---

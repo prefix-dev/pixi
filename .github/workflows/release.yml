@@ -59,7 +59,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           submodules: recursive
           persist-credentials: false
@@ -73,13 +73,13 @@ jobs:
 
       # Use fork of dist to allow for binaries in the root of the tarball
       - name: Install cargo-dist from git
-        uses: baptiste0928/cargo-install@b687c656bda5733207e629b50a22bf68974a0305 # v3
+        uses: baptiste0928/cargo-install@f204293d9709061b7bc1756fec3ec4e2cd57dec0 # v3
         with:
           crate: dist
           git: https://github.com/ruben-arts/cargo-dist.git
           rev: d4085f9cf734dbfeb49d6ff89b16c768b7977ad3 # feature/update_bin_in_root_tar
 
-      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
+      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
         with:
           environments: dist
           activate-environment: true
@@ -151,14 +151,14 @@ jobs:
       - name: enable windows longpaths
         run: |
           git config --global core.longpaths true
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           submodules: recursive
           persist-credentials: false
 
       # Use fork of dist to allow for binaries in the root of the tarball
       - name: Install cargo-dist from git
-        uses: baptiste0928/cargo-install@b687c656bda5733207e629b50a22bf68974a0305 # v3
+        uses: baptiste0928/cargo-install@f204293d9709061b7bc1756fec3ec4e2cd57dec0 # v3
         with:
           crate: dist
           git: https://github.com/ruben-arts/cargo-dist.git
@@ -167,12 +167,12 @@ jobs:
       - name: Install cargo-zigbuild
         # Only install on non windows platforms
         if: ${{ contains(matrix.runner, 'windows') == false }}
-        uses: baptiste0928/cargo-install@b687c656bda5733207e629b50a22bf68974a0305 # v3
+        uses: baptiste0928/cargo-install@f204293d9709061b7bc1756fec3ec4e2cd57dec0 # v3
         with:
           crate: cargo-zigbuild
           version: "0.20.1"
 
-      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
+      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
         with:
           environments: dist
           activate-environment: true
@@ -200,9 +200,61 @@ jobs:
           # Actually do builds and make zips and whatnot
           dist build ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
           echo "dist ran successfully"
+      - name: Azure login (OIDC)
+        if: runner.os == 'Windows'
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Extract Windows executables from archives
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $signDir = Join-Path $env:RUNNER_TEMP "to-sign"
+          New-Item -ItemType Directory -Path $signDir -Force
+          foreach ($zip in (Get-ChildItem target/distrib -Filter "*.zip")) {
+            $extractDir = Join-Path $env:RUNNER_TEMP $zip.BaseName
+            Expand-Archive -Path $zip.FullName -DestinationPath $extractDir -Force
+            Get-ChildItem $extractDir -Filter "*.exe" -Recurse | Copy-Item -Destination $signDir
+          }
+          Get-ChildItem target/distrib -Filter "*.msi" | Copy-Item -Destination $signDir
+      - name: Sign Windows binaries
+        if: runner.os == 'Windows'
+        uses: azure/trusted-signing-action@87c2e83e6868da99d3380aa309851b32ed9a8346 # v1.1.0
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE_NAME }}
+          files-folder: ${{ runner.temp }}/to-sign
+          files-folder-filter: exe,msi
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Repackage signed executables into archives
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $signDir = Join-Path $env:RUNNER_TEMP "to-sign"
+          foreach ($zip in (Get-ChildItem target/distrib -Filter "*.zip")) {
+            $extractDir = Join-Path $env:RUNNER_TEMP $zip.BaseName
+            # Overwrite extracted exe with signed version
+            Get-ChildItem $extractDir -Filter "*.exe" -Recurse | ForEach-Object {
+              $signed = Join-Path $signDir $_.Name
+              if (Test-Path $signed) { Copy-Item $signed $_.FullName -Force }
+            }
+            # Recreate zip
+            Remove-Item $zip.FullName
+            Compress-Archive -Path (Join-Path $extractDir "*") -DestinationPath $zip.FullName
+          }
+          # Overwrite MSI with signed version
+          Get-ChildItem $signDir -Filter "*.msi" | ForEach-Object {
+            $orig = Get-ChildItem target/distrib -Filter $_.Name
+            if ($orig) { Copy-Item $_.FullName $orig.FullName -Force }
+          }
       - name: Attest Builds
         id: attest
-        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
         with:
           subject-path: "target/distrib/*${{ join(matrix.targets, ', ') }}"
       - run: cp ${{ steps.attest.outputs.bundle-path }} target/distrib/attestations-${{ join(matrix.targets, ', ') }}.intoto.jsonl
@@ -238,7 +290,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/global-dist-manifest.json
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           submodules: recursive
           persist-credentials: false
@@ -288,7 +340,7 @@ jobs:
     outputs:
       val: ${{ steps.host.outputs.manifest }}
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           submodules: recursive
           persist-credentials: false
@@ -383,6 +435,12 @@ jobs:
           name: artifacts-pixi-aarch64-pc-windows-msvc.exe
           path: unpacked-artifacts/pixi-aarch64-pc-windows-msvc.exe
 
+      - name: Upload unpacked artifact for pixi-riscv64gc-unknown-linux-gnu
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: artifacts-pixi-riscv64gc-unknown-linux-gnu
+          path: unpacked-artifacts/pixi-riscv64gc-unknown-linux-gnu
+
       # Upload installer scripts
       - name: Upload install.sh
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -410,7 +468,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           submodules: recursive
           persist-credentials: false

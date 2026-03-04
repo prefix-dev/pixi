@@ -20,7 +20,7 @@ impl CommandDispatcherProcessor {
     ) -> SourceBuildCacheStatusId {
         let id = SourceBuildCacheStatusId(self.source_build_cache_status_ids.len());
         self.source_build_cache_status_ids
-            .insert(task.spec.clone(), id);
+            .insert(task.spec.key(), id);
         if let Some(parent) = task.parent {
             self.parent_contexts.insert(id.into(), parent);
         }
@@ -30,9 +30,13 @@ impl CommandDispatcherProcessor {
     /// Called when a [`crate::command_dispatcher::SourceBuildCacheStatusTask`]
     /// task was received.
     pub(crate) fn on_source_build_cache_status(&mut self, task: SourceBuildCacheStatusTask) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         // Lookup the id of the request to avoid duplication.
         let source_build_cache_status_id = {
-            match self.source_build_cache_status_ids.get(&task.spec) {
+            match self.source_build_cache_status_ids.get(&task.spec.key()) {
                 Some(id) => {
                     // We already have a pending task. Let's make sure that we are not trying to
                     // resolve the same thing in a cycle.

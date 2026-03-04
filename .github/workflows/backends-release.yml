@@ -2,133 +2,95 @@ name: "Backends - Conda Packages"
 
 on:
   workflow_dispatch:
-    inputs:
-      push_to_channel:
-        description: "Push packages to conda channel after build"
-        required: false
-        default: true
-        type: boolean
-      package_name:
-        description: "Build specific package only (optional)"
-        required: false
-        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - "pixi-build-backends/**"
+      - "crates/pixi_build_python/**"
+      - "crates/pixi_build_rattler_build/**"
+      - "crates/pixi_build_cmake/**"
+      - "crates/pixi_build_rust/**"
+      - "crates/pixi_build_mojo/**"
+      - ".github/workflows/backends-release.yml"
+  pull_request:
+    types:
+      - labeled
+      - synchronize
+      - opened
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
 jobs:
-  generate-matrix:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set_version.outputs.matrix }}
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-        with:
-          persist-credentials: false
-      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
-        with:
-          environments: backends-release
-      - name: Extract versions
-        id: set_version
-        run: |
-          # extract names and versions from cargo metadata
-          # and generate a matrix entries for the build job
-          echo "Package name input: '${GITHUB_EVENT_INPUTS_PACKAGE_NAME}'"
-          if [ -n "${GITHUB_EVENT_INPUTS_PACKAGE_NAME}" ]; then
-            echo "Building specific package: ${GITHUB_EVENT_INPUTS_PACKAGE_NAME}"
-            MATRIX_JSON=$(pixi run -e backends-release generate-matrix --package "${GITHUB_EVENT_INPUTS_PACKAGE_NAME}")
-          else
-            echo "Building all packages"
-            MATRIX_JSON=$(pixi run -e backends-release generate-matrix)
-          fi
-
-          echo "Generated matrix: $MATRIX_JSON"
-          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_EVENT_INPUTS_PACKAGE_NAME: ${{ github.event.inputs.package_name }}
-
   build:
-    needs: generate-matrix
+    if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'release:backends')}}
+    timeout-minutes: 80
     permissions:
       id-token: write
-      attestations: write
       contents: read
     env:
       REPO_NAME: "prefix-dev/pixi"
+      SCCACHE_GHA_ENABLED: "true"
+      ACTIONS_CACHE_SERVICE_V2: on
     strategy:
       matrix:
-        bins: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+        include:
+          - target: linux-64
+            os: ubuntu-latest
+          - target: linux-aarch64
+            os: ubuntu-latest
+          - target: win-64
+            os: windows-latest
+          - target: osx-64
+            os: macos-15-intel
+          - target: osx-arm64
+            os: macos-15
       fail-fast: false
-    runs-on: ${{ matrix.bins.os }}
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
-      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
+      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
         with:
           environments: backends-release
+      - name: Configure sccache
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
       - name: Enable long paths (Windows)
-        if: ${{ matrix.bins.os == 'windows-latest' }}
-        run: |
-          git config --global core.longpaths true
+        if: matrix.os == 'windows-latest'
+        run: git config --global core.longpaths true
         shell: bash
-      - name: Set environment variable for recipe version
+      - name: Set package version environment variables
         shell: bash
-        run: |
-          echo "${{ matrix.bins.env_name }}=${{ matrix.bins.version }}" >> $GITHUB_ENV
-      - name: Build ${{ matrix.bins.bin }}
+        run: pixi run -e backends-release generate-versions >> $GITHUB_ENV
+
+      - name: Build all backends for ${{ matrix.target }}
         shell: bash
         env:
           RATTLER_BUILD_ENABLE_GITHUB_INTEGRATION: "true"
           RATTLER_BUILD_COLOR: "always"
         run: |
-          pixi run -e backends-release build-recipe-ci $RUNNER_TEMP pixi-build-backends/recipe/${{ matrix.bins.bin }}/recipe.yaml ${{ matrix.bins.target }}
+          pixi run -e backends-release build-backend-packages ${{ matrix.target }}
 
-      - uses: actions/attest@7667f588f2f73a90cea6c7ac70e78266c4f76616 # v3.1.0
-        id: attest
-        with:
-          subject-path: "${{ runner.temp }}/**/*.conda"
-          predicate-type: "https://schemas.conda.org/attestations-publish-1.schema.json"
-          predicate: "{\"targetChannel\": \"https://prefix.dev/pixi-build-backends\"}"
-
-      - name: Generate attestation for conda package
+      - name: Show sccache stats
         shell: bash
-        run: |
-          # Convert Windows paths to Unix-style for bash compatibility
-          RUNNER_TEMP_UNIX="${{ runner.temp }}"
-          RUNNER_TEMP_UNIX="${RUNNER_TEMP_UNIX//\\//}"
-          BUNDLE_PATH_UNIX="${STEPS_ATTEST_OUTPUTS_BUNDLE_PATH//\\//}"
+        run: pixi run -e backends-release sccache --stop-server
 
-          # Find the actual conda package file (search recursively)
-          CONDA_PACKAGE=$(find "$RUNNER_TEMP_UNIX" -name "*.conda" -type f | head -1)
-          if [ -n "$CONDA_PACKAGE" ]; then
-            # Extract just the filename without path
-            PACKAGE_NAME=$(basename "$CONDA_PACKAGE")
-            # Create signature filename by replacing .conda with .sig
-            SIG_NAME="${PACKAGE_NAME%.conda}.sig"
-            # Get the directory where the conda package is located
-            PACKAGE_DIR=$(dirname "$CONDA_PACKAGE")
-            # Move the attestation bundle to the same directory as the conda package
-            mv "$BUNDLE_PATH_UNIX" "$PACKAGE_DIR/$SIG_NAME"
-            echo "Created attestation: $PACKAGE_DIR/$SIG_NAME"
-          else
-            echo "Error: No conda package found in $RUNNER_TEMP_UNIX"
-            exit 1
-          fi
-        env:
-          STEPS_ATTEST_OUTPUTS_BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+      - name: Remove build cache
+        shell: bash
+        run: rm -rf output/build_cache
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: conda-packages-${{ matrix.bins.bin }}-${{ matrix.bins.target }}
-          path: |
-            ${{ runner.temp }}/**/*.conda
-            ${{ runner.temp }}/**/*.sig
+          name: conda-packages-${{ matrix.target }}
+          path: output/**/*.conda
 
       - name: Kill any lingering processes (Windows)
         if: runner.os == 'Windows'
@@ -144,31 +106,15 @@ jobs:
           # Wait a moment for handles to be released
           Start-Sleep -Seconds 2
 
-  aggregate:
+  upload:
     needs: build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        target: [linux-64, linux-aarch64, linux-ppc64le, win-64, osx-64, osx-arm64]
+    if: github.repository == 'prefix-dev/pixi'
+    permissions:
+      id-token: write
+      contents: read
     steps:
-      - name: Download conda package artifacts for ${{ matrix.target }}
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          pattern: conda-packages-*-${{ matrix.target }}
-          path: conda-artifacts-${{ matrix.target }}
-          merge-multiple: true
-      - name: Upload aggregated conda packages for ${{ matrix.target }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: conda-packages-${{ matrix.target }}
-          path: conda-artifacts-${{ matrix.target }}/**/*.conda
-
-  upload:
-    needs: aggregate
-    runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.push_to_channel == 'true' && github.repository == 'prefix-dev/pixi' }}
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
       - name: Download all conda packages
@@ -178,21 +124,8 @@ jobs:
           path: conda-packages
           merge-multiple: true
           run-id: ${{ github.run_id }}
-      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
+      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
         with:
           environments: backends-release
       - name: Upload packages
-        shell: bash
-        run: |
-          for file in conda-packages/**/*.conda; do
-            echo "Uploading ${file}"
-            # Find corresponding attestation file
-            ATTESTATION_FILE="${file%.conda}.sig"
-            if [ -f "$ATTESTATION_FILE" ]; then
-              echo "Found attestation: $ATTESTATION_FILE"
-              pixi run -e backends-release rattler-build upload prefix -c pixi-build-backends "$file" --attestation "$ATTESTATION_FILE"
-            else
-              echo "Warning: No attestation found for $file"
-              pixi run -e backends-release rattler-build upload prefix -c pixi-build-backends "$file"
-            fi
-          done
+        run: pixi run -e backends-release upload-packages conda-packages

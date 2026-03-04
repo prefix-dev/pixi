@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-# Version: v0.63.2
+# Version: v0.65.0
 
 __wrap__() {
     # Function to mask username and password in URLs for safe printing
@@ -47,6 +47,7 @@ __wrap__() {
 
     case "${ARCH-}" in
     arm64 | aarch64) ARCH="aarch64" ;;
+    riscv64) ARCH="riscv64gc" ;;
     esac
 
     BINARY="pixi-${ARCH}-${PLATFORM}"

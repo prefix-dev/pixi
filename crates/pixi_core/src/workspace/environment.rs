@@ -315,7 +315,7 @@ impl<'p> Environment<'p> {
     ///
     /// The environment variables of all features are combined in the order they
     /// are defined for the environment.
-    pub(crate) fn activation_env(&self, platform: Option<Platform>) -> IndexMap<String, String> {
+    pub fn activation_env(&self, platform: Option<Platform>) -> IndexMap<String, String> {
         self.features()
             .map(|f| f.activation_env(platform))
             .fold(IndexMap::new(), |mut acc, env| {

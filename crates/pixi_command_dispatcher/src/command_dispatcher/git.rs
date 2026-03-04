@@ -22,8 +22,10 @@ impl CommandDispatcher {
         // Determine the git url, including the reference
         let git_reference = git_spec
             .rev
+            .clone()
             .map(|rev| rev.into())
             .unwrap_or(GitReference::DefaultBranch);
+        let pinned_git_reference = git_spec.rev.unwrap_or_default();
 
         let git_url = GitUrl::try_from(git_spec.git)
             .map_err(GitError::from)
@@ -43,7 +45,7 @@ impl CommandDispatcher {
             source: PinnedGitCheckout {
                 commit: fetch.commit(),
                 subdirectory: git_spec.subdirectory.clone(),
-                reference: git_reference.into(),
+                reference: pinned_git_reference,
             },
         };
 
