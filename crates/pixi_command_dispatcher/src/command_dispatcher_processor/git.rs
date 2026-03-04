@@ -9,6 +9,10 @@ use crate::{CommandDispatcherError, Reporter, command_dispatcher::GitCheckoutTas
 impl CommandDispatcherProcessor {
     /// Called when a [`ForegroundMessage::GitCheckout`] task was received.
     pub(crate) fn on_checkout_git(&mut self, task: GitCheckoutTask) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
         let repository_reference = RepositoryReference::from(&task.spec);
         match self.git_checkouts.entry(repository_reference.clone()) {
