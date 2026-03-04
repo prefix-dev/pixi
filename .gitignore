@@ -131,3 +131,4 @@ files.txt
 
 # Rattler build output
 output/*
+.cargo-tmp/

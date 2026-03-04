@@ -465,6 +465,15 @@ pub enum PlatformUnsat {
         manifest_path: String,
         available: String,
     },
+
+    #[error(
+        "the locked package '{package}' with version '{locked_version}' does not satisfy the constraint '{constraint}'"
+    )]
+    ConstraintViolated {
+        package: String,
+        locked_version: String,
+        constraint: String,
+    },
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -1785,6 +1794,59 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .map(|c| c.clone().into_base_url(&channel_config))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| Box::new(PlatformUnsat::InvalidChannel(e)))?;
+
+    // Check that all locked conda packages satisfy the current constraints.
+    // If a constraint is violated, the lock file needs to be re-solved.
+    for (package_name, pixi_spec) in environment
+        .combined_constraints(Some(platform))
+        .into_specs()
+    {
+        // Source constraints don't apply to binary packages; skip them.
+        let binary_spec = match pixi_spec.into_source_or_binary() {
+            Either::Left(_) => continue,
+            Either::Right(binary_spec) => binary_spec,
+        };
+        let nameless_spec =
+            binary_spec
+                .try_into_nameless_match_spec(&channel_config)
+                .map_err(|e| {
+                    let parse_err: ParseMatchSpecError = match e {
+                        SpecConversionError::NonAbsoluteRootDir(p) => {
+                            ParseChannelError::NonAbsoluteRootDir(p).into()
+                        }
+                        SpecConversionError::NotUtf8RootDir(p) => {
+                            ParseChannelError::NotUtf8RootDir(p).into()
+                        }
+                        SpecConversionError::InvalidPath(p) => {
+                            ParseChannelError::InvalidPath(p).into()
+                        }
+                        SpecConversionError::InvalidChannel(_name, p) => p.into(),
+                        SpecConversionError::MissingName => {
+                            ParseMatchSpecError::MissingPackageName
+                        }
+                    };
+                    Box::new(PlatformUnsat::FailedToParseMatchSpec(
+                        package_name.as_source().to_string(),
+                        parse_err,
+                    ))
+                })?;
+        let match_spec =
+            MatchSpec::from_nameless(nameless_spec, Some(package_name.clone().into()));
+
+        // Only check packages that are actually locked; constraints only apply
+        // to installed packages. Source packages are controlled via their source
+        // spec, not version constraints, so they are excluded.
+        if let Some(idx) = locked_pixi_records.index_by_name(&package_name) {
+            let locked_record = &locked_pixi_records.records[idx];
+            if locked_record.as_binary().is_some() && !match_spec.matches(locked_record) {
+                return Err(Box::new(PlatformUnsat::ConstraintViolated {
+                    package: package_name.as_source().to_string(),
+                    locked_version: locked_record.version().to_string(),
+                    constraint: match_spec.to_string(),
+                }));
+            }
+        }
+    }
 
     // Determine the build variants
     let VariantConfig {

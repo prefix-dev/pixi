@@ -31,9 +31,22 @@
             "$ref": "#/$defs/MatchspecTable"
           }
         ]
-      },
-      "propertyNames": {
-        "minLength": 1
+      }
+    },
+    "constraints": {
+      "title": "Constraints",
+      "description": "The `conda` version constraints. These constrain the versions of packages that may be installed without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints.",
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "$ref": "#/$defs/MatchspecTable"
+          }
+        ]
       }
     },
     "dependencies": {
@@ -50,9 +63,6 @@
             "$ref": "#/$defs/MatchspecTable"
           }
         ]
-      },
-      "propertyNames": {
-        "minLength": 1
       }
     },
     "dev": {
@@ -61,9 +71,6 @@
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/SourceSpecTable"
-      },
-      "propertyNames": {
-        "minLength": 1
       }
     },
     "environments": {
@@ -93,9 +100,6 @@
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/Feature"
-      },
-      "propertyNames": {
-        "minLength": 1
       }
     },
     "host-dependencies": {
@@ -112,9 +116,6 @@
             "$ref": "#/$defs/MatchspecTable"
           }
         ]
-      },
-      "propertyNames": {
-        "minLength": 1
       },
       "examples": [
         {
@@ -159,9 +160,6 @@
             "$ref": "#/$defs/PyPIUrlRequirement"
           }
         ]
-      },
-      "propertyNames": {
-        "minLength": 1
       }
     },
     "pypi-options": {
@@ -178,9 +176,6 @@
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/Target"
-      },
-      "propertyNames": {
-        "minLength": 1
       },
       "examples": [
         {
@@ -214,16 +209,12 @@
             }
           ]
         }
-      },
-      "propertyNames": {
-        "description": "A valid task name."
       }
     },
     "tool": {
       "title": "Tool",
       "description": "Third-party tool configurations, ignored by pixi",
-      "type": "object",
-      "additionalProperties": true
+      "type": "object"
     },
     "workspace": {
       "$ref": "#/$defs/Workspace",
@@ -260,9 +251,6 @@
           "type": "object",
           "additionalProperties": {
             "type": "string",
-            "minLength": 1
-          },
-          "propertyNames": {
             "minLength": 1
           },
           "examples": [
@@ -311,9 +299,6 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
-          },
-          "propertyNames": {
-            "minLength": 1
           }
         },
         "backend": {
@@ -344,8 +329,7 @@
         "config": {
           "title": "Config",
           "description": "The configuration of the build backend",
-          "type": "object",
-          "additionalProperties": true
+          "type": "object"
         },
         "source": {
           "$ref": "#/$defs/SourceLocation",
@@ -367,9 +351,6 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/BuildTarget"
-          },
-          "propertyNames": {
-            "minLength": 1
           },
           "examples": [
             {
@@ -402,9 +383,6 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
-          },
-          "propertyNames": {
-            "minLength": 1
           }
         },
         "branch": {
@@ -546,8 +524,7 @@
         "config": {
           "title": "Config",
           "description": "Target-specific configuration for the build backend",
-          "type": "object",
-          "additionalProperties": true
+          "type": "object"
         }
       }
     },
@@ -618,15 +595,7 @@
                   }
                 },
                 "maxProperties": 1,
-                "minProperties": 1,
-                "propertyNames": {
-                  "description": "A valid task argument name; may not be any of: pixi",
-                  "not": {
-                    "enum": [
-                      "pixi"
-                    ]
-                  }
-                }
+                "minProperties": 1
               }
             ]
           }
@@ -698,9 +667,6 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
-          },
-          "propertyNames": {
-            "minLength": 1
           }
         },
         "channel-priority": {
@@ -732,6 +698,22 @@
             ]
           }
         },
+        "constraints": {
+          "title": "Constraints",
+          "description": "The `conda` version constraints. These constrain the versions of packages that may be installed without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          }
+        },
         "dependencies": {
           "title": "Dependencies",
           "description": "The `conda` dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
@@ -746,9 +728,6 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
-          },
-          "propertyNames": {
-            "minLength": 1
           }
         },
         "dev": {
@@ -757,9 +736,6 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/SourceSpecTable"
-          },
-          "propertyNames": {
-            "minLength": 1
           }
         },
         "host-dependencies": {
@@ -776,9 +752,6 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
-          },
-          "propertyNames": {
-            "minLength": 1
           },
           "examples": [
             {
@@ -823,9 +796,6 @@
                 "$ref": "#/$defs/PyPIUrlRequirement"
               }
             ]
-          },
-          "propertyNames": {
-            "minLength": 1
           }
         },
         "pypi-options": {
@@ -851,9 +821,6 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/Target"
-          },
-          "propertyNames": {
-            "minLength": 1
           },
           "examples": [
             {
@@ -887,9 +854,6 @@
                 }
               ]
             }
-          },
-          "propertyNames": {
-            "description": "A valid task name."
           }
         }
       }
@@ -1118,9 +1082,6 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
-          },
-          "propertyNames": {
-            "minLength": 1
           }
         },
         "description": {
@@ -1178,9 +1139,6 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
-          },
-          "propertyNames": {
-            "minLength": 1
           },
           "examples": [
             {
@@ -1268,9 +1226,6 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
-          },
-          "propertyNames": {
-            "minLength": 1
           }
         },
         "target": {
@@ -1279,9 +1234,6 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/Target"
-          },
-          "propertyNames": {
-            "minLength": 1
           },
           "examples": [
             {
@@ -1479,9 +1431,6 @@
               }
             ]
           },
-          "propertyNames": {
-            "minLength": 1
-          },
           "examples": [
             {
               "numpy": ">=1.21.0"
@@ -1528,15 +1477,24 @@
           "anyOf": [
             {
               "type": "string",
-              "const": "first-index"
+              "const": "first-index",
+              "enum": [
+                "first-index"
+              ]
             },
             {
               "type": "string",
-              "const": "unsafe-first-match"
+              "const": "unsafe-first-match",
+              "enum": [
+                "unsafe-first-match"
+              ]
             },
             {
               "type": "string",
-              "const": "unsafe-best-match"
+              "const": "unsafe-best-match",
+              "enum": [
+                "unsafe-best-match"
+              ]
             }
           ],
           "examples": [
@@ -1622,23 +1580,38 @@
           "anyOf": [
             {
               "type": "string",
-              "const": "disallow"
+              "const": "disallow",
+              "enum": [
+                "disallow"
+              ]
             },
             {
               "type": "string",
-              "const": "allow"
+              "const": "allow",
+              "enum": [
+                "allow"
+              ]
             },
             {
               "type": "string",
-              "const": "if-necessary"
+              "const": "if-necessary",
+              "enum": [
+                "if-necessary"
+              ]
             },
             {
               "type": "string",
-              "const": "explicit"
+              "const": "explicit",
+              "enum": [
+                "explicit"
+              ]
             },
             {
               "type": "string",
-              "const": "if-necessary-or-explicit"
+              "const": "if-necessary-or-explicit",
+              "enum": [
+                "if-necessary-or-explicit"
+              ]
             }
           ],
           "examples": [
@@ -1942,7 +1915,7 @@
           "anyOf": [
             {
               "type": "number",
-              "exclusiveMinimum": 0
+              "exclusiveMinimum": 0.0
             },
             {
               "type": "string",
@@ -1956,7 +1929,7 @@
           "anyOf": [
             {
               "type": "number",
-              "exclusiveMinimum": 0
+              "exclusiveMinimum": 0.0
             },
             {
               "type": "string",
@@ -2006,9 +1979,22 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
-          },
-          "propertyNames": {
-            "minLength": 1
+          }
+        },
+        "constraints": {
+          "title": "Constraints",
+          "description": "The `conda` version constraints. These constrain the versions of packages that may be installed without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
           }
         },
         "dependencies": {
@@ -2025,9 +2011,6 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
-          },
-          "propertyNames": {
-            "minLength": 1
           }
         },
         "dev": {
@@ -2036,9 +2019,6 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/SourceSpecTable"
-          },
-          "propertyNames": {
-            "minLength": 1
           }
         },
         "host-dependencies": {
@@ -2055,9 +2035,6 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
-          },
-          "propertyNames": {
-            "minLength": 1
           },
           "examples": [
             {
@@ -2094,9 +2071,6 @@
                 "$ref": "#/$defs/PyPIUrlRequirement"
               }
             ]
-          },
-          "propertyNames": {
-            "minLength": 1
           }
         },
         "tasks": {
@@ -2121,9 +2095,6 @@
                 }
               ]
             }
-          },
-          "propertyNames": {
-            "description": "A valid task name."
           }
         }
       }
@@ -2301,9 +2272,6 @@
             "type": "string",
             "minLength": 1
           },
-          "propertyNames": {
-            "minLength": 1
-          },
           "examples": [
             {
               "key": "value"
@@ -2363,9 +2331,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "propertyNames": {
-            "minLength": 1
           }
         },
         "build-variants-files": {
@@ -2491,7 +2456,10 @@
                   {
                     "description": "Enables building of source records",
                     "type": "string",
-                    "const": "pixi-build"
+                    "const": "pixi-build",
+                    "enum": [
+                      "pixi-build"
+                    ]
                   },
                   {
                     "type": "string"
@@ -2553,9 +2521,6 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/WorkspaceTarget"
-          },
-          "propertyNames": {
-            "minLength": 1
           }
         },
         "version": {
@@ -2582,7 +2547,10 @@
           "title": "Workspace",
           "description": "Must be true to inherit from workspace",
           "type": "boolean",
-          "const": true
+          "const": true,
+          "enum": [
+            true
+          ]
         }
       }
     },
@@ -2601,9 +2569,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "propertyNames": {
-            "minLength": 1
           }
         }
       }

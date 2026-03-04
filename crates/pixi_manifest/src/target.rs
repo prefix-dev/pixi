@@ -11,7 +11,7 @@ use crate::{
     CondaDependencies, DependencyOverwriteBehavior, InternalDependencyBehavior, PyPiDependencies,
     SpecType,
     activation::Activation,
-    dependencies::CondaDevDependencies,
+    dependencies::{CondaConstraints, CondaDevDependencies},
     task::{Task, TaskName},
     utils::PixiSpanned,
 };
@@ -35,6 +35,13 @@ pub struct WorkspaceTarget {
     /// Dev dependencies - source packages whose dependencies should be
     /// installed without building the packages themselves
     pub dev_dependencies: Option<CondaDevDependencies>,
+
+    /// Version constraints for this target.
+    ///
+    /// Constraints limit the versions of packages that can be installed without
+    /// explicitly requiring them to be installed. They apply only if the
+    /// package is installed as a dependency of another package.
+    pub constraints: Option<CondaConstraints>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -967,5 +974,162 @@ mod tests {
             "==1.0",
             "Expected foo=1.0 on osx-arm64"
         );
+    }
+
+    #[test]
+    fn test_constraints_parsed_from_toml() {
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        python = ">=3.9"
+
+        [constraints]
+        abc = "<5"
+        "#,
+        )
+        .unwrap();
+
+        let default_target = manifest.default_feature().targets.default();
+        let constraints = default_target.constraints.as_ref().expect("Should have constraints");
+        assert!(
+            !constraints.is_empty(),
+            "Constraints should not be empty"
+        );
+        let abc = PackageName::from_str("abc").unwrap();
+        let abc_specs: Vec<_> = constraints
+            .get(&abc)
+            .expect("Should have constraint for 'abc'")
+            .iter()
+            .collect();
+        assert_eq!(abc_specs.len(), 1);
+        assert_eq!(
+            abc_specs[0]
+                .as_version_spec()
+                .expect("Should be a version spec")
+                .to_string(),
+            "<5"
+        );
+    }
+
+    #[test]
+    fn test_constraints_per_feature() {
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        python = ">=3.9"
+
+        [constraints]
+        abc = "<5"
+
+        [feature.experimental.constraints]
+        xyz = ">=2.0"
+        "#,
+        )
+        .unwrap();
+
+        let default_feature = manifest.default_feature();
+        let default_constraints = default_feature
+            .constraints(None)
+            .expect("Default feature should have constraints");
+        let abc = PackageName::from_str("abc").unwrap();
+        assert!(
+            default_constraints.get(&abc).is_some(),
+            "Default feature should have abc constraint"
+        );
+
+        let experimental = manifest
+            .features
+            .get(&FeatureName::from("experimental"))
+            .expect("Should have experimental feature");
+        let exp_constraints = experimental
+            .constraints(None)
+            .expect("Experimental feature should have constraints");
+        let xyz = PackageName::from_str("xyz").unwrap();
+        assert!(
+            exp_constraints.get(&xyz).is_some(),
+            "Experimental feature should have xyz constraint"
+        );
+    }
+
+    #[test]
+    fn test_constraints_per_target() {
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "osx-64"]
+
+        [dependencies]
+        python = ">=3.9"
+
+        [constraints]
+        abc = "<5"
+
+        [target.linux-64.constraints]
+        abc = "<4"
+        "#,
+        )
+        .unwrap();
+
+        use rattler_conda_types::Platform;
+        let default_feature = manifest.default_feature();
+
+        // Platform-independent constraints
+        let no_platform_constraints = default_feature
+            .constraints(None)
+            .expect("Should have platform-independent constraints");
+        let abc = PackageName::from_str("abc").unwrap();
+        let spec = no_platform_constraints.get(&abc).expect("Should have abc");
+        assert_eq!(
+            spec.iter()
+                .next()
+                .unwrap()
+                .as_version_spec()
+                .unwrap()
+                .to_string(),
+            "<5"
+        );
+
+        // Linux-specific constraints should override
+        let linux_constraints = default_feature
+            .constraints(Some(Platform::Linux64))
+            .expect("Should have linux-64 constraints");
+        let linux_spec = linux_constraints.get(&abc).expect("Should have abc on linux");
+        assert_eq!(
+            linux_spec
+                .iter()
+                .next()
+                .unwrap()
+                .as_version_spec()
+                .unwrap()
+                .to_string(),
+            "<4"
+        );
+
+        // osx-64 has no platform-specific constraints, so should use the default target
+        let osx_constraints = default_feature.constraints(Some(Platform::OsxX8664));
+        assert!(osx_constraints.is_some());
+        let osx_spec = osx_constraints
+            .unwrap()
+            .get(&abc)
+            .expect("Should have abc on osx")
+            .iter()
+            .next()
+            .unwrap()
+            .as_version_spec()
+            .unwrap()
+            .to_string();
+        assert_eq!(osx_spec, "<5");
     }
 }

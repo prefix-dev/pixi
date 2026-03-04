@@ -2201,6 +2201,18 @@ async fn spawn_solve_conda_environment_task(
     // Get the dev dependencies for this platform
     let dev_dependencies = group.combined_dev_dependencies(Some(platform));
 
+    // Get the constraints for this platform and convert to binary specs.
+    // Source specs are not meaningful as constraints and are dropped.
+    let constraints = {
+        use pixi_record::DevSourceRecord;
+        let conda_constraints = group.combined_constraints(Some(platform));
+        let (_source_constraints, binary_constraints) =
+            DevSourceRecord::split_into_source_and_binary_requirements(
+                conda_constraints.into_specs(),
+            );
+        binary_constraints
+    };
+
     // Get solve options
     let exclude_newer = group.exclude_newer();
     let strategy = group.solve_strategy().into();
@@ -2273,7 +2285,7 @@ async fn spawn_solve_conda_environment_task(
         .solve_pixi_environment(PixiEnvironmentSpec {
             name: Some(group_name.to_string()),
             dependencies,
-            constraints: Default::default(),
+            constraints,
             dev_sources,
             installed: existing_repodata_records.records.clone(),
             build_environment: BuildEnvironment::simple(platform, virtual_packages),
