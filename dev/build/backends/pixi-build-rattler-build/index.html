@@ -1959,6 +1959,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        recipe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#debug-dir" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3937,6 +3948,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        recipe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#debug-dir" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4041,6 +4063,7 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 </span></code></pre></div>
 <p>The backend expects a rattler-build recipe file in one of these locations (searched in order):</p>
 <ol>
+<li><code>package.build.config.recipe</code> if given.</li>
 <li><code>recipe.yaml</code> or <code>recipe.yml</code> in the same directory as the package manifest</li>
 <li><code>recipe/recipe.yaml</code> or <code>recipe/recipe.yml</code> in a subdirectory of the package manifest</li>
 </ol>
@@ -4096,6 +4119,17 @@ model only provides the workspace structure information that the recipe cannot k
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">experimental</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 </span></code></pre></div>
 <p>Note: This option cannot be set in target-specific configurations. It must be set at the root <code>[package.build.config]</code> level only.</p>
+<h3 id="recipe"><code>recipe</code><a class="headerlink" href="#recipe" title="Permanent link">#</a></h3>
+<ul>
+<li><strong>Type</strong>: <code>String</code> (path)</li>
+<li><strong>Default</strong>: checks for <code>recipe.yaml</code>, <code>recipe.yml</code>, <code>recipe/recipe.yaml</code>, <code>recipe/recipe.yml</code> in order.</li>
+<li><strong>Target Merge Behavior</strong>: Not allowed - must be set at root level only</li>
+</ul>
+<p>Path to the recipe YAML file.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">recipe</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;../template/recipe.yaml&quot;</span>
+</span></code></pre></div>
+<p>Note: This option cannot be set in target-specific configurations. It must be set at the root <code>[package.build.config]</code> level only.</p>
 <h3 id="debug-dir"><code>debug-dir</code><a class="headerlink" href="#debug-dir" title="Permanent link">#</a></h3>
 <p>The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the <code>debug</code> subdirectory inside the work directory (for example <code>&lt;work_directory&gt;/debug</code>). The deprecated <code>debug-dir</code> configuration option is ignored; if it is still set in a manifest the backend emits a warning to make the change explicit.</p>
 <h3 id="extra-input-globs"><code>extra-input-globs</code><a class="headerlink" href="#extra-input-globs" title="Permanent link">#</a></h3>
@@ -4105,20 +4139,20 @@ model only provides the workspace structure information that the recipe cannot k
 <li><strong>Target Merge Behavior</strong>: <code>Overwrite</code> - Platform-specific globs completely replace base globs</li>
 </ul>
 <p>Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that are determined from the recipe sources and package directory structure.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="s2">&quot;patches/**/*&quot;</span><span class="p">,</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="s2">&quot;scripts/*.sh&quot;</span><span class="p">,</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="s2">&quot;*.md&quot;</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="s2">&quot;patches/**/*&quot;</span><span class="p">,</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="s2">&quot;scripts/*.sh&quot;</span><span class="p">,</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="s2">&quot;*.md&quot;</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>For target-specific configuration, platform-specific globs completely replace the base:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;*.yaml&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;*.md&quot;</span><span class="p">]</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">[package.build.target.linux-64.config]</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;*.yaml&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;*.md&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;*.sh&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;patches-linux/**/*&quot;</span><span class="p">]</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># Result for linux-64: [&quot;*.yaml&quot;, &quot;*.md&quot;, &quot;*.sh&quot;, &quot;patches-linux/**/*&quot;]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;*.yaml&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;*.md&quot;</span><span class="p">]</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">[package.build.target.linux-64.config]</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;*.yaml&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;*.md&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;*.sh&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;patches-linux/**/*&quot;</span><span class="p">]</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Result for linux-64: [&quot;*.yaml&quot;, &quot;*.md&quot;, &quot;*.sh&quot;, &quot;patches-linux/**/*&quot;]</span>
 </span></code></pre></div>
 <h2 id="build-process">Build Process<a class="headerlink" href="#build-process" title="Permanent link">#</a></h2>
 <p>The rattler-build backend follows this build process:</p>
