@@ -259,6 +259,11 @@ pub async fn main() {
 
 #[cfg(test)]
 mod tests {
+    use cargo_toml::Manifest;
+    use indexmap::IndexMap;
+    use recipe_stage0::recipe::{Item, Value};
+
+    use super::*;
 
     #[tokio::test]
     async fn test_binaries_flag_is_rendered() {
@@ -272,8 +277,7 @@ mod tests {
                 &project_model,
                 &RustBackendConfig {
                     binaries: vec!["rattler-build".to_string()],
-                    ignore_cargo_manifest: Some(true),
-                    ..Default::default()
+                    ..RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
@@ -307,7 +311,7 @@ mod tests {
     fn test_input_globs_includes_extra_globs() {
         let config = RustBackendConfig {
             extra_input_globs: vec!["custom/*.txt".to_string(), "extra/**/*.py".to_string()],
-            ..Default::default()
+            ..RustBackendConfig::new_with_clean_environment()
         };
 
         let generator = RustGenerator::default();
@@ -361,7 +365,7 @@ mod tests {
         let generated_recipe = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default_with_ignore_cargo_manifest(),
+                &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
@@ -406,7 +410,7 @@ mod tests {
         let generated_recipe = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default_with_ignore_cargo_manifest(),
+                &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
@@ -450,7 +454,7 @@ mod tests {
                     env: env.clone(),
                     system_env: Default::default(),
                     ignore_cargo_manifest: Some(true),
-                    ..Default::default()
+                    ..RustBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
@@ -495,7 +499,7 @@ mod tests {
                     env,
                     system_env,
                     ignore_cargo_manifest: Some(true),
-                    ..Default::default()
+                    ..RustBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
@@ -529,7 +533,7 @@ mod tests {
         let generated_recipe = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default(),
+                &RustBackendConfig::new_with_clean_environment(),
                 // Using this crate itself, as it has interesting metadata, using .workspace
                 std::env::current_dir().unwrap(),
                 Platform::Linux64,
@@ -630,7 +634,7 @@ mod tests {
         let result = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default(),
+                &RustBackendConfig::new_with_clean_environment(),
                 PathBuf::from("/non/existent/path"),
                 Platform::Linux64,
                 None,
@@ -661,7 +665,7 @@ mod tests {
         let result = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default_with_ignore_cargo_manifest(),
+                &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 std::env::current_dir().unwrap(),
                 Platform::Linux64,
                 None,
@@ -700,7 +704,7 @@ mod tests {
                 &RustBackendConfig {
                     compilers: Some(vec!["rust".to_string(), "c".to_string(), "cxx".to_string()]),
                     ignore_cargo_manifest: Some(true),
-                    ..Default::default()
+                    ..RustBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
@@ -774,7 +778,7 @@ mod tests {
                 &RustBackendConfig {
                     compilers: None,
                     ignore_cargo_manifest: Some(true),
-                    ..Default::default()
+                    ..RustBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
@@ -866,7 +870,7 @@ mod tests {
         let generated_recipe = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default_with_ignore_cargo_manifest(),
+                &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
@@ -971,7 +975,7 @@ mod tests {
         let generated_recipe = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default_with_ignore_cargo_manifest(),
+                &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,

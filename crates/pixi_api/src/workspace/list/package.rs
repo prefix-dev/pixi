@@ -305,8 +305,8 @@ impl PackageExt {
     /// Returns the version string of the package
     pub fn version(&self) -> Option<String> {
         match self {
-            Self::Conda(value) => Some(value.record().version.to_string().into()),
-            Self::PyPI(value, _) => value.version.as_ref().map(|v| v.to_string().into()),
+            Self::Conda(value) => Some(value.record().version.to_string()),
+            Self::PyPI(value, _) => value.version.as_ref().map(|v| v.to_string()),
         }
     }
 }

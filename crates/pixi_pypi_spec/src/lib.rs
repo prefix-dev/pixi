@@ -616,7 +616,7 @@ mod tests {
         assert_eq!(
             as_pypi_req,
             PixiPypiSpec::new(PixiPypiSource::Path {
-                path: PathBuf::from("C:/path/to/boltons"),
+                path: PathBuf::from("C:/path/to/boltons").into(),
                 editable: None,
             })
         );

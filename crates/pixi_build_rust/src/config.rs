@@ -36,12 +36,6 @@ pub struct RustBackendConfig {
     pub binaries: Vec<String>,
 }
 
-impl Default for RustBackendConfig {
-    fn default() -> Self {
-        Self::new_with_system_environment()
-    }
-}
-
 fn collect_system_env() -> IndexMap<String, String> {
     std::env::vars().collect()
 }
@@ -72,10 +66,10 @@ impl RustBackendConfig {
     /// Creates a new [`RustBackendConfig`] with default values and
     /// `ignore_cargo_manifest` set to `true`.
     #[cfg(test)]
-    pub fn default_with_ignore_cargo_manifest() -> Self {
+    pub fn with_ignore_cargo_manifest(self) -> Self {
         Self {
             ignore_cargo_manifest: Some(true),
-            ..Default::default()
+            ..self
         }
     }
 }
@@ -253,7 +247,7 @@ mod tests {
             binaries: vec![],
         };
 
-        let empty_target_config = RustBackendConfig::default();
+        let empty_target_config = RustBackendConfig::new_with_clean_environment();
 
         let merged = base_config
             .merge_with_target_config(&empty_target_config)
@@ -266,5 +260,23 @@ mod tests {
         assert_eq!(merged.extra_input_globs, vec!["*.base".to_string()]);
         assert_eq!(merged.compilers, Some(vec!["rust".to_string()]));
         assert!(merged.binaries.is_empty());
+    }
+
+    #[test]
+    fn test_merge_target_debug_dir_error() {
+        let base_config = RustBackendConfig {
+            debug_dir: Some(PathBuf::from("/base/debug")),
+            ..RustBackendConfig::new_with_clean_environment()
+        };
+
+        let target_config = RustBackendConfig {
+            debug_dir: Some(PathBuf::from("/target/debug")),
+            ..RustBackendConfig::new_with_clean_environment()
+        };
+
+        let result = base_config.merge_with_target_config(&target_config);
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("`debug_dir` cannot have a target specific value"));
     }
 }
