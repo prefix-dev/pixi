@@ -509,6 +509,11 @@ impl Project {
         self.manifest.parsed.envs.get(name)
     }
 
+    /// Returns a reference to the bin directory.
+    pub fn bin_dir(&self) -> &BinDir {
+        &self.bin_dir
+    }
+
     /// Returns the path to the environment root directory.
     pub fn env_root_path(&self) -> &Path {
         self.env_root.path()

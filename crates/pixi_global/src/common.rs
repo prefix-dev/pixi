@@ -84,6 +84,30 @@ impl BinDir {
         &self.0
     }
 
+    /// Warn if the bin directory is not on the system PATH.
+    ///
+    /// This helps users who installed pixi via a method that doesn't
+    /// automatically add `~/.pixi/bin` to their PATH (e.g. Homebrew).
+    pub fn warn_if_not_on_path(&self) {
+        let bin_path = dunce::simplified(self.path());
+        let is_on_path = std::env::var_os("PATH")
+            .map(|paths| {
+                std::env::split_paths(&paths).any(|p| dunce::simplified(&p) == bin_path)
+            })
+            .unwrap_or(false);
+
+        if !is_on_path {
+            eprintln!(
+                "{}The directory `{}` is not on your PATH. Installed executables won't be found.\n  \
+                 To fix this, add the following to your shell configuration (e.g. `~/.bashrc`, `~/.zshrc`):\n\n  \
+                 export PATH=\"{}:$PATH\"",
+                console::style(console::Emoji("⚠️  ", "")).yellow(),
+                self.path().display(),
+                self.path().display(),
+            );
+        }
+    }
+
     /// Returns the path to the executable script for the given exposed name.
     ///
     /// This function constructs the path to the executable script by joining

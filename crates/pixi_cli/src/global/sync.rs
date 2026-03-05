@@ -58,6 +58,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
+    // Warn if the bin directory is not on the PATH
+    project.bin_dir().warn_if_not_on_path();
+
     if errors.is_empty() {
         Ok(())
     } else {
