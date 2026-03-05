@@ -1393,9 +1393,7 @@ impl<'p> UpdateContextBuilder<'p> {
                                 .map(|(lock_platform, records)| {
                                     (
                                         lock_platform.subdir(),
-                                        Arc::new(PypiRecordsByName::from_iter(
-                                            records.map(|data| data.clone()),
-                                        )),
+                                        Arc::new(PypiRecordsByName::from_iter(records.cloned())),
                                     )
                                 })
                                 .collect(),

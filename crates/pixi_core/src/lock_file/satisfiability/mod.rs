@@ -2122,7 +2122,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
                             if requirement.is_editable() {
                                 if let Err(err) =
-                                    pypi_satisfies_editable(&requirement, &record, project_root)
+                                    pypi_satisfies_editable(&requirement, record, project_root)
                                 {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
@@ -2130,7 +2130,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                 FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras.to_vec())
                             } else {
                                 if let Err(err) =
-                                    pypi_satisfies_requirement(&requirement, &record, project_root)
+                                    pypi_satisfies_requirement(&requirement, record, project_root)
                                 {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
@@ -2942,15 +2942,12 @@ mod tests {
         .unwrap();
     }
 
-    // Currently this test is missing from `good_satisfiability`, so we test the
-    // specific windows case here this should work an all supported platforms
-    //
-    // Do not use windows here: The path gets normalized to something unix-y, and
-    // the lockfile keeps the "pretty" path the suer filled in at all times. So
-    // on windows the test fails.
+    // Do not use unix paths on windows: The path gets normalized to something
+    // unix-y, and the lockfile keeps the "pretty" path the user filled in at
+    // all times. So on windows the test fails.
+    #[cfg(not(target_os = "windows"))]
     #[test]
     fn test_unix_absolute_path_handling() {
-        // Mock locked data
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
             version: Some(Version::from_str("0.1.0").unwrap()),
@@ -2966,7 +2963,27 @@ mod tests {
 
         let spec = pep508_requirement_to_uv_requirement(spec).unwrap();
 
-        // This should satisfy:
+        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+    }
+
+    #[test]
+    fn test_windows_absolute_path_handling() {
+        let locked_data = PypiPackageData {
+            name: "mypkg".parse().unwrap(),
+            version: Some(Version::from_str("0.1.0").unwrap()),
+            location: Verbatim::new(UrlOrPath::Path("C:\\Users\\username\\mypkg.tar.gz".into())),
+            hash: None,
+            index_url: None,
+            requires_dist: vec![],
+            requires_python: None,
+        };
+
+        let spec =
+            pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg.tar.gz")
+                .unwrap();
+
+        let spec = pep508_requirement_to_uv_requirement(spec).unwrap();
+
         pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
     }
 
@@ -2991,15 +3008,21 @@ mod tests {
         let pypi_no_build_check = PypiNoBuildCheck::new(Some(&NoBuild::All));
 
         pypi_no_build_check
-            .check(&PypiPackageData {
-                name: PackageName::from_str("sdist").expect("invalid name"),
-                version: pep440_rs::Version::from_str("0.0.0").expect("invalid version"),
-                location: UrlOrPath::from_str(".").expect("invalid path"),
-                hash: None,
-                requires_dist: vec![],
-                requires_python: None,
-                editable: true,
-            })
+            .check(
+                &PypiPackageData {
+                    name: PackageName::from_str("sdist").expect("invalid name"),
+                    version: Some(pep440_rs::Version::from_str("0.0.0").expect("invalid version")),
+                    location: UrlOrPath::from_str(".").expect("invalid path").into(),
+                    index_url: None,
+                    hash: None,
+                    requires_dist: vec![],
+                    requires_python: None,
+                },
+                Some(&PixiPypiSource::Path {
+                    path: PathBuf::from("").into(),
+                    editable: Some(true),
+                }),
+            )
             .expect("check must pass");
     }
 }
