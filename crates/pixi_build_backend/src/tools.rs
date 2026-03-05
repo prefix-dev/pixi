@@ -441,24 +441,10 @@ mod tests {
     use std::collections::BTreeSet;
 
     use fs_err as fs;
-    use rattler_build::selectors::SelectorConfig;
     use rattler_conda_types::Platform;
     use tempfile::tempdir;
 
     use super::{LoadedVariantConfig, VARIANTS_CONFIG_FILE};
-
-    fn default_selector_config() -> SelectorConfig {
-        SelectorConfig {
-            target_platform: Platform::Linux64,
-            host_platform: Platform::Linux64,
-            build_platform: Platform::Linux64,
-            hash: None,
-            variant: Default::default(),
-            experimental: false,
-            allow_undefined: true,
-            recipe_path: None,
-        }
-    }
 
     #[test]
     fn test_source_dir_variants_tracked_in_input_globs() {
@@ -478,7 +464,7 @@ mod tests {
         let loaded = LoadedVariantConfig::from_recipe_path(
             source_dir,
             &recipe_path,
-            &default_selector_config(),
+            Platform::current(),
             std::iter::empty(),
         )
         .unwrap();
@@ -507,7 +493,7 @@ mod tests {
         let loaded = LoadedVariantConfig::from_recipe_path(
             source_dir,
             &recipe_path,
-            &default_selector_config(),
+            Platform::current(),
             std::iter::empty(),
         )
         .unwrap();
@@ -539,7 +525,7 @@ mod tests {
         let loaded = LoadedVariantConfig::from_recipe_path(
             source_dir,
             &recipe_path,
-            &default_selector_config(),
+            Platform::current(),
             std::iter::empty(),
         )
         .unwrap();
