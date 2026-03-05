@@ -1041,9 +1041,17 @@ pub(crate) fn pypi_satisfies_requirement(
 
     match &spec.source {
         RequirementSource::Registry { specifier, .. } => {
-            // In the old way we always satisfy based on version so let's keep it similar
-            // here
-            let version_string = locked_data.version_string();
+            // If the locked package has no version (e.g. a source dependency with
+            // dynamic version), it cannot satisfy a registry version specifier.
+            let Some(locked_version) = &locked_data.version else {
+                return Err(PlatformUnsat::LockedPyPIVersionsMismatch {
+                    name: spec.name.clone().to_string(),
+                    specifiers: specifier.clone().to_string(),
+                    version: locked_data.version_string(),
+                }
+                .into());
+            };
+            let version_string = locked_version.to_string();
             if specifier.contains(
                 &uv_pep440::Version::from_str(&version_string).expect("could not parse version"),
             ) {
@@ -3024,5 +3032,86 @@ mod tests {
                 }),
             )
             .expect("check must pass");
+    }
+
+    /// Test that `pypi_satisfies_requirement` works correctly when a pypi
+    /// package has no version (dynamic version from a source dependency).
+    /// Path-based requirements should still satisfy.
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn test_pypi_satisfies_path_requirement_without_version() {
+        let locked_data = PypiPackageData {
+            name: "dynamic-dep".parse().unwrap(),
+            version: None,
+            location: Verbatim::new(UrlOrPath::Path("/home/user/project/dynamic-dep".into())),
+            hash: None,
+            index_url: None,
+            requires_dist: vec![],
+            requires_python: None,
+        };
+
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str("dynamic-dep @ file:///home/user/project/dynamic-dep")
+                .unwrap(),
+        )
+        .unwrap();
+
+        // A path-based source dependency without a version should still satisfy
+        // a path-based requirement.
+        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+    }
+
+    /// Windows variant of the path-based dynamic version test.
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn test_pypi_satisfies_path_requirement_without_version() {
+        let locked_data = PypiPackageData {
+            name: "dynamic-dep".parse().unwrap(),
+            version: None,
+            location: Verbatim::new(UrlOrPath::Path(
+                "C:\\Users\\user\\project\\dynamic-dep".into(),
+            )),
+            hash: None,
+            index_url: None,
+            requires_dist: vec![],
+            requires_python: None,
+        };
+
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str(
+                "dynamic-dep @ file:///C:\\Users\\user\\project\\dynamic-dep",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        // A path-based source dependency without a version should still satisfy
+        // a path-based requirement.
+        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+    }
+
+    /// Test that `pypi_satisfies_requirement` works with a git-based
+    /// requirement when the locked package has no version.
+    #[test]
+    fn test_pypi_satisfies_git_requirement_without_version() {
+        let locked_data = PypiPackageData {
+            name: "mypkg".parse().unwrap(),
+            version: None,
+            location: "git+https://github.com/mypkg.git#29932f3915935d773dc8d52c292cadd81c81071d"
+                .parse()
+                .expect("failed to parse url"),
+            hash: None,
+            index_url: None,
+            requires_dist: vec![],
+            requires_python: None,
+        };
+
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap(),
+        )
+        .unwrap();
+
+        // A git-based source dependency without a version should still satisfy.
+        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
     }
 }

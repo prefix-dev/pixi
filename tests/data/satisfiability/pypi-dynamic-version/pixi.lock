@@ -1,0 +1,22 @@
+version: 7
+platforms:
+- name: win-64
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    indexes:
+    - https://pypi.org/simple
+    packages:
+      win-64:
+      - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.12.3-h2628c8c_0_cpython.conda
+      - pypi: ./dynamic-dep
+packages:
+- conda: https://conda.anaconda.org/conda-forge/win-64/python-3.12.3-h2628c8c_0_cpython.conda
+  sha256: 1a95494abe572a8819c933f978df89f00bde72ea9432d46a70632599e8029ea4
+  md5: f07c8c5dd98767f9a652de5d039b284e
+  # Faked to be empty to reduce the size of the example
+  depends: []
+- pypi: ./dynamic-dep
+  name: dynamic-dep
+  sha256: 93b37bda9cded35069601a8e2d2cecdba7a13fe9ac356985c53784c26461911d
