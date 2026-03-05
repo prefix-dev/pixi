@@ -28,6 +28,7 @@ console-subscriber = { workspace = true, optional = true }
 ctrlc = { workspace = true }
 deno_task_shell = { workspace = true }
 dialoguer = { workspace = true }
+dirs = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
 flate2 = { workspace = true }
