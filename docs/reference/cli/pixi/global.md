@@ -26,6 +26,7 @@ pixi global <COMMAND>
 | [`expose`](global/expose.md) | Interact with the exposure of binaries in the global environment |
 | [`shortcut`](global/shortcut.md) | Interact with the shortcuts on your machine |
 | [`update`](global/update.md) | Updates environments in the global environment |
+| [`shell-init`](global/shell-init.md) | Configure your shell to put the pixi global bin directory on PATH |
 | [`tree`](global/tree.md) | Show a tree of dependencies for a specific global environment |
 
 

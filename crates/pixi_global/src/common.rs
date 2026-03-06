@@ -88,21 +88,30 @@ impl BinDir {
     ///
     /// This helps users who installed pixi via a method that doesn't
     /// automatically add `~/.pixi/bin` to their PATH (e.g. Homebrew).
+    /// Canonicalizes both sides of the comparison to handle symlinks and
+    /// relative paths correctly.
     pub fn warn_if_not_on_path(&self) {
-        let bin_path = dunce::simplified(self.path());
+        let bin_canonical = std::fs::canonicalize(self.path())
+            .map(|p| dunce::simplified(&p).to_path_buf())
+            .unwrap_or_else(|_| dunce::simplified(self.path()).to_path_buf());
+
         let is_on_path = std::env::var_os("PATH")
             .map(|paths| {
-                std::env::split_paths(&paths).any(|p| dunce::simplified(&p) == bin_path)
+                std::env::split_paths(&paths).any(|p| {
+                    std::fs::canonicalize(&p)
+                        .map(|c| dunce::simplified(&c).to_path_buf())
+                        .unwrap_or_else(|_| dunce::simplified(&p).to_path_buf())
+                        == bin_canonical
+                })
             })
             .unwrap_or(false);
 
         if !is_on_path {
-            eprintln!(
+            pixi_progress::println!(
                 "{}The directory `{}` is not on your PATH. Installed executables won't be found.\n  \
-                 To fix this, add the following to your shell configuration (e.g. `~/.bashrc`, `~/.zshrc`):\n\n  \
-                 export PATH=\"{}:$PATH\"",
+                 Run `pixi global shell-init` to configure your shell, \
+                 or use `pixi global shell-init --print` to see the required snippet.",
                 console::style(console::Emoji("⚠️  ", "")).yellow(),
-                self.path().display(),
                 self.path().display(),
             );
         }
