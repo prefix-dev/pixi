@@ -59,10 +59,10 @@ The lock file contains two definitions:
 Pixi uses the lock file for the following reasons:
 
 - To save a working installation state, without copying the entire environment's data.
-- To ensure the workspace configuration is aligned with the installed environment.
+- To ensure the workspace configuration is aligned with the environment.
 - To give the user a file that contains all the information about the environment.
 
-This gives you (and your collaborators) a way to really reproduce the environment they are working in.
+This gives you (and your collaborators) a way to really reproduce environment they are working in.
 Using tools such as docker suddenly becomes much less necessary.
 
 ## When is a lock file generated?
@@ -172,4 +172,4 @@ rm pixi.lock
 This will remove the lock file, and the next time you run a command that requires the lock file, it will be generated again.
 
 !!! Warning "Note"
-    This does remove the locked state of the environment, and the environment will be updated to the latest version of the packages.
+    This does remove the locked state of the environment, which will be updated to the latest version of all packages.

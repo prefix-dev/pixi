@@ -93,11 +93,16 @@ pub struct ExecutableTask<'p> {
     pub task: Cow<'p, Task>,
     pub run_environment: Environment<'p>,
     pub args: ArgValues,
+    pub init_cwd: Option<PathBuf>,
 }
 
 impl<'p> ExecutableTask<'p> {
     /// Constructs a new executable task from a task graph node.
-    pub fn from_task_graph(task_graph: &TaskGraph<'p>, task_id: TaskId) -> Self {
+    pub fn from_task_graph(
+        task_graph: &TaskGraph<'p>,
+        task_id: TaskId,
+        init_cwd: Option<PathBuf>,
+    ) -> Self {
         let node = &task_graph[task_id];
 
         Self {
@@ -106,6 +111,7 @@ impl<'p> ExecutableTask<'p> {
             task: node.task.clone(),
             run_environment: node.run_environment.clone(),
             args: node.args.clone().unwrap_or_default(),
+            init_cwd,
         }
     }
 
@@ -131,12 +137,13 @@ impl<'p> ExecutableTask<'p> {
     /// Creates a properly populated `TaskRenderContext` for this task.
     ///
     /// This includes the platform, environment name, manifest path, and arguments.
-    pub fn render_context(&self) -> pixi_manifest::task::TaskRenderContext {
+    pub fn render_context(&self) -> pixi_manifest::task::TaskRenderContext<'_> {
         pixi_manifest::task::TaskRenderContext {
             platform: self.run_environment.best_platform(),
             environment_name: self.run_environment.name(),
             manifest_path: Some(&self.workspace.workspace.provenance.path),
             args: Some(&self.args),
+            init_cwd: self.init_cwd.as_deref(),
         }
     }
 
@@ -153,20 +160,23 @@ impl<'p> ExecutableTask<'p> {
             let export = get_export_specific_task_env(self.task.as_ref());
 
             // Append the command line arguments verbatim
-            let cli_args = if let ArgValues::FreeFormArgs(additional_args) = &self.args {
-                additional_args
-                    .iter()
-                    .format_with(" ", |arg, f| f(&format_args!("'{arg}'")))
-                    .to_string()
-            } else {
+            let extra = self.args.extra_args();
+            let cli_args = if extra.is_empty() {
                 String::new()
+            } else {
+                format!(
+                    " {}",
+                    extra
+                        .iter()
+                        .format_with(" ", |arg, f| f(&format_args!("'{arg}'")))
+                )
             };
 
             // Skip the export if it's empty, to avoid newlines
             let full_script = if export.is_empty() {
-                format!("{task} {cli_args}")
+                format!("{task}{cli_args}")
             } else {
-                format!("{export}\n{task} {cli_args}")
+                format!("{export}\n{task}{cli_args}")
             };
 
             Ok(Some(full_script))
@@ -227,11 +237,10 @@ impl<'p> ExecutableTask<'p> {
             .map(|c| c.into_owned());
 
         if let Some(mut cmd) = original_cmd {
-            if let ArgValues::FreeFormArgs(additional_args) = &self.args {
-                if !additional_args.is_empty() {
-                    cmd.push(' ');
-                    cmd.push_str(&additional_args.join(" "));
-                }
+            let extra = self.args.extra_args();
+            if !extra.is_empty() {
+                cmd.push(' ');
+                cmd.push_str(&extra.join(" "));
             }
             Ok(Some(cmd))
         } else {
@@ -334,27 +343,29 @@ impl<'p> ExecutableTask<'p> {
         };
 
         // Outputs warning
-        if rendered_outputs.is_some() && post_hash.outputs.is_none() {
-            if let Some(globs) = rendered_outputs.as_ref() {
-                tracing::warn!(
-                    "No files matched the output globs for task '{}'",
-                    self.name().unwrap_or_default()
-                );
-                let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
-                tracing::warn!("Output globs: {}", formatted);
-            }
+        if rendered_outputs.is_some()
+            && post_hash.outputs.is_none()
+            && let Some(globs) = rendered_outputs.as_ref()
+        {
+            tracing::warn!(
+                "No files matched the output globs for task '{}'",
+                self.name().unwrap_or_default()
+            );
+            let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
+            tracing::warn!("Output globs: {}", formatted);
         }
 
         // Inputs warning
-        if rendered_inputs.is_some() && post_hash.inputs.is_none() {
-            if let Some(globs) = rendered_inputs.as_ref() {
-                tracing::warn!(
-                    "No files matched the input globs for task '{}'",
-                    self.name().unwrap_or_default()
-                );
-                let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
-                tracing::warn!("Input globs: {}", formatted);
-            }
+        if rendered_inputs.is_some()
+            && post_hash.inputs.is_none()
+            && let Some(globs) = rendered_inputs.as_ref()
+        {
+            tracing::warn!(
+                "No files matched the input globs for task '{}'",
+                self.name().unwrap_or_default()
+            );
+            let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
+            tracing::warn!("Input globs: {}", formatted);
         }
     }
 
@@ -454,14 +465,13 @@ impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
                         .apply_to(command.as_deref().unwrap_or("<alias>"))
                         .bold()
                 )?;
-                if let ArgValues::FreeFormArgs(additional_args) = &self.task.args {
-                    if !additional_args.is_empty() {
-                        write!(
-                            f,
-                            " {}",
-                            consts::TASK_STYLE.apply_to(additional_args.iter().format(" "))
-                        )?;
-                    }
+                let extra = self.task.args.extra_args();
+                if !extra.is_empty() {
+                    write!(
+                        f,
+                        " {}",
+                        consts::TASK_STYLE.apply_to(extra.iter().format(" "))
+                    )?;
                 }
                 Ok(())
             }
@@ -604,10 +614,11 @@ mod tests {
             task: Cow::Borrowed(task),
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
+            init_cwd: None,
         };
 
         let script = executable_task.as_script().unwrap().unwrap();
-        assert_eq!(script, "export \"FOO=bar\";\n\ntest ");
+        assert_eq!(script, "export \"FOO=bar\";\n\ntest");
     }
 
     #[tokio::test]

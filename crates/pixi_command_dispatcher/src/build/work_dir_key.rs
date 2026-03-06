@@ -62,9 +62,11 @@ impl WorkDirKey {
             SourceRecordOrCheckout::Record { package_name, .. } => {
                 Some(package_name.as_normalized())
             }
-            SourceRecordOrCheckout::Checkout { checkout } => {
-                checkout.path.file_name().and_then(OsStr::to_str)
-            }
+            SourceRecordOrCheckout::Checkout { checkout } => checkout
+                .path
+                .as_std_path()
+                .file_name()
+                .and_then(OsStr::to_str),
         };
 
         match name {

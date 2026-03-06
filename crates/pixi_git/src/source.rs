@@ -127,10 +127,10 @@ impl GitSource {
         db.copy_to(actual_rev.into(), &checkout_path)?;
 
         // Report the checkout operation to the reporter.
-        if let Some(task) = task {
-            if let Some(reporter) = self.reporter.as_ref() {
-                reporter.on_checkout_complete(remote.url(), short_id.as_str(), task);
-            }
+        if let Some(task) = task
+            && let Some(reporter) = self.reporter.as_ref()
+        {
+            reporter.on_checkout_complete(remote.url(), short_id.as_str(), task);
         }
 
         tracing::trace!("Finished fetching Git source `{}`", self.git.repository);

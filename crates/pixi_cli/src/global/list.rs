@@ -1,7 +1,9 @@
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use pixi_config::{Config, ConfigCli};
-use pixi_global::list::{list_all_global_environments, list_specific_global_environment};
+use pixi_global::list::{
+    list_all_global_environments, list_global_environments_json, list_specific_global_environment,
+};
 use pixi_global::{EnvironmentName, Project};
 use std::str::FromStr;
 
@@ -35,6 +37,10 @@ pub struct Args {
     /// Sorting strategy for the package table of an environment
     #[arg(long, default_value = "name", value_enum, requires = "environment")]
     sort_by: GlobalSortBy,
+
+    /// Whether to output in JSON format
+    #[arg(long)]
+    json: bool,
 }
 
 /// Sorting strategy for the package table
@@ -50,6 +56,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
+
+    if args.json {
+        let env_name = args
+            .environment
+            .map(|e| EnvironmentName::from_str(e.as_str()))
+            .transpose()?;
+        return list_global_environments_json(&project, env_name.as_ref(), args.regex).await;
+    }
 
     if let Some(environment) = args.environment {
         let env_name = EnvironmentName::from_str(environment.as_str())?;

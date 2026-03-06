@@ -80,6 +80,7 @@ impl DetailedSpec {
             url: None,
             extras: Default::default(),
             condition: None,
+            track_features: None,
         })
     }
 }

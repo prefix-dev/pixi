@@ -1,0 +1,32 @@
+[workspace]
+build-variants-files = ["./corp-pinning/conda_build_config.yaml"]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "variant-conda-config-python"
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+preview = ["pixi-build"]
+
+[dependencies]
+variant-conda-config-python = { path = "." }
+
+[package]
+name = "variant-conda-config-python"
+version = "1.0.0"
+
+[package.build.backend]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-python"
+version = "*"
+
+[package.host-dependencies]
+hatchling = "*"
+package3 = "*"
+python = "*"
+
+[package.build.config]
+noarch = false

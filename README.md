@@ -204,15 +204,15 @@ cargo install --locked --git https://github.com/prefix-dev/pixi.git pixi
 We don't publish to `crates.io` anymore, so you need to install it from the repository.
 The reason for this is that we depend on some unpublished crates which disallows us to publish to `crates.io`.
 
-or when you want to make changes use:
+If you install pixi that way, it isn't necessarily the first in your PATH.
+The one installed by the installation script might take precedence.
+Therefore, we recommend running the following task instead for local development:
 
 ```shell
-cargo build
-cargo test
+pixi run install-as pixid
 ```
 
-If you have any issues building because of the dependency on `rattler` checkout
-it's [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try)
+This way, a new binary called `pixid` will be available without any name conflicts with other Pixi installations on your system.
 
 ## Uninstall
 

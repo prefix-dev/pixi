@@ -16,7 +16,7 @@ use rattler_conda_types::{ChannelUrl, NoArchType, PackageName, Platform, Version
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{BinaryPackageSpecV1, PackageSpecV1, VariantValue, project_model::NamedSpecV1};
+use crate::{ConstraintSpec, PackageSpec, VariantValue, project_model::NamedSpec};
 
 pub const METHOD_NAME: &str = "conda/outputs";
 
@@ -163,11 +163,11 @@ pub struct CondaOutputMetadata {
 pub struct CondaOutputDependencies {
     /// A list of matchspecs that describe the dependencies of a particular
     /// environment.
-    pub depends: Vec<NamedSpecV1<PackageSpecV1>>,
+    pub depends: Vec<NamedSpec<PackageSpec>>,
 
     /// Additional constraints that apply to the environment in which the
     /// dependencies are solved. Constraints are represented as matchspecs.
-    pub constraints: Vec<NamedSpecV1<BinaryPackageSpecV1>>,
+    pub constraints: Vec<NamedSpec<ConstraintSpec>>,
 }
 
 /// Describes which run-exports should be ignored for a particular output.
@@ -187,23 +187,23 @@ pub struct CondaOutputIgnoreRunExports {
 #[serde(rename_all = "camelCase")]
 pub struct CondaOutputRunExports {
     /// weak run exports apply a dependency from host to run
-    pub weak: Vec<NamedSpecV1<PackageSpecV1>>,
+    pub weak: Vec<NamedSpec<PackageSpec>>,
 
     /// strong run exports apply a dependency from build to host and run
-    pub strong: Vec<NamedSpecV1<PackageSpecV1>>,
+    pub strong: Vec<NamedSpec<PackageSpec>>,
 
     /// noarch run exports apply a run export only to noarch packages (other run
     /// exports are ignored) for example, python uses this to apply a
     /// dependency on python to all noarch packages, but not to
     /// the python_abi package
-    pub noarch: Vec<NamedSpecV1<PackageSpecV1>>,
+    pub noarch: Vec<NamedSpec<PackageSpec>>,
 
     /// weak constrains apply a constrain dependency from host to run
-    pub weak_constrains: Vec<NamedSpecV1<BinaryPackageSpecV1>>,
+    pub weak_constrains: Vec<NamedSpec<ConstraintSpec>>,
 
     /// strong constrains apply a constrain dependency from build to host and
     /// run
-    pub strong_constrains: Vec<NamedSpecV1<BinaryPackageSpecV1>>,
+    pub strong_constrains: Vec<NamedSpec<ConstraintSpec>>,
 }
 
 // TODO: Multi-output caching is not yet supported.
@@ -214,18 +214,18 @@ pub struct CondaOutputRunExports {
 //     /// An optional name
 //     pub name: Option<String>,
 //
-//     /// The build dependencies of the package. These refer to the packages that
-//     /// should be installed in the "build" environment. The build environment
-//     /// contains packages for the current architecture that can be used to run
-//     /// tools on the current machine like compilers, code generators, etc.
-//     pub build_dependencies: Option<CondaOutputDependencies>,
+//     /// The build dependencies of the package. These refer to the packages
+// that     /// should be installed in the "build" environment. The build
+// environment     /// contains packages for the current architecture that can
+// be used to run     /// tools on the current machine like compilers, code
+// generators, etc.     pub build_dependencies: Option<CondaOutputDependencies>,
 //
-//     /// The "host" dependencies of the package. These refer to the package that
-//     /// should be installed to be able to refer to them from the build process
-//     /// but not run them. They are installed for the "target" architecture (see
-//     /// subdir) or for the current architecture if the target is `noarch`.
-//     /// For C++ packages these would be libraries to link against.
-//     pub host_dependencies: Option<CondaOutputDependencies>,
+//     /// The "host" dependencies of the package. These refer to the package
+// that     /// should be installed to be able to refer to them from the build
+// process     /// but not run them. They are installed for the "target"
+// architecture (see     /// subdir) or for the current architecture if the
+// target is `noarch`.     /// For C++ packages these would be libraries to link
+// against.     pub host_dependencies: Option<CondaOutputDependencies>,
 //
 //     /// Describes which run-exports should be ignored for this package.
 //     pub ignore_run_exports: CondaOutputIgnoreRunExports,

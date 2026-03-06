@@ -40,6 +40,7 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
         [workspace]
         channels = ["{channel_url}"]
         platforms = ["{platform}"]
+        conda-pypi-map = {{}}
 
         [pypi-dependencies]
         click = {{ version = "==8.2.0", index = "{pypi_index_url}" }}
@@ -89,15 +90,16 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
         .replace(&channel.url().to_string(), "[CHANNEL_URL]")
         .replace(&pypi_index_url.to_string(), "[PYPI_INDEX_URL]");
     assert_snapshot!(redacted_content, @r###"
-        [workspace]
-        channels = ["[CHANNEL_URL]"]
-        platforms = ["[PLATFORM]"]
+    [workspace]
+    channels = ["[CHANNEL_URL]"]
+    platforms = ["[PLATFORM]"]
+    conda-pypi-map = {}
 
-        [pypi-dependencies]
-        click = { version = ">=8.3.1, <9", index = "[PYPI_INDEX_URL]" }
+    [pypi-dependencies]
+    click = { version = ">=8.3.1, <9", index = "[PYPI_INDEX_URL]" }
 
-        [dependencies]
-        python = ">=3.12.0,<3.13"
+    [dependencies]
+    python = ">=3.12.0,<3.13"
     "###);
 }
 
@@ -239,10 +241,11 @@ async fn pypi_dependency_upgrade_uses_custom_index() {
     // Create manifest with foo pinned to 1.0.0, using custom index
     let pixi = PixiControl::from_manifest(&format!(
         r#"
-        [project]
+        [workspace]
         name = "pypi-upgrade-custom-index"
         platforms = ["{platform}"]
         channels = ["{channel}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
         python = "==3.12.0"

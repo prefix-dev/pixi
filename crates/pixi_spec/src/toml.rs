@@ -21,7 +21,7 @@ use url::Url;
 
 use crate::{
     BinarySpec, DetailedSpec, GitReference, GitSpec, PathSourceSpec, PathSpec, PixiSpec,
-    SourceLocationSpec, UrlSourceSpec, UrlSpec,
+    SourceLocationSpec, Subdirectory, SubdirectoryError, UrlSourceSpec, UrlSpec,
 };
 
 /// A TOML representation of a package specification.
@@ -171,6 +171,9 @@ pub enum SpecError {
 
     #[error(transparent)]
     NotABinary(NotBinary),
+
+    #[error(transparent)]
+    InvalidSubdirectory(#[from] SubdirectoryError),
 }
 
 #[derive(Error, Debug)]
@@ -189,6 +192,9 @@ pub enum SourceLocationSpecError {
 
     #[error("must specify one of `path`, `url`, or `git`")]
     NoSourceType,
+
+    #[error(transparent)]
+    InvalidSubdirectory(#[from] SubdirectoryError),
 }
 
 #[derive(Error, Debug)]
@@ -282,6 +288,11 @@ impl TomlSpec {
                     url,
                     md5: loc.md5,
                     sha256: loc.sha256,
+                    subdirectory: loc
+                        .subdirectory
+                        .map(Subdirectory::try_from)
+                        .transpose()?
+                        .unwrap_or_default(),
                 }),
                 (None, Some(path), None) => PixiSpec::Path(PathSpec { path: path.into() }),
                 (None, None, Some(git)) => {
@@ -294,7 +305,11 @@ impl TomlSpec {
                             return Err(SpecError::MultipleGitRefs);
                         }
                     };
-                    let subdirectory = loc.subdirectory;
+                    let subdirectory = loc
+                        .subdirectory
+                        .map(Subdirectory::try_from)
+                        .transpose()?
+                        .unwrap_or_default();
                     PixiSpec::Git(GitSpec {
                         git,
                         rev,
@@ -369,6 +384,11 @@ impl TomlSpec {
                         url,
                         md5: loc.md5,
                         sha256: loc.sha256,
+                        subdirectory: loc
+                            .subdirectory
+                            .map(Subdirectory::try_from)
+                            .transpose()?
+                            .unwrap_or_default(),
                     };
                     if let Either::Right(binary) = url_spec.into_source_or_binary() {
                         BinarySpec::Url(binary)
@@ -490,6 +510,11 @@ impl TomlLocationSpec {
                 url,
                 md5: self.md5,
                 sha256: self.sha256,
+                subdirectory: self
+                    .subdirectory
+                    .map(Subdirectory::try_from)
+                    .transpose()?
+                    .unwrap_or_default(),
             }),
             (None, Some(path), None) => {
                 SourceLocationSpec::Path(PathSourceSpec { path: path.into() })
@@ -504,7 +529,11 @@ impl TomlLocationSpec {
                         return Err(SourceLocationSpecError::MultipleGitRefs);
                     }
                 };
-                let subdirectory = self.subdirectory;
+                let subdirectory = self
+                    .subdirectory
+                    .map(Subdirectory::try_from)
+                    .transpose()?
+                    .unwrap_or_default();
                 SourceLocationSpec::Git(GitSpec {
                     git,
                     rev,

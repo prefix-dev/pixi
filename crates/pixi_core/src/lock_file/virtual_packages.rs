@@ -6,7 +6,7 @@ use pypi_modifiers::pypi_tags::{PyPITagError, get_tags_from_machine, is_python_r
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Matches, PackageName, PackageRecord};
 use rattler_conda_types::{ParseMatchSpecError, Platform};
-use rattler_lock::{ConversionError, LockFile, PypiPackageData};
+use rattler_lock::{CondaPackageData, ConversionError, LockFile, PypiPackageData};
 use rattler_virtual_packages::{
     DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
 };
@@ -166,19 +166,28 @@ pub(crate) fn validate_system_meets_environment_requirements(
         MachineValidationError::EnvironmentNotFound(environment_name.as_str().to_string()),
     )?;
 
-    // Retrieve the conda package records for the specified platform.
-    let Some(conda_data) = environment
-        .conda_repodata_records(platform)
-        .map_err(MachineValidationError::RepodataConversionError)?
-    else {
-        // Early out if there are no conda records, as we don't need to check for virtual packages
+    // Retrieve all conda packages for the specified platform (both binary and source).
+    let Some(conda_packages) = environment.conda_packages(platform) else {
+        // Early out if there are no packages, as we don't need to check for virtual packages
         return Ok(true);
     };
 
-    let conda_records: Vec<&PackageRecord> = conda_data
+    // Collect conda packages (both binary and source) into a vector of CondaPackageData
+    let conda_packages: Vec<&CondaPackageData> = conda_packages.collect_vec();
+
+    if conda_packages.is_empty() {
+        // Early out if there are no conda records, as we don't need to check for virtual packages
+        return Ok(true);
+    }
+
+    // Get package records from both binary and source packages
+    let conda_records = conda_packages
         .iter()
-        .map(|record| &record.package_record)
-        .collect();
+        .map(|data| match data {
+            CondaPackageData::Binary(binary) => &binary.package_record,
+            CondaPackageData::Source(source) => &source.package_record,
+        })
+        .collect_vec();
 
     // Get the virtual packages required by the conda records
     let required_virtual_packages =
@@ -260,34 +269,34 @@ pub(crate) fn validate_system_meets_environment_requirements(
     }
 
     // Check if the wheel tags match the system virtual packages if there are any
-    if environment.has_pypi_packages(platform) {
-        if let Some(pypi_packages) = environment.pypi_packages(platform) {
-            // Get python record from conda packages
-            let python_record = conda_records
-                .iter()
-                .find(|record| is_python_record(record))
-                .ok_or(MachineValidationError::NoPythonRecordFound(platform))?;
+    if environment.has_pypi_packages(platform)
+        && let Some(pypi_packages) = environment.pypi_packages(platform)
+    {
+        // Get python record from conda packages
+        let python_record = conda_records
+            .iter()
+            .find(|record| is_python_record(record))
+            .ok_or(MachineValidationError::NoPythonRecordFound(platform))?;
 
-            // Check if all the wheel tags match the system virtual packages
-            let pypi_packages = pypi_packages
-                .map(|(pkg_data, _)| pkg_data.clone())
-                .collect_vec();
+        // Check if all the wheel tags match the system virtual packages
+        let pypi_packages = pypi_packages
+            .map(|(pkg_data, _)| pkg_data.clone())
+            .collect_vec();
 
-            let wheels = get_wheels_from_pypi_package_data(pypi_packages);
+        let wheels = get_wheels_from_pypi_package_data(pypi_packages);
 
-            let uv_system_tags =
-                get_tags_from_machine(&system_virtual_packages, platform, python_record)?;
+        let uv_system_tags =
+            get_tags_from_machine(&system_virtual_packages, platform, python_record)?;
 
-            // Check if all the wheel tags match the system virtual packages
-            for wheel in wheels {
-                if !wheel.is_compatible(&uv_system_tags) {
-                    return Err(MachineValidationError::WheelTagsMismatch(
-                        wheel.to_string(),
-                        uv_system_tags.to_string(),
-                    ));
-                }
-                tracing::debug!("Wheel: {} matches the system", wheel);
+        // Check if all the wheel tags match the system virtual packages
+        for wheel in wheels {
+            if !wheel.is_compatible(&uv_system_tags) {
+                return Err(MachineValidationError::WheelTagsMismatch(
+                    wheel.to_string(),
+                    uv_system_tags.to_string(),
+                ));
             }
+            tracing::debug!("Wheel: {} matches the system", wheel);
         }
     }
     Ok(true)

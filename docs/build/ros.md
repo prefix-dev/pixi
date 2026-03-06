@@ -3,7 +3,7 @@ This guide shows how to build a ROS package into a conda package with Pixi using
 
 To understand the build feature, start with the general [Build Getting Started](./getting_started.md) guide.
 For ROS without Pixi building (not packaging), see the [ROS 2 tutorial](../tutorials/ros2.md).
-You may also want to read the backend documentation for [pixi-build-ros](https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-ros/).
+You may also want to read the backend documentation for [pixi-build-ros](backends/pixi-build-ros.md).
 
 !!! warning
     `pixi-build` is a preview feature and may change before stabilization.
@@ -147,7 +147,7 @@ You can now upload these artifacts to a conda channel and depend on them from ot
 
 - ROS distro and platform: pick the correct RoboStack channel (e.g. `robostack-humble`, `robostack-jazzy`) and ensure your platform is supported.
 - Keep `package.xml` accurate: name, version, license, maintainers, URLs, and dependencies are read automatically; but you can override them in the [pixi manifest](https://pixi.sh/latest/reference/pixi_manifest/#the-package-section).
-- Backend docs: see the [pixi-build-ros documentation](https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-ros/) for configuration details like `env`, `distro` and `extra-input-globs`.
+- Backend docs: see the [pixi-build-ros documentation](backends/pixi-build-ros.md) for configuration details like `env`, `distro` and `extra-input-globs`.
 - Colcon vs pixi build: you don’t need `colcon` when using `pixi`; the backend invokes the right build flow. But since you don't have to change your package structure, you can still use `colcon` if you want.
 - Not all ROS packages are available in RoboStack. If you depend on a package not in RoboStack, you can:
   - **Recommended:** Contribute to RoboStack to add it; see the [RoboStack Contributing page](https://robostack.github.io/Contributing.html)

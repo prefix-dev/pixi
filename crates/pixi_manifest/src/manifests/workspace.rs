@@ -233,10 +233,10 @@ impl WorkspaceManifestMut<'_> {
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Check if the task already exists
-        if let Ok(tasks) = self.workspace.tasks(platform, feature_name) {
-            if tasks.contains_key(&name) {
-                miette::bail!("task {} already exists", name);
-            }
+        if let Ok(tasks) = self.workspace.tasks(platform, feature_name)
+            && tasks.contains_key(&name)
+        {
+            miette::bail!("task {} already exists", name);
         }
 
         // Add the task to the Toml manifest
@@ -358,13 +358,17 @@ impl WorkspaceManifestMut<'_> {
     /// `ManifestProvenance::save` to persist the changes to disk.
     ///
     /// Returns the list of environments that were modified.
-    pub fn remove_feature(&mut self, feature_name: &FeatureName) -> miette::Result<Vec<String>> {
+    pub fn remove_feature(
+        &mut self,
+        feature_name: &FeatureName,
+    ) -> miette::Result<Vec<EnvironmentName>> {
         if feature_name.is_default() {
             miette::bail!("Cannot remove the default feature");
         }
 
         if self.workspace.features.get(feature_name).is_none() {
-            miette::bail!("Feature '{}' does not exist", feature_name);
+            tracing::warn!("Feature `{}` doesn't exist", feature_name);
+            return Ok(Vec::new());
         }
 
         self.workspace.features.shift_remove(feature_name);
@@ -417,7 +421,7 @@ impl WorkspaceManifestMut<'_> {
 
         let modified_environments = environments_using_feature
             .iter()
-            .map(|env| env.name.to_string())
+            .map(|env| env.name.clone())
             .collect();
 
         Ok(modified_environments)
@@ -743,6 +747,40 @@ impl WorkspaceManifestMut<'_> {
         channels.clear();
         for channel in current_clone.iter() {
             channels.push(Value::from(channel.clone()));
+        }
+
+        Ok(())
+    }
+
+    /// Sets / replaces all channels of a manifest.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_channels(
+        &mut self,
+        channels: impl IntoIterator<Item = PrioritizedChannel>,
+        feature_name: &FeatureName,
+    ) -> miette::Result<()> {
+        let channels: Vec<_> = channels.into_iter().collect();
+
+        // Get the current channels
+        let current = if feature_name.is_default() {
+            &mut self.workspace.workspace.channels
+        } else {
+            self.workspace
+                .get_or_insert_feature_mut(feature_name)
+                .channels_mut()
+        };
+
+        // Replace with the new channels
+        current.clear();
+        current.extend(channels.iter().cloned());
+
+        // Update the TOML document
+        let toml_channels = self.document.get_array_mut("channels", feature_name)?;
+        toml_channels.clear();
+        for channel in &channels {
+            toml_channels.push(Value::from(channel.clone()));
         }
 
         Ok(())
@@ -1978,9 +2016,7 @@ feature_target_dep = "*"
             String::from("foo description")
         );
 
-        manifest
-            .set_description(&String::from("my new description"))
-            .unwrap();
+        manifest.set_description("my new description").unwrap();
 
         assert_eq!(
             manifest
@@ -2984,16 +3020,20 @@ bar = "*"
         // Check the feature was removed from the manifest
         assert!(manifest.workspace.feature("test").is_none());
 
-        // Remove non-existent feature should return error
-        let result = manifest.remove_feature(&FeatureName::from_str("nonexistent").unwrap());
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("does not exist"));
+        // Remove non-existent feature should succeed
+        let result = manifest
+            .remove_feature(&FeatureName::from_str("nonexistent").unwrap())
+            .unwrap();
+        assert!(result.is_empty());
 
         // Remove feature used by environment should succeed and update environments
         let modified = manifest
             .remove_feature(&FeatureName::from_str("used").unwrap())
             .unwrap();
-        assert_eq!(modified, vec!["test-env"]);
+        assert_eq!(
+            modified,
+            vec![EnvironmentName::from_str("test-env").unwrap()]
+        );
 
         // Check the feature was removed from the manifest
         assert!(manifest.workspace.feature("used").is_none());
@@ -3120,6 +3160,98 @@ bar = "*"
             .map(|c| c.channel.to_string())
             .collect();
         assert_eq!(channels, vec!["pytorch", "conda-forge", "bioconda"]);
+    }
+
+    #[test]
+    fn test_set_channels() {
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = ["conda-forge", "nvidia"]
+platforms = ["linux-64", "win-64"]
+
+[feature.cuda]
+channels = ["nvidia", "pytorch"]
+    "#;
+
+        let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
+
+        // Verify initial state
+        let initial_channels: Vec<_> = manifest
+            .workspace
+            .workspace
+            .channels
+            .iter()
+            .map(|c| c.channel.to_string())
+            .collect();
+        assert_eq!(initial_channels, vec!["conda-forge", "nvidia"]);
+
+        // Set channels for default feature (replacing all existing channels)
+        let new_channels = vec![
+            PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("bioconda"))),
+            PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("conda-forge"))),
+        ];
+        manifest
+            .set_channels(new_channels, &FeatureName::DEFAULT)
+            .unwrap();
+
+        // Verify channels were replaced
+        let channels: Vec<_> = manifest
+            .workspace
+            .workspace
+            .channels
+            .iter()
+            .map(|c| c.channel.to_string())
+            .collect();
+        assert_eq!(channels, vec!["bioconda", "conda-forge"]);
+
+        // Set channels for cuda feature
+        let cuda_feature = FeatureName::from("cuda");
+        let cuda_channels = vec![PrioritizedChannel::from(NamedChannelOrUrl::Name(
+            String::from("cudachannel"),
+        ))];
+        manifest.set_channels(cuda_channels, &cuda_feature).unwrap();
+
+        // Verify cuda feature channels were replaced
+        let cuda_channels: Vec<_> = manifest
+            .workspace
+            .features
+            .get(&cuda_feature)
+            .unwrap()
+            .channels
+            .clone()
+            .unwrap()
+            .iter()
+            .map(|c| c.channel.to_string())
+            .collect();
+        assert_eq!(cuda_channels, vec!["cudachannel"]);
+
+        // Set empty channels
+        manifest
+            .set_channels(Vec::<PrioritizedChannel>::new(), &cuda_feature)
+            .unwrap();
+
+        // Verify cuda feature has empty channels
+        let cuda_channels = manifest
+            .workspace
+            .features
+            .get(&cuda_feature)
+            .unwrap()
+            .channels
+            .clone()
+            .unwrap();
+        assert!(cuda_channels.is_empty());
+
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = ["bioconda", "conda-forge"]
+        platforms = ["linux-64", "win-64"]
+
+        [feature.cuda]
+        channels = []
+        "###);
     }
 
     #[test]

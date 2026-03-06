@@ -73,15 +73,14 @@ impl TomlWorkspace {
             value: license,
             span,
         }) = &self.license
+            && let Err(e) = spdx::Expression::parse(license)
         {
-            if let Err(e) = spdx::Expression::parse(license) {
-                return Err(
-                    GenericError::new("'license' is not a valid SPDX expression")
-                        .with_span((*span).into())
-                        .with_span_label(e.to_string())
-                        .into(),
-                );
-            }
+            return Err(
+                GenericError::new("'license' is not a valid SPDX expression")
+                    .with_span((*span).into())
+                    .with_span_label(e.to_string())
+                    .into(),
+            );
         }
 
         let check_file_existence = |path: &Option<Spanned<PathBuf>>| {
@@ -393,14 +392,14 @@ mod test {
         let parse_error = TomlWorkspace::from_toml_str(input)
             .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), Some(path)))
             .unwrap_err();
-        assert_snapshot!(format_parse_error(input, parse_error), @r###"
-         × `date` is neither a valid date (input contains invalid characters) nor a valid datetime (input contains invalid characters)
+        assert_snapshot!(format_parse_error(input, parse_error), @r#"
+         × `date` is neither a valid date (input contains invalid characters) nor a valid datetime (premature end of input)
           ╭─[pixi.toml:4:26]
         3 │         platforms = []
         4 │         exclude-newer = "date"
           ·                          ────
         5 │
           ╰────
-        "###);
+        "#);
     }
 }

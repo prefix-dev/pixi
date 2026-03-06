@@ -1,0 +1,13 @@
+# serializer version: 1
+# name: test_project_model_initialization
+  'ProjectModel { name: Some("test_project"), build_string: None, build_number: None, version: Some(Version { version: [[0], [1], [0], [0]], local: [] }), description: None, authors: None, license: None, license_file: None, readme: None, homepage: None, repository: None, documentation: None, targets: None }'
+# ---
+# name: test_project_model_initialization_from_dict
+  'ProjectModel { name: Some("test_project"), build_string: None, build_number: None, version: Some(Version { version: [[0], [1], [0], [0]], local: [] }), description: None, authors: None, license: None, license_file: None, readme: None, homepage: None, repository: None, documentation: None, targets: None }'
+# ---
+# name: test_project_model_initialization_from_json
+  'ProjectModel { name: Some("test_project"), build_string: None, build_number: None, version: Some(Version { version: [[0], [1], [0], [0]], local: [] }), description: None, authors: None, license: None, license_file: None, readme: None, homepage: None, repository: None, documentation: None, targets: None }'
+# ---
+# name: test_project_model_initialization_from_json_file
+  'ProjectModel { name: Some("minimal-package"), build_string: None, build_number: None, version: Some(Version { version: [[0], [1], [0], [0]], local: [] }), description: None, authors: None, license: None, license_file: None, readme: None, homepage: None, repository: None, documentation: None, targets: Some(Targets { default_target: Some(Target { host_dependencies: Some({}), build_dependencies: Some({}), run_dependencies: Some({"python": Binary(NamelessMatchSpecV1 { version: Range(GreaterEquals, Version { version: [[0], [3], [8]], local: [] }) })}) }), targets: Some({Platform("Linux"): Target { host_dependencies: Some({"rich": Binary(NamelessMatchSpecV1 { version: Range(GreaterEquals, Version { version: [[0], [10], [0]], local: [] }) })}), build_dependencies: Some({}), run_dependencies: Some({}) }}) }) }'
+# ---

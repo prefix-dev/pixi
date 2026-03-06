@@ -1,0 +1,15 @@
+[project]
+description = "Variant manifest test package built with pixi-build-python."
+name = "variant-manifest-python"
+requires-python = ">=3.11"
+version = "1.0.0"
+
+[project.scripts]
+variant-manifest-python = "variant_manifest_python:main"
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["variant_manifest_python"]

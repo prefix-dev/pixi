@@ -171,6 +171,7 @@ pub struct InstalledDistOptions {
     installer: Option<String>,
     requires_python: Option<uv_pep440::VersionSpecifiers>,
     metadata_mtime: Option<std::time::SystemTime>,
+    cache_info: Option<uv_cache_info::CacheInfo>,
 }
 
 impl InstalledDistOptions {
@@ -185,8 +186,8 @@ impl InstalledDistOptions {
         self
     }
 
-    pub fn with_metadata_mtime(mut self, metadata_mtime: std::time::SystemTime) -> Self {
-        self.metadata_mtime = Some(metadata_mtime);
+    pub fn with_cache_info(mut self, cache_info: uv_cache_info::CacheInfo) -> Self {
+        self.cache_info = Some(cache_info);
         self
     }
 
@@ -265,6 +266,13 @@ impl MockedSitePackages {
             file.set_modified(metadata_mtime)
                 .expect("should set modified time");
             file.sync_all().expect("should sync file");
+        }
+
+        // Write the uv_cache.json file if cache_info is provided
+        if let Some(cache_info) = &opts.cache_info {
+            let json = serde_json::to_string(cache_info).expect("should serialize cache_info");
+            fs_err::write(dist_info.join("uv_cache.json"), json)
+                .expect("should write uv_cache.json");
         }
 
         dist_info

@@ -66,3 +66,6 @@ Masked versions of Python array API standard compatible arrays.
 - [pyfixest](https://github.com/py-econometrics/pyfixest):  Fast High-Dimensional Fixed Effects Regression in Python following fixest-syntax.
 - [geovista](https://github.com/bjlittle/geovista): Cartographic rendering and mesh analytics powered by [PyVista](https://github.com/pyvista/pyvista) 🌍
 - [SciPy](https://github.com/scipy/scipy): Fundamental algorithms for scientific computing in Python.
+- [Snakedown](https://github.com/savente93/snakedown) A fast and intuitive python API reference generator so you can host your docs with your favourite static site generator.
+- [Parcels](https://github.com/Parcels-code/parcels): A customisable Lagrangian simulation framework.
+- [Xarray](https://github.com/pydata/xarray): N-D labeled arrays and datasets in Python.

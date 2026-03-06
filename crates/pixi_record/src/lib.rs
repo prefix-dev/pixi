@@ -1,6 +1,10 @@
-mod path_utils;
+mod canonical_spec;
+mod dev_source_record;
 mod pinned_source;
 mod source_record;
+
+pub use canonical_spec::{CanonicalGit, CanonicalPath, CanonicalSourceLocation, CanonicalUrl};
+pub use dev_source_record::DevSourceRecord;
 
 use std::path::Path;
 
@@ -14,7 +18,7 @@ use rattler_conda_types::{
 };
 use rattler_lock::{CondaPackageData, ConversionError, UrlOrPath};
 use serde::Serialize;
-pub use source_record::{InputHash, SourceRecord};
+pub use source_record::{PinnedBuildSourceSpec, SourceRecord};
 use thiserror::Error;
 
 /// A record of a conda package that is either something installable from a

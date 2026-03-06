@@ -1,0 +1,11 @@
+[package]
+edition = "2024"
+name = "fast_math"
+version = "0.1.0"
+
+[lib]
+crate-type = ["cdylib"]
+name = "fast_math"
+
+[dependencies]
+pyo3 = "0.25.0"

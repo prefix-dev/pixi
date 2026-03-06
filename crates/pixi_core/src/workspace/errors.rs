@@ -32,8 +32,8 @@ impl Display for UnsupportedPlatformError {
             EnvironmentName::Default => {
                 write!(
                     f,
-                    "The project does not support '{}'.\n\
-                    Add it with 'pixi project platform add {}'.",
+                    "The workspace does not support '{}'.\n\
+                    Add it with 'pixi workspace platform add {}'.",
                     self.platform, self.platform
                 )
             }

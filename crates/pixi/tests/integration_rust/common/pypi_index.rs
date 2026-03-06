@@ -304,6 +304,74 @@ fn build_module(pkg: &PyPIPackage) -> (String, Vec<u8>) {
     (path, content)
 }
 
+/// Write a malformed wheel where the filename version doesn't match the METADATA version.
+/// This is used to test the UV_SKIP_WHEEL_FILENAME_CHECK environment variable.
+pub fn write_malformed_wheel(
+    out_dir: &Path,
+    filename_version: &str,
+    metadata_version: &str,
+    name: &str,
+) -> miette::Result<PathBuf> {
+    let wheel_name = format!(
+        "{}-{}-py3-none-any.whl",
+        normalize_dist_name(name),
+        filename_version
+    );
+    let wheel_path = out_dir.join(&wheel_name);
+
+    let file = std::fs::File::create(&wheel_path).into_diagnostic()?;
+    let mut zip = ZipWriter::new(file);
+    let options = SimpleFileOptions::default();
+
+    let dist_info = format!(
+        "{}-{}.dist-info",
+        normalize_dist_name(name),
+        metadata_version
+    );
+
+    // METADATA with different version than filename
+    let metadata = format!(
+        "Metadata-Version: 2.1\nName: {}\nVersion: {}\nSummary: Malformed test wheel\n",
+        name, metadata_version
+    );
+
+    // WHEEL file
+    let wheel_content = "Wheel-Version: 1.0\nGenerator: pixi-tests-malformed\nRoot-Is-Purelib: true\nTag: py3-none-any\n";
+
+    // Module file
+    let module_dir = normalize_dist_name(name).to_string();
+    let module_path = format!("{module_dir}/__init__.py");
+    let module_content = format!(
+        "# malformed test package\n__version__ = \"{}\"\n",
+        metadata_version
+    );
+
+    // Write module
+    zip.start_file(&module_path, options).into_diagnostic()?;
+    zip.write_all(module_content.as_bytes()).into_diagnostic()?;
+
+    // Write METADATA
+    let metadata_path = format!("{dist_info}/METADATA");
+    zip.start_file(&metadata_path, options).into_diagnostic()?;
+    zip.write_all(metadata.as_bytes()).into_diagnostic()?;
+
+    // Write WHEEL
+    let wheel_file_path = format!("{dist_info}/WHEEL");
+    zip.start_file(&wheel_file_path, options)
+        .into_diagnostic()?;
+    zip.write_all(wheel_content.as_bytes()).into_diagnostic()?;
+
+    // Build and write RECORD
+    let record_path = format!("{dist_info}/RECORD");
+    let record =
+        format!("{module_path},,\n{metadata_path},,\n{wheel_file_path},,\n{record_path},,\n");
+    zip.start_file(&record_path, options).into_diagnostic()?;
+    zip.write_all(record.as_bytes()).into_diagnostic()?;
+
+    zip.finish().into_diagnostic()?;
+    Ok(wheel_path)
+}
+
 /// Write a wheel to `out_dir` for the package.
 fn write_wheel(out_dir: &Path, pkg: &PyPIPackage) -> miette::Result<PathBuf> {
     let wheel_name = wheel_filename(pkg);

@@ -15,6 +15,7 @@ itertools = { workspace = true }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
+rattler_package_streaming = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }

@@ -30,6 +30,7 @@ use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home}
 use pixi_consts::consts::{self};
 use pixi_core::repodata::Repodata;
 use pixi_manifest::PrioritizedChannel;
+use pixi_path::AbsPathBuf;
 use pixi_progress::global_multi_progress;
 use pixi_record::PixiRecord;
 use pixi_reporters::TopLevelProgress;
@@ -42,7 +43,7 @@ use pixi_utils::{
 };
 use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
-    menuinst::MenuMode, package::ArchiveIdentifier,
+    menuinst::MenuMode, package::CondaArchiveIdentifier,
 };
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
@@ -1024,10 +1025,9 @@ impl Project {
             if !package_executables
                 .iter()
                 .any(|executable| executable.name.as_str() == package_name.as_normalized())
+                && let Some(exec) = find_binary_by_name(&prefix, package_name).await?
             {
-                if let Some(exec) = find_binary_by_name(&prefix, package_name).await? {
-                    package_executables.push(exec);
-                }
+                package_executables.push(exec);
             }
 
             executables_for_package.insert(package_name.clone(), package_executables);
@@ -1608,11 +1608,17 @@ impl Project {
         self.command_dispatcher.get_or_try_init(|| {
             let multi_progress = global_multi_progress();
             let anchor_pb = multi_progress.add(ProgressBar::hidden());
-            let cache_dirs = pixi_command_dispatcher::CacheDirs::new(
-                pixi_config::get_cache_dir()
-                    .map(|cache_dir| cache_dir.join(BUILD_DIR))
-                    .map_err(|e| CommandDispatcherError::CacheDirectory(e.into()))?,
-            );
+            let cache_dir_path = pixi_config::get_cache_dir()
+                .map(|cache_dir| cache_dir.join(BUILD_DIR))
+                .map_err(|e| CommandDispatcherError::CacheDirectory(e.into()))?;
+            let cache_dir = AbsPathBuf::new(cache_dir_path)
+                .expect("cache dir is not absolute")
+                .into_assume_dir();
+            let cache_dirs = pixi_command_dispatcher::CacheDirs::new(cache_dir);
+
+            let root_dir = AbsPathBuf::new(self.root.clone())
+                .expect("root dir is not absolute")
+                .into_assume_dir();
 
             Ok(pixi_command_dispatcher::CommandDispatcher::builder()
                 .with_gateway(
@@ -1621,7 +1627,7 @@ impl Project {
                         .clone(),
                 )
                 .with_cache_dirs(cache_dirs)
-                .with_root_dir(self.root.clone())
+                .with_root_dir(root_dir)
                 .with_download_client(
                     self.authenticated_client()
                         .map_err(|e| CommandDispatcherError::AuthenticatedClient(e.into()))?
@@ -1716,8 +1722,8 @@ impl Project {
             Either::Right(binary_spec) => match binary_spec {
                 BinarySpec::Path(PathBinarySpec { path }) => path
                     .file_name()
-                    .and_then(ArchiveIdentifier::try_from_filename)
-                    .and_then(|iden| PackageName::from_str(&iden.name).ok())
+                    .and_then(CondaArchiveIdentifier::try_from_filename)
+                    .and_then(|iden| PackageName::from_str(&iden.identifier.name).ok())
                     .ok_or(InferPackageNameError::UnsupportedSpecType),
                 _ => Err(InferPackageNameError::UnsupportedSpecType),
             },
@@ -1837,6 +1843,7 @@ mod tests {
     use itertools::Itertools;
     use rattler_conda_types::{
         NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
+        package::DistArchiveIdentifier,
     };
     use tempfile::tempdir;
     use url::Url;
@@ -2077,7 +2084,8 @@ mod tests {
 
         let repodata_record = RepoDataRecord {
             package_record: package_record.clone(),
-            file_name: "doesnt_matter.conda".to_string(),
+            identifier: DistArchiveIdentifier::try_from_filename("doesnt_matter-0-0.conda")
+                .expect("valid filename"),
             url: Url::from_str("https://also_doesnt_matter").unwrap(),
             channel: Some(format!(
                 "{}{}",
@@ -2100,7 +2108,8 @@ mod tests {
         // Test with different from default channel alias
         let repodata_record = RepoDataRecord {
             package_record: package_record.clone(),
-            file_name: "doesnt_matter.conda".to_string(),
+            identifier: DistArchiveIdentifier::try_from_filename("doesnt_matter-0-0.conda")
+                .expect("valid filename"),
             url: Url::from_str("https://also_doesnt_matter").unwrap(),
             channel: Some("https://test-channel.com/idk".to_string()),
         };

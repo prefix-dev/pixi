@@ -11,6 +11,16 @@ import tomli_w
 from .common import CONDA_FORGE_CHANNEL, CURRENT_PLATFORM, ExitCode, verify_cli_command
 
 
+def get_other_platform() -> str:
+    """Return a platform that is NOT the current platform."""
+    other_platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+    for p in other_platforms:
+        if p != CURRENT_PLATFORM:
+            return p
+
+    raise RuntimeError("This should never happen")
+
+
 @pytest.mark.extra_slow
 def test_pypi_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Test where we need to lookup recursive git dependencies and consider them first party"""
@@ -471,10 +481,10 @@ def test_help_warning_when_platform_not_supported(pixi: Path, tmp_pixi_workspace
     manifest_toml["workspace"]["platforms"] = []
     manifest_path.write_text(tomli_w.dumps(manifest_toml))
 
-    # Check if the command throws a warning
+    # Check if the command throws an error for unsupported platform
     verify_cli_command(
         [pixi, "run", "--manifest-path", tmp_pixi_workspace, "bla"],
-        ExitCode.COMMAND_NOT_FOUND,
+        ExitCode.FAILURE,
         stderr_contains=["pixi workspace platform add"],
     )
 
@@ -556,4 +566,71 @@ six = {{ path = "../local_project", editable = true }}
         ],
         stdout_contains="LOCAL",
         env=cache_env,
+    )
+
+
+def test_install_fails_on_unsupported_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that pixi install fails when run on an unsupported platform (issue #5071)"""
+    other_platform = get_other_platform()
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = f"""
+[workspace]
+name = "test"
+channels = []
+platforms = ["{other_platform}"]
+"""
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest],
+        ExitCode.FAILURE,
+        stderr_contains=[other_platform, CURRENT_PLATFORM],
+    )
+
+
+def test_run_fails_on_unsupported_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that pixi run fails when run on an unsupported platform (issue #5071)"""
+    other_platform = get_other_platform()
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = f"""
+[workspace]
+name = "test"
+channels = []
+platforms = ["{other_platform}"]
+
+[tasks]
+hello = "echo hello from unsupported platform test"
+"""
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "hello"],
+        ExitCode.FAILURE,
+        stderr_contains=[other_platform, CURRENT_PLATFORM],
+        stderr_excludes="hello from unsupported platform test",
+    )
+
+
+def test_run_as_is_works_on_unsupported_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that pixi run --as-is works even on an unsupported platform (issue #5071)
+
+    Since --as-is skips environment activation, it should not check platform compatibility.
+    """
+    other_platform = get_other_platform()
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = f"""
+[workspace]
+name = "test"
+channels = []
+platforms = ["{other_platform}"]
+
+[tasks]
+hello = "echo hello from as-is unsupported platform test"
+"""
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [pixi, "run", "--as-is", "--manifest-path", manifest, "hello"],
+        ExitCode.SUCCESS,
+        stdout_contains="hello from as-is unsupported platform test",
     )

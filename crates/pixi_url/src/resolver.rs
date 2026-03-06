@@ -23,7 +23,7 @@ impl UrlResolver {
     }
 
     /// Returns the precise hash for the URL if it is known.
-    fn get(&self, url: &Url) -> Option<Ref<Url, Sha256Hash>> {
+    fn get(&self, url: &Url) -> Option<Ref<'_, Url, Sha256Hash>> {
         self.0.get(url)
     }
 
@@ -35,10 +35,10 @@ impl UrlResolver {
         cache: PathBuf,
         progress: Option<Arc<dyn ProgressHandler>>,
     ) -> Result<Fetch, UrlError> {
-        if spec.sha256.is_none() {
-            if let Some(precise) = self.get(&spec.url) {
-                spec.sha256 = Some(*precise);
-            }
+        if spec.sha256.is_none()
+            && let Some(precise) = self.get(&spec.url)
+        {
+            spec.sha256 = Some(*precise);
         }
 
         let source = UrlSource::new(spec.clone(), client, cache);

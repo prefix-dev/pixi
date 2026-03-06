@@ -1,0 +1,29 @@
+context:
+  name: array-api-extra
+  version: "0.8.0"
+  python_min: "3.10"
+
+package:
+  name: ${{ name|lower }}
+  version: ${{ version }}
+
+source:
+  url: https://pypi.org/packages/source/${{ name[0] }}/${{ name }}/array_api_extra-${{ version }}.tar.gz
+  sha256: 1358c2111768317acf7ae5e397d04ed321ccc1f0c1d7a42347b0fba69f0bdf4e
+
+build:
+  noarch: python
+  script: ${{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
+
+requirements:
+  host:
+    - python ${{ python_min }}.*
+    - hatchling
+    - pip
+  run:
+    - python >=${{ python_min }}
+    - array-api-compat
+
+about:
+  license: MIT
+  license_file: LICENSE

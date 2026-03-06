@@ -9,6 +9,10 @@ use crate::{CommandDispatcherError, Reporter, command_dispatcher::GitCheckoutTas
 impl CommandDispatcherProcessor {
     /// Called when a [`ForegroundMessage::GitCheckout`] task was received.
     pub(crate) fn on_checkout_git(&mut self, task: GitCheckoutTask) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
         let repository_reference = RepositoryReference::from(&task.spec);
         match self.git_checkouts.entry(repository_reference.clone()) {
@@ -17,7 +21,10 @@ impl CommandDispatcherProcessor {
                 PendingGitCheckout::CheckedOut(fetch) => {
                     let _ = task.tx.send(Ok(fetch.clone()));
                 }
-                PendingGitCheckout::Errored => {
+                PendingGitCheckout::Errored(err) => {
+                    let _ = task.tx.send(Err(err.clone()));
+                }
+                PendingGitCheckout::Cancelled => {
                     // Drop the sender, this will cause a cancellation on the other side.
                     drop(task.tx);
                 }
@@ -51,7 +58,7 @@ impl CommandDispatcherProcessor {
                     task.cancellation_token
                         .run_until_cancelled_owned(async move {
                             resolver
-                                .fetch(task.spec.clone(), client, cache_dir, None)
+                                .fetch(task.spec.clone(), client, cache_dir.into(), None)
                                 .await
                                 .map_err(CommandDispatcherError::Failed)
                         })
@@ -99,22 +106,18 @@ impl CommandDispatcherProcessor {
                 self.git_checkouts
                     .insert(repository_reference, PendingGitCheckout::CheckedOut(fetch));
             }
-            Err(CommandDispatcherError::Failed(mut err)) => {
-                // Only send the error to the first channel, drop the rest, which cancels them.
-                for tx in pending.drain(..) {
-                    match tx.send(Err(err)) {
-                        Ok(_) => return,
-                        Err(Err(failed_to_send)) => err = failed_to_send,
-                        Err(Ok(_)) => unreachable!(),
-                    }
+            Err(CommandDispatcherError::Failed(err)) => {
+                // Clone the error and send to all waiting channels.
+                for tx in std::mem::take(pending) {
+                    let _ = tx.send(Err(err.clone()));
                 }
 
                 self.git_checkouts
-                    .insert(repository_reference, PendingGitCheckout::Errored);
+                    .insert(repository_reference, PendingGitCheckout::Errored(err));
             }
             Err(CommandDispatcherError::Cancelled) => {
                 self.git_checkouts
-                    .insert(repository_reference, PendingGitCheckout::Errored);
+                    .insert(repository_reference, PendingGitCheckout::Cancelled);
             }
         }
     }

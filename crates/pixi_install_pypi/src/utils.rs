@@ -1,7 +1,7 @@
-use std::{borrow::Cow, cmp::max, io, path::Path, str::FromStr, time::Duration};
+use std::{borrow::Cow, str::FromStr, time::Duration};
 
 use url::Url;
-use uv_cache_info::Timestamp;
+use uv_cache_info::{CacheInfo, CacheInfoError};
 use uv_distribution_types::InstalledDist;
 
 pub fn elapsed(duration: Duration) -> String {
@@ -38,77 +38,80 @@ pub fn strip_direct_scheme(url: &Url) -> Cow<'_, Url> {
         .unwrap_or(Cow::Borrowed(url))
 }
 
-/// ArchiveTimestamp is removed from uv,
-/// copy logic from ArchiveTimestamp::from_path to keep the same behavior
-fn uv_old_timestamp_from_path(path: impl AsRef<Path>) -> Result<Option<Timestamp>, io::Error> {
-    let metadata = fs_err::metadata(path.as_ref())?;
-    if metadata.is_file() {
-        Ok(Some(Timestamp::from_metadata(&metadata)))
-    } else {
-        // Compute the modification timestamp for the `pyproject.toml`, `setup.py`, and
-        // `setup.cfg` files, if they exist.
-        let pyproject_toml = path
-            .as_ref()
-            .join("pyproject.toml")
-            .metadata()
-            .ok()
-            .filter(std::fs::Metadata::is_file)
-            .as_ref()
-            .map(Timestamp::from_metadata);
-
-        let setup_py = path
-            .as_ref()
-            .join("setup.py")
-            .metadata()
-            .ok()
-            .filter(std::fs::Metadata::is_file)
-            .as_ref()
-            .map(Timestamp::from_metadata);
-
-        let setup_cfg = path
-            .as_ref()
-            .join("setup.cfg")
-            .metadata()
-            .ok()
-            .filter(std::fs::Metadata::is_file)
-            .as_ref()
-            .map(Timestamp::from_metadata);
-
-        // Take the most recent timestamp of the three files.
-        Ok(max(pyproject_toml, max(setup_py, setup_cfg)))
-    }
-}
-
-/// ArchiveTimestamp is removed from uv,
-/// copy logic from ArchiveTimestamp::up_to_date_with to keep the same behavior
-fn uv_old_up_to_date_with(source: &Path, target: &InstalledDist) -> Result<bool, io::Error> {
-    let Some(modified_at) = uv_old_timestamp_from_path(source)? else {
-        // If there's no entrypoint, we can't determine the modification time, so we assume that the
-        // target is not up-to-date.
-        return Ok(false);
-    };
-    let created_at = Timestamp::from_path(target.install_path().join("METADATA"))?;
-    Ok(modified_at <= created_at)
-}
-
-/// Check freshness of a locked url against an installed dist
+/// Check freshness of a locked url against an installed dist.
+///
+/// For directory sources (source distributions), this function uses uv's `CacheInfo`
+/// to determine if the source has changed since the package was installed. It compares
+/// the current source's CacheInfo against the stored CacheInfo (from uv_cache.json)
+/// that was captured at install time.
+///
+/// For file URLs pointing to files (wheel archives), freshness is determined by
+/// comparing file timestamps since wheels are immutable artifacts.
+///
+/// This respects `[tool.uv].cache-keys` from pyproject.toml, falling back to uv's
+/// defaults (pyproject.toml, setup.py, setup.cfg, and the src/ directory).
 pub fn check_url_freshness(
     locked_url: &Url,
     installed_dist: &InstalledDist,
-) -> Result<bool, std::io::Error> {
-    if let Ok(archive) = locked_url.to_file_path() {
-        // This checks the entrypoints like `pyproject.toml`, `setup.cfg`, and
-        // `setup.py` against the METADATA of the installed distribution
-        if uv_old_up_to_date_with(&archive, installed_dist)? {
-            tracing::debug!("Requirement already satisfied (and up-to-date): {installed_dist}");
-            Ok(true)
-        } else {
-            tracing::debug!("Requirement already satisfied (but not up-to-date): {installed_dist}");
-            Ok(false)
+) -> Result<bool, CacheInfoError> {
+    if let Ok(source_path) = locked_url.to_file_path() {
+        // For files (wheels), use simple timestamp comparison
+        if source_path.is_file() {
+            // For wheel files, compare the file's modification time against METADATA
+            let source_timestamp =
+                uv_cache_info::Timestamp::from_path(&source_path).map_err(CacheInfoError::Io)?;
+            let installed_timestamp =
+                uv_cache_info::Timestamp::from_path(installed_dist.install_path().join("METADATA"))
+                    .map_err(CacheInfoError::Io)?;
+
+            let is_fresh = source_timestamp <= installed_timestamp;
+            tracing::debug!(
+                "archive freshness check for {installed_dist}: source_ts={source_timestamp:?}, installed_ts={installed_timestamp:?}, is_fresh={is_fresh}"
+            );
+            return Ok(is_fresh);
         }
+
+        // For directories (source distributions), use CacheInfo comparison
+        // Get current source cache info (reads [tool.uv.cache-keys] if present, else uses defaults)
+        let source_cache_info = CacheInfo::from_path(&source_path)?;
+
+        // Get the stored cache info from the installed distribution (uv_cache.json)
+        let installed_cache_info = match InstalledDist::read_cache_info(
+            installed_dist.install_path(),
+        ) {
+            Ok(Some(cache_info)) => cache_info,
+            Ok(None) => {
+                // No stored cache info (older installation or non-uv install)
+                // Fall back to assuming not up-to-date to trigger a rebuild
+                tracing::debug!(
+                    "no stored cache info for {installed_dist}, assuming not up-to-date"
+                );
+                return Ok(false);
+            }
+            Err(err) => {
+                tracing::debug!(
+                    "failed to read stored cache info for {installed_dist}: {err}, assuming not up-to-date"
+                );
+                return Ok(false);
+            }
+        };
+
+        // Compare CacheInfo objects - if they match, the source hasn't changed
+        let is_fresh = source_cache_info == installed_cache_info;
+
+        tracing::debug!(
+            "freshness check for {installed_dist}: source={source_cache_info:?}, installed={installed_cache_info:?}, is_fresh={is_fresh}"
+        );
+
+        if is_fresh {
+            tracing::debug!("requirement already satisfied (and up-to-date): {installed_dist}");
+        } else {
+            tracing::debug!("requirement already satisfied (but not up-to-date): {installed_dist}");
+        }
+        Ok(is_fresh)
     } else {
-        // Otherwise, assume the requirement is up-to-date.
-        tracing::debug!("Requirement already satisfied (assumed up-to-date): {installed_dist}");
+        // Non-local URLs assumed up-to-date
+        tracing::debug!("requirement already satisfied (assumed up-to-date): {installed_dist}");
         Ok(true)
     }
 }

@@ -244,6 +244,7 @@ pub async fn execute() -> miette::Result<()> {
         Box::new(
             miette::MietteHandlerOpts::default()
                 .color(use_colors)
+                .with_syntax_highlighting(miette_arborium::MietteHighlighter::new())
                 // Don't wrap lines in CI environments or when explicitly specified to avoid
                 // breaking logs and tests.
                 .wrap_lines(!in_ci && !no_wrap)

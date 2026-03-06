@@ -100,8 +100,101 @@ async fn conda_solve_group_functionality() {
     );
 }
 
+#[tokio::test]
+async fn conda_solve_group_heterogeneous_platforms() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+
+    // Add `foo` available on both linux-64 and win-64
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_subdir(Platform::Linux64)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_subdir(Platform::Win64)
+            .finish(),
+    );
+
+    // Add `bar` available only on linux-64
+    package_database.add_package(
+        Package::build("bar", "1")
+            .with_subdir(Platform::Linux64)
+            .finish(),
+    );
+
+    // Write the repodata to disk
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let channel = Url::from_file_path(channel_dir.path()).unwrap();
+
+    // The `linux-only` feature restricts to linux-64 and adds `bar`.
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-heterogeneous-platforms"
+    channels = ["{channel}"]
+    platforms = ["linux-64", "win-64"]
+
+    [dependencies]
+    foo = "*"
+
+    [feature.linux-only]
+    platforms = ["linux-64"]
+
+    [feature.linux-only.dependencies]
+    bar = "*"
+
+    [environments]
+    full = {{ solve-group = "group1" }}
+    restricted = {{ features = ["linux-only"], solve-group = "group1" }}
+    "#
+    ))
+    .unwrap();
+
+    // Solving should succeed for both platforms.
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // `full` environment: has `foo` on both platforms, no `bar`
+    assert!(
+        lock_file.contains_match_spec("full", Platform::Linux64, "foo ==1"),
+        "full/linux-64 should have foo"
+    );
+    assert!(
+        lock_file.contains_match_spec("full", Platform::Win64, "foo ==1"),
+        "full/win-64 should have foo"
+    );
+    assert!(
+        !lock_file.contains_conda_package("full", Platform::Win64, "bar"),
+        "full/win-64 should not have bar"
+    );
+    assert!(
+        !lock_file.contains_conda_package("full", Platform::Linux64, "bar"),
+        "full/linux-64 should not have bar"
+    );
+
+    // `restricted` environment: only supports linux-64, should have both foo and bar
+    assert!(
+        lock_file.contains_match_spec("restricted", Platform::Linux64, "foo ==1"),
+        "restricted/linux-64 should have foo"
+    );
+    assert!(
+        lock_file.contains_match_spec("restricted", Platform::Linux64, "bar ==1"),
+        "restricted/linux-64 should have bar"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_purl_are_added_for_pypi() {
     setup_tracing();
 
@@ -182,8 +275,8 @@ async fn test_purl_are_missing_for_non_conda_forge() {
     let foo_bar_package = Package::build("foo-bar-car", "2").finish();
 
     let mut repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "foo-bar-car".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
         channel: Some("dummy-channel".to_owned()),
     };
@@ -218,8 +311,8 @@ async fn test_purl_are_generated_using_custom_mapping() {
     let foo_bar_package = Package::build("foo-bar-car", "2").finish();
 
     let mut repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "foo-bar-car".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
@@ -266,8 +359,8 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
     let foo_bar_package = Package::build("pandoc", "2").finish();
 
     let mut repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "pandoc".to_owned(),
         url: Url::parse("https://haskell.org/pandoc/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
@@ -307,15 +400,15 @@ async fn test_dont_record_not_present_package_as_purl() {
     let boltons_package = Package::build("boltons", "99999").finish();
 
     let mut repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "pixi-something-new-for-test".to_owned(),
         url: Url::parse("https://pypi.org/simple/something-new/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/osx-arm64/brotli-python-1.1.0-py311ha891d26_1.conda".to_owned()),
     };
 
     let mut boltons_repo_data_record = RepoDataRecord {
+        identifier: boltons_package.identifier(),
         package_record: boltons_package.package_record,
-        file_name: "boltons".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
@@ -418,15 +511,15 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     let boltons_package = Package::build("boltons", "2").finish();
 
     let repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "pixi-something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
     let boltons_repo_data_record = RepoDataRecord {
+        identifier: boltons_package.identifier(),
         package_record: boltons_package.package_record,
-        file_name: "boltons".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
@@ -497,8 +590,8 @@ async fn test_custom_mapping_channel_with_suffix() {
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
 
     let repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "pixi-something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge".to_owned()),
     };
@@ -554,8 +647,8 @@ async fn test_repo_data_record_channel_with_suffix() {
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
 
     let repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "pixi-something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
@@ -610,8 +703,8 @@ async fn test_path_channel() {
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
 
     let repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "pixi-something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
         channel: Some("file:///home/user/staged-recipes/build_artifacts".to_owned()),
     };
@@ -688,8 +781,8 @@ async fn test_file_url_as_mapping_location() {
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
 
     let repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "pixi-something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
@@ -750,8 +843,8 @@ async fn test_disabled_mapping() {
     let boltons_package = Package::build("boltons", "2").finish();
 
     let boltons_repo_data_record = RepoDataRecord {
+        identifier: boltons_package.identifier(),
         package_record: boltons_package.package_record,
-        file_name: "boltons".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
@@ -1018,8 +1111,8 @@ async fn test_missing_mapping_file_error_includes_path() {
     let foo_bar_package = Package::build("foo-bar-car", "2").finish();
 
     let mut repo_data_record = RepoDataRecord {
+        identifier: foo_bar_package.identifier(),
         package_record: foo_bar_package.package_record,
-        file_name: "foo-bar-car".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };

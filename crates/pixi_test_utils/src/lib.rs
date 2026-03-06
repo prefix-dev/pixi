@@ -6,7 +6,9 @@ pub mod git_fixture;
 pub mod mock_repo_data;
 
 pub use git_fixture::GitRepoFixture;
-pub use mock_repo_data::{LocalChannel, MockRepoData, Package, PackageBuilder};
+pub use mock_repo_data::{
+    LocalChannel, MockRepoData, Package, PackageBuilder, create_conda_package,
+};
 
 /// Format a TOML parse error into a string that can be used to generate
 /// snapshots.

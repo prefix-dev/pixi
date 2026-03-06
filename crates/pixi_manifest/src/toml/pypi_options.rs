@@ -133,6 +133,8 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
 
         let no_binary = th.optional::<NoBinary>("no-binary");
 
+        let skip_wheel_filename_check = th.optional::<bool>("skip-wheel-filename-check");
+
         th.finalize(None)?;
 
         Ok(Self {
@@ -145,6 +147,7 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
             no_build,
             dependency_overrides,
             no_binary,
+            skip_wheel_filename_check,
         })
     }
 }
@@ -294,11 +297,13 @@ mod test {
                 no_build: Default::default(),
                 dependency_overrides: Some(indexmap::IndexMap::from_iter([(
                     PypiPackageName::from_str("numpy").unwrap(),
-                    pixi_pypi_spec::PixiPypiSpec::RawVersion(
-                        pixi_pypi_spec::VersionOrStar::from_str(">=2.0.0").unwrap()
-                    )
+                    pixi_pypi_spec::PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Registry {
+                        version: pixi_pypi_spec::VersionOrStar::from_str(">=2.0.0").unwrap(),
+                        index: None,
+                    })
                 )]),),
                 no_binary: Default::default(),
+                skip_wheel_filename_check: None,
             },
         );
     }

@@ -21,7 +21,7 @@ LIBRARY_CONFIGS: dict[str, dict[str, Any]] = {
         "patch_url": "https://github.com/astral-sh/uv",
     },
     "rattler": {
-        "pattern": r"^(rattler.*|file_url|simple_spawn_blocking|tools|path_resolver|coalesced_map)$",
+        "pattern": r"^(rattler(_.*)?|file_url|simple_spawn_blocking|tools|path_resolver|coalesced_map)$",
         "default_path": "../rattler",
         "git_url": None,  # Rattler deps don't use git currently
         "patch_url": "crates-io",  # Use [patch.crates-io] for rattler

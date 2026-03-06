@@ -1,0 +1,13 @@
+package:
+  name: simple-app
+  version: 0.1.0
+
+build:
+  number: 0
+  script:
+    - echo Building package simple-app
+    - if: win
+      then:
+        - exit /b 1
+      else:
+        - exit 1

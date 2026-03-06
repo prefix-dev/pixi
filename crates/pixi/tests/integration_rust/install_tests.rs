@@ -6,6 +6,7 @@ use std::{
     sync::LazyLock,
 };
 
+use dunce::canonicalize;
 use fs_err::tokio as tokio_fs;
 use pixi_cli::run::{self, Args};
 use pixi_cli::{
@@ -32,6 +33,7 @@ use uv_configuration::RAYON_INITIALIZE;
 use uv_normalize::PackageName;
 use uv_python::PythonEnvironment;
 
+use crate::common::pypi_index::PyPIPackage;
 use crate::common::{
     LockFileExt, PixiControl,
     builders::{
@@ -44,7 +46,10 @@ use pixi_test_utils::{MockRepoData, Package};
 /// Should add a python version to the environment and lock file that matches
 /// the specified version and run it
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn install_run_python() {
     setup_tracing();
 
@@ -175,7 +180,10 @@ async fn test_incremental_lock_file() {
 
 /// Test the `pixi install --locked` functionality.
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn install_locked_with_config() {
     setup_tracing();
 
@@ -278,7 +286,10 @@ async fn install_locked_with_config() {
 
 /// Test `pixi install/run --frozen` functionality
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn install_frozen() {
     setup_tracing();
 
@@ -357,7 +368,10 @@ async fn is_conda_package_installed(prefix_path: &Path, package_name: &str) -> b
 
 /// Test `pixi install --frozen --skip` functionality
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn install_frozen_skip() {
     setup_tracing();
 
@@ -422,7 +436,10 @@ async fn install_frozen_skip() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn pypi_reinstall_python() {
     setup_tracing();
 
@@ -479,7 +496,10 @@ async fn pypi_reinstall_python() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 // Check if we add and remove a pypi package that the site-packages is cleared
 async fn pypi_add_remove() {
     setup_tracing();
@@ -587,7 +607,10 @@ async fn install_conda_meta_history() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn minimal_lockfile_update_pypi() {
     setup_tracing();
 
@@ -633,7 +656,10 @@ async fn minimal_lockfile_update_pypi() {
 /// then change the installer back and see if it reinstalls the package
 /// with a new version
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_installer_name() {
     setup_tracing();
 
@@ -731,7 +757,10 @@ async fn test_old_lock_install() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_no_build_isolation() {
     setup_tracing();
 
@@ -815,7 +844,10 @@ setup(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_no_build_isolation_with_dependencies() {
     setup_tracing();
 
@@ -938,7 +970,10 @@ setup(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_setuptools_override_failure() {
     setup_tracing();
 
@@ -982,7 +1017,10 @@ async fn test_setuptools_override_failure() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_many_linux_wheel_tag() {
     setup_tracing();
 
@@ -1060,7 +1098,10 @@ async fn test_ensure_gitignore_file_creation() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn pypi_prefix_is_not_created_when_whl() {
     setup_tracing();
 
@@ -1101,9 +1142,29 @@ async fn pypi_prefix_is_not_created_when_whl() {
 /// This should result in the PyPI package being overridden on linux and not on
 /// osxarm64.
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn conda_pypi_override_correct_per_platform() {
     setup_tracing();
+
+    // Create local conda channel with Python for multiple platforms
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_db.add_package(
+        Package::build("boltons", "1.0.0")
+            .with_subdir(Platform::NoArch)
+            .with_pypi_purl("boltons")
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    // Create local PyPI index with test packages
+    let pypi_index = crate::common::pypi_index::Database::new()
+        .with(PyPIPackage::new("boltons", "1.0.0"))
+        .into_simple_index()
+        .unwrap();
 
     let pixi = PixiControl::new().unwrap();
     pixi.init_with_platforms(vec![
@@ -1112,9 +1173,19 @@ async fn conda_pypi_override_correct_per_platform() {
         Platform::Win64.to_string(),
         Platform::Osx64.to_string(),
     ])
+    .with_local_channel(channel.url().to_file_path().unwrap())
     .await
     .unwrap();
     pixi.add("python==3.12").with_install(false).await.unwrap();
+
+    // Add pypi-options to the manifest
+    let manifest = pixi.manifest_contents().unwrap();
+    let updated_manifest = format!(
+        "{}\n[pypi-options]\nindex-url = \"{}\"\n",
+        manifest,
+        pypi_index.index_url()
+    );
+    pixi.update_manifest(&updated_manifest).unwrap();
 
     // Add a conda package that is only available on linux
     pixi.add("boltons")
@@ -1157,8 +1228,10 @@ async fn conda_pypi_override_correct_per_platform() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_multiple_prefix_update() {
     setup_tracing();
 
@@ -1208,8 +1281,8 @@ async fn test_multiple_prefix_update() {
         .finish();
 
     let python_repo_data_record = RepoDataRecord {
+        identifier: python_package.identifier(),
         package_record: python_package.package_record,
-        file_name: "python".to_owned(),
         url: Url::parse(url).unwrap(),
         channel: Some("https://repo.prefix.dev/conda-forge/".to_owned()),
     };
@@ -1222,8 +1295,8 @@ async fn test_multiple_prefix_update() {
         .finish();
 
     let wheel_repo_data_record = RepoDataRecord {
+        identifier: wheel_package.identifier(),
         package_record: wheel_package.package_record,
-        file_name: "wheel".to_owned(),
         url: Url::parse(
             "https://repo.prefix.dev/conda-forge/noarch/wheel-0.45.1-pyhd8ed1ab_1.conda",
         )
@@ -1455,7 +1528,10 @@ async fn test_exclude_newer() {
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn test_exclude_newer_pypi() {
     setup_tracing();
 
@@ -1485,4 +1561,150 @@ async fn test_exclude_newer_pypi() {
         Platform::current(),
         "boltons ==20.2.1".parse().unwrap()
     ));
+}
+
+/// Test that UV_SKIP_WHEEL_FILENAME_CHECK environment variable and pypi-option are respected
+/// when installing wheels with version mismatch between filename and metadata
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
+async fn test_uv_skip_wheel_filename_check() {
+    setup_tracing();
+
+    // Create a malformed wheel with version mismatch
+    // Filename says 1.0.0, but METADATA says 2.0.0
+    let wheels_dir = tempdir().unwrap();
+    crate::common::pypi_index::write_malformed_wheel(
+        wheels_dir.path(),
+        "1.0.0", // filename version
+        "2.0.0", // metadata version
+        "test-malformed",
+    )
+    .unwrap();
+
+    let current_platform = Platform::current();
+    let wheel_path = canonicalize(
+        wheels_dir
+            .path()
+            .join("test_malformed-1.0.0-py3-none-any.whl"),
+    )
+    .expect("failed to canonicalize wheel path")
+    .display()
+    .to_string()
+    .replace('\\', "/"); // Convert Windows backslashes to forward slashes for TOML
+
+    // Test 1: Environment variable UV_SKIP_WHEEL_FILENAME_CHECK=1
+    let manifest_env_var = format!(
+        r#"
+    [project]
+    name = "test-malformed-wheel-env"
+    channels = ["https://prefix.dev/conda-forge"]
+    platforms = ["{current_platform}"]
+
+    [dependencies]
+    python = "3.12.*"
+
+    [pypi-dependencies]
+    test-malformed = {{ path = "{wheel_path}" }}
+    "#
+    );
+
+    let pixi =
+        PixiControl::from_manifest(&manifest_env_var).expect("cannot instantiate pixi project");
+
+    // Installation should succeed with UV_SKIP_WHEEL_FILENAME_CHECK=1
+    temp_env::async_with_vars([("UV_SKIP_WHEEL_FILENAME_CHECK", Some("1"))], async {
+        pixi.install()
+            .await
+            .expect("Installation should succeed with UV_SKIP_WHEEL_FILENAME_CHECK=1");
+    })
+    .await;
+
+    // Verify the package is installed
+    let prefix_path = pixi.default_env_path().unwrap();
+    let cache = uv_cache::Cache::temp().unwrap();
+    let env = create_uv_environment(&prefix_path, &cache);
+    assert!(
+        is_pypi_package_installed(&env, "test-malformed"),
+        "Package should be installed with UV_SKIP_WHEEL_FILENAME_CHECK=1"
+    );
+
+    // Test 2: pypi-option skip-wheel-filename-check = true
+    let manifest_pypi_option = format!(
+        r#"
+    [project]
+    name = "test-malformed-wheel-option"
+    channels = ["https://prefix.dev/conda-forge"]
+    platforms = ["{current_platform}"]
+
+    [dependencies]
+    python = "3.12.*"
+
+    [pypi-options]
+    skip-wheel-filename-check = true
+
+    [pypi-dependencies]
+    test-malformed = {{ path = "{wheel_path}" }}
+    "#
+    );
+
+    let pixi_option =
+        PixiControl::from_manifest(&manifest_pypi_option).expect("cannot instantiate pixi project");
+
+    // Installation should succeed with pypi-option
+    pixi_option
+        .install()
+        .await
+        .expect("Installation should succeed with skip-wheel-filename-check = true");
+
+    // Verify the package is installed
+    let prefix_path = pixi_option.default_env_path().unwrap();
+    let cache = uv_cache::Cache::temp().unwrap();
+    let env = create_uv_environment(&prefix_path, &cache);
+    assert!(
+        is_pypi_package_installed(&env, "test-malformed"),
+        "Package should be installed with skip-wheel-filename-check = true"
+    );
+
+    // Test 3: Environment variable takes precedence over pypi-option
+    let manifest_precedence = format!(
+        r#"
+    [project]
+    name = "test-malformed-wheel-precedence"
+    channels = ["https://prefix.dev/conda-forge"]
+    platforms = ["{current_platform}"]
+
+    [dependencies]
+    python = "3.12.*"
+
+    [pypi-options]
+    skip-wheel-filename-check = false
+
+    [pypi-dependencies]
+    test-malformed = {{ path = "{wheel_path}" }}
+    "#
+    );
+
+    let pixi_precedence =
+        PixiControl::from_manifest(&manifest_precedence).expect("cannot instantiate pixi project");
+
+    // Installation should succeed because env var overrides pypi-option
+    temp_env::async_with_vars([("UV_SKIP_WHEEL_FILENAME_CHECK", Some("1"))], async {
+        pixi_precedence
+            .install()
+            .await
+            .expect("Installation should succeed when env var overrides pypi-option");
+    })
+    .await;
+
+    // Verify the package is installed
+    let prefix_path = pixi_precedence.default_env_path().unwrap();
+    let cache = uv_cache::Cache::temp().unwrap();
+    let env = create_uv_environment(&prefix_path, &cache);
+    assert!(
+        is_pypi_package_installed(&env, "test-malformed"),
+        "Package should be installed when env var takes precedence"
+    );
 }

@@ -44,7 +44,6 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
         for v in value {
             mirrors.push(Mirror {
                 url: ensure_trailing_slash(v),
-                no_jlap: false,
                 no_bz2: false,
                 no_zstd: false,
                 max_failures: None,
@@ -57,7 +56,7 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
 }
 
 pub fn oci_middleware() -> OciMiddleware {
-    OciMiddleware
+    OciMiddleware::new(LazyClient::default())
 }
 
 static DEFAULT_REQWEST_USER_AGENT: LazyLock<String> =
@@ -69,25 +68,32 @@ static DEFAULT_REQWEST_IDLE_PER_HOST: usize = 20;
 ///
 /// For `native-tls` builds, this always returns `true` since the system TLS library is used.
 /// For `rustls-tls` builds, this returns `true` if the config is set to `Native` or `All`.
-pub fn should_use_native_tls_for_uv(config: &Config) -> bool {
+pub fn should_use_native_tls_for_uv() -> bool {
+    tls_backend() == "native-tls"
+}
+
+/// Determines whether we should load all builtin certificates
+/// for uv
+pub fn should_use_builtin_certs_uv(config: &Config) -> bool {
+    matches!(config.tls_root_certs(), pixi_config::TlsRootCerts::All)
+}
+
+/// Returns the name of the TLS backend used by this build.
+///
+/// This is determined at compile time based on the enabled features.
+pub fn tls_backend() -> &'static str {
     #[cfg(feature = "native-tls")]
     {
-        let _ = config;
-        return true;
+        return "native-tls";
     }
 
     #[cfg(not(feature = "native-tls"))]
     {
-        matches!(
-            config.tls_root_certs(),
-            pixi_config::TlsRootCerts::Native | pixi_config::TlsRootCerts::All
-        )
+        "rustls"
     }
 }
 
 pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest::ClientBuilder> {
-    use pixi_config::TlsRootCerts;
-
     let mut builder = Client::builder()
         .pool_max_idle_per_host(DEFAULT_REQWEST_IDLE_PER_HOST)
         .user_agent(DEFAULT_REQWEST_USER_AGENT.as_str())
@@ -109,6 +115,7 @@ pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest
 
     #[cfg(feature = "rustls-tls")]
     {
+        use pixi_config::TlsRootCerts;
         let tls_root_certs = config.map(|c| c.tls_root_certs()).unwrap_or_default();
 
         builder = builder.use_rustls_tls().tls_built_in_root_certs(false); // Disable auto-loading to choose explicitly
@@ -147,6 +154,14 @@ pub fn build_reqwest_middleware_stack(
 ) -> miette::Result<Box<[Arc<dyn Middleware>]>> {
     let mut result: Vec<Arc<dyn Middleware>> = Vec::new();
 
+    // Retry middleware must come before mirror middleware so that when a mirror
+    // returns a server error (e.g. 500), the retry will go through the mirror
+    // middleware again, which will then select a different mirror due to the
+    // recorded failure.
+    result.push(Arc::new(RetryTransientMiddleware::new_with_policy(
+        default_retry_policy(),
+    )));
+
     if !config.mirror_map().is_empty() {
         result.push(Arc::new(mirror_middleware(config)));
         result.push(Arc::new(oci_middleware()));
@@ -166,10 +181,6 @@ pub fn build_reqwest_middleware_stack(
     result.push(Arc::new(
         get_auth_middleware(config).expect("could not create auth middleware"),
     ));
-
-    result.push(Arc::new(RetryTransientMiddleware::new_with_policy(
-        default_retry_policy(),
-    )));
 
     Ok(result.into_boxed_slice())
 }

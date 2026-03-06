@@ -62,9 +62,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if let Some(format) = &args.format {
         import(args.clone(), format).await
     } else if let Ok(result) = import(args.clone(), &ImportFileFormat::CondaEnv).await {
-        return Ok(result);
+        Ok(result)
     } else if let Ok(result) = import(args, &ImportFileFormat::PypiTxt).await {
-        return Ok(result);
+        Ok(result)
     } else {
         miette::bail!(
             "Tried all formats for input file, but none were successful. Pass a `format` argument to see the specific error for that format."

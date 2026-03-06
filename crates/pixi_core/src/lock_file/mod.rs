@@ -18,8 +18,8 @@ use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 pub use records_by_name::{PixiRecordsByName, PypiRecordsByName};
 pub use resolve::pypi::resolve_pypi;
 pub use satisfiability::{
-    EnvironmentUnsat, PlatformUnsat, verify_environment_satisfiability,
-    verify_platform_satisfiability,
+    Dependency, EnvironmentUnsat, PlatformUnsat, resolve_dev_dependencies,
+    verify_environment_satisfiability, verify_platform_satisfiability,
 };
 pub use update::{
     LockFileDerivedData, PackageFilterNames, ReinstallEnvironment, ReinstallPackages,

@@ -12,9 +12,9 @@ pub use capabilities::{BackendCapabilities, FrontendCapabilities};
 pub use channel_configuration::ChannelConfiguration;
 pub use conda_package_metadata::CondaPackageMetadata;
 pub use project_model::{
-    BinaryPackageSpecV1, GitReferenceV1, GitSpecV1, NamedSpecV1, PackageSpecV1, PathSpecV1,
-    ProjectModelV1, SourcePackageName, SourcePackageSpecV1, TargetSelectorV1, TargetV1, TargetsV1,
-    UrlSpecV1, VersionedProjectModel,
+    BinaryPackageSpec, ConstraintSpec, GitReference, GitSpec, NamedSpec, PackageSpec, PathSpec,
+    PinBound, PinCompatibleSpec, PinExpression, ProjectModel, SourcePackageLocationSpec,
+    SourcePackageName, SourcePackageSpec, Target, TargetSelector, Targets, UrlSpec,
 };
 use rattler_conda_types::{
     GenericVirtualPackage, PackageName, Platform, Version, VersionSpec,
@@ -27,14 +27,15 @@ pub use variant::VariantValue;
 // Version 1: Added conda/outputs and conda/build_v1
 // Version 2: Name in project models can be `None`.
 // Version 3: Outputs with the same name must have unique variants.
+// Version 4: (BREAKING) Add matchspec fields to source record, cleanup types, remove version from project model and streamline use of directory vs dir.
 
 /// The constraint for the pixi build api version package
 /// Adding this constraint when solving a pixi build backend environment ensures
 /// that a backend is selected that uses the same interface version as Pixi does
 pub static PIXI_BUILD_API_VERSION_NAME: LazyLock<PackageName> =
     LazyLock::new(|| PackageName::new_unchecked("pixi-build-api-version"));
-pub const PIXI_BUILD_API_VERSION_LOWER: u64 = 1;
-pub const PIXI_BUILD_API_VERSION_CURRENT: u64 = 3;
+pub const PIXI_BUILD_API_VERSION_LOWER: u64 = 4;
+pub const PIXI_BUILD_API_VERSION_CURRENT: u64 = 4;
 pub const PIXI_BUILD_API_VERSION_UPPER: u64 = PIXI_BUILD_API_VERSION_CURRENT + 1;
 pub static PIXI_BUILD_API_VERSION_SPEC: LazyLock<VersionSpec> = LazyLock::new(|| {
     VersionSpec::Group(
@@ -82,13 +83,15 @@ impl PixiBuildApiVersion {
             1 => BackendCapabilities {
                 provides_conda_outputs: Some(true),
                 provides_conda_build_v1: Some(true),
-                highest_supported_project_model: Some(1),
             },
             2 => BackendCapabilities {
                 ..Self(1).expected_backend_capabilities()
             },
             3 => BackendCapabilities {
                 ..Self(2).expected_backend_capabilities()
+            },
+            4 => BackendCapabilities {
+                ..Self(3).expected_backend_capabilities()
             },
             _ => BackendCapabilities::default(),
         }

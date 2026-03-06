@@ -127,6 +127,20 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
             let default_env = self.project.default_environment();
             // If the default environment has the task
             if let Ok(default_env_task) = default_env.task(&name, self.platform) {
+                // If the task in the default environment declares a `default-environment`
+                // and that environment exists and can run on this platform, prefer that
+                // environment instead of returning the default environment.
+                if let Some(default_env_name) = default_env_task.default_environment()
+                    && let Some(env) = self
+                        .project
+                        .environments()
+                        .into_iter()
+                        .find(|e| e.name() == default_env_name)
+                    && verify_current_platform_can_run_environment(&env, None).is_ok()
+                    && let Ok(task_in_env) = env.task(&name, self.platform)
+                {
+                    return Ok((env.clone(), task_in_env));
+                }
                 // If no other environment has the task name but a different task, return the
                 // default environment
                 if !self
@@ -357,5 +371,121 @@ mod tests {
         // Ambiguous task because it is the same name and code but it is defined in
         // different environments
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
+    }
+
+    #[test]
+    fn test_default_environment_preferred_when_multiple_envs() {
+        let manifest_str = r#"
+            [workspace]
+            channels = []
+            platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
+
+            [tasks]
+            test = "echo test"
+            test2 = "echo test2"
+            dep.depends-on = ["test3", "test6"]
+
+            [feature.test.tasks]
+            test3 = { cmd = "echo test3", default-environment = "three" }
+            test4 = "echo test4"
+
+            [feature.test2.tasks]
+            test5 = "echo test5"
+            test6 = { cmd = "echo test6", default-environment = "four" }
+
+            [environments]
+            one = []
+            two = ["test"]
+            three = ["test2", "test"]
+            four = ["test2"]
+            five = ["test", "test2"]
+            six = { features = ["test"], no-default-feature = true }
+            seven = { features = ["test2"], no-default-feature = true }
+        "#;
+
+        let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+
+        // Build a SearchEnvironments that will prefer a candidate environment
+        // whose task declares a `default-environment` matching the env name.
+        let search = SearchEnvironments::from_opt_env(&project, None, None).with_disambiguate_fn(
+            |amb: &AmbiguousTask| {
+                amb.environments
+                    .iter()
+                    .find(|(env, task)| {
+                        if let Some(default_env_name) = task.default_environment() {
+                            default_env_name == env.name()
+                        } else {
+                            false
+                        }
+                    })
+                    .cloned()
+            },
+        );
+
+        // When resolving `test3` we expect the it to pick `three`.
+        let result = search
+            .find_task("test3".into(), FindTaskSource::CmdArgs, None)
+            .expect("should pick default environment");
+        assert_eq!(result.0.name().as_str(), "three");
+    }
+
+    #[test]
+    fn test_explicit_environment_overrides_task_default_environment() {
+        let manifest_str = r#"
+            [project]
+            name = "foo"
+            channels = []
+            platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
+
+            [feature.test.tasks]
+            test3 = { cmd = "echo test3", default-environment = "three" }
+
+            [feature.test2.tasks]
+            test3 = "echo other"
+
+            [environments]
+            default = ["test"]
+            two = ["test2"]
+            three = ["test"]
+        "#;
+
+        let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+
+        // If the user explicitly requests `two`, that should be preferred even
+        // though the task has a `default-environment` set to `three`.
+        let explicit_env = project.environment("two").unwrap();
+        let search = SearchEnvironments::from_opt_env(&project, Some(explicit_env), None);
+        let result = search.find_task("test3".into(), FindTaskSource::CmdArgs, None);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().0.name().as_str(), "two");
+    }
+
+    #[test]
+    fn test_top_level_task_default_environment_is_used() {
+        let manifest_str = r#"
+            [workspace]
+            channels = []
+            platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
+
+            [tasks]
+            test = { cmd = "echo test", default-environment = "test" }
+
+            [feature.test.dependencies]
+
+            [environments]
+            test = ["test"]
+        "#;
+
+        let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+
+        // Build a SearchEnvironments that will apply default behavior.
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+
+        // Resolve `test` task; since the task declares `default-environment = "test"`
+        // we expect the resolved environment to be `test` rather than the default.
+        let result = search
+            .find_task("test".into(), FindTaskSource::CmdArgs, None)
+            .expect("should resolve to an environment");
+        assert_eq!(result.0.name().as_str(), "test");
     }
 }

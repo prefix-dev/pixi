@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-
+use pixi_path::AbsPresumedDirPathBuf;
 use pixi_record::{PinnedSourceSpec, PinnedUrlSpec};
 use pixi_spec::UrlSpec;
 pub use pixi_url::UrlError;
@@ -10,12 +9,13 @@ use crate::{CommandDispatcher, CommandDispatcherError, SourceCheckout, SourceChe
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UrlCheckout {
     pub pinned_url: PinnedUrlSpec,
+
     /// Directory which contains checkout.
-    pub dir: PathBuf,
+    pub dir: AbsPresumedDirPathBuf,
 }
 
 impl UrlCheckout {
-    pub fn into_path(self) -> PathBuf {
+    pub fn into_path(self) -> AbsPresumedDirPathBuf {
         self.dir
     }
 }
@@ -40,7 +40,7 @@ impl CommandDispatcher {
             .map_err(|err| err.map(SourceCheckoutError::from))?;
 
         Ok(SourceCheckout {
-            path: dir,
+            path: dir.into(),
             pinned: PinnedSourceSpec::Url(pinned_url),
         })
     }
@@ -64,6 +64,7 @@ impl CommandDispatcher {
             url: pinned_url_spec.url.clone(),
             md5: pinned_url_spec.md5,
             sha256: Some(pinned_url_spec.sha256),
+            subdirectory: pinned_url_spec.subdirectory.clone(),
         };
         // Fetch the url in the background
         let fetch = self
@@ -71,16 +72,17 @@ impl CommandDispatcher {
             .await
             .map_err(|err| err.map(SourceCheckoutError::from))?;
 
-        // TODO: Similar to TODO above.
-        // let path = if let Some(subdir) = url_spec.source.subdirectory.as_ref() {
-        //     fetch.path().join(subdir)
-        // } else {
-        //     fetch.into_path()
-        // };
-        let path = fetch.into_path();
+        let path = if !pinned_url_spec.subdirectory.is_empty() {
+            fetch
+                .dir
+                .join(pinned_url_spec.subdirectory.as_path())
+                .into_assume_dir()
+        } else {
+            fetch.into_path()
+        };
 
         Ok(SourceCheckout {
-            path,
+            path: path.into(),
             pinned: PinnedSourceSpec::Url(pinned_url_spec),
         })
     }

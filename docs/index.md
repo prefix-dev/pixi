@@ -6,16 +6,6 @@ template: home.html
 
 Pixi is a **fast, modern, and reproducible** package management tool for developers of all backgrounds.
 
-=== "Linux & macOS"
-    ```shell
-    curl -fsSL https://pixi.sh/install.sh | sh
-    ```
-=== "Windows"
-    ```powershell
-    powershell -ExecutionPolicy Bypass -c "irm -useb https://pixi.sh/install.ps1 | iex"
-    ```
-More installation options can be found [here](installation.md).
-
 ## Highlights
 
 - [🔄 **Reproducibility**](workspace/lockfile.md)  
@@ -27,13 +17,16 @@ More installation options can be found [here](installation.md).
 - [🌐 **Multi Platform**](workspace/multi_platform_configuration.md)  
   Works on Linux, macOS, Windows, and more.
 
-- [🧩 **Multi Environment**](workspace/multi_environment.md)  
+- [🧩 **Multiple Environments**](workspace/multi_environment.md)  
   Compose multiple environments in one manifest.
 
 - [🐍 **Python**](python/tutorial.md)  
   Support for `pyproject.toml` and PyPI through uv.
 
-- [🌍 **Global Tools**](global_tools/introduction.md)  
+- [💾 **Disk Efficient**](workspace/environment.md#de-duplication)
+  Environments share files through hard links or reflinks, so packages are stored only once.
+
+- [🌍 **Global Tools**](global_tools/introduction.md)
   Install global tools, safely isolated. Replacing `apt`, `homebrew`, `winget`.
 
 ---
@@ -84,7 +77,7 @@ Pixi defaults to the **biggest Conda package repository**, [conda-forge](https:/
 - **C/C++**: [`clang`](https://prefix.dev/channels/conda-forge/packages/clang), [`boost`](https://prefix.dev/channels/conda-forge/packages/libboost-devel), [`opencv`](https://prefix.dev/channels/conda-forge/packages/opencv), [`ninja`](https://prefix.dev/channels/conda-forge/packages/ninja)
 - **Java**: [`openjdk`](https://prefix.dev/channels/conda-forge/packages/openjdk), [`gradle`](https://prefix.dev/channels/conda-forge/packages/gradle), [`maven`](https://prefix.dev/channels/conda-forge/packages/maven)
 - **Rust**: [`rust`](https://prefix.dev/channels/conda-forge/packages/rust), [`cargo-edit`](https://prefix.dev/channels/conda-forge/packages/cargo-edit), [`cargo-insta`](https://prefix.dev/channels/conda-forge/packages/cargo-insta)
-- **Node.js**: [`nodejs`](https://prefix.dev/channels/conda-forge/packages/nodejs), [`pnpm`](https://prefix.dev/channels/conda-forge/packages/pnpm), [`eslint`](https://prefix.dev/channels/conda-forge/packages/eslint)
+- **Node.js**: [`nodejs`](https://prefix.dev/channels/conda-forge/packages/nodejs), [`bun`](https://prefix.dev/channels/conda-forge/packages/bun), [`pnpm`](https://prefix.dev/channels/conda-forge/packages/pnpm), [`eslint`](https://prefix.dev/channels/conda-forge/packages/eslint)
 - **Cli Tools**: [`git`](https://prefix.dev/channels/conda-forge/packages/git), [`gh`](https://prefix.dev/channels/conda-forge/packages/gh), [`ripgrep`](https://prefix.dev/channels/conda-forge/packages/ripgrep), [`make`](https://prefix.dev/channels/conda-forge/packages/make)
 
 And browse the thousands more on [prefix.dev](https://prefix.dev/), or host [your own channels](https://prefix.dev/channels/)
@@ -128,7 +121,7 @@ To install `pixi`, run:
     pixi init hello-world
     cd hello-world
     ```
-    2. **Add dependencies:**
+    2. **Add dependencies into the default environment:**
         ```
         pixi add cowpy python
         ```
@@ -155,7 +148,7 @@ To install `pixi`, run:
                     ||----w |
                     ||     ||
         ```
-    7. **Entry the environment shell:**
+    7. **Enter the shell into the environment:**
         ```
         pixi shell
         python hello.py

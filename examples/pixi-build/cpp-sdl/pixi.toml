@@ -1,5 +1,8 @@
 [workspace]
-channels = ["https://prefix.dev/conda-forge"]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 preview = ["pixi-build"]
 

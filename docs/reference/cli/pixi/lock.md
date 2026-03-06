@@ -18,13 +18,15 @@ pixi lock [OPTIONS]
 :  Output the changes in JSON format
 - <a id="arg---check" href="#arg---check">`--check`</a>
 :  Check if any changes have been made to the lock file. If yes, exit with a non-zero code
+- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run`</a>
+:  Compute the lock file without writing to disk. Implies --no-install
 
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock-file
 
 ## Global Options
-- <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
+- <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 --8<-- "docs/reference/cli/pixi/lock_extender:example"

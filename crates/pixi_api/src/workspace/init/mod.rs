@@ -79,6 +79,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
             .to_string();
 
         let env_vars = env_file.variables();
+
         // TODO: Improve this:
         //  - Use .condarc as channel config
         let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
@@ -93,6 +94,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
             &vec![],
             config.s3_options,
             Some(&env_vars),
+            options.conda_pypi_mapping.as_ref(),
         );
         let mut workspace =
             WorkspaceMut::from_template(pixi_manifest_path, rendered_workspace_template)?;
@@ -205,17 +207,27 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
 
             // Create a 'pyproject.toml' manifest
         } else if pyproject {
-            // Python package names cannot contain '-', so we replace them with '_'
-            let pypi_package_name = PackageName::from_str(&default_name)
+            // PyPI package names must not start or end with '-', '_', or '.',
+            // so strip those boundary characters before normalizing.
+            let pypi_safe_name = {
+                let trimmed = default_name.trim_matches(|c: char| matches!(c, '_' | '-' | '.'));
+                if trimmed.is_empty() {
+                    "workspace".to_string()
+                } else {
+                    trimmed.to_string()
+                }
+            };
+            // Normalize separators to '-' as PyPI dist-info convention requires.
+            let pypi_package_name = PackageName::from_str(&pypi_safe_name)
                 .map(|name| name.as_dist_info_name().to_string())
-                .unwrap_or_else(|_| default_name.clone());
+                .unwrap_or_else(|_| pypi_safe_name.clone());
 
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,
                     template::NEW_PYROJECT_TEMPLATE,
                     context! {
-                        name => default_name,
+                        name => pypi_safe_name,
                         pypi_package_name,
                         version,
                         author,
@@ -279,6 +291,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
                 &extra_index_urls,
                 config.s3_options,
                 None,
+                options.conda_pypi_mapping.as_ref(),
             );
             save_manifest_file(interface, &path, rv).await?;
             Workspace::from_path(&path)?
@@ -330,6 +343,7 @@ fn render_workspace(
     extra_index_urls: &Vec<Url>,
     s3_options: HashMap<String, pixi_config::S3Options>,
     env_vars: Option<&HashMap<String, String>>,
+    pypi_mapping: Option<&HashMap<NamedChannelOrUrl, String>>,
 ) -> String {
     let ctx = context! {
         name,
@@ -342,6 +356,13 @@ fn render_workspace(
         s3 => relevant_s3_options(s3_options, channels),
         env_vars => {if let Some(env_vars) = env_vars {
             env_vars.iter().map(|(k, v)| format!("{k} = \"{v}\"")).collect::<Vec<String>>().join(", ")
+        } else {String::new()}},
+        pypi_mapping => {if let Some(pypi_mapping) = pypi_mapping {
+            if pypi_mapping.is_empty() {
+                String::from(" ")
+            } else {
+                pypi_mapping.iter().map(|(k, v)| format!("\"{k}\" = \"{v}\"")).collect::<Vec<String>>().join(", ")
+            }
         } else {String::new()}},
     };
 

@@ -244,10 +244,10 @@ fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathB
     let write_path = if common_args.system {
         pixi_config::config_path_system()
     } else {
-        if let Some(root) = determine_project_root(common_args)? {
-            if !common_args.global {
-                return Ok(root.join(consts::PIXI_DIR).join(consts::CONFIG_FILE));
-            }
+        if let Some(root) = determine_project_root(common_args)?
+            && !common_args.global
+        {
+            return Ok(root.join(consts::PIXI_DIR).join(consts::CONFIG_FILE));
         }
 
         let mut global_locations = pixi_config::config_path_global();

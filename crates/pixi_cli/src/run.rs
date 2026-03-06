@@ -26,7 +26,7 @@ use pixi_manifest::{FeaturesExt, TaskName};
 use pixi_progress::global_multi_progress;
 use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
-    SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
+    PreferExecutable, SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
 };
 use rattler_conda_types::Platform;
 use thiserror::Error;
@@ -49,6 +49,12 @@ pub struct Args {
     /// The pixi task or a task shell command you want to run in the workspace's
     /// environment, which can be an executable in the environment's PATH.
     pub task: Vec<String>,
+
+    /// Execute the command as an executable without resolving Pixi tasks.
+    ///
+    /// Useful when a task name and an executable have the same name.
+    #[arg(long = "executable", short = 'x')]
+    pub executable: bool,
 
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
@@ -77,6 +83,14 @@ pub struct Args {
     /// definition)
     #[arg(long)]
     pub skip_deps: bool,
+
+    /// Enable template rendering for the command arguments.
+    ///
+    /// By default, arguments passed to `pixi run` on the command line are not
+    /// processed by the template engine. Use this flag to enable rendering
+    /// of template variables like `{{ pixi.platform }}`.
+    #[arg(long)]
+    pub templated: bool,
 
     /// Run the task in dry-run mode (only print the command that would run)
     #[clap(short = 'n', long)]
@@ -135,6 +149,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let best_platform = environment.best_platform();
 
+    // Check if the current platform is supported, but only when we're going to
+    // install/activate. Without installs we skip environment activation,
+    // so platform doesn't matter.
+    if args.lock_and_install_config.allow_installs()
+        && !environment.platforms().contains(&best_platform)
+    {
+        return Err(UnsupportedPlatformError {
+            environments_platforms: environment.platforms().into_iter().collect(),
+            environment: environment.name().clone(),
+            platform: best_platform,
+        }
+        .into());
+    }
+
     // Ensure that the lock-file is up-to-date.
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
@@ -152,17 +180,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     });
 
-    // Construct a task graph from the input arguments
-    let search_environment = SearchEnvironments::from_opt_env(
+    // Construct a task graph from the input arguments.
+    // When installs are allowed, filter by platform since we are activating
+    // an environment and the platform matters.
+    let search_platform = if args.lock_and_install_config.allow_installs() {
+        Some(best_platform)
+    } else {
+        None
+    };
+    let search_environment =
+        SearchEnvironments::from_opt_env(&workspace, explicit_environment.clone(), search_platform)
+            .with_disambiguate_fn(disambiguate_task_interactive);
+
+    let task_graph = TaskGraph::from_cmd_args(
         &workspace,
-        explicit_environment.clone(),
-        Some(best_platform),
-    )
-    .with_disambiguate_fn(disambiguate_task_interactive);
-
-    let task_graph =
-        TaskGraph::from_cmd_args(&workspace, &search_environment, args.task, args.skip_deps)?;
-
+        &search_environment,
+        args.task,
+        args.skip_deps,
+        if args.executable {
+            PreferExecutable::Always
+        } else {
+            PreferExecutable::TaskFirst
+        },
+        args.templated,
+    )?;
     tracing::debug!("Task graph: {}", task_graph);
 
     // Print dry-run message if dry-run mode is enabled
@@ -184,8 +225,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // make sure that child processes are killed when pixi stops
     let _drop_guard = signal.clone().drop_guard();
 
+    let init_cwd = std::env::current_dir().ok();
     for task_id in task_graph.topological_order() {
-        let executable_task = ExecutableTask::from_task_graph(&task_graph, task_id);
+        let executable_task =
+            ExecutableTask::from_task_graph(&task_graph, task_id, init_cwd.clone());
 
         // If the task is not executable (e.g. an alias), we skip it. This ensures we
         // don't instantiate a prefix for an alias.
@@ -424,6 +467,19 @@ async fn execute_task(
 fn disambiguate_task_interactive<'p>(
     problem: &AmbiguousTask<'p>,
 ) -> Option<TaskAndEnvironment<'p>> {
+    // If any of the candidate tasks declares a `default-environment` that
+    // corresponds to one of the candidate environments, prefer that
+    // environment automatically.
+    if let Some(idx) = problem.environments.iter().position(|(env, task)| {
+        if let Some(default_env_name) = task.default_environment() {
+            default_env_name == env.name()
+        } else {
+            false
+        }
+    }) {
+        return Some(problem.environments[idx].clone());
+    }
+
     let environment_names = problem
         .environments
         .iter()

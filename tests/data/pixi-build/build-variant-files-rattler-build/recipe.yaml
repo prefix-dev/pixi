@@ -1,0 +1,21 @@
+package:
+  name: variant-files
+  version: 1.0.0
+
+requirements:
+  host:
+    - package3
+
+build:
+  number: 0
+  script:
+    - if: win
+      then:
+        - if not exist "%PREFIX%" mkdir "%PREFIX%"
+        - echo @echo off > %PREFIX%\\bin\\variant-files.bat
+        - echo echo variants from file >> %PREFIX%\\bin\\variant-files.bat
+      else:
+        - mkdir -p $PREFIX/bin
+        - echo "#!/usr/bin/env bash" > $PREFIX/bin/variant-files
+        - echo "echo variants from file" >> $PREFIX/bin/variant-files
+        - chmod +x $PREFIX/bin/variant-files

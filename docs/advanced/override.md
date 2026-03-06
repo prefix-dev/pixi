@@ -2,7 +2,8 @@
 
 Sometimes our direct dependency declares outdated intermediate dependency or is too tight to solve with other direct dependencies. In this case, we can override the intermediate dependency in our `pyproject.toml`or `pixi.toml` file.
 
-> [!Note] This option is not recommended unless you know what you are doing, as uv will ignore all the version constraints of the dependency and use the version you specified.
+!!! note
+    This option is not recommended unless you know what you are doing, as uv will ignore all the version constraints of the dependency and use the version you specified.
 
 ## Example
 ### Override a dependency version
@@ -30,7 +31,8 @@ numpy = ">=2.0.0"
 This will override the version of `numpy` used by all dependencies in the `dev` feature to be at least `2.0.0`, regardless of what the dependencies specify when the `dev` feature is enabled.
 
 ### Interact with other overrides
-For a specific environment, all the `dependency-overrides` defined in different features will be combined in the order they were when defining the environment.
+
+For a specific environment, all the `dependency-overrides` defined in different features will be combined in the order they were defined.
 
 If the same dependency is overridden multiple times, we'll use the override from the **prior** feature in that environment.
 
@@ -63,4 +65,6 @@ outdated: `numpy == 1.21.0`
 conflict_a: `numpy == 1.21.0` (from `outdated`)
 conflict_b: `numpy == 2.0.0` (from `dev`)
 
-This may contrast with the intuition that all overrides are applied and combined to a result, but it is done this way to avoid conflicts and confusion. Since users are granted fully control over the overrides, it is up to ourselves to choose the right overrides for the environment.
+This may contrast with the intuition that all overrides are applied and combined to a result. It
+is done this way to avoid conflicts and confusion: Since users are granted fully control over the
+overrides, it is up to them to choose the right overrides for an environment.

@@ -1,35 +1,8 @@
 ---
 source: crates/pixi_build_discovery/tests/discovery.rs
-expression: backend
+expression: "pixi_test_utils :: format_diagnostic(& err)"
 input_file: tests/data/discovery/ros-package/TEST-CASE
 ---
-backend-spec:
-  type: json-rpc
-  name: pixi-build-ros
-  command:
-    type: environment-spec
-    requirement:
-      - pixi-build-ros
-      - "*"
-    channels:
-      - "https://conda.anaconda.org/conda-forge"
-      - "https://prefix.dev/pixi-build-backends"
-init-params:
-  workspace-root: "file://<ROOT>/ros-package"
-  source: ~
-  source-anchor: "file://<ROOT>/ros-package"
-  manifest-path: "file://<ROOT>/ros-package/package.xml"
-  project-model:
-    name: ~
-    version: ~
-    description: ~
-    authors: ~
-    license: ~
-    licenseFile: ~
-    readme: ~
-    homepage: ~
-    repository: ~
-    documentation: ~
-    targets: ~
-  configuration: ~
-  target-configuration: ~
+  × the source directory '<CARGO_ROOT>/tests/data/discovery/ros-package', does not contain a supported manifest
+  help: ROS packages require you to specify the 'package.xml' file path directly, due to supporting more backends in the future. Or ensure that the source directory contains a valid manifest file:
+        pixi.toml, pyproject.toml, mojoproject.toml, recipe.yaml, recipe.yml.

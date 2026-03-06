@@ -411,14 +411,6 @@ impl AsRef<str> for ExposedName {
     }
 }
 
-/// Represents an error that occurs when parsing an binary exposed name.
-///
-/// This error is returned when a string fails to be parsed as an environment
-/// name.
-#[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
-#[error("pixi is not allowed as exposed name in the map")]
-pub struct ParseExposedKeyError {}
-
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;

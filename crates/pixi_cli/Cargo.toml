@@ -38,6 +38,7 @@ indicatif = { workspace = true }
 is_executable = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
+miette-arborium = { version = "2.5.0", features = ["lang-toml"] }
 pathdiff = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_api = { workspace = true }
@@ -51,6 +52,7 @@ pixi_diff = { workspace = true }
 pixi_git = { workspace = true }
 pixi_global = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
+pixi_path = { workspace = true }
 pixi_progress = { workspace = true }
 pixi_pypi_spec = { workspace = true }
 pixi_record = { workspace = true }
@@ -58,9 +60,7 @@ pixi_reporters = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_task = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
-pixi_uv_context = { workspace = true }
 pixi_uv_conversions = { workspace = true }
-pypi_modifiers = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
 rattler_lock = { workspace = true }
@@ -94,13 +94,9 @@ typed-path = { workspace = true }
 url = { workspace = true }
 uv-client = { workspace = true }
 uv-configuration = { workspace = true }
-uv-distribution = { workspace = true }
-uv-distribution-types = { workspace = true }
-uv-normalize = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
 uv-requirements-txt = { workspace = true }
-uv-types = { workspace = true }
 which = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 

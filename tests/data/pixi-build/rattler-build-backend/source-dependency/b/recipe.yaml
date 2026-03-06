@@ -1,0 +1,19 @@
+package:
+  name: b
+  version: 0.1.0
+
+build:
+  script:
+    - if: win
+      then:
+        - type "%BUILD_PREFIX%\hi"
+        - if not exist "%PREFIX%" mkdir "%PREFIX%"
+        - copy "%BUILD_PREFIX%\hi" "%PREFIX%\hi-from-a"
+      else:
+        - cat $BUILD_PREFIX/hi
+        - mkdir -p $PREFIX
+        - cp $BUILD_PREFIX/hi $PREFIX/hi-from-a
+
+requirements:
+  build:
+    - a

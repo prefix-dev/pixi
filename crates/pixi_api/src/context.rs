@@ -10,11 +10,13 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{
+    Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform, RepoDataRecord,
+};
 
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
-use crate::workspace::{DependencyOptions, InitOptions, ReinstallOptions};
+use crate::workspace::{ChannelOptions, DependencyOptions, InitOptions, Package, ReinstallOptions};
 
 pub struct DefaultContext<I: Interface> {
     _interface: I,
@@ -27,24 +29,14 @@ impl<I: Interface> DefaultContext<I> {
         }
     }
 
-    /// Returns all matching package versions sorted by version
-    pub async fn search_exact(
+    /// Search for packages matching a [`MatchSpec`]
+    pub async fn search(
         &self,
-        match_spec: MatchSpec,
+        matchspec: MatchSpec,
         channels: IndexSet<Channel>,
-        platform: Platform,
-    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-        crate::workspace::search::search_exact(None, match_spec, channels, platform).await
-    }
-
-    /// Returns all matching packages with their latest versions
-    pub async fn search_wildcard(
-        &self,
-        search: &str,
-        channels: IndexSet<Channel>,
-        platform: Platform,
-    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-        crate::workspace::search::search_wildcard(None, search, channels, platform).await
+        platforms: Vec<Platform>,
+    ) -> miette::Result<Vec<RepoDataRecord>> {
+        crate::workspace::search::search(None, matchspec, channels, platforms).await
     }
 }
 
@@ -81,7 +73,95 @@ impl<I: Interface> WorkspaceContext<I> {
         crate::workspace::workspace::name::set(&self.interface, self.workspace_mut()?, name).await
     }
 
-    pub async fn list_environments(&self) -> Vec<Environment> {
+    pub async fn description(&self) -> Option<String> {
+        crate::workspace::workspace::description::get(&self.workspace).await
+    }
+
+    pub async fn set_description(&self, description: &str) -> miette::Result<()> {
+        crate::workspace::workspace::description::set(
+            &self.interface,
+            self.workspace_mut()?,
+            description,
+        )
+        .await
+    }
+
+    pub async fn list_channel(&self) -> HashMap<EnvironmentName, Vec<NamedChannelOrUrl>> {
+        crate::workspace::workspace::channel::list(&self.workspace).await
+    }
+
+    pub async fn add_channel(
+        &self,
+        options: ChannelOptions,
+        priority: Option<i32>,
+        prepend: bool,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::channel::add(
+            &self.interface,
+            self.workspace_mut()?,
+            options,
+            priority,
+            prepend,
+        )
+        .await
+    }
+
+    pub async fn remove_channel(
+        &self,
+        options: ChannelOptions,
+        priority: Option<i32>,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::channel::remove(
+            &self.interface,
+            self.workspace_mut()?,
+            options,
+            priority,
+        )
+        .await
+    }
+
+    pub async fn set_channels(&self, options: ChannelOptions) -> miette::Result<()> {
+        crate::workspace::workspace::channel::set(&self.interface, self.workspace_mut()?, options)
+            .await
+    }
+
+    pub async fn list_platforms(&self) -> HashMap<EnvironmentName, Vec<Platform>> {
+        crate::workspace::workspace::platform::list(&self.workspace).await
+    }
+
+    pub async fn add_platforms(
+        &self,
+        platform: Vec<Platform>,
+        no_install: bool,
+        feature: Option<String>,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::platform::add(
+            &self.interface,
+            self.workspace_mut()?,
+            platform,
+            no_install,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn remove_platforms(
+        &self,
+        platform: Vec<Platform>,
+        no_install: bool,
+        feature: Option<String>,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::platform::remove(
+            &self.interface,
+            self.workspace_mut()?,
+            platform,
+            no_install,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn list_environments(&self) -> Vec<Environment<'_>> {
         crate::workspace::workspace::environment::list(&self.workspace).await
     }
 
@@ -110,6 +190,27 @@ impl<I: Interface> WorkspaceContext<I> {
             &self.interface,
             self.workspace_mut()?,
             name,
+        )
+        .await
+    }
+
+    pub async fn list_packages(
+        &self,
+        regex: Option<String>,
+        platform: Option<Platform>,
+        environment: Option<String>,
+        explicit: bool,
+        no_install: bool,
+        lock_file_usage: LockFileUsage,
+    ) -> miette::Result<Vec<Package>> {
+        crate::workspace::list::list(
+            &self.workspace,
+            regex,
+            platform,
+            environment,
+            explicit,
+            no_install,
+            lock_file_usage,
         )
         .await
     }
@@ -169,7 +270,10 @@ impl<I: Interface> WorkspaceContext<I> {
             .await
     }
 
-    pub async fn remove_feature(&self, feature: &FeatureName) -> miette::Result<()> {
+    pub async fn remove_feature(
+        &self,
+        feature: &FeatureName,
+    ) -> miette::Result<Vec<EnvironmentName>> {
         crate::workspace::workspace::feature::remove_feature(
             &self.interface,
             self.workspace_mut()?,
@@ -309,29 +413,14 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
-    pub async fn search_exact(
+    /// Search for packages matching a [`MatchSpec`]
+    pub async fn search(
         &self,
-        match_spec: MatchSpec,
+        matchspec: MatchSpec,
         channels: IndexSet<Channel>,
-        platform: Platform,
-    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-        crate::workspace::search::search_exact(
-            Some(&self.workspace),
-            match_spec,
-            channels,
-            platform,
-        )
-        .await
-    }
-
-    /// Returns all matching packages with their latest versions
-    pub async fn search_wildcard(
-        &self,
-        search: &str,
-        channels: IndexSet<Channel>,
-        platform: Platform,
-    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-        crate::workspace::search::search_wildcard(Some(&self.workspace), search, channels, platform)
+        platforms: Vec<Platform>,
+    ) -> miette::Result<Vec<RepoDataRecord>> {
+        crate::workspace::search::search(Some(&self.workspace), matchspec, channels, platforms)
             .await
     }
 }

@@ -21,28 +21,18 @@ pub struct GlobHashKey {
     root: PathBuf,
     /// The glob patterns.
     globs: BTreeSet<String>,
-    /// Additional hash which should invalidate the cache if it changes.
-    additional_hash: Vec<u8>,
 }
 
 impl GlobHashKey {
     /// Creates a new `GlobHashKey` from the given root directory and glob patterns.
-    pub fn new(
-        root: impl Into<PathBuf>,
-        globs: BTreeSet<String>,
-        additional_hash: Vec<u8>,
-    ) -> Self {
+    pub fn new(root: impl Into<PathBuf>, globs: BTreeSet<String>) -> Self {
         let mut root = root.into();
         // Ensure that `root` points to a directory, not a file.
         if root.is_file() {
             root = root.parent().expect("Root must be a directory").to_owned();
         }
 
-        Self {
-            root,
-            globs,
-            additional_hash,
-        }
+        Self { root, globs }
     }
 }
 
@@ -86,7 +76,6 @@ impl GlobHashCache {
                     GlobHash::from_patterns(
                         &computation_key.root,
                         computation_key.globs.iter().map(String::as_str),
-                        computation_key.additional_hash,
                     )
                 })
                 .await

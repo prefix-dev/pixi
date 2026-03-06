@@ -35,9 +35,7 @@ use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rayon::prelude::*;
 use utils::elapsed;
 use uv_auth::store_credentials_from_url;
-use uv_client::{
-    BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder,
-};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClient};
 use uv_configuration::{BuildOptions, Constraints, IndexStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{BuiltWheelIndex, DistributionDatabase, RegistryWheelIndex};
@@ -178,6 +176,7 @@ pub struct PyPIBuildConfig<'a> {
     pub no_binary: &'a NoBinary,
     pub index_strategy: Option<&'a pixi_manifest::pypi::pypi_options::IndexStrategy>,
     pub exclude_newer: Option<&'a DateTime<Utc>>,
+    pub skip_wheel_filename_check: Option<bool>,
 }
 
 /// Configuration for PyPI context, grouping uv and environment settings
@@ -264,6 +263,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         pixi_records: &[PixiRecord],
         pypi_records: &[PyPIRecords],
     ) -> miette::Result<()> {
+        // Initialize UV flags from environment variables and pypi-options before any operations
+        initialize_uv_flags(self.build_config.skip_wheel_filename_check);
+
         let python_info =
             match on_python_interpreter_change(python_status, self.config.prefix, pypi_records)
                 .await?
@@ -347,25 +349,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &index_locations,
         );
 
-        let base_client_builder = BaseClientBuilder::default()
-            .allow_insecure_host(allow_insecure_hosts)
-            .keyring(self.context_config.uv_context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .native_tls(self.context_config.uv_context.use_native_tls)
-            .extra_middleware(self.context_config.uv_context.extra_middleware.clone());
-
-        let mut uv_client_builder = RegistryClientBuilder::new(
-            base_client_builder,
-            self.context_config.uv_context.cache.clone(),
-        )
-        .index_locations(index_locations.clone())
-        .index_strategy(index_strategy);
-
-        for p in &self.context_config.uv_context.proxies {
-            uv_client_builder = uv_client_builder.proxy(p.clone())
-        }
-
-        let registry_client = Arc::new(uv_client_builder.build());
+        let registry_client = self.context_config.uv_context.build_registry_client(
+            allow_insecure_hosts,
+            &index_locations,
+            index_strategy,
+            None,
+        );
 
         // Resolve the flat indexes from `--find-links`.
         let flat_index_client = FlatIndexClient::new(
@@ -1038,4 +1027,34 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         Ok(())
     }
+}
+
+/// Initialize UV flags from environment variables and pypi-options.
+///
+/// This function reads UV-related environment variables and pypi-options
+/// to initialize the global uv_flags state. Environment variables take
+/// precedence over pypi-options.
+/// It's safe to call multiple times as the global flag can only be initialized once.
+pub fn initialize_uv_flags(skip_wheel_filename_check_option: Option<bool>) {
+    let mut flags = uv_flags::EnvironmentFlags::empty();
+
+    // Determine if we should skip wheel filename check
+    // Environment variable takes precedence over pypi-option
+    let should_skip = if let Ok(env_value) = std::env::var("UV_SKIP_WHEEL_FILENAME_CHECK") {
+        // Environment variable is set - use it (takes precedence)
+        matches!(
+            env_value.to_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        )
+    } else {
+        // No environment variable - use pypi-option if set, otherwise false
+        skip_wheel_filename_check_option.unwrap_or(false)
+    };
+
+    if should_skip {
+        flags.insert(uv_flags::EnvironmentFlags::SKIP_WHEEL_FILENAME_CHECK);
+    }
+
+    // Initialize the global flags (ignore error if already initialized)
+    let _ = uv_flags::init(flags);
 }

@@ -4,7 +4,7 @@ use std::{
 };
 
 use itertools::Either;
-use rattler_conda_types::{NamelessMatchSpec, package::ArchiveType};
+use rattler_conda_types::{NamelessMatchSpec, package::CondaArchiveType};
 use serde_with::serde_as;
 use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
 
@@ -60,7 +60,7 @@ impl PathSpec {
     /// This is determined by checking if the path has a known binary archive
     /// extension (e.g. `.tar.bz2`, `.conda`).
     pub fn is_binary(&self) -> bool {
-        ArchiveType::try_from(Path::new(self.path.as_str())).is_some()
+        CondaArchiveType::try_from(Path::new(self.path.as_str())).is_some()
     }
 
     /// Converts this instance into a [`PathSourceSpec`] if the path points to a
@@ -246,7 +246,7 @@ mod tests {
 
     #[test]
     fn test_is_binary() {
-        // Test binary archive extensions supported by ArchiveType
+        // Test binary archive extensions supported by CondaArchiveType
         let binary_extensions = vec![
             "package.tar.bz2",
             "package.conda",

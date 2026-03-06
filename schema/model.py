@@ -249,6 +249,22 @@ class MatchspecTable(StrictBaseModel):
     subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
 
 
+class SourceSpecTable(StrictBaseModel):
+    """A precise description of a source package location."""
+
+    path: NonEmptyStr | None = Field(None, description="The path to the source package")
+
+    url: NonEmptyStr | None = Field(None, description="The URL to the source package")
+    md5: Md5Sum | None = Field(None, description="The md5 hash of the source package")
+    sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the source package")
+
+    git: NonEmptyStr | None = Field(None, description="The git URL to the source repo")
+    rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
+    tag: NonEmptyStr | None = Field(None, description="A git tag to use")
+    branch: NonEmptyStr | None = Field(None, description="A git branch to use")
+    subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
+
+
 MatchSpec = NonEmptyStr | MatchspecTable
 CondaPackageName = NonEmptyStr
 
@@ -378,6 +394,9 @@ class TaskArgs(StrictBaseModel):
 
     arg: TaskArgName = Field(description="The name of the argument")
     default: str | None = Field(None, description="The default value of the argument")
+    choices: list[str] | None = Field(
+        None, description="Allowed values for the argument", min_length=1
+    )
 
 
 class DependsOn(StrictBaseModel):
@@ -423,10 +442,13 @@ class TaskInlineTable(StrictBaseModel):
         description="A map of environment variables to values, used in the task, these will be overwritten by the shell.",
         examples=[{"key": "value"}, {"ARGUMENT": "value"}],
     )
+    default_environment: EnvironmentName | None = Field(
+        None,
+        description="A default environment to run the task",
+    )
     description: NonEmptyStr | None = Field(
         None,
         description="A short description of the task",
-        examples=["Build the project"],
     )
     clean_env: bool | None = Field(
         None,
@@ -536,6 +558,10 @@ class Target(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies for this target"
     )
+    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
+        None,
+        description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
+    )
     tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the target"
     )
@@ -578,6 +604,10 @@ class Feature(StrictBaseModel):
     build_dependencies: Dependencies = BuildDependenciesField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies of this feature"
+    )
+    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
+        None,
+        description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
     )
     tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks provided by this feature"
@@ -695,6 +725,11 @@ class PyPIOptions(StrictBaseModel):
         None,
         description="The strategy to use when considering pre-release versions",
         examples=["disallow", "allow", "if-necessary", "explicit", "if-necessary-or-explicit"],
+    )
+    skip_wheel_filename_check: bool | None = Field(
+        None,
+        description="Skip wheel filename validation, allowing installation of wheels with version mismatches between filename and metadata",
+        examples=[True, False],
     )
 
 
@@ -870,6 +905,10 @@ class BaseManifest(StrictBaseModel):
     build_dependencies: Dependencies = BuildDependenciesField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies"
+    )
+    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
+        None,
+        description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
     )
     tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the project"

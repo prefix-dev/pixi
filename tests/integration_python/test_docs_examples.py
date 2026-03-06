@@ -37,15 +37,7 @@ class TestPixiBuild:
             pixi_projects[2].name,
             (
                 pixi_projects[2],
-                snapshot("""\
-┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
-┃ name         ┃ age ┃ city        ┃
-┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
-│ John Doe     │ 30  │ New York    │
-│ Jane Smith   │ 25  │ Los Angeles │
-│ Tim de Jager │ 35  │ Utrecht     │
-└──────────────┴─────┴─────────────┘
-"""),
+                snapshot("Hello, from dev-package!\n"),
             ),
         ),
         (
@@ -71,9 +63,9 @@ class TestPixiBuild:
 ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
 ┃ name         ┃ age ┃ city        ┃
 ┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
-│ John Doe     │ 31  │ New York    │
-│ Jane Smith   │ 26  │ Los Angeles │
-│ Tim de Jager │ 36  │ Utrecht     │
+│ John Doe     │ 30  │ New York    │
+│ Jane Smith   │ 25  │ Los Angeles │
+│ Tim de Jager │ 35  │ Utrecht     │
 └──────────────┴─────┴─────────────┘
 """),
             ),
@@ -82,6 +74,21 @@ class TestPixiBuild:
             pixi_projects[5].name,
             (
                 pixi_projects[5],
+                snapshot("""\
+┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+┃ name         ┃ age ┃ city        ┃
+┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+│ John Doe     │ 31  │ New York    │
+│ Jane Smith   │ 26  │ Los Angeles │
+│ Tim de Jager │ 36  │ Utrecht     │
+└──────────────┴─────┴─────────────┘
+"""),
+            ),
+        ),
+        (
+            pixi_projects[6].name,
+            (
+                pixi_projects[6],
                 snapshot("""\
 ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
 ┃ name         ┃ age ┃ city        ┃

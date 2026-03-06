@@ -1,0 +1,6 @@
+[package.build.backend]
+name = "pixi-build-ros"
+version = "*"
+
+# Specifically no distro specified here:
+# [package.build.config]

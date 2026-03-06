@@ -10,7 +10,7 @@ Commands to manage workspace channels
 
 ## Usage
 ```
-pixi workspace channel <COMMAND>
+pixi workspace channel [OPTIONS] <COMMAND>
 ```
 
 ## Subcommands
@@ -20,5 +20,9 @@ pixi workspace channel <COMMAND>
 | [`list`](channel/list.md) | List the channels in the manifest |
 | [`remove`](channel/remove.md) | Remove channel(s) from the manifest and updates the lockfile |
 
+
+## Global Options
+- <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>
+:  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 --8<-- "docs/reference/cli/pixi/workspace/channel_extender:example"

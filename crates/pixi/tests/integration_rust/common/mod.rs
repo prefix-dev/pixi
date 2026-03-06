@@ -37,8 +37,8 @@ use pixi_core::{
 use pixi_manifest::{EnvironmentName, FeatureName};
 use pixi_progress::global_multi_progress;
 use pixi_task::{
-    ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph, TaskGraphError,
-    TaskName, get_task_env,
+    ExecutableTask, PreferExecutable, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
+    TaskGraphError, TaskName, get_task_env,
 };
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, LockedPackageRef, UrlOrPath};
@@ -143,7 +143,7 @@ pub trait LockFileExt {
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<LockedPackageRef>;
+    ) -> Option<LockedPackageRef<'_>>;
 
     /// Check if a PyPI package is marked as editable in the lock file
     fn is_pypi_package_editable(
@@ -234,7 +234,7 @@ impl LockFileExt for LockFile {
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<LockedPackageRef> {
+    ) -> Option<LockedPackageRef<'_>> {
         self.environment(environment).and_then(|env| {
             env.packages(platform)
                 .and_then(|mut packages| packages.find(|p| p.name() == package))
@@ -401,6 +401,7 @@ impl PixiControl {
                 format: None,
                 pyproject_toml: false,
                 scm: Some(GitAttributes::Github),
+                conda_pypi_map: None,
             },
         }
     }
@@ -419,6 +420,7 @@ impl PixiControl {
                 format: None,
                 pyproject_toml: false,
                 scm: Some(GitAttributes::Github),
+                conda_pypi_map: None,
             },
         }
     }
@@ -466,8 +468,10 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                     ..Default::default()
                 },
-                platform: Platform::current(),
-                limit: None,
+                platform: None,
+                limit: 5,
+                limit_packages: 10,
+                json: false,
                 channels: ChannelsConfig::default(),
             },
         }
@@ -495,11 +499,11 @@ impl PixiControl {
     /// Add a new channel to the project.
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
+            workspace_config: WorkspaceConfig {
+                manifest_path: Some(self.manifest_path()),
+                ..Default::default()
+            },
             args: workspace::channel::AddRemoveArgs {
-                workspace_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
-                },
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
@@ -517,12 +521,11 @@ impl PixiControl {
     /// Remove a channel from the project.
     pub fn project_channel_remove(&self) -> ProjectChannelRemoveBuilder {
         ProjectChannelRemoveBuilder {
-            manifest_path: Some(self.manifest_path()),
+            workspace_config: WorkspaceConfig {
+                manifest_path: Some(self.manifest_path()),
+                ..Default::default()
+            },
             args: workspace::channel::AddRemoveArgs {
-                workspace_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
-                },
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
@@ -590,14 +593,25 @@ impl PixiControl {
                 .map(|e| e.best_platform())
                 .or(Some(Platform::current())),
         );
-        let task_graph = TaskGraph::from_cmd_args(&project, &search_env, args.task, false)
-            .map_err(RunError::TaskGraphError)?;
+        let task_graph = TaskGraph::from_cmd_args(
+            &project,
+            &search_env,
+            args.task,
+            false,
+            if args.executable {
+                PreferExecutable::Always
+            } else {
+                PreferExecutable::TaskFirst
+            },
+            args.templated,
+        )
+        .map_err(RunError::TaskGraphError)?;
 
         // Iterate over all tasks in the graph and execute them.
         let mut task_env = None;
         let mut result = RunOutput::default();
         for task_id in task_graph.topological_order() {
-            let task = ExecutableTask::from_task_graph(&task_graph, task_id);
+            let task = ExecutableTask::from_task_graph(&task_graph, task_id, None);
 
             // Construct the task environment if not already created.
             let task_env = match task_env.as_ref() {
@@ -641,9 +655,9 @@ impl PixiControl {
         InstallBuilder {
             args: Args {
                 environment: None,
-                project_config: WorkspaceConfig {
+                workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
+                    backend_override: self.backend_override.clone(),
                 },
                 lock_file_usage: LockFileUsageConfig {
                     frozen: false,
@@ -712,11 +726,12 @@ impl PixiControl {
             args: lock::Args {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
+                    backend_override: self.backend_override.clone(),
                 },
                 no_install_config: NoInstallConfig { no_install: false },
                 check: false,
                 json: false,
+                dry_run: false,
             },
         }
     }
@@ -739,7 +754,7 @@ impl PixiControl {
         }
     }
 
-    pub fn tasks(&self) -> TasksControl {
+    pub fn tasks(&self) -> TasksControl<'_> {
         TasksControl { pixi: self }
     }
 }
@@ -766,6 +781,7 @@ impl TasksControl<'_> {
                 platform,
                 feature: feature_name.non_default().map(str::to_owned),
                 cwd: None,
+                default_environment: None,
                 env: Default::default(),
                 description: None,
                 clean_env: false,
