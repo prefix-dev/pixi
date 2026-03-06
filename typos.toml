@@ -2,6 +2,7 @@
 extend-exclude = [
   ".git/",
   ".pixi/",
+  ".claude/",
   "**/*.snap",
   "tests/data/mapping_files/*",
   "examples/**/**.ipynb",

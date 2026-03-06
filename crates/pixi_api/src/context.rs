@@ -16,7 +16,7 @@ use rattler_conda_types::{
 
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
-use crate::workspace::{ChannelOptions, DependencyOptions, InitOptions, ReinstallOptions};
+use crate::workspace::{ChannelOptions, DependencyOptions, InitOptions, Package, ReinstallOptions};
 
 pub struct DefaultContext<I: Interface> {
     _interface: I,
@@ -29,24 +29,14 @@ impl<I: Interface> DefaultContext<I> {
         }
     }
 
-    /// Returns all matching package versions sorted by version
-    pub async fn search_exact(
+    /// Search for packages matching a [`MatchSpec`]
+    pub async fn search(
         &self,
-        match_spec: MatchSpec,
+        matchspec: MatchSpec,
         channels: IndexSet<Channel>,
-        platform: Platform,
-    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-        crate::workspace::search::search_exact(None, match_spec, channels, platform).await
-    }
-
-    /// Returns all matching packages with their latest versions
-    pub async fn search_wildcard(
-        &self,
-        search: &str,
-        channels: IndexSet<Channel>,
-        platform: Platform,
-    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-        crate::workspace::search::search_wildcard(None, search, channels, platform).await
+        platforms: Vec<Platform>,
+    ) -> miette::Result<Vec<RepoDataRecord>> {
+        crate::workspace::search::search(None, matchspec, channels, platforms).await
     }
 }
 
@@ -200,6 +190,27 @@ impl<I: Interface> WorkspaceContext<I> {
             &self.interface,
             self.workspace_mut()?,
             name,
+        )
+        .await
+    }
+
+    pub async fn list_packages(
+        &self,
+        regex: Option<String>,
+        platform: Option<Platform>,
+        environment: Option<String>,
+        explicit: bool,
+        no_install: bool,
+        lock_file_usage: LockFileUsage,
+    ) -> miette::Result<Vec<Package>> {
+        crate::workspace::list::list(
+            &self.workspace,
+            regex,
+            platform,
+            environment,
+            explicit,
+            no_install,
+            lock_file_usage,
         )
         .await
     }
@@ -402,29 +413,14 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
-    pub async fn search_exact(
+    /// Search for packages matching a [`MatchSpec`]
+    pub async fn search(
         &self,
-        match_spec: MatchSpec,
+        matchspec: MatchSpec,
         channels: IndexSet<Channel>,
-        platform: Platform,
-    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-        crate::workspace::search::search_exact(
-            Some(&self.workspace),
-            match_spec,
-            channels,
-            platform,
-        )
-        .await
-    }
-
-    /// Returns all matching packages with their latest versions
-    pub async fn search_wildcard(
-        &self,
-        search: &str,
-        channels: IndexSet<Channel>,
-        platform: Platform,
-    ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-        crate::workspace::search::search_wildcard(Some(&self.workspace), search, channels, platform)
+        platforms: Vec<Platform>,
+    ) -> miette::Result<Vec<RepoDataRecord>> {
+        crate::workspace::search::search(Some(&self.workspace), matchspec, channels, platforms)
             .await
     }
 }

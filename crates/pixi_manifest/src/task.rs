@@ -414,6 +414,18 @@ pub struct TaskArg {
 
     /// The default value of the argument
     pub default: Option<String>,
+
+    /// The allowed values for the argument
+    pub choices: Option<Vec<String>>,
+}
+
+impl TaskArg {
+    /// Returns whether `value` is allowed by this argument's choices (if any).
+    pub fn is_valid_value(&self, value: &str) -> bool {
+        self.choices
+            .as_ref()
+            .is_none_or(|choices| choices.iter().any(|c| c == value))
+    }
 }
 
 impl std::str::FromStr for TaskArg {
@@ -423,6 +435,7 @@ impl std::str::FromStr for TaskArg {
         Ok(TaskArg {
             name: ArgName::from_str(s)?,
             default: None,
+            choices: None,
         })
     }
 }
@@ -507,14 +520,13 @@ impl<'a> TaskRenderContext<'a> {
     /// User arguments are added when TypedArgs are provided.
     pub fn to_jinja_context(&self) -> minijinja::Value {
         // Build the context map with user arguments if available
-        let mut context_map: HashMap<String, minijinja::Value> =
-            if let Some(ArgValues::TypedArgs(args)) = self.args {
-                args.iter()
-                    .map(|arg| (arg.name.clone(), minijinja::Value::from(arg.value.as_str())))
-                    .collect()
-            } else {
-                HashMap::new()
-            };
+        let mut context_map: HashMap<String, minijinja::Value> = match self.args {
+            Some(ArgValues::TypedArgs { args, .. }) => args
+                .iter()
+                .map(|arg| (arg.name.clone(), minijinja::Value::from(arg.value.as_str())))
+                .collect(),
+            _ => HashMap::new(),
+        };
 
         // Create the pixi object with system-provided variables
         let mut pixi_vars: HashMap<String, minijinja::Value> = HashMap::new();
@@ -662,14 +674,29 @@ impl RenderedString {
 #[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash)]
 pub enum ArgValues {
     FreeFormArgs(Vec<String>),
-    TypedArgs(Vec<TypedArg>),
+    TypedArgs {
+        args: Vec<TypedArg>,
+        /// Extra passthrough args appended after `--` (empty if none)
+        extra: Vec<String>,
+    },
 }
 
 impl ArgValues {
     pub fn is_empty(&self) -> bool {
         match self {
             ArgValues::FreeFormArgs(args) => args.is_empty(),
-            ArgValues::TypedArgs(args) => args.is_empty(),
+            ArgValues::TypedArgs { args, extra } => args.is_empty() && extra.is_empty(),
+        }
+    }
+
+    /// Returns the extra passthrough arguments.
+    ///
+    /// For free-form args, this is the full list of args.
+    /// For typed args, this is only the extra args passed after `--`.
+    pub fn extra_args(&self) -> &[String] {
+        match self {
+            ArgValues::FreeFormArgs(args) => args,
+            ArgValues::TypedArgs { extra, .. } => extra,
         }
     }
 }
@@ -684,7 +711,13 @@ impl Display for ArgValues {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ArgValues::FreeFormArgs(args) => write!(f, "{}", args.iter().join(", ")),
-            ArgValues::TypedArgs(args) => write!(f, "{}", args.iter().join(", ")),
+            ArgValues::TypedArgs { args, extra } => {
+                write!(f, "{}", args.iter().join(", "))?;
+                if !extra.is_empty() {
+                    write!(f, " -- {}", extra.iter().join(", "))?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -871,10 +904,18 @@ impl From<Task> for Item {
                 if let Some(args) = &process.args {
                     let mut args_array = Array::new();
                     for arg in args {
-                        if let Some(default) = &arg.default {
+                        if arg.default.is_some() || arg.choices.is_some() {
                             let mut arg_table = Table::new().into_inline_table();
                             arg_table.insert("arg", arg.name.as_str().into());
-                            arg_table.insert("default", default.into());
+                            if let Some(default) = &arg.default {
+                                arg_table.insert("default", default.into());
+                            }
+                            if let Some(choices) = &arg.choices {
+                                arg_table.insert(
+                                    "choices",
+                                    Value::Array(Array::from_iter(choices.iter())),
+                                );
+                            }
                             args_array.push(Value::InlineTable(arg_table));
                         } else {
                             args_array.push(Value::String(toml_edit::Formatted::new(
@@ -943,10 +984,18 @@ impl From<Task> for Item {
                     if let Some(args_vec) = &alias.args {
                         let mut args = Vec::new();
                         for arg in args_vec {
-                            if let Some(default) = &arg.default {
+                            if arg.default.is_some() || arg.choices.is_some() {
                                 let mut arg_table = Table::new().into_inline_table();
                                 arg_table.insert("arg", arg.name.as_str().into());
-                                arg_table.insert("default", default.into());
+                                if let Some(default) = &arg.default {
+                                    arg_table.insert("default", default.into());
+                                }
+                                if let Some(choices) = &arg.choices {
+                                    arg_table.insert(
+                                        "choices",
+                                        Value::Array(Array::from_iter(choices.iter())),
+                                    );
+                                }
                                 args.push(Value::InlineTable(arg_table));
                             } else {
                                 args.push(Value::String(toml_edit::Formatted::new(
@@ -1119,7 +1168,10 @@ mod tests {
 
         let env_name = EnvironmentName::from_str("test-env").unwrap();
         let manifest_path = PathBuf::from("/tmp/pixi.toml");
-        let args = ArgValues::TypedArgs(vec![]);
+        let args = ArgValues::TypedArgs {
+            args: vec![],
+            extra: vec![],
+        };
 
         let context = TaskRenderContext {
             platform: Platform::Linux64,
@@ -1157,10 +1209,13 @@ mod tests {
     #[test]
     fn test_template_string_renders_with_typed_args() {
         let t = TemplateString::from("echo {{ foo }}");
-        let args = ArgValues::TypedArgs(vec![TypedArg {
-            name: "foo".into(),
-            value: "bar".into(),
-        }]);
+        let args = ArgValues::TypedArgs {
+            args: vec![TypedArg {
+                name: "foo".into(),
+                value: "bar".into(),
+            }],
+            extra: vec![],
+        };
         let context = TaskRenderContext {
             args: Some(&args),
             ..TaskRenderContext::default()
@@ -1172,7 +1227,10 @@ mod tests {
     #[test]
     fn test_template_string_renders_platform_variable() {
         let t = TemplateString::from("echo {{ pixi.platform }}");
-        let args = ArgValues::TypedArgs(vec![]);
+        let args = ArgValues::TypedArgs {
+            args: vec![],
+            extra: vec![],
+        };
         let context = TaskRenderContext {
             platform: Platform::Linux64,
             args: Some(&args),
@@ -1186,10 +1244,13 @@ mod tests {
     #[test]
     fn test_template_string_renders_with_platform_and_args() {
         let t = TemplateString::from("build-{{ pixi.platform }}-{{ version }}");
-        let args = ArgValues::TypedArgs(vec![TypedArg {
-            name: "version".into(),
-            value: "1.0.0".into(),
-        }]);
+        let args = ArgValues::TypedArgs {
+            args: vec![TypedArg {
+                name: "version".into(),
+                value: "1.0.0".into(),
+            }],
+            extra: vec![],
+        };
         let context = TaskRenderContext {
             platform: Platform::Linux64,
             args: Some(&args),

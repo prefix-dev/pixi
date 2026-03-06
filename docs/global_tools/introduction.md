@@ -174,6 +174,10 @@ end
 
     Completions of packages are installed as long as their binaries are exposed under the same name: e.g. `exposed = { git = "git" }`.
 
+!!! tip
+
+    Are you missing shell completions for your favorite CLI tool? Add them similar to [conda-forge/crush-feedstock #37](https://github.com/conda-forge/crush-feedstock/pull/37/changes).
+
 ## Adding a Series of Tools at Once
 
 Without specifying an installation environment, you can add multiple tools at once:

@@ -30,6 +30,10 @@ impl CommandDispatcherProcessor {
     /// Called when a [`crate::command_dispatcher::SourceBuildCacheStatusTask`]
     /// task was received.
     pub(crate) fn on_source_build_cache_status(&mut self, task: SourceBuildCacheStatusTask) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         // Lookup the id of the request to avoid duplication.
         let source_build_cache_status_id = {
             match self.source_build_cache_status_ids.get(&task.spec.key()) {

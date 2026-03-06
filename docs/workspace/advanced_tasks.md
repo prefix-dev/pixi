@@ -195,6 +195,7 @@ Arguments can be:
 
 - **Required**: must be provided when running the task
 - **Optional**: can have default values that are used when not explicitly provided
+- **Constrained**: can be restricted to a set of allowed values using `choices`
 
 ### Defining Task Arguments
 
@@ -230,6 +231,62 @@ pixi run deploy auth-service
 pixi run deploy auth-service production
 ✨ Pixi task (deploy in default): echo Deploying auth-service to production
 ```
+### Passing Extra Arguments with `--`
+
+When a task defines typed `args`, all command-line values are matched against those definitions. If you need to pass *additional* flags or arguments directly to the underlying command on top of the typed args, use `--` as a separator. Everything after `--` is forwarded verbatim to the command, regardless of the task's `args` definition.
+
+```toml
+[tasks.test]
+cmd = "pytest {{ target }} -v"
+args = [{ arg = "target", default = "tests/unit" }]
+```
+
+```shell
+# Without --, extra flags would cause an error:
+# × task 'test' received more arguments than expected
+#   hint: use `--` to separate task arguments from extra passthrough arguments
+pixi run test tests/integration --tb=short --maxfail=5
+
+# With --, the typed arg is filled and the rest is forwarded:
+pixi run test tests/integration -- --tb=short --maxfail=5
+✨ Pixi task (test in default): pytest tests/integration -v --tb=short --maxfail=5
+```
+
+You can also use `--` when relying on a default argument value:
+
+```shell
+# "target" uses its default, "--maxfail=5" is forwarded to the command
+pixi run test -- --maxfail=5
+✨ Pixi task (test in default): pytest tests/unit -v --maxfail=5
+```
+
+!!! note "Tasks without typed args"
+    For tasks that do **not** define `args`, `--` is passed through to the underlying command unchanged. This preserves its meaning for programs that use `--` themselves (e.g. `git log -- somefile`).
+
+### Restricting Values with Choices
+
+You can restrict the allowed values of an argument using the `choices` field. If a value is provided that is not in the list, Pixi will report an error instead of running the task.
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_arguments.toml:project_tasks_choices"
+```
+
+```shell
+# Providing a valid choice
+pixi run compile debug
+✨ Pixi task (compile): echo 'Compiling in debug mode'
+Compiling in debug mode
+
+# Default value must also be one of the choices
+pixi run test
+✨ Pixi task (test): echo 'Running unit tests'
+Running unit tests
+
+# Providing an invalid value results in an error
+pixi run compile fast
+× got 'fast' for argument 'mode' of task 'compile', choose from: debug, release
+```
+
 ### Passing Arguments to Dependent Tasks
 
 You can pass arguments to tasks that are dependencies of other tasks:
