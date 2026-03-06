@@ -1,6 +1,5 @@
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::Arc;
 
 use pixi_consts::consts;
 use pixi_record::LockedGitUrl;
@@ -18,6 +17,15 @@ use uv_distribution_types::{
 use uv_pypi_types::{HashAlgorithm, HashDigest, ParsedUrl, ParsedUrlError, VerbatimParsedUrl};
 
 use super::utils::{is_direct_url, strip_direct_scheme};
+
+/// Build an [`IndexUrl`] from the lock-file's optional `index_url`.
+/// Falls back to `DEFAULT_PYPI_INDEX_URL` when the lock-file has no stored index.
+fn index_url_from_lock(index: Option<&Url>) -> IndexUrl {
+    let url = index
+        .cloned()
+        .unwrap_or_else(|| consts::DEFAULT_PYPI_INDEX_URL.clone());
+    IndexUrl::from(uv_pep508::VerbatimUrl::from(url))
+}
 
 /// Converts our locked data to a file
 pub fn locked_data_to_file(
@@ -164,15 +172,7 @@ pub fn convert_to_dist(
                     wheels: vec![RegistryBuiltWheel {
                         filename,
                         file: Box::new(file),
-                        // This should be fine because currently it is only used for caching
-                        // When upgrading uv and running into problems we would need to sort this
-                        // out but it would require adding the indexes to
-                        // the lock file
-                        index: IndexUrl::Pypi(Arc::new(uv_pep508::VerbatimUrl::from_url(
-                            uv_redacted::DisplaySafeUrl::from(
-                                consts::DEFAULT_PYPI_INDEX_URL.clone(),
-                            ),
-                        ))),
+                        index: index_url_from_lock(pkg.index_url.as_ref()),
                     }],
                     best_wheel_index: 0,
                     sdist: None,
@@ -188,10 +188,7 @@ pub fn convert_to_dist(
                     name: pkg_name,
                     version: pkg_version,
                     file: Box::new(file),
-                    // This should be fine because currently it is only used for caching
-                    index: IndexUrl::Pypi(Arc::new(uv_pep508::VerbatimUrl::from_url(
-                        uv_redacted::DisplaySafeUrl::from(consts::DEFAULT_PYPI_INDEX_URL.clone()),
-                    ))),
+                    index: index_url_from_lock(pkg.index_url.as_ref()),
                     // I don't think this really matters for the install
                     wheels: vec![],
                     ext: SourceDistExtension::from_path(Path::new(filename_raw)).map_err(|e| {

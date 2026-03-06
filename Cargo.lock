@@ -5604,8 +5604,10 @@ dependencies = [
  "tracing",
  "url",
  "uv-distribution",
+ "uv-distribution-filename",
  "uv-distribution-types",
  "uv-normalize",
+ "uv-pep508",
  "uv-pypi-types",
  "uv-types",
 ]

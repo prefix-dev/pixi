@@ -394,6 +394,13 @@ pub enum PlatformUnsat {
         locked_path: String,
     },
 
+    #[error("'{name}' requires index {expected_index} but the lock-file has {locked_index}")]
+    LockedPyPIIndexMismatch {
+        name: String,
+        expected_index: String,
+        locked_index: String,
+    },
+
     #[error("failed to convert between pep508 and uv types: {0}")]
     UvTypesConversionError(#[from] ConversionError),
 
@@ -1029,7 +1036,9 @@ pub(crate) fn pypi_satisfies_requirement(
     }
 
     match &spec.source {
-        RequirementSource::Registry { specifier, .. } => {
+        RequirementSource::Registry {
+            specifier, index, ..
+        } => {
             // If the locked package has no version (e.g. a source dependency with
             // dynamic version), it cannot satisfy a registry version specifier.
             let Some(locked_version) = &locked_data.version else {
@@ -1041,18 +1050,36 @@ pub(crate) fn pypi_satisfies_requirement(
                 .into());
             };
             let version_string = locked_version.to_string();
-            if specifier.contains(
+            if !specifier.contains(
                 &uv_pep440::Version::from_str(&version_string).expect("could not parse version"),
             ) {
-                Ok(())
-            } else {
-                Err(PlatformUnsat::LockedPyPIVersionsMismatch {
+                return Err(PlatformUnsat::LockedPyPIVersionsMismatch {
                     name: spec.name.clone().to_string(),
                     specifiers: specifier.clone().to_string(),
                     version: version_string,
                 }
-                .into())
+                .into());
             }
+
+            // If the requirement specifies an explicit index, verify the lock-file matches
+            if let Some(required_index) = index {
+                let required_url: Url = required_index.url.url().clone().into();
+                match &locked_data.index_url {
+                    Some(locked_url) if locked_url == &required_url => {}
+                    other => {
+                        return Err(PlatformUnsat::LockedPyPIIndexMismatch {
+                            name: spec.name.to_string(),
+                            expected_index: required_url.to_string(),
+                            locked_index: other
+                                .as_ref()
+                                .map_or("<default>".to_string(), |u| u.to_string()),
+                        }
+                        .into());
+                    }
+                }
+            }
+
+            Ok(())
         }
         RequirementSource::Url { url: spec_url, .. } => {
             if let UrlOrPath::Url(locked_url) = &*locked_data.location {
