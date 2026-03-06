@@ -714,7 +714,10 @@ impl<'p> LockFileDerivedData<'p> {
                         (
                             data.clone(),
                             pixi_install_pypi::ManifestData {
-                                editable: is_editable_from_manifest(&manifest_pypi_deps, &data.name),
+                                editable: is_editable_from_manifest(
+                                    &manifest_pypi_deps,
+                                    &data.name,
+                                ),
                             },
                         )
                     })
@@ -2736,7 +2739,7 @@ mod tests {
 
         // Simulate tool.pixi.pypi-dependencies (added first)
         let path_spec = PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Path {
-            path: "./requests".into(),
+            path: std::path::PathBuf::from("./requests").into(),
             editable: Some(true),
         });
         deps.insert(name.clone(), path_spec);
@@ -2781,14 +2784,14 @@ mod tests {
 
         // Higher-priority feature explicitly sets editable=false (inserted first)
         let non_editable_spec = PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Path {
-            path: "./requests".into(),
+            path: std::path::PathBuf::from("./requests").into(),
             editable: Some(false),
         });
         deps.insert(name.clone(), non_editable_spec);
 
         // Lower-priority feature has editable=true (inserted second)
         let editable_spec = PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Path {
-            path: "./requests".into(),
+            path: std::path::PathBuf::from("./requests").into(),
             editable: Some(true),
         });
         deps.insert(name.clone(), editable_spec);

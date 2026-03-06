@@ -5608,7 +5608,6 @@ dependencies = [
  "uv-distribution-types",
  "uv-normalize",
  "uv-pep508",
- "uv-pypi-types",
  "uv-types",
 ]
 
@@ -5761,7 +5760,6 @@ dependencies = [
  "minijinja",
  "pixi_build_backend",
  "pixi_build_types",
- "rattler_build_core",
  "rattler_build_jinja",
  "rattler_build_types",
  "rattler_conda_types",
