@@ -1,9 +1,13 @@
-use std::{borrow::Cow, collections::HashMap};
-
+use pixi_consts::consts;
+use pixi_uv_conversions::to_uv_version;
 use rattler_lock::{CondaPackageData, PypiPackageData, UrlOrPath};
 use serde::Serialize;
+use std::str::FromStr;
+use std::{borrow::Cow, collections::HashMap};
 use uv_distribution::RegistryWheelIndex;
-use uv_pypi_types::HashAlgorithm;
+use uv_distribution_filename::WheelFilename;
+use uv_distribution_types::IndexUrl;
+use uv_pep508::VerbatimUrl;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Package {
@@ -28,6 +32,7 @@ pub struct Package {
     pub noarch: Option<String>,
     pub file_name: Option<String>,
     pub url: Option<String>,
+    pub index_url: Option<String>,
     pub requested_spec: Option<String>,
     pub constrains: Vec<String>,
     pub depends: Vec<String>,
@@ -73,27 +78,36 @@ impl Package {
                 },
             ),
             PackageExt::PyPI(p, name) => {
-                // Check the hash to avoid non index packages to be handled by the registry
-                // index as wheels
-                if let Some(hash) = &p.hash {
-                    if let Some(registry_index) = registry_index {
+                if p.hash.is_some() {
+                    let url = p
+                        .index_url
+                        .clone()
+                        .unwrap_or_else(|| consts::DEFAULT_PYPI_INDEX_URL.clone());
+                    let index = IndexUrl::from(VerbatimUrl::from(url));
+                    let size = if let Some(registry_index) = registry_index {
                         // Handle case where the registry index is present
-                        let entry = registry_index.get(name).find(|i| {
-                            i.dist.hashes.iter().any(|h| {
-                                (h.algorithm == HashAlgorithm::Sha256
-                                    && hash.sha256().map(|hash| format!("{hash:x}")).as_deref()
-                                        == Some(h.digest.as_ref()))
-                                    || (h.algorithm == HashAlgorithm::Md5
-                                        && hash.md5().map(|hash| format!("{hash:x}")).as_deref()
-                                            == Some(h.digest.as_ref()))
-                            })
+                        let wheel_filename = p
+                            .location
+                            .file_name()
+                            .and_then(|f| WheelFilename::from_str(f).ok());
+                        let entry = registry_index.get(name).find(|entry| {
+                            if entry.index.url() != &index {
+                                return false;
+                            }
+                            if let Some(filename) = &wheel_filename {
+                                &entry.dist.filename == filename
+                            } else if let Some(version) = &p.version {
+                                Some(&entry.dist.filename.version)
+                                    == to_uv_version(version).ok().as_ref()
+                            } else {
+                                false
+                            }
                         });
-                        let size = entry.and_then(|e| get_dir_size(e.dist.path.clone()).ok());
-                        let name = entry.map(|e| e.dist.filename.to_string());
-                        (size, name)
+                        entry.and_then(|e| get_dir_size(&e.dist.path).ok())
                     } else {
-                        get_pypi_location_information(&p.location)
-                    }
+                        get_pypi_location_information(&p.location).0
+                    };
+                    (size, Some(index.to_string()))
                 } else {
                     get_pypi_location_information(&p.location)
                 }
@@ -178,6 +192,11 @@ impl Package {
             ),
         };
 
+        let index_url = match package {
+            PackageExt::PyPI(p, _) => p.index_url.as_ref().map(|u| u.to_string()),
+            PackageExt::Conda(_) => None,
+        };
+
         let requested_spec = requested_specs.get(&name).cloned();
         let is_explicit = requested_spec.is_some();
 
@@ -225,6 +244,7 @@ impl Package {
             noarch,
             file_name,
             url,
+            index_url,
             requested_spec,
             constrains,
             depends,

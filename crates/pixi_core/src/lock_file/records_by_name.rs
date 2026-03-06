@@ -167,10 +167,9 @@ impl<D: HasNameVersion> DependencyRecordsByName<D> {
                     // dependency with a dynamic version), keep the existing entry.
                     let idx = *entry.get();
                     if let (Some(existing), Some(new)) = (records[idx].version(), record.version())
+                        && existing < new
                     {
-                        if existing < new {
-                            records[idx] = record;
-                        }
+                        records[idx] = record;
                     }
                 }
             }
