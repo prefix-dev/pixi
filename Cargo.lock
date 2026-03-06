@@ -5659,7 +5659,7 @@ dependencies = [
  "rattler-build",
  "rattler_build_jinja",
  "rattler_build_recipe",
- "rattler_build_types",
+ "rattler_build_types 0.1.0 (git+https://github.com/prefix-dev/rattler-build?rev=0514a68221c47a03f358d26337969a0fe979ae32)",
  "rattler_build_variant_config",
  "rattler_conda_types",
  "rattler_digest",
@@ -5708,7 +5708,7 @@ dependencies = [
  "pixi_build_types",
  "rattler-build",
  "rattler_build_jinja",
- "rattler_build_types",
+ "rattler_build_types 0.1.0 (git+https://github.com/prefix-dev/rattler-build?rev=0514a68221c47a03f358d26337969a0fe979ae32)",
  "rattler_conda_types",
  "recipe_stage0",
  "rstest",
@@ -5778,7 +5778,7 @@ dependencies = [
  "pixi_build_types",
  "rattler-build",
  "rattler_build_jinja",
- "rattler_build_types",
+ "rattler_build_types 0.1.0 (git+https://github.com/prefix-dev/rattler-build?rev=0514a68221c47a03f358d26337969a0fe979ae32)",
  "rattler_conda_types",
  "recipe_stage0",
  "rstest",
@@ -7419,7 +7419,7 @@ dependencies = [
  "rattler_build_recipe_generator",
  "rattler_build_script",
  "rattler_build_source_cache",
- "rattler_build_types",
+ "rattler_build_types 0.1.0 (git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1)",
  "rattler_build_variant_config",
  "rattler_cache",
  "rattler_conda_types",
@@ -7482,7 +7482,7 @@ dependencies = [
  "itertools 0.14.0",
  "lazy_static",
  "minijinja",
- "rattler_build_types",
+ "rattler_build_types 0.1.0 (git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1)",
  "rattler_conda_types",
  "serde",
  "serde_json",
@@ -7521,7 +7521,7 @@ dependencies = [
  "petgraph",
  "rattler_build_jinja",
  "rattler_build_script",
- "rattler_build_types",
+ "rattler_build_types 0.1.0 (git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1)",
  "rattler_build_variant_config",
  "rattler_build_yaml_parser",
  "rattler_conda_types",
@@ -7633,6 +7633,21 @@ dependencies = [
 [[package]]
 name = "rattler_build_types"
 version = "0.1.0"
+source = "git+https://github.com/prefix-dev/rattler-build?rev=0514a68221c47a03f358d26337969a0fe979ae32#0514a68221c47a03f358d26337969a0fe979ae32"
+dependencies = [
+ "globset",
+ "itertools 0.14.0",
+ "rattler_conda_types",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "serde_yaml",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "rattler_build_types"
+version = "0.1.0"
 source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
 dependencies = [
  "globset",
@@ -7655,7 +7670,7 @@ dependencies = [
  "miette 7.6.0",
  "minijinja",
  "rattler_build_jinja",
- "rattler_build_types",
+ "rattler_build_types 0.1.0 (git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1)",
  "rattler_build_yaml_parser",
  "rattler_conda_types",
  "regex",
@@ -8235,7 +8250,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "marked-yaml",
- "rattler_build_types",
+ "rattler_build_types 0.1.0 (git+https://github.com/prefix-dev/rattler-build?rev=0514a68221c47a03f358d26337969a0fe979ae32)",
  "rattler_conda_types",
  "serde",
  "serde_yaml",

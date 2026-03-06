@@ -248,7 +248,7 @@ rattler-build = { git = "https://github.com/prefix-dev/rattler-build", rev = "v0
 ] }
 rattler_build_jinja = { git = "https://github.com/prefix-dev/rattler-build", rev = "v0.58.1" }
 rattler_build_recipe = { git = "https://github.com/prefix-dev/rattler-build", rev = "v0.58.1" }
-rattler_build_types = { git = "https://github.com/prefix-dev/rattler-build", rev = "v0.58.1" }
+rattler_build_types = { git = "https://github.com/prefix-dev/rattler-build", rev = "0514a68221c47a03f358d26337969a0fe979ae32" }
 rattler_build_variant_config = { git = "https://github.com/prefix-dev/rattler-build", rev = "v0.58.1" }
 
 [patch.crates-io]
