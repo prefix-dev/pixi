@@ -93,6 +93,9 @@ pub struct Args {
     /// Whether the pypi requirement should be editable
     #[arg(long, requires = "pypi")]
     pub editable: bool,
+
+    #[clap(long, requires = "pypi")]
+    pub index: Option<Url>,
 }
 
 impl TryFrom<&Args> for DependencyOptions {
