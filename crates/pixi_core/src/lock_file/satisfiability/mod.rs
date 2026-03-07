@@ -1841,7 +1841,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
             if locked_record.as_binary().is_some() && !match_spec.matches(locked_record) {
                 return Err(Box::new(PlatformUnsat::ConstraintViolated {
                     package: package_name.as_source().to_string(),
-                    locked_version: locked_record.version().to_string(),
+                    locked_version: locked_record.package_record().version.to_string(),
                     constraint: match_spec.to_string(),
                 }));
             }
