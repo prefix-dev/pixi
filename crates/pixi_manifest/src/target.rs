@@ -1118,7 +1118,7 @@ mod tests {
         );
 
         // osx-64 has no platform-specific constraints, so should use the default target
-        let osx_constraints = default_feature.constraints(Some(Platform::OsxX8664));
+        let osx_constraints = default_feature.constraints(Some(Platform::Osx64));
         assert!(osx_constraints.is_some());
         let osx_spec = osx_constraints
             .unwrap()
