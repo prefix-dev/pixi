@@ -96,6 +96,8 @@ pub struct Args {
     #[arg(long, requires = "pypi")]
     pub editable: bool,
 
+    /// The PyPI index URL to use for this dependency.
+    /// Only applicable when adding pypi dependencies.
     #[clap(long, requires = "pypi", conflicts_with = "git")]
     pub index: Option<Url>,
 }

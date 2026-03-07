@@ -28,10 +28,10 @@ pixi add [OPTIONS] <SPEC>...
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The feature for which the dependency should be modified
 <br>**default**: `default`
-- <a id="arg---index" href="#arg---index">`--index <INDEX>`</a>
-:  The PyPI index URL to use for this dependency. Only applicable when adding pypi dependencies
 - <a id="arg---editable" href="#arg---editable">`--editable`</a>
 :  Whether the pypi requirement should be editable
+- <a id="arg---index" href="#arg---index">`--index <INDEX>`</a>
+:  The PyPI index URL to use for this dependency. Only applicable when adding pypi dependencies
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
