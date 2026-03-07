@@ -162,7 +162,6 @@ pub trait HasDependencyConfig: Sized {
             git: Default::default(),
             rev: Default::default(),
             subdir: Default::default(),
-            index: Default::default(),
         }
     }
 
