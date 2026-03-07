@@ -134,8 +134,8 @@ fn apply_index_to_pypi_spec(
     req: &Requirement,
     index_url: &Url,
 ) -> miette::Result<Option<PixiPypiSpec>> {
-    let mut spec =
-        PixiPypiSpec::try_from(req.clone()).map_err(|e| miette::miette!("failed to convert requirement: {}", e))?;
+    let mut spec = PixiPypiSpec::try_from(req.clone())
+        .map_err(|e| miette::miette!("failed to convert requirement: {}", e))?;
     if let PixiPypiSource::Registry { index, .. } = spec.source_mut() {
         *index = Some(index_url.clone());
     }

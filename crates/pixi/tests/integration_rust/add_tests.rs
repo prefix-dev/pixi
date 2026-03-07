@@ -1219,7 +1219,7 @@ async fn add_pypi_with_index() {
         .with(PyPIPackage::new("black", "24.8.0"))
         .into_simple_index()
         .unwrap();
-    
+
     // Create conda channel with Python
     let mut package_db = MockRepoData::default();
     package_db.add_package(
@@ -1228,7 +1228,7 @@ async fn add_pypi_with_index() {
             .finish(),
     );
     let channel = package_db.into_channel().await.unwrap();
-    
+
     let pixi = PixiControl::new().unwrap();
 
     pixi.init()
@@ -1241,20 +1241,17 @@ async fn add_pypi_with_index() {
         .await
         .unwrap();
 
-
     pixi.add("pipx==1.7.1")
         .set_type(DependencyType::PypiDependency)
         .await
         .unwrap();
 
-
-
     pixi.add("black==24.8.0")
         .set_pypi(true)
-        .with_index(Some(pypi_index.index_url())) 
+        .with_index(Some(pypi_index.index_url()))
         .await
         .unwrap();
-    
+
     // Verify manifest contains index
     let manifest = pixi.manifest_contents().unwrap();
     let url = pypi_index.index_url();
