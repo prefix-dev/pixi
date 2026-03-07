@@ -258,6 +258,11 @@ impl AddBuilder {
         self.args.no_install_config.no_install = no_install;
         self
     }
+
+    pub fn with_index(mut self, index: Option<Url>) -> Self {
+        self.args.index = index;
+        self
+    }
 }
 
 impl HasDependencyConfig for AddBuilder {
