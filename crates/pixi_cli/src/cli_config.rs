@@ -307,7 +307,6 @@ pub struct DependencyConfig {
     /// The subdirectory of the git repository to use
     #[clap(long, short, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
     pub subdir: Option<String>,
-
 }
 
 impl DependencyConfig {
