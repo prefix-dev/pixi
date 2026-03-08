@@ -194,8 +194,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .await?
         }
         DependencyType::PypiDependency => {
-            let index = args.index.clone();
-
             let requirements_iter = match args
                 .dependency_config
                 .vcs_pep508_requirements(&workspace)
@@ -205,7 +203,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 None => args.dependency_config.pypi_deps(&workspace)?.into_iter(),
             };
 
-            let pypi_deps = map_pypi_requirements_with_index(requirements_iter, index.as_ref())?;
+            let pypi_deps = map_pypi_requirements_with_index(requirements_iter, args.index.as_ref())?;
 
             workspace_ctx
                 .add_pypi_deps(pypi_deps, args.editable, (&args).try_into()?)
