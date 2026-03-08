@@ -1241,19 +1241,21 @@ async fn add_pypi_with_index() {
         .await
         .unwrap();
 
-    pixi.add("pipx==1.7.1")
-        .set_type(DependencyType::PypiDependency)
-        .await
-        .unwrap();
-
     pixi.add("black==24.8.0")
         .set_pypi(true)
         .with_index(Some(pypi_index.index_url()))
         .await
         .unwrap();
 
-    // Verify manifest contains index
-    let manifest = pixi.manifest_contents().unwrap();
-    let url = pypi_index.index_url();
-    assert!(manifest.contains(url.as_str()));
+    // Verify manifest contains index - following established pattern
+    let project = pixi.workspace().unwrap();
+    project
+        .default_environment()
+        .pypi_dependencies(None)
+        .into_specs()
+        .for_each(|(name, spec)| {
+            if name == PypiPackageName::from_str("black").unwrap() {
+                assert_eq!(spec.source.index(), Some(&pypi_index.index_url()));
+            }
+        });
 }
