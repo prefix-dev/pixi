@@ -31,6 +31,9 @@
             "$ref": "#/$defs/MatchspecTable"
           }
         ]
+      },
+      "propertyNames": {
+        "minLength": 1
       }
     },
     "constraints": {
@@ -47,6 +50,9 @@
             "$ref": "#/$defs/MatchspecTable"
           }
         ]
+      },
+      "propertyNames": {
+        "minLength": 1
       }
     },
     "dependencies": {
@@ -63,6 +69,9 @@
             "$ref": "#/$defs/MatchspecTable"
           }
         ]
+      },
+      "propertyNames": {
+        "minLength": 1
       }
     },
     "dev": {
@@ -71,6 +80,9 @@
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/SourceSpecTable"
+      },
+      "propertyNames": {
+        "minLength": 1
       }
     },
     "environments": {
@@ -100,6 +112,9 @@
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/Feature"
+      },
+      "propertyNames": {
+        "minLength": 1
       }
     },
     "host-dependencies": {
@@ -116,6 +131,9 @@
             "$ref": "#/$defs/MatchspecTable"
           }
         ]
+      },
+      "propertyNames": {
+        "minLength": 1
       },
       "examples": [
         {
@@ -160,6 +178,9 @@
             "$ref": "#/$defs/PyPIUrlRequirement"
           }
         ]
+      },
+      "propertyNames": {
+        "minLength": 1
       }
     },
     "pypi-options": {
@@ -176,6 +197,9 @@
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/Target"
+      },
+      "propertyNames": {
+        "minLength": 1
       },
       "examples": [
         {
@@ -209,12 +233,16 @@
             }
           ]
         }
+      },
+      "propertyNames": {
+        "description": "A valid task name."
       }
     },
     "tool": {
       "title": "Tool",
       "description": "Third-party tool configurations, ignored by pixi",
-      "type": "object"
+      "type": "object",
+      "additionalProperties": true
     },
     "workspace": {
       "$ref": "#/$defs/Workspace",
@@ -251,6 +279,9 @@
           "type": "object",
           "additionalProperties": {
             "type": "string",
+            "minLength": 1
+          },
+          "propertyNames": {
             "minLength": 1
           },
           "examples": [
@@ -299,6 +330,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "backend": {
@@ -329,7 +363,8 @@
         "config": {
           "title": "Config",
           "description": "The configuration of the build backend",
-          "type": "object"
+          "type": "object",
+          "additionalProperties": true
         },
         "source": {
           "$ref": "#/$defs/SourceLocation",
@@ -351,6 +386,9 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/BuildTarget"
+          },
+          "propertyNames": {
+            "minLength": 1
           },
           "examples": [
             {
@@ -383,6 +421,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "branch": {
@@ -524,7 +565,8 @@
         "config": {
           "title": "Config",
           "description": "Target-specific configuration for the build backend",
-          "type": "object"
+          "type": "object",
+          "additionalProperties": true
         }
       }
     },
@@ -595,7 +637,15 @@
                   }
                 },
                 "maxProperties": 1,
-                "minProperties": 1
+                "minProperties": 1,
+                "propertyNames": {
+                  "description": "A valid task argument name; may not be any of: pixi",
+                  "not": {
+                    "enum": [
+                      "pixi"
+                    ]
+                  }
+                }
               }
             ]
           }
@@ -667,6 +717,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "channel-priority": {
@@ -712,6 +765,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "dependencies": {
@@ -728,6 +784,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "dev": {
@@ -736,6 +795,9 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/SourceSpecTable"
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "host-dependencies": {
@@ -752,6 +814,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           },
           "examples": [
             {
@@ -796,6 +861,9 @@
                 "$ref": "#/$defs/PyPIUrlRequirement"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "pypi-options": {
@@ -821,6 +889,9 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/Target"
+          },
+          "propertyNames": {
+            "minLength": 1
           },
           "examples": [
             {
@@ -854,6 +925,9 @@
                 }
               ]
             }
+          },
+          "propertyNames": {
+            "description": "A valid task name."
           }
         }
       }
@@ -1082,6 +1156,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "description": {
@@ -1139,6 +1216,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           },
           "examples": [
             {
@@ -1226,6 +1306,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "target": {
@@ -1234,6 +1317,9 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/Target"
+          },
+          "propertyNames": {
+            "minLength": 1
           },
           "examples": [
             {
@@ -1431,6 +1517,9 @@
               }
             ]
           },
+          "propertyNames": {
+            "minLength": 1
+          },
           "examples": [
             {
               "numpy": ">=1.21.0"
@@ -1477,24 +1566,15 @@
           "anyOf": [
             {
               "type": "string",
-              "const": "first-index",
-              "enum": [
-                "first-index"
-              ]
+              "const": "first-index"
             },
             {
               "type": "string",
-              "const": "unsafe-first-match",
-              "enum": [
-                "unsafe-first-match"
-              ]
+              "const": "unsafe-first-match"
             },
             {
               "type": "string",
-              "const": "unsafe-best-match",
-              "enum": [
-                "unsafe-best-match"
-              ]
+              "const": "unsafe-best-match"
             }
           ],
           "examples": [
@@ -1580,38 +1660,23 @@
           "anyOf": [
             {
               "type": "string",
-              "const": "disallow",
-              "enum": [
-                "disallow"
-              ]
+              "const": "disallow"
             },
             {
               "type": "string",
-              "const": "allow",
-              "enum": [
-                "allow"
-              ]
+              "const": "allow"
             },
             {
               "type": "string",
-              "const": "if-necessary",
-              "enum": [
-                "if-necessary"
-              ]
+              "const": "if-necessary"
             },
             {
               "type": "string",
-              "const": "explicit",
-              "enum": [
-                "explicit"
-              ]
+              "const": "explicit"
             },
             {
               "type": "string",
-              "const": "if-necessary-or-explicit",
-              "enum": [
-                "if-necessary-or-explicit"
-              ]
+              "const": "if-necessary-or-explicit"
             }
           ],
           "examples": [
@@ -1915,7 +1980,7 @@
           "anyOf": [
             {
               "type": "number",
-              "exclusiveMinimum": 0.0
+              "exclusiveMinimum": 0
             },
             {
               "type": "string",
@@ -1929,7 +1994,7 @@
           "anyOf": [
             {
               "type": "number",
-              "exclusiveMinimum": 0.0
+              "exclusiveMinimum": 0
             },
             {
               "type": "string",
@@ -1979,6 +2044,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "constraints": {
@@ -1995,6 +2063,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "dependencies": {
@@ -2011,6 +2082,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "dev": {
@@ -2019,6 +2093,9 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/SourceSpecTable"
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "host-dependencies": {
@@ -2035,6 +2112,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           },
           "examples": [
             {
@@ -2071,6 +2151,9 @@
                 "$ref": "#/$defs/PyPIUrlRequirement"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "tasks": {
@@ -2095,6 +2178,9 @@
                 }
               ]
             }
+          },
+          "propertyNames": {
+            "description": "A valid task name."
           }
         }
       }
@@ -2272,6 +2358,9 @@
             "type": "string",
             "minLength": 1
           },
+          "propertyNames": {
+            "minLength": 1
+          },
           "examples": [
             {
               "key": "value"
@@ -2331,6 +2420,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "build-variants-files": {
@@ -2456,10 +2548,7 @@
                   {
                     "description": "Enables building of source records",
                     "type": "string",
-                    "const": "pixi-build",
-                    "enum": [
-                      "pixi-build"
-                    ]
+                    "const": "pixi-build"
                   },
                   {
                     "type": "string"
@@ -2521,6 +2610,9 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/WorkspaceTarget"
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "version": {
@@ -2547,10 +2639,7 @@
           "title": "Workspace",
           "description": "Must be true to inherit from workspace",
           "type": "boolean",
-          "const": true,
-          "enum": [
-            true
-          ]
+          "const": true
         }
       }
     },
@@ -2569,6 +2658,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         }
       }
