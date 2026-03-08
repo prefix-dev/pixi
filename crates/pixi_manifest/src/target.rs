@@ -995,11 +995,11 @@ mod tests {
         .unwrap();
 
         let default_target = manifest.default_feature().targets.default();
-        let constraints = default_target.constraints.as_ref().expect("Should have constraints");
-        assert!(
-            !constraints.is_empty(),
-            "Constraints should not be empty"
-        );
+        let constraints = default_target
+            .constraints
+            .as_ref()
+            .expect("Should have constraints");
+        assert!(!constraints.is_empty(), "Constraints should not be empty");
         let abc = PackageName::from_str("abc").unwrap();
         let abc_specs: Vec<_> = constraints
             .get(&abc)
@@ -1105,7 +1105,9 @@ mod tests {
         let linux_constraints = default_feature
             .constraints(Some(Platform::Linux64))
             .expect("Should have linux-64 constraints");
-        let linux_spec = linux_constraints.get(&abc).expect("Should have abc on linux");
+        let linux_spec = linux_constraints
+            .get(&abc)
+            .expect("Should have abc on linux");
         assert_eq!(
             linux_spec
                 .iter()

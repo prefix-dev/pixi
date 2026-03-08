@@ -1806,32 +1806,26 @@ pub(crate) async fn verify_package_platform_satisfiability(
             Either::Left(_) => continue,
             Either::Right(binary_spec) => binary_spec,
         };
-        let nameless_spec =
-            binary_spec
-                .try_into_nameless_match_spec(&channel_config)
-                .map_err(|e| {
-                    let parse_err: ParseMatchSpecError = match e {
-                        SpecConversionError::NonAbsoluteRootDir(p) => {
-                            ParseChannelError::NonAbsoluteRootDir(p).into()
-                        }
-                        SpecConversionError::NotUtf8RootDir(p) => {
-                            ParseChannelError::NotUtf8RootDir(p).into()
-                        }
-                        SpecConversionError::InvalidPath(p) => {
-                            ParseChannelError::InvalidPath(p).into()
-                        }
-                        SpecConversionError::InvalidChannel(_name, p) => p.into(),
-                        SpecConversionError::MissingName => {
-                            ParseMatchSpecError::MissingPackageName
-                        }
-                    };
-                    Box::new(PlatformUnsat::FailedToParseMatchSpec(
-                        package_name.as_source().to_string(),
-                        parse_err,
-                    ))
-                })?;
-        let match_spec =
-            MatchSpec::from_nameless(nameless_spec, Some(package_name.clone().into()));
+        let nameless_spec = binary_spec
+            .try_into_nameless_match_spec(&channel_config)
+            .map_err(|e| {
+                let parse_err: ParseMatchSpecError = match e {
+                    SpecConversionError::NonAbsoluteRootDir(p) => {
+                        ParseChannelError::NonAbsoluteRootDir(p).into()
+                    }
+                    SpecConversionError::NotUtf8RootDir(p) => {
+                        ParseChannelError::NotUtf8RootDir(p).into()
+                    }
+                    SpecConversionError::InvalidPath(p) => ParseChannelError::InvalidPath(p).into(),
+                    SpecConversionError::InvalidChannel(_name, p) => p.into(),
+                    SpecConversionError::MissingName => ParseMatchSpecError::MissingPackageName,
+                };
+                Box::new(PlatformUnsat::FailedToParseMatchSpec(
+                    package_name.as_source().to_string(),
+                    parse_err,
+                ))
+            })?;
+        let match_spec = MatchSpec::from_nameless(nameless_spec, Some(package_name.clone().into()));
 
         // Only check packages that are actually locked; constraints only apply
         // to installed packages. Source packages are controlled via their source

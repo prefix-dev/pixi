@@ -3352,7 +3352,10 @@ zlib = ">=1.2"
         let manifest = parse_pixi_toml(contents).manifest;
         let constraints = manifest.default_feature().constraints(None);
 
-        assert!(constraints.is_some(), "Default feature should have constraints");
+        assert!(
+            constraints.is_some(),
+            "Default feature should have constraints"
+        );
         let constraints = constraints.unwrap();
 
         let openssl = PackageName::from_str("openssl").unwrap();

@@ -436,10 +436,7 @@ impl Feature {
     ///
     /// If the `platform` is `None` no platform specific constraints are taken
     /// into consideration.
-    pub fn constraints(
-        &self,
-        platform: Option<Platform>,
-    ) -> Option<Cow<'_, CondaConstraints>> {
+    pub fn constraints(&self, platform: Option<Platform>) -> Option<Cow<'_, CondaConstraints>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
