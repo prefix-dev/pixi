@@ -6,7 +6,7 @@ use pixi_api::{
 };
 use pixi_config::ConfigCli;
 use pixi_core::{DependencyType, WorkspaceLocator};
-use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec};
+use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
 use url::Url;
 
 use crate::{
@@ -14,6 +14,9 @@ use crate::{
     cli_interface::CliInterface,
     has_specs::HasSpecs,
 };
+
+use indexmap::IndexMap;
+use pixi_manifest::PypiDependencyLocation;
 
 /// Adds dependencies to the workspace
 ///
@@ -130,17 +133,35 @@ impl From<&Args> for GitOptions {
     }
 }
 
-fn apply_index_to_pypi_spec(
-    req: &Requirement,
-    index_url: &Url,
-) -> miette::Result<Option<PixiPypiSpec>> {
-    let mut spec = PixiPypiSpec::try_from(req.clone())
-        .map_err(|e| miette::miette!("failed to convert requirement: {}", e))?;
-    if let PixiPypiSource::Registry { index, .. } = spec.source_mut() {
-        *index = Some(index_url.clone());
-    }
-    Ok(Some(spec))
+fn map_pypi_requirements_with_index(
+    requirements: impl Iterator<Item = (PypiPackageName, Requirement)>,
+    index: Option<&Url>,
+) -> miette::Result<IndexMap<PypiPackageName, (Requirement, Option<PixiPypiSpec>, Option<PypiDependencyLocation>)>> {
+    requirements
+        .map(|(name, req)| {
+            let pixi_spec = if let Some(index_url) = index {
+                // Create spec from requirement
+                let mut spec = PixiPypiSpec::try_from(req.clone())
+                    .map_err(|e| miette::miette!("failed to convert requirement: {}", e))?;
+                
+                // Only apply index if this is a Registry source
+                match spec.source_mut() {
+                    PixiPypiSource::Registry { index, .. } => {
+                        *index = Some(index_url.clone());
+                        Some(spec) // Return spec only when index was actually applied
+                    }
+                    _ => None, // For Git, Path, etc. - index doesn't apply
+                }
+            } else {
+                None // No index provided
+            };
+            
+            Ok((name, (req, pixi_spec, None)))
+        })
+        .collect()
 }
+
+
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let mut workspace = WorkspaceLocator::for_cli()
@@ -179,34 +200,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         DependencyType::PypiDependency => {
             let index = args.index.clone();
-            let pypi_deps = match args
+            
+            let requirements_iter = match args
                 .dependency_config
                 .vcs_pep508_requirements(&workspace)
                 .transpose()?
             {
-                Some(vcs_reqs) => vcs_reqs
-                    .into_iter()
-                    .map(|(name, req)| {
-                        let pixi_spec = index
-                            .as_ref()
-                            .and_then(|index_url| apply_index_to_pypi_spec(&req, index_url).ok())
-                            .flatten();
-                        Ok((name, (req, pixi_spec, None)))
-                    })
-                    .collect::<miette::Result<_>>()?,
-                None => args
-                    .dependency_config
-                    .pypi_deps(&workspace)?
-                    .into_iter()
-                    .map(|(name, req)| {
-                        let pixi_spec = index
-                            .as_ref()
-                            .and_then(|index_url| apply_index_to_pypi_spec(&req, index_url).ok())
-                            .flatten();
-                        Ok((name, (req, pixi_spec, None)))
-                    })
-                    .collect::<miette::Result<_>>()?,
+                Some(vcs_reqs) => vcs_reqs.into_iter(),
+                None => args.dependency_config.pypi_deps(&workspace)?.into_iter(),
             };
+
+            let pypi_deps = map_pypi_requirements_with_index(
+                requirements_iter,
+                index.as_ref(),
+            )?;
 
             workspace_ctx
                 .add_pypi_deps(pypi_deps, args.editable, (&args).try_into()?)
