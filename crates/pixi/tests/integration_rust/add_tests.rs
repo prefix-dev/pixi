@@ -1214,9 +1214,10 @@ async fn add_pypi_with_index() {
     use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 
     setup_tracing();
+    let pypi_demo_package = PyPIPackage::new("black", "24.8.0");
 
     let pypi_index = PyPIDatabase::new()
-        .with(PyPIPackage::new("black", "24.8.0"))
+        .with(pypi_demo_package.clone())
         .into_simple_index()
         .unwrap();
 
@@ -1247,15 +1248,16 @@ async fn add_pypi_with_index() {
         .await
         .unwrap();
 
-    // Verify manifest contains index - following established pattern
     let project = pixi.workspace().unwrap();
-    project
+
+    // Searching our demo_package
+    let (_, spec) = project
         .default_environment()
         .pypi_dependencies(None)
         .into_specs()
-        .for_each(|(name, spec)| {
-            if name == PypiPackageName::from_str("black").unwrap() {
-                assert_eq!(spec.source.index(), Some(&pypi_index.index_url()));
-            }
-        });
+        .find(|(dep_name, _)| dep_name.as_source() == pypi_demo_package.name)
+        .expect("The package 'black' should have been added to the manifest");
+
+    // asserting index flag
+    assert_eq!(spec.source.index(), Some(&pypi_index.index_url()));
 }

@@ -5,7 +5,7 @@ use pixi_api::{
     workspace::{DependencyOptions, GitOptions},
 };
 use pixi_config::ConfigCli;
-use pixi_core::{DependencyType, WorkspaceLocator};
+use pixi_core::{DependencyType, WorkspaceLocator, workspace::PypiDeps};
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
 use url::Url;
 
@@ -14,9 +14,6 @@ use crate::{
     cli_interface::CliInterface,
     has_specs::HasSpecs,
 };
-
-use indexmap::IndexMap;
-use pixi_manifest::PypiDependencyLocation;
 
 /// Adds dependencies to the workspace
 ///
@@ -136,16 +133,7 @@ impl From<&Args> for GitOptions {
 fn map_pypi_requirements_with_index(
     requirements: impl Iterator<Item = (PypiPackageName, Requirement)>,
     index: Option<&Url>,
-) -> miette::Result<
-    IndexMap<
-        PypiPackageName,
-        (
-            Requirement,
-            Option<PixiPypiSpec>,
-            Option<PypiDependencyLocation>,
-        ),
-    >,
-> {
+) -> miette::Result<PypiDeps> {
     requirements
         .map(|(name, req)| {
             let pixi_spec = if let Some(index_url) = index {
