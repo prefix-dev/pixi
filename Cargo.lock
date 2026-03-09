@@ -3462,20 +3462,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66cdb727cec723cee65912a74a7f9f0c3ad0c6f9df4f03d05a5c7a15398bbad1"
 
 [[package]]
-name = "http-range-client"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d5f72a73344fc9576e74e42a0f1d7a05d7c6c50950a15f44faea133a91f622b"
-dependencies = [
- "async-trait",
- "byteorder",
- "bytes",
- "read-logger",
- "reqwest 0.12.28",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "http-serde"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5656,7 +5642,7 @@ dependencies = [
  "ordermap",
  "pathdiff",
  "pixi_build_types",
- "rattler-build",
+ "rattler_build_core",
  "rattler_build_jinja",
  "rattler_build_recipe",
  "rattler_build_types",
@@ -5706,7 +5692,7 @@ dependencies = [
  "minijinja",
  "pixi_build_backend",
  "pixi_build_types",
- "rattler-build",
+ "rattler_build_core",
  "rattler_build_jinja",
  "rattler_build_types",
  "rattler_conda_types",
@@ -5776,7 +5762,7 @@ dependencies = [
  "minijinja",
  "pixi_build_backend",
  "pixi_build_types",
- "rattler-build",
+ "rattler_build_core",
  "rattler_build_jinja",
  "rattler_build_types",
  "rattler_conda_types",
@@ -5830,7 +5816,7 @@ dependencies = [
  "pathdiff",
  "pixi_build_backend",
  "pixi_build_types",
- "rattler-build",
+ "rattler_build_core",
  "rattler_build_recipe",
  "rattler_build_variant_config",
  "rattler_conda_types",
@@ -7376,9 +7362,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "rattler-build"
-version = "0.58.1"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
+name = "rattler_build_core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce26c074c0625ac10189f01ad19e228e123994f24bfb1e7beed61d80c7690b76"
 dependencies = [
  "anyhow",
  "async-once-cell",
@@ -7386,12 +7373,9 @@ dependencies = [
  "chrono",
  "clap",
  "clap-verbosity-flag",
- "clap_complete",
- "clap_complete_nushell",
  "comfy-table",
  "console 0.16.2",
  "content_inspector",
- "dialoguer",
  "dunce",
  "flickzeug",
  "fs-err",
@@ -7399,12 +7383,10 @@ dependencies = [
  "globset",
  "goblin",
  "hex",
- "http-range-client",
  "ignore",
  "indexmap 2.13.0",
  "indicatif",
  "itertools 0.14.0",
- "lazy_static",
  "line-ending",
  "memchr",
  "memmap2 0.9.10",
@@ -7416,11 +7398,9 @@ dependencies = [
  "rattler_build_jinja",
  "rattler_build_networking",
  "rattler_build_recipe",
- "rattler_build_recipe_generator",
  "rattler_build_script",
  "rattler_build_source_cache",
  "rattler_build_types",
- "rattler_build_variant_config",
  "rattler_cache",
  "rattler_conda_types",
  "rattler_config",
@@ -7430,7 +7410,6 @@ dependencies = [
  "rattler_menuinst",
  "rattler_networking",
  "rattler_package_streaming",
- "rattler_prefix_guard",
  "rattler_redaction",
  "rattler_repodata_gateway",
  "rattler_s3",
@@ -7443,7 +7422,6 @@ dependencies = [
  "regex",
  "reqwest 0.12.28",
  "reqwest-middleware",
- "reqwest-retry 0.8.0",
  "retry-policies 0.5.1",
  "scroll",
  "serde",
@@ -7451,18 +7429,13 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serde_yaml",
- "sevenz-rust2",
- "sha1",
  "sha2",
- "spdx 0.12.0",
- "strum",
  "tempfile",
  "terminal_size",
  "text-stub-library",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util 0.7.18",
- "toml",
  "tracing",
  "tracing-core",
  "tracing-subscriber",
@@ -7475,7 +7448,8 @@ dependencies = [
 [[package]]
 name = "rattler_build_jinja"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a60745c13efad6b5f02660322323ea54c12632ec2df449003f654e71a3fdd1c"
 dependencies = [
  "fs-err",
  "indexmap 2.13.0",
@@ -7496,7 +7470,8 @@ dependencies = [
 [[package]]
 name = "rattler_build_networking"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bd36d42bdc0c8a2bb7ac8df83e679de98ff0cab127dd0d43a83ac071347fd0b"
 dependencies = [
  "rattler_networking",
  "reqwest 0.12.28",
@@ -7508,7 +7483,8 @@ dependencies = [
 [[package]]
 name = "rattler_build_recipe"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3294faf75a6cedc48e78ea698c5fd0b4275bc085558b85c78f93ed9ef06e3f31"
 dependencies = [
  "fs-err",
  "globset",
@@ -7539,39 +7515,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "rattler_build_recipe_generator"
-version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
-dependencies = [
- "async-once-cell",
- "async-recursion",
- "clap",
- "flate2",
- "fs-err",
- "indexmap 2.13.0",
- "itertools 0.14.0",
- "miette 7.6.0",
- "rattler_conda_types",
- "rattler_digest",
- "regex",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "serde_with",
- "serde_yaml",
- "sha2",
- "tar",
- "tempfile",
- "toml",
- "tracing",
- "url",
- "zip 6.0.0",
-]
-
-[[package]]
 name = "rattler_build_script"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "302b3848bc40404eea94529ea351b024892223f9a30b6050ea2604c78745fba0"
 dependencies = [
  "clap",
  "console 0.16.2",
@@ -7593,7 +7540,8 @@ dependencies = [
 [[package]]
 name = "rattler_build_source_cache"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b65765386135a07615535fa3a39f36f1ebc918ae9f50e20b3a1c6583692d73fb"
 dependencies = [
  "async-trait",
  "bzip2 0.6.1",
@@ -7616,8 +7564,6 @@ dependencies = [
  "serde_json",
  "sevenz-rust2",
  "sha2",
- "sigstore-trust-root",
- "sigstore-types",
  "sigstore-verify",
  "tar",
  "tempfile",
@@ -7633,7 +7579,8 @@ dependencies = [
 [[package]]
 name = "rattler_build_types"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "197dc86a4b706f2a8fa906144f7616b701eeb093b4b702572d891d0d9783060b"
 dependencies = [
  "globset",
  "itertools 0.14.0",
@@ -7648,7 +7595,8 @@ dependencies = [
 [[package]]
 name = "rattler_build_variant_config"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "023fe7cf441398ce37bd1ac890de856746566e50d004299e9f7796ae0feb4ca4"
 dependencies = [
  "fs-err",
  "marked-yaml",
@@ -7668,7 +7616,8 @@ dependencies = [
 [[package]]
 name = "rattler_build_yaml_parser"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "841d6a588539ddb58092b0d1c93aa57e060e43696ed2768806ac994d5214e17d"
 dependencies = [
  "marked-yaml",
  "miette 7.6.0",
@@ -7793,7 +7742,8 @@ dependencies = [
 [[package]]
 name = "rattler_git"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e3433ae20e2a061b99f8587b497fc2fb0c3f8e63527b047f33aca2d28a949f0"
 dependencies = [
  "dashmap",
  "dunce",
@@ -7988,14 +7938,15 @@ dependencies = [
 [[package]]
 name = "rattler_prefix_guard"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler-build?rev=v0.58.1#cfed7c5d2447755367cfa643e307b78e73226d16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e61233ecc4db99035f4f97e378e971d4998b45b3bb5fb894350e04b05f8bb97"
 dependencies = [
  "fs-err",
  "libc",
  "serde",
  "serde_json",
  "tokio",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8215,15 +8166,6 @@ checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
-]
-
-[[package]]
-name = "read-logger"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c7f715a23c7db804b71eb9162a9cf210b89e99db9c3649a2a038d13b7594a99"
-dependencies = [
- "log",
 ]
 
 [[package]]
