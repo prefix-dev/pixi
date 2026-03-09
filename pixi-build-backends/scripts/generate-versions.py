@@ -47,6 +47,7 @@ def main():
         "pixi_build_cmake",
         "pixi_build_mojo",
         "pixi_build_python",
+        "pixi_build_r",
         "pixi_build_rattler_build",
         "pixi_build_rust",
     ]

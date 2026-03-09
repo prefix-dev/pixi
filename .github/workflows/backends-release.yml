@@ -8,6 +8,7 @@ on:
     paths:
       - "pixi-build-backends/**"
       - "crates/pixi_build_python/**"
+      - "crates/pixi_build_r/**"
       - "crates/pixi_build_rattler_build/**"
       - "crates/pixi_build_cmake/**"
       - "crates/pixi_build_rust/**"
