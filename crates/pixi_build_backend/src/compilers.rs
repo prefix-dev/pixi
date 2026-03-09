@@ -4,7 +4,7 @@
 use std::{collections::HashSet, fmt::Display, ops::Deref};
 
 use itertools::Itertools;
-use rattler_build::NormalizedKey;
+use rattler_build_types::NormalizedKey;
 use rattler_conda_types::Platform;
 use recipe_stage0::{
     matchspec::PackageDependency,

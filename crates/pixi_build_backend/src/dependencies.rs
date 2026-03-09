@@ -6,7 +6,7 @@ use std::{
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi_build_types as pbt;
 use pixi_build_types::{BinaryPackageSpec, NamedSpec};
-use rattler_build::{
+use rattler_build_core::{
     render::resolved_dependencies::{
         DependencyInfo, PinCompatibleDependency, PinSubpackageDependency, ResolveError,
         SourceDependency, VariantDependency,

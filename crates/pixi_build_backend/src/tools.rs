@@ -5,7 +5,7 @@ use std::{
 
 use indexmap::IndexSet;
 use miette::IntoDiagnostic;
-use rattler_build::{
+use rattler_build_core::{
     DiscoveredOutput,
     metadata::{BuildConfiguration, Debug, Output, PlatformWithVirtualPackages},
     system_tools::SystemTools,

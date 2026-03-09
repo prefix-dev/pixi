@@ -28,7 +28,7 @@ use pixi_build_types::{
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
     },
 };
-use rattler_build::{
+use rattler_build_core::{
     DiscoveredOutput,
     build::{WorkingDirectoryBehavior, run_build},
     console_utils::LoggingOutputHandler,
@@ -678,7 +678,7 @@ mod tests {
     use fs_err as fs;
     use pixi_build_backend::utils::test::conda_outputs_snapshot;
     use pixi_build_types::{VariantValue, procedures::initialize::InitializeParams};
-    use rattler_build::console_utils::LoggingOutputHandler;
+    use rattler_build_core::console_utils::LoggingOutputHandler;
     use tempfile::tempdir;
 
     use super::*;
