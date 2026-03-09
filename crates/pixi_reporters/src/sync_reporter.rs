@@ -256,7 +256,8 @@ impl CombinedInstallReporterInner {
             multi_progress.clone(),
             ProgressBarPlacement::After(preparing_progress_bar.progress_bar()),
             "installing".to_owned(),
-        );
+        )
+        .with_osc_report();
 
         Self {
             next_id: std::sync::atomic::AtomicUsize::new(0),
