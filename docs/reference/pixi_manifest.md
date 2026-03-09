@@ -757,7 +757,7 @@ syntax as `[dependencies]`.
     openssl = ">=3.0"
 
     [target.linux-64.constraints]
-    # Tighten the constraint further on Linux where we need FIPS-capable builds
+    # Tighten the constraint further on Linux
     openssl = ">=3.0.7"
     ```
 
