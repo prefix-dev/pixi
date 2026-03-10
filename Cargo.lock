@@ -5785,6 +5785,7 @@ dependencies = [
  "miette 7.6.0",
  "minijinja",
  "once_cell",
+ "pep440_rs",
  "pep508_rs",
  "pixi_build_backend",
  "pixi_build_types",
