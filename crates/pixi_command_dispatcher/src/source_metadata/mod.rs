@@ -9,8 +9,9 @@ pub use cycle::{Cycle, CycleEnvironment};
 use futures::TryStreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
+use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
-use pixi_record::{PixiRecord, SourceRecord};
+use pixi_record::{PinnedSourceSpec, PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
@@ -42,6 +43,65 @@ pub struct SourceMetadataSpec {
 
     /// Information about the build backend to request the information from.
     pub backend_metadata: BuildBackendMetadataSpec,
+}
+
+/// A normalized deduplication key for [`SourceMetadataSpec`].
+///
+/// [`SourceMetadataSpec`] contains environment-specific fields inherited from
+/// [`BuildBackendMetadataSpec`], such as `channels`, `channel_config`,
+/// `build_environment`, `variant_configuration`, and `variant_files`. When
+/// multiple pixi environments (e.g. "default" and "test") depend on the same
+/// local source package, these fields often differ between them even though
+/// the underlying metadata extraction targets the exact same source.
+///
+/// Using the full [`SourceMetadataSpec`] as the deduplication key in the
+/// [`CommandDispatcherProcessor`] prevents coalescing these requests, causing
+/// redundant metadata computations that race each other and trigger
+/// `WriteResult::Conflict` on the disk cache.
+///
+/// `SourceMetadataKey` normalizes the spec by retaining only the fields that
+/// determine *which* source metadata is being requested:
+/// - `package` — the package name to extract metadata for
+/// - `manifest_source` — the pinned location of the manifest
+/// - `preferred_build_source` — the optional pinned build source
+/// - `enabled_protocols` — which protocols are active
+///
+/// The following fields are **intentionally excluded** because they vary
+/// per-environment but do not change the identity of the metadata request:
+/// - `channels`
+/// - `channel_config`
+/// - `build_environment`
+/// - `variant_configuration`
+/// - `variant_files`
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct SourceMetadataKey {
+    /// The name of the package.
+    pub package: PackageName,
+
+    /// The pinned manifest source location.
+    pub manifest_source: PinnedSourceSpec,
+
+    /// The optional pinned build source location.
+    pub preferred_build_source: Option<PinnedSourceSpec>,
+
+    /// The protocols enabled for this source.
+    pub enabled_protocols: EnabledProtocols,
+}
+
+impl SourceMetadataSpec {
+    /// Returns a normalized key suitable for in-memory deduplication.
+    ///
+    /// Two [`SourceMetadataSpec`] values that differ only in environment-specific
+    /// fields (channels, channel_config, build_environment, variant_configuration,
+    /// variant_files) will produce the same [`SourceMetadataKey`].
+    pub(crate) fn dedup_key(&self) -> SourceMetadataKey {
+        SourceMetadataKey {
+            package: self.package.clone(),
+            manifest_source: self.backend_metadata.manifest_source.clone(),
+            preferred_build_source: self.backend_metadata.preferred_build_source.clone(),
+            enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
+        }
+    }
 }
 
 /// The result of building a particular source record.

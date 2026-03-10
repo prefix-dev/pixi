@@ -16,7 +16,7 @@ use crate::{
     DevSourceMetadataError, DevSourceMetadataSpec, InstallPixiEnvironmentResult, Reporter,
     SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
     SourceBuildCacheStatusError, SourceBuildError, SourceBuildResult, SourceBuildSpec,
-    SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    SourceMetadata, SourceMetadataError,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
         BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcherChannel,
@@ -30,6 +30,7 @@ use crate::{
     instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult},
     reporter,
     solve_conda::SolveCondaEnvironmentError,
+    source_metadata::SourceMetadataKey,
 };
 use futures::{StreamExt, future::LocalBoxFuture};
 use itertools::Itertools;
@@ -107,7 +108,7 @@ pub(crate) struct CommandDispatcherProcessor {
         PendingDeduplicatingTask<Arc<SourceMetadata>, SourceMetadataError>,
     >,
     source_metadata_reporters: HashMap<SourceMetadataId, reporter::SourceMetadataId>,
-    source_metadata_ids: HashMap<SourceMetadataSpec, SourceMetadataId>,
+    source_metadata_ids: HashMap<SourceMetadataKey, SourceMetadataId>,
 
     /// A mapping of instantiated tool environments
     instantiated_tool_envs: HashMap<

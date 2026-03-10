@@ -7,14 +7,18 @@ use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
     CommandDispatcherError, Reporter, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     command_dispatcher::{CommandDispatcherContext, SourceMetadataId, SourceMetadataTask},
-    source_metadata::Cycle,
+    source_metadata::{Cycle, SourceMetadataKey},
 };
 
 impl CommandDispatcherProcessor {
     /// Constructs a new [`SourceBuildId`] for the given `task`.
-    fn gen_source_metadata_id(&mut self, task: &SourceMetadataTask) -> SourceMetadataId {
+    fn gen_source_metadata_id(
+        &mut self,
+        task: &SourceMetadataTask,
+        key: SourceMetadataKey,
+    ) -> SourceMetadataId {
         let id = SourceMetadataId(self.source_metadata_ids.len());
-        self.source_metadata_ids.insert(task.spec.clone(), id);
+        self.source_metadata_ids.insert(key, id);
         if let Some(parent) = task.parent {
             self.parent_contexts.insert(id.into(), parent);
         }
@@ -28,9 +32,12 @@ impl CommandDispatcherProcessor {
             return;
         }
 
+        // Compute the normalized deduplication key once.
+        let key = task.spec.dedup_key();
+
         // Lookup the id of the source metadata to avoid deduplication.
         let source_metadata_id = {
-            match self.source_metadata_ids.get(&task.spec) {
+            match self.source_metadata_ids.get(&key) {
                 Some(id) => {
                     // We already have a pending task for this source metadata. Let's make sure that
                     // we are not trying to resolve the same source metadata in a cycle.
@@ -43,7 +50,7 @@ impl CommandDispatcherProcessor {
 
                     *id
                 }
-                None => self.gen_source_metadata_id(&task),
+                None => self.gen_source_metadata_id(&task, key),
             }
         };
 
