@@ -513,12 +513,17 @@ pub struct Python {
     /// executable and the module + function that should be executed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub entry_points: Vec<EntryPoint>,
+    /// When true, indicates the package is Python version independent (e.g.
+    /// uses the stable ABI / abi3). This tells the solver that the package
+    /// does not need to be rebuilt for different Python minor versions.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub version_independent: bool,
 }
 
 impl Python {
     /// Returns true if this is the default python configuration.
     pub fn is_default(&self) -> bool {
-        self.entry_points.is_empty()
+        self.entry_points.is_empty() && !self.version_independent
     }
 }
 

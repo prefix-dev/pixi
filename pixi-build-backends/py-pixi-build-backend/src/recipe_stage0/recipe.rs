@@ -634,7 +634,10 @@ impl PyPython {
 
         match entry_points {
             Ok(entry_points) => Ok(PyPython {
-                inner: RecipePython { entry_points },
+                inner: RecipePython {
+                    entry_points,
+                    version_independent: false,
+                },
             }),
             Err(_) => Err(pyo3::exceptions::PyValueError::new_err(
                 "Invalid entry point format",
