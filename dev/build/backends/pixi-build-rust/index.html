@@ -2086,6 +2086,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#binaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        binaries
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4080,6 +4091,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#binaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        binaries
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4336,6 +4358,25 @@ The backend will only use metadata explicitly defined in your <code>pixi.toml</c
 <p class="admonition-title">Comprehensive Compiler Documentation</p>
 <p>For detailed information about available compilers, platform-specific behavior, and how conda-forge compilers work, see the <a href="../../key_concepts/compilers/">Compilers Documentation</a>.</p>
 </div>
+<h3 id="binaries"><code>binaries</code><a class="headerlink" href="#binaries" title="Permanent link">#</a></h3>
+<ul>
+<li><strong>Type</strong>: <code>Array&lt;String&gt;</code></li>
+<li><strong>Default</strong>: <code>[]</code></li>
+<li><strong>Target Merge Behavior</strong>: <code>Overwrite</code> - Platform-specific binaries completely replace base binaries when set</li>
+</ul>
+<p>List of specific cargo binaries to install. Each entry is passed to <code>cargo install</code> as <code>--bin &lt;name&gt;</code>.
+If the list is empty, Cargo's default behavior is used (all binaries defined by the crate are installed).</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">binaries</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;rattler-build&quot;</span><span class="p">]</span>
+</span></code></pre></div>
+<p>For target-specific configuration, platform-specific binaries override the base configuration:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">binaries</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;my-cli&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;my-helper&quot;</span><span class="p">]</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="k">[package.build.target.linux-64.config]</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">binaries</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;my-cli&quot;</span><span class="p">]</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1"># Result for linux-64: only [&quot;my-cli&quot;]</span>
+</span></code></pre></div>
 <h2 id="build-process">Build Process<a class="headerlink" href="#build-process" title="Permanent link">#</a></h2>
 <p>The Rust backend follows this build process:</p>
 <ol>
@@ -4347,6 +4388,7 @@ The backend will only use metadata explicitly defined in your <code>pixi.toml</c
 <li><code>--path .</code>: Install from the current source directory</li>
 <li><code>--no-track</code>: Don't track installation metadata</li>
 <li><code>--force</code>: Force installation even if already installed</li>
+<li><code>--bin &lt;name&gt;</code> (optional, repeated): Added for each entry in <a href="#binaries"><code>[package.build.config.binaries]</code></a></li>
 </ul>
 </li>
 <li><strong>Cache Statistics</strong>: Displays <code>sccache</code> statistics if available</li>
@@ -4362,9 +4404,9 @@ Note that setting these default variants does not automatically add compilers to
 <p>This default is set to align with conda-forge's switch to Visual Studio 2022 and because <a href="https://learn.microsoft.com/en-us/lifecycle/products/visual-studio-2019">mainstream support for Visual Studio 2019 ended in 2024</a>.
 The <code>vs2022</code> compiler is more widely supported on modern GitHub runners and build environments.</p>
 <p>You can override these defaults by explicitly setting variants using <a href="https://pixi.sh/latest/reference/pixi_manifest/#build-variants-optional"><code>[workspace.build-variants]</code></a> in your <code>pixi.toml</code>:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[workspace.build-variants]</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">c_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">cxx_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">[workspace.build-variants]</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">c_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">cxx_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">#</a></h2>
 <ul>
