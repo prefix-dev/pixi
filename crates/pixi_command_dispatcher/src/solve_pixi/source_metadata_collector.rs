@@ -126,10 +126,10 @@ impl SourceMetadataCollector {
 
             // Process transitive dependencies
             for record in &source_metadata.records {
-                chain.push(record.package_record.name.clone());
+                chain.push(record.package_record().name.clone());
                 let anchor =
-                    SourceAnchor::from(SourceLocationSpec::from(record.manifest_source.clone()));
-                for depend in &record.package_record.depends {
+                    SourceAnchor::from(SourceLocationSpec::from(record.manifest_source().clone()));
+                for depend in &record.package_record().depends {
                     if let Ok(spec) = MatchSpec::from_str(depend, ParseStrictness::Lenient) {
                         let (PackageNameMatcher::Exact(name), nameless_spec) =
                             spec.clone().into_nameless()
@@ -138,7 +138,7 @@ impl SourceMetadataCollector {
                                 "non exact packages names are not supported in {depend}"
                             );
                         };
-                        if let Some(source_location) = record.sources.get(name.as_normalized()) {
+                        if let Some(source_location) = record.sources().get(name.as_normalized()) {
                             // We encountered a transitive source dependency.
                             let resolved_location = anchor.resolve(source_location.clone());
                             specs.push((

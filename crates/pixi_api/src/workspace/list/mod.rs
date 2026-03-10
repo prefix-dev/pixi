@@ -7,7 +7,7 @@ use pixi_core::{
 };
 use pixi_manifest::FeaturesExt;
 use pixi_uv_conversions::{ConversionError, pypi_options_to_index_locations, to_uv_normalize};
-use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
+use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_package_name};
 use rattler_conda_types::Platform;
 use rattler_lock::LockedPackageRef;
 use uv_distribution::RegistryWheelIndex;
@@ -71,7 +71,7 @@ pub async fn list(
     let mut conda_records = locked_deps_ext.iter().filter_map(|d| d.as_conda());
 
     // Construct the registry index if we have a python record
-    let python_record = conda_records.find(|r| is_python_record(r));
+    let python_record = conda_records.find(|r| is_python_package_name(r.name()));
     let tags;
     let uv_context;
     let index_locations;
@@ -87,10 +87,11 @@ pub async fn list(
             index_locations =
                 pypi_options_to_index_locations(&environment.pypi_options(), workspace.root())
                     .into_diagnostic()?;
+            let record = python_record.record().expect("python record should have full metadata");
             tags = get_pypi_tags(
                 platform,
                 &environment.system_requirements(),
-                python_record.record(),
+                record,
             )?;
             Some(RegistryWheelIndex::new(
                 &uv_context.cache,

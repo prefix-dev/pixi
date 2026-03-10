@@ -57,18 +57,18 @@ impl Package {
         let kind = PackageKind::from(package);
 
         let build = match package {
-            PackageExt::Conda(pkg) => Some(pkg.record().build.clone()),
+            PackageExt::Conda(pkg) => pkg.record().map(|r| r.build.clone()),
             PackageExt::PyPI(_, _) => None,
         };
 
         let build_number = match package {
-            PackageExt::Conda(pkg) => Some(pkg.record().build_number),
+            PackageExt::Conda(pkg) => pkg.record().map(|r| r.build_number),
             PackageExt::PyPI(_, _) => None,
         };
 
         let (size_bytes, source) = match package {
             PackageExt::Conda(pkg) => (
-                pkg.record().size,
+                pkg.record().and_then(|r| r.size),
                 match pkg {
                     CondaPackageData::Source(source) => Some(source.location.to_string()),
                     CondaPackageData::Binary(binary) => binary
@@ -115,17 +115,17 @@ impl Package {
         };
 
         let license = match package {
-            PackageExt::Conda(pkg) => pkg.record().license.clone(),
+            PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.license.clone()),
             PackageExt::PyPI(_, _) => None,
         };
 
         let license_family = match package {
-            PackageExt::Conda(pkg) => pkg.record().license_family.clone(),
+            PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.license_family.clone()),
             PackageExt::PyPI(_, _) => None,
         };
 
         let md5 = match package {
-            PackageExt::Conda(pkg) => pkg.record().md5.map(|h| format!("{h:x}")),
+            PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.md5.map(|h| format!("{h:x}"))),
             PackageExt::PyPI(p, _) => p
                 .hash
                 .as_ref()
@@ -133,7 +133,7 @@ impl Package {
         };
 
         let sha256 = match package {
-            PackageExt::Conda(pkg) => pkg.record().sha256.map(|h| format!("{h:x}")),
+            PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.sha256.map(|h| format!("{h:x}"))),
             PackageExt::PyPI(p, _) => p
                 .hash
                 .as_ref()
@@ -141,35 +141,37 @@ impl Package {
         };
 
         let arch = match package {
-            PackageExt::Conda(pkg) => pkg.record().arch.clone(),
+            PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.arch.clone()),
             PackageExt::PyPI(_, _) => None,
         };
 
         let platform = match package {
-            PackageExt::Conda(pkg) => pkg.record().platform.clone(),
+            PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.platform.clone()),
             PackageExt::PyPI(_, _) => None,
         };
 
         let subdir = match package {
-            PackageExt::Conda(pkg) => Some(pkg.record().subdir.clone()),
+            PackageExt::Conda(pkg) => pkg.record().map(|r| r.subdir.clone()),
             PackageExt::PyPI(_, _) => None,
         };
 
         let timestamp = match package {
-            PackageExt::Conda(pkg) => pkg.record().timestamp.map(|ts| ts.timestamp_millis()),
+            PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.timestamp.map(|ts| ts.timestamp_millis())),
             PackageExt::PyPI(_, _) => None,
         };
 
         let noarch = match package {
             PackageExt::Conda(pkg) => {
-                let noarch_type = &pkg.record().noarch;
-                if noarch_type.is_python() {
-                    Some("python".to_string())
-                } else if noarch_type.is_generic() {
-                    Some("generic".to_string())
-                } else {
-                    None
-                }
+                pkg.record().and_then(|r| {
+                    let noarch_type = &r.noarch;
+                    if noarch_type.is_python() {
+                        Some("python".to_string())
+                    } else if noarch_type.is_generic() {
+                        Some("generic".to_string())
+                    } else {
+                        None
+                    }
+                })
             }
             PackageExt::PyPI(_, _) => None,
         };
@@ -209,17 +211,17 @@ impl Package {
         };
 
         let constrains = match package {
-            PackageExt::Conda(pkg) => pkg.record().constrains.clone(),
+            PackageExt::Conda(pkg) => pkg.record().map(|r| r.constrains.clone()).unwrap_or_default(),
             PackageExt::PyPI(_, _) => Vec::new(),
         };
 
         let depends = match package {
-            PackageExt::Conda(pkg) => pkg.record().depends.clone(),
+            PackageExt::Conda(pkg) => pkg.record().map(|r| r.depends.clone()).unwrap_or_default(),
             PackageExt::PyPI(p, _) => p.requires_dist.iter().map(|r| r.to_string()).collect(),
         };
 
         let track_features = match package {
-            PackageExt::Conda(pkg) => pkg.record().track_features.clone(),
+            PackageExt::Conda(pkg) => pkg.record().map(|r| r.track_features.clone()).unwrap_or_default(),
             PackageExt::PyPI(_, _) => Vec::new(),
         };
 
@@ -317,7 +319,7 @@ impl PackageExt {
     /// Returns the name of the package.
     pub fn name(&self) -> Cow<'_, str> {
         match self {
-            Self::Conda(value) => value.record().name.as_normalized().into(),
+            Self::Conda(value) => value.name().as_normalized().into(),
             Self::PyPI(value, _) => value.name.as_dist_info_name(),
         }
     }
@@ -325,7 +327,7 @@ impl PackageExt {
     /// Returns the version string of the package
     pub fn version(&self) -> Option<String> {
         match self {
-            Self::Conda(value) => Some(value.record().version.to_string()),
+            Self::Conda(value) => value.record().map(|r| r.version.to_string()),
             Self::PyPI(value, _) => value.version.as_ref().map(|v| v.to_string()),
         }
     }

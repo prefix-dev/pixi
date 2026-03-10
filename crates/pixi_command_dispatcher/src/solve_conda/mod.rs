@@ -125,7 +125,7 @@ impl SolveCondaEnvironmentSpec {
                 .source_repodata
                 .iter()
                 .flat_map(|metadata| &metadata.records)
-                .map(|metadata| &metadata.package_record.name)
+                .map(|metadata| &metadata.package_record().name)
                 .dedup()
                 .collect::<HashSet<_>>();
 
@@ -190,13 +190,13 @@ impl SolveCondaEnvironmentSpec {
                 for record in &source_metadata.records {
                     let url = unique_url(record);
                     let repodata_record = RepoDataRecord {
-                        package_record: record.package_record.clone(),
+                        package_record: record.data.package_record.clone(),
                         url: url.clone(),
                         identifier: DistArchiveIdentifier {
                             identifier: ArchiveIdentifier {
-                                name: record.package_record.name.as_normalized().to_string(),
-                                version: record.package_record.version.to_string(),
-                                build_string: format!("{}_source", record.package_record.build),
+                                name: record.package_record().name.as_normalized().to_string(),
+                                version: record.package_record().version.to_string(),
+                                build_string: format!("{}_source", record.package_record().build),
                             },
                             archive_type: CondaArchiveType::Conda.into(),
                         },
@@ -341,14 +341,14 @@ impl SolveCondaEnvironmentSpec {
 
 /// Generates a unique URL for a source record.
 fn unique_url(source: &SourceRecord) -> Url {
-    let mut url = source.manifest_source.identifiable_url();
+    let mut url = source.manifest_source().identifiable_url();
 
     // Add unique identifiers to the URL.
     url.query_pairs_mut()
-        .append_pair("name", source.package_record.name.as_source())
-        .append_pair("version", &source.package_record.version.as_str())
-        .append_pair("build", &source.package_record.build)
-        .append_pair("subdir", &source.package_record.subdir);
+        .append_pair("name", source.package_record().name.as_source())
+        .append_pair("version", &source.package_record().version.as_str())
+        .append_pair("build", &source.package_record().build)
+        .append_pair("subdir", &source.package_record().subdir);
 
     url
 }

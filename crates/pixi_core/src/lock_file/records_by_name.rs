@@ -207,7 +207,7 @@ impl PixiRecordsByName {
                         .map(move |identifiers| (idx, record, identifiers))
                 }
                 PixiRecord::Source(source_record) => {
-                    PypiPackageIdentifier::from_package_record(&source_record.package_record)
+                    PypiPackageIdentifier::from_package_record(source_record.package_record())
                         .ok()
                         .map(move |identifiers| (idx, record, identifiers))
                 }

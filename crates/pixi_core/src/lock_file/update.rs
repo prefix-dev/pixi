@@ -18,9 +18,11 @@ use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
+use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    PixiEnvironmentSpec, SolvePixiEnvironmentError, executor::CancellationAwareFutures,
+    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
+    CommandDispatcherErrorResultExt, PixiEnvironmentSpec, SolvePixiEnvironmentError,
+    SourceMetadataSpec, executor::CancellationAwareFutures,
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
@@ -30,7 +32,10 @@ use pixi_install_pypi::{
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PixiRecord};
+use pixi_record::{
+    ParseLockFileError, PinnedBuildSourceSpec, PixiRecord, UnresolvedPixiRecord,
+    UnresolvedSourceRecord, VariantValue,
+};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
@@ -40,7 +45,9 @@ use pixi_uv_conversions::{
 use pypi_mapping::{self, MappingClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError, Platform};
+use rattler_conda_types::{
+    Arch, ChannelUrl, GenericVirtualPackage, PackageName, ParseChannelError, Platform,
+};
 use rattler_lock::{LockFile, LockedPackageRef, ParseCondaLockError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -694,12 +701,41 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let (ignored_conda, ignored_pypi): (HashSet<_>, HashSet<_>) =
                     ignored.into_iter().partition_map(|p| match p {
-                        LockedPackageRef::Conda(data) => Either::Left(data.record().name.clone()),
+                        LockedPackageRef::Conda(data) => Either::Left(data.name().clone()),
                         LockedPackageRef::Pypi(data) => Either::Right(data.name.clone()),
                     });
 
-                let pixi_records =
-                    locked_packages_to_pixi_records(conda_packages, self.workspace.root())?;
+                let pixi_records = {
+                    let channel_config = environment.channel_config();
+                    let channels: Vec<ChannelUrl> = environment
+                        .channels()
+                        .into_iter()
+                        .cloned()
+                        .map(|c| c.into_base_url(&channel_config))
+                        .collect::<Result<Vec<_>, _>>()
+                        .into_diagnostic()?;
+                    let VariantConfig {
+                        variant_configuration,
+                        variant_files,
+                    } = self.workspace.variants(platform).into_diagnostic()?;
+                    let virtual_packages: Vec<GenericVirtualPackage> = environment
+                        .virtual_packages(platform)
+                        .into_iter()
+                        .map(GenericVirtualPackage::from)
+                        .collect();
+                    locked_packages_to_pixi_records(
+                        conda_packages,
+                        self.workspace.root(),
+                        &self.command_dispatcher,
+                        channel_config,
+                        channels,
+                        variant_configuration,
+                        variant_files,
+                        virtual_packages,
+                        platform,
+                    )
+                    .await?
+                };
 
                 // Get the manifest's pypi dependencies for this environment to look up editability.
                 // The lock file always stores editable=false, so we apply the actual
@@ -900,7 +936,37 @@ impl<'p> LockFileDerivedData<'p> {
                 } else {
                     Vec::new()
                 };
-                let records = locked_packages_to_pixi_records(packages, self.workspace.root())?;
+                let records = {
+                    let channel_config = environment.channel_config();
+                    let channels: Vec<ChannelUrl> = environment
+                        .channels()
+                        .into_iter()
+                        .cloned()
+                        .map(|c| c.into_base_url(&channel_config))
+                        .collect::<Result<Vec<_>, _>>()
+                        .into_diagnostic()?;
+                    let VariantConfig {
+                        variant_configuration,
+                        variant_files,
+                    } = self.workspace.variants(platform).into_diagnostic()?;
+                    let virtual_packages: Vec<GenericVirtualPackage> = environment
+                        .virtual_packages(platform)
+                        .into_iter()
+                        .map(GenericVirtualPackage::from)
+                        .collect();
+                    locked_packages_to_pixi_records(
+                        packages,
+                        self.workspace.root(),
+                        &self.command_dispatcher,
+                        channel_config,
+                        channels,
+                        variant_configuration,
+                        variant_files,
+                        virtual_packages,
+                        platform,
+                    )
+                    .await?
+                };
 
                 // Update the conda prefix
                 let CondaPrefixUpdated {
@@ -989,18 +1055,166 @@ impl PackageFilterNames {
     }
 }
 
-fn locked_packages_to_pixi_records(
+fn locked_packages_to_unresolved_records(
     conda_packages: Vec<LockedPackageRef<'_>>,
     workspace_root: &std::path::Path,
-) -> Result<Vec<PixiRecord>, Report> {
-    let pixi_records = conda_packages
+) -> Result<Vec<UnresolvedPixiRecord>, Report> {
+    conda_packages
         .into_iter()
         .filter_map(LockedPackageRef::as_conda)
         .cloned()
-        .map(|data| PixiRecord::from_conda_package_data(data, workspace_root))
+        .map(|data| UnresolvedPixiRecord::from_conda_package_data(data, workspace_root))
         .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn locked_packages_to_pixi_records(
+    conda_packages: Vec<LockedPackageRef<'_>>,
+    workspace_root: &std::path::Path,
+    command_dispatcher: &CommandDispatcher,
+    channel_config: rattler_conda_types::ChannelConfig,
+    channels: Vec<ChannelUrl>,
+    variants: std::collections::BTreeMap<String, Vec<VariantValue>>,
+    variant_files: Vec<std::path::PathBuf>,
+    virtual_packages: Vec<GenericVirtualPackage>,
+    platform: Platform,
+) -> Result<Vec<PixiRecord>, Report> {
+    let unresolved = locked_packages_to_unresolved_records(conda_packages, workspace_root)?;
+    resolve_unresolved_records(
+        unresolved,
+        command_dispatcher,
+        channel_config,
+        channels,
+        variants,
+        variant_files,
+        virtual_packages,
+        platform,
+    )
+    .await
+}
+
+/// Resolve a list of `UnresolvedPixiRecord` into `PixiRecord`.
+///
+/// Full records pass through directly. Partial source records are resolved
+/// by calling `source_metadata()` on the command dispatcher to fetch the
+/// full metadata.
+#[allow(clippy::too_many_arguments)]
+async fn resolve_unresolved_records(
+    records: Vec<UnresolvedPixiRecord>,
+    command_dispatcher: &CommandDispatcher,
+    channel_config: rattler_conda_types::ChannelConfig,
+    channels: Vec<ChannelUrl>,
+    variants: std::collections::BTreeMap<String, Vec<VariantValue>>,
+    variant_files: Vec<std::path::PathBuf>,
+    virtual_packages: Vec<GenericVirtualPackage>,
+    platform: Platform,
+) -> Result<Vec<PixiRecord>, Report> {
+    let mut resolved = Vec::with_capacity(records.len());
+    for record in records {
+        match record.try_into_resolved() {
+            Ok(pixi_record) => resolved.push(pixi_record),
+            Err(partial) => {
+                let pixi_record = resolve_partial_record(
+                    partial,
+                    command_dispatcher,
+                    channel_config.clone(),
+                    channels.clone(),
+                    variants.clone(),
+                    variant_files.clone(),
+                    virtual_packages.clone(),
+                    platform,
+                )
+                .await?;
+                resolved.push(pixi_record);
+            }
+        }
+    }
+    Ok(resolved)
+}
+
+/// Resolve a single partial `UnresolvedPixiRecord` into a `PixiRecord`
+/// by fetching source metadata from the command dispatcher.
+#[allow(clippy::too_many_arguments)]
+async fn resolve_partial_record(
+    partial: UnresolvedPixiRecord,
+    command_dispatcher: &CommandDispatcher,
+    channel_config: rattler_conda_types::ChannelConfig,
+    channels: Vec<ChannelUrl>,
+    variants: std::collections::BTreeMap<String, Vec<VariantValue>>,
+    variant_files: Vec<std::path::PathBuf>,
+    virtual_packages: Vec<GenericVirtualPackage>,
+    platform: Platform,
+) -> Result<PixiRecord, Report> {
+    let source = match partial.as_source() {
+        Some(s) => s,
+        None => {
+            // Binary records should never end up here since try_into_resolved
+            // would have succeeded. Defensive fallback.
+            miette::bail!("unexpected binary record in resolve_partial_record");
+        }
+    };
+
+    let spec = build_source_metadata_spec(source, channel_config, channels, variants, variant_files, virtual_packages, platform);
+
+    let metadata = command_dispatcher
+        .source_metadata(spec)
+        .await
         .into_diagnostic()?;
-    Ok(pixi_records)
+
+    let partial_name = source.name().clone();
+    let partial_variants = source.variants().clone();
+
+    // Find the record that matches by name and variants.
+    let matched = metadata
+        .records
+        .iter()
+        .find(|r| {
+            r.name() == &partial_name
+                && (partial_variants.is_empty() || r.variants() == &partial_variants)
+        })
+        .cloned()
+        .ok_or_else(|| {
+            miette::miette!(
+                "could not resolve partial source record for '{}': no matching record found in source metadata",
+                partial_name.as_source()
+            )
+        })?;
+
+    Ok(PixiRecord::Source(matched))
+}
+
+/// Build a `SourceMetadataSpec` from an `UnresolvedSourceRecord`.
+fn build_source_metadata_spec(
+    source: &UnresolvedSourceRecord,
+    channel_config: rattler_conda_types::ChannelConfig,
+    channels: Vec<ChannelUrl>,
+    variants: std::collections::BTreeMap<String, Vec<VariantValue>>,
+    variant_files: Vec<std::path::PathBuf>,
+    virtual_packages: Vec<GenericVirtualPackage>,
+    platform: Platform,
+) -> SourceMetadataSpec {
+    SourceMetadataSpec {
+        package: source.name().clone(),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: source.manifest_source().clone(),
+            preferred_build_source: source
+                .build_source()
+                .cloned()
+                .map(PinnedBuildSourceSpec::into_pinned),
+            channel_config,
+            channels,
+            build_environment: BuildEnvironment {
+                host_platform: platform,
+                build_platform: platform,
+                host_virtual_packages: virtual_packages.clone(),
+                build_virtual_packages: virtual_packages,
+            },
+            variant_configuration: Some(variants),
+            variant_files: Some(variant_files),
+            enabled_protocols: EnabledProtocols::default(),
+        },
+    }
 }
 
 pub struct UpdateContext<'p> {
@@ -1349,37 +1563,95 @@ impl<'p> UpdateContextBuilder<'p> {
             }
         };
 
-        // Extract the current conda records from the lock-file
-        // TODO: Should we parallelize this? Measure please.
+        // Extract the current conda records from the lock-file.
+        // First collect as UnresolvedPixiRecord (sync), then resolve partials (async).
         let workspace_root = project.root();
-        let locked_repodata_records = project
+        let command_dispatcher = &self.command_dispatcher;
+
+        // Step 1: Collect unresolved records per environment and platform (sync).
+        #[allow(clippy::type_complexity)]
+        let unresolved_by_env: Vec<(
+            crate::workspace::Environment<'_>,
+            Vec<(Platform, Vec<UnresolvedPixiRecord>)>,
+        )> = project
             .environments()
             .into_iter()
-            .flat_map(|env| {
-                lock_file
-                    .environment(env.name().as_str())
-                    .into_iter()
-                    .map(move |locked_env| {
-                        locked_env
-                            .conda_packages_by_platform()
-                            .map(|(lock_platform, records)| {
-                                let platform = lock_platform.subdir();
-                                records
-                                    .cloned()
-                                    .map(|data| {
-                                        PixiRecord::from_conda_package_data(data, workspace_root)
-                                    })
-                                    .collect::<Result<Vec<_>, _>>()
-                                    .map(|records| {
-                                        (platform, Arc::new(PixiRecordsByName::from_iter(records)))
-                                    })
+            .filter_map(|env| {
+                let locked_env = lock_file.environment(env.name().as_str())?;
+                let platforms: Result<Vec<_>, _> = locked_env
+                    .conda_packages_by_platform()
+                    .map(|(lock_platform, records)| {
+                        let platform = lock_platform.subdir();
+                        let unresolved = records
+                            .cloned()
+                            .map(|data| {
+                                UnresolvedPixiRecord::from_conda_package_data(
+                                    data,
+                                    workspace_root,
+                                )
                             })
-                            .collect::<Result<HashMap<_, _>, _>>()
-                            .map(|records| (env.clone(), records))
+                            .collect::<Result<Vec<_>, _>>()?;
+                        Ok((platform, unresolved))
                     })
+                    .collect();
+                Some(platforms.map(|p| (env, p)))
             })
-            .collect::<Result<HashMap<_, HashMap<_, _>>, _>>()
+            .collect::<Result<Vec<_>, ParseLockFileError>>()
             .into_diagnostic()?;
+
+        // Step 2: Resolve partials async.
+        let mut locked_repodata_records: HashMap<
+            crate::workspace::Environment<'_>,
+            HashMap<Platform, Arc<PixiRecordsByName>>,
+        > = HashMap::new();
+        for (env, platform_records) in unresolved_by_env {
+            let mut env_map = HashMap::new();
+            for (platform, unresolved) in platform_records {
+                // Check if any records are partial.
+                let has_partials = unresolved.iter().any(|r| r.is_partial());
+                let resolved = if has_partials {
+                    let channel_config = env.channel_config();
+                    let channels: Vec<ChannelUrl> = env
+                        .channels()
+                        .into_iter()
+                        .cloned()
+                        .map(|c| c.into_base_url(&channel_config))
+                        .collect::<Result<Vec<_>, _>>()
+                        .into_diagnostic()?;
+                    let VariantConfig {
+                        variant_configuration,
+                        variant_files,
+                    } = project.variants(platform).into_diagnostic()?;
+                    let virtual_packages: Vec<GenericVirtualPackage> = env
+                        .virtual_packages(platform)
+                        .into_iter()
+                        .map(GenericVirtualPackage::from)
+                        .collect();
+                    resolve_unresolved_records(
+                        unresolved,
+                        command_dispatcher,
+                        channel_config,
+                        channels,
+                        variant_configuration,
+                        variant_files,
+                        virtual_packages,
+                        platform,
+                    )
+                    .await?
+                } else {
+                    // All records are full — resolve without async.
+                    unresolved
+                        .into_iter()
+                        .map(|r| {
+                            r.try_into_resolved()
+                                .expect("all records verified as non-partial")
+                        })
+                        .collect()
+                };
+                env_map.insert(platform, Arc::new(PixiRecordsByName::from_iter(resolved)));
+            }
+            locked_repodata_records.insert(env, env_map);
+        }
 
         let locked_pypi_records = project
             .environments()
@@ -1653,10 +1925,10 @@ impl<'p> UpdateContext<'p> {
                             .iter()
                             .filter_map(|r| match r {
                                 PixiRecord::Source(src) => {
-                                    let name = src.package_record.name.clone();
+                                    let name = src.name().clone();
                                     if targets.contains(name.as_source()) {
-                                        src.build_source
-                                            .clone()
+                                        src.build_source()
+                                            .cloned()
                                             .map(|spec| (name, spec.into_pinned()))
                                     } else {
                                         None
