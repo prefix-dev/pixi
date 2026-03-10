@@ -24,7 +24,7 @@ pyo3 = { version = "0.26", features = [
   "py-clone",
   "experimental-async",
 ] }
-pyo3-async-runtimes = { version = "0.26.0", features = ["tokio-runtime"] }
+pyo3-async-runtimes = { version = "0.28.0", features = ["tokio-runtime"] }
 
 # Core pixi-build dependencies (local crates)
 pixi_build_backend = { path = "../../crates/pixi_build_backend" }
