@@ -175,6 +175,7 @@ nav:
           - Pixi Diff-to-markdown: integration/ci/updates_github_actions.md
       - Extensions:
           - Introduction: integration/extensions/introduction.md
+          - Pixi Browse: integration/extensions/pixi_browse.md
           - Pixi Diff: integration/extensions/pixi_diff.md
           - Pixi Diff-to-markdown: integration/ci/updates_github_actions.md
           - Pixi Inject: integration/extensions/pixi_inject.md
