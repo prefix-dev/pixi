@@ -163,7 +163,7 @@ impl SourceMetadataSpec {
         };
 
         // Try to store the metadata in the cache with version checking
-        match command_dispatcher
+        let records = match command_dispatcher
             .source_metadata_cache()
             .try_write(&shard, cached_source_metadata, cache_version)
             .await
@@ -172,13 +172,15 @@ impl SourceMetadataSpec {
         {
             source_metadata::WriteResult::Written => {
                 tracing::trace!("Cache updated successfully");
+                records
             }
-            source_metadata::WriteResult::Conflict(_) => {
+            source_metadata::WriteResult::Conflict(conflict_metadata) => {
                 tracing::debug!(
-                    "Cache was updated by another process during computation (version conflict), using our computed result"
+                    "Cache was updated by another process during computation (version conflict)"
                 );
+                conflict_metadata.records
             }
-        }
+        };
 
         Ok(SourceMetadata {
             records: Self::amend_cached_source_records(&source_location, records),
