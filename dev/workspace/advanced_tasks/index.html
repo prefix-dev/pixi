@@ -4614,7 +4614,7 @@ For example, consider a Pixi workspace structured as follows:</p>
 </span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>✨<span class="w"> </span>Pixi<span class="w"> </span>task<span class="w"> </span><span class="o">(</span>base-task<span class="w"> </span><span class="k">in</span><span class="w"> </span>default<span class="o">)</span>:<span class="w"> </span><span class="nb">echo</span><span class="w"> </span>Base<span class="w"> </span>task<span class="w"> </span>with<span class="w"> </span>override1<span class="w"> </span>and<span class="w"> </span>cli-arg
 </span></code></pre></div>
 <h3 id="minijinja-templating-for-task-arguments">MiniJinja Templating for Task Arguments<a class="headerlink" href="#minijinja-templating-for-task-arguments" title="Permanent link">#</a></h3>
-<p>Task commands defined in the manifest support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.</p>
+<p>Task commands and env variables defined in the manifest support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.</p>
 <div class="admonition note">
 <p class="admonition-title">Templating and ad-hoc CLI commands</p>
 <p>MiniJinja templating is only applied to tasks defined in your manifest file (<code>pixi.toml</code> / <code>pyproject.toml</code>).
@@ -4815,7 +4815,8 @@ Use the <code>--templated</code> flag to opt in to template rendering for CLI co
 See <a href="../../reference/environment_variables/#environment-variable-priority">the environment variable priority documentation</a> for full details of ways to set environment variables,
 and how those ways interact with each other.</p>
 <p>Notes on environment variables in tasks:
-- Values set via <code>tasks.&lt;name&gt;.env</code> are interpreted by <code>deno_task_shell</code> when the task runs. Shell-style expansions like <code>env = { VAR = "$FOO" }</code> therefore work the same on all operating systems.</p>
+- Values set via <code>tasks.&lt;name&gt;.env</code> are interpreted by <code>deno_task_shell</code> when the task runs. Shell-style expansions like <code>env = { VAR = "$FOO" }</code> therefore work the same on all operating systems.
+- Templating is allowed in env variables, when you have something like <code>{ cmd="pytest", env={ BACKEND="{{ backend }}" }, args=[{arg="backend", default="numpy"}] }</code>. The arg <code>{{ backend }}</code> value is interpreted by the <code>backend</code> values passed in.  </p>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
 <p>In older versions of Pixi, this priority was not well-defined, and there are a number of known
