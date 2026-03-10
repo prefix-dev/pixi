@@ -5830,7 +5830,6 @@ dependencies = [
  "once_cell",
  "pixi_build_backend",
  "pixi_build_types",
- "rattler-build",
  "rattler_conda_types",
  "recipe_stage0",
  "rstest",
