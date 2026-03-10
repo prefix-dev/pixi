@@ -8,6 +8,7 @@ To decouple the building of a conda package from Pixi we provide something what 
 | [**`pixi-build-python`**](pixi-build-python/)               | Building Python packages                      |
 | [**`pixi-build-rattler-build`**](pixi-build-rattler-build/) | Direct `recipe.yaml` builds with full control |
 | [**`pixi-build-ros`**](pixi-build-ros/)                     | ROS (Robot Operating System) packages         |
+| [**`pixi-build-r`**](pixi-build-r/)                         | R packages using `R CMD INSTALL`              |
 | [**`pixi-build-rust`**](pixi-build-rust/)                   | Cargo-based Rust applications and libraries   |
 | [**`pixi-build-mojo`**](pixi-build-mojo/)                   | Mojo applications and packages                |
 

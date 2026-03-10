@@ -67,6 +67,7 @@ for further details on how to use the software.
 - [CMake](https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-cmake/index.md)
 - [Mojo](https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-mojo/index.md)
 - [Python](https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-python/index.md)
+- [R](https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-r/index.md)
 - [rattler-build](https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-rattler-build/index.md)
 - [ROS](https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-ros/index.md)
 - [Rust](https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-rust/index.md)

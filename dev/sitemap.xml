@@ -93,6 +93,10 @@
          <lastmod>2026-03-10</lastmod>
     </url>
     <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-r/</loc>
+         <lastmod>2026-03-10</lastmod>
+    </url>
+    <url>
          <loc>https://prefix-dev.github.io/pixi/dev/build/backends/pixi-build-rattler-build/</loc>
          <lastmod>2026-03-10</lastmod>
     </url>
