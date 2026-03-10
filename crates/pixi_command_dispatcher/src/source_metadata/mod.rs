@@ -2,6 +2,7 @@ mod cycle;
 
 use std::{
     collections::{BTreeMap, HashMap},
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -11,11 +12,11 @@ use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
-use pixi_record::{PinnedSourceSpec, PixiRecord, SourceRecord};
+use pixi_record::{PinnedSourceSpec, PixiRecord, SourceRecord, VariantValue};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, PackageRecord,
+    ChannelConfig, ChannelUrl, InvalidPackageNameError, MatchSpec, PackageName, PackageRecord,
     package::RunExportsJson,
 };
 use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
@@ -47,32 +48,21 @@ pub struct SourceMetadataSpec {
 
 /// A normalized deduplication key for [`SourceMetadataSpec`].
 ///
-/// [`SourceMetadataSpec`] contains environment-specific fields inherited from
-/// [`BuildBackendMetadataSpec`], such as `channels`, `channel_config`,
-/// `build_environment`, `variant_configuration`, and `variant_files`. When
-/// multiple pixi environments (e.g. "default" and "test") depend on the same
-/// local source package, these fields often differ between them even though
-/// the underlying metadata extraction targets the exact same source.
+/// [`SourceMetadataSpec`] wraps a nested [`BuildBackendMetadataSpec`], so its
+/// derived `Hash`/`Eq` includes the entire nested struct. `SourceMetadataKey`
+/// flattens the relevant fields into a single-level key for use in the
+/// [`CommandDispatcherProcessor`]'s deduplication map.
 ///
-/// Using the full [`SourceMetadataSpec`] as the deduplication key in the
-/// [`CommandDispatcherProcessor`] prevents coalescing these requests, causing
-/// redundant metadata computations that race each other and trigger
-/// `WriteResult::Conflict` on the disk cache.
-///
-/// `SourceMetadataKey` normalizes the spec by retaining only the fields that
-/// determine *which* source metadata is being requested:
+/// All fields that influence the metadata output are included:
 /// - `package` — the package name to extract metadata for
 /// - `manifest_source` — the pinned location of the manifest
 /// - `preferred_build_source` — the optional pinned build source
 /// - `enabled_protocols` — which protocols are active
-///
-/// The following fields are **intentionally excluded** because they vary
-/// per-environment but do not change the identity of the metadata request:
-/// - `channels`
-/// - `channel_config`
-/// - `build_environment`
-/// - `variant_configuration`
-/// - `variant_files`
+/// - `build_environment` — host/build platform and virtual packages
+/// - `channels` — conda channels used for dependency resolution
+/// - `channel_config` — channel URL configuration
+/// - `variant_configuration` — variant selection (e.g. python version)
+/// - `variant_files` — additional variant specification files
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct SourceMetadataKey {
     /// The name of the package.
@@ -86,20 +76,39 @@ pub struct SourceMetadataKey {
 
     /// The protocols enabled for this source.
     pub enabled_protocols: EnabledProtocols,
+
+    /// Information about the build environment (host/build platform).
+    pub build_environment: BuildEnvironment,
+
+    /// The channels to use for solving.
+    pub channels: Vec<ChannelUrl>,
+
+    /// The channel configuration to use.
+    pub channel_config: ChannelConfig,
+
+    /// Variant configuration.
+    pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
+
+    /// Variant file paths.
+    pub variant_files: Option<Vec<PathBuf>>,
 }
 
 impl SourceMetadataSpec {
     /// Returns a normalized key suitable for in-memory deduplication.
     ///
-    /// Two [`SourceMetadataSpec`] values that differ only in environment-specific
-    /// fields (channels, channel_config, build_environment, variant_configuration,
-    /// variant_files) will produce the same [`SourceMetadataKey`].
+    /// This flattens the nested [`BuildBackendMetadataSpec`] fields into a
+    /// single-level key for efficient HashMap lookups.
     pub(crate) fn dedup_key(&self) -> SourceMetadataKey {
         SourceMetadataKey {
             package: self.package.clone(),
             manifest_source: self.backend_metadata.manifest_source.clone(),
             preferred_build_source: self.backend_metadata.preferred_build_source.clone(),
             enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
+            build_environment: self.backend_metadata.build_environment.clone(),
+            channels: self.backend_metadata.channels.clone(),
+            channel_config: self.backend_metadata.channel_config.clone(),
+            variant_configuration: self.backend_metadata.variant_configuration.clone(),
+            variant_files: self.backend_metadata.variant_files.clone(),
         }
     }
 }
