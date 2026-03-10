@@ -19,7 +19,10 @@ use pixi_core::{
     workspace::get_activated_environment_variables,
     workspace::{Environment, HasWorkspaceRef},
 };
-use pixi_manifest::{Task, TaskName, task::ArgValues, task::TemplateStringError};
+use pixi_manifest::{
+    Task, TaskName,
+    task::{ArgValues, TaskRenderContext, TemplateStringError},
+};
 use pixi_progress::await_in_progress;
 use rattler_lock::LockFile;
 use thiserror::Error;
@@ -157,7 +160,8 @@ impl<'p> ExecutableTask<'p> {
             .map_err(FailedToParseShellScript::ArgumentReplacement)?;
         if let Some(task) = task {
             // Get the export specific environment variables
-            let export = get_export_specific_task_env(self.task.as_ref());
+            let export = get_export_specific_task_env(self.task.as_ref(), &context)
+                .map_err(FailedToParseShellScript::ArgumentReplacement)?;
 
             // Append the command line arguments verbatim
             let extra = self.args.extra_args();
@@ -498,16 +502,22 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
 /// task script. At runtime they are interpreted by `deno_task_shell`, not by an
 /// external OS shell, so `$VAR`-style expansion follows deno-task-shell’s
 /// semantics.
-fn get_export_specific_task_env(task: &Task) -> String {
-    // Append the environment variables if they don't exist
+fn get_export_specific_task_env(
+    task: &Task,
+    context: &TaskRenderContext,
+) -> Result<String, TemplateStringError> {
+    // Append the environment variables if they don’t exist
     let mut export = String::new();
     if let Some(env) = task.env() {
         for (key, value) in env {
-            tracing::debug!("Setting environment variable: {}=\"{}\"", key, value);
-            export.push_str(&format!("export \"{key}={value}\";\n"));
+            let rendered = value.render(context)?;
+            // Escape double quotes so the export statement remains valid shell.
+            let escaped = rendered.replace('"', "\\\"");
+            tracing::debug!("Setting environment variable: {}=\"{}\"", key, escaped);
+            export.push_str(&format!("export \"{key}={escaped}\";\n"));
         }
     }
-    export
+    Ok(export)
 }
 
 /// Determine the environment variables to use when executing a command. The
@@ -557,6 +567,7 @@ pub async fn get_task_env(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pixi_manifest::task::{ArgValues, TypedArg};
     use std::path::Path;
 
     const PROJECT_BOILERPLATE: &str = r#"
@@ -585,9 +596,80 @@ mod tests {
             .task(&TaskName::from("test"), None)
             .unwrap();
 
-        let export = get_export_specific_task_env(task);
+        let context = TaskRenderContext::default();
+        let export = get_export_specific_task_env(task, &context).unwrap();
 
         assert_eq!(export, "export \"FOO=bar\";\nexport \"BAR=$FOO\";\n");
+    }
+
+    #[test]
+    fn test_export_specific_task_env_with_template() {
+        let file_contents = r#"
+            [tasks]
+            test = {cmd = "test", env = {BACKEND = "{{ backend }}"}, args = [{arg = "backend", default = "Numba"}]}
+            "#;
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+
+        // Test with explicit arg value
+        let args = ArgValues::TypedArgs {
+            args: vec![TypedArg {
+                name: "backend".into(),
+                value: "CuPy".into(),
+            }],
+            extra: vec![],
+        };
+        let context = TaskRenderContext {
+            args: Some(&args),
+            ..Default::default()
+        };
+        let export = get_export_specific_task_env(task, &context).unwrap();
+        assert_eq!(export, "export \"BACKEND=CuPy\";\n");
+
+        // Test with default context (no args renders the default)
+        let default_args = ArgValues::TypedArgs {
+            args: vec![TypedArg {
+                name: "backend".into(),
+                value: "Numba".into(),
+            }],
+            extra: vec![],
+        };
+        let context = TaskRenderContext {
+            args: Some(&default_args),
+            ..Default::default()
+        };
+        let export = get_export_specific_task_env(task, &context).unwrap();
+        assert_eq!(export, "export \"BACKEND=Numba\";\n");
+    }
+
+    #[test]
+    fn test_export_env_escapes_double_quotes() {
+        let file_contents = r#"
+            [tasks]
+            test = {cmd = "test", env = {JSON = '{"key": "value"}'}}
+            "#;
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+
+        let context = TaskRenderContext::default();
+        let export = get_export_specific_task_env(task, &context).unwrap();
+        assert_eq!(export, "export \"JSON={\\\"key\\\": \\\"value\\\"}\";\n");
     }
 
     #[test]
