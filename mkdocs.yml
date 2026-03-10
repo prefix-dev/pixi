@@ -150,6 +150,7 @@ nav:
           - Python: build/backends/pixi-build-python.md
           - rattler-build: build/backends/pixi-build-rattler-build.md
           - ROS: build/backends/pixi-build-ros.md
+          - R: build/backends/pixi-build-r.md
           - Rust: build/backends/pixi-build-rust.md
           - Mojo: build/backends/pixi-build-mojo.md
       - Key Concepts:
