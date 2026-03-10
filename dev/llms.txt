@@ -91,6 +91,7 @@ for further details on how to use the software.
 - [VSCode](https://prefix-dev.github.io/pixi/dev/integration/editor/vscode/index.md)
 - [Zed](https://prefix-dev.github.io/pixi/dev/integration/editor/zed/index.md)
 - [Introduction](https://prefix-dev.github.io/pixi/dev/integration/extensions/introduction/index.md)
+- [Pixi Browse](https://prefix-dev.github.io/pixi/dev/integration/extensions/pixi_browse/index.md)
 - [Pixi Diff](https://prefix-dev.github.io/pixi/dev/integration/extensions/pixi_diff/index.md)
 - [Pixi Inject](https://prefix-dev.github.io/pixi/dev/integration/extensions/pixi_inject/index.md)
 - [Pixi Install-to-prefix](https://prefix-dev.github.io/pixi/dev/integration/extensions/pixi_install_to_prefix/index.md)
