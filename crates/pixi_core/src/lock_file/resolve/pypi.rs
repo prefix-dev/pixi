@@ -309,7 +309,7 @@ pub async fn resolve_pypi(
                     PypiPackageIdentifier::from_repodata_record(repodata_record)
                 }
                 PixiRecord::Source(source_record) => {
-                    PypiPackageIdentifier::from_package_record(&source_record.package_record)
+                    PypiPackageIdentifier::from_package_record(source_record.package_record())
                 }
             };
 

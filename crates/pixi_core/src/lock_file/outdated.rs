@@ -434,10 +434,10 @@ fn find_inconsistent_solve_groups<'p>(
             {
                 match package {
                     LockedPackageRef::Conda(pkg) => {
-                        match conda_packages_by_name.get(&pkg.record().name) {
+                        match conda_packages_by_name.get(pkg.name()) {
                             None => {
                                 conda_packages_by_name
-                                    .insert(pkg.record().name.clone(), pkg.location().clone());
+                                    .insert(pkg.name().clone(), pkg.location().clone());
                             }
                             Some(url) if pkg.location() != url => {
                                 conda_package_mismatch = true;

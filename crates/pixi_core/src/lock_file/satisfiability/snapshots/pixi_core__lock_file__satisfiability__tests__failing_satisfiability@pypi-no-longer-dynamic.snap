@@ -5,4 +5,4 @@ expression: s
 environment 'default' does not satisfy the requirements of the project for platform 'win-64'
     Diagnostic severity: error
     Caused by: source tree hash for dynamic-dep does not match the hash in the lock-file
-    Caused by: the computed source tree hash is '50db39844d97e7135f4c4f85d97e02b97f82179de450ca879c12a8fd5db456cc', but the lock-file contains '93b37bda9cded35069601a8e2d2cecdba7a13fe9ac356985c53784c26461911d'
+    Caused by: the computed source tree hash is 'f63894414ac1fb1dd627b8c8bd3998d9232ae5d0b900c7a7498f9c35c3678b72', but the lock-file contains '93b37bda9cded35069601a8e2d2cecdba7a13fe9ac356985c53784c26461911d'

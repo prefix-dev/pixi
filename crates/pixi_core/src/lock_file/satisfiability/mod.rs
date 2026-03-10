@@ -25,7 +25,7 @@ use pixi_manifest::{
 use pixi_pypi_spec::PixiPypiSource;
 use pixi_record::{
     DevSourceRecord, LockedGitUrl, ParseLockFileError, PinnedBuildSourceSpec, PinnedSourceSpec,
-    PixiRecord, SourceMismatchError, SourceRecord, VariantValue,
+    PixiRecord, SourceMismatchError, SourceRecord, UnresolvedPixiRecord, VariantValue,
 };
 use pixi_spec::{
     PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError, Subdirectory,
@@ -868,8 +868,9 @@ pub async fn verify_platform_satisfiability(
     platform: Platform,
     project_root: &Path,
 ) -> Result<VerifiedIndividualEnvironment, Box<PlatformUnsat>> {
-    // Convert the lock file into a list of conda and pypi packages
-    let mut pixi_records: Vec<PixiRecord> = Vec::new();
+    // Convert the lock file into a list of conda and pypi packages.
+    // Read as UnresolvedPixiRecord first, then resolve any partial source records.
+    let mut unresolved_records: Vec<UnresolvedPixiRecord> = Vec::new();
     let mut pypi_packages: Vec<PypiPackageData> = Vec::new();
     let lock_platform = locked_environment
         .lock_file()
@@ -882,8 +883,8 @@ pub async fn verify_platform_satisfiability(
         match package {
             LockedPackageRef::Conda(conda) => {
                 let url = conda.location().clone();
-                pixi_records.push(
-                    PixiRecord::from_conda_package_data(conda.clone(), project_root)
+                unresolved_records.push(
+                    UnresolvedPixiRecord::from_conda_package_data(conda.clone(), project_root)
                         .map_err(|e| PlatformUnsat::CorruptedEntry(url.to_string(), e))?,
                 );
             }
@@ -892,6 +893,102 @@ pub async fn verify_platform_satisfiability(
             }
         }
     }
+
+    // Resolve any partial source records using source_metadata().
+    let pixi_records: Vec<PixiRecord> = {
+        let has_partials = unresolved_records.iter().any(|r| r.is_partial());
+        if has_partials {
+            let channel_config = environment.workspace().channel_config();
+            let channels: Vec<ChannelUrl> = environment
+                .channels()
+                .into_iter()
+                .cloned()
+                .map(|c| c.into_base_url(&channel_config))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| Box::new(PlatformUnsat::InvalidChannel(e)))?;
+            let VariantConfig {
+                variant_configuration,
+                variant_files,
+            } = environment
+                .workspace()
+                .variants(platform)
+                .map_err(|e| Box::new(PlatformUnsat::Variants(e)))?;
+            let virtual_packages: Vec<GenericVirtualPackage> = environment
+                .virtual_packages(platform)
+                .into_iter()
+                .map(GenericVirtualPackage::from)
+                .collect();
+
+            let mut resolved = Vec::with_capacity(unresolved_records.len());
+            for record in unresolved_records {
+                match record.try_into_resolved() {
+                    Ok(pixi_record) => resolved.push(pixi_record),
+                    Err(partial) => {
+                        let source = partial.as_source().expect("partial must be source");
+                        let spec = SourceMetadataSpec {
+                            package: source.name().clone(),
+                            backend_metadata: BuildBackendMetadataSpec {
+                                manifest_source: source.manifest_source().clone(),
+                                preferred_build_source: source
+                                    .build_source()
+                                    .cloned()
+                                    .map(PinnedBuildSourceSpec::into_pinned),
+                                channel_config: channel_config.clone(),
+                                channels: channels.clone(),
+                                build_environment: BuildEnvironment {
+                                    host_platform: platform,
+                                    build_platform: platform,
+                                    host_virtual_packages: virtual_packages.clone(),
+                                    build_virtual_packages: virtual_packages.clone(),
+                                },
+                                variant_configuration: Some(variant_configuration.clone()),
+                                variant_files: Some(variant_files.clone()),
+                                enabled_protocols: EnabledProtocols::default(),
+                            },
+                        };
+
+                        let partial_name = source.name().clone();
+                        let partial_variants = source.variants().clone();
+
+                        let metadata = command_dispatcher
+                            .source_metadata(spec)
+                            .await
+                            .map_err(|e| Box::new(PlatformUnsat::SourceMetadata(e)))?;
+
+                        let matched = metadata
+                            .records
+                            .iter()
+                            .find(|r| {
+                                r.name() == &partial_name
+                                    && (partial_variants.is_empty()
+                                        || r.variants() == &partial_variants)
+                            })
+                            .ok_or_else(|| {
+                                Box::new(PlatformUnsat::SourcePackageNotFoundInMetadata {
+                                    package_name: partial_name.as_source().to_string(),
+                                    manifest_path: source
+                                        .manifest_source()
+                                        .as_path()
+                                        .map(|p| p.path.to_string())
+                                        .unwrap_or_else(|| source.manifest_source().to_string()),
+                                })
+                            })?;
+
+                        resolved.push(PixiRecord::Source(matched.clone()));
+                    }
+                }
+            }
+            resolved
+        } else {
+            unresolved_records
+                .into_iter()
+                .map(|r| {
+                    r.try_into_resolved()
+                        .expect("all records verified as non-partial")
+                })
+                .collect()
+        }
+    };
 
     // to reflect new purls for pypi packages
     // we need to invalidate the locked environment
@@ -1282,12 +1379,12 @@ async fn verify_source_metadata(
             async move {
                 // Build source metadata spec to request current package metadata
                 let source_metadata_spec = SourceMetadataSpec {
-                    package: source_record.package_record.name.clone(),
+                    package: source_record.name().clone(),
                     backend_metadata: BuildBackendMetadataSpec {
-                        manifest_source: source_record.manifest_source.clone(),
+                        manifest_source: source_record.manifest_source().clone(),
                         preferred_build_source: source_record
-                            .build_source
-                            .clone()
+                            .build_source()
+                            .cloned()
                             .map(PinnedBuildSourceSpec::into_pinned),
                         channel_config,
                         channels: channel_urls,
@@ -1311,12 +1408,12 @@ async fn verify_source_metadata(
 
                 if current_source_metadata.records.is_empty() {
                     return Err(Box::new(PlatformUnsat::SourcePackageNotFoundInMetadata {
-                        package_name: source_record.package_record.name.as_source().to_string(),
+                        package_name: source_record.name().as_source().to_string(),
                         manifest_path: source_record
-                            .manifest_source
+                            .manifest_source()
                             .as_path()
                             .map(|p| p.path.to_string())
-                            .unwrap_or_else(|| source_record.manifest_source.to_string()),
+                            .unwrap_or_else(|| source_record.manifest_source().to_string()),
                     }));
                 }
 
@@ -1331,10 +1428,10 @@ async fn verify_source_metadata(
 
                 let Some(current_record) = current_record else {
                     let manifest_path = source_record
-                        .manifest_source
+                        .manifest_source()
                         .as_path()
                         .map(|p| p.path.to_string())
-                        .unwrap_or_else(|| source_record.manifest_source.to_string());
+                        .unwrap_or_else(|| source_record.manifest_source().to_string());
                     return Err(Box::new(PlatformUnsat::NoMatchingSourcePackageInMetadata {
                         package: format_source_record(source_record),
                         manifest_path,
@@ -1347,26 +1444,24 @@ async fn verify_source_metadata(
                 };
 
                 // Check if the build source location changed
-                if current_record.build_source != source_record.build_source {
+                if current_record.build_source() != source_record.build_source() {
                     return Err(Box::new(PlatformUnsat::SourceBuildLocationChanged(
-                        source_record.package_record.name.as_source().to_string(),
+                        source_record.name().as_source().to_string(),
                         source_record
-                            .build_source
-                            .as_ref()
+                            .build_source()
                             .map(|s| s.to_string())
                             .unwrap_or_default(),
                         current_record
-                            .build_source
-                            .as_ref()
+                            .build_source()
                             .map(|s| s.to_string())
                             .unwrap_or_default(),
                     )));
                 }
 
                 // Check if the source dependencies match
-                let package_name = source_record.package_record.name.as_source().to_string();
-                for (source_name, locked_source_spec) in &source_record.sources {
-                    match current_record.sources.get(source_name) {
+                let package_name = source_record.name().as_source().to_string();
+                for (source_name, locked_source_spec) in source_record.sources() {
+                    match current_record.sources().get(source_name) {
                         Some(current_source_spec) => {
                             if locked_source_spec != current_source_spec {
                                 return Err(Box::new(PlatformUnsat::SourceDependencyChanged {
@@ -1389,8 +1484,8 @@ async fn verify_source_metadata(
                 }
 
                 // Check if there are any new sources in current that weren't in locked
-                for (source_name, current_source_spec) in &current_record.sources {
-                    if !source_record.sources.contains_key(source_name) {
+                for (source_name, current_source_spec) in current_record.sources() {
+                    if !source_record.sources().contains_key(source_name.as_str()) {
                         return Err(Box::new(PlatformUnsat::SourceDependencyChanged {
                             package: package_name.clone(),
                             dependency: source_name.clone(),
@@ -1401,15 +1496,15 @@ async fn verify_source_metadata(
                 }
 
                 // Check if the package record metadata matches
-                let package_name = source_record.package_record.name.as_source();
+                let package_name = source_record.name().as_source();
                 tracing::trace!(
                     "Checking package record equality for '{}' (current vs locked)",
                     package_name
                 );
 
                 if let Err(reason) = package_records_are_equal(
-                    &current_record.package_record,
-                    &source_record.package_record,
+                    current_record.package_record(),
+                    source_record.package_record(),
                 ) {
                     return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
                         package_name.to_string(),
@@ -1574,16 +1669,16 @@ fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> Result<(),
 fn format_source_record(r: &SourceRecord) -> String {
     let variants = format!(
         "[{}]",
-        r.variants
+        r.variants()
             .iter()
             .format_with(", ", |(k, v), f| f(&format_args!("{k}={v}")))
     );
     format!(
         "{}/{}={}={} {}",
-        &r.package_record.subdir,
-        r.package_record.name.as_source(),
-        &r.package_record.version,
-        &r.package_record.build,
+        &r.package_record().subdir,
+        r.package_record().name.as_source(),
+        &r.package_record().version,
+        &r.package_record().build,
         variants,
     )
 }
@@ -2129,7 +2224,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         PixiRecord::Source(record) => (
                             Cow::Owned(format!(
                                 "{} @ {}",
-                                record.package_record.name.as_source(),
+                                record.name().as_source(),
                                 &record.manifest_source
                             )),
                             SourceLocationSpec::from(record.manifest_source.clone()).into(),
@@ -2144,7 +2239,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                 .as_exact()
                                 .expect("depends can only contain exact package names");
                             Some((
-                                record.sources.get(package_name.as_normalized())?,
+                                record.sources().get(package_name.as_normalized())?,
                                 package_name,
                             ))
                         })
@@ -2295,9 +2390,9 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .iter()
         .filter_map(PixiRecord::as_source)
     {
-        if !expected_conda_source_dependencies.contains(&record.package_record.name) {
+        if !expected_conda_source_dependencies.contains(record.name()) {
             return Err(Box::new(PlatformUnsat::RequiredBinaryIsSource(
-                record.package_record.name.as_source().to_string(),
+                record.name().as_source().to_string(),
             )));
         }
     }
@@ -2551,12 +2646,12 @@ fn verify_build_source_matches_manifest(
 
     let ok = Ok(());
     let error = Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
-        src_record.package_record.name.as_source().to_string(),
+        src_record.name().as_source().to_string(),
         SourceMismatchError::SourceTypeMismatch,
     )));
     let sat_err = |e| {
         Box::new(PlatformUnsat::PackageBuildSourceMismatch(
-            src_record.package_record.name.as_source().to_string(),
+            src_record.name().as_source().to_string(),
             e,
         ))
     };

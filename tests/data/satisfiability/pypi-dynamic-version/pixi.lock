@@ -19,4 +19,4 @@ packages:
   depends: []
 - pypi: ./dynamic-dep
   name: dynamic-dep
-  sha256: 93b37bda9cded35069601a8e2d2cecdba7a13fe9ac356985c53784c26461911d
+  sha256: ec39769fce8466d4438621a1d371aad180c4e8426a5a22632b0fe46b61cedb90

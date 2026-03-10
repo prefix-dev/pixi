@@ -760,7 +760,7 @@ impl Workspace {
             if affected_environments.contains(&(env.name().as_str(), platform)) {
                 match package {
                     LockedPackageRef::Conda(package) => {
-                        !conda_packages.contains(&package.record().name)
+                        !conda_packages.contains(package.name())
                     }
                     LockedPackageRef::Pypi(package) => !pypi_packages.contains(&package.name),
                 }
