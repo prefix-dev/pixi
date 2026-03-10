@@ -189,10 +189,12 @@ impl LockedEnvironmentHash {
                 match package {
                     // A select set of fields are used to hash the package
                     LockedPackageRef::Conda(pack) => {
-                        if let Some(sha) = pack.record().sha256 {
-                            sha.hash(&mut hasher);
-                        } else if let Some(md5) = pack.record().md5 {
-                            md5.hash(&mut hasher);
+                        if let Some(record) = pack.record() {
+                            if let Some(sha) = record.sha256 {
+                                sha.hash(&mut hasher);
+                            } else if let Some(md5) = record.md5 {
+                                md5.hash(&mut hasher);
+                            }
                         }
                     }
                     LockedPackageRef::Pypi(_) => {}

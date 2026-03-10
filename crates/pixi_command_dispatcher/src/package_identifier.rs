@@ -59,12 +59,12 @@ impl<'a> From<&'a PackageRecord> for PackageIdentifier {
 
 impl From<SourceRecord> for PackageIdentifier {
     fn from(record: SourceRecord) -> Self {
-        record.package_record.into()
+        record.data.package_record.into()
     }
 }
 
 impl<'a> From<&'a SourceRecord> for PackageIdentifier {
     fn from(record: &'a SourceRecord) -> Self {
-        (&record.package_record).into()
+        (&record.data.package_record).into()
     }
 }

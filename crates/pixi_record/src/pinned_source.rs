@@ -164,13 +164,11 @@ impl PinnedSourceSpec {
     ///     },
     /// });
     ///
-    /// let source_spec = SourceSpec {
-    ///     location: SourceLocationSpec::Git(GitSpec {
-    ///         git: Url::parse("https://github.com/user/repo.git")?,
-    ///         rev: None,
-    ///         subdirectory: Default::default(),
-    ///     }),
-    /// };
+    /// let source_spec = SourceLocationSpec::Git(GitSpec {
+    ///     git: Url::parse("https://github.com/user/repo.git")?,
+    ///     rev: None,
+    ///     subdirectory: Default::default(),
+    /// });
     ///
     /// assert!(pinned_git.matches_source_spec(&source_spec));
     /// # Ok(())

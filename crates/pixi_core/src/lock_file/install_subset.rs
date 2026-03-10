@@ -37,16 +37,8 @@ impl<'a> From<LockedPackageRef<'a>> for PackageNode {
         let dependency_names: Vec<String> = match package_ref {
             LockedPackageRef::Conda(conda_data) => {
                 // Extract dependencies from conda data and parse as MatchSpec
-                let depends = match conda_data {
-                    rattler_lock::CondaPackageData::Binary(binary_data) => {
-                        &binary_data.package_record.depends
-                    }
-                    rattler_lock::CondaPackageData::Source(source_data) => {
-                        &source_data.package_record.depends
-                    }
-                };
-
-                depends
+                conda_data
+                    .depends()
                     .iter()
                     .filter_map(|dep_spec| {
                         // Parse as MatchSpec to get the package name

@@ -1,7 +1,3 @@
----
-source: crates/pixi_record/src/source_record.rs
-expression: roundtrip_lock
----
 version: 7
 platforms:
 - name: noarch
@@ -23,27 +19,39 @@ packages:
   version: 1.1.0
   build: h234567_0
   subdir: noarch
-  package_build_source:
+  source:
     path: ../src
 - conda_source: git-no-manifest-subdir[f0ed072f] @ git+https://github.com/example/repo.git?tag=v1.0.0#abc123def456abc123def456abc123def456abc1
   version: 3.0.0
   build: h901237_0
   subdir: noarch
-  package_build_source:
+  source:
     path: build/subdir
 - conda_source: git-sibling-test[cb1b107e] @ git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
   version: 1.0.0
   build: h123456_0
   subdir: noarch
-  package_build_source:
+  source:
     path: ../non-nested
-- source: path-absolute-manifest[17e682f7] @ /workspace/absolute-recipe
-  package_build_source:
+- conda_source: path-absolute-manifest[17e682f7] @ /workspace/absolute-recipe
+  version: 2.4.0
+  build: h901236_0
+  subdir: noarch
+  source:
     path: ../src
-- source: path-child-test[9d062313] @ recipes/my-package
-  package_build_source:
+- conda_source: path-child-test[9d062313] @ recipes/my-package
+  version: 2.1.0
+  build: h890123_0
+  subdir: noarch
+  source:
     path: ../../src/lib
-- source: path-no-build-source[e11447f7] @ recipes/no-build
-- source: path-sibling-test[2c2ab470] @ recipes/my-package
-  package_build_source:
+- conda_source: path-no-build-source[e11447f7] @ recipes/no-build
+  version: 2.5.0
+  build: h901238_0
+  subdir: noarch
+- conda_source: path-sibling-test[2c2ab470] @ recipes/my-package
+  version: 2.0.0
+  build: h789012_0
+  subdir: noarch
+  source:
     path: ../../other-package/src

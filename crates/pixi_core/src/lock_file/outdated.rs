@@ -9,7 +9,7 @@ use futures::FutureExt;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use itertools::Itertools;
-use pixi_command_dispatcher::CommandDispatcher;
+use pixi_command_dispatcher::{CommandDispatcher, CommandDispatcherError};
 use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
@@ -251,7 +251,19 @@ async fn find_unsatisfiable_targets<'p>(
                 Ok(verified_env) => {
                     verified_environments.insert((environment.clone(), platform), verified_env);
                 }
-                Err(unsat) if unsat.is_pypi_only() => {
+                Err(CommandDispatcherError::Cancelled) => {
+                    tracing::info!(
+                        "the dependencies of environment '{0}' for platform {platform} are out of date because the operation was cancelled",
+                        environment.name().fancy_display()
+                    );
+
+                    unsatisfiable_targets
+                        .outdated_conda
+                        .entry(environment.clone())
+                        .or_default()
+                        .insert(platform);
+                }
+                Err(CommandDispatcherError::Failed(unsat)) if unsat.is_pypi_only() => {
                     tracing::info!(
                         "the pypi dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
                         environment.name().fancy_display()
@@ -263,7 +275,7 @@ async fn find_unsatisfiable_targets<'p>(
                         .or_default()
                         .insert(platform);
                 }
-                Err(unsat) => {
+                Err(CommandDispatcherError::Failed(unsat)) => {
                     tracing::info!(
                         "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
                         environment.name().fancy_display()
@@ -433,18 +445,16 @@ fn find_inconsistent_solve_groups<'p>(
                 .flatten()
             {
                 match package {
-                    LockedPackageRef::Conda(pkg) => {
-                        match conda_packages_by_name.get(&pkg.record().name) {
-                            None => {
-                                conda_packages_by_name
-                                    .insert(pkg.record().name.clone(), pkg.location().clone());
-                            }
-                            Some(url) if pkg.location() != url => {
-                                conda_package_mismatch = true;
-                            }
-                            _ => {}
+                    LockedPackageRef::Conda(pkg) => match conda_packages_by_name.get(pkg.name()) {
+                        None => {
+                            conda_packages_by_name
+                                .insert(pkg.name().clone(), pkg.location().clone());
                         }
-                    }
+                        Some(url) if pkg.location() != url => {
+                            conda_package_mismatch = true;
+                        }
+                        _ => {}
+                    },
                     LockedPackageRef::Pypi(pkg) => match pypi_packages_by_name.get(&pkg.name) {
                         None => {
                             pypi_packages_by_name.insert(pkg.name.clone(), pkg.location.clone());

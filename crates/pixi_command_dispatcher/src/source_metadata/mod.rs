@@ -10,7 +10,7 @@ use futures::TryStreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
-use pixi_record::{PixiRecord, SourceRecord};
+use pixi_record::{FullSourceRecordData, PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
@@ -201,11 +201,14 @@ impl SourceMetadataSpec {
                      variants,
                      sources,
                  }| SourceRecord {
-                    package_record,
+                    data: FullSourceRecordData {
+                        package_record,
+                        sources,
+                    },
                     variants,
-                    sources,
                     manifest_source: source.manifest_source().clone(),
                     build_source: source.build_source().cloned(),
+                    identifier_hash: None,
                 },
             )
             .collect()

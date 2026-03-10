@@ -523,7 +523,7 @@ impl SourceBuildSpec {
                 PixiRecord::Source(source) => {
                     let repodata_record = prefix
                         .resolved_source_records
-                        .get(&source.package_record.name)
+                        .get(&source.data.package_record.name)
                         .cloned()
                         .expect("the source record should be present in the result sources");
                     BuildHostPackage {
