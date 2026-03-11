@@ -1828,16 +1828,15 @@ pub(crate) async fn verify_package_platform_satisfiability(
         // Only check packages that are actually locked; constraints only apply
         // to installed packages. Source records are excluded because they are
         // controlled via their source spec, not version constraints.
-        if let Some(locked_record) = locked_pixi_records.by_name(&package_name) {
-            if let Some(binary_record) = locked_record.as_binary() {
-                if !nameless_spec.matches(&binary_record.package_record) {
-                    return Err(Box::new(PlatformUnsat::ConstraintViolated {
-                        package: package_name.as_source().to_string(),
-                        locked_version: binary_record.package_record.version.to_string(),
-                        constraint: nameless_spec.to_string(),
-                    }));
-                }
-            }
+        if let Some(locked_record) = locked_pixi_records.by_name(&package_name)
+            && let Some(binary_record) = locked_record.as_binary()
+            && !nameless_spec.matches(&binary_record.package_record)
+        {
+            return Err(Box::new(PlatformUnsat::ConstraintViolated {
+                package: package_name.as_source().to_string(),
+                locked_version: binary_record.package_record.version.to_string(),
+                constraint: nameless_spec.to_string(),
+            }));
         }
     }
 
