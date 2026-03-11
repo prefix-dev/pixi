@@ -11,9 +11,17 @@ This document explains how you can use the `[dev]` table to depend on the develo
 Assume a Rust package that you want to develop using Pixi.
 Then we add a `pixi.toml` manifest file:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/dev/pixi.toml:minimal"
-```
+=== "pixi.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/dev/pixi.toml:minimal"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pyproject_tomls/dev_pixi.toml:minimal"
+    ```
 
 Now you can use Pixi to build the package into a conda package:
 
@@ -25,9 +33,17 @@ Because of the isolation, the development dependencies such as `cargo` are not a
 
 To change that you can add a `[dev]` table to the manifest file:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/dev/pixi.toml:dev"
-```
+=== "pixi.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/dev/pixi.toml:dev"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pyproject_tomls/dev_pixi.toml:dev"
+    ```
 
 Now when you run `pixi install` the development dependencies will be installed into the Pixi environment.
 This means that you can now use `cargo` in `pixi run`:
@@ -42,9 +58,18 @@ Thus, you can use them during development.
 ## Extended example
 This is a full `pixi.toml` example using the `[dev]` table:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/dev/pixi.toml"
-```
+=== "pixi.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/dev/pixi.toml"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pyproject_tomls/dev_pixi.toml"
+    ```
 
 What you will see when you run `pixi list` is that you will have `cmake`, `python`, `bat` and `rust` installed all without defining them in the actual dependencies.
 This is because they are defined in the dependencies of the package that was included in the `[dev]` table.
+

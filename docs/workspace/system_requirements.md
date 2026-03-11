@@ -100,10 +100,17 @@ If you're encountering an error like:
 This indicates that the environment's system requirements are higher than your current system's specifications.
 To resolve this, you can lower the system requirements in your configuration:
 
-```toml
-[system-requirements]
-linux = "4.12.14"
-```
+=== "pixi.toml"
+    ```toml
+    [system-requirements]
+    linux = "4.12.14"
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.system-requirements]
+    linux = "4.12.14"
+    ```
 
 This adjustment informs the dependency resolver to accommodate the older system version.
 
@@ -114,10 +121,17 @@ This ensures that CUDA is recognized and appropriately locked into the lock file
 
 Example Configuration
 
-```toml
-[system-requirements]
-cuda = "12"  # Replace "12" with the specific CUDA version you intend to use
-```
+=== "pixi.toml"
+    ```toml
+    [system-requirements]
+    cuda = "12"  # Replace "12" with the specific CUDA version you intend to use
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.system-requirements]
+    cuda = "12"  # Replace "12" with the specific CUDA version you intend to use
+    ```
 
 1. Can `system-requirements` enforce a specific CUDA runtime version?
     - No. The `system-requirements` field is used to specify the supported CUDA version based on the host’s NVIDIA driver API.
@@ -126,13 +140,23 @@ Adding this field ensures that packages depending on `__cuda >= {version}` are r
 ### Setting System Requirements environment specific
 This can be set per `feature` in the `the manifest` file.
 
-```toml
-[feature.cuda.system-requirements]
-cuda = "12"
+=== "pixi.toml"
+    ```toml
+    [feature.cuda.system-requirements]
+    cuda = "12"
 
-[environments]
-cuda = ["cuda"]
-```
+    [environments]
+    cuda = ["cuda"]
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.feature.cuda.system-requirements]
+    cuda = "12"
+
+    [tool.pixi.environments]
+    cuda = ["cuda"]
+    ```
 
 ### Available Override Options
 In certain scenarios, you might need to override the system requirements detected on your machine.
