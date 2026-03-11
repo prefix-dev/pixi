@@ -66,8 +66,7 @@ impl std::fmt::Display for TlsRootCerts {
 }
 
 pub fn default_channel_config() -> ChannelConfig {
-    let cwd = std::env::current_dir()
-        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     ChannelConfig::default_with_root_dir(cwd)
 }
 
