@@ -971,7 +971,15 @@ def test_repeated_named_cli_arg_last_one_wins(pixi: Path, tmp_pixi_workspace: Pa
     manifest_path.write_text(tomli_w.dumps(manifest_content))
 
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "build", "--target=first", "--target=second"],
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "build",
+            "--target=first",
+            "--target=second",
+        ],
         stdout_contains="second",
     )
 
@@ -991,14 +999,21 @@ def test_named_cli_arg_with_passthrough_args(pixi: Path, tmp_pixi_workspace: Pat
     manifest_path.write_text(tomli_w.dumps(manifest_content))
 
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "build", "--target=value", "--", "--foo=bar"],
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "build",
+            "--target=value",
+            "--",
+            "--foo=bar",
+        ],
         stdout_contains="value --foo=bar",
     )
 
 
-def test_named_cli_arg_empty_value_respects_choices(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
+def test_named_cli_arg_empty_value_respects_choices(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
 
     manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)

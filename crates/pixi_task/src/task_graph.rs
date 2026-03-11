@@ -325,12 +325,10 @@ impl<'p> TaskGraph<'p> {
                             args: arg_values,
                             dependencies: vec![],
                         },
-                        Some(
-                            Self::parse_cli_typed_args(
-                                task.args().map(|args| args.as_ref()).unwrap_or(&[]),
-                                &args,
-                            ),
-                        ),
+                        Some(Self::parse_cli_typed_args(
+                            task.args().map(|args| args.as_ref()).unwrap_or(&[]),
+                            &args,
+                        )),
                     );
                 }
             }
@@ -624,10 +622,8 @@ impl<'p> TaskGraph<'p> {
         task_arguments: &[TaskArg],
         raw_args: &[String],
     ) -> Vec<TypedDependencyArg> {
-        let task_arg_names: HashSet<&str> = task_arguments
-            .iter()
-            .map(|arg| arg.name.as_str())
-            .collect();
+        let task_arg_names: HashSet<&str> =
+            task_arguments.iter().map(|arg| arg.name.as_str()).collect();
 
         raw_args
             .iter()
@@ -1437,8 +1433,8 @@ mod test {
             { arg = "mode", default = "debug", choices = ["debug", "release"] },
         ]
     "#;
-        let err = TaskGraphTest::new(workspace_str, &["build", "--mode=release", "app"])
-            .expect_error();
+        let err =
+            TaskGraphTest::new(workspace_str, &["build", "--mode=release", "app"]).expect_error();
         assert_matches!(
             err,
             TaskGraphError::PositionalAfterNamedArgument(value, task)
