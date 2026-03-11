@@ -702,6 +702,33 @@ mod test {
     }
 
     #[test]
+    fn test_source_spec_in_constraints() {
+        // Path source specs are not allowed in [constraints]
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [constraints]
+        my-package = { path = "../my-package" }
+        "#,
+        ));
+
+        // Git source specs are not allowed in [constraints] either
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [feature.gpu.constraints]
+        my-lib = { git = "https://github.com/example/my-lib" }
+        "#,
+        ));
+    }
+
+    #[test]
     fn test_host_dependencies_in_feature_with_pixi_build() {
         assert_snapshot!(expect_parse_failure(
             r#"
