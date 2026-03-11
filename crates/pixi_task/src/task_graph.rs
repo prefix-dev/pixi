@@ -263,16 +263,14 @@ impl<'p> TaskGraph<'p> {
                             vec![]
                         };
 
-                        // Check if we don't have more arguments than the task expects
-                        if args.len() > task_arguments.len() {
+                        let typed_dep_args = Self::parse_cli_typed_args(task_arguments, &args);
+
+                        // Check if we don't have more effective typed arguments than the task
+                        // expects. Repeated named arguments are treated as overrides, so they
+                        // only count once.
+                        if Self::effective_cli_arg_count(&typed_dep_args) > task_arguments.len() {
                             return Err(TaskGraphError::TooManyArguments(task_name.to_string()));
                         }
-
-                        // TODO: support named arguments from the CLI
-                        let typed_dep_args = args
-                            .iter()
-                            .map(|a| TypedDependencyArg::Positional(a.to_string()))
-                            .collect();
 
                         let merged = Self::merge_args(
                             &TaskName::from(task_name.clone()),
@@ -328,9 +326,10 @@ impl<'p> TaskGraph<'p> {
                             dependencies: vec![],
                         },
                         Some(
-                            args.iter()
-                                .map(|a| TypedDependencyArg::Positional(a.clone()))
-                                .collect(),
+                            Self::parse_cli_typed_args(
+                                task.args().map(|args| args.as_ref()).unwrap_or(&[]),
+                                &args,
+                            ),
                         ),
                     );
                 }
@@ -532,11 +531,11 @@ impl<'p> TaskGraph<'p> {
             return Ok(ArgValues::FreeFormArgs(free_form_args));
         }
 
-        let mut named_args = Vec::new();
+        let mut named_args = HashMap::new();
         let mut seen_named = false;
 
-        // build up vec of named args whilst validating that all named args are valid for this task,
-        // and that all positional args precede any named args
+        // Collect named args while validating that all named args are valid for this task,
+        // and that all positional args precede any named args.
         for arg in dep_args {
             match arg {
                 TypedDependencyArg::Named(name, value) => {
@@ -547,7 +546,7 @@ impl<'p> TaskGraph<'p> {
                         ));
                     }
                     seen_named = true;
-                    named_args.push((name.to_string(), value.to_string()));
+                    named_args.insert(name.to_string(), value.to_string());
                 }
                 TypedDependencyArg::Positional(value) => {
                     if seen_named {
@@ -564,7 +563,7 @@ impl<'p> TaskGraph<'p> {
 
         for (i, arg) in task_arguments.iter().enumerate() {
             let arg_name = arg.name.as_str();
-            let arg_value = if let Some((_n, v)) = named_args.iter().find(|(n, _v)| n == arg_name) {
+            let arg_value = if let Some(v) = named_args.get(arg_name) {
                 // a matching named arg was specified
                 v.to_string()
             } else if i < dep_args.len() {
@@ -619,6 +618,47 @@ impl<'p> TaskGraph<'p> {
             args: typed_args,
             extra: vec![],
         })
+    }
+
+    fn parse_cli_typed_args(
+        task_arguments: &[TaskArg],
+        raw_args: &[String],
+    ) -> Vec<TypedDependencyArg> {
+        let task_arg_names: HashSet<&str> = task_arguments
+            .iter()
+            .map(|arg| arg.name.as_str())
+            .collect();
+
+        raw_args
+            .iter()
+            .map(|arg| {
+                if let Some((name, value)) = arg.split_once('=')
+                    && let Some(name) = name.strip_prefix("--")
+                    && task_arg_names.contains(name)
+                {
+                    TypedDependencyArg::Named(name.to_string(), value.to_string())
+                } else {
+                    TypedDependencyArg::Positional(arg.to_string())
+                }
+            })
+            .collect()
+    }
+
+    fn effective_cli_arg_count(args: &[TypedDependencyArg]) -> usize {
+        let positional_count = args
+            .iter()
+            .filter(|arg| matches!(arg, TypedDependencyArg::Positional(_)))
+            .count();
+        let named_count = args
+            .iter()
+            .filter_map(|arg| match arg {
+                TypedDependencyArg::Named(name, _) => Some(name.as_str()),
+                TypedDependencyArg::Positional(_) => None,
+            })
+            .collect::<HashSet<_>>()
+            .len();
+
+        positional_count + named_count
     }
 
     /// Returns the topological order of the tasks in the graph.
@@ -1340,6 +1380,144 @@ mod test {
         let run_args = &["mytask", "--", "arg1", "arg2"];
         let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
         assert_eq!(commands, vec!["echo 'arg1' 'arg2'"]);
+    }
+
+    #[test]
+    fn test_named_cli_args_for_typed_task() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.build]
+        cmd = "echo {{ target }} {{ mode }}"
+        args = [
+            { arg = "target" },
+            { arg = "mode", default = "debug", choices = ["debug", "release"] },
+        ]
+    "#;
+        let run_args = &["build", "--mode=release", "--target=app"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo app release"]);
+    }
+
+    #[test]
+    fn test_mixed_positional_and_named_cli_args_for_typed_task() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.build]
+        cmd = "echo {{ target }} {{ mode }}"
+        args = [
+            { arg = "target" },
+            { arg = "mode", default = "debug", choices = ["debug", "release"] },
+        ]
+    "#;
+        let run_args = &["build", "app", "--mode=release"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo app release"]);
+    }
+
+    #[test]
+    fn test_positional_after_named_cli_args_errors() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.build]
+        cmd = "echo {{ target }} {{ mode }}"
+        args = [
+            { arg = "target" },
+            { arg = "mode", default = "debug", choices = ["debug", "release"] },
+        ]
+    "#;
+        let err = TaskGraphTest::new(workspace_str, &["build", "--mode=release", "app"])
+            .expect_error();
+        assert_matches!(
+            err,
+            TaskGraphError::PositionalAfterNamedArgument(value, task)
+                if value == "app" && task == "build"
+        );
+    }
+
+    #[test]
+    fn test_unknown_double_dash_equals_stays_positional() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.build]
+        cmd = "echo {{ target }}"
+        args = [{ arg = "target" }]
+    "#;
+        let run_args = &["build", "--not-a-task-arg=value"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo --not-a-task-arg=value"]);
+    }
+
+    #[test]
+    fn test_repeated_named_cli_arg_last_one_wins() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.build]
+        cmd = "echo {{ target }}"
+        args = [{ arg = "target", default = "default" }]
+    "#;
+        let run_args = &["build", "--target=first", "--target=second"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo second"]);
+    }
+
+    #[test]
+    fn test_named_cli_arg_with_passthrough_args() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.build]
+        cmd = "echo {{ target }}"
+        args = [{ arg = "target", default = "default" }]
+    "#;
+        let run_args = &["build", "--target=value", "--", "--foo=bar"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo value '--foo=bar'"]);
+    }
+
+    #[test]
+    fn test_named_cli_arg_empty_value_respects_choices() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.build]
+        cmd = "echo {{ mode }}"
+        args = [{ arg = "mode", choices = ["debug", "release"] }]
+    "#;
+        let err = TaskGraphTest::new(workspace_str, &["build", "--mode="]).expect_error();
+        assert_matches!(
+            err,
+            TaskGraphError::InvalidArgValue(invalid)
+                if invalid.arg == "mode"
+                    && invalid.task == "build"
+                    && invalid.value.is_empty()
+                    && invalid.choices == "debug, release"
+        );
     }
 
     #[test]

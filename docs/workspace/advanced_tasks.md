@@ -263,6 +263,35 @@ pixi run test -- --maxfail=5
 !!! note "Tasks without typed args"
     For tasks that do **not** define `args`, `--` is passed through to the underlying command unchanged. This preserves its meaning for programs that use `--` themselves (e.g. `git log -- somefile`).
 
+### Named Task Arguments
+
+Typed task arguments can also be provided by name using the `--name=value` form. This is useful when you want to override a later argument without repeating all earlier positional arguments.
+
+```toml
+[tasks.build]
+cmd = "echo Building {{ target }} in {{ mode }}"
+args = [
+  { arg = "target" },
+  { arg = "mode", default = "debug", choices = ["debug", "release"] },
+]
+```
+
+```shell
+# Positional
+pixi run build my-app release
+✨ Pixi task (build in default): echo Building my-app in release
+
+# Named
+pixi run build --mode=release --target=my-app
+✨ Pixi task (build in default): echo Building my-app in release
+
+# Mixed positional + named
+pixi run build my-app --mode=release
+✨ Pixi task (build in default): echo Building my-app in release
+```
+
+Named arguments use the same validation rules as task arguments in the manifest. Positional arguments must come before named arguments. If the same task argument is provided both positionally and by name, the named value wins. Values of the form `--foo=bar` are only treated as named arguments if `foo` is a declared task argument; otherwise they are forwarded as positional values.
+
 ### Restricting Values with Choices
 
 You can restrict the allowed values of an argument using the `choices` field. If a value is provided that is not in the list, Pixi will report an error instead of running the task.

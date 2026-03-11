@@ -888,6 +888,137 @@ def test_argument_with_dash_errors(pixi: Path, tmp_pixi_workspace: Path) -> None
     )
 
 
+def test_named_cli_args_valid(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+    manifest_content["tasks"] = {
+        "build": {
+            "cmd": "echo Building {{ target }} mode={{ mode }}",
+            "args": [
+                {"arg": "target"},
+                {"arg": "mode", "default": "debug"},
+            ],
+        }
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "build", "--mode=release", "--target=app"],
+        stdout_contains="Building app mode=release",
+    )
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "build", "app", "--mode=release"],
+        stdout_contains="Building app mode=release",
+    )
+
+
+def test_named_cli_args_invalid(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+    manifest_content["tasks"] = {
+        "build": {
+            "cmd": "echo Building {{ target }} mode={{ mode }}",
+            "args": [
+                {"arg": "target"},
+                {"arg": "mode", "default": "debug"},
+            ],
+        }
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "build", "--mode=release", "app"],
+        ExitCode.FAILURE,
+        stderr_contains="Positional argument 'app' found after named argument",
+    )
+
+
+def test_unknown_double_dash_equals_stays_positional(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+    manifest_content["tasks"] = {
+        "build": {
+            "cmd": "echo {{ target }}",
+            "args": [
+                {"arg": "target"},
+            ],
+        }
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "build", "--not-a-task-arg=value"],
+        stdout_contains="--not-a-task-arg=value",
+    )
+
+
+def test_repeated_named_cli_arg_last_one_wins(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+    manifest_content["tasks"] = {
+        "build": {
+            "cmd": "echo {{ target }}",
+            "args": [
+                {"arg": "target", "default": "default"},
+            ],
+        }
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "build", "--target=first", "--target=second"],
+        stdout_contains="second",
+    )
+
+
+def test_named_cli_arg_with_passthrough_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+    manifest_content["tasks"] = {
+        "build": {
+            "cmd": "echo {{ target }}",
+            "args": [
+                {"arg": "target", "default": "default"},
+            ],
+        }
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "build", "--target=value", "--", "--foo=bar"],
+        stdout_contains="value --foo=bar",
+    )
+
+
+def test_named_cli_arg_empty_value_respects_choices(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+    manifest_content["tasks"] = {
+        "build": {
+            "cmd": "echo {{ mode }}",
+            "args": [
+                {"arg": "mode", "choices": ["debug", "release"]},
+            ],
+        }
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "build", "--mode="],
+        ExitCode.FAILURE,
+        stderr_contains="got '' for argument 'mode' of task 'build', choose from: debug, release",
+    )
+
+
 def test_undefined_arguments_in_command(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Test behavior when using undefined arguments in commands."""
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
