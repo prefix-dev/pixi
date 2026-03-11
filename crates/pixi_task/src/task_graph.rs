@@ -326,7 +326,7 @@ impl<'p> TaskGraph<'p> {
                             dependencies: vec![],
                         },
                         Some(Self::parse_cli_typed_args(
-                            task.args().map(|args| args.as_ref()).unwrap_or(&[]),
+                            task.args().unwrap_or(&[]),
                             &args,
                         )),
                     );
