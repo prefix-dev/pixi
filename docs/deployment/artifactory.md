@@ -26,19 +26,19 @@ To authenticate with Artifactory, you need to generate an identity token:
 
 1. Click on your user profile in the top-right corner and select **Edit Profile**
 
-    ![Edit Profile menu](../assets/artifactory-edit-profile-menu.png)
+   ![Edit Profile menu](../assets/artifactory-edit-profile-menu.png)
 
 2. Under **Authentication Settings**, click **Generate an Identity Token**
 
-    ![Edit Profile page](../assets/artifactory-edit-profile.png)
+   ![Edit Profile page](../assets/artifactory-edit-profile.png)
 
 3. Add a description (e.g., "pixi") and click **Next**
 
-    ![Generate an Identity Token dialog](../assets/artifactory-generate-an-identity-token.png)
+   ![Generate an Identity Token dialog](../assets/artifactory-generate-an-identity-token.png)
 
 4. Copy the generated **Reference Token**
 
-    ![Generated identity token](../assets/artifactory-generate-identity-token.png)
+   ![Generated identity token](../assets/artifactory-generate-identity-token.png)
 
 ## Authenticating with pixi
 
@@ -54,15 +54,22 @@ This stores the token securely using your system's credential manager. See [Auth
 
 Add your Artifactory channel to your `pixi.toml`:
 
-```toml
-[workspace]
-channels = ["https://my-org.jfrog.io/artifactory/channel-1", "conda-forge"]
-```
+=== "pixi.toml"
+`toml
+    [workspace]
+    channels = ["https://my-org.jfrog.io/artifactory/channel-1", "conda-forge"]
+    `
+
+=== "pyproject.toml"
+`toml
+    [tool.pixi.workspace]
+    channels = ["https://my-org.jfrog.io/artifactory/channel-1", "conda-forge"]
+    `
 
 !!!note "Strict channel priority"
-    Pixi uses strict channel priority. Packages are always resolved from the first channel that contains them.
-    In the example above, if a package exists in both your Artifactory channel and conda-forge,
-    the version from Artifactory will always be used.
+Pixi uses strict channel priority. Packages are always resolved from the first channel that contains them.
+In the example above, if a package exists in both your Artifactory channel and conda-forge,
+the version from Artifactory will always be used.
 
     This is useful for:
 
@@ -76,32 +83,59 @@ channels = ["https://my-org.jfrog.io/artifactory/channel-1", "conda-forge"]
 
 Here's a complete example using Artifactory with conda-forge as a fallback:
 
+=== "pixi.toml"
 ```toml
 [workspace]
 name = "my-project"
 channels = ["https://my-org.jfrog.io/artifactory/internal-packages", "conda-forge"]
 platforms = ["linux-64", "osx-arm64", "win-64"]
 
-[dependencies]
-python = ">=3.11"
-# This will come from your Artifactory channel if available there
-my-internal-package = "*"
-# These will come from conda-forge (due to channel priority)
-numpy = ">=1.24"
-pandas = ">=2.0"
-```
+    [dependencies]
+    python = ">=3.11"
+    # This will come from your Artifactory channel if available there
+    my-internal-package = "*"
+    # These will come from conda-forge (due to channel priority)
+    numpy = ">=1.24"
+    pandas = ">=2.0"
+    ```
+
+=== "pyproject.toml"
+```toml
+[tool.pixi.workspace]
+name = "my-project"
+channels = ["https://my-org.jfrog.io/artifactory/internal-packages", "conda-forge"]
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+    [tool.pixi.dependencies]
+    python = ">=3.11"
+    # This will come from your Artifactory channel if available there
+    my-internal-package = "*"
+    # These will come from conda-forge (due to channel priority)
+    numpy = ">=1.24"
+    pandas = ">=2.0"
+    ```
 
 ### Forcing a specific channel
 
 If you want to ensure a package always comes from a specific channel regardless of priority, use the `channel` key:
 
-```toml
-[dependencies]
-# Always use numpy from conda-forge, even if it exists in Artifactory
-numpy = { version = ">=1.24", channel = "conda-forge" }
-# Always use internal-lib from Artifactory
-internal-lib = { version = "*", channel = "https://my-org.jfrog.io/artifactory/internal-packages" }
-```
+=== "pixi.toml"
+`toml
+    [dependencies]
+    # Always use numpy from conda-forge, even if it exists in Artifactory
+    numpy = { version = ">=1.24", channel = "conda-forge" }
+    # Always use internal-lib from Artifactory
+    internal-lib = { version = "*", channel = "https://my-org.jfrog.io/artifactory/internal-packages" }
+    `
+
+=== "pyproject.toml"
+`toml
+    [tool.pixi.dependencies]
+    # Always use numpy from conda-forge, even if it exists in Artifactory
+    numpy = { version = ">=1.24", channel = "conda-forge" }
+    # Always use internal-lib from Artifactory
+    internal-lib = { version = "*", channel = "https://my-org.jfrog.io/artifactory/internal-packages" }
+    `
 
 This is useful when you want to override the default channel priority for specific packages.
 

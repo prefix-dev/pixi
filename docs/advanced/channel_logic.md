@@ -7,13 +7,23 @@ Therefore, this document will continue with simplified flow charts.
 ## Channel Specific Dependencies
 
 When a user defines a channel per dependency, the solver needs to know the other channels are unusable for this dependency.
-```toml
-[workspace]
-channels = ["conda-forge", "my-channel"]
+=== "pixi.toml"
+    ```toml
+    [workspace]
+    channels = ["conda-forge", "my-channel"]
 
-[dependencies]
-packgex = { version = "*", channel = "my-channel" }
-```
+    [dependencies]
+    packgex = { version = "*", channel = "my-channel" }
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.workspace]
+    channels = ["conda-forge", "my-channel"]
+
+    [tool.pixi.dependencies]
+    packgex = { version = "*", channel = "my-channel" }
+    ```
 In the `packagex` example, the solver will understand that the package is only available in `my-channel` and will not look for it in `conda-forge`.
 
 The flowchart of the logic that excludes all other channels:
@@ -33,10 +43,17 @@ flowchart TD
 
 Channel priority is dictated by the order in the `workspace.channels` array, where the first channel is the highest priority.
 For instance:
-```toml
-[workspace]
-channels = ["conda-forge", "my-channel", "your-channel"]
-```
+=== "pixi.toml"
+    ```toml
+    [workspace]
+    channels = ["conda-forge", "my-channel", "your-channel"]
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.workspace]
+    channels = ["conda-forge", "my-channel", "your-channel"]
+    ```
 If the package is found in `conda-forge` the solver will not look for it in `my-channel` and `your-channel`, because it tells the solver they are excluded.
 If the package is not found in `conda-forge` the solver will look for it in `my-channel` and if it **is** found there it will tell the solver to exclude `your-channel` for this package.
 This diagram explains the logic:
@@ -63,18 +80,33 @@ If you have 10 channels and the package is found in the 5th channel it will excl
 
 ## Use Case: pytorch and nvidia with conda-forge
 A common use case is to use `pytorch` with `nvidia` drivers, while also needing the `conda-forge` channel for the main dependencies.
-```toml
-[workspace]
-channels = ["nvidia/label/cuda-11.8.0", "nvidia", "conda-forge", "pytorch"]
-platforms = ["linux-64"]
+=== "pixi.toml"
+    ```toml
+    [workspace]
+    channels = ["nvidia/label/cuda-11.8.0", "nvidia", "conda-forge", "pytorch"]
+    platforms = ["linux-64"]
 
-[dependencies]
-cuda = {version = "*", channel="nvidia/label/cuda-11.8.0"}
-pytorch = {version = "2.0.1.*", channel="pytorch"}
-torchvision = {version = "0.15.2.*", channel="pytorch"}
-pytorch-cuda = {version = "11.8.*", channel="pytorch"}
-python = "3.10.*"
-```
+    [dependencies]
+    cuda = {version = "*", channel="nvidia/label/cuda-11.8.0"}
+    pytorch = {version = "2.0.1.*", channel="pytorch"}
+    torchvision = {version = "0.15.2.*", channel="pytorch"}
+    pytorch-cuda = {version = "11.8.*", channel="pytorch"}
+    python = "3.10.*"
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.workspace]
+    channels = ["nvidia/label/cuda-11.8.0", "nvidia", "conda-forge", "pytorch"]
+    platforms = ["linux-64"]
+
+    [tool.pixi.dependencies]
+    cuda = {version = "*", channel="nvidia/label/cuda-11.8.0"}
+    pytorch = {version = "2.0.1.*", channel="pytorch"}
+    torchvision = {version = "0.15.2.*", channel="pytorch"}
+    pytorch-cuda = {version = "11.8.*", channel="pytorch"}
+    python = "3.10.*"
+    ```
 What this will do is get as much as possible from the `nvidia/label/cuda-11.8.0` channel, which is actually only the `cuda` package.
 
 Then it will get all packages from the `nvidia` channel, which is a little more and some packages overlap the `nvidia` and `conda-forge` channel.
@@ -96,26 +128,49 @@ Non specified priorities are set to 0 but the index in the array still counts as
 
 This priority definition is mostly important for [multiple environments](../workspace/multi_environment.md) with different channel priorities, as by default feature channels are prepended to the workspace channels.
 
-```toml
-[workspace]
-name = "test_channel_priority"
-platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
-channels = ["conda-forge"]
+=== "pixi.toml"
+    ```toml
+    [workspace]
+    name = "test_channel_priority"
+    platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+    channels = ["conda-forge"]
 
-[feature.a]
-channels = ["nvidia"]
+    [feature.a]
+    channels = ["nvidia"]
 
-[feature.b]
-channels = [ "pytorch", {channel = "nvidia", priority = 1}]
+    [feature.b]
+    channels = [ "pytorch", {channel = "nvidia", priority = 1}]
 
-[feature.c]
-channels = [ "pytorch", {channel = "nvidia", priority = -1}]
+    [feature.c]
+    channels = [ "pytorch", {channel = "nvidia", priority = -1}]
 
-[environments]
-a = ["a"]
-b = ["b"]
-c = ["c"]
-```
+    [environments]
+    a = ["a"]
+    b = ["b"]
+    c = ["c"]
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.workspace]
+    name = "test_channel_priority"
+    platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+    channels = ["conda-forge"]
+
+    [tool.pixi.feature.a]
+    channels = ["nvidia"]
+
+    [tool.pixi.feature.b]
+    channels = [ "pytorch", {channel = "nvidia", priority = 1}]
+
+    [tool.pixi.feature.c]
+    channels = [ "pytorch", {channel = "nvidia", priority = -1}]
+
+    [tool.pixi.environments]
+    a = ["a"]
+    b = ["b"]
+    c = ["c"]
+    ```
 This example creates 4 environments, `a`, `b`, `c`, and the default environment.
 Which will have the following channel order:
 

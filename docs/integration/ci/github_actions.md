@@ -78,26 +78,49 @@ With pixi, you can create multiple environments for different requirements.
 You can also specify which environment(s) you want to install by setting the `environments` input argument.
 This will install all environments that are specified and cache them.
 
-```toml
-[workspace]
-name = "my-package"
-channels = ["conda-forge"]
-platforms = ["linux-64"]
+=== "pixi.toml"
+    ```toml
+    [workspace]
+    name = "my-package"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
 
-[dependencies]
-python = ">=3.11"
-pip = "*"
-polars = ">=0.14.24,<0.21"
+    [dependencies]
+    python = ">=3.11"
+    pip = "*"
+    polars = ">=0.14.24,<0.21"
 
-[feature.py311.dependencies]
-python = "3.11.*"
-[feature.py312.dependencies]
-python = "3.12.*"
+    [feature.py311.dependencies]
+    python = "3.11.*"
+    [feature.py312.dependencies]
+    python = "3.12.*"
 
-[environments]
-py311 = ["py311"]
-py312 = ["py312"]
-```
+    [environments]
+    py311 = ["py311"]
+    py312 = ["py312"]
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.workspace]
+    name = "my-package"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+
+    [tool.pixi.dependencies]
+    python = ">=3.11"
+    pip = "*"
+    polars = ">=0.14.24,<0.21"
+
+    [tool.pixi.feature.py311.dependencies]
+    python = "3.11.*"
+    [tool.pixi.feature.py312.dependencies]
+    python = "3.12.*"
+
+    [tool.pixi.environments]
+    py311 = ["py311"]
+    py312 = ["py312"]
+    ```
 
 #### Multiple environments using a matrix
 
