@@ -10,7 +10,7 @@ version = "1.2.3"
 # --8<-- [start:project_authors]
 authors = [
   { name = "John Doe", email = "j.doe@prefix.dev" },
-  { name = "Marie Curie", email = "mss1867@gmail.com" }
+  { name = "Marie Curie", email = "mss1867@gmail.com" },
 ]
 # --8<-- [end:project_authors]
 
