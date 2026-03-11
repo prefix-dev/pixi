@@ -12,8 +12,8 @@ license = { text = "MIT" }
 readme = "README.md"
 
 [project.urls]
-Homepage = "https://example.com"
 Documentation = "https://docs.example.com"
+Homepage = "https://example.com"
 Repository = "https://github.com/user/repo"
 # --8<-- [end:extra-fields]
 
