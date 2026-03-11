@@ -474,6 +474,11 @@ pub enum PlatformUnsat {
         locked_version: String,
         constraint: String,
     },
+
+    #[error(
+        "source specifications are not supported in the `[constraints]` table, but a source constraint was found for '{0}'"
+    )]
+    SourceConstraintNotSupported(String),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -1801,9 +1806,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .combined_constraints(Some(platform))
         .into_specs()
     {
-        // Source constraints don't apply to binary packages; skip them.
+        // Source specs are not valid in [constraints]; raise an error.
         let binary_spec = match pixi_spec.into_source_or_binary() {
-            Either::Left(_) => continue,
+            Either::Left(_) => {
+                return Err(Box::new(PlatformUnsat::SourceConstraintNotSupported(
+                    package_name.as_source().to_string(),
+                )));
+            }
             Either::Right(binary_spec) => binary_spec,
         };
         let nameless_spec = binary_spec
