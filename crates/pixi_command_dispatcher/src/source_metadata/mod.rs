@@ -174,7 +174,7 @@ impl SourceMetadataSpec {
                 tracing::trace!("Cache updated successfully");
             }
             source_metadata::WriteResult::Conflict(_) => {
-                tracing::warn!(
+                tracing::debug!(
                     "Cache was updated by another process during computation (version conflict), using our computed result"
                 );
             }

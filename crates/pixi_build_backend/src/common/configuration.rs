@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use miette::IntoDiagnostic;
 use pixi_build_types::PlatformAndVirtualPackages;
-use rattler_build::{metadata::PlatformWithVirtualPackages, types::Directories};
+use rattler_build_core::{metadata::PlatformWithVirtualPackages, types::Directories};
 use rattler_build_jinja::Variable;
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::ChannelUrl;
@@ -30,10 +30,11 @@ pub fn build_configuration(
     let (build_platform, host_platform) = match (build_platform, host_platform) {
         (Some(build_platform), Some(host_platform)) => (build_platform, host_platform),
         (build_platform, host_platform) => {
-            let current_platform = rattler_build::metadata::PlatformWithVirtualPackages::detect(
-                &VirtualPackageOverrides::from_env(),
-            )
-            .into_diagnostic()?;
+            let current_platform =
+                rattler_build_core::metadata::PlatformWithVirtualPackages::detect(
+                    &VirtualPackageOverrides::from_env(),
+                )
+                .into_diagnostic()?;
             (
                 build_platform.unwrap_or_else(|| current_platform.clone()),
                 host_platform.unwrap_or(current_platform),

@@ -7,7 +7,7 @@ use std::{
 use miette::IntoDiagnostic;
 use pixi_build_backend::source::Source;
 use pixi_build_types::SourcePackageSpec;
-use rattler_build::console_utils::LoggingOutputHandler;
+use rattler_build_core::console_utils::LoggingOutputHandler;
 
 use crate::config::RattlerBuildBackendConfig;
 
