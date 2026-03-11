@@ -975,5 +975,4 @@ mod tests {
             "Expected foo=1.0 on osx-arm64"
         );
     }
-
 }
