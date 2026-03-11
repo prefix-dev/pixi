@@ -422,6 +422,11 @@ pub enum SolveCondaEnvironmentError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Variants(#[from] VariantsError),
+
+    #[error(
+        "source specifications are not supported in the `[constraints]` table, but a source constraint was found for '{0}'"
+    )]
+    SourceConstraintNotSupported(String),
 }
 
 impl SolveCondaEnvironmentError {
@@ -2202,14 +2207,18 @@ async fn spawn_solve_conda_environment_task(
     let dev_dependencies = group.combined_dev_dependencies(Some(platform));
 
     // Get the constraints for this platform and convert to binary specs.
-    // Source specs are not meaningful as constraints and are dropped.
+    // Source specs are not meaningful as constraints and are an error.
     let constraints = {
-        use pixi_record::DevSourceRecord;
         let conda_constraints = group.combined_constraints(Some(platform));
-        let (_source_constraints, binary_constraints) =
-            DevSourceRecord::split_into_source_and_binary_requirements(
+        let (source_constraints, binary_constraints) =
+            pixi_record::DevSourceRecord::split_into_source_and_binary_requirements(
                 conda_constraints.into_specs(),
             );
+        if let Some((name, _)) = source_constraints.iter_specs().next() {
+            return Err(SolveCondaEnvironmentError::SourceConstraintNotSupported(
+                name.as_source().to_string(),
+            ));
+        }
         binary_constraints
     };
 

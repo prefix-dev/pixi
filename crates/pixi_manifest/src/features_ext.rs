@@ -233,7 +233,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// a constraint for the same package, all constraints are retained and the
     /// solver must satisfy all of them simultaneously.
     ///
-    /// If the `platform` is `None` no platform specific constraints are taken
+    /// If the `platform` is `None`, no platform specific constraints are taken
     /// into consideration.
     fn combined_constraints(&self, platform: Option<Platform>) -> CondaConstraints {
         let constraints: Vec<_> = self

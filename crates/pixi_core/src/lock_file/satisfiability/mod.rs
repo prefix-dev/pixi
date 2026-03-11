@@ -1825,19 +1825,18 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     parse_err,
                 ))
             })?;
-        let match_spec = MatchSpec::from_nameless(nameless_spec, Some(package_name.clone().into()));
-
         // Only check packages that are actually locked; constraints only apply
-        // to installed packages. Source packages are controlled via their source
-        // spec, not version constraints, so they are excluded.
-        if let Some(idx) = locked_pixi_records.index_by_name(&package_name) {
-            let locked_record = &locked_pixi_records.records[idx];
-            if locked_record.as_binary().is_some() && !match_spec.matches(locked_record) {
-                return Err(Box::new(PlatformUnsat::ConstraintViolated {
-                    package: package_name.as_source().to_string(),
-                    locked_version: locked_record.package_record().version.to_string(),
-                    constraint: match_spec.to_string(),
-                }));
+        // to installed packages. Source records are excluded because they are
+        // controlled via their source spec, not version constraints.
+        if let Some(locked_record) = locked_pixi_records.by_name(&package_name) {
+            if let Some(binary_record) = locked_record.as_binary() {
+                if !nameless_spec.matches(&binary_record.package_record) {
+                    return Err(Box::new(PlatformUnsat::ConstraintViolated {
+                        package: package_name.as_source().to_string(),
+                        locked_version: binary_record.package_record.version.to_string(),
+                        constraint: nameless_spec.to_string(),
+                    }));
+                }
             }
         }
     }
