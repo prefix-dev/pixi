@@ -94,10 +94,24 @@ impl TomlTarget {
                 )))
             })?;
 
-        // Convert constraints from UniquePackageMap to DependencyMap
+        // Convert constraints from UniquePackageMap to DependencyMap.
+        // Source specs are never valid in [constraints], regardless of pixi-build mode.
         let constraints = self
             .constraints
             .map(|c| {
+                if let Some((name, _)) = c.value.specs.iter().find(|(_, spec)| spec.is_source()) {
+                    return Err(TomlError::Generic(
+                        GenericError::new(format!(
+                            "source specifications are not supported in `[constraints]`, but '{}' is a source specification",
+                            name.as_source()
+                        ))
+                        .with_opt_span(c.value.value_spans.get(name).cloned())
+                        .with_span_label("source specification specified here")
+                        .with_help(
+                            "constraints only apply to packages resolved from channels, not source packages",
+                        ),
+                    ));
+                }
                 c.value
                     .into_inner(pixi_build_enabled)
                     .map(|index_map| index_map.into_iter().collect())
