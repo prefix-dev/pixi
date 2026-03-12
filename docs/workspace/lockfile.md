@@ -40,14 +40,14 @@ If it detects that they aren't in sync, it will regenerate the lock file. You ca
 
 The following commands will check and automatically update the lock file if needed:
 
-- `pixi install`
-- `pixi run`
-- `pixi shell`
-- `pixi shell-hook`
-- `pixi tree`
-- `pixi list`
-- `pixi add`
-- `pixi remove`
+- [`pixi install`](../reference/cli/pixi/install.md)
+- [`pixi run`](../reference/cli/pixi/run.md)
+- [`pixi shell`](../reference/cli/pixi/shell.md)
+- [`pixi shell-hook`](../reference/cli/pixi/shell-hook.md)
+- [`pixi tree`](../reference/cli/pixi/tree.md)
+- [`pixi list`](../reference/cli/pixi/list.md)
+- [`pixi add`](../reference/cli/pixi/add.md)
+- [`pixi remove`](../reference/cli/pixi/remove.md)
 
 If you want to remove the lock file, you can simply delete it - ready for it to be generated again with the latest package versions when one of the above commands are run.
 
