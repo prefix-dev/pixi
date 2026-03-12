@@ -18,6 +18,8 @@ use rattler_conda_types::{
 };
 use rattler_lock::{CondaPackageData, ConversionError, UrlOrPath};
 use serde::Serialize;
+// Re-export the fully-resolved type as `SourceRecord` since it is the most
+// commonly used variant throughout the codebase.
 pub use source_record::{
     FullSourceRecord as SourceRecord, FullSourceRecordData, PartialSourceRecord,
     PartialSourceRecordData, PinnedBuildSourceSpec, SourceRecordData, UnresolvedSourceRecord,
@@ -55,7 +57,7 @@ impl PixiRecord {
         match self {
             PixiRecord::Binary(record) => record.into(),
             PixiRecord::Source(record) => {
-                CondaPackageData::Source(record.into_conda_source_data(workspace_root))
+                CondaPackageData::Source(Box::new(record.into_conda_source_data(workspace_root)))
             }
         }
     }
@@ -116,8 +118,13 @@ impl From<RepoDataRecord> for PixiRecord {
 
 /// A record that may contain partial source metadata (not yet resolved).
 ///
-/// Used at the lock-file boundary: lock-file read produces these, and they must
-/// be resolved to [`PixiRecord`] before use in solving/installing.
+/// Lifecycle: lock-file read produces `UnresolvedPixiRecord` values. Binary
+/// records and immutable source records are already resolved; mutable source
+/// records are partial and must be resolved by re-evaluating source metadata
+/// before the record can be used for solving or installing.
+///
+/// Call [`try_into_resolved`](Self::try_into_resolved) to attempt the
+/// conversion to a fully-resolved [`PixiRecord`].
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum UnresolvedPixiRecord {
@@ -196,7 +203,7 @@ impl UnresolvedPixiRecord {
         match data {
             CondaPackageData::Binary(value) => {
                 let location = value.location.clone();
-                Ok(UnresolvedPixiRecord::Binary(value.try_into().map_err(
+                Ok(UnresolvedPixiRecord::Binary((*value).try_into().map_err(
                     |err| match err {
                         ConversionError::Missing(field) => {
                             ParseLockFileError::Missing(location, field)
@@ -211,7 +218,7 @@ impl UnresolvedPixiRecord {
                 )?))
             }
             CondaPackageData::Source(value) => Ok(UnresolvedPixiRecord::Source(
-                UnresolvedSourceRecord::from_conda_source_data(value, workspace_root)?,
+                UnresolvedSourceRecord::from_conda_source_data(*value, workspace_root)?,
             )),
         }
     }
@@ -221,38 +228,28 @@ impl UnresolvedPixiRecord {
         match self {
             UnresolvedPixiRecord::Binary(record) => record.into(),
             UnresolvedPixiRecord::Source(record) => {
-                CondaPackageData::Source(record.into_conda_source_data(workspace_root))
+                CondaPackageData::Source(Box::new(record.into_conda_source_data(workspace_root)))
             }
         }
     }
 
-    /// Try to convert into a fully resolved `PixiRecord`.
+    /// Try to convert into a fully resolved [`PixiRecord`].
     ///
-    /// Returns `Ok(PixiRecord)` if this is a binary record or a full source
-    /// record. Returns `Err(self)` if this is a partial source record.
+    /// Returns `Ok(PixiRecord)` if this is a binary record or a source record
+    /// with full metadata. Returns `Err(self)` if this is a partial source
+    /// record that still needs metadata resolution (i.e. re-evaluation of
+    /// the mutable source).
+    #[allow(clippy::result_large_err)]
     pub fn try_into_resolved(self) -> Result<PixiRecord, Self> {
         match self {
             UnresolvedPixiRecord::Binary(record) => Ok(PixiRecord::Binary(record)),
-            UnresolvedPixiRecord::Source(source) => match source.data {
-                SourceRecordData::Full(full) => {
-                    Ok(PixiRecord::Source(source_record::SourceRecord {
-                        data: full,
-                        manifest_source: source.manifest_source,
-                        build_source: source.build_source,
-                        variants: source.variants,
-                        identifier_hash: source.identifier_hash,
-                    }))
-                }
-                SourceRecordData::Partial(partial) => {
-                    Err(UnresolvedPixiRecord::Source(source_record::SourceRecord {
-                        data: SourceRecordData::Partial(partial),
-                        manifest_source: source.manifest_source,
-                        build_source: source.build_source,
-                        variants: source.variants,
-                        identifier_hash: source.identifier_hash,
-                    }))
-                }
-            },
+            UnresolvedPixiRecord::Source(source) => source
+                .try_map_data(|data| match data {
+                    SourceRecordData::Full(full) => Ok(full),
+                    SourceRecordData::Partial(partial) => Err(SourceRecordData::Partial(partial)),
+                })
+                .map(PixiRecord::Source)
+                .map_err(UnresolvedPixiRecord::Source),
         }
     }
 }

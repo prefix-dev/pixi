@@ -150,8 +150,8 @@ fn render_env_platform(
 
     // Topologically sort packages
     let repodata = conda_packages_from_lockfile
-        .iter()
-        .map(|p| RepoDataRecord::try_from(p.clone()))
+        .into_iter()
+        .map(|p| RepoDataRecord::try_from(*p))
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()
         .with_context(|| "Failed to convert conda packages to RepoDataRecords")?;
