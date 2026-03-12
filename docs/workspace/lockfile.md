@@ -64,6 +64,7 @@ Reproducibility is very important in a range of projects (e.g., deploying softwa
 Reproducibility of environments helps with reproducibility of results - it ensures your developers, and deployment machines are all using the same packages.
 
 Hesitant to commit the lockfile? Consider this:
+
 - Docker images for reproducible environments are **always larger**.
 - Git works well with YAML.
 - It serves as a cache for the dependency resolution, giving  **faster installation and CI**.
