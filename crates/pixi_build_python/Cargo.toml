@@ -24,6 +24,7 @@ indexmap = { workspace = true }
 miette = { workspace = true }
 minijinja = { workspace = true }
 once_cell = { workspace = true }
+pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_build_backend = { workspace = true }
 pixi_build_types = { workspace = true }

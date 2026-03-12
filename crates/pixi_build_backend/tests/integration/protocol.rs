@@ -4,7 +4,7 @@ use crate::common::model::{convert_test_model_to_project_model_v1, load_project_
 use imp::TestGenerateRecipe;
 use pixi_build_backend::{intermediate_backend::IntermediateBackend, protocol::Protocol};
 use pixi_build_types::procedures::conda_build_v1::{CondaBuildV1Output, CondaBuildV1Params};
-use rattler_build::console_utils::LoggingOutputHandler;
+use rattler_build_core::console_utils::LoggingOutputHandler;
 use rattler_conda_types::{ChannelUrl, Platform};
 use serde_json::json;
 use tempfile::TempDir;

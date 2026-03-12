@@ -252,6 +252,12 @@ jobs:
             $orig = Get-ChildItem target/distrib -Filter $_.Name
             if ($orig) { Copy-Item $_.FullName $orig.FullName -Force }
           }
+          # Recompute .sha256 files for all modified archives (zip and msi)
+          # The signing step changes the file content, so checksums computed before signing are stale
+          foreach ($artifact in (Get-ChildItem target/distrib -Filter "*.zip") + (Get-ChildItem target/distrib -Filter "*.msi")) {
+            $hash = (Get-FileHash $artifact.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash *$($artifact.Name)" | Set-Content "$($artifact.FullName).sha256" -NoNewline
+          }
       - name: Attest Builds
         id: attest
         uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0

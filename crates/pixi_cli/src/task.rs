@@ -14,7 +14,7 @@ use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
 use pixi_manifest::{
     EnvironmentName, FeatureName,
-    task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, quote},
+    task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, TemplateString, quote},
 };
 use rattler_conda_types::Platform;
 use serde::Serialize;
@@ -206,7 +206,7 @@ impl From<AddArgs> for Task {
             } else {
                 let mut env = IndexMap::new();
                 for (key, value) in value.env {
-                    env.insert(key, value);
+                    env.insert(key, TemplateString::from(value));
                 }
                 Some(env)
             };
@@ -500,7 +500,7 @@ pub struct TaskInfo {
     depends_on: Vec<Dependency>,
     args: Option<Vec<TaskArg>>,
     cwd: Option<PathBuf>,
-    env: Option<IndexMap<String, String>>,
+    env: Option<IndexMap<String, TemplateString>>,
     default_environment: Option<EnvironmentName>,
     clean_env: bool,
     inputs: Option<Vec<String>>,
