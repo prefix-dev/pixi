@@ -21,9 +21,9 @@ For example - a common problem encountered is when a package manager installs a 
 
 Pixi - like many other modern package managers - has native support for lock files. This file is named `pixi.lock` .
 
-During the creation of the lockfile, Pixi resolves the packages - for all environments and platforms listed in the manifest.
-This greatly increases the reproducibility of your project making it easy to use on different OSs or CPU architectures - in fact, for a lot of cases, sharing a lockfile can be done instead of sharing a Docker container!
-This is also super handy for running code in CI.
+During the creation of the lock file, Pixi resolves the packages - for all environments and platforms listed in the manifest.
+This greatly increases the reproducibility of your project making it easy to use on different OSs or CPU architectures - in fact, for a lot of cases, sharing a lock file can be done instead of sharing a Docker container!
+This make recreating your local development environment in CI very easy.
 
 The Pixi lock file is also human readable, so you can take a look at which packages are listed without extra tools - as well as easily track changes to the file (don't make edits to it - you did read the warning block above right?). 
 
@@ -151,6 +151,7 @@ The Pixi lock file is structured into two parts.
       size: 14596811
       timestamp: 1708118065292
     ```
+
 ### The version of the lock file
 
 The lock file also has a version number, this is to ensure that the lock file is compatible with the local version of `pixi`.
