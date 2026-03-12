@@ -2,6 +2,7 @@ change_ps1 = true
 tls_no_verify = false
 
 [repodata_config]
+disable_jlap = true
 disable_zstd = true
 
 [mirrors]
