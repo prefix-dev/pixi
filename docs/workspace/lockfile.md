@@ -25,7 +25,7 @@ During the creation of the lockfile, Pixi resolves the packages - for all enviro
 This greatly increases the reproducibility of your project making it easy to use on different OSs or CPU architectures - in fact, for a lot of cases, sharing a lockfile can be done instead of sharing a Docker container!
 This is also super handy for running code in CI.
 
-The Pixi lock file is also human readable, so you can take a poke around to see which packages are listed - as well as track changes to the file (don't make edits to it - you did read the warning block above right?). 
+The Pixi lock file is also human readable, so you can take a look at which packages are listed without extra tools - as well as easily track changes to the file (don't make edits to it - you did read the warning block above right?). 
 
 ## Lock file changes
 
