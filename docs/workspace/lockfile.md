@@ -10,9 +10,8 @@ During the resolution process, it is ensured that resolved versions are compatib
 
 A lock file lists the exact dependencies that were resolved during this resolution process - the packages, their versions, and other metadata useful for package management.
 
-A lock file improves reproducibility as it means the project environment can easily be recreated on the same machine using this relatively small file.
-Whether the lockfile can be recreated on other machines, however, depends on the package manager and whether they have cross platform support.
-For example - a common problem encountered is when a package manager installs a package for a specific operating system or CPU architecture that is incompatible with other OSs or hardware.
+A lock file improves reproducibility through a relatively small file.
+Installers can exactly create the same environment without needing to manage the actual package contents itself. 
 
 !!! Warning "Do not edit the lock file"
     A lock file is built for machines, and made human readable for easy inspection. It's not meant to be edited by hand.
