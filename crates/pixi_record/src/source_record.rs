@@ -1,9 +1,38 @@
+//! Source records for conda packages that require building from source.
+//!
+//! # Full vs Partial vs Unresolved
+//!
+//! Source records exist in three states:
+//!
+//! - **Full** ([`FullSourceRecord`]): all metadata is available (package record,
+//!   dependencies, sources). Safe to use for building and installing.
+//! - **Partial** ([`PartialSourceRecord`]): only minimal metadata (name, depends,
+//!   sources). Produced when a *mutable* (path-based) source is written to the
+//!   lock file, because the full metadata would be stale by the next read.
+//! - **Unresolved** ([`UnresolvedSourceRecord`]): may be either full or partial.
+//!   This is what the lock file produces on read.
+//!
+//! # State transitions
+//!
+//! ```text
+//! Lock-file write: FullSourceRecord ──► Partial (if mutable source)
+//!                                   ──► Full   (if immutable source, e.g. git)
+//!
+//! Lock-file read:  ──► UnresolvedSourceRecord (Full or Partial)
+//!
+//! Startup resolve: UnresolvedSourceRecord ──► FullSourceRecord
+//!                  (re-evaluates source metadata for partial records)
+//! ```
+//!
+//! Use [`SourceRecord::map_data`] and [`SourceRecord::try_map_data`] for clean
+//! state transitions without field-by-field reconstruction.
+
 use pixi_git::sha::GitSha;
 use pixi_spec::{GitReference, SourceLocationSpec};
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageName, PackageRecord};
 use rattler_lock::{
-    CondaSourceData, FullSourceMetadata, GitShallowSpec, PackageBuildSource,
-    PartialSourceMetadata, SourceMetadata,
+    CondaSourceData, FullSourceMetadata, GitShallowSpec, PackageBuildSource, PartialSourceMetadata,
+    SourceMetadata,
 };
 use std::fmt::{Display, Formatter};
 use std::{
@@ -94,15 +123,30 @@ pub struct SourceRecord<D> {
     pub identifier_hash: Option<String>,
 }
 
-/// A source record with full metadata (package record + sources).
+/// A fully-resolved source record with all metadata available.
+///
+/// This is the primary type used throughout the codebase for building,
+/// installing, and solving. Re-exported as `SourceRecord` from the crate root.
 pub type FullSourceRecord = SourceRecord<FullSourceRecordData>;
 
-/// A source record with only the package name (no metadata resolved yet).
+/// A source record with only minimal metadata (name, depends, sources).
+///
+/// Produced when a mutable (path-based) source is written to the lock file.
+/// Not used directly outside this crate; see [`UnresolvedSourceRecord`].
 pub type PartialSourceRecord = SourceRecord<PartialSourceRecordData>;
 
-/// A source record that may be full or partial.
+/// A source record that may be either full or partial. This is the lock-file
+/// boundary type.
+///
+/// Use [`UnresolvedPixiRecord::try_into_resolved`](crate::UnresolvedPixiRecord::try_into_resolved)
+/// to check whether resolution is needed.
 pub type UnresolvedSourceRecord = SourceRecord<SourceRecordData>;
 
+/// Minimal metadata for a source package whose full record is not yet known.
+///
+/// This is what gets stored in the lock file for mutable (path-based) sources,
+/// since their full metadata (version, build string, etc.) can change between
+/// runs and would be stale.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PartialSourceRecordData {
     /// The package name of the source record.
@@ -116,6 +160,10 @@ pub struct PartialSourceRecordData {
     pub sources: HashMap<String, SourceLocationSpec>,
 }
 
+/// Complete metadata for a fully-evaluated source package.
+///
+/// Contains the full [`PackageRecord`] (version, build, dependencies, etc.)
+/// plus the source dependency map.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FullSourceRecordData {
     #[serde(flatten)]
@@ -126,7 +174,13 @@ pub struct FullSourceRecordData {
     pub sources: HashMap<String, SourceLocationSpec>,
 }
 
+/// Runtime-checked variant used at the lock-file boundary.
+///
+/// After reading a lock file, source records may be either full (immutable
+/// sources like git) or partial (mutable sources like local paths). This enum
+/// captures both cases and is resolved to [`FullSourceRecordData`] at startup.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum SourceRecordData {
     Partial(PartialSourceRecordData),
     Full(FullSourceRecordData),
@@ -180,6 +234,55 @@ impl<D> SourceRecord<D> {
     pub fn variants(&self) -> &BTreeMap<String, VariantValue> {
         &self.variants
     }
+
+    /// Transform the data payload while preserving all shared fields.
+    ///
+    /// Useful for state transitions (e.g. Full → Unresolved, Partial → Full)
+    /// without field-by-field reconstruction.
+    pub fn map_data<D2>(self, f: impl FnOnce(D) -> D2) -> SourceRecord<D2> {
+        SourceRecord {
+            data: f(self.data),
+            manifest_source: self.manifest_source,
+            build_source: self.build_source,
+            variants: self.variants,
+            identifier_hash: self.identifier_hash,
+        }
+    }
+
+    /// Fallible version of [`map_data`](Self::map_data).
+    ///
+    /// On success the record carries the new data type; on failure the record
+    /// is reassembled with the error type so no information is lost.
+    #[allow(clippy::result_large_err)]
+    pub fn try_map_data<T, E>(
+        self,
+        f: impl FnOnce(D) -> Result<T, E>,
+    ) -> Result<SourceRecord<T>, SourceRecord<E>> {
+        let SourceRecord {
+            data,
+            manifest_source,
+            build_source,
+            variants,
+            identifier_hash,
+        } = self;
+        let shared = (manifest_source, build_source, variants, identifier_hash);
+        match f(data) {
+            Ok(new_data) => Ok(SourceRecord {
+                data: new_data,
+                manifest_source: shared.0,
+                build_source: shared.1,
+                variants: shared.2,
+                identifier_hash: shared.3,
+            }),
+            Err(err_data) => Err(SourceRecord {
+                data: err_data,
+                manifest_source: shared.0,
+                build_source: shared.1,
+                variants: shared.2,
+                identifier_hash: shared.3,
+            }),
+        }
+    }
 }
 
 impl SourceRecord<FullSourceRecordData> {
@@ -215,14 +318,17 @@ impl SourceRecord<FullSourceRecordData> {
 
     /// Convert into lock-file compatible `CondaSourceData`.
     ///
-    /// If either source (manifest or build) is mutable, the record is
-    /// downgraded to partial metadata so the lock-file only stores minimal
-    /// information for packages whose metadata may change.
+    /// If either source (manifest or build) is mutable (path-based), the
+    /// record is downgraded to partial metadata. This is intentional: mutable
+    /// sources can change between runs, so storing full metadata (version,
+    /// build string, hashes) would be misleading because it would appear locked
+    /// but could silently become stale. By keeping only name, depends, and
+    /// sources, we force re-evaluation at the next lock-file read.
     pub fn into_conda_source_data(self, workspace_root: &Path) -> CondaSourceData {
         let has_mutable = self.has_mutable_source();
         let mut unresolved = SourceRecord::<SourceRecordData>::from(self);
         if has_mutable {
-            // Downgrade full data to partial — keep only name, depends, and sources.
+            // Downgrade full data to partial: keep only name, depends, and sources.
             if let SourceRecordData::Full(full) = unresolved.data {
                 unresolved.data = SourceRecordData::Partial(PartialSourceRecordData {
                     name: full.package_record.name,
@@ -334,15 +440,21 @@ impl SourceRecord<SourceRecordData> {
         let metadata = match self.data {
             SourceRecordData::Full(full) => SourceMetadata::Full(Box::new(FullSourceMetadata {
                 package_record: full.package_record,
-                sources: full.sources.into_iter().map(|(k, v)| (k, v.into())).collect(),
+                sources: full
+                    .sources
+                    .into_iter()
+                    .map(|(k, v)| (k, v.into()))
+                    .collect(),
             })),
-            SourceRecordData::Partial(partial) => {
-                SourceMetadata::Partial(PartialSourceMetadata {
-                    name: partial.name,
-                    depends: partial.depends,
-                    sources: partial.sources.into_iter().map(|(k, v)| (k, v.into())).collect(),
-                })
-            }
+            SourceRecordData::Partial(partial) => SourceMetadata::Partial(PartialSourceMetadata {
+                name: partial.name,
+                depends: partial.depends,
+                sources: partial
+                    .sources
+                    .into_iter()
+                    .map(|(k, v)| (k, v.into()))
+                    .collect(),
+            }),
         };
 
         CondaSourceData {
@@ -380,7 +492,11 @@ impl SourceRecord<SourceRecordData> {
                 SourceRecordData::Partial(PartialSourceRecordData {
                     name: partial.name,
                     depends: partial.depends,
-                    sources: partial.sources.into_iter().map(|(k, v)| (k, SourceLocationSpec::from(v))).collect(),
+                    sources: partial
+                        .sources
+                        .into_iter()
+                        .map(|(k, v)| (k, SourceLocationSpec::from(v)))
+                        .collect(),
                 })
             }
         };
@@ -402,13 +518,7 @@ impl SourceRecord<SourceRecordData> {
 /// Upcast from full to unresolved.
 impl From<SourceRecord<FullSourceRecordData>> for SourceRecord<SourceRecordData> {
     fn from(record: SourceRecord<FullSourceRecordData>) -> Self {
-        Self {
-            data: SourceRecordData::Full(record.data),
-            manifest_source: record.manifest_source,
-            build_source: record.build_source,
-            variants: record.variants,
-            identifier_hash: record.identifier_hash,
-        }
+        record.map_data(SourceRecordData::Full)
     }
 }
 
@@ -579,7 +689,7 @@ mod tests {
             })
             .collect();
 
-        // Write back — mutable (path) records should become partial,
+        // Write back: mutable (path) records should become partial,
         // immutable (git) records stay full.
         let roundtrip_lock = build_lock_from_records(&roundtrip_records, workspace_root);
         let mut settings = insta::Settings::clone_current();
@@ -702,7 +812,10 @@ mod tests {
                 path: typed_path::Utf8TypedPathBuf::from("./my-package"),
             }),
             build_source: None,
-            variants: BTreeMap::from([("python".into(), crate::VariantValue::from("3.12".to_string()))]),
+            variants: BTreeMap::from([(
+                "python".into(),
+                crate::VariantValue::from("3.12".to_string()),
+            )]),
             identifier_hash: Some("abcd1234".to_string()),
         };
 
@@ -710,12 +823,11 @@ mod tests {
 
         // Roundtrip through CondaSourceData.
         let conda_data = partial.into_conda_source_data(workspace_root);
-        let roundtripped =
-            super::SourceRecord::<SourceRecordData>::from_conda_source_data(
-                conda_data,
-                workspace_root,
-            )
-            .expect("from_conda_source_data should succeed");
+        let roundtripped = super::SourceRecord::<SourceRecordData>::from_conda_source_data(
+            conda_data,
+            workspace_root,
+        )
+        .expect("from_conda_source_data should succeed");
 
         assert_eq!(roundtripped.name().as_source(), "my-package");
         assert!(roundtripped.data.is_partial());
@@ -747,12 +859,11 @@ mod tests {
             .next()
             .expect("expected at least one source package");
 
-        let unresolved =
-            UnresolvedPixiRecord::from_conda_package_data(
-                CondaPackageData::Source(conda_source),
-                workspace_root,
-            )
-            .expect("from_conda_package_data should succeed");
+        let unresolved = UnresolvedPixiRecord::from_conda_package_data(
+            CondaPackageData::Source(Box::new(conda_source)),
+            workspace_root,
+        )
+        .expect("from_conda_package_data should succeed");
 
         let resolved = unresolved.try_into_resolved();
         assert!(resolved.is_ok());
@@ -783,6 +894,176 @@ mod tests {
         assert_eq!(still_partial.name().as_source(), "partial-pkg");
     }
 
+    /// Helper to create a minimal full source record for testing.
+    fn make_full_record(
+        name: &str,
+        manifest_source: PinnedSourceSpec,
+        build_source: Option<PinnedBuildSourceSpec>,
+        variants: BTreeMap<String, crate::VariantValue>,
+    ) -> SourceRecord {
+        let mut record = PackageRecord::new(
+            PackageName::from_str(name).unwrap(),
+            "1.0.0"
+                .parse::<rattler_conda_types::VersionWithSource>()
+                .unwrap(),
+            "h1234_0".into(),
+        );
+        record.subdir = "linux-64".into();
+        record.depends = vec!["python >=3.8".into()];
+        SourceRecord {
+            data: FullSourceRecordData {
+                package_record: record,
+                sources: HashMap::new(),
+            },
+            manifest_source,
+            build_source,
+            variants,
+            identifier_hash: None,
+        }
+    }
+
+    fn path_source(p: &str) -> PinnedSourceSpec {
+        PinnedSourceSpec::Path(PinnedPathSpec {
+            path: typed_path::Utf8TypedPathBuf::from(p),
+        })
+    }
+
+    fn git_source() -> PinnedSourceSpec {
+        PinnedSourceSpec::Git(crate::PinnedGitSpec {
+            git: url::Url::parse("https://github.com/example/repo.git").unwrap(),
+            source: crate::PinnedGitCheckout {
+                commit: pixi_git::sha::GitSha::from_str("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                    .unwrap(),
+                subdirectory: Default::default(),
+                reference: pixi_spec::GitReference::DefaultBranch,
+            },
+        })
+    }
+
+    #[test]
+    fn path_source_is_mutable() {
+        let record = make_full_record("my-pkg", path_source("./my-pkg"), None, BTreeMap::new());
+        assert!(record.has_mutable_source());
+    }
+
+    #[test]
+    fn git_source_is_not_mutable() {
+        let record = make_full_record("my-pkg", git_source(), None, BTreeMap::new());
+        assert!(!record.has_mutable_source());
+    }
+
+    #[test]
+    fn mutable_build_source_triggers_mutable() {
+        let record = make_full_record(
+            "my-pkg",
+            git_source(),
+            Some(PinnedBuildSourceSpec::Absolute(path_source("./build-dir"))),
+            BTreeMap::new(),
+        );
+        assert!(record.has_mutable_source());
+    }
+
+    #[test]
+    fn path_source_downgrades_to_partial_in_lockfile() {
+        let record = make_full_record("my-pkg", path_source("./my-pkg"), None, BTreeMap::new());
+        let conda_data = record.into_conda_source_data(Path::new("/workspace"));
+        assert!(
+            matches!(conda_data.metadata, SourceMetadata::Partial(_)),
+            "mutable source should be downgraded to partial"
+        );
+    }
+
+    #[test]
+    fn git_source_stays_full_in_lockfile() {
+        let record = make_full_record("my-pkg", git_source(), None, BTreeMap::new());
+        let conda_data = record.into_conda_source_data(Path::new("/workspace"));
+        assert!(
+            matches!(conda_data.metadata, SourceMetadata::Full(_)),
+            "immutable source should stay full"
+        );
+    }
+
+    #[test]
+    fn refers_to_same_output_same_name_same_variants() {
+        let variants = BTreeMap::from([(
+            "python".into(),
+            crate::VariantValue::from("3.12".to_string()),
+        )]);
+        let a = make_full_record("pkg", path_source("."), None, variants.clone());
+        let b = make_full_record("pkg", path_source("."), None, variants);
+        assert!(a.refers_to_same_output(&b));
+    }
+
+    #[test]
+    fn refers_to_same_output_different_variants() {
+        let a = make_full_record(
+            "pkg",
+            path_source("."),
+            None,
+            BTreeMap::from([(
+                "python".into(),
+                crate::VariantValue::from("3.12".to_string()),
+            )]),
+        );
+        let b = make_full_record(
+            "pkg",
+            path_source("."),
+            None,
+            BTreeMap::from([(
+                "python".into(),
+                crate::VariantValue::from("3.11".to_string()),
+            )]),
+        );
+        assert!(!a.refers_to_same_output(&b));
+    }
+
+    #[test]
+    fn refers_to_same_output_empty_variants_is_true() {
+        let a = make_full_record("pkg", path_source("."), None, BTreeMap::new());
+        let b = make_full_record(
+            "pkg",
+            path_source("."),
+            None,
+            BTreeMap::from([(
+                "python".into(),
+                crate::VariantValue::from("3.12".to_string()),
+            )]),
+        );
+        assert!(a.refers_to_same_output(&b));
+    }
+
+    #[test]
+    fn refers_to_same_output_different_names() {
+        let variants = BTreeMap::from([(
+            "python".into(),
+            crate::VariantValue::from("3.12".to_string()),
+        )]);
+        let a = make_full_record("pkg-a", path_source("."), None, variants.clone());
+        let b = make_full_record("pkg-b", path_source("."), None, variants);
+        assert!(!a.refers_to_same_output(&b));
+    }
+
+    #[test]
+    fn map_data_preserves_shared_fields() {
+        let record = make_full_record(
+            "my-pkg",
+            path_source("./my-pkg"),
+            None,
+            BTreeMap::from([(
+                "python".into(),
+                crate::VariantValue::from("3.12".to_string()),
+            )]),
+        );
+        let unresolved: super::SourceRecord<SourceRecordData> =
+            record.map_data(SourceRecordData::Full);
+        assert_eq!(unresolved.name().as_source(), "my-pkg");
+        assert!(unresolved.data.is_full());
+        assert_eq!(
+            unresolved.variants.get("python").map(|v| v.to_string()),
+            Some("3.12".to_string())
+        );
+    }
+
     #[test]
     fn full_upcast_roundtrip() {
         let workspace_root = Path::new("/workspace");
@@ -804,22 +1085,20 @@ mod tests {
             .expect("expected at least one source package");
 
         // Parse as unresolved record (first record in fixture is git = immutable = full).
-        let unresolved =
-            super::SourceRecord::<SourceRecordData>::from_conda_source_data(
-                conda_source,
-                workspace_root,
-            )
-            .expect("from_conda_source_data should succeed");
+        let unresolved = super::SourceRecord::<SourceRecordData>::from_conda_source_data(
+            conda_source,
+            workspace_root,
+        )
+        .expect("from_conda_source_data should succeed");
         assert!(unresolved.data.is_full());
 
         // Roundtrip through CondaSourceData.
         let conda_data = unresolved.into_conda_source_data(workspace_root);
-        let roundtripped =
-            super::SourceRecord::<SourceRecordData>::from_conda_source_data(
-                conda_data,
-                workspace_root,
-            )
-            .expect("roundtrip should succeed");
+        let roundtripped = super::SourceRecord::<SourceRecordData>::from_conda_source_data(
+            conda_data,
+            workspace_root,
+        )
+        .expect("roundtrip should succeed");
 
         assert!(roundtripped.data.is_full());
     }

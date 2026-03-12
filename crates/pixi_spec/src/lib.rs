@@ -682,7 +682,12 @@ impl From<SourceLocationSpec> for rattler_lock::source::SourceLocation {
 #[cfg(feature = "rattler_lock")]
 impl From<rattler_lock::source::UrlSourceLocation> for UrlSourceSpec {
     fn from(value: rattler_lock::source::UrlSourceLocation) -> Self {
-        let rattler_lock::source::UrlSourceLocation { url, md5, sha256, subdirectory } = value;
+        let rattler_lock::source::UrlSourceLocation {
+            url,
+            md5,
+            sha256,
+            subdirectory,
+        } = value;
 
         Self {
             url,

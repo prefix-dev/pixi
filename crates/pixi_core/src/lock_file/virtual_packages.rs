@@ -169,8 +169,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
         .collect_vec();
 
     // Get the virtual packages required by the conda records
-    let required_virtual_packages =
-        get_required_virtual_packages_from_depends(&all_depends)?;
+    let required_virtual_packages = get_required_virtual_packages_from_depends(&all_depends)?;
 
     // Find the python package record (needed for wheel tag validation below).
     // This works for binary and full source packages; partial source records
@@ -257,8 +256,8 @@ pub(crate) fn validate_system_meets_environment_requirements(
     if lock_platform.is_some_and(|p| environment.has_pypi_packages(p))
         && let Some(pypi_packages) = lock_platform.and_then(|p| environment.pypi_packages(p))
     {
-        let python_record = python_record
-            .ok_or(MachineValidationError::NoPythonRecordFound(platform))?;
+        let python_record =
+            python_record.ok_or(MachineValidationError::NoPythonRecordFound(platform))?;
 
         // Check if all the wheel tags match the system virtual packages
         let pypi_packages = pypi_packages.cloned().collect_vec();
@@ -311,8 +310,7 @@ mod test {
             .map(|s| s.as_str())
             .collect();
 
-        let virtual_matchspecs =
-            get_required_virtual_packages_from_depends(&all_depends).unwrap();
+        let virtual_matchspecs = get_required_virtual_packages_from_depends(&all_depends).unwrap();
 
         assert!(
             virtual_matchspecs
