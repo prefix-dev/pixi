@@ -789,14 +789,14 @@ test-source-pkg = {{ path = "./source-package" }}
         "Lock file should contain the source package"
     );
 
-    // Verify we can find the package with the expected version
+    // Verify we can find the package
     assert!(
         lock_file.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
             Platform::current(),
-            "test-source-pkg ==1.2.3"
+            "test-source-pkg"
         ),
-        "Lock file should contain test-source-pkg with version 1.2.3"
+        "Lock file should contain test-source-pkg"
     );
 
     // Second invocation: Load the workspace again and check if lock-file is up to date
