@@ -2,7 +2,7 @@
 
 ## What is a lock file?
 
-To answer this question, we need to highlight the difference between the manifest and the lock file.
+To answer this question, we first need to highlight the difference between the manifest and the lock file.
 
 The manifest lists the direct dependencies of your project.
 When you install your environment, this manifest goes through "dependency resolution": all the dependencies of your requested dependencies are found, et cetera all the way down.
@@ -11,7 +11,7 @@ During the resolution process, it is ensured that resolved versions are compatib
 A lock file lists the exact dependencies that were resolved during this resolution process - the packages, their versions, and other metadata useful for package management.
 
 A lock file improves reproducibility through a relatively small file.
-Installers can exactly create the same environment without needing to manage the actual package contents itself. 
+Installers can create exactly the same environment without needing to manage the actual package contents itself. 
 
 !!! Warning "Do not edit the lock file"
     A lock file is built for machines, and made human readable for easy inspection. It's not meant to be edited by hand.
