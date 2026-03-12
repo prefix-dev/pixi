@@ -105,51 +105,51 @@ The Pixi lock file is structured into two parts.
 
 - The environments that are used in the workspace - listing the packages contained. e.g.:
 
-  ```yaml
-  environments:
-      default:
-          channels:
-            - url: https://conda.anaconda.org/conda-forge/
-          packages:
-              linux-64:
-              ...
-              - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.2-hab00c5b_0_cpython.conda
-              ...
-              osx-64:
-              ...
-              - conda: https://conda.anaconda.org/conda-forge/osx-64/python-3.12.2-h9f0c242_0_cpython.conda
-              ...
-  ```
+```yaml
+environments:
+    default:
+        channels:
+          - url: https://conda.anaconda.org/conda-forge/
+        packages:
+            linux-64:
+            ...
+            - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.2-hab00c5b_0_cpython.conda
+            ...
+            osx-64:
+            ...
+            - conda: https://conda.anaconda.org/conda-forge/osx-64/python-3.12.2-h9f0c242_0_cpython.conda
+            ...
+```
 
-  - The definition of the packages themselves. e.g.:
+- The definition of the packages themselves. e.g.:
 
-    ```yaml
-    - kind: conda
-      name: python
-      version: 3.12.2
-      build: h9f0c242_0_cpython
-      subdir: osx-64
-      url: https://conda.anaconda.org/conda-forge/osx-64/python-3.12.2-h9f0c242_0_cpython.conda
-      sha256: 7647ac06c3798a182a4bcb1ff58864f1ef81eb3acea6971295304c23e43252fb
-      md5: 0179b8007ba008cf5bec11f3b3853902
-      depends:
-        - bzip2 >=1.0.8,<2.0a0
-        - libexpat >=2.5.0,<3.0a0
-        - libffi >=3.4,<4.0a0
-        - libsqlite >=3.45.1,<4.0a0
-        - libzlib >=1.2.13,<1.3.0a0
-        - ncurses >=6.4,<7.0a0
-        - openssl >=3.2.1,<4.0a0
-        - readline >=8.2,<9.0a0
-        - tk >=8.6.13,<8.7.0a0
-        - tzdata
-        - xz >=5.2.6,<6.0a0
-      constrains:
-        - python_abi 3.12.* *_cp312
-      license: Python-2.0
-      size: 14596811
-      timestamp: 1708118065292
-    ```
+```yaml
+- kind: conda
+  name: python
+  version: 3.12.2
+  build: h9f0c242_0_cpython
+  subdir: osx-64
+  url: https://conda.anaconda.org/conda-forge/osx-64/python-3.12.2-h9f0c242_0_cpython.conda
+  sha256: 7647ac06c3798a182a4bcb1ff58864f1ef81eb3acea6971295304c23e43252fb
+  md5: 0179b8007ba008cf5bec11f3b3853902
+  depends:
+    - bzip2 >=1.0.8,<2.0a0
+    - libexpat >=2.5.0,<3.0a0
+    - libffi >=3.4,<4.0a0
+    - libsqlite >=3.45.1,<4.0a0
+    - libzlib >=1.2.13,<1.3.0a0
+    - ncurses >=6.4,<7.0a0
+    - openssl >=3.2.1,<4.0a0
+    - readline >=8.2,<9.0a0
+    - tk >=8.6.13,<8.7.0a0
+    - tzdata
+    - xz >=5.2.6,<6.0a0
+  constrains:
+    - python_abi 3.12.* *_cp312
+  license: Python-2.0
+  size: 14596811
+  timestamp: 1708118065292
+```
 
 ### The version of the lock file
 
