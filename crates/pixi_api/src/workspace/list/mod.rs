@@ -86,12 +86,10 @@ pub async fn list(
             index_locations =
                 pypi_options_to_index_locations(&environment.pypi_options(), workspace.root())
                     .into_diagnostic()?;
-            let record = python_record.record().expect("python record should have full metadata");
-            tags = get_pypi_tags(
-                platform,
-                &environment.system_requirements(),
-                record,
-            )?;
+            let record = python_record
+                .record()
+                .expect("python record should have full metadata");
+            tags = get_pypi_tags(platform, &environment.system_requirements(), record)?;
             Some(RegistryWheelIndex::new(
                 &uv_context.cache,
                 &tags,

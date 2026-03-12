@@ -1305,10 +1305,8 @@ pub(crate) fn pypi_satisfies_requirement(
         RequirementSource::Path { install_path, .. }
         | RequirementSource::Directory { install_path, .. } => {
             if let UrlOrPath::Path(locked_path) = &*locked_data.location {
-                eprintln!("Path from lock: {locked_path:?}");
                 let install_path =
                     Utf8TypedPathBuf::from(install_path.to_string_lossy().to_string());
-                eprintln!("Path from install: {install_path:?}");
                 let project_root =
                     Utf8TypedPathBuf::from(project_root.to_string_lossy().to_string());
                 // Join relative paths with the project root
@@ -1317,7 +1315,6 @@ pub(crate) fn pypi_satisfies_requirement(
                 } else {
                     project_root.join(locked_path.to_path()).normalize()
                 };
-                eprintln!("Path from lock (always absolute): {locked_path:?}");
                 if locked_path.to_path() != install_path {
                     return Err(PlatformUnsat::LockedPyPIPathMismatch {
                         name: spec.name.clone().to_string(),
@@ -2015,7 +2012,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
     // Iterate over all packages. First iterate over all conda matchspecs and then
     // over all pypi requirements. We want to ensure we always check the conda
     // packages first.
-    let mut conda_queue = environment_dependencies
+    let mut conda_stack = environment_dependencies
         .into_iter()
         .chain(resolved_dev_dependencies.into_iter())
         .collect_vec();
@@ -2025,7 +2022,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
     let mut conda_packages_used_by_pypi = HashSet::new();
     let mut delayed_pypi_error = None;
 
-    while let Some(package) = conda_queue.pop().or_else(|| pypi_queue.pop()) {
+    while let Some(package) = conda_stack.pop().or_else(|| pypi_queue.pop()) {
         // Determine the package that matches the requirement of matchspec.
         let found_package = match package {
             Dependency::Input(name, spec, source) => {
@@ -2246,13 +2243,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     {
                         let anchored_location = anchor.resolve(source.clone());
                         let source_spec = SourceSpec::new(anchored_location, spec);
-                        conda_queue.push(Dependency::CondaSource(
+                        conda_stack.push(Dependency::CondaSource(
                             package_name.clone(),
                             source_spec,
                             origin,
                         ));
                     } else {
-                        conda_queue.push(Dependency::Conda(
+                        conda_stack.push(Dependency::Conda(
                             MatchSpec::from_nameless(spec, name),
                             origin,
                         ));

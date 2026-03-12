@@ -1150,7 +1150,15 @@ async fn resolve_partial_record(
         }
     };
 
-    let spec = build_source_metadata_spec(source, channel_config, channels, variants, variant_files, virtual_packages, platform);
+    let spec = build_source_metadata_spec(
+        source,
+        channel_config,
+        channels,
+        variants,
+        variant_files,
+        virtual_packages,
+        platform,
+    );
 
     let metadata = command_dispatcher
         .source_metadata(spec)
@@ -1580,10 +1588,7 @@ impl<'p> UpdateContextBuilder<'p> {
                         let unresolved = records
                             .cloned()
                             .map(|data| {
-                                UnresolvedPixiRecord::from_conda_package_data(
-                                    data,
-                                    workspace_root,
-                                )
+                                UnresolvedPixiRecord::from_conda_package_data(data, workspace_root)
                             })
                             .collect::<Result<Vec<_>, _>>()?;
                         Ok((platform, unresolved))

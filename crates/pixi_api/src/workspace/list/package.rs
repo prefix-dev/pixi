@@ -133,7 +133,9 @@ impl Package {
         };
 
         let sha256 = match package {
-            PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.sha256.map(|h| format!("{h:x}"))),
+            PackageExt::Conda(pkg) => pkg
+                .record()
+                .and_then(|r| r.sha256.map(|h| format!("{h:x}"))),
             PackageExt::PyPI(p, _) => p
                 .hash
                 .as_ref()
@@ -156,23 +158,23 @@ impl Package {
         };
 
         let timestamp = match package {
-            PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.timestamp.map(|ts| ts.timestamp_millis())),
+            PackageExt::Conda(pkg) => pkg
+                .record()
+                .and_then(|r| r.timestamp.map(|ts| ts.timestamp_millis())),
             PackageExt::PyPI(_, _) => None,
         };
 
         let noarch = match package {
-            PackageExt::Conda(pkg) => {
-                pkg.record().and_then(|r| {
-                    let noarch_type = &r.noarch;
-                    if noarch_type.is_python() {
-                        Some("python".to_string())
-                    } else if noarch_type.is_generic() {
-                        Some("generic".to_string())
-                    } else {
-                        None
-                    }
-                })
-            }
+            PackageExt::Conda(pkg) => pkg.record().and_then(|r| {
+                let noarch_type = &r.noarch;
+                if noarch_type.is_python() {
+                    Some("python".to_string())
+                } else if noarch_type.is_generic() {
+                    Some("generic".to_string())
+                } else {
+                    None
+                }
+            }),
             PackageExt::PyPI(_, _) => None,
         };
 
@@ -211,7 +213,10 @@ impl Package {
         };
 
         let constrains = match package {
-            PackageExt::Conda(pkg) => pkg.record().map(|r| r.constrains.clone()).unwrap_or_default(),
+            PackageExt::Conda(pkg) => pkg
+                .record()
+                .map(|r| r.constrains.clone())
+                .unwrap_or_default(),
             PackageExt::PyPI(_, _) => Vec::new(),
         };
 
@@ -221,7 +226,10 @@ impl Package {
         };
 
         let track_features = match package {
-            PackageExt::Conda(pkg) => pkg.record().map(|r| r.track_features.clone()).unwrap_or_default(),
+            PackageExt::Conda(pkg) => pkg
+                .record()
+                .map(|r| r.track_features.clone())
+                .unwrap_or_default(),
             PackageExt::PyPI(_, _) => Vec::new(),
         };
 

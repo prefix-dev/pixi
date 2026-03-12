@@ -61,10 +61,9 @@ impl LockFileDiff {
                     .into_iter()
                     .flatten()
                     .partition_map(|p| match p {
-                        LockedPackageRef::Conda(conda_package_data) => Either::Left((
-                            conda_package_data.name().clone(),
-                            conda_package_data,
-                        )),
+                        LockedPackageRef::Conda(conda_package_data) => {
+                            Either::Left((conda_package_data.name().clone(), conda_package_data))
+                        }
                         LockedPackageRef::Pypi(pypi_package_data) => {
                             Either::Right((pypi_package_data.name.clone(), pypi_package_data))
                         }
@@ -253,7 +252,11 @@ impl LockFileDiff {
         fn format_conda_identifier(p: &CondaPackageData) -> String {
             match p {
                 CondaPackageData::Binary(b) => {
-                    format!("{} {}", b.package_record.version.as_str(), &b.package_record.build)
+                    format!(
+                        "{} {}",
+                        b.package_record.version.as_str(),
+                        &b.package_record.build
+                    )
                 }
                 CondaPackageData::Source(s) => {
                     format!("@ {}", &s.location)
@@ -327,9 +330,15 @@ impl LockFileDiff {
                                     consts::CondaEmoji,
                                     name,
                                     choose_style(&prev_ver, &curr_ver),
-                                    choose_style(prev.package_record.build.as_str(), curr.package_record.build.as_str()),
+                                    choose_style(
+                                        prev.package_record.build.as_str(),
+                                        curr.package_record.build.as_str()
+                                    ),
                                     choose_style(&curr_ver, &prev_ver),
-                                    choose_style(curr.package_record.build.as_str(), prev.package_record.build.as_str()),
+                                    choose_style(
+                                        curr.package_record.build.as_str(),
+                                        prev.package_record.build.as_str()
+                                    ),
                                 )
                             }
                             (CondaPackageData::Source(prev), CondaPackageData::Source(curr)) => {
