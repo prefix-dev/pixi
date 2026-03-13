@@ -34,7 +34,7 @@ You can upload packages directly through the web interface. Navigate to **Upload
 Alternatively, you can upload packages using the `pixi` (or `rattler-build`) CLI tool. To do so locally, you need to generate an API key for your user account (User -> Settings -> Api Keys).
 
 ```bash
-pixi upload prefix -c <channel-name> <package-file> --api-key $PREFIX_API_KEY
+pixi upload prefix --channel <channel-name> <package-file> --api-key $PREFIX_API_KEY
 ```
 
 ## Using the channel in pixi
