@@ -79,6 +79,7 @@ for further details on how to use the software.
 - [Authentication](https://prefix-dev.github.io/pixi/dev/deployment/authentication/index.md)
 - [Container](https://prefix-dev.github.io/pixi/dev/deployment/container/index.md)
 - [Pixi Pack](https://prefix-dev.github.io/pixi/dev/deployment/pixi_pack/index.md)
+- [Prefix.dev Channel](https://prefix-dev.github.io/pixi/dev/deployment/prefix/index.md)
 - [S3](https://prefix-dev.github.io/pixi/dev/deployment/s3/index.md)
 
 ## Integration documentation
