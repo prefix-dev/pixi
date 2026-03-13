@@ -94,7 +94,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@v0.8.0
 
       - run: pixi run build
-      - run: pixi upload prefix -c foobar ./my-pkg*.conda
+      - run: pixi upload prefix --channel <channel-name> ./my-pkg*.conda
 ```
 
 The `rattler-build-action` automatically handles the OIDC token exchange with prefix.dev when trusted publishing is configured for the repository and workflow.
