@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use pixi_git::url::RepositoryUrl;
 use pixi_record::LockedGitUrl;
 use pixi_uv_conversions::{to_parsed_git_url, to_uv_version};
-use rattler_lock::{PypiPackageData, UrlOrPath};
+use rattler_lock::UrlOrPath;
 use url::Url;
 use uv_cache_info::CacheInfoError;
 use uv_distribution_types::{Dist, InstalledDist, InstalledDistKind};
@@ -31,10 +31,11 @@ pub enum NeedsReinstallError {
 /// Check if a package needs to be reinstalled
 pub(crate) fn need_reinstall(
     installed_dist: &InstalledDist,
-    required_pkg: &PypiPackageData,
+    required_record: &crate::UnresolvedPypiRecord,
     required_dist: &Dist,
     lock_file_dir: &Path,
 ) -> Result<ValidateCurrentInstall, NeedsReinstallError> {
+    let required_pkg = required_record.as_package_data();
     // Check if the installed version is the same as the required version
     match &installed_dist.kind {
         InstalledDistKind::Registry(reg) => {

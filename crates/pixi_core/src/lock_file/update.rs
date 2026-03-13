@@ -10,6 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::lock_file::records_by_name::HasNameVersion;
 use barrier_cell::BarrierCell;
 use dashmap::DashMap;
 use fancy_display::FancyDisplay;
@@ -28,7 +29,7 @@ use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
 use pixi_install_pypi::{
     LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
-    PyPIUpdateConfig,
+    PyPIUpdateConfig, UnresolvedPypiRecord,
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
@@ -68,7 +69,7 @@ use crate::{
         read_environment_file, write_environment_file,
     },
     lock_file::{
-        self, PypiPackageData, reporter::SolveProgressBar,
+        self, reporter::SolveProgressBar,
         virtual_packages::validate_system_meets_environment_requirements,
     },
     workspace::{
@@ -747,7 +748,7 @@ impl<'p> LockFileDerivedData<'p> {
                     .filter_map(LockedPackageRef::as_pypi)
                     .map(move |data| {
                         (
-                            data.clone(),
+                            Into::<UnresolvedPypiRecord>::into(data.clone()),
                             pixi_install_pypi::ManifestData {
                                 editable: is_editable_from_manifest(
                                     &manifest_pypi_deps,
@@ -783,7 +784,7 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let pypi_lock_file_names = pypi_records
                     .iter()
-                    .filter_map(|(data, _)| to_uv_normalize(&data.name).ok())
+                    .filter_map(|(data, _)| to_uv_normalize(data.name()).ok())
                     .collect::<HashSet<_>>();
 
                 // Figure out uv reinstall
@@ -1650,7 +1651,9 @@ impl<'p> UpdateContextBuilder<'p> {
                                 .map(|(lock_platform, records)| {
                                     (
                                         lock_platform.subdir(),
-                                        Arc::new(PypiRecordsByName::from_iter(records.cloned())),
+                                        Arc::new(PypiRecordsByName::from_iter(
+                                            records.map(|r| r.clone().into()),
+                                        )),
                                     )
                                 })
                                 .collect(),
@@ -2369,7 +2372,11 @@ impl<'p> UpdateContext<'p> {
                 if let Some(records) = self.take_latest_pypi_records(&environment, platform) {
                     for pkg_data in records.into_inner() {
                         builder
-                            .add_pypi_package(&environment_name, &platform_str, pkg_data)
+                            .add_pypi_package(
+                                &environment_name,
+                                &platform_str,
+                                pkg_data.as_package_data().clone(),
+                            )
                             .expect("platform was registered");
                         has_pypi_records = true;
                     }
@@ -2685,7 +2692,7 @@ async fn spawn_extract_environment_task(
 
     enum PackageRecord<'a> {
         Conda(&'a PixiRecord),
-        Pypi((&'a PypiPackageData, Option<ExtraName>)),
+        Pypi((&'a UnresolvedPypiRecord, Option<ExtraName>)),
     }
 
     // Determine the conda packages we need.
@@ -2833,7 +2840,7 @@ async fn spawn_extract_environment_task(
                     .into_diagnostic()?
                     .unwrap_or_default();
 
-                for req in record.requires_dist.iter() {
+                for req in record.as_package_data().requires_dist.iter() {
                     // Evaluate the marker environment with the given extras
                     if let Some(marker_env) = &marker_environment {
                         // let marker_str = marker_env.to_string();
@@ -2866,7 +2873,7 @@ async fn spawn_extract_environment_task(
                 }
 
                 // Insert the record if it is not already present
-                pypi_records.entry(record.name.clone()).or_insert(record);
+                pypi_records.entry(record.name().clone()).or_insert(record);
             }
         }
     }

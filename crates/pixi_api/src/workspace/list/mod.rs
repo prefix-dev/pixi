@@ -60,7 +60,7 @@ pub async fn list(
         .map(|p| match p {
             LockedPackageRef::Pypi(pypi_data) => {
                 let name = to_uv_normalize(&pypi_data.name)?;
-                Ok(PackageExt::PyPI(pypi_data.clone(), name))
+                Ok(PackageExt::PyPI(pypi_data.clone().into(), name))
             }
             LockedPackageRef::Conda(c) => Ok(PackageExt::Conda(c.clone())),
         })

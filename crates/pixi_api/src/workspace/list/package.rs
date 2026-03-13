@@ -1,6 +1,8 @@
 use pixi_consts::consts;
+use pixi_core::lock_file::HasNameVersion;
+use pixi_install_pypi::UnresolvedPypiRecord;
 use pixi_uv_conversions::to_uv_version;
-use rattler_lock::{CondaPackageData, PypiPackageData, UrlOrPath};
+use rattler_lock::{CondaPackageData, UrlOrPath};
 use serde::Serialize;
 use std::str::FromStr;
 use std::{borrow::Cow, collections::HashMap};
@@ -77,7 +79,8 @@ impl Package {
                         .map(|c| c.to_string().trim_end_matches('/').to_string()),
                 },
             ),
-            PackageExt::PyPI(p, name) => {
+            PackageExt::PyPI(record, name) => {
+                let p = record.as_package_data();
                 if p.hash.is_some() {
                     let url = p
                         .index_url
@@ -126,7 +129,8 @@ impl Package {
 
         let md5 = match package {
             PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.md5.map(|h| format!("{h:x}"))),
-            PackageExt::PyPI(p, _) => p
+            PackageExt::PyPI(record, _) => record
+                .as_package_data()
                 .hash
                 .as_ref()
                 .and_then(|h| h.md5().map(|m| format!("{m:x}"))),
@@ -136,7 +140,8 @@ impl Package {
             PackageExt::Conda(pkg) => pkg
                 .record()
                 .and_then(|r| r.sha256.map(|h| format!("{h:x}"))),
-            PackageExt::PyPI(p, _) => p
+            PackageExt::PyPI(record, _) => record
+                .as_package_data()
                 .hash
                 .as_ref()
                 .and_then(|h| h.sha256().map(|s| format!("{s:x}"))),
@@ -186,18 +191,25 @@ impl Package {
                 ),
                 CondaPackageData::Source(source) => (None, Some(source.location.to_string())),
             },
-            PackageExt::PyPI(p, _) => (
-                None,
-                Some(
-                    p.location
-                        .given()
-                        .map_or_else(|| p.location.to_string(), ToOwned::to_owned),
-                ),
-            ),
+            PackageExt::PyPI(record, _) => {
+                let p = record.as_package_data();
+                (
+                    None,
+                    Some(
+                        p.location
+                            .given()
+                            .map_or_else(|| p.location.to_string(), ToOwned::to_owned),
+                    ),
+                )
+            }
         };
 
         let index_url = match package {
-            PackageExt::PyPI(p, _) => p.index_url.as_ref().map(|u| u.to_string()),
+            PackageExt::PyPI(record, _) => record
+                .as_package_data()
+                .index_url
+                .as_ref()
+                .map(|u| u.to_string()),
             PackageExt::Conda(_) => None,
         };
 
@@ -222,7 +234,12 @@ impl Package {
 
         let depends = match package {
             PackageExt::Conda(pkg) => pkg.record().map(|r| r.depends.clone()).unwrap_or_default(),
-            PackageExt::PyPI(p, _) => p.requires_dist.iter().map(|r| r.to_string()).collect(),
+            PackageExt::PyPI(record, _) => record
+                .as_package_data()
+                .requires_dist
+                .iter()
+                .map(|r| r.to_string())
+                .collect(),
         };
 
         let track_features = match package {
@@ -303,7 +320,7 @@ fn serde_skip_is_editable(editable: &bool) -> bool {
 /// Associate with a uv_normalize::PackageName
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum PackageExt {
-    PyPI(PypiPackageData, uv_normalize::PackageName),
+    PyPI(UnresolvedPypiRecord, uv_normalize::PackageName),
     Conda(CondaPackageData),
 }
 
@@ -328,7 +345,7 @@ impl PackageExt {
     pub fn name(&self) -> Cow<'_, str> {
         match self {
             Self::Conda(value) => value.name().as_normalized().into(),
-            Self::PyPI(value, _) => value.name.as_dist_info_name(),
+            Self::PyPI(value, _) => value.name().as_dist_info_name(),
         }
     }
 
@@ -336,7 +353,7 @@ impl PackageExt {
     pub fn version(&self) -> Option<String> {
         match self {
             Self::Conda(value) => value.record().map(|r| r.version.to_string()),
-            Self::PyPI(value, _) => value.version.as_ref().map(|v| v.to_string()),
+            Self::PyPI(value, _) => value.version().map(|v| v.to_string()),
         }
     }
 }

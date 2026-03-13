@@ -56,7 +56,22 @@ pub struct ManifestData {
     pub editable: bool,
 }
 
-pub type PyPIRecords = (PypiPackageData, ManifestData);
+#[derive(Clone, Debug)]
+pub struct UnresolvedPypiRecord(PypiPackageData);
+
+impl From<PypiPackageData> for UnresolvedPypiRecord {
+    fn from(value: PypiPackageData) -> Self {
+        UnresolvedPypiRecord(value)
+    }
+}
+
+impl UnresolvedPypiRecord {
+    pub fn as_package_data(&self) -> &PypiPackageData {
+        &self.0
+    }
+}
+
+pub type PypiRecords = (UnresolvedPypiRecord, ManifestData);
 
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
@@ -131,7 +146,7 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
 pub async fn on_python_interpreter_change<'a>(
     status: &'a PythonStatus,
     prefix: &Prefix,
-    pypi_records: &[PyPIRecords],
+    pypi_records: &[PypiRecords],
 ) -> miette::Result<ContinuePyPIPrefixUpdate<'a>> {
     match status {
         PythonStatus::Removed { old } => {
@@ -277,7 +292,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         &self,
         python_status: &PythonStatus,
         pixi_records: &[PixiRecord],
-        pypi_records: &[PyPIRecords],
+        pypi_records: &[PypiRecords],
     ) -> miette::Result<()> {
         // Initialize UV flags from environment variables and pypi-options before any operations
         initialize_uv_flags(self.build_config.skip_wheel_filename_check);
@@ -311,7 +326,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     async fn execute_update(
         &self,
         pixi_records: &[PixiRecord],
-        pypi_records: &[PyPIRecords],
+        pypi_records: &[PypiRecords],
         python_info: &rattler::install::PythonInfo,
     ) -> miette::Result<()> {
         // Cheap planning setup (no network I/O)
@@ -479,7 +494,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     /// Create the installation plan by analyzing current state vs requirements
     async fn create_installation_plan(
         &self,
-        pypi_records: &[crate::PyPIRecords],
+        pypi_records: &[crate::PypiRecords],
         planner_config: &UvInstallerPlannerConfig,
     ) -> miette::Result<PyPIInstallationPlan> {
         // Create required distributions with pre-created Dist objects
