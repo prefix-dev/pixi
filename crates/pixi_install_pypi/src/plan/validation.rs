@@ -145,15 +145,6 @@ pub(crate) fn need_reinstall(
                             ));
                         }
                     }
-                    eprintln!(
-                        "Dirinfo: Editable: {}",
-                        dir_info.editable.unwrap_or_default()
-                    );
-                    eprintln!("installed: {}", installed_dist.is_editable());
-                    eprintln!(
-                        "required_dist.is_editable(): {}",
-                        required_dist.is_editable()
-                    );
                     if dir_info.editable.unwrap_or_default() != required_dist.is_editable() {
                         return Ok(ValidateCurrentInstall::Reinstall(
                             NeedReinstall::EditableStatusChanged {
