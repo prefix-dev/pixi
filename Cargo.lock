@@ -5588,6 +5588,7 @@ dependencies = [
  "pixi_config",
  "pixi_consts",
  "pixi_core",
+ "pixi_install_pypi",
  "pixi_manifest",
  "pixi_pypi_spec",
  "pixi_spec",

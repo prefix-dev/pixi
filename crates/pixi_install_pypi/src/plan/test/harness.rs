@@ -1,7 +1,7 @@
-use crate::ManifestData;
 use crate::plan::InstallPlanner;
 use crate::plan::cache::DistCache;
 use crate::plan::installed_dists::InstalledDists;
+use crate::{ManifestData, UnresolvedPypiRecord};
 use pixi_consts::consts;
 use pixi_uv_conversions::GitUrlWithPrefix;
 use rattler_lock::{PypiPackageData, UrlOrPath};
@@ -480,7 +480,7 @@ impl<'a> DistCache<'a> for AllCached {
 /// Struct to create the required packages map
 #[derive(Default)]
 pub struct RequiredPackages {
-    required: HashMap<uv_normalize::PackageName, (PypiPackageData, ManifestData)>,
+    required: HashMap<uv_normalize::PackageName, (UnresolvedPypiRecord, ManifestData)>,
 }
 
 impl RequiredPackages {
@@ -492,7 +492,7 @@ impl RequiredPackages {
     pub fn add_registry<S: AsRef<str>>(mut self, name: S, version: S) -> Self {
         let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("should be correct");
-        let data = PyPIPackageDataBuilder::registry(name, version);
+        let data = PyPIPackageDataBuilder::registry(name, version).into();
         self.required
             .insert(package_name, (data, ManifestData { editable: false }));
         self
@@ -508,7 +508,7 @@ impl RequiredPackages {
     ) -> Self {
         let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("should be correct");
-        let data = PyPIPackageDataBuilder::path(name, version, path);
+        let data = PyPIPackageDataBuilder::path(name, version, path).into();
         self.required
             .insert(package_name, (data, ManifestData { editable }));
         self
@@ -517,7 +517,7 @@ impl RequiredPackages {
     pub fn add_local_wheel<S: AsRef<str>>(mut self, name: S, version: S, path: PathBuf) -> Self {
         let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("should be correct");
-        let data = PyPIPackageDataBuilder::path(name, version, path);
+        let data = PyPIPackageDataBuilder::path(name, version, path).into();
         self.required
             .insert(package_name, (data, ManifestData { editable: false }));
         self
@@ -526,7 +526,7 @@ impl RequiredPackages {
     pub fn add_archive<S: AsRef<str>>(mut self, name: S, version: S, url: Url) -> Self {
         let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("should be correct");
-        let data = PyPIPackageDataBuilder::url(name, version, url, UrlType::Direct);
+        let data = PyPIPackageDataBuilder::url(name, version, url, UrlType::Direct).into();
         self.required
             .insert(package_name, (data, ManifestData { editable: false }));
         self
@@ -535,7 +535,7 @@ impl RequiredPackages {
     pub fn add_git<S: AsRef<str>>(mut self, name: S, version: S, url: Url) -> Self {
         let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("should be correct");
-        let data = PyPIPackageDataBuilder::url(name, version, url, UrlType::Other);
+        let data = PyPIPackageDataBuilder::url(name, version, url, UrlType::Other).into();
         self.required
             .insert(package_name, (data, ManifestData { editable: false }));
         self

@@ -6,7 +6,7 @@ use pixi_record::LockedGitUrl;
 use pixi_uv_conversions::{
     ConversionError, to_parsed_git_url, to_uv_normalize, to_uv_version, to_uv_version_specifiers,
 };
-use rattler_lock::{PackageHashes, PypiPackageData, UrlOrPath};
+use rattler_lock::{PackageHashes, UrlOrPath};
 use url::Url;
 use uv_distribution_filename::DistExtension;
 use uv_distribution_filename::{ExtensionError, SourceDistExtension, WheelFilename};
@@ -100,12 +100,13 @@ pub enum ConvertToUvDistError {
     UvPepTypes(#[from] ConversionError),
 }
 
-/// Convert from a PypiPackageData to a uv [`distribution_types::Dist`]
+/// Convert from an [`UnresolvedPypiRecord`] to a uv [`distribution_types::Dist`]
 pub fn convert_to_dist(
-    pkg: &PypiPackageData,
+    record: &crate::UnresolvedPypiRecord,
     manifest_data: &crate::ManifestData,
     lock_file_dir: &Path,
 ) -> Result<Dist, ConvertToUvDistError> {
+    let pkg = record.as_package_data();
     // Figure out if it is a url from the registry or a direct url
     let dist = match &*pkg.location {
         UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
@@ -249,7 +250,7 @@ mod tests {
         let wheel = "torch-2.3.0%2Bcu121-cp312-cp312-win_amd64.whl";
         let url = format!("https://example.com/{wheel}").parse().unwrap();
         // Pass into locked data
-        let locked = PypiPackageData {
+        let locked: crate::UnresolvedPypiRecord = PypiPackageData {
             name: "torch".parse().unwrap(),
             version: Some(Version::from_str("2.3.0+cu121").unwrap()),
             location: UrlOrPath::Url(url).into(),
@@ -257,7 +258,8 @@ mod tests {
             index_url: None,
             requires_dist: vec![],
             requires_python: None,
-        };
+        }
+        .into();
 
         // Convert the locked data to a uv dist
         // check if it does not panic
