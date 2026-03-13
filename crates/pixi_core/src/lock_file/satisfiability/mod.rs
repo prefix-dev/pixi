@@ -1193,22 +1193,33 @@ pub(crate) fn pypi_satisfies_requirement(
                 .into());
             }
 
-            // If the requirement specifies an explicit index, verify the lock-file matches
-            if let Some(required_index) = index {
-                let required_url: Url = required_index.url.url().clone().into();
-                match &locked_data.index_url {
-                    Some(locked_url) if locked_url == &required_url => {}
-                    other => {
-                        return Err(PlatformUnsat::LockedPyPIIndexMismatch {
-                            name: spec.name.to_string(),
-                            expected_index: required_url.to_string(),
-                            locked_index: other
-                                .as_ref()
-                                .map_or("<default>".to_string(), |u| u.to_string()),
+            // Verify the index in the requirement matches the lock-file.
+            match (index, &locked_data.index_url) {
+                (Some(required_index), locked_index) => {
+                    let required_url: Url = required_index.url.url().clone().into();
+                    match locked_index {
+                        Some(locked_url) if locked_url == &required_url => {}
+                        other => {
+                            return Err(PlatformUnsat::LockedPyPIIndexMismatch {
+                                name: spec.name.to_string(),
+                                expected_index: required_url.to_string(),
+                                locked_index: other
+                                    .as_ref()
+                                    .map_or("<default>".to_string(), |u| u.to_string()),
+                            }
+                            .into());
                         }
-                        .into());
                     }
                 }
+                (None, Some(locked_url)) => {
+                    return Err(PlatformUnsat::LockedPyPIIndexMismatch {
+                        name: spec.name.to_string(),
+                        expected_index: "<default>".to_string(),
+                        locked_index: locked_url.to_string(),
+                    }
+                    .into());
+                }
+                (None, None) => {}
             }
 
             Ok(())
@@ -3288,5 +3299,153 @@ mod tests {
 
         // A git-based source dependency without a version should still satisfy.
         pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+    }
+
+    /// Regression test: removing a PyPI `index` from the manifest should
+    /// invalidate the lock-file when the locked package was resolved from that
+    /// index.
+    ///
+    /// Verify that removing an explicit index from a PyPI requirement
+    /// invalidates the lock-file entry that was resolved from that index.
+    #[test]
+    fn test_pypi_index_removed_should_invalidate() {
+        // Locked data: package was resolved from a custom index.
+        let locked_data = PypiPackageData {
+            name: "my-dep".parse().unwrap(),
+            version: Some(Version::from_str("1.0.0").unwrap()),
+            location: "https://custom.example.com/simple/packages/my_dep-1.0.0-py3-none-any.whl"
+                .parse()
+                .expect("failed to parse url"),
+            hash: None,
+            index_url: Some(Url::parse("https://custom.example.com/simple").unwrap()),
+            requires_dist: vec![],
+            requires_python: None,
+        };
+
+        // Requirement: no index specified (user removed the `index` field).
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str("my-dep>=1.0").unwrap(),
+        )
+        .unwrap();
+
+        let project_root = PathBuf::from_str("/").unwrap();
+
+        let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
+        assert!(
+            result.is_err(),
+            "expected index removal to invalidate satisfiability, \
+             but pypi_satisfies_requirement returned Ok(())"
+        );
+    }
+
+    /// Helper to build a `uv_distribution_types::Requirement` with an explicit index.
+    fn registry_requirement_with_index(
+        name: &str,
+        specifier: &str,
+        index_url: &str,
+    ) -> uv_distribution_types::Requirement {
+        use uv_normalize::PackageName as UvPackageName;
+        use uv_pep440::VersionSpecifiers;
+
+        let index =
+            uv_distribution_types::IndexMetadata::from(uv_distribution_types::IndexUrl::from(
+                uv_pep508::VerbatimUrl::from_url(Url::parse(index_url).unwrap().into()),
+            ));
+        uv_distribution_types::Requirement {
+            name: UvPackageName::from_str(name).unwrap(),
+            extras: vec![].into(),
+            groups: vec![].into(),
+            marker: uv_pep508::MarkerTree::TRUE,
+            source: RequirementSource::Registry {
+                specifier: VersionSpecifiers::from_str(specifier).unwrap(),
+                index: Some(index),
+                conflict: None,
+            },
+            origin: None,
+        }
+    }
+
+    /// Verify that changing a PyPI index to a different non-default index
+    /// invalidates the lock-file.
+    #[test]
+    fn test_pypi_index_changed_should_invalidate() {
+        let locked_data = PypiPackageData {
+            name: "my-dep".parse().unwrap(),
+            version: Some(Version::from_str("1.0.0").unwrap()),
+            location: "https://old-index.example.com/packages/my_dep-1.0.0-py3-none-any.whl"
+                .parse()
+                .expect("failed to parse url"),
+            hash: None,
+            index_url: Some(Url::parse("https://old-index.example.com/simple").unwrap()),
+            requires_dist: vec![],
+            requires_python: None,
+        };
+
+        let spec = registry_requirement_with_index(
+            "my-dep",
+            ">=1.0",
+            "https://new-index.example.com/simple",
+        );
+
+        let project_root = PathBuf::from_str("/").unwrap();
+        let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
+        assert!(
+            result.is_err(),
+            "expected index change to invalidate satisfiability"
+        );
+    }
+
+    /// Verify that a matching non-default index is considered satisfiable.
+    #[test]
+    fn test_pypi_index_matching_should_satisfy() {
+        let index_url = "https://custom.example.com/simple";
+        let locked_data = PypiPackageData {
+            name: "my-dep".parse().unwrap(),
+            version: Some(Version::from_str("1.0.0").unwrap()),
+            location: "https://custom.example.com/packages/my_dep-1.0.0-py3-none-any.whl"
+                .parse()
+                .expect("failed to parse url"),
+            hash: None,
+            index_url: Some(Url::parse(index_url).unwrap()),
+            requires_dist: vec![],
+            requires_python: None,
+        };
+
+        let spec = registry_requirement_with_index("my-dep", ">=1.0", index_url);
+
+        let project_root = PathBuf::from_str("/").unwrap();
+        let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
+        assert!(
+            result.is_ok(),
+            "expected matching index to satisfy, got: {:?}",
+            result.unwrap_err()
+        );
+    }
+
+    /// Verify that adding an index to a requirement that was locked without one
+    /// invalidates the lock-file.
+    #[test]
+    fn test_pypi_index_added_should_invalidate() {
+        let locked_data = PypiPackageData {
+            name: "my-dep".parse().unwrap(),
+            version: Some(Version::from_str("1.0.0").unwrap()),
+            location: "https://pypi.org/packages/my_dep-1.0.0-py3-none-any.whl"
+                .parse()
+                .expect("failed to parse url"),
+            hash: None,
+            index_url: None,
+            requires_dist: vec![],
+            requires_python: None,
+        };
+
+        let spec =
+            registry_requirement_with_index("my-dep", ">=1.0", "https://custom.example.com/simple");
+
+        let project_root = PathBuf::from_str("/").unwrap();
+        let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
+        assert!(
+            result.is_err(),
+            "expected adding an index to invalidate satisfiability"
+        );
     }
 }
