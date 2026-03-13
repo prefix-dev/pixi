@@ -42,7 +42,7 @@ pixi upload prefix -c <channel-name> <package-file> --api-key $PREFIX_API_KEY
 Once your channel is set up and has packages, you can use it in your `pixi.toml`:
 
 ```toml
-[project]
+[workspace]
 channels = ["https://prefix.dev/<channel-name>"]
 ```
 
