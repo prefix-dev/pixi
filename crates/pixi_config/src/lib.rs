@@ -524,11 +524,8 @@ impl ExperimentalConfig {
     }
 }
 
-// Making the default values part of pixi_config to allow for printing the
-// default settings in the future.
 /// The default maximum number of concurrent solves that can be run at once.
 /// Defaulting to the number of CPUs available.
-
 fn default_max_concurrent_solves() -> usize {
     std::thread::available_parallelism().map_or(1, |n| n.get())
 }
