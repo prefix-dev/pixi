@@ -4659,7 +4659,7 @@ At the moment, only <code>platform_system</code>, <code>os_name</code>, <code>pl
 <h2 id="installer-selection">Installer Selection<a class="headerlink" href="#installer-selection" title="Permanent link">#</a></h2>
 <p>The backend automatically detects which Python installer to use:</p>
 <ul>
-<li><strong>uv</strong>: Used if <code>uv</code> is present in any dependency category (build, host, or run)</li>
+<li><strong>uv</strong>: Used if <code>uv</code> is present in the build or host dependencies</li>
 <li><strong>pip</strong>: Used as the default fallback installer</li>
 </ul>
 <p>To use <code>uv</code> for faster installations, add it to your dependencies:</p>
