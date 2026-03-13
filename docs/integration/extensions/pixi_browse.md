@@ -1,4 +1,5 @@
-![pixi-browse demo](https://raw.githubusercontent.com/pavelzw/pixi-browse/refs/heads/main/.github/assets/demo.gif)
+![pixi-browse demo](https://raw.githubusercontent.com/pavelzw/pixi-browse/refs/heads/main/.github/assets/demo-light.gif#only-light)
+![pixi-browse demo](https://raw.githubusercontent.com/pavelzw/pixi-browse/refs/heads/main/.github/assets/demo-dark.gif#only-dark)
 
 [pixi-browse](https://github.com/pavelzw/pixi-browse) is an interactive terminal UI for browsing conda package metadata.
 Explore packages, versions, dependencies, and more from any conda channel, right from your terminal.
