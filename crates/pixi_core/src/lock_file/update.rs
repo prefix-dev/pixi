@@ -56,7 +56,7 @@ use uv_normalize::ExtraName;
 
 use super::{
     CondaPrefixUpdater, InstallSubset, PixiRecordsByName, PypiRecordsByName,
-    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
+    UnresolvedPixiRecordsByName, outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
 };
 use crate::{
     Workspace,
@@ -1226,10 +1226,13 @@ pub struct UpdateContext<'p> {
     /// Repodata records from the lock-file. This contains the records that
     /// actually exist in the lock-file. If the lock-file is missing or
     /// partially missing then the data also won't exist in this field.
-    locked_repodata_records: PerEnvironmentAndPlatform<'p, Arc<PixiRecordsByName>>,
+    ///
+    /// Records may be unresolved (partial source records from mutable path
+    /// sources). They are resolved lazily only when needed.
+    locked_repodata_records: PerEnvironmentAndPlatform<'p, Arc<UnresolvedPixiRecordsByName>>,
 
     /// Repodata records from the lock-file grouped by solve-group.
-    locked_grouped_repodata_records: PerGroupAndPlatform<'p, Arc<PixiRecordsByName>>,
+    locked_grouped_repodata_records: PerGroupAndPlatform<'p, Arc<UnresolvedPixiRecordsByName>>,
 
     /// Pypi  records from the lock-file grouped by solve-group.
     locked_grouped_pypi_records: PerGroupAndPlatform<'p, Arc<PypiRecordsByName>>,
@@ -1317,14 +1320,16 @@ impl<'p> UpdateContext<'p> {
             return Some((async move { pending_records.wait().await.clone() }).left_future());
         }
 
-        // Otherwise read the records directly from the lock-file.
+        // Otherwise read the records directly from the lock-file, converting
+        // unresolved records to resolved on a best-effort basis (partial source
+        // records are dropped — they have no version/PackageRecord anyway).
         let locked_records = self
             .locked_grouped_repodata_records
             .get(group)
-            .and_then(|records| records.get(&platform))?
-            .clone();
+            .and_then(|records| records.get(&platform))?;
+        let resolved = Arc::new(locked_records.as_ref().clone().into_resolved_best_effort());
 
-        Some(ready(locked_records).right_future())
+        Some(ready(resolved).right_future())
     }
 
     /// Returns a future that will resolve to the solved pypi records for the
@@ -1357,22 +1362,31 @@ impl<'p> UpdateContext<'p> {
         &mut self,
         environment: &Environment<'p>,
         platform: Platform,
-    ) -> Option<PixiRecordsByName> {
+    ) -> Option<UnresolvedPixiRecordsByName> {
         self.solved_repodata_records
             .get_mut(environment)
             .and_then(|records| records.remove(&platform))
             .map(|cell| {
-                Arc::into_inner(cell)
+                let solved = Arc::into_inner(cell)
                     .expect("records must not be shared")
                     .into_inner()
-                    .expect("records must be available")
+                    .expect("records must be available");
+                // Convert solved PixiRecords into UnresolvedPixiRecords so the
+                // return type is uniform with locked (potentially partial) records.
+                let solved = Arc::try_unwrap(solved).unwrap_or_else(|arc| (*arc).clone());
+                UnresolvedPixiRecordsByName::from_iter(
+                    solved
+                        .into_inner()
+                        .into_iter()
+                        .map(UnresolvedPixiRecord::from),
+                )
             })
             .or_else(|| {
                 self.locked_repodata_records
                     .get_mut(environment)
                     .and_then(|records| records.remove(&platform))
+                    .map(|records| Arc::try_unwrap(records).unwrap_or_else(|arc| (*arc).clone()))
             })
-            .map(|records| Arc::try_unwrap(records).unwrap_or_else(|arc| (*arc).clone()))
     }
 
     /// Takes the latest pypi records for the given environment and platform.
@@ -1567,11 +1581,9 @@ impl<'p> UpdateContextBuilder<'p> {
         };
 
         // Extract the current conda records from the lock-file.
-        // First collect as UnresolvedPixiRecord (sync), then resolve partials (async).
         let workspace_root = project.root();
-        let command_dispatcher = &self.command_dispatcher;
 
-        // Step 1: Collect unresolved records per environment and platform (sync).
+        // Collect unresolved records per environment and platform.
         #[allow(clippy::type_complexity)]
         let unresolved_by_env: Vec<(
             crate::workspace::Environment<'_>,
@@ -1599,56 +1611,21 @@ impl<'p> UpdateContextBuilder<'p> {
             .collect::<Result<Vec<_>, ParseLockFileError>>()
             .into_diagnostic()?;
 
-        // Step 2: Resolve partials async.
+        // Step 2: Store the unresolved records directly. Partial source records
+        // are kept as-is and resolved lazily only when needed. This avoids a
+        // hard error when a partial record cannot be resolved (e.g. after a
+        // package rename) — the outdated environment will be re-solved anyway.
         let mut locked_repodata_records: HashMap<
             crate::workspace::Environment<'_>,
-            HashMap<Platform, Arc<PixiRecordsByName>>,
+            HashMap<Platform, Arc<UnresolvedPixiRecordsByName>>,
         > = HashMap::new();
         for (env, platform_records) in unresolved_by_env {
             let mut env_map = HashMap::new();
             for (platform, unresolved) in platform_records {
-                // Check if any records are partial.
-                let has_partials = unresolved.iter().any(|r| r.is_partial());
-                let resolved = if has_partials {
-                    let channel_config = env.channel_config();
-                    let channels: Vec<ChannelUrl> = env
-                        .channels()
-                        .into_iter()
-                        .cloned()
-                        .map(|c| c.into_base_url(&channel_config))
-                        .collect::<Result<Vec<_>, _>>()
-                        .into_diagnostic()?;
-                    let VariantConfig {
-                        variant_configuration,
-                        variant_files,
-                    } = project.variants(platform).into_diagnostic()?;
-                    let virtual_packages: Vec<GenericVirtualPackage> = env
-                        .virtual_packages(platform)
-                        .into_iter()
-                        .map(GenericVirtualPackage::from)
-                        .collect();
-                    resolve_unresolved_records(
-                        unresolved,
-                        command_dispatcher,
-                        channel_config,
-                        channels,
-                        variant_configuration,
-                        variant_files,
-                        virtual_packages,
-                        platform,
-                    )
-                    .await?
-                } else {
-                    // All records are full — resolve without async.
-                    unresolved
-                        .into_iter()
-                        .map(|r| {
-                            r.try_into_resolved()
-                                .expect("all records verified as non-partial")
-                        })
-                        .collect()
-                };
-                env_map.insert(platform, Arc::new(PixiRecordsByName::from_iter(resolved)));
+                env_map.insert(
+                    platform,
+                    Arc::new(UnresolvedPixiRecordsByName::from_iter(unresolved)),
+                );
             }
             locked_repodata_records.insert(env, env_map);
         }
@@ -1724,7 +1701,10 @@ impl<'p> UpdateContextBuilder<'p> {
                         by_platform
                             .into_iter()
                             .map(|(platform, records)| {
-                                (platform, Arc::new(PixiRecordsByName::from_iter(records)))
+                                (
+                                    platform,
+                                    Arc::new(UnresolvedPixiRecordsByName::from_iter(records)),
+                                )
                             })
                             .collect()
                     }
@@ -1904,11 +1884,16 @@ impl<'p> UpdateContext<'p> {
                     continue;
                 }
                 // No, we need to spawn a task to update for the entire solve group.
+                // Convert to resolved records on a best-effort basis: partial
+                // source records are dropped (the solver only uses binary records
+                // from `installed` anyway).
                 let locked_group_records = self
                     .locked_grouped_repodata_records
                     .get(&source)
                     .and_then(|records| records.get(&platform))
-                    .cloned()
+                    .map(|unresolved| {
+                        Arc::new(unresolved.as_ref().clone().into_resolved_best_effort())
+                    })
                     .unwrap_or_default();
 
                 // Spawn a task to solve the group.

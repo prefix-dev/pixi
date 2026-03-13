@@ -16,7 +16,7 @@ use pixi_record::PixiRecord;
 pub use pixi_uv_context::UvResolutionContext;
 use rattler_lock::PypiPackageData;
 pub use rattler_lock::Verbatim;
-pub use records_by_name::{PixiRecordsByName, PypiRecordsByName};
+pub use records_by_name::{PixiRecordsByName, PypiRecordsByName, UnresolvedPixiRecordsByName};
 pub use resolve::pypi::resolve_pypi;
 pub use satisfiability::{
     Dependency, EnvironmentUnsat, PlatformUnsat, resolve_dev_dependencies,
