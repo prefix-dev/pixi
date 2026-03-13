@@ -158,6 +158,7 @@ nav:
       - Package Source: build/package_source.md
       - Dev Packages: build/dev.md
   - Distributing:
+      - Prefix.dev Channel: deployment/prefix.md
       - Pixi Pack: deployment/pixi_pack.md
       - Authentication: deployment/authentication.md
       - Container: deployment/container.md
