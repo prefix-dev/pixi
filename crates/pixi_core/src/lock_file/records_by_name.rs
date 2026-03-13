@@ -1,6 +1,6 @@
 use super::package_identifier::ConversionError;
 use crate::lock_file::{PypiPackageData, PypiPackageIdentifier};
-use pixi_record::PixiRecord;
+use pixi_record::{PixiRecord, UnresolvedPixiRecord};
 use pixi_uv_conversions::to_uv_normalize;
 use pypi_modifiers::pypi_tags::is_python_record;
 use rattler_conda_types::{PackageName, RepoDataRecord, VersionWithSource};
@@ -10,6 +10,7 @@ use std::hash::Hash;
 
 pub type PypiRecordsByName = DependencyRecordsByName<PypiPackageData>;
 pub type PixiRecordsByName = DependencyRecordsByName<PixiRecord>;
+pub type UnresolvedPixiRecordsByName = DependencyRecordsByName<UnresolvedPixiRecord>;
 
 /// A trait required from the dependencies stored in DependencyRecordsByName
 pub trait HasNameVersion {
@@ -59,6 +60,19 @@ impl HasNameVersion for PixiRecord {
 
     fn version(&self) -> Option<&Self::V> {
         Some(&self.package_record().version)
+    }
+}
+
+impl HasNameVersion for UnresolvedPixiRecord {
+    type N = PackageName;
+    type V = VersionWithSource;
+
+    fn name(&self) -> &Self::N {
+        UnresolvedPixiRecord::name(self)
+    }
+
+    fn version(&self) -> Option<&Self::V> {
+        self.package_record().map(|pr| &pr.version)
     }
 }
 
@@ -219,6 +233,20 @@ impl PixiRecordsByName {
                 })
             })
             .collect::<Result<HashMap<_, _>, ConversionError>>()
+    }
+}
+
+impl UnresolvedPixiRecordsByName {
+    /// Converts to a [`PixiRecordsByName`] on a best-effort basis.
+    ///
+    /// Binary records and full source records are converted; partial source
+    /// records (whose metadata is incomplete) are silently dropped.
+    pub(crate) fn into_resolved_best_effort(self) -> PixiRecordsByName {
+        PixiRecordsByName::from_iter(
+            self.records
+                .into_iter()
+                .filter_map(|r| r.try_into_resolved().ok()),
+        )
     }
 }
 
