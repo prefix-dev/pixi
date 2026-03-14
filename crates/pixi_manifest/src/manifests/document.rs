@@ -472,7 +472,54 @@ impl ManifestDocument {
             if let Some(idx) = existing_entry_idx {
                 array.replace(idx, requirement.to_string());
             } else {
-                array.push(requirement.to_string());
+                // Insert alphabetically if the list is already sorted (uv-style behavior):
+                // preserve user ordering when unsorted, maintain alpha order when sorted.
+                let req_str = requirement.to_string();
+                let req_name_lower = requirement.name.to_string().to_lowercase();
+
+                let existing_names: Vec<String> = array
+                    .iter()
+                    .filter_map(|item| {
+                        let s = item.as_str()?;
+                        let req: pep508_rs::Requirement = s.parse().ok()?;
+                        Some(req.name.to_string().to_lowercase())
+                    })
+                    .collect();
+
+                let is_sorted = existing_names.windows(2).all(|w| w[0] <= w[1]);
+
+                if is_sorted {
+                    let insert_idx = array
+                        .iter()
+                        .position(|item| {
+                            let Some(s) = item.as_str() else { return false };
+                            let Ok(req): Result<pep508_rs::Requirement, _> = s.parse() else {
+                                return false;
+                            };
+                            req.name.to_string().to_lowercase() > req_name_lower
+                        })
+                        .unwrap_or(array.len());
+
+                    if insert_idx == array.len() {
+                        array.push(req_str);
+                    } else {
+                        // toml_edit Array has no insert(), so rebuild by collecting,
+                        // inserting, then repopulating.
+                        let mut values: Vec<String> = array
+                            .iter()
+                            .map(|v| v.as_str().unwrap_or_default().to_string())
+                            .collect();
+                        values.insert(insert_idx, req_str);
+                        while !array.is_empty() {
+                            array.remove(0);
+                        }
+                        for v in values {
+                            array.push(v);
+                        }
+                    }
+                } else {
+                    array.push(req_str);
+                }
             }
             Ok(())
         };
