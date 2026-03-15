@@ -1,4 +1,8 @@
-use std::{collections::HashMap, io::Write, path::PathBuf};
+use std::{
+    collections::HashMap,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use clap::Parser;
 use miette::IntoDiagnostic;
@@ -204,6 +208,8 @@ fn start_winbash(
 /// - `shell`: The type of shell to start. Must implement the `Shell` and `Copy` traits.
 /// - `args`: A vector of arguments to pass to the shell.
 /// - `env`: A HashMap containing environment variables to set in the shell.
+/// - `shell_exe`: Optional resolved path to the shell executable, used to
+///   bypass PATH lookup when the parent process's actual binary is known.
 #[cfg(target_family = "unix")]
 async fn start_unix_shell<T: Shell + Copy + 'static>(
     shell: T,
@@ -212,6 +218,7 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
     prompt: String,
     prefix: &Prefix,
     source_shell_completions: bool,
+    shell_exe: Option<&Path>,
 ) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
@@ -244,7 +251,8 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
 
     let temp_path = temp_file.into_temp_path();
 
-    let mut command = std::process::Command::new(shell.executable());
+    let exe = shell_exe.unwrap_or(Path::new(shell.executable()));
+    let mut command = std::process::Command::new(exe);
     command.args(&args);
 
     // Space added before `source` to automatically ignore it in history.
@@ -272,14 +280,53 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
     process.interact(Some(DONE_STR)).into_diagnostic()
 }
 
+/// Try to get the executable path of the parent shell process.
+///
+/// When `pixi shell` detects the parent shell type (e.g., nushell), it normally
+/// spawns a new shell by looking up the shell name (e.g., `"nu"`) on PATH. But
+/// if the binary found on PATH is a pixi trampoline whose configuration file is
+/// missing, the trampoline will fail. By resolving the parent process's actual
+/// executable path, we can spawn the real shell binary directly, bypassing any
+/// trampoline.
+#[cfg(target_os = "linux")]
+fn parent_shell_executable() -> Option<PathBuf> {
+    let ppid = unsafe { libc::getppid() };
+    if ppid <= 0 {
+        return None;
+    }
+    let exe_path = std::fs::read_link(format!("/proc/{ppid}/exe")).ok()?;
+    // Verify the resolved path exists (it might not if the binary was deleted)
+    if exe_path.is_file() {
+        tracing::debug!(
+            "Resolved parent shell executable to: {}",
+            exe_path.display()
+        );
+        Some(exe_path)
+    } else {
+        None
+    }
+}
+
+#[cfg(all(target_family = "unix", not(target_os = "linux")))]
+fn parent_shell_executable() -> Option<PathBuf> {
+    // On macOS and other Unix systems, fall back to default shell lookup.
+    // A future improvement could use platform-specific APIs (e.g., libproc on
+    // macOS) to resolve the parent process executable.
+    None
+}
+
 /// Starts a nu shell.
 /// # Arguments
 /// - `shell`: The Nushell (also contains executable location)
 /// - `env`: A HashMap containing environment variables to set in the shell.
+/// - `shell_exe`: The resolved path to the shell executable. If provided, this
+///   is used instead of looking up `"nu"` on PATH, which avoids issues with
+///   pixi trampolines.
 async fn start_nu_shell(
     shell: rattler_shell::shell::NuShell,
     env: &HashMap<String, String>,
     prompt: String,
+    shell_exe: Option<&Path>,
 ) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
@@ -310,7 +357,8 @@ async fn start_nu_shell(
     temp_file.write_all(prompt.as_bytes()).into_diagnostic()?;
     temp_file.flush().into_diagnostic()?;
 
-    let mut command = std::process::Command::new(shell.executable());
+    let exe = shell_exe.unwrap_or(Path::new(shell.executable()));
+    let mut command = std::process::Command::new(exe);
     command.arg("--execute");
     command.arg(format!("source {}", temp_file.path().display()));
 
@@ -365,7 +413,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .or_else(ShellEnum::from_env)
         .unwrap_or_default();
 
-    tracing::info!("Starting shell: {:?}", interactive_shell);
+    // Try to resolve the parent shell's actual executable path. This avoids
+    // issues where looking up the shell name on PATH finds a pixi trampoline
+    // binary with a missing configuration file, instead of the real shell.
+    #[cfg(target_family = "unix")]
+    let parent_exe = parent_shell_executable();
+    #[cfg(not(target_family = "unix"))]
+    let parent_exe: Option<PathBuf> = None;
+
+    tracing::info!(
+        "Starting shell: {:?} (resolved exe: {:?})",
+        interactive_shell,
+        parent_exe,
+    );
 
     let prompt_hook = if workspace.config().change_ps1() {
         let prompt_name = prompt::prompt_name(workspace.display_name(), environment.name());
@@ -384,7 +444,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     #[cfg(target_family = "windows")]
     let res = match interactive_shell {
-        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, env, prompt_hook).await,
+        ShellEnum::NuShell(nushell) => {
+            start_nu_shell(nushell, env, prompt_hook, parent_exe.as_deref()).await
+        }
         ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt_hook),
         ShellEnum::CmdExe(cmdexe) => start_cmdexe(cmdexe, env, prompt_hook),
         ShellEnum::Bash(bash) => {
@@ -397,8 +459,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     #[cfg(target_family = "unix")]
     let res = {
+        let parent_exe_ref = parent_exe.as_deref();
         match interactive_shell {
-            ShellEnum::NuShell(nushell) => start_nu_shell(nushell, env, prompt_hook).await,
+            ShellEnum::NuShell(nushell) => {
+                start_nu_shell(nushell, env, prompt_hook, parent_exe_ref).await
+            }
             ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt_hook),
             ShellEnum::Bash(bash) => {
                 start_unix_shell(
@@ -408,6 +473,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     prompt_hook,
                     &prefix,
                     source_shell_completions,
+                    parent_exe_ref,
                 )
                 .await
             }
@@ -419,6 +485,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     prompt_hook,
                     &prefix,
                     source_shell_completions,
+                    parent_exe_ref,
                 )
                 .await
             }
@@ -430,6 +497,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     prompt_hook,
                     &prefix,
                     source_shell_completions,
+                    parent_exe_ref,
                 )
                 .await
             }
@@ -441,6 +509,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     prompt_hook,
                     &prefix,
                     source_shell_completions,
+                    parent_exe_ref,
                 )
                 .await
             }
