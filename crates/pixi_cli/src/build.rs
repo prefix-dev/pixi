@@ -71,7 +71,7 @@ pub struct Args {
 
 /// Validate that the full path of package manifest exists and is a supported format.
 /// Directories are allowed (for discovery), and specific manifest files must be supported formats.
-async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
+pub(crate) async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
     let supported_file_names: Vec<&str> = [
         // backend-specific build files
         // that will be autodiscovered
