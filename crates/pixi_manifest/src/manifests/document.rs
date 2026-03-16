@@ -6,7 +6,7 @@ use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 use thiserror::Error;
-use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
+use toml_edit::{Array, DocumentMut, Item, RawString, Table, Value, value};
 
 use crate::{
     FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance, PypiDependencyLocation,
@@ -458,8 +458,6 @@ impl ManifestDocument {
                 .manifest_mut()
                 .get_or_insert_toml_array_mut(table_parts, array)?;
 
-            // Check if there is an existing entry that we should replace. Replacing will
-            // preserve any existing formatting.
             let existing_entry_idx = array.iter().position(|item| {
                 let Ok(req): Result<pep508_rs::Requirement, _> =
                     item.as_str().unwrap_or_default().parse()
@@ -472,55 +470,47 @@ impl ManifestDocument {
             if let Some(idx) = existing_entry_idx {
                 array.replace(idx, requirement.to_string());
             } else {
-                // Insert alphabetically if the list is already sorted (uv-style behavior):
-                // preserve user ordering when unsorted, maintain alpha order when sorted.
-                let req_str = requirement.to_string();
-                let req_name_lower = requirement.name.to_string().to_lowercase();
-
-                let existing_names: Vec<String> = array
+                // Collect existing names for sort detection.
+                // Only look at string entries (skip include-group inline tables).
+                let names: Vec<String> = array
                     .iter()
                     .filter_map(|item| {
-                        let s = item.as_str()?;
-                        let req: pep508_rs::Requirement = s.parse().ok()?;
+                        let req: pep508_rs::Requirement = item.as_str()?.parse().ok()?;
                         Some(req.name.to_string().to_lowercase())
                     })
                     .collect();
 
-                let is_sorted = existing_names.windows(2).all(|w| w[0] <= w[1]);
+                let is_sorted = names.windows(2).all(|w| w[0] <= w[1]);
+                let req_str = requirement.to_string();
+                let req_name_lower = requirement.name.to_string().to_lowercase();
 
                 if is_sorted {
+                    // Find correct alphabetical position.
                     let insert_idx = array
                         .iter()
                         .position(|item| {
-                            let Some(s) = item.as_str() else { return false };
-                            let Ok(req): Result<pep508_rs::Requirement, _> = s.parse() else {
+                            let Some(req) = item
+                                .as_str()
+                                .and_then(|s| s.parse::<pep508_rs::Requirement>().ok())
+                            else {
                                 return false;
                             };
                             req.name.to_string().to_lowercase() > req_name_lower
                         })
                         .unwrap_or(array.len());
 
-                    if insert_idx == array.len() {
-                        array.push(req_str);
-                    } else {
-                        // toml_edit Array has no insert(), so rebuild by collecting,
-                        // inserting, then repopulating.
-                        let mut values: Vec<String> = array
-                            .iter()
-                            .map(|v| v.as_str().unwrap_or_default().to_string())
-                            .collect();
-                        values.insert(insert_idx, req_str);
-                        while !array.is_empty() {
-                            array.remove(0);
-                        }
-                        for v in values {
-                            array.push(v);
-                        }
-                    }
+                    // Use insert_formatted to preserve TOML decorations correctly.
+                    let value = toml_edit::Value::from(req_str.as_str());
+                    array.insert_formatted(insert_idx, value);
                 } else {
+                    // Unsorted-append to end, preserving user ordering.
                     array.push(req_str);
                 }
             }
+
+            // Always reformat to multiline
+            reformat_array_multiline(array);
+
             Ok(())
         };
 
@@ -910,6 +900,110 @@ impl ManifestDocument {
         Ok(())
     }
 }
+/// Reformats a TOML array to multi line while trying to preserve all comments
+/// and move them around. This also formats the array to have a trailing comma.
+/// This implementation is adapted from the uv project:
+/// https://github.com/astral-sh/uv
+fn reformat_array_multiline(deps: &mut Array) {
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum CommentType {
+        OwnLine,
+        EndOfLine { leading_whitespace: String },
+    }
+
+    #[derive(Debug, Clone)]
+    struct Comment {
+        text: String,
+        kind: CommentType,
+    }
+
+    fn find_comments(s: Option<&RawString>) -> Vec<Comment> {
+        let mut comments = Vec::new();
+        let mut prev_was_empty = false;
+        let mut prev_was_comment = false;
+
+        for line in s.and_then(|x| x.as_str()).unwrap_or("").lines() {
+            let trimmed = line.trim();
+            if let Some((before, comment)) = line.split_once('#') {
+                let text = format!("#{}", comment.trim_end());
+                let kind = if prev_was_empty || prev_was_comment {
+                    CommentType::OwnLine
+                } else {
+                    CommentType::EndOfLine {
+                        leading_whitespace: before
+                            .chars()
+                            .rev()
+                            .take_while(|c| c.is_whitespace())
+                            .collect::<String>()
+                            .chars()
+                            .rev()
+                            .collect(),
+                    }
+                };
+                prev_was_empty = trimmed.is_empty();
+                prev_was_comment = true;
+                comments.push(Comment { text, kind });
+            } else {
+                prev_was_empty = trimmed.is_empty();
+                prev_was_comment = false;
+            }
+        }
+        comments
+    }
+
+    // Determine indentation from the first entry's prefix.
+    let indentation = deps
+        .iter()
+        .next()
+        .and_then(|item| item.decor().prefix())
+        .and_then(|s| s.as_str())
+        .and_then(|s| s.lines().last())
+        .map(|s| s.split_once('#').map(|(b, _)| b).unwrap_or(s))
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
+    let indent_str = format!("\n{}", indentation.as_deref().unwrap_or("    "));
+
+    for item in deps.iter_mut() {
+        let decor = item.decor_mut();
+        let mut prefix = String::new();
+
+        for comment in find_comments(decor.prefix())
+            .into_iter()
+            .chain(find_comments(decor.suffix()))
+        {
+            match &comment.kind {
+                CommentType::OwnLine => prefix.push_str(&indent_str),
+                CommentType::EndOfLine { leading_whitespace } => {
+                    prefix.push_str(leading_whitespace)
+                }
+            }
+            prefix.push_str(&comment.text);
+        }
+        prefix.push_str(&indent_str);
+        decor.set_prefix(prefix);
+        decor.set_suffix("");
+    }
+
+    // Handle trailing comments.
+    let trailing = {
+        let comments = find_comments(Some(deps.trailing()));
+        let mut rv = String::new();
+        for comment in &comments {
+            match &comment.kind {
+                CommentType::OwnLine => rv.push_str(&indent_str),
+                CommentType::EndOfLine { leading_whitespace } => rv.push_str(leading_whitespace),
+            }
+            rv.push_str(&comment.text);
+        }
+        if !rv.is_empty() || !deps.is_empty() {
+            rv.push('\n');
+        }
+        rv
+    };
+    deps.set_trailing(trailing);
+    deps.set_trailing_comma(true);
+}
 
 #[cfg(test)]
 mod test {
@@ -1256,5 +1350,166 @@ platforms = []
         assert!(result.contains("numpy"));
 
         insta::assert_snapshot!(result);
+    }
+
+    /// `pixi add -f dev --pypi ruff mypy` should produce multiline sorted output,
+    /// and remove+readd should produce zero diff.
+    #[test]
+    pub fn add_pypi_dependency_dependency_groups_zero_diff_after_readd() {
+        let manifest_content = r#"[project]
+name = "test"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+"#;
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        let ruff = pep508_rs::Requirement::from_str("ruff>=0.15.5,<0.16").unwrap();
+        let mypy = pep508_rs::Requirement::from_str("mypy>=1.19.1,<2").unwrap();
+
+        // Force both into [dependency-groups] — the exact format from the issue
+        document
+            .add_pypi_dependency(
+                &ruff,
+                None,
+                None,
+                &FeatureName::from_str("dev").unwrap(),
+                None,
+                Some(PypiDependencyLocation::DependencyGroups),
+            )
+            .unwrap();
+        document
+            .add_pypi_dependency(
+                &mypy,
+                None,
+                None,
+                &FeatureName::from_str("dev").unwrap(),
+                None,
+                Some(PypiDependencyLocation::DependencyGroups),
+            )
+            .unwrap();
+
+        let after_add = document.to_string();
+
+        // mypy must come before ruff (sorted)
+        let mypy_pos = after_add.find("mypy").unwrap();
+        let ruff_pos = after_add.find("ruff").unwrap();
+        assert!(
+            mypy_pos < ruff_pos,
+            "mypy should come before ruff:\n{after_add}"
+        );
+
+        // Simulate: pixi remove -f dev --pypi ruff && pixi add -f dev --pypi ruff
+        // Remove ruff
+        let ruff_name = PypiPackageName::from_str("ruff").unwrap();
+        document
+            .remove_pypi_dependency(&ruff_name, None, &FeatureName::from_str("dev").unwrap())
+            .unwrap();
+
+        // Re-add ruff
+        document
+            .add_pypi_dependency(
+                &ruff,
+                None,
+                None,
+                &FeatureName::from_str("dev").unwrap(),
+                None,
+                Some(PypiDependencyLocation::DependencyGroups),
+            )
+            .unwrap();
+
+        let after_readd = document.to_string();
+
+        // The output must be identical — zero diff
+        assert_eq!(
+            after_add, after_readd,
+            "remove+readd should produce zero diff"
+        );
+    }
+
+    /// Tests that a sorted list stays sorted when a new dep is added in the middle.
+    #[test]
+    pub fn add_pypi_dependency_inserts_alphabetically_when_sorted() {
+        let manifest_content = r#"[project]
+name = "test"
+dependencies = [
+    "mypy>=1.19.1",
+    "ruff>=0.15.5",
+]
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+"#;
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        let pytest = pep508_rs::Requirement::from_str("pytest>=9.0.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &pytest,
+                None,
+                None,
+                &FeatureName::default(),
+                None,
+                Some(PypiDependencyLocation::Dependencies),
+            )
+            .unwrap();
+
+        let result = document.to_string();
+        let mypy_pos = result.find("mypy").unwrap();
+        let pytest_pos = result.find("pytest").unwrap();
+        let ruff_pos = result.find("ruff").unwrap();
+        assert!(
+            mypy_pos < pytest_pos && pytest_pos < ruff_pos,
+            "pytest should be between mypy and ruff:\n{result}"
+        );
+    }
+
+    /// Tests that inline arrays are always expanded to multiline.
+    #[test]
+    pub fn add_pypi_dependency_expands_inline_array_to_multiline() {
+        let manifest_content = r#"[project]
+name = "test"
+dependencies = ["mypy>=1.19.1", "ruff>=0.15.5"]
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+"#;
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        let pytest = pep508_rs::Requirement::from_str("pytest>=9.0.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &pytest,
+                None,
+                None,
+                &FeatureName::default(),
+                None,
+                Some(PypiDependencyLocation::Dependencies),
+            )
+            .unwrap();
+
+        let result = document.to_string();
+        // Each dep must be on its own line
+        assert!(
+            result.contains("\n    \"mypy"),
+            "mypy should be on its own line:\n{result}"
+        );
+        assert!(
+            result.contains("\n    \"pytest"),
+            "pytest should be on its own line:\n{result}"
+        );
+        assert!(
+            result.contains("\n    \"ruff"),
+            "ruff should be on its own line:\n{result}"
+        );
     }
 }
