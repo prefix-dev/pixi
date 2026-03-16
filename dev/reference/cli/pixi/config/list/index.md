@@ -25,6 +25,7 @@ pixi config list [OPTIONS] [KEY]
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 

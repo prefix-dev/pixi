@@ -14754,6 +14754,7 @@ pixi add [OPTIONS] <SPEC>...
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -15008,10 +15009,12 @@ pixi clean [OPTIONS] [COMMAND]
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment directory to remove
 - [`--activation-cache`](#arg---activation-cache) : Only remove the activation cache
 - [`--build`](#arg---build) : Only remove the pixi-build cache
+- [`--workspaces-registry`](#arg---workspaces-registry) : Only remove disassociated workspace registries
 
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -15278,6 +15281,7 @@ pixi import [OPTIONS] <FILE>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -15305,6 +15309,7 @@ pixi info [OPTIONS]
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Examples
 
@@ -15489,6 +15494,7 @@ pixi install [OPTIONS]
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -15582,6 +15588,7 @@ pixi list [OPTIONS] [REGEX]
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -15655,6 +15662,7 @@ pixi lock [OPTIONS]
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Examples
 
@@ -15742,6 +15750,7 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -15853,6 +15862,7 @@ pixi remove [OPTIONS] <SPEC>...
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -15965,6 +15975,7 @@ pixi run [OPTIONS] [TASK]...
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -16083,6 +16094,7 @@ pixi search [OPTIONS] <PACKAGE>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -16222,6 +16234,7 @@ pixi shell-hook [OPTIONS]
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -16327,6 +16340,7 @@ pixi shell [OPTIONS]
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Examples
 
@@ -16361,6 +16375,7 @@ pixi task [OPTIONS] <COMMAND>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 # [pixi](../) tree
 
@@ -16401,6 +16416,7 @@ pixi tree [OPTIONS] [REGEX]
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -16580,6 +16596,7 @@ pixi update [OPTIONS] [PACKAGES]...
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -16710,6 +16727,7 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -16932,22 +16950,24 @@ pixi workspace [OPTIONS] <COMMAND>
 
 ## Subcommands
 
-| Command                                       | Description                                             |
-| --------------------------------------------- | ------------------------------------------------------- |
-| [`channel`](channel/)                         | Commands to manage workspace channels                   |
-| [`description`](description/)                 | Commands to manage workspace description                |
-| [`platform`](platform/)                       | Commands to manage workspace platforms                  |
-| [`version`](version/)                         | Commands to manage workspace version                    |
-| [`environment`](environment/)                 | Commands to manage workspace environments               |
-| [`feature`](feature/)                         | Commands to manage workspace features                   |
-| [`export`](export/)                           | Commands to export workspaces to other formats          |
-| [`name`](name/)                               | Commands to manage workspace name                       |
-| [`system-requirements`](system-requirements/) | Commands to manage workspace system requirements        |
-| [`requires-pixi`](requires-pixi/)             | Commands to manage the pixi minimum version requirement |
+| Command                                       | Description                                                                             |
+| --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| [`channel`](channel/)                         | Commands to manage workspace channels                                                   |
+| [`description`](description/)                 | Commands to manage workspace description                                                |
+| [`platform`](platform/)                       | Commands to manage workspace platforms                                                  |
+| [`version`](version/)                         | Commands to manage workspace version                                                    |
+| [`environment`](environment/)                 | Commands to manage workspace environments                                               |
+| [`feature`](feature/)                         | Commands to manage workspace features                                                   |
+| [`export`](export/)                           | Commands to export workspaces to other formats                                          |
+| [`name`](name/)                               | Commands to manage workspace name                                                       |
+| [`system-requirements`](system-requirements/) | Commands to manage workspace system requirements                                        |
+| [`register`](register/)                       | Commands to manage the registry of workspaces. Default command will add a new workspace |
+| [`requires-pixi`](requires-pixi/)             | Commands to manage the pixi minimum version requirement                                 |
 
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 # [pixi](../../) [auth](../) login
 
@@ -17110,6 +17130,7 @@ pixi config append [OPTIONS] <KEY> <VALUE>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -17151,6 +17172,7 @@ pixi config edit [OPTIONS] [EDITOR]
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Examples
 
@@ -17189,6 +17211,7 @@ pixi config list [OPTIONS] [KEY]
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -17238,6 +17261,7 @@ pixi config prepend [OPTIONS] <KEY> <VALUE>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -17280,6 +17304,7 @@ pixi config set [OPTIONS] <KEY> [VALUE]
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -17325,6 +17350,7 @@ pixi config unset [OPTIONS] <KEY>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 ## Description
 
@@ -18886,6 +18912,7 @@ pixi workspace channel [OPTIONS] <COMMAND>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 # [pixi](../../) [workspace](../) description
 
@@ -18907,6 +18934,7 @@ pixi workspace description [OPTIONS] <COMMAND>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 # [pixi](../../) [workspace](../) environment
 
@@ -18929,6 +18957,7 @@ pixi workspace environment [OPTIONS] <COMMAND>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 # [pixi](../../) [workspace](../) export
 
@@ -18967,6 +18996,7 @@ pixi workspace feature [OPTIONS] <COMMAND>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 # [pixi](../../) [workspace](../) name
 
@@ -18988,6 +19018,7 @@ pixi workspace name [OPTIONS] <COMMAND>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 # [pixi](../../) [workspace](../) platform
 
@@ -19010,6 +19041,36 @@ pixi workspace platform [OPTIONS] <COMMAND>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
+
+# [pixi](../../) [workspace](../) register
+
+Commands to manage the registry of workspaces. Default command will add a new workspace
+
+## Usage
+
+```text
+pixi workspace register [OPTIONS] [COMMAND]
+```
+
+## Subcommands
+
+| Command             | Description                                  |
+| ------------------- | -------------------------------------------- |
+| [`list`](list/)     | List the registered workspaces               |
+| [`remove`](remove/) | Remove a workspace from registry             |
+| [`prune`](prune/)   | Prune disassociated workspaces from registry |
+
+## Options
+
+- [`--name (-n) <NAME>`](#arg---name) : Name of the workspace to register. Defaults to the name of the current workspace
+- [`--path (-p) <PATH>`](#arg---path) : Path to register. Defaults to the path to the current workspace
+- [`--force (-f)`](#arg---force) : Overwrite the workspace entry if the name of the workspace already exists in the registry
+
+## Global Options
+
+- [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 # [pixi](../../) [workspace](../) requires-pixi
 
@@ -19033,6 +19094,7 @@ pixi workspace requires-pixi [OPTIONS] <COMMAND>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 # [pixi](../../) [workspace](../) system-requirements
 
@@ -19054,6 +19116,7 @@ pixi workspace system-requirements [OPTIONS] <COMMAND>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 # [pixi](../../) [workspace](../) version
 
@@ -19078,6 +19141,7 @@ pixi workspace version [OPTIONS] <COMMAND>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 # [pixi](../../../) [workspace](../../) [channel](../) add
 
@@ -19372,6 +19436,7 @@ pixi workspace export conda-environment [OPTIONS] [OUTPUT_PATH]
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 # [pixi](../../../) [workspace](../../) [export](../) conda-explicit-spec
 
@@ -19468,6 +19533,7 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- [`--workspace (-w) <WORKSPACE>`](#arg---workspace) : Name of the workspace
 
 # [pixi](../../../) [workspace](../../) [feature](../) list
 
@@ -19590,6 +19656,48 @@ pixi workspace platform remove [OPTIONS] <PLATFORM>...
 
 - [`--no-install`](#arg---no-install) : Don't update the environment, only remove the platform(s) from the lock-file
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The name of the feature to remove the platform from
+
+# [pixi](../../../) [workspace](../../) [register](../) list
+
+List the registered workspaces
+
+## Usage
+
+```text
+pixi workspace register list [OPTIONS]
+```
+
+## Options
+
+- [`--json`](#arg---json) : Output in JSON format
+
+# [pixi](../../../) [workspace](../../) [register](../) prune
+
+Prune disassociated workspaces from registry
+
+## Usage
+
+```text
+pixi workspace register prune
+```
+
+# [pixi](../../../) [workspace](../../) [register](../) remove
+
+Remove a workspace from registry
+
+## Usage
+
+```text
+pixi workspace register remove <NAME>
+```
+
+## Arguments
+
+- [`<NAME>`](#arg-%3CNAME%3E) : Name of the workspace to unregister
+
+  ```
+  **required**: `true`
+  ```
 
 # [pixi](../../../) [workspace](../../) [requires-pixi](../) get
 
