@@ -221,7 +221,11 @@ pub trait MetadataCache: Clone + Sized {
 
     /// Returns the path to the cache entry with the given key.
     fn cache_file_path(&self, input: &Self::Key) -> PathBuf {
-        self.root().join(input.hash_key()).with_extension("json")
+        // Use string concatenation instead of `with_extension` to avoid issues
+        // with dots in the hash key (e.g., from package names like "my.package").
+        // `with_extension` replaces everything after the last dot, which would
+        // truncate the file name.
+        self.root().join(format!("{}.json", input.hash_key()))
     }
 }
 
@@ -259,4 +263,82 @@ pub enum WriteResult<M> {
 pub trait CacheError: std::error::Error + Sized {
     /// Creates an error from an I/O error with context about the operation
     fn from_io_error(operation: String, path: PathBuf, error: std::io::Error) -> Self;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct DummyKey(String);
+
+    impl CacheKey for DummyKey {
+        fn hash_key(&self) -> String {
+            self.0.clone()
+        }
+    }
+
+    #[derive(Clone, serde::Serialize, serde::Deserialize)]
+    struct DummyMetadata {
+        version: u64,
+    }
+
+    impl CachedMetadata for DummyMetadata {}
+
+    impl VersionedMetadata for DummyMetadata {
+        fn cache_version(&self) -> u64 {
+            self.version
+        }
+        fn set_cache_version(&mut self, version: u64) {
+            self.version = version;
+        }
+    }
+
+    #[derive(Debug, thiserror::Error)]
+    #[error("test error")]
+    struct DummyError;
+
+    impl CacheError for DummyError {
+        fn from_io_error(_operation: String, _path: PathBuf, _error: std::io::Error) -> Self {
+            DummyError
+        }
+    }
+
+    #[derive(Clone)]
+    struct DummyCache {
+        root: PathBuf,
+    }
+
+    impl MetadataCache for DummyCache {
+        type Key = DummyKey;
+        type Metadata = DummyMetadata;
+        type Error = DummyError;
+        const CACHE_SUFFIX: &'static str = "v0";
+        fn root(&self) -> &Path {
+            &self.root
+        }
+    }
+
+    #[test]
+    fn test_cache_file_path_with_dots_in_key() {
+        let cache = DummyCache {
+            root: PathBuf::from("/tmp/cache"),
+        };
+
+        // A key with dots (e.g., from package name "my.package") should NOT
+        // have the part after the dot replaced by `with_extension`.
+        let key = DummyKey("source-dir/my.package-osx-arm64-HASH".to_string());
+        let path = cache.cache_file_path(&key);
+        assert_eq!(
+            path,
+            PathBuf::from("/tmp/cache/source-dir/my.package-osx-arm64-HASH.json")
+        );
+
+        // A key without dots should also work correctly.
+        let key = DummyKey("source-dir/my-package-osx-arm64-HASH".to_string());
+        let path = cache.cache_file_path(&key);
+        assert_eq!(
+            path,
+            PathBuf::from("/tmp/cache/source-dir/my-package-osx-arm64-HASH.json")
+        );
+    }
 }
