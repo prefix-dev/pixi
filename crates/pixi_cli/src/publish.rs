@@ -29,12 +29,12 @@ use crate::cli_config::LockAndInstallConfig;
 /// This is a convenience command that combines `pixi build` and `pixi upload`.
 ///
 /// Supported target channel URLs:
-///   - prefix.dev: https://prefix.dev/<channel-name>
-///   - anaconda.org: https://anaconda.org/<owner>/<label>
-///   - S3: s3://bucket-name
-///   - Filesystem: file:///path/to/channel
-///   - Quetz: quetz://server/<channel>
-///   - Artifactory: artifactory://server/<channel>
+///   - prefix.dev: `https://prefix.dev/<channel-name>`
+///   - anaconda.org: `https://anaconda.org/<owner>/<label>`
+///   - S3: `s3://bucket-name`
+///   - Filesystem: `file:///path/to/channel`
+///   - Quetz: `quetz://server/<channel>`
+///   - Artifactory: `artifactory://server/<channel>`
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
 pub struct Args {
@@ -73,8 +73,8 @@ pub struct Args {
     /// The target channel URL to publish packages to.
     ///
     /// Examples:
-    ///   --to https://prefix.dev/my-channel
-    ///   --to https://anaconda.org/my-user
+    ///   --to <https://prefix.dev/my-channel>
+    ///   --to <https://anaconda.org/my-user>
     ///   --to s3://my-bucket/my-channel
     ///   --to file:///path/to/local/channel
     #[arg(long)]
@@ -285,9 +285,8 @@ fn parse_target_url(to: &str) -> miette::Result<url::Url> {
 
 /// Determine the subdirectory (platform) of a conda package.
 fn determine_package_subdir(package_path: &std::path::Path) -> miette::Result<String> {
-    let index_json: rattler_conda_types::package::IndexJson =
-        read_package_file(package_path)
-            .map_err(|e| miette::miette!("Failed to read package file: {}", e))?;
+    let index_json: rattler_conda_types::package::IndexJson = read_package_file(package_path)
+        .map_err(|e| miette::miette!("Failed to read package file: {}", e))?;
 
     Ok(index_json.subdir.unwrap_or_else(|| "noarch".to_string()))
 }
@@ -309,7 +308,14 @@ async fn upload_packages(
         "quetz" => upload_to_quetz(url, package_paths, auth_storage).await,
         "artifactory" => upload_to_artifactory(url, package_paths, auth_storage).await,
         "prefix" => {
-            upload_to_prefix(url, package_paths, auth_storage, force, generate_attestation).await
+            upload_to_prefix(
+                url,
+                package_paths,
+                auth_storage,
+                force,
+                generate_attestation,
+            )
+            .await
         }
         "file" => {
             let path = url
@@ -321,8 +327,14 @@ async fn upload_packages(
             let host = url.host_str().unwrap_or("");
 
             if host.contains("prefix.dev") {
-                upload_to_prefix(url, package_paths, auth_storage, force, generate_attestation)
-                    .await
+                upload_to_prefix(
+                    url,
+                    package_paths,
+                    auth_storage,
+                    force,
+                    generate_attestation,
+                )
+                .await
             } else if host.contains("anaconda.org") {
                 upload_to_anaconda(url, package_paths, auth_storage, force).await
             } else if host.contains("quetz") {

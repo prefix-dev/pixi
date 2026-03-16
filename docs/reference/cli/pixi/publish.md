@@ -75,12 +75,12 @@ Build a conda package and publish it to a channel.
 This is a convenience command that combines `pixi build` and `pixi upload`.
 
 Supported target channel URLs:
-  - prefix.dev: https://prefix.dev/<channel-name>
-  - anaconda.org: https://anaconda.org/<owner>/<label>
-  - S3: s3://bucket-name
-  - Filesystem: file:///path/to/channel
-  - Quetz: quetz://server/<channel>
-  - Artifactory: artifactory://server/<channel>
+  - prefix.dev: `https://prefix.dev/<channel-name>`
+  - anaconda.org: `https://anaconda.org/<owner>/<label>`
+  - S3: `s3://bucket-name`
+  - Filesystem: `file:///path/to/channel`
+  - Quetz: `quetz://server/<channel>`
+  - Artifactory: `artifactory://server/<channel>`
 
 
 --8<-- "docs/reference/cli/pixi/publish_extender:example"

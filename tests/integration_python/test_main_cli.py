@@ -1306,6 +1306,8 @@ dependencies:
         (["upgrade"], [], "pixi upgrade"),
         # Pixi build (can lock its source)
         (["build"], [], "pixi build"),
+        # Pixi publish (builds and uploads)
+        (["publish", "--to", "https://prefix.dev/test-channel"], [], "pixi publish"),
     ]
     # This command needs to stay last so we always have something that requires a re-solve
     # Dont move this!
