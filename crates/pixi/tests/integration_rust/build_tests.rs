@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use fs_err as fs;
 use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, PassthroughBackend};
 use pixi_build_frontend::BackendOverride;
@@ -1035,5 +1037,90 @@ noarch = false
         count_conda_outputs_events(&events_after_sixth),
         0,
         "conda_outputs should NOT be called again after cache is updated"
+    );
+}
+
+/// Test that `pixi build --build-string <value>` passes the build string
+/// through to the build backend and the resulting `.conda` artifact uses it.
+#[tokio::test]
+async fn test_build_with_custom_build_string() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create the source package directory
+    let source_dir = pixi.workspace_path().join("src");
+    fs::create_dir_all(&source_dir).unwrap();
+
+    // Create a pixi.toml that PassthroughBackend will read
+    let source_pixi_toml = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+"#;
+    fs::write(source_dir.join("pixi.toml"), source_pixi_toml).unwrap();
+
+    // Create the workspace manifest
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = []
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = {{ name = "in-memory", version = "0.1.0" }}
+source.path = "src"
+
+[dependencies]
+my-package = {{ path = "." }}
+"#,
+        Platform::current(),
+    );
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // Build with a custom build string
+    let output_dir = pixi.workspace_path().join("output");
+    fs::create_dir_all(&output_dir).unwrap();
+
+    pixi.build()
+        .with_build_string("custom_abc_123")
+        .with_output_dir(&output_dir)
+        .await
+        .expect("build should succeed");
+
+    // Find the output .conda file
+    let entries: Vec<PathBuf> = fs::read_dir(&output_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|ext| ext == "conda"))
+        .collect();
+
+    assert_eq!(
+        entries.len(),
+        1,
+        "Expected exactly one .conda file in output, found: {entries:?}"
+    );
+
+    let file_name = entries[0]
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
+
+    assert!(
+        file_name.contains("custom_abc_123"),
+        "Output file name should contain the custom build string, got: {file_name}"
     );
 }

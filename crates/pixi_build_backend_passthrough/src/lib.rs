@@ -117,8 +117,9 @@ impl InMemoryBackend for PassthroughBackend {
             .collect();
         // Check if there are real variants (not just target_platform)
         let has_real_variants = variant.keys().any(|k| k != "target_platform");
-        let build_string =
-            compute_build_string(&self.index_json.build, &variant, has_real_variants);
+        let build_string = self.project_model.build_string.clone().unwrap_or_else(|| {
+            compute_build_string(&self.index_json.build, &variant, has_real_variants)
+        });
 
         let output_dir = params
             .output_directory
@@ -557,7 +558,10 @@ fn create_output(
                 .cloned()
                 .unwrap_or_else(|| Version::major(0))
                 .into(),
-            build: compute_build_string(&index_json.build, &variant, has_real_variants),
+            build: project_model.build_string.as_deref().map_or_else(
+                || compute_build_string(&index_json.build, &variant, has_real_variants),
+                str::to_owned,
+            ),
             build_number: index_json.build_number,
             subdir,
             license: project_model.license.clone(),

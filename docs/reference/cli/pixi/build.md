@@ -20,6 +20,8 @@ pixi build [OPTIONS]
 - <a id="arg---build-platform" href="#arg---build-platform">`--build-platform <BUILD_PLATFORM>`</a>
 :  The build platform to use for building (defaults to the current platform)
 <br>**default**: `current_platform`
+- <a id="arg---build-string" href="#arg---build-string">`--build-string <BUILD_STRING>`</a>
+:  The build string to use for the package
 - <a id="arg---output-dir" href="#arg---output-dir">`--output-dir (-o) <OUTPUT_DIR>`</a>
 :  The output directory to place the built artifacts
 <br>**default**: `.`

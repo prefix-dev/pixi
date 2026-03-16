@@ -84,6 +84,12 @@ pub struct BuildBackendMetadataSpec {
     /// The protocols that are enabled for this source
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
+
+    /// An optional build string override provided by the user (e.g. via CLI).
+    /// When set, this overrides the `build_string` in the `ProjectModel` sent
+    /// to the build backend during initialization.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build_string: Option<String>,
 }
 
 /// The metadata of a source checkout.
@@ -219,11 +225,18 @@ impl BuildBackendMetadataSpec {
             None => (None, 0),
         };
 
-        let project_model_hash = discovered_backend
-            .init_params
-            .project_model
-            .as_ref()
-            .map(ProjectModelHash::from);
+        // Apply the CLI build string override to the project model if provided.
+        // This must happen before computing the hash so the cache key reflects
+        // the override.
+        let project_model = {
+            let mut model = discovered_backend.init_params.project_model.clone();
+            if let (Some(m), Some(bs)) = (&mut model, &self.build_string) {
+                m.build_string = Some(bs.clone());
+            }
+            model
+        };
+
+        let project_model_hash = project_model.as_ref().map(ProjectModelHash::from);
 
         let configuration_hash = ConfigurationHash::compute(
             discovered_backend.init_params.configuration.as_ref(),
@@ -275,7 +288,7 @@ impl BuildBackendMetadataSpec {
                     .expect("manifest path is not absolute")
                     .assume_file()
                     .to_path_buf(),
-                project_model: discovered_backend.init_params.project_model.clone(),
+                project_model,
                 configuration: discovered_backend.init_params.configuration.clone(),
                 target_configuration: discovered_backend.init_params.target_configuration.clone(),
             })

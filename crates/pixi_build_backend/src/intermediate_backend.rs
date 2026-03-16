@@ -256,7 +256,7 @@ where
         variant_config.variants.append(&mut param_variants);
 
         // Construct the intermediate recipe
-        let generated_recipe = self
+        let mut generated_recipe = self
             .generate_recipe
             .generate_recipe(
                 &self.project_model,
@@ -269,6 +269,12 @@ where
                 self.cache_dir.clone(),
             )
             .await?;
+
+        // Apply build string override from the project model if set.
+        if let Some(ref bs) = self.project_model.build_string {
+            generated_recipe.recipe.build.string =
+                Some(recipe_stage0::recipe::Value::Concrete(bs.clone()));
+        }
 
         // Convert the recipe to source code.
         // TODO(baszalmstra): In the future it would be great if we could just
@@ -607,6 +613,11 @@ where
                 self.cache_dir.clone(),
             )
             .await?;
+
+        // Apply build string override from the project model if set.
+        if let Some(ref bs) = self.project_model.build_string {
+            recipe.recipe.build.string = Some(recipe_stage0::recipe::Value::Concrete(bs.clone()));
+        }
 
         // Convert the recipe to source code.
         // TODO(baszalmstra): In the future it would be great if we could just

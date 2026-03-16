@@ -1430,6 +1430,7 @@ impl Project {
             variant_configuration: None,
             variant_files: None,
             enabled_protocols: Default::default(),
+            build_string: None,
         };
 
         // Get the metadata using the command dispatcher

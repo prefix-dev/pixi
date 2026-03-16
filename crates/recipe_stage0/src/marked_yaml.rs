@@ -140,6 +140,13 @@ impl ToMarkedYaml for Build {
             );
         }
 
+        if let Some(ref string) = self.string {
+            mapping.insert(
+                MarkedScalarNode::new(Span::new_blank(), "string"),
+                string.to_marked_yaml(),
+            );
+        }
+
         MarkedNode::Mapping(MarkedMappingNode::new(Span::new_blank(), mapping))
     }
 }
