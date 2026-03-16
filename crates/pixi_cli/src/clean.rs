@@ -155,7 +155,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             false,
         )
         .await?;
-        clean_workspaces().await?;
+        prune_workspace_registry().await?;
     } else {
         if args.activation_cache {
             remove_folder_with_progress(workspace.activation_env_cache_folder(), true).await?;
@@ -168,7 +168,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .await?;
         }
         if args.workspaces_registry {
-            clean_workspaces().await?;
+            prune_workspace_registry().await?;
         }
     }
     Ok(())
@@ -230,16 +230,17 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
 }
 
 /// Clean disassociated workspaces from the workspace registry
-async fn clean_workspaces() -> miette::Result<()> {
+async fn prune_workspace_registry() -> miette::Result<()> {
     let mut workspace_registry = WorkspaceRegistry::load()?;
     let removed_workspaces = workspace_registry.prune().await?;
+
+    if removed_workspaces.is_empty() {
+        tracing::info!("No workspace registries were pruned.");
+    }
+
     for name in removed_workspaces {
         eprintln!("{} {}", console::style("pruned workspace").green(), name);
     }
-    eprintln!(
-        "{} Workspace registry pruned",
-        console::style(console::Emoji("✔ ", "")).green(),
-    );
     Ok(())
 }
 
