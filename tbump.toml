@@ -42,6 +42,14 @@ search = "/pixi.sh/v{current_version}/"
 src = "schema/schema.json"
 
 [[file]]
+search = "/pixi.sh/v{current_version}/"
+src = "schema/pyproject/schema.json"
+
+[[file]]
+search = "Generated from `pixi` v{current_version}"
+src = "schema/pyproject/partial-pixi.json"
+
+[[file]]
 search = "Version: v{current_version}"
 src = "install/install.sh"
 
