@@ -1,5 +1,5 @@
 use super::package_identifier::ConversionError;
-use crate::lock_file::PypiPackageIdentifier;
+use crate::lock_file::{LockedPypiRecord, PypiPackageIdentifier};
 use pixi_install_pypi::UnresolvedPypiRecord;
 use pixi_record::{PixiRecord, UnresolvedPixiRecord};
 use pixi_uv_conversions::to_uv_normalize;
@@ -10,6 +10,7 @@ use std::collections::hash_map::Entry;
 use std::hash::Hash;
 
 pub type PypiRecordsByName = DependencyRecordsByName<UnresolvedPypiRecord>;
+pub type LockedPypiRecordsByName = DependencyRecordsByName<LockedPypiRecord>;
 pub type PixiRecordsByName = DependencyRecordsByName<PixiRecord>;
 pub type UnresolvedPixiRecordsByName = DependencyRecordsByName<UnresolvedPixiRecord>;
 
@@ -25,6 +26,18 @@ pub trait HasNameVersion {
     /// Returns the version of the dependency, or `None` if the version is
     /// unknown (e.g. a pypi source dependency with a dynamic version).
     fn version(&self) -> Option<&Self::V>;
+}
+
+impl HasNameVersion for LockedPypiRecord {
+    type N = pep508_rs::PackageName;
+    type V = pep440_rs::Version;
+
+    fn name(&self) -> &pep508_rs::PackageName {
+        &self.data.name
+    }
+    fn version(&self) -> Option<&Self::V> {
+        Some(&self.locked_version)
+    }
 }
 
 impl HasNameVersion for UnresolvedPypiRecord {

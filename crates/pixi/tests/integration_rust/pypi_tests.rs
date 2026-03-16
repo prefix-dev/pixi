@@ -335,6 +335,75 @@ setup(version="42.23.12")
         _ => panic!("expected a pypi package"),
     }
 
+    // Make the version static: remove `dynamic = ["version"]` and set an
+    // explicit version. The lock file should still store version as None
+    // because the package is a local source dependency.
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamic-dep"
+version = "42.23.12"
+"#,
+    )
+    .unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    match lock
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should be in the lock file after making version static")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version.is_none(),
+                "version should remain None for local source dependency even after making version static, got {:?}",
+                data.version
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
+    // Switch back to a dynamic version and re-resolve.
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamic-dep"
+dynamic = ["version"]
+"#,
+    )
+    .unwrap();
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/setup.py"),
+        r#"from setuptools import setup
+setup(version="99.0.0")
+"#,
+    )
+    .unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    match lock
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should be in the lock file after switching back to dynamic version")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version.is_none(),
+                "version should be None after switching back to dynamic version, got {:?}",
+                data.version
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
     // Round-trip: serialize and parse the lock file, then verify the version is still None
     let lock_str = lock.render_to_string().unwrap();
     let lock2 = rattler_lock::LockFile::from_str_with_base_directory(&lock_str, None).unwrap();

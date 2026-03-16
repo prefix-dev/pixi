@@ -58,6 +58,12 @@ pub struct ManifestData {
     pub editable: bool,
 }
 
+#[derive(Clone)]
+pub struct LockedPypiRecord {
+    pub data: PypiPackageData,
+    pub locked_version: pep440_rs::Version,
+}
+
 #[derive(Clone, Debug)]
 pub struct UnresolvedPypiRecord(PypiPackageData);
 
@@ -70,6 +76,21 @@ impl From<PypiPackageData> for UnresolvedPypiRecord {
 impl UnresolvedPypiRecord {
     pub fn as_package_data(&self) -> &PypiPackageData {
         &self.0
+    }
+
+    pub fn lock(
+        &self,
+        locked_version: pep440_rs::Version,
+        version_is_dynamic: bool,
+    ) -> LockedPypiRecord {
+        let mut data = self.0.clone();
+
+        data.version = (!version_is_dynamic).then_some(locked_version.clone());
+
+        LockedPypiRecord {
+            data,
+            locked_version,
+        }
     }
 }
 

@@ -64,7 +64,7 @@ use uv_types::EmptyInstalledPackages;
 use crate::{
     environment::CondaPrefixUpdated,
     lock_file::{
-        CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
+        CondaPrefixUpdater, LockedPypiRecords, PixiRecordsByName, PypiPackageIdentifier,
         records_by_name::HasNameVersion,
         resolve::{
             build_dispatch::{
@@ -297,7 +297,7 @@ pub async fn resolve_pypi(
     disallow_install_conda_prefix: bool,
     exclude_newer: Option<DateTime<Utc>>,
     solve_strategy: SolveStrategy,
-) -> miette::Result<(LockedPypiPackages, Option<CondaPrefixUpdated>)> {
+) -> miette::Result<(LockedPypiRecords, Option<CondaPrefixUpdated>)> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
 
@@ -795,13 +795,7 @@ pub async fn resolve_pypi(
 
     // We try to distinguish between build dispatch panics and any other panics that occur
     let (locked_packages, conda_task) = match resolution_future.catch_unwind().await {
-        Ok(result) => {
-            let result = result?;
-            (
-                result.0.iter().map(|r| r.clone().into()).collect(),
-                result.1,
-            )
-        }
+        Ok(result) => result?,
         Err(panic_payload) => {
             // Try to get the stored initialization error from the last_error holder
             if let Some(stored_error) = last_error.get() {
@@ -954,8 +948,8 @@ async fn lock_pypi_packages(
     concurrent_downloads: usize,
     abs_project_root: &Path,
     original_git_references: &HashMap<uv_normalize::PackageName, pixi_spec::GitReference>,
-) -> miette::Result<LockedPypiPackages> {
-    let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
+) -> miette::Result<LockedPypiRecords> {
+    let mut locked_packages = Vec::with_capacity(resolution.len());
     let database =
         DistributionDatabase::new(registry_client, pixi_build_dispatch, concurrent_downloads);
     for dist in resolution.distributions() {
@@ -964,7 +958,7 @@ async fn lock_pypi_packages(
             continue;
         }
 
-        let pypi_package_data = match dist {
+        let locked_pypi_package_data = match dist {
             // Ignore installed distributions
             ResolvedDist::Installed { .. } => {
                 continue;
@@ -1014,15 +1008,17 @@ async fn lock_pypi_packages(
                         .await
                         .into_diagnostic()
                         .wrap_err("cannot get wheel metadata")?;
-                    PypiPackageData {
+
+                    let locked_version =
+                        pep440_rs::Version::from_str(&metadata.version.to_string())
+                            .into_diagnostic()
+                            .context("cannot convert version")?;
+
+                    UnresolvedPypiRecord::from(PypiPackageData {
                         name: pep508_rs::PackageName::new(metadata.name.to_string())
                             .into_diagnostic()
                             .context("cannot convert name")?,
-                        version: Some(
-                            pep440_rs::Version::from_str(&metadata.version.to_string())
-                                .into_diagnostic()
-                                .context("cannot convert version")?,
-                        ),
+                        version: None,
                         requires_python: metadata
                             .requires_python
                             .map(|r| to_version_specifiers(&r))
@@ -1035,7 +1031,11 @@ async fn lock_pypi_packages(
                         location: Verbatim::new(location),
                         hash,
                         index_url,
-                    }
+                    })
+                    .lock(
+                        locked_version,
+                        metadata.dynamic || matches!(dist, BuiltDist::Path(_)),
+                    )
                 }
                 Dist::Source(source) => {
                     // Handle new hash stuff
@@ -1155,14 +1155,13 @@ async fn lock_pypi_packages(
                         }
                     };
 
-                    PypiPackageData {
+                    let locked_version =
+                        pep440_rs::Version::from_str(&metadata.version.to_string())
+                            .into_diagnostic()?;
+
+                    UnresolvedPypiRecord::from(PypiPackageData {
                         name: to_normalize(&metadata.name).into_diagnostic()?,
-                        version: (!metadata.dynamic)
-                            .then(|| {
-                                pep440_rs::Version::from_str(&metadata.version.to_string())
-                                    .into_diagnostic()
-                            })
-                            .transpose()?,
+                        version: None,
                         requires_python: metadata
                             .requires_python
                             .map(|r| to_version_specifiers(&r))
@@ -1173,12 +1172,17 @@ async fn lock_pypi_packages(
                             .into_diagnostic()?,
                         hash,
                         index_url,
-                    }
+                    })
+                    .lock(
+                        locked_version,
+                        metadata.dynamic
+                            || matches!(source, SourceDist::Path(_) | SourceDist::Directory(_)),
+                    )
                 }
             },
         };
 
-        locked_packages.push(pypi_package_data.into());
+        locked_packages.push(locked_pypi_package_data);
     }
 
     Ok(locked_packages)
