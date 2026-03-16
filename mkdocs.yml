@@ -52,7 +52,7 @@ theme:
     - navigation.instant
     - navigation.instant.progress
     - navigation.tracking
-    - navigation.sections
+    - navigation.indexes
     - navigation.top
     - navigation.footer
 
@@ -150,6 +150,7 @@ nav:
           - Python: build/backends/pixi-build-python.md
           - rattler-build: build/backends/pixi-build-rattler-build.md
           - ROS: build/backends/pixi-build-ros.md
+          - R: build/backends/pixi-build-r.md
           - Rust: build/backends/pixi-build-rust.md
           - Mojo: build/backends/pixi-build-mojo.md
       - Key Concepts:
@@ -157,10 +158,12 @@ nav:
       - Package Source: build/package_source.md
       - Dev Packages: build/dev.md
   - Distributing:
+      - Prefix.dev Channel: deployment/prefix.md
       - Pixi Pack: deployment/pixi_pack.md
       - Authentication: deployment/authentication.md
       - Container: deployment/container.md
       - S3: deployment/s3.md
+      - JFrog Artifactory: deployment/artifactory.md
   - Integration:
       - Editor:
           - VSCode: integration/editor/vscode.md
@@ -173,11 +176,13 @@ nav:
           - Pixi Diff-to-markdown: integration/ci/updates_github_actions.md
       - Extensions:
           - Introduction: integration/extensions/introduction.md
+          - Pixi Browse: integration/extensions/pixi_browse.md
           - Pixi Diff: integration/extensions/pixi_diff.md
           - Pixi Diff-to-markdown: integration/ci/updates_github_actions.md
           - Pixi Inject: integration/extensions/pixi_inject.md
           - Pixi Install-to-prefix: integration/extensions/pixi_install_to_prefix.md
           - Pixi Pack: deployment/pixi_pack.md
+          - Pixi Skills: integration/extensions/pixi_skills.md
       - Third Party:
           - Conda Deny: integration/third_party/conda_deny.md
           - Direnv: integration/third_party/direnv.md

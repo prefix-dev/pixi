@@ -445,6 +445,7 @@ impl PixiControl {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     backend_override: self.backend_override.clone(),
+                    workspace: None,
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
                 no_install_config: NoInstallConfig { no_install: true },
@@ -468,8 +469,10 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                     ..Default::default()
                 },
-                platform: Platform::current(),
-                limit: None,
+                platform: None,
+                limit: 5,
+                limit_packages: 10,
+                json: false,
                 channels: ChannelsConfig::default(),
             },
         }
@@ -601,6 +604,7 @@ impl PixiControl {
             } else {
                 PreferExecutable::TaskFirst
             },
+            args.templated,
         )
         .map_err(RunError::TaskGraphError)?;
 
@@ -608,7 +612,7 @@ impl PixiControl {
         let mut task_env = None;
         let mut result = RunOutput::default();
         for task_id in task_graph.topological_order() {
-            let task = ExecutableTask::from_task_graph(&task_graph, task_id);
+            let task = ExecutableTask::from_task_graph(&task_graph, task_id, None);
 
             // Construct the task environment if not already created.
             let task_env = match task_env.as_ref() {
@@ -655,6 +659,7 @@ impl PixiControl {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     backend_override: self.backend_override.clone(),
+                    workspace: None,
                 },
                 lock_file_usage: LockFileUsageConfig {
                     frozen: false,
@@ -724,6 +729,7 @@ impl PixiControl {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     backend_override: self.backend_override.clone(),
+                    workspace: None,
                 },
                 no_install_config: NoInstallConfig { no_install: false },
                 check: false,

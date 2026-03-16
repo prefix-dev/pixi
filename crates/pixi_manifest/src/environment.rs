@@ -2,6 +2,7 @@ use std::{
     borrow::Borrow,
     fmt,
     hash::{Hash, Hasher},
+    path::Path,
     str::FromStr,
 };
 
@@ -59,13 +60,33 @@ impl EnvironmentName {
 
     /// Tries to read the environment name from an argument, then it will try
     /// to read from an environment variable, otherwise it will fall back to
-    /// default
+    /// default.
+    ///
+    /// If `PIXI_PROJECT_ROOT` is set to a path different from `workspace_root`,
+    /// the environment variable fallback is skipped. This handles the case
+    /// where a pixi task runs another pixi project via `--manifest-path` - the
+    /// child process should not inherit the parent's environment name.
     pub fn from_arg_or_env_var(
         arg_name: Option<String>,
+        workspace_root: &Path,
     ) -> Result<Self, ParseEnvironmentNameError> {
+        // If an explicit name is provided, use it
         if let Some(arg_name) = arg_name {
             return EnvironmentName::from_str(&arg_name);
-        } else if std::env::var("PIXI_IN_SHELL").is_ok()
+        }
+
+        // Check if we should ignore PIXI_ env vars because they belong to a
+        // different workspace
+        let should_ignore_env_vars = std::env::var("PIXI_PROJECT_ROOT")
+            .ok()
+            .is_some_and(|pixi_root| Path::new(&pixi_root) != workspace_root);
+
+        if should_ignore_env_vars {
+            return Ok(EnvironmentName::Default);
+        }
+
+        // Try to read from environment variable
+        if std::env::var("PIXI_IN_SHELL").is_ok()
             && let Ok(env_var_name) = std::env::var("PIXI_ENVIRONMENT_NAME")
         {
             if env_var_name == DEFAULT_ENVIRONMENT_NAME {
@@ -73,6 +94,7 @@ impl EnvironmentName {
             }
             return Ok(EnvironmentName::Named(env_var_name));
         }
+
         Ok(EnvironmentName::Default)
     }
 }

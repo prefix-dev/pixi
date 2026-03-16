@@ -58,7 +58,11 @@ def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
     # Simulate activated shell in environment 'a'
-    env = {"PIXI_IN_SHELL": "true", "PIXI_ENVIRONMENT_NAME": "a"}
+    env = {
+        "PIXI_IN_SHELL": "true",
+        "PIXI_ENVIRONMENT_NAME": "a",
+        "PIXI_PROJECT_ROOT": str(tmp_pixi_workspace),
+    }
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
         stdout_contains=["a", "a1"],

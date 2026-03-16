@@ -5,13 +5,16 @@ use std::{
 
 use clap::Parser;
 use indexmap::IndexMap;
-use itertools::Itertools;
 use miette::{IntoDiagnostic, Report};
 use pixi_api::{DefaultContext, WorkspaceContext};
 use pixi_config::default_channel_config;
 use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
+use pixi_manifest::FeaturesExt;
 use pixi_progress::await_in_progress;
-use rattler_conda_types::{MatchSpec, ParseStrictness, Platform, RepoDataRecord};
+use rattler_conda_types::{
+    MatchSpec, PackageName, ParseStrictness, ParseStrictnessWithNameMatcher, Platform,
+    RepoDataRecord,
+};
 use tracing::{debug, error};
 use url::Url;
 
@@ -26,7 +29,7 @@ use crate::{
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
-    /// Name of package to search
+    /// MatchSpec of a package to search
     #[arg(required = true)]
     pub package: String,
 
@@ -36,19 +39,46 @@ pub struct Args {
     #[clap(flatten)]
     pub project_config: WorkspaceConfig,
 
-    /// The platform to search for, defaults to current platform
-    #[arg(short, long, default_value_t = Platform::current())]
-    pub platform: Platform,
+    /// The platform(s) to search for.
+    /// By default, searches all platforms from the manifest (or all known
+    /// platforms if no manifest is found).
+    #[arg(short, long)]
+    pub platform: Option<Platform>,
 
-    /// Limit the number of search results
-    #[clap(short, long)]
-    pub limit: Option<usize>,
+    /// Limit the number of versions shown per package, -1 for no limit
+    #[clap(short, long, default_value = "5", allow_hyphen_values = true)]
+    pub limit: i64,
+
+    /// Limit the number of packages shown, -1 for no limit
+    #[clap(
+        short = 'n',
+        long = "limit-packages",
+        default_value = "5",
+        allow_hyphen_values = true
+    )]
+    pub limit_packages: i64,
+
+    /// Output in JSON format
+    #[arg(long, conflicts_with_all = ["limit", "limit_packages"])]
+    pub json: bool,
+}
+
+fn build_json_output(packages: &[RepoDataRecord]) -> IndexMap<String, Vec<&RepoDataRecord>> {
+    let mut result: IndexMap<String, Vec<&RepoDataRecord>> = IndexMap::new();
+    for pkg in packages {
+        let platform = pkg.package_record.subdir.clone();
+        result.entry(platform).or_default().push(pkg);
+    }
+    for records in result.values_mut() {
+        records.sort_unstable_by(|a, b| b.cmp(a));
+    }
+    result
 }
 
 pub async fn execute_impl<W: Write>(
     args: Args,
     out: &mut W,
-) -> miette::Result<Option<Vec<RepoDataRecord>>> {
+) -> miette::Result<Vec<RepoDataRecord>> {
     let workspace = match WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
@@ -71,81 +101,82 @@ pub async fn execute_impl<W: Write>(
     let channels = args.channels.resolve_from_project(workspace.as_ref())?;
     eprintln!(
         "Using channels: {}",
-        channels.iter().map(|c| c.name()).format(", ")
+        channels
+            .iter()
+            .map(|c| c.name())
+            .collect::<Vec<_>>()
+            .join(", ")
     );
 
-    let match_spec = MatchSpec::from_str(&args.package, ParseStrictness::Lenient).into_diagnostic();
-
-    let packages = if let Ok(match_spec) = match_spec {
-        // Search by exact name
-        let packages = if let Some(workspace) = workspace {
-            await_in_progress("search exact package...", |_| async {
-                let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
-                workspace_ctx
-                    .search_exact(match_spec, channels, args.platform)
-                    .await
-            })
-            .await?
-        } else {
-            await_in_progress("search exact package...", |_| async {
-                let default_ctx = DefaultContext::new(CliInterface {});
-                default_ctx
-                    .search_exact(match_spec, channels, args.platform)
-                    .await
-            })
-            .await?
-        };
-
-        if let Some(packages) = packages.as_ref() {
-            let newest_package = packages.last();
-            if let Some(newest_package) = newest_package {
-                let other_versions = packages
-                    .iter()
-                    .filter(|p| p.package_record != newest_package.package_record)
-                    .collect::<Vec<_>>();
-                if let Err(e) = print_package_info(newest_package, &other_versions, out)
-                    && e.kind() != std::io::ErrorKind::BrokenPipe
-                {
-                    return Err(e).into_diagnostic();
-                }
-            }
+    // Resolve platforms
+    let platforms = if let Some(platform) = args.platform {
+        vec![platform, Platform::NoArch]
+    } else if let Some(ref workspace) = workspace {
+        let mut platforms: Vec<Platform> = workspace
+            .default_environment()
+            .platforms()
+            .into_iter()
+            .collect();
+        if !platforms.contains(&Platform::NoArch) {
+            platforms.push(Platform::NoArch);
         }
+        platforms
+    } else {
+        Platform::all().collect()
+    };
 
-        packages
-    } else if args.package.contains('*') {
-        // Search packages by wildcard
-        let packages = if let Some(workspace) = workspace {
-            await_in_progress("search packages...", |_| async {
-                let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
-                workspace_ctx
-                    .search_wildcard(&args.package, channels, args.platform)
-                    .await
-            })
-            .await?
-        } else {
-            await_in_progress("search packages...", |_| async {
-                let default_ctx = DefaultContext::new(CliInterface {});
-                default_ctx
-                    .search_wildcard(&args.package, channels, args.platform)
-                    .await
-            })
-            .await?
-        };
+    let matchspec = MatchSpec::from_str(
+        &args.package,
+        ParseStrictnessWithNameMatcher {
+            parse_strictness: ParseStrictness::Lenient,
+            exact_names_only: false,
+        },
+    )
+    .into_diagnostic()?;
 
-        if let Some(packages) = packages.as_ref()
-            && let Err(e) = print_matching_packages(packages, out, args.limit)
+    let packages = if let Some(workspace) = workspace {
+        await_in_progress("searching packages...", |_| async {
+            WorkspaceContext::new(CliInterface {}, workspace)
+                .search(matchspec, channels, platforms)
+                .await
+        })
+        .await?
+    } else {
+        await_in_progress("searching packages...", |_| async {
+            DefaultContext::new(CliInterface {})
+                .search(matchspec, channels, platforms)
+                .await
+        })
+        .await?
+    };
+
+    if args.json {
+        let json_output = build_json_output(&packages);
+        let json_str = serde_json::to_string_pretty(&json_output).into_diagnostic()?;
+        if let Err(e) = writeln!(out, "{json_str}")
             && e.kind() != std::io::ErrorKind::BrokenPipe
         {
             return Err(e).into_diagnostic();
         }
-
-        packages
     } else {
-        return Err(miette::miette!(
-            "Invalid package specification: {}",
-            args.package
-        ));
-    };
+        let limit_versions = if args.limit < 0 {
+            None
+        } else {
+            Some(args.limit as usize)
+        };
+        let limit_packages = if args.limit_packages < 0 {
+            None
+        } else {
+            Some(args.limit_packages as usize)
+        };
+
+        // Print search results with detailed info for first N packages
+        if let Err(e) = print_search_results(&packages, out, limit_packages, limit_versions)
+            && e.kind() != std::io::ErrorKind::BrokenPipe
+        {
+            return Err(e).into_diagnostic();
+        }
+    }
 
     Ok(packages)
 }
@@ -153,6 +184,117 @@ pub async fn execute_impl<W: Write>(
 pub async fn execute(args: Args) -> miette::Result<()> {
     let mut out = io::stdout();
     execute_impl(args, &mut out).await?;
+    Ok(())
+}
+
+fn print_search_results<W: Write>(
+    packages: &[RepoDataRecord],
+    out: &mut W,
+    limit_packages: Option<usize>,
+    limit_versions: Option<usize>,
+) -> io::Result<()> {
+    // Group packages by name
+    let mut by_name: IndexMap<&PackageName, Vec<&RepoDataRecord>> = IndexMap::new();
+    for pkg in packages {
+        by_name
+            .entry(&pkg.package_record.name)
+            .or_default()
+            .push(pkg);
+    }
+
+    let channel_config = default_channel_config();
+
+    // Single package name => show detailed view
+    if by_name.len() == 1 {
+        let (_, records) = by_name.iter().next().expect("by_name has exactly 1 entry");
+        let newest = records
+            .last()
+            .expect("records is non-empty since packages is non-empty");
+        let others: Vec<_> = records.iter().rev().skip(1).cloned().collect();
+        print_package_info(newest, &others, out, limit_versions)?;
+        return Ok(());
+    }
+
+    // Multiple package names => show compact summary view
+    let n_packages = limit_packages.unwrap_or(usize::MAX);
+    let n_versions = limit_versions.unwrap_or(usize::MAX);
+
+    for (i, (name, records)) in by_name.iter().enumerate() {
+        if i >= n_packages {
+            break;
+        }
+        if i > 0 {
+            writeln!(out)?;
+        }
+
+        let total_versions = records.len();
+        writeln!(
+            out,
+            "{} ({} {})",
+            console::style(name.as_source()).green().bold(),
+            total_versions,
+            if total_versions == 1 {
+                "version"
+            } else {
+                "versions"
+            }
+        )?;
+
+        let shown = total_versions.min(n_versions);
+        for record in records.iter().rev().take(shown) {
+            let channel_name = record
+                .channel
+                .as_ref()
+                .and_then(|channel| Url::from_str(channel).ok())
+                .and_then(|url| channel_config.strip_channel_alias(&url))
+                .or_else(|| record.channel.clone())
+                .unwrap_or_else(|| "<unknown>".to_string());
+
+            writeln!(
+                out,
+                "  {} {} [{}] {}",
+                console::style(&record.package_record.version).cyan(),
+                record.package_record.build,
+                record.package_record.subdir,
+                console::style(channel_name).dim(),
+            )?;
+        }
+
+        let remaining_versions = total_versions.saturating_sub(shown);
+        if remaining_versions > 0 {
+            let label = if remaining_versions == 1 {
+                "version"
+            } else {
+                "versions"
+            };
+            writeln!(
+                out,
+                "  {}",
+                console::style(format!(
+                    "... and {remaining_versions} more {label} (use -l to show more)"
+                ))
+                .dim(),
+            )?;
+        }
+    }
+
+    let remaining_packages = by_name.len().saturating_sub(n_packages);
+    if remaining_packages > 0 {
+        let label = if remaining_packages == 1 {
+            "package"
+        } else {
+            "packages"
+        };
+        writeln!(
+            out,
+            "\n{}",
+            console::style(format!(
+                "... and {remaining_packages} more {label} (use -n to show more)"
+            ))
+            .dim(),
+        )?;
+    }
+
     Ok(())
 }
 
@@ -169,9 +311,8 @@ fn print_package_info<W: Write>(
     package: &RepoDataRecord,
     other_versions: &Vec<&RepoDataRecord>,
     out: &mut W,
+    limit_versions: Option<usize>,
 ) -> io::Result<()> {
-    writeln!(out)?;
-
     let package = package.clone();
     let package_name = package.package_record.name.as_source();
     let build = &package.package_record.build;
@@ -196,78 +337,94 @@ fn print_package_info<W: Write>(
 
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("Name"),
         console::style(package_name)
     )?;
 
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("Version"),
         console::style(package.package_record.version)
     )?;
 
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("Build"),
         console::style(build)
     )?;
 
     let size = match package.package_record.size {
-        Some(size) => size.to_string(),
+        Some(size) => indicatif::HumanBytes(size).to_string(),
         None => String::from("Not found."),
     };
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("Size"),
         console::style(size)
     )?;
 
-    let license = match package.package_record.license {
-        Some(license) => license,
-        None => String::from("Not found."),
-    };
-    writeln!(
-        out,
-        "{:19} {:19}",
-        console::style("License"),
-        console::style(license)
-    )?;
+    if let Some(license) = package.package_record.license.as_ref() {
+        writeln!(
+            out,
+            "{:19} {}",
+            console::style("License"),
+            console::style(license)
+        )?;
+    }
+
+    if let Some(timestamp) = package.package_record.timestamp {
+        writeln!(
+            out,
+            "{:19} {}",
+            console::style("Timestamp"),
+            console::style(
+                timestamp
+                    .datetime()
+                    .format("%Y-%m-%d %H:%M:%S UTC")
+                    .to_string()
+            )
+        )?;
+    }
 
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("Subdir"),
-        console::style(package.package_record.subdir)
+        console::style(&package.package_record.subdir)
     )?;
+
+    if let Some(noarch_kind) = package.package_record.noarch.kind() {
+        writeln!(
+            out,
+            "{:19} {}",
+            console::style("NoArch"),
+            console::style(format!("{noarch_kind:?}").to_lowercase())
+        )?;
+    }
 
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("File Name"),
         console::style(package.identifier.to_file_name())
     )?;
 
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("URL"),
-        console::style(package.url)
+        console::style(&package.url)
     )?;
 
     let md5 = match package.package_record.md5 {
         Some(md5) => format!("{md5:x}"),
         None => "Not available".to_string(),
     };
-    writeln!(
-        out,
-        "{:19} {:19}",
-        console::style("MD5"),
-        console::style(md5)
-    )?;
+    writeln!(out, "{:19} {}", console::style("MD5"), console::style(md5))?;
 
     let sha256 = match package.package_record.sha256 {
         Some(sha256) => format!("{sha256:x}"),
@@ -275,13 +432,29 @@ fn print_package_info<W: Write>(
     };
     writeln!(
         out,
-        "{:19} {:19}",
+        "{:19} {}",
         console::style("SHA256"),
         console::style(sha256),
     )?;
 
+    if !package.package_record.track_features.is_empty() {
+        writeln!(out, "\nTrack features:")?;
+        for feature in &package.package_record.track_features {
+            writeln!(out, " - {feature}")?;
+        }
+    }
+
+    if let Some(purls) = package.package_record.purls.as_ref()
+        && !purls.is_empty()
+    {
+        writeln!(out, "\nPackage URLs:")?;
+        for purl in purls {
+            writeln!(out, " - {purl}")?;
+        }
+    }
+
     writeln!(out, "\nDependencies:")?;
-    for dependency in package.package_record.depends {
+    for dependency in &package.package_record.depends {
         writeln!(out, " - {dependency}")?;
     }
 
@@ -315,100 +488,38 @@ fn print_package_info<W: Write>(
             .max()
             .expect("there is at least one version, so this should not be empty")
             + 1;
-        let build_width = other_versions
-            .iter()
-            .map(|v| v.package_record.build.len())
-            .chain(["Build".len()].iter().cloned())
-            .max()
-            .expect("there is at least one build, so this should not be empty")
-            + 1;
         writeln!(
             out,
-            "{:version_width$} {:build_width$}",
+            "{:version_width$} {}",
             console::style("Version").bold(),
             console::style("Build").bold(),
-            version_width = version_width,
-            build_width = build_width
+            version_width = version_width
         )?;
-        let max_displayed_versions = 4;
-        let mut counter = 0;
-        for (version, builds) in grouped_by_version.iter().rev() {
-            writeln!(
-                out,
-                "{:version_width$} {:build_width$}{}",
-                console::style(version.to_string()),
-                console::style(builds[0].package_record.build.clone()),
-                console::style(format_additional_builds_string(Some(builds[1..].to_vec()))).dim(),
-                version_width = version_width,
-                build_width = build_width
-            )?;
-            counter += 1;
-            if counter == max_displayed_versions {
+        let max_displayed = limit_versions.unwrap_or(usize::MAX);
+        for (i, (version, builds)) in grouped_by_version.iter().enumerate() {
+            if i >= max_displayed {
+                let remaining = grouped_by_version.len() - max_displayed;
                 writeln!(
                     out,
-                    "... and {} more",
-                    grouped_by_version.len() - max_displayed_versions
+                    "{} and {} more",
+                    console::style("...").dim(),
+                    remaining
                 )?;
                 break;
             }
+            let newest_build = builds
+                .last()
+                .expect("each version group has at least one build");
+            let other_builds = builds[..builds.len() - 1].to_vec();
+            writeln!(
+                out,
+                "{:version_width$} {}{}",
+                console::style(version.to_string()),
+                console::style(newest_build.package_record.build.clone()),
+                console::style(format_additional_builds_string(Some(other_builds))).dim(),
+                version_width = version_width
+            )?;
         }
-    }
-
-    Ok(())
-}
-
-fn print_matching_packages<W: Write>(
-    packages: &[RepoDataRecord],
-    out: &mut W,
-    limit: Option<usize>,
-) -> io::Result<()> {
-    writeln!(
-        out,
-        "{:40} {:19} {:19}",
-        console::style("Package").bold(),
-        console::style("Version").bold(),
-        console::style("Channel").bold(),
-    )?;
-
-    // split off at `limit`, discard the second half
-    let limit = limit.unwrap_or(usize::MAX);
-
-    let (packages, remaining_packages) = if limit < packages.len() {
-        packages.split_at(limit)
-    } else {
-        (packages, &[][..])
-    };
-
-    let channel_config = default_channel_config();
-    for package in packages {
-        // TODO: change channel fetch logic to be more robust
-        // currently it relies on channel field being a url with trailing slash
-        // https://github.com/conda/rattler/issues/146
-
-        let channel_name = package
-            .channel
-            .as_ref()
-            .and_then(|channel| Url::from_str(channel).ok())
-            .and_then(|url| channel_config.strip_channel_alias(&url))
-            .or_else(|| package.channel.clone())
-            .unwrap_or_else(|| "<unknown>".to_string());
-
-        let channel_name = format!("{}/{}", channel_name, package.package_record.subdir);
-
-        let package_name = &package.package_record.name;
-        let version = package.package_record.version.as_str();
-
-        writeln!(
-            out,
-            "{:40} {:19} {:19}",
-            console::style(package_name.as_source()).cyan().bright(),
-            console::style(version),
-            console::style(channel_name),
-        )?;
-    }
-
-    if !remaining_packages.is_empty() {
-        println!("... and {} more", remaining_packages.len());
     }
 
     Ok(())

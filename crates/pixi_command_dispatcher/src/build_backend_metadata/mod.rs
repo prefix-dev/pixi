@@ -5,7 +5,7 @@ use pixi_build_discovery::{CommandSpec, EnabledProtocols};
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_glob::GlobSet;
-use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec, VariantValue};
+use pixi_record::{CanonicalSourceLocation, PinnedBuildSourceSpec, PinnedSourceSpec, VariantValue};
 use pixi_spec::{SourceAnchor, SourceLocationSpec};
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use std::time::SystemTime;
@@ -18,12 +18,13 @@ use std::{
 use thiserror::Error;
 use tracing::instrument;
 
+use crate::build::CanonicalSourceCodeLocation;
 use crate::cache::build_backend_metadata::CachedCondaMetadataId;
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
-    build::{SourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
+    build::{PinnedSourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
     cache::{
         build_backend_metadata::{self, BuildBackendMetadataCacheShard, CachedCondaMetadata},
         common::MetadataCache,
@@ -89,7 +90,7 @@ pub struct BuildBackendMetadataSpec {
 #[derive(Debug)]
 pub struct BuildBackendMetadata {
     /// The manifest and optional build source location for this metadata.
-    pub source: SourceCodeLocation,
+    pub source: PinnedSourceCodeLocation,
 
     /// The metadata that was acquired from the build backend.
     pub metadata: CachedCondaMetadata,
@@ -186,7 +187,7 @@ impl BuildBackendMetadataSpec {
             } else {
                 (manifest_source_checkout.clone(), None)
             };
-        let manifest_source_location = SourceCodeLocation::new(
+        let manifest_source_location = PinnedSourceCodeLocation::new(
             manifest_source_checkout.pinned.clone(),
             build_source.clone(),
         );
@@ -199,7 +200,12 @@ impl BuildBackendMetadataSpec {
 
         // Check the source metadata cache, short circuit if there is a cache hit that
         // is still fresh.
-        let cache_key = self.cache_shard();
+        let cache_key = BuildBackendMetadataCacheShard {
+            channel_urls: self.channels.clone(),
+            build_environment: self.build_environment.clone(),
+            enabled_protocols: self.enabled_protocols.clone(),
+            source: manifest_source_location.clone().into(),
+        };
         let cache_read_result = command_dispatcher
             .build_backend_metadata_cache()
             .read(&cache_key)
@@ -292,6 +298,7 @@ impl BuildBackendMetadataSpec {
         let mut metadata = self
             .call_conda_outputs(
                 command_dispatcher.clone(),
+                manifest_source_location.manifest_source().into(),
                 build_source_checkout,
                 project_model_hash,
                 configuration_hash,
@@ -407,14 +414,6 @@ impl BuildBackendMetadataSpec {
         if cache_entry.configuration_hash != configuration_hash {
             tracing::info!(
                 "found cached outputs with different build configuration, invalidating cache."
-            );
-            return Ok(None);
-        }
-
-        // Check if the source location changed.
-        if cache_entry.build_source != build_source_checkout.pinned {
-            tracing::info!(
-                "found cached outputs with different source code location, invalidating cache."
             );
             return Ok(None);
         }
@@ -535,9 +534,11 @@ impl BuildBackendMetadataSpec {
 
     /// Use the `conda/outputs` procedure to get the metadata for the source
     /// checkout.
+    #[allow(clippy::too_many_arguments)]
     async fn call_conda_outputs(
         self,
         command_dispatcher: CommandDispatcher,
+        canonical_manifest_source: CanonicalSourceLocation,
         build_source_checkout: SourceCheckout,
         project_model_hash: Option<ProjectModelHash>,
         configuration_hash: ConfigurationHash,
@@ -623,6 +624,10 @@ impl BuildBackendMetadataSpec {
             })
             .collect();
 
+        let canonical_build_source = CanonicalSourceLocation::from(build_source_checkout.pinned);
+        let canonical_build_source_opt =
+            (canonical_manifest_source != canonical_build_source).then_some(canonical_build_source);
+
         Ok(CachedCondaMetadata {
             id: CachedCondaMetadataId::random(),
             cache_version: 0,
@@ -631,21 +636,14 @@ impl BuildBackendMetadataSpec {
             build_variant_files: self.variant_files.into_iter().flatten().collect(),
             input_globs: outputs.input_globs.into_iter().collect(),
             input_files: input_glob_files,
-            build_source: build_source_checkout.pinned,
+            source: CanonicalSourceCodeLocation::new(
+                canonical_manifest_source,
+                canonical_build_source_opt,
+            ),
             project_model_hash,
             configuration_hash,
             timestamp,
         })
-    }
-
-    /// Computes the cache key for this instance
-    pub(crate) fn cache_shard(&self) -> BuildBackendMetadataCacheShard {
-        BuildBackendMetadataCacheShard {
-            channel_urls: self.channels.clone(),
-            build_environment: self.build_environment.clone(),
-            enabled_protocols: self.enabled_protocols.clone(),
-            pinned_source: self.manifest_source.clone(),
-        }
     }
 }
 

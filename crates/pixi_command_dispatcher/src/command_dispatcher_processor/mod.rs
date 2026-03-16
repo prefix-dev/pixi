@@ -9,13 +9,14 @@ use std::{
     sync::Arc,
 };
 
+use crate::source_build_cache_status::SourceBuildCacheKey;
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt, DevSourceMetadata,
     DevSourceMetadataError, DevSourceMetadataSpec, InstallPixiEnvironmentResult, Reporter,
     SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
-    SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceBuildError, SourceBuildResult,
-    SourceBuildSpec, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    SourceBuildCacheStatusError, SourceBuildError, SourceBuildResult, SourceBuildSpec,
+    SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
         BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcherChannel,
@@ -136,7 +137,7 @@ pub(crate) struct CommandDispatcherProcessor {
         SourceBuildCacheStatusId,
         PendingDeduplicatingTask<Arc<SourceBuildCacheEntry>, SourceBuildCacheStatusError>,
     >,
-    source_build_cache_status_ids: HashMap<SourceBuildCacheStatusSpec, SourceBuildCacheStatusId>,
+    source_build_cache_status_ids: HashMap<SourceBuildCacheKey, SourceBuildCacheStatusId>,
 
     /// Dev source metadata requests that are currently being processed.
     dev_source_metadata: HashMap<
@@ -651,8 +652,26 @@ impl CommandDispatcherProcessor {
         self.cancellation_tokens.insert(context, token);
     }
 
-    /// Removes the cancellation token for the given context.
+    /// Removes and cancels the cancellation token for the given context.
+    ///
+    /// Cancelling the token ensures that any child tasks that were spawned
+    /// with a child token linked to this context are also cancelled.
     fn remove_cancellation_token(&mut self, context: CommandDispatcherContext) {
-        self.cancellation_tokens.remove(&context);
+        if let Some(token) = self.cancellation_tokens.remove(&context) {
+            token.cancel();
+        }
+    }
+
+    /// Returns true if the parent context has been cancelled or cleaned up.
+    ///
+    /// Since `remove_cancellation_token` cancels tokens when removing them,
+    /// a missing or cancelled token means the parent is done and any child
+    /// task should be skipped.
+    fn is_parent_cancelled(&self, parent: Option<CommandDispatcherContext>) -> bool {
+        parent.is_some_and(|ctx| {
+            self.cancellation_tokens
+                .get(&ctx)
+                .is_none_or(|token| token.is_cancelled())
+        })
     }
 }

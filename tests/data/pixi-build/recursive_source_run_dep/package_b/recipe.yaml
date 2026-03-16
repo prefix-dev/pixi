@@ -7,7 +7,7 @@ build:
   script:
     - if: win
       then:
-        - mkdir %PREFIX%\bin
+        - if not exist %PREFIX%\bin mkdir %PREFIX%\bin
         - echo @echo off > %PREFIX%\bin\package-b.bat
         - echo echo hello from package-b >> %PREFIX%\bin\package-b.bat
       else:

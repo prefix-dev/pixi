@@ -19,6 +19,10 @@ impl CommandDispatcherProcessor {
         &mut self,
         task: Task<InstantiateToolEnvironmentSpec>,
     ) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         let cache_key = task.spec.cache_key();
         let new_id = self.instantiated_tool_cache_keys.len();
         let id = *self

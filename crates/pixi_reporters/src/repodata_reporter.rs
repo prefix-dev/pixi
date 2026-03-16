@@ -7,7 +7,7 @@ use std::{
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle, style::ProgressTracker};
 use parking_lot::RwLock;
 use pixi_progress::ProgressBarPlacement;
-use rattler_repodata_gateway::{DownloadReporter, JLAPReporter};
+use rattler_repodata_gateway::DownloadReporter;
 use url::Url;
 
 #[derive(Clone)]
@@ -18,11 +18,6 @@ pub struct RepodataReporter {
 impl rattler_repodata_gateway::Reporter for RepodataReporter {
     fn download_reporter(&self) -> Option<&dyn DownloadReporter> {
         Some(self)
-    }
-
-    fn jlap_reporter(&self) -> Option<&dyn JLAPReporter> {
-        // TODO: Implement JLAPReporter for RepodataReporter in the future
-        None
     }
 }
 

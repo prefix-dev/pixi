@@ -174,3 +174,17 @@ The cache contains multiple folders concerning different caches from within pixi
 - `repodata`: Contains the `conda` repodata cache.
 - `uv-cache`: Contains the `uv` cache. This includes multiple caches, e.g. `built-wheels` `wheels` `archives`
 - `http-cache`: Contains the `conda-pypi` mapping cache.
+
+### De-duplication
+
+When Pixi installs packages into an environment, it does not copy files from the cache.
+Instead, it creates **hard links** (or **reflinks** on file systems that support copy-on-write, such as APFS on macOS and btrfs/XFS on Linux).
+This means every environment that uses the same version of a package shares the same on-disk files, so the package is effectively stored only once.
+
+For example, if three workspaces all depend on `numpy 1.26.4`, the individual files of that package exist once in the cache and are linked into each environment.
+This can save gigabytes of disk space, especially when you work with many environments or large packages like CUDA toolkits.
+
+!!! note "Hard links vs reflinks"
+    - **Hard links** point multiple directory entries to the same data on disk. Modifying one link modifies all of them, but this is not an issue because Pixi environments are meant to be read-only.
+    - **Reflinks** (copy-on-write links) behave like instant copies that only allocate new disk space when one side is modified. This makes them safer than hard links: if a process accidentally writes to a file in an environment, only that environment's copy is affected while the cached original and all other environments stay intact. On supported file systems Pixi prefers reflinks for this reason.
+    - If neither hard links nor reflinks are available (e.g. when the cache and the workspace are on different mount points), Pixi falls back to copying files.

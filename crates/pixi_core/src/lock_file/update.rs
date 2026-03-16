@@ -424,6 +424,18 @@ pub enum SolveCondaEnvironmentError {
     Variants(#[from] VariantsError),
 }
 
+impl SolveCondaEnvironmentError {
+    /// Returns true if this error is due to cancellation (e.g., a sibling
+    /// platform solve failed and this one was cancelled as a result).
+    fn is_cancelled(&self) -> bool {
+        matches!(
+            self,
+            Self::SolveFailed { source, .. }
+                if matches!(source.as_ref(), CommandDispatcherError::Cancelled)
+        )
+    }
+}
+
 /// Options to pass to [`Workspace::update_lock_file`].
 #[derive(Default)]
 pub struct UpdateLockFileOptions {
@@ -697,11 +709,7 @@ impl<'p> LockFileDerivedData<'p> {
                     .filter_map(LockedPackageRef::as_pypi)
                     .map(|(data, env_data)| {
                         let mut data = data.clone();
-                        data.editable = manifest_pypi_deps
-                            .get(&data.name)
-                            .and_then(|specs| specs.last())
-                            .and_then(|spec| spec.editable())
-                            .unwrap_or(false);
+                        data.editable = is_editable_from_manifest(&manifest_pypi_deps, &data.name);
                         (data, env_data.clone())
                     })
                     .collect::<Vec<_>>();
@@ -1645,16 +1653,26 @@ impl<'p> UpdateContext<'p> {
                 })()
                 .unwrap_or_default();
 
-                let group_solve_task = spawn_solve_conda_environment_task(
-                    source.clone(),
-                    locked_group_records,
-                    self.mapping_client.clone(),
-                    platform,
-                    channel_priority,
-                    self.command_dispatcher.clone(),
-                    pin_overrides,
-                )
-                .map_err(Report::new)
+                let mapping_client = self.mapping_client.clone();
+                let command_dispatcher = self.command_dispatcher.clone();
+                let source_clone = source.clone();
+                let group_solve_task = async move {
+                    match spawn_solve_conda_environment_task(
+                        source_clone,
+                        locked_group_records,
+                        mapping_client,
+                        platform,
+                        channel_priority,
+                        command_dispatcher,
+                        pin_overrides,
+                    )
+                    .await
+                    {
+                        Ok(result) => Ok(Some(result)),
+                        Err(err) if err.is_cancelled() => Ok(None),
+                        Err(err) => Err(Report::new(err)),
+                    }
+                }
                 .boxed_local();
 
                 // Store the task so we can poll it later.
@@ -1768,7 +1786,7 @@ impl<'p> UpdateContext<'p> {
                 self.no_install,
             );
 
-            pending_futures.push(pypi_solve_future.boxed_local());
+            pending_futures.push(pypi_solve_future.map_ok(Some).boxed_local());
 
             let previous_cell = self
                 .grouped_solved_pypi_records
@@ -1814,7 +1832,7 @@ impl<'p> UpdateContext<'p> {
                 grouped_pypi_records,
                 self.command_dispatcher.clone(),
             );
-            pending_futures.push(extract_resolution_task.boxed_local());
+            pending_futures.push(extract_resolution_task.map_ok(Some).boxed_local());
 
             // Create a cell that will be used to store the result of the extraction.
             let previous_cell = self
@@ -1865,8 +1883,13 @@ impl<'p> UpdateContext<'p> {
         // 2. The futures stored in `pending_futures` do not necessarily have to be
         //    `'static`. Which makes them easier to work with.
         while let Some(result) = pending_futures.next().await {
+            let Some(task_result) = result? else {
+                // Task was cancelled (a sibling solve failed) — skip.
+                top_level_progress.inc(1);
+                continue;
+            };
             top_level_progress.inc(1);
-            match result? {
+            match task_result {
                 TaskResult::CondaGroupSolved(group_name, platform, records, duration) => {
                     let group = GroupedEnvironment::from_name(project, &group_name)
                         .expect("group should exist");
@@ -2654,4 +2677,102 @@ async fn spawn_solve_pypi_task<'p>(
         duration,
         prefix_task_result,
     ))
+}
+
+/// Check if a package should be installed as editable based on the manifest's
+/// pypi dependencies.
+///
+/// When multiple specs exist for a package (from merged features or duplicate
+/// entries from `project.dependencies` and `tool.pixi.pypi-dependencies`),
+/// we take the first spec that has an explicit editable value. This respects
+/// feature priority ordering (non-default features come first) while also
+/// handling the same-feature case where a registry spec from
+/// `project.dependencies` lacks an editable field.
+fn is_editable_from_manifest(
+    manifest_pypi_deps: &pixi_manifest::PyPiDependencies,
+    package_name: &pep508_rs::PackageName,
+) -> bool {
+    manifest_pypi_deps
+        .get(package_name)
+        .and_then(|specs| specs.iter().find_map(|spec| spec.editable()))
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_manifest::PyPiDependencies;
+    use pixi_pypi_spec::PixiPypiSpec;
+
+    #[test]
+    fn test_editable_path_spec_with_registry_spec() {
+        let mut deps = PyPiDependencies::default();
+        let name = pixi_pypi_spec::PypiPackageName::from_str("requests").unwrap();
+        let pep508_name = pep508_rs::PackageName::new("requests".to_string()).unwrap();
+
+        // Simulate tool.pixi.pypi-dependencies (added first)
+        let path_spec = PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Path {
+            path: "./requests".into(),
+            editable: Some(true),
+        });
+        deps.insert(name.clone(), path_spec);
+
+        // Simulate project.dependencies (added second, no editable field)
+        let registry_spec: PixiPypiSpec = pep508_rs::Requirement::from_str("requests>=2.0")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        deps.insert(name.clone(), registry_spec);
+
+        // The first explicit editable value (Some(true)) should win
+        assert!(
+            is_editable_from_manifest(&deps, &pep508_name),
+            "Package should be editable when an editable path spec exists alongside a registry spec"
+        );
+    }
+
+    #[test]
+    fn test_not_editable_when_only_registry_spec() {
+        let mut deps = PyPiDependencies::default();
+        let name = pixi_pypi_spec::PypiPackageName::from_str("requests").unwrap();
+        let pep508_name = pep508_rs::PackageName::new("requests".to_string()).unwrap();
+
+        let registry_spec: PixiPypiSpec = pep508_rs::Requirement::from_str("requests>=2.0")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        deps.insert(name.clone(), registry_spec);
+
+        assert!(
+            !is_editable_from_manifest(&deps, &pep508_name),
+            "Package should not be editable when no spec has editable=true"
+        );
+    }
+
+    #[test]
+    fn test_feature_priority_explicit_non_editable_wins() {
+        let mut deps = PyPiDependencies::default();
+        let name = pixi_pypi_spec::PypiPackageName::from_str("requests").unwrap();
+        let pep508_name = pep508_rs::PackageName::new("requests".to_string()).unwrap();
+
+        // Higher-priority feature explicitly sets editable=false (inserted first)
+        let non_editable_spec = PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Path {
+            path: "./requests".into(),
+            editable: Some(false),
+        });
+        deps.insert(name.clone(), non_editable_spec);
+
+        // Lower-priority feature has editable=true (inserted second)
+        let editable_spec = PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Path {
+            path: "./requests".into(),
+            editable: Some(true),
+        });
+        deps.insert(name.clone(), editable_spec);
+
+        // The first explicit editable value (Some(false)) should win
+        assert!(
+            !is_editable_from_manifest(&deps, &pep508_name),
+            "Higher-priority feature's explicit editable=false should take precedence"
+        );
+    }
 }

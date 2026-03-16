@@ -11,7 +11,7 @@ build:
   script:
     - if: win
       then:
-        - mkdir -p %PREFIX%\bin
+        - if not exist %PREFIX%\bin mkdir %PREFIX%\bin
         - echo @echo off > %PREFIX%\bin\simple-app.bat
         - echo echo Build backend works >> %PREFIX%\bin\simple-app.bat
       else:

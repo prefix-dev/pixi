@@ -24,8 +24,9 @@ def main():
     repo_root = script_dir.parent.parent
 
     # Generate version suffix
-    date_suffix = datetime.now().strftime("%Y%m%d")
-    time_suffix = datetime.now().strftime("%H%M")
+    now = datetime.now()
+    date_suffix = now.strftime("%Y%m%d")
+    time_suffix = now.strftime("%H%M")
     git_hash = get_git_short_hash()
     version_suffix = f"{date_suffix}.{time_suffix}.{git_hash}"
 
@@ -43,11 +44,12 @@ def main():
 
     # Rust backends
     rust_packages = [
-        "pixi-build-cmake",
-        "pixi-build-mojo",
-        "pixi-build-python",
-        "pixi-build-rattler-build",
-        "pixi-build-rust",
+        "pixi_build_cmake",
+        "pixi_build_mojo",
+        "pixi_build_python",
+        "pixi_build_r",
+        "pixi_build_rattler_build",
+        "pixi_build_rust",
     ]
     for package in cargo_metadata.get("packages", []):
         if package["name"] in rust_packages:
