@@ -1335,7 +1335,16 @@ dependencies:
         elif command_name == "pixi publish":
             # Special case: publish uses --path instead of --manifest-path
             verify_cli_command(
-                [pixi, "publish", "--to", "https://prefix.dev/test-channel", "--path", manifest_path, "--frozen", "--no-install"],
+                [
+                    pixi,
+                    "publish",
+                    "--to",
+                    "https://prefix.dev/test-channel",
+                    "--path",
+                    manifest_path,
+                    "--frozen",
+                    "--no-install",
+                ],
                 expected_exit_code=ExitCode.FAILURE,
             )
         else:
