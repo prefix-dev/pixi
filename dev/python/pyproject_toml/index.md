@@ -2,7 +2,7 @@ We support the use of the `pyproject.toml` as our manifest file in pixi. This al
 
 ## Initial setup of the `pyproject.toml` file
 
-When you already have a `pyproject.toml` file in your project, you can run `pixi init` in a that folder. Pixi will automatically
+When you already have a `pyproject.toml` file in your project, you can run `pixi init` in that folder. Pixi will automatically
 
 - Add a `[tool.pixi.workspace]` section to the file, with the platform and channel information required by pixi;
 - Add the current project as an editable pypi dependency;
