@@ -2,7 +2,7 @@
 edition.workspace = true
 license.workspace = true
 name = "pixi_build_mojo"
-version = "0.1.9"
+version = "0.1.10"
 
 [[bin]]
 name = "pixi-build-mojo"

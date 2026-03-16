@@ -1,9 +1,9 @@
 [package]
+description = "R build backend for Pixi"
 edition.workspace = true
 license.workspace = true
 name = "pixi_build_r"
-version = "0.1.0"
-description = "R build backend for Pixi"
+version = "0.1.1"
 
 [[bin]]
 name = "pixi-build-r"
