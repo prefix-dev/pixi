@@ -4,6 +4,14 @@ use indexmap::IndexMap;
 use pixi_build_backend::generated_recipe::BackendConfig;
 use serde::{Deserialize, Serialize};
 
+/// The compiler cache to use during builds.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum CompilerCache {
+    /// Use sccache as the compiler cache.
+    Sccache,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CMakeBackendConfig {
@@ -26,6 +34,10 @@ pub struct CMakeBackendConfig {
     /// List of compilers to use (e.g., ["c", "cxx", "cuda"])
     /// If not specified, a default will be used
     pub compilers: Option<Vec<String>>,
+    /// The compiler cache to use. If set, the build will use the specified
+    /// compiler cache. Can also be set globally in `~/.config/pixi/config.toml`
+    /// or per-project in `.pixi/config.toml`.
+    pub compiler_cache: Option<CompilerCache>,
 }
 
 fn collect_system_env() -> IndexMap<String, String> {
@@ -50,6 +62,7 @@ impl CMakeBackendConfig {
             debug_dir: Default::default(),
             extra_input_globs: Default::default(),
             compilers: Default::default(),
+            compiler_cache: Default::default(),
         }
     }
 }
@@ -93,6 +106,10 @@ impl BackendConfig for CMakeBackendConfig {
                 .compilers
                 .clone()
                 .or_else(|| self.compilers.clone()),
+            compiler_cache: target_config
+                .compiler_cache
+                .clone()
+                .or_else(|| self.compiler_cache.clone()),
         })
     }
 }
@@ -124,6 +141,7 @@ mod tests {
             debug_dir: Some(PathBuf::from("/base/debug")),
             extra_input_globs: vec!["*.base".to_string()],
             compilers: Some(vec!["cxx".to_string()]),
+            compiler_cache: None,
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -137,6 +155,7 @@ mod tests {
             debug_dir: None,
             extra_input_globs: vec!["*.target".to_string()],
             compilers: Some(vec!["c".to_string(), "cuda".to_string()]),
+            compiler_cache: None,
         };
 
         let merged = base_config
@@ -182,6 +201,7 @@ mod tests {
             debug_dir: Some(PathBuf::from("/base/debug")),
             extra_input_globs: vec!["*.base".to_string()],
             compilers: Some(vec!["cxx".to_string()]),
+            compiler_cache: None,
         };
 
         let empty_target_config = CMakeBackendConfig::new_with_clean_environment();

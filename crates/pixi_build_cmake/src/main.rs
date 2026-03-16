@@ -2,10 +2,10 @@ mod build_script;
 mod config;
 
 use build_script::{BuildPlatform, BuildScriptContext};
-use config::CMakeBackendConfig;
+use config::{CMakeBackendConfig, CompilerCache};
 use miette::IntoDiagnostic;
 use pixi_build_backend::{
-    cache::{sccache_envs, sccache_tools},
+    cache::sccache_tools,
     generated_recipe::{DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     traits::ProjectModel,
@@ -18,7 +18,7 @@ use recipe_stage0::{
     matchspec::PackageDependency,
     recipe::{Item, Script},
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -108,42 +108,18 @@ impl GenerateRecipe for CMakeGenerator {
             .host
             .contains_key(&SourcePackageName::from("python"));
 
-        let config_env = config.env.clone();
-
-        let system_env_vars = config
-            .system_env
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect::<HashMap<_, _>>();
-
-        let all_env_vars = config_env
-            .clone()
-            .into_iter()
-            .chain(system_env_vars.clone())
-            .collect();
-
         let mut sccache_secrets = Vec::default();
-        let mut has_sccache = false;
+        let has_sccache = matches!(config.compiler_cache, Some(CompilerCache::Sccache));
 
-        // Verify if user has set any sccache environment variables
-        if sccache_envs(&all_env_vars).is_some() {
-            // check if we set some sccache in system env vars
-            if let Some(system_sccache_keys) = sccache_envs(&system_env_vars) {
-                // If sccache_envs are used in the system environment variables,
-                // we need to set them as secrets
-                let system_sccache_keys = system_env_vars
-                    .keys()
-                    // we set only those keys that are present in the system environment variables
-                    // and not in the config env
-                    .filter(|key| {
-                        system_sccache_keys.contains(&key.as_str())
-                            && !config_env.contains_key(*key)
-                    })
-                    .cloned()
-                    .collect();
-
-                sccache_secrets = system_sccache_keys;
-            };
+        if has_sccache {
+            // Mark any SCCACHE_* variables in the system environment as secrets so they
+            // are not leaked into the build recipe.
+            sccache_secrets = config
+                .system_env
+                .keys()
+                .filter(|k| k.starts_with("SCCACHE") && !config.env.contains_key(*k))
+                .cloned()
+                .collect();
 
             let sccache_dep: Vec<Item<PackageDependency>> = sccache_tools()
                 .iter()
@@ -159,8 +135,6 @@ impl GenerateRecipe for CMakeGenerator {
                     .into_iter()
                     .filter(|dep| !existing_reqs.contains(dep)),
             );
-
-            has_sccache = true;
         }
 
         let build_script = BuildScriptContext {
@@ -178,7 +152,7 @@ impl GenerateRecipe for CMakeGenerator {
 
         generated_recipe.recipe.build.script = Script {
             content: build_script,
-            env: config_env,
+            env: config.env.clone(),
             secrets: sccache_secrets,
         };
 
@@ -748,6 +722,8 @@ mod tests {
             }
         });
 
+        // SCCACHE_* env vars in system_env should be marked as secrets when
+        // compiler_cache is set to sccache.
         let env = IndexMap::from([("SCCACHE_BUCKET".to_string(), "my-bucket".to_string())]);
         let system_env = IndexMap::from([
             ("SCCACHE_SYSTEM".to_string(), "SOME_VALUE".to_string()),
@@ -760,6 +736,7 @@ mod tests {
                 &CMakeBackendConfig {
                     env,
                     system_env,
+                    compiler_cache: Some(CompilerCache::Sccache),
                     ..CMakeBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
@@ -773,7 +750,7 @@ mod tests {
             .expect("Failed to generate recipe");
 
         // Verify that sccache is added to the build requirements
-        // when some env variables are set
+        // when compiler_cache = "sccache" is set
         insta::assert_yaml_snapshot!(generated_recipe.recipe, {
         ".source[0].path" => "[ ... path ... ]",
         ".build.script.content" => "[ ... script ... ]",

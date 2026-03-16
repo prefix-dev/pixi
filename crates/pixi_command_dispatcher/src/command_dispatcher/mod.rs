@@ -159,6 +159,11 @@ pub(crate) struct CommandDispatcherData {
 
     /// The execution type of the dispatcher.
     pub executor: Executor,
+
+    /// The compiler cache to use for all builds. If set, this is injected into
+    /// the backend configuration as a default (can be overridden per-package
+    /// in `pixi.toml`).
+    pub compiler_cache: Option<pixi_config::CompilerCache>,
 }
 
 /// A channel through which to send any messages to the command_dispatcher. Some
