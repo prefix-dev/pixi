@@ -62,10 +62,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Remove specs from the manifest
         let mut removed_dependencies = vec![];
         for spec in specs {
-            let package_name = spec
-                .name
-                .as_exact()
-                .expect("package name must be exact");
+            let package_name = spec.name.as_exact().expect("package name must be exact");
             project
                 .manifest
                 .remove_dependency(env_name, package_name)

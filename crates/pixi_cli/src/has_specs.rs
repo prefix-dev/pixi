@@ -16,10 +16,10 @@ pub(crate) trait HasSpecs {
             .map(|package| {
                 let spec =
                     MatchSpec::from_str(package, ParseStrictness::Lenient).into_diagnostic()?;
-                let name = spec.name
-                    .as_exact()
-                    .cloned()
-                    .ok_or_else(|| miette::miette!("wildcard package names are not supported"))?;
+                let name =
+                    spec.name.as_exact().cloned().ok_or_else(|| {
+                        miette::miette!("wildcard package names are not supported")
+                    })?;
                 Ok((name, spec))
             })
             .collect()

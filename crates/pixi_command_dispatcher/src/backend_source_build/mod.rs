@@ -379,10 +379,7 @@ fn convert_pixi_spec_to_match_spec(
         Either::Left(source) => source.to_nameless_match_spec(),
         Either::Right(binary) => binary.try_into_nameless_match_spec(channel_config)?,
     };
-    Ok(MatchSpec::from_nameless(
-        nameless_spec,
-        package_name.into(),
-    ))
+    Ok(MatchSpec::from_nameless(nameless_spec, package_name.into()))
 }
 
 fn convert_binary_spec_to_match_spec(
@@ -391,10 +388,7 @@ fn convert_binary_spec_to_match_spec(
     channel_config: &ChannelConfig,
 ) -> Result<MatchSpec, SpecConversionError> {
     let nameless_spec = spec.try_into_nameless_match_spec(channel_config)?;
-    Ok(MatchSpec::from_nameless(
-        nameless_spec,
-        package_name.into(),
-    ))
+    Ok(MatchSpec::from_nameless(nameless_spec, package_name.into()))
 }
 
 #[derive(Debug, Clone, thiserror::Error, Diagnostic)]

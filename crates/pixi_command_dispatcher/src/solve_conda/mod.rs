@@ -233,8 +233,7 @@ impl SolveCondaEnvironmentSpec {
                                     .clone()
                                     .try_into_nameless_match_spec_ref(&self.channel_config)
                                     .unwrap_or_default();
-                                MatchSpec::from_nameless(nameless, name.clone().into())
-                                    .to_string()
+                                MatchSpec::from_nameless(nameless, name.clone().into()).to_string()
                             })
                             .collect(),
                         constrains: dev_source

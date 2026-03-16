@@ -54,9 +54,9 @@ impl<'a> From<LockedPackageRef<'a>> for PackageNode {
                             .parse::<rattler_conda_types::MatchSpec>()
                             .ok()
                             .and_then(|spec| {
-                                spec.name.as_exact().map(|name| {
-                                    name.as_normalized().to_string()
-                                })
+                                spec.name
+                                    .as_exact()
+                                    .map(|name| name.as_normalized().to_string())
                             })
                     })
                     .collect()

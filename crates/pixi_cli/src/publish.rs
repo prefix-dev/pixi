@@ -423,10 +423,7 @@ async fn upload_to_anaconda(
 
     let (owner, channel) = match path_segments.len() {
         1 => (path_segments[0].to_string(), "main".to_string()),
-        2 => (
-            path_segments[0].to_string(),
-            path_segments[1].to_string(),
-        ),
+        2 => (path_segments[0].to_string(), path_segments[1].to_string()),
         _ => {
             return Err(miette::miette!(
                 "Invalid Anaconda.org URL format. Expected: https://anaconda.org/owner or https://anaconda.org/owner/label"

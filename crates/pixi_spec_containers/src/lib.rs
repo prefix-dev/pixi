@@ -248,10 +248,7 @@ impl DependencyMap<rattler_conda_types::PackageName, rattler_conda_types::Namele
     ) -> impl DoubleEndedIterator<Item = rattler_conda_types::MatchSpec> {
         self.map.iter().flat_map(|(name, specs)| {
             specs.into_iter().map(move |spec| {
-                rattler_conda_types::MatchSpec::from_nameless(
-                    spec.clone(),
-                    name.clone().into(),
-                )
+                rattler_conda_types::MatchSpec::from_nameless(spec.clone(), name.clone().into())
             })
         })
     }
