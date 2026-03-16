@@ -10766,7 +10766,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.9.4
   with:
-    pixi-version: v0.65.0
+    pixi-version: v0.66.0
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -11559,7 +11559,7 @@ Create a new directory `.devcontainer` in the root of your workspace. Then, crea
 ```dockerfile
 FROM mcr.microsoft.com/devcontainers/base:jammy
 
-ARG PIXI_VERSION=v0.65.0
+ARG PIXI_VERSION=v0.66.0
 
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \
@@ -19863,6 +19863,59 @@ pixi workspace version set <VERSION>
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+### [0.66.0] - 2026-03-16
+
+#### ✨ Highlights
+
+Want a `conda`/`mamba` like workflow for Pixi workspaces? This release brings registered workspaces!
+
+You can now register your Pixi workspace and then use its name to refer to it from anywhere on your machine. For example:
+
+```shell
+cd path/to/a/pixi/workspace
+pixi workspace register
+cd
+pixi run --workspace workspace-name task-name
+pixi shell -w workspace-name
+pixi shell-hook -w workspace-name
+```
+
+#### Added
+
+- `pixi search` improvements: allow arbitrary MatchSpecs, add `--json` by @pavelzw in [#5442](https://github.com/prefix-dev/pixi/pull/5442)
+- Add atomic write utilities for safe file operations by @baszalmstra in [#5500](https://github.com/prefix-dev/pixi/pull/5500)
+- Support `--` separator to pass extra args to typed-arg tasks by @ruben-arts in [#5569](https://github.com/prefix-dev/pixi/pull/5569)
+- Add template args for env vars in tasks as well by @tdejager in [#5613](https://github.com/prefix-dev/pixi/pull/5613)
+- Allow users to use Pixi named workspaces through a registry by @soapy1 in [#5277](https://github.com/prefix-dev/pixi/pull/5277)
+- Add `pyproject.toml` schema by @bollwyvl in [#5583](https://github.com/prefix-dev/pixi/pull/5583)
+
+#### Documentation
+
+- Add `pixi-browse` by @pavelzw in [#5642](https://github.com/prefix-dev/pixi/pull/5642) and [#5664](https://github.com/prefix-dev/pixi/pull/5664)
+- Rewrite docs page on lock file by @VeckoTheGecko in [#5404](https://github.com/prefix-dev/pixi/pull/5404)
+- Fix pixi-build docs about uv in installer selection by @kilian-hu in [#5670](https://github.com/prefix-dev/pixi/pull/5670)
+- Add prefix.dev docs to deployment by @wolfv in [#5671](https://github.com/prefix-dev/pixi/pull/5671)
+- Fix typo in pyproject.toml setup documentation by @LiamConnors in [#5620](https://github.com/prefix-dev/pixi/pull/5620)
+
+#### Fixed
+
+- Allow to solve environments with different platforms in the same solve group by @borchero in [#5538](https://github.com/prefix-dev/pixi/pull/5538)
+- Race condition with error coalescing by @baszalmstra in [#5591](https://github.com/prefix-dev/pixi/pull/5591)
+- Support implicit table syntax in pyproject.toml parsing by @suleman1412 in [#5580](https://github.com/prefix-dev/pixi/pull/5580)
+- Updated `aws-lc-sys` to 0.38.0 by @baszalmstra in [#5610](https://github.com/prefix-dev/pixi/pull/5610)
+- Hash computation in release by @wolfv in [#5605](https://github.com/prefix-dev/pixi/pull/5605)
+- Editability check during pypi install by @tdejager in [#5617](https://github.com/prefix-dev/pixi/pull/5617)
+- Avoid panic when current working directory no longer exists by @mohitdebian in [#5652](https://github.com/prefix-dev/pixi/pull/5652)
+- Cache file path corruption when package name contains dots by @ytausch in [#5668](https://github.com/prefix-dev/pixi/pull/5668)
+- `pixi clean` behavior improvements by @ruben-arts in [#5685](https://github.com/prefix-dev/pixi/pull/5685)
+- Use `mp.suspend` for `pixi_progress::println!` by @lucascolley in [#5459](https://github.com/prefix-dev/pixi/pull/5459)
+
+#### New Contributors
+
+- @soapy1 made their first contribution in [#5277](https://github.com/prefix-dev/pixi/pull/5277)
+- @mohitdebian made their first contribution in [#5652](https://github.com/prefix-dev/pixi/pull/5652)
+- @suleman1412 made their first contribution in [#5580](https://github.com/prefix-dev/pixi/pull/5580)
 
 ### [0.65.0] - 2026-02-26
 
