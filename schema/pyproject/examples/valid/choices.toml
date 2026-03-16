@@ -1,8 +1,8 @@
 #:schema ./../../schema.json
 [project]
+dependencies = ["tomli"]
 name = "foo"
 requires-python = ">=3.11"
-dependencies = ["tomli"]
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
@@ -10,7 +10,7 @@ platforms = ["linux-64"]
 
 [tool.pixi.tasks.bad-choices]
 args = [
-    {arg="not_a_string", choices=["1"]},  # must be strings
-    {arg="no_choices", choices=["0"]},     # must be non-empty
+  { arg = "not_a_string", choices = ["1"] }, # must be strings
+  { arg = "no_choices", choices = ["0"] },   # must be non-empty
 ]
 cmd = "echo {{ choice1 }} {{ choice2 }}"
