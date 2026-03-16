@@ -131,7 +131,7 @@ impl CacheDirs {
             .unwrap_or_else(|| self.root.join(consts::CACHED_GIT_DIR).into_assume_dir())
     }
 
-    /// Returns the directory where git repositories are cached.
+    /// Returns the directory where url based sources are cached.
     pub fn url(&self) -> AbsPresumedDirPathBuf {
         self.url
             .clone()
