@@ -316,7 +316,7 @@ def main() -> None:
                         "cargo",
                         "update",
                         "--package",
-                        py_backend.cargo_name,
+                        py_backend.binary,
                         "--manifest-path",
                         str(py_backend.version_path),
                     ]
