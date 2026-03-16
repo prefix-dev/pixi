@@ -136,7 +136,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 explicit_env.name().fancy_display()
             );
         }
-    } else if !args.activation_cache & !args.build & !args.workspaces_registry {
+    } else if !args.activation_cache && !args.build && !args.workspaces_registry {
         // Remove all pixi related work from the workspace.
         if !workspace
             .environments_dir()
@@ -278,17 +278,23 @@ async fn remove_folder_with_progress(
         folder.clone().display()
     ));
 
-    // Ignore errors
-    let result = tokio_fs::remove_dir_all(&folder).await;
-    if let Err(e) = result {
-        tracing::info!("Failed to remove folder {:?}: {}", folder, e);
+    match tokio_fs::remove_dir_all(&folder).await {
+        Ok(()) => {
+            pb.finish_with_message(format!(
+                "{} {}",
+                console::style("Removed").green(),
+                folder.display()
+            ));
+        }
+        Err(e) => {
+            pb.finish_with_message(format!(
+                "{} {} ({})",
+                console::style("Failed to remove").red(),
+                folder.display(),
+                e
+            ));
+        }
     }
-
-    pb.finish_with_message(format!(
-        "{} {}",
-        console::style("removed").green(),
-        folder.display()
-    ));
     Ok(())
 }
 
