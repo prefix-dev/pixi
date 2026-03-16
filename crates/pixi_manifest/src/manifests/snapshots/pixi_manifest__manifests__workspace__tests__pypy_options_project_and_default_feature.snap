@@ -1,0 +1,15 @@
+---
+source: crates/pixi_manifest/src/manifests/workspace.rs
+expression: manifest.workspace.pypi_options.clone().unwrap()
+---
+index-url: ~
+extra-index-urls:
+  - "https://pypi.org/simple2"
+find-links: ~
+no-build-isolation: []
+index-strategy: ~
+prerelease-mode: ~
+no-build: ~
+dependency-overrides: ~
+no-binary: ~
+skip-wheel-filename-check: ~

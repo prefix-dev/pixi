@@ -1,0 +1,24 @@
+[workspace]
+channels = ["conda-forge"]
+description = "Example package to run the rerun-sdk"
+name = "rerun"
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+[tasks]
+lidar = "lidar"
+nuscenses = "nuscenes_dataset"
+start = "python force_driven_lockfile_graph.py"
+
+[dependencies]
+matplotlib = "*"
+networkx = ">=3.5,<4"
+numpy = ">=2.3.0,<3"
+nuscenes-devkit = "*"
+python = ">=3.12.11,<3.14"
+pyyaml = ">=6.0.2,<7"
+rerun-sdk = ">=0.23.3,<0.24"
+scipy = ">=1.15.2,<2"
+
+[pypi-dependencies]
+lidar = { path = "./lidar" }
+nuscenes_dataset = { path = "./nuscenes_dataset" }

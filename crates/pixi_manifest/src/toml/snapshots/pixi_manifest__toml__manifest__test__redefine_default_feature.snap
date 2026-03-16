@@ -1,0 +1,12 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foo\"\n        channels = []\n        platforms = []\n\n        [feature.default.dependencies]\n        \"#,)"
+---
+  × The feature 'default' is reserved and cannot be redefined
+   ╭─[pixi.toml:7:18]
+ 6 │
+ 7 │         [feature.default.dependencies]
+   ·                  ───────
+ 8 │
+   ╰────
+  help: All tables at the root of the document are implicitly added to the 'default' feature, use those instead.

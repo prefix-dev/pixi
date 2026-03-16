@@ -1,0 +1,23 @@
+outputs:
+  - package:
+      name: package-unix
+      version: 0.1.0
+
+    build:
+      skip: not unix
+      script:
+        - mkdir -p $PREFIX/bin
+        - echo "#!/usr/bin/env bash" > $PREFIX/bin/package
+        - echo "echo unix" >> $PREFIX/bin/package
+        - chmod +x $PREFIX/bin/package
+
+  - package:
+      name: package-windows
+      version: 0.1.0
+
+    build:
+      skip: not win
+      script:
+        - mkdir -p $PREFIX/bin
+        - echo "@echo off" > $PREFIX/bin/package.bat
+        - echo "echo windows" >> $PREFIX/bin/package.bat

@@ -1,0 +1,40 @@
+---
+source: crates/pixi_build_frontend/src/into_build_types.rs
+expression: project_model
+---
+{
+  "name": "sdl_example",
+  "version": "0.1.0",
+  "description": "Showcases how to create a simple C++ executable with Pixi",
+  "authors": [
+    "Bas Zalmstra <bas@prefix.dev>"
+  ],
+  "license": null,
+  "license_file": null,
+  "readme": null,
+  "homepage": null,
+  "repository": null,
+  "documentation": null,
+  "configuration": null,
+  "targets": {
+    "default_target": {
+      "host_dependencies": {
+        "sdl2": {
+          "detailedVersion": {
+            "version": ">=2.26.5,<3.0",
+            "build": null,
+            "build_number": null,
+            "file_name": null,
+            "channel": null,
+            "subdir": null,
+            "md5": null,
+            "sha256": null
+          }
+        }
+      },
+      "build_dependencies": {},
+      "run_dependencies": {}
+    },
+    "targets": {}
+  }
+}

@@ -1,0 +1,12 @@
+---
+source: crates/pixi/tests/integration_rust/add_tests.rs
+expression: project.manifest().source.to_string()
+---
+[workspace]
+name = "some-workspace"
+platforms = []
+channels = ['file://<LOCAL_CHANNEL>/']
+preview = ['pixi-build']
+
+[dependencies]
+foo = "*"

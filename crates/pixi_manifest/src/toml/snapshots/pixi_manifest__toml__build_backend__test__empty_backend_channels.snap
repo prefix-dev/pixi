@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/toml/build_backend.rs
+expression: "expect_parse_failure(r#\"\n            backend = { name = \"foobar\", version = \"*\", channels = [] }\n        \"#)"
+---
+  × No channels specified for the build backend dependencies
+   ╭─[pixi.toml:2:68]
+ 1 │
+ 2 │             backend = { name = "foobar", version = "*", channels = [] }
+   ·                                                                    ──
+ 3 │
+   ╰────

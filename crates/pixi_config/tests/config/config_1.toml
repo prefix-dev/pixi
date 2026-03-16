@@ -1,0 +1,16 @@
+default_channels = ["conda-forge", "bioconda", "defaults"]
+tls_no_verify = true
+
+# Hardcode as we don't want this to depend on the system in the tests
+concurrency.solves = 1
+
+[s3-options.bucket1]
+endpoint-url = "https://my-s3-host"
+force-path-style = false
+region = "us-east-1"
+
+[mirrors]
+"https://conda.anaconda.org/conda-forge" = ["whatever://config_1"]
+
+[build]
+package-format = "conda:max"

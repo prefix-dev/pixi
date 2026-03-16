@@ -1,0 +1,14 @@
+name: crnntf
+channels:
+  - defaults
+dependencies:
+  - pip=10.0.1
+  - python=3.5.5
+  - setuptools=39.1.0
+  - wheel=0.31.1
+  - pip:
+      - tensorflow_gpu==1.15.0
+      - numpy
+      - opencv_python
+      - matplotlib
+      - easydict

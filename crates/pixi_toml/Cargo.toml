@@ -1,0 +1,23 @@
+[package]
+authors.workspace = true
+description = "A crate that provides utilities to parse TOML files with extended diagnostics"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_toml"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+digest = { workspace = true }
+hex = { workspace = true }
+indexmap = { workspace = true }
+itertools = { workspace = true }
+miette = { workspace = true }
+strsim = { workspace = true }
+strum = { workspace = true }
+toml-span = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

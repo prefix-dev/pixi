@@ -1,0 +1,154 @@
+recipe:
+  name: dummy
+  version: 1.0.0
+
+outputs:
+  - package:
+      name: dummy-a
+      version: 0.1.0
+
+    requirements:
+      run:
+        - dummy-c
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - mkdir -p $PREFIX/nested
+        - if: win
+          then:
+            - echo "dummy-a on windows" > $PREFIX/bin/dummy-a.bat
+            - echo "dummy-aa on windows" > $PREFIX/bin/dummy-aa.bat
+            - echo "nested dummy on windows" > $PREFIX/nested/dummy.bat
+          else:
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-a
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-aa
+            - echo "#!/usr/bin/env bash" > $PREFIX/nested/dummy-sh
+            - echo "dummy-a on unix" >> $PREFIX/bin/dummy-a
+            - echo "dummy-aa on unix" >> $PREFIX/bin/dummy-aa
+            - echo "nested dummy on unix" >> $PREFIX/nested/dummy.sh
+            - chmod +x $PREFIX/bin/dummy-a
+            - chmod +x $PREFIX/bin/dummy-aa
+            - chmod +x $PREFIX/nested/dummy.sh
+
+  - package:
+      name: dummy-b
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "dummy-b on windows" > $PREFIX/bin/dummy-b.bat
+          else:
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-b
+            - echo "echo dummy-b on unix" >> $PREFIX/bin/dummy-b
+            - chmod +x $PREFIX/bin/dummy-b
+
+  - package:
+      name: dummy-c
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "dummy-c on windows" > $PREFIX/bin/dummy-c.bat
+          else:
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-c
+            - echo "dummy-c on unix" >> $PREFIX/bin/dummy-c
+            - chmod +x $PREFIX/bin/dummy-c
+
+  - package:
+      name: dummy-d
+      version: 0.1.0
+
+    requirements:
+      run:
+        - dummy-x # This comes from dummy_channel_2
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "dummy-d on windows" > $PREFIX/bin/dummy-d.bat
+          else:
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-d
+            - echo "dummy-d on unix" >> $PREFIX/bin/dummy-d
+            - chmod +x $PREFIX/bin/dummy-d
+
+  - package:
+      name: dummy_e
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "dummy_e on windows" > $PREFIX/bin/dummy_e.bat
+          else:
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-e
+            - echo "dummy_e on unix" >> $PREFIX/bin/dummy_e
+            - chmod +x $PREFIX/bin/dummy_e
+
+  - package:
+      name: dummy-f
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "@echo off" > $PREFIX/bin/dummy-f.bat
+            - echo "echo dummy-f on windows" >> $PREFIX/bin/dummy-f.bat
+          else:
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-f
+            - echo "echo dummy-f on unix" >> $PREFIX/bin/dummy-f
+            - chmod +x $PREFIX/bin/dummy-f
+
+  - package:
+      name: dummy-g
+      version: 0.1.0
+
+    requirements:
+      run:
+        - dummy-b
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "@echo off" > $PREFIX/bin/dummy-g.bat
+            - echo "echo windows" >> $PREFIX/bin/dummy-g.bat
+          else:
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-g
+            - echo "echo unix" >> $PREFIX/bin/dummy-g
+            - chmod +x $PREFIX/bin/dummy-g
+
+  - package:
+      name: pixi-foobar
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "@echo off" > $PREFIX/bin/pixi-foobar.bat
+            - echo "echo %*" >> $PREFIX/bin/pixi-foobar.bat
+            - mkdir -p $PREFIX/etc/conda/activate.d
+            - echo "@echo off" > $PREFIX/etc/conda/activate.d/script.bat
+            - echo "set BAR_PATH=bar" >> $PREFIX/etc/conda/activate.d/script.bat
+          else:
+            - echo '#!/bin/sh' > $PREFIX/bin/pixi-foobar
+            - echo 'echo "$@"' >> $PREFIX/bin/pixi-foobar
+            - chmod +x $PREFIX/bin/pixi-foobar
+            - mkdir -p $PREFIX/etc/conda/activate.d
+            - echo '#!/bin/sh' > $PREFIX/etc/conda/activate.d/script.sh
+            - echo "export BAR_PATH='bar'" >> $PREFIX/etc/conda/activate.d/script.sh

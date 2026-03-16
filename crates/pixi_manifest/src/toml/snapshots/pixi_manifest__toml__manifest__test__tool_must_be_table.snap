@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        tool = false\n\n        [workspace]\n        channels = []\n        platforms = []\n        preview = [\"pixi-build\"]\n        \"#,)"
+---
+  × expected a table, found boolean
+   ╭─[pixi.toml:2:16]
+ 1 │
+ 2 │         tool = false
+   ·                ─────
+ 3 │
+   ╰────

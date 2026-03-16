@@ -1,0 +1,24 @@
+[workspace]
+build-variants = { package3 = ["0.3.0", "0.2.0"] }
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "variant-manifest"
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+preview = ["pixi-build"]
+
+[dependencies]
+variant-manifest = { path = "." }
+
+[package]
+name = "variant-manifest"
+version = "1.0.0"
+
+[package.build.backend]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-rattler-build"
+version = "*"

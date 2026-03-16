@@ -1,0 +1,2 @@
+# This pixi toml is explicitly empty.
+# It is not a valid pixi manifest, but for workspace discovery that shouldn't matter.

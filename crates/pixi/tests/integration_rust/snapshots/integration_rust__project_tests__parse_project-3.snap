@@ -1,0 +1,9 @@
+---
+source: crates/pixi/tests/integration_rust/project_tests.rs
+expression: "dependency_names(&project, Platform::Win64)"
+---
+[
+    "all",
+    "win",
+    "all_win",
+]

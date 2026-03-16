@@ -1,0 +1,6 @@
+---
+source: crates/pixi_manifest/src/discovery.rs
+expression: snapshot
+---
+Discovered workspace at: nested-workspace/pixi.toml
+- Name: nested-workspace

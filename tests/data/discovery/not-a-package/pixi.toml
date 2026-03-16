@@ -1,0 +1,5 @@
+[workspace]
+channels = []
+name = "some-workspace"
+platforms = []
+preview = ['pixi-build']

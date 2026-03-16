@@ -1,0 +1,17 @@
+[project]
+channels = ["conda-forge"]
+name = "bug_test"
+platforms = ["win-64"]
+
+[dependencies]
+python = "=3.11"
+
+[pypi-dependencies]
+matplotlib = "~=3.8"
+
+[feature.dev.dependencies]
+moto = "=5.0"
+
+[environments]
+default = { features = [], solve-group = "bug_test" }
+dev = { features = ["dev"], solve-group = "bug_test" }

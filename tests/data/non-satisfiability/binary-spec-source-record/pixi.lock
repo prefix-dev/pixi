@@ -1,0 +1,17 @@
+version: 6
+environments:
+  default:
+    channels:
+      - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      win-64:
+        - conda: source
+packages:
+  - conda: source
+    name: source
+    version: "0"
+    build: ""
+    noarch: false
+    subdir: noarch
+    variants:
+      target_platform: noarch

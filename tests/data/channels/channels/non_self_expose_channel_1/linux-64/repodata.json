@@ -1,0 +1,39 @@
+{
+  "info": {
+    "subdir": "linux-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "jupyter-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [
+        "jupyter-core"
+      ],
+      "md5": "e21e5d39645428ebcc38113558eae5d8",
+      "name": "jupyter",
+      "platform": "linux",
+      "sha256": "f326acf6bcd44f203a9e2375c8a646f42c649a08de22f4a9c7758ee78fa16704",
+      "size": 993,
+      "subdir": "linux-64",
+      "timestamp": 1730898133150,
+      "version": "0.1.0"
+    },
+    "jupyter-core-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "ffac5d2147953383cf34752e2996d066",
+      "name": "jupyter-core",
+      "platform": "linux",
+      "sha256": "7a6f7fa35475b5370a4081c27d15f3e5f5cfe59a33fa010fa573badb503c16ff",
+      "size": 1179,
+      "subdir": "linux-64",
+      "timestamp": 1730898133150,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}

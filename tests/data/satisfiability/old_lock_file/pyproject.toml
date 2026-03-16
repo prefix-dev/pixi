@@ -1,0 +1,23 @@
+[project]
+dependencies = ["flask==2.*"]
+description = "Testing pyproject-manifest."
+name = "pyproject-manifest"
+readme = "README.md"
+requires-python = ">=3.11"
+version = "0.1.0"
+
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools", "wheel"]
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+name = "pyproject-manifest"
+platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+
+[tool.pixi]
+# This dotted inline table fails with the `toml` parser, but works with `@iarna/toml`.
+pypi-dependencies.boltons = "*"
+
+[tool.pixi.tasks]
+test = "echo 'Running tests...'"

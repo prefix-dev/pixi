@@ -1,0 +1,270 @@
+use crate::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherErrorResultExt, SourceCheckoutError,
+    command_dispatcher::error::CommandDispatcherError,
+    instantiate_tool_env::{
+        InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult,
+        InstantiateToolEnvironmentSpec,
+    },
+};
+use miette::Diagnostic;
+use ordermap::OrderMap;
+use pixi_build_discovery::{BackendSpec, CommandSpec, EnabledProtocols};
+use pixi_build_frontend::{
+    Backend, BackendOverride, json_rpc,
+    json_rpc::{CommunicationError, JsonRpcBackend},
+    tool::{IsolatedTool, SystemTool, Tool},
+};
+use pixi_build_types::{
+    PixiBuildApiVersion, ProjectModel, TargetSelector, procedures::initialize::InitializeParams,
+};
+use pixi_path::{AbsPresumedDirPathBuf, AbsPresumedFilePathBuf};
+use pixi_spec::SpecConversionError;
+use rattler_conda_types::ChannelConfig;
+use rattler_shell::{
+    activation::{ActivationError, ActivationVariables, Activator},
+    shell::ShellEnum,
+};
+use rattler_virtual_packages::DetectVirtualPackageError;
+use std::sync::Arc;
+use thiserror::Error;
+
+#[derive(Debug)]
+pub struct InstantiateBackendSpec {
+    /// The backend specification
+    pub backend_spec: BackendSpec,
+
+    /// The root directory of the workspace.
+    pub workspace_root: AbsPresumedDirPathBuf,
+
+    /// The absolute path of the discovered manifest
+    pub manifest_path: AbsPresumedFilePathBuf,
+
+    /// Optionally, the manifest of the discovered package.
+    pub project_model: Option<ProjectModel>,
+
+    /// Additional configuration that applies to the backend.
+    pub configuration: Option<serde_json::Value>,
+
+    /// Targets that apply to the backend.
+    pub target_configuration: Option<OrderMap<TargetSelector, serde_json::Value>>,
+
+    /// The source directory to use for the backend
+    pub build_source_dir: AbsPresumedDirPathBuf,
+
+    /// The channel configuration to use for any source packages required by the
+    /// backend.
+    pub channel_config: ChannelConfig,
+
+    /// The protocols that are enabled for discovering source packages
+    pub enabled_protocols: EnabledProtocols,
+}
+
+impl CommandDispatcher {
+    /// Instantiate a build backend
+    pub async fn instantiate_backend(
+        &self,
+        spec: InstantiateBackendSpec,
+    ) -> Result<Backend, CommandDispatcherError<InstantiateBackendError>> {
+        let BackendSpec::JsonRpc(backend_spec) = spec.backend_spec;
+
+        // Canonicalize the source_dir to ensure it's a fully resolved absolute path
+        // without any relative components like ".." or "."
+        let source_dir = dunce::canonicalize(&spec.build_source_dir).map_err(|e| {
+            CommandDispatcherError::Failed(InstantiateBackendError::SpecConversionError(Arc::new(
+                SpecConversionError::InvalidPath(format!(
+                    "failed to canonicalize source directory '{}': {}",
+                    spec.build_source_dir.display(),
+                    e
+                )),
+            )))
+        })?;
+
+        let command_spec = match self.build_backend_overrides() {
+            BackendOverride::System(overridden_backends) => overridden_backends
+                .named_backend_override(&backend_spec.name)
+                .unwrap_or(backend_spec.command),
+            BackendOverride::InMemory(memory) => {
+                let backend = memory.backend_override(&backend_spec.name);
+
+                if let Some(in_mem) = backend {
+                    let memory = in_mem
+                        .initialize(InitializeParams {
+                            manifest_path: spec.manifest_path.to_std_path_buf(),
+                            source_directory: Some(source_dir),
+                            workspace_directory: Some(spec.workspace_root.to_std_path_buf()),
+                            cache_directory: Some(self.cache_dirs().root().to_owned().into()),
+                            project_model: spec.project_model,
+                            configuration: spec.configuration,
+                            target_configuration: spec.target_configuration,
+                        })
+                        .map_err(InstantiateBackendError::from)
+                        .map_err(CommandDispatcherError::Failed)?;
+                    return Ok(Backend::new(memory.into(), in_mem.api_version()));
+                } else {
+                    backend_spec.command
+                }
+            }
+        };
+
+        let (tool, api_version) = match command_spec {
+            CommandSpec::System(system_spec) => (
+                Tool::System(SystemTool::new(
+                    system_spec.command.unwrap_or(backend_spec.name),
+                )),
+                // Assume the latest version of the backend
+                PixiBuildApiVersion::current(),
+            ),
+            CommandSpec::EnvironmentSpec(env_spec) => {
+                let (tool_platform, tool_platform_virtual_packages) = self.tool_platform();
+                let InstantiateToolEnvironmentResult {
+                    prefix,
+                    version,
+                    api,
+                } = self
+                    .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
+                        requirement: env_spec.requirement,
+                        additional_requirements: env_spec.additional_requirements,
+                        constraints: env_spec.constraints,
+                        build_environment: BuildEnvironment {
+                            host_platform: tool_platform,
+                            build_platform: tool_platform,
+                            host_virtual_packages: tool_platform_virtual_packages.to_vec(),
+                            build_virtual_packages: tool_platform_virtual_packages.to_vec(),
+                        },
+                        channels: env_spec.channels,
+                        exclude_newer: None,
+                        variant_configuration: None,
+                        variant_files: None,
+                        channel_config: spec.channel_config,
+                        enabled_protocols: spec.enabled_protocols,
+                    })
+                    .await
+                    .map_err_with(InstantiateBackendError::from)?;
+
+                // Get the activation scripts
+                let activator =
+                    Activator::from_path(prefix.path(), ShellEnum::default(), tool_platform)
+                        .map_err(InstantiateBackendError::from)
+                        .map_err(CommandDispatcherError::Failed)?;
+
+                let activation_scripts = activator
+                    .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)
+                    .map_err(InstantiateBackendError::from)
+                    .map_err(CommandDispatcherError::Failed)?;
+
+                (
+                    Tool::from(IsolatedTool::new(
+                        env_spec.command.unwrap_or(backend_spec.name),
+                        Some(version),
+                        prefix.path().to_path_buf(),
+                        activation_scripts,
+                    )),
+                    api,
+                )
+            }
+        };
+
+        // Add debug information about what the backend supports.
+        tracing::info!(
+            "Instantiated backend {}{}, negotiated API version {}{}",
+            tool.executable(),
+            tool.version().map_or_else(String::new, |v| format!("@{v}")),
+            api_version,
+            if let Some(isolated_tool) = tool.as_isolated() {
+                format!(", from prefix {}", isolated_tool.prefix().display())
+            } else {
+                "".to_string()
+            },
+        );
+
+        // Make sure that the project model is compatible with the API version.
+        if !api_version.supports_name_none()
+            && spec
+                .project_model
+                .as_ref()
+                .is_some_and(|p| p.name.is_none())
+        {
+            return Err(CommandDispatcherError::Failed(
+                InstantiateBackendError::SpecConversionError(Arc::new(
+                    SpecConversionError::MissingName,
+                )),
+            ));
+        }
+
+        JsonRpcBackend::setup(
+            source_dir,
+            spec.manifest_path.to_std_path_buf(),
+            spec.workspace_root.to_std_path_buf(),
+            spec.project_model,
+            spec.configuration,
+            spec.target_configuration,
+            Some(self.cache_dirs().root().to_owned().into()),
+            tool,
+        )
+        .await
+        .map_err(InstantiateBackendError::from)
+        .map_err(CommandDispatcherError::Failed)
+        .map(|backend| Backend::new(backend.into(), api_version))
+    }
+}
+
+#[derive(Debug, Clone, Error, Diagnostic)]
+pub enum InstantiateBackendError {
+    /// The command dispatcher could not be initialized.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    JsonRpc(Arc<json_rpc::InitializeError>),
+
+    /// The command dispatcher could not be initialized.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InMemoryError(Arc<CommunicationError>),
+
+    /// Could not detect the virtual packages for the system
+    #[error(transparent)]
+    VirtualPackages(Arc<DetectVirtualPackageError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InstantiateToolEnvironment(#[from] InstantiateToolEnvironmentError),
+
+    #[error("failed to run activation for the backend tool")]
+    Activation(Arc<ActivationError>),
+
+    #[error(transparent)]
+    SpecConversionError(Arc<SpecConversionError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    SourceCheckout(#[from] SourceCheckoutError),
+}
+
+impl From<json_rpc::InitializeError> for InstantiateBackendError {
+    fn from(err: json_rpc::InitializeError) -> Self {
+        Self::JsonRpc(Arc::new(err))
+    }
+}
+
+impl From<Box<CommunicationError>> for InstantiateBackendError {
+    fn from(err: Box<CommunicationError>) -> Self {
+        Self::InMemoryError(Arc::new(*err))
+    }
+}
+
+impl From<DetectVirtualPackageError> for InstantiateBackendError {
+    fn from(err: DetectVirtualPackageError) -> Self {
+        Self::VirtualPackages(Arc::new(err))
+    }
+}
+
+impl From<ActivationError> for InstantiateBackendError {
+    fn from(err: ActivationError) -> Self {
+        Self::Activation(Arc::new(err))
+    }
+}
+
+impl From<SpecConversionError> for InstantiateBackendError {
+    fn from(err: SpecConversionError) -> Self {
+        Self::SpecConversionError(Arc::new(err))
+    }
+}

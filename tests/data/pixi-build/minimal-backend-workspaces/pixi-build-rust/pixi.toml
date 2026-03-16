@@ -1,0 +1,25 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+name = "pixi-build-rust"
+platforms = ["linux-64", "osx-arm64", "win-64"]
+preview = ["pixi-build"]
+version = "0.1.0"
+
+[dependencies]
+simple-app = { path = "." }
+
+[tasks]
+start = "simple-app"
+
+[package]
+authors = ["Julian Hofer <julianhofer@gnome.org>"]
+name = "simple-app"
+version = "0.1.0"
+
+[package.build.backend]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-rust"
+version = "*"

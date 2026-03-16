@@ -1,0 +1,9 @@
+[project]
+name = "nested-pyproject"
+version = "0.1.0"
+
+[tool.pixi.package]
+# name etc should be derived from the project itself
+
+[tool.pixi.package.build]
+backend = { name = "bla", version = "*" }

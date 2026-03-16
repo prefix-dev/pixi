@@ -1,0 +1,43 @@
+[workspace]
+authors = ["Bas Zalmstra <bas@prefix.dev>"]
+channels = ["conda-forge"]
+description = "Showcases how to create a simple C++ executable with Pixi"
+name = "sdl_example"
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+
+[tasks.start]
+# Start the built executable
+cmd = ".build/bin/sdl_example"
+depends-on = ["build"]
+
+[dependencies]
+cmake = ">=3.31.6,<4"
+sdl2 = "2.26.5.*"
+
+[feature.build.dependencies]
+cxx-compiler = ">=1.9.0, <2"
+ninja = ">=1.12.1,<2"
+
+[feature.build.tasks.configure]
+# Configures CMake
+cmd = [
+  "cmake",
+  # Use the cross-platform Ninja generator
+  "-GNinja",
+  # The source is in the root directory
+  "-S.",
+  # We wanna build in the .build directory
+  "-B.build",
+]
+inputs = ["CMakeLists.txt"]
+outputs = [".build/CMakeFiles/"]
+
+# Build the executable but make sure CMake is configured first.
+[feature.build.tasks.build]
+cmd = ["cmake", "--build", ".build"]
+depends-on = ["configure"]
+inputs = ["CMakeLists.txt", "src/*"]
+outputs = [".build/bin/sdl_example"]
+
+[environments]
+build = ["build"]

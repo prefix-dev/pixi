@@ -1,0 +1,13 @@
+---
+source: crates/pixi_manifest/src/toml/build_backend.rs
+expression: "format_parse_error(toml, parsed.warnings.into_iter().next().unwrap())"
+snapshot_kind: text
+---
+  ⚠ The `configuration` field is deprecated. Use `config` instead.
+   ╭─[pixi.toml:3:13]
+ 2 │             backend = { name = "foobar", version = "*" }
+ 3 │             configuration = { key = "value" }
+   ·             ──────┬──────
+   ·                   ╰── replace this with 'config'
+ 4 │
+   ╰────

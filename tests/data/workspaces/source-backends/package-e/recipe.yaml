@@ -1,0 +1,6 @@
+package:
+  name: package-e
+  version: 0.1.0
+
+build:
+  noarch: generic

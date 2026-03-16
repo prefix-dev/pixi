@@ -1,0 +1,27 @@
+---
+source: crates/pixi_command_dispatcher/tests/integration/main.rs
+expression: err
+---
+Failed(
+    SolveEnvironment(
+        CollectSourceMetadataError(
+            SourceMetadataError {
+                name: PackageName {
+                    normalized: None,
+                    source: "package-d",
+                },
+                error: BuildBackendMetadata(
+                    Initialize(
+                        JsonRpc(
+                            Setup(
+                                MissingExecutable(
+                                    "package-e",
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            },
+        ),
+    ),
+)

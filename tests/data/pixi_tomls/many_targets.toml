@@ -1,0 +1,39 @@
+[project]
+authors = [
+  "Wolf Vollprecht <wolf@prefix.dev>",
+  "Bas Zalmstra <bas@prefix.dev>",
+  "Tim de Jager <tim@prefix.dev>",
+  "Ruben Arts <ruben@prefix.dev>",
+]
+channels = ["conda-forge"]
+description = "Package management made easy!"
+name = "pixi"
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+version = "0.14.0"
+
+[dependencies]
+all = "*"
+
+[target.linux-64.dependencies]
+linux = "*"
+
+[target.win-64.dependencies]
+win = "*"
+
+[target.osx-64.dependencies]
+osx_64 = "*"
+
+[target.osx-arm64.dependencies]
+osx_arm64 = "*"
+
+[target.linux.dependencies]
+all_linux = "*"
+
+[target.win.dependencies]
+all_win = "*"
+
+[target.osx.dependencies]
+all_macos = "*"
+
+[target.unix.dependencies]
+all_unix = "*"

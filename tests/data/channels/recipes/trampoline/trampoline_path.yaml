@@ -1,0 +1,24 @@
+recipe:
+  name: trampoline
+  version: 1.0.0
+
+outputs:
+  - package:
+      name: dummy-trampoline-path
+      version: 0.1.0
+    source:
+      path: .
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - mkdir -p $PREFIX/etc/conda/activate.d
+            - echo "set PATH=/test/path;%PATH%" > $PREFIX/etc/conda/activate.d/activate-trampoline.bat
+            - mv print_path.bat $PREFIX/bin/dummy-trampoline-path.bat
+          else:
+            - mkdir -p $PREFIX/etc/conda/activate.d
+            - echo "export PATH=/test/path:\$PATH" > $PREFIX/etc/conda/activate.d/activate-trampoline.sh
+            - mv print_path.sh $PREFIX/bin/dummy-trampoline-path
+            - chmod +x $PREFIX/bin/dummy-trampoline-path

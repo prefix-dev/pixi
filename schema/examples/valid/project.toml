@@ -1,0 +1,5 @@
+#:schema ./../../schema.json
+[project]
+channels = ["conda-forge"]
+name = "project"
+platforms = ["linux-64"]

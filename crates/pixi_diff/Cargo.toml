@@ -1,0 +1,22 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_diff"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+ahash = { workspace = true }
+console = { workspace = true }
+indexmap = { workspace = true }
+itertools = { workspace = true }
+pixi_consts = { workspace = true }
+pixi_manifest = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_lock = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tabwriter = { workspace = true }

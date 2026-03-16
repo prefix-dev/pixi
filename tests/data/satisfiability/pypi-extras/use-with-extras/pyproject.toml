@@ -1,0 +1,12 @@
+[project]
+dependencies = ["has-extras[pinject]"]
+name = "use-with-extras"
+version = "0.1.0"
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["win-64"]

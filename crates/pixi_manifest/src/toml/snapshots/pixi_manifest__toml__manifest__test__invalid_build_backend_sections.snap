@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foobar\"\n        channels = []\n        platforms = []\n\n        [build-backend]\n        \"#,)"
+---
+  × missing field 'name' in table
+   ╭─[pixi.toml:7:9]
+ 6 │
+ 7 │         [build-backend]
+   ·         ────────────────
+ 8 │
+   ╰────

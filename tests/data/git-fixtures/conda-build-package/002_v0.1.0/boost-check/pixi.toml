@@ -1,0 +1,12 @@
+[workspace]
+channels = ["conda-forge"]
+platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
+preview = ["pixi-build"]
+
+[package]
+description = "Test package for git dependency tests"
+name = "boost-check"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }

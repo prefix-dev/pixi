@@ -1,0 +1,148 @@
+name: Deploy Docs
+
+on:
+  push:
+    branches:
+      - main
+      - update-pixi
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs.yml"
+      - "mkdocs.yml"
+      - "pixi.*"
+      - "install/*"
+    tags:
+      - v**
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs.yml"
+      - "mkdocs.yml"
+      - "pixi.*"
+      - "install/*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to deploy"
+        required: true
+        default: "v0.0.0"
+
+# Allow one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-docs:
+    if: github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+        with:
+          environments: docs
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build docs for test
+        run: |
+          pixi run build-docs
+
+  docs-release:
+    # Don't run on forks
+    if: github.repository == 'prefix-dev/pixi' && (startsWith(github.event.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.tag, 'v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # fetch everything so we can checkout the tag
+          fetch-depth: 0
+          submodules: recursive
+
+      # check out tag if workflow_dispatch
+      - name: Checkout tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git checkout tags/${GITHUB_EVENT_INPUTS_TAG}
+        env:
+          GITHUB_EVENT_INPUTS_TAG: ${{ github.event.inputs.tag }}
+
+      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+        with:
+          environments: docs
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Configure Git user
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Extract tag name
+        if: github.event_name != 'workflow_dispatch'
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+
+      - name: Tag from workflow_dispatch
+        if: github.event_name == 'workflow_dispatch'
+        run: echo "RELEASE_VERSION=${GITHUB_EVENT_INPUTS_TAG}" >> $GITHUB_ENV
+        env:
+          GITHUB_EVENT_INPUTS_TAG: ${{ github.event.inputs.tag }}
+
+      - name: Deploy with mike 🚀
+        run: |
+          pixi run -e docs mike deploy --push --update-aliases $RELEASE_VERSION latest
+
+  docs-dev:
+    # Don't run on forks
+    if: github.repository == 'prefix-dev/pixi' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && !startsWith(github.event.inputs.tag, 'v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # fetch everything so we can checkout the tag
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+        with:
+          environments: docs
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Configure Git user
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Deploy with mike 🚀
+        run: |
+          pixi run deploy-dev
+
+      - name: Copy file to gh-pages
+        run: |
+          git fetch
+          git checkout gh-pages
+          git checkout main -- install/install.sh install/install.ps1
+          mv install/install.sh install/install.ps1 .
+          git restore --staged .
+          git add install.sh install.ps1
+          # Check diff before committing
+          git diff-index --quiet HEAD || git commit -m "Update install scripts from main"
+          git push origin gh-pages
+
+      - name: Checkout main branch
+        # Important to run the post setup-pixi steps, we want to cache based on the `main` branch and we checked out another in the step above.
+        run: git checkout main

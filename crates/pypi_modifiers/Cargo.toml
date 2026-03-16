@@ -1,0 +1,22 @@
+[package]
+authors.workspace = true
+description = "This crate contains an interpretation of PyPI Environment Markers and Wheel Tags for use in pixi"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pypi_modifiers"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+miette = { workspace = true }
+pixi_default_versions = { workspace = true }
+pixi_manifest = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_virtual_packages = { workspace = true }
+regex = { workspace = true }
+thiserror = { workspace = true }
+uv-distribution-filename = { workspace = true }
+uv-pep508 = { workspace = true }
+uv-platform-tags = { workspace = true }

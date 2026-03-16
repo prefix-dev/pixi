@@ -1,0 +1,14 @@
+blank_issues_enabled: true
+
+contact_links:
+  - name: Chat
+    url: https://discord.gg/kKV8ZxyzY4
+    about: Engage with the Prefix.dev team and other community members.
+
+  - name: Discussions
+    url: https://github.com/prefix-dev/pixi/discussions
+    about: Get help! Ask questions, get support, and share ideas.
+
+  - name: Twitter
+    url: https://twitter.com/prefix_dev
+    about: Follow us and stay up to date with all that prefix.dev does to solve package management.

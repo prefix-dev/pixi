@@ -1,0 +1,48 @@
+---
+source: src/cli/completion.rs
+expression: result
+---
+
+(add)
+_arguments "${_arguments_options[@]}" \
+'--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
+'*::specs -- Specify the dependencies you wish to add to the project:' \
+&& ret=0
+;;
+(run)
+local tasks
+tasks=("${(@s/ /)$(pixi task list --machine-readable 2> /dev/null)}")
+
+if [[ -n "$tasks" ]]; then
+    _values 'task' "${tasks[@]}"
+else
+    return 1
+fi
+_arguments "${_arguments_options[@]}" \
+'--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
+'--color=[Whether the log needs to be colored]:COLOR:(always never auto)' \
+'(--frozen)--locked[Require pixi.lock is up-to-date]' \
+'(--locked)--frozen[Don'\''t check if pixi.lock is up-to-date, install as lockfile states]' \
+'*-v[More output per occurrence]' \
+'*--verbose[More output per occurrence]' \
+'(-v --verbose)*-q[Less output per occurrence]' \
+'(-v --verbose)*--quiet[Less output per occurrence]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::task -- The pixi task or a deno task shell command you want to run in the project's environment, which can be an executable in the environment's PATH.:' \
+&& ret=0
+;;
+(add)
+_arguments "${_arguments_options[@]}" \
+&& ret=0
+;;
+(run)
+_arguments "${_arguments_options[@]}" \
+&& ret=0
+;;
+(shell)
+_arguments "${_arguments_options[@]}" \
+&& ret=0
+;;
+
+

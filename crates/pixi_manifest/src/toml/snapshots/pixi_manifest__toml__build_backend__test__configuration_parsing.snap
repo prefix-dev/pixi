@@ -1,0 +1,122 @@
+---
+source: crates/pixi_manifest/src/toml/build_backend.rs
+expression: parsed
+snapshot_kind: text
+---
+TomlPackageBuild {
+    backend: PixiSpanned {
+        span: Some(
+            23..57,
+        ),
+        value: TomlBuildBackend {
+            name: PixiSpanned {
+                span: Some(
+                    33..39,
+                ),
+                value: PackageName {
+                    normalized: None,
+                    source: "foobar",
+                },
+            },
+            spec: TomlSpec {
+                version: Some(
+                    Any,
+                ),
+                location: Some(
+                    TomlLocationSpec {
+                        url: None,
+                        git: None,
+                        path: None,
+                        branch: None,
+                        rev: None,
+                        tag: None,
+                        subdirectory: None,
+                        md5: None,
+                        sha256: None,
+                    },
+                ),
+                build: None,
+                build_number: None,
+                file_name: None,
+                channel: None,
+                subdir: None,
+                license: None,
+            },
+            channels: None,
+            additional_dependencies: UniquePackageMap {
+                specs: {},
+                name_spans: {},
+                value_spans: {},
+            },
+        },
+    },
+    channels: None,
+    additional_dependencies: UniquePackageMap {
+        specs: {},
+        name_spans: {},
+        value_spans: {},
+    },
+    source: None,
+    configuration: Some(
+        Map(
+            {
+                String(
+                    "integer",
+                ): I64(
+                    1234,
+                ),
+                String(
+                    "key",
+                ): String(
+                    "value",
+                ),
+                String(
+                    "nested",
+                ): Map(
+                    {
+                        String(
+                            "abc",
+                        ): String(
+                            "def",
+                        ),
+                    },
+                ),
+                String(
+                    "other",
+                ): Seq(
+                    [
+                        String(
+                            "foo",
+                        ),
+                        String(
+                            "bar",
+                        ),
+                    ],
+                ),
+            },
+        ),
+    ),
+    target: {},
+    warnings: [
+        Deprecation(
+            Deprecation {
+                message: "The `configuration` field is deprecated. Use `config` instead.",
+                labels: [
+                    LabeledSpan {
+                        label: Some(
+                            "replace this with 'config'",
+                        ),
+                        span: SourceSpan {
+                            offset: SourceOffset(
+                                70,
+                            ),
+                            length: 13,
+                        },
+                        primary: true,
+                    },
+                ],
+                help: None,
+            },
+        ),
+    ],
+}

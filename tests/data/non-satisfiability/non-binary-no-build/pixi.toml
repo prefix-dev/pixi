@@ -1,0 +1,17 @@
+[project]
+authors = ["Tim de Jager <tim@prefix.dev>"]
+channels = ["https://prefix.dev/conda-forge"]
+name = "non-binary-no-build"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[pypi-options]
+no-build = true
+
+[tasks]
+
+[dependencies]
+python = "3.12.*"
+
+[pypi-dependencies]
+sdist = "*"

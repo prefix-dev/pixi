@@ -1,0 +1,56 @@
+---
+source: crates/pixi_pypi_spec/src/lib.rs
+expression: snapshot
+---
+- input: "pkg = \"==1.2.3\""
+  result:
+    version: "==1.2.3"
+- input: "pkg = { version = \"==1.2.3\" } "
+  result:
+    version: "==1.2.3"
+- input: "pkg = \"*\""
+  result:
+    version: "*"
+- input: "pkg = { path = \"foobar\" } "
+  result:
+    path: foobar
+- input: "pkg = { path = \"~/.cache\" } "
+  result:
+    path: ~/.cache
+- input: "pkg = { url = \"https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda\" }"
+  result:
+    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+- input: "pkg = { git = \"https://github.com/conda-forge/21cmfast-feedstock\" }"
+  result:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+- input: "pkg = { git = \"https://github.com/conda-forge/21cmfast-feedstock\", \"branch\" = \"main\" }"
+  result:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
+- input: "pkg = { git = \"ssh://github.com/conda-forge/21cmfast-feedstock\", \"tag\" = \"v1.2.3\" }"
+  result:
+    git: "ssh://github.com/conda-forge/21cmfast-feedstock"
+    tag: v1.2.3
+- input: "pkg = { git = \"https://github.com/prefix-dev/rattler-build\", \"rev\" = \"123456\" }"
+  result:
+    git: "https://github.com/prefix-dev/rattler-build"
+    rev: "123456"
+- input: "pkg = { git = \"https://github.com/prefix-dev/rattler-build\", \"subdirectory\" = \"pyrattler\" }"
+  result:
+    git: "https://github.com/prefix-dev/rattler-build"
+    subdirectory: pyrattler
+- input: "pkg = { git = \"https://github.com/prefix-dev/rattler-build\", \"extras\" = [\"test\"] }"
+  result:
+    extras:
+      - test
+    git: "https://github.com/prefix-dev/rattler-build"
+- input: "pkg = { version = \"*\", \"env-markers\" = \"sys_platform == 'win32'\" }"
+  result:
+    env_markers: "sys_platform == 'win32'"
+    version: "*"
+- input: "pkg = { git = \"https://github.com/prefix-dev/rattler-build\", \"extras\" = [\"test\"], \"env-markers\" = \"sys_platform == 'linux'\" }"
+  result:
+    extras:
+      - test
+    env_markers: "sys_platform == 'linux'"
+    git: "https://github.com/prefix-dev/rattler-build"

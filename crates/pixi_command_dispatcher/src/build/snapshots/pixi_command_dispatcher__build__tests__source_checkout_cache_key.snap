@@ -1,0 +1,12 @@
+---
+source: crates/pixi_command_dispatcher/src/build/mod.rs
+expression: "urls.into_iter().map(|url|\n{\n    let parsed_url = Url::parse(url).unwrap();\n    (url, pretty_url_name(&parsed_url))\n}).collect::<IndexMap<_, _>>()"
+---
+{
+    "https://example.com/package-1.0.0.tar.gz": "package-1.0.0",
+    "https://example.com/package-1.0.0.tar.gz#hash": "package-1.0.0",
+    "https://example.com/package-1.0.0.tar.gz?query=param": "package-1.0.0",
+    "git://git@github.com/user/repo.git": "repo",
+    "git://git@github.com/user/repo.git#subdir=path": "repo",
+    "https://www.google.com": "www.google.com",
+}

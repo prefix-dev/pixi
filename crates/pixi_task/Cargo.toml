@@ -1,0 +1,37 @@
+[package]
+authors.workspace = true
+description = "Task execution with dependency graphs and caching"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_task"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+assert_matches = { workspace = true }
+crossbeam-channel = { workspace = true }
+deno_task_shell = { workspace = true }
+fancy_display = { workspace = true }
+fs-err = { workspace = true }
+itertools = { workspace = true }
+miette = { workspace = true }
+pixi_consts = { workspace = true }
+pixi_core = { workspace = true }
+pixi_glob = { workspace = true }
+pixi_manifest = { workspace = true, features = ["rattler_lock"] }
+pixi_progress = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_lock = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+shlex = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uv-configuration = { workspace = true }
+xxhash-rust = { workspace = true }

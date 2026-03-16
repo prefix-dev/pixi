@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/toml/task.rs
+expression: "expect_parse_failure(r#\"\n            cmd = \"test\"\n            depends-on = { task = \"z\" }\n        \"#)"
+---
+  × expected string or array, found table
+   ╭─[pixi.toml:3:26]
+ 2 │             cmd = "test"
+ 3 │             depends-on = { task = "z" }
+   ·                          ──────────────
+ 4 │
+   ╰────

@@ -1,0 +1,283 @@
+[workspace]
+default-members = ["crates/pixi"]
+exclude = [
+  # Only pulled in when enabling certain features. We do not want to include
+  # these crates when running workspace wide commands.
+  "crates/pixi_allocator",
+  # Debug output directories that don't contain Cargo.toml
+  "crates/pixi-build-cmake",
+  "crates/pixi-build-python",
+  # Standalone projects that should not be part of the workspace
+  "docs",
+  "examples",
+  "pixi-build-backends",
+  "tests/data",
+  "trampoline",
+  "pytest-temp",
+]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+authors = ["pixi contributors <hi@prefix.dev>"]
+edition = "2024"
+homepage = "https://github.com/prefix-dev/pixi"
+license = "BSD-3-Clause"
+readme = "README.md"
+repository = "https://github.com/prefix-dev/pixi"
+rust-version = "1.90"
+
+[workspace.dependencies]
+ahash = "0.8.11"
+anyhow = "1.0.102"
+assert_matches = "1.5.0"
+async-fd-lock = "0.2.0"
+async-once-cell = "0.5.4"
+async-trait = "0.1.86"
+axum = "0.8"
+barrier_cell = { path = "crates/barrier_cell" }
+base64 = "0.22.1"
+cargo_toml = "0.22.3"
+chrono = "0.4.40"
+clap = { version = "4.5.31", default-features = false }
+clap-verbosity-flag = "3.0.2"
+clap_complete = "4.5.46"
+clap_complete_nushell = "4.5.5"
+comfy-table = "7.2.1"
+console = "0.16.1"
+console-subscriber = "0.5.0"
+crossbeam-channel = "0.5.14"
+csv = "1.3.1"
+ctrlc = "3.4.5"
+dashmap = "6.1.0"
+deno_task_shell = "0.29.0"
+derive_more = "2.0.1"
+dialoguer = "0.12.0"
+digest = "0.10"
+dirs = "6.0.0"
+dunce = "1.0.5"
+fancy_display = { path = "crates/fancy_display" }
+flate2 = "1.1.0"
+fs-err = { version = "3.1.0" }
+fs_extra = "1.3.0"
+futures = "0.3.31"
+hashlink = "0.10.0"
+hex = "0.4.3"
+http = "1.3.1"
+http-cache-reqwest = "0.16.0"
+human_bytes = "0.4.3"
+humantime = "2.1.0"
+indexmap = "2.10.0"
+indicatif = "0.18.0"
+insta = "1.42.1"
+is_executable = "1.0.4"
+itertools = "0.14.0"
+jiff = "0.2.8"
+jsonrpc-core = "18.0.0"
+jsonrpc-http-server = "18.0.0"
+jsonrpc-stdio-server = "18.0.0"
+jsonrpsee = "=0.26.0"
+libc = { version = "0.2.170", default-features = false }
+marked-yaml = "0.8.0"
+memchr = "2.7.4"
+miette = { version = "7.6.0" }
+minijinja = "2.15.1"
+nix = { version = "0.29.0", default-features = false }
+once_cell = "1.20.3"
+ordermap = "1.0.0"
+parking_lot = "0.12.4"
+pathdiff = "0.2.3"
+pep440_rs = "0.7.3"
+pep508_rs = "0.9.2"
+percent-encoding = "2.3.1"
+pin-project-lite = "0.2.16"
+pixi_allocator = { path = "crates/pixi_allocator" }
+pixi_api = { path = "crates/pixi_api" }
+pixi_auth = { path = "crates/pixi_auth", default-features = false }
+pixi_build_backend = { path = "crates/pixi_build_backend" }
+pixi_build_backend_passthrough = { path = "crates/pixi_build_backend_passthrough" }
+pixi_build_discovery = { path = "crates/pixi_build_discovery" }
+pixi_build_frontend = { path = "crates/pixi_build_frontend" }
+pixi_build_type_conversions = { path = "crates/pixi_build_type_conversions" }
+pixi_build_types = { path = "crates/pixi_build_types" }
+pixi_cli = { path = "crates/pixi_cli" }
+pixi_command_dispatcher = { path = "crates/pixi_command_dispatcher" }
+pixi_config = { path = "crates/pixi_config" }
+pixi_consts = { path = "crates/pixi_consts" }
+pixi_core = { path = "crates/pixi_core" }
+pixi_default_versions = { path = "crates/pixi_default_versions" }
+pixi_diff = { path = "crates/pixi_diff" }
+pixi_git = { path = "crates/pixi_git" }
+pixi_glob = { path = "crates/pixi_glob" }
+pixi_global = { path = "crates/pixi_global" }
+pixi_install_pypi = { path = "crates/pixi_install_pypi" }
+pixi_manifest = { path = "crates/pixi_manifest" }
+pixi_path = { path = "crates/pixi_path" }
+pixi_progress = { path = "crates/pixi_progress" }
+pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
+pixi_python_status = { path = "crates/pixi_python_status" }
+pixi_record = { path = "crates/pixi_record" }
+pixi_reporters = { path = "crates/pixi_reporters" }
+pixi_spec = { path = "crates/pixi_spec" }
+pixi_spec_containers = { path = "crates/pixi_spec_containers" }
+pixi_stable_hash = { path = "crates/pixi_stable_hash" }
+pixi_task = { path = "crates/pixi_task" }
+pixi_test_utils = { path = "crates/pixi_test_utils" }
+pixi_toml = { path = "crates/pixi_toml" }
+pixi_url = { path = "crates/pixi_url" }
+pixi_utils = { path = "crates/pixi_utils", default-features = false }
+pixi_uv_context = { path = "crates/pixi_uv_context" }
+pixi_uv_conversions = { path = "crates/pixi_uv_conversions" }
+pixi_variant = { path = "crates/pixi_variant" }
+pypi_mapping = { path = "crates/pypi_mapping" }
+pypi_modifiers = { path = "crates/pypi_modifiers" }
+pyproject-toml = "0.13.7"
+rand = { version = "0.10.0", default-features = false }
+
+rayon = "1.10.0"
+recipe_stage0 = { path = "crates/recipe_stage0" }
+regex = "1.11.1"
+reqwest = { version = "0.12.12", default-features = false }
+retry-policies = "0.4"
+# reqwest-middleware = "0.4"
+# reqwest-retry = "0.7.0"
+bzip2 = "0.6.1"
+reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
+reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
+rlimit = "0.11.0"
+rstest = "0.26.0"
+same-file = "1.0.6"
+schemars = "1.1.0"
+self-replace = "1.5.0"
+serde = "1.0.218"
+serde-untagged = "0.1.6"
+serde-value = "0.7.0"
+serde_derive = "*"
+serde_ignored = "0.1.10"
+serde_json = "1.0.139"
+serde_with = "=3.16.1"
+serde_yaml = "0.9.34"
+sevenz-rust2 = "0.20.0"
+shlex = "1.3.0"
+signal-hook = "0.3.17"
+slotmap = "1.0.7"
+spdx = "0.10.8"
+strsim = "0.11.1"
+strum = "0.28.0"
+tabwriter = "1.4.1"
+tar = "0.4.44"
+temp-env = { version = "0.3.6", features = ["async_closure"] }
+tempfile = "3.17.1"
+text_trees = "0.1.2"
+thiserror = "2.0.12"
+tokio = "1.43.0"
+tokio-util = "0.7.13"
+toml = "0.9.8"
+toml-span = "0.6.0"
+toml_edit = "0.23.0"
+tracing = "0.1.41"
+xz2 = "0.1.7"
+# Forcing the version due to this PR https://github.com/tokio-rs/tracing/pull/3368
+tracing-subscriber = "=0.3.19"
+tracing-test = "0.2"
+typed-path = "0.12.0"
+# Bumping this to a higher version breaks the Windows path handling.
+url = "2.5.4"
+uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-cache-info = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-cache-key = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-flags = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-preview = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-redacted = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+which = "8.0.0"
+xxhash-rust = "0.8.15"
+zip = { version = "2.4.2", default-features = false }
+zstd = { version = "0.13.3", default-features = false }
+
+# Rattler crates
+coalesced_map = "0.1.2"
+file_url = "0.2.7"
+rattler = { version = "0.39.15", default-features = false }
+rattler_cache = { version = "0.6.14", default-features = false }
+rattler_conda_types = { version = "0.43.5", default-features = false, features = [
+  "rayon",
+] }
+rattler_digest = { version = "1.2.2", default-features = false }
+rattler_lock = { version = "0.26.16", default-features = false }
+rattler_menuinst = { version = "0.2.49", default-features = false }
+rattler_networking = { version = "0.26.2", default-features = false, features = [
+  "dirs",
+  "google-cloud-auth",
+] }
+rattler_package_streaming = { version = "0.24.2", default-features = false }
+rattler_repodata_gateway = { version = "0.26.2", default-features = false }
+rattler_shell = { version = "0.26.2", default-features = false }
+rattler_solve = { version = "4.2.6", default-features = false }
+rattler_upload = { version = "0.4.15", default-features = false, features = [
+  "s3",
+] }
+rattler_virtual_packages = { version = "2.3.11", default-features = false }
+simple_spawn_blocking = { version = "1.1.0", default-features = false }
+
+# Rattler build crates
+rattler_build_core = { version = "0.1.0", default-features = false, features = [
+  "s3",
+] }
+rattler_build_jinja = { version = "0.1.0" }
+rattler_build_recipe = { version = "0.1.0" }
+rattler_build_types = { version = "0.1.0" }
+rattler_build_variant_config = { version = "0.1.0" }
+
+[patch.crates-io]
+# This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
+reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
+reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
+version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
+
+[profile.ci]
+codegen-units = 16
+inherits = "release"
+lto = false
+opt-level = 3
+strip = false
+
+[profile.dist]
+codegen-units = 1
+inherits = "release"
+lto = "fat"
+opt-level = 3
+strip = "symbols"
+
+[profile.profiling]
+debug = 2                    # full debug info
+inherits = "release"
+lto = false                  # avoid over-inlining across crates
+opt-level = 1                # less inlining, easier stepping/backtraces
+panic = "unwind"             # needed for backtraces
+split-debuginfo = "unpacked"
+strip = "none"               # or "debuginfo" to separate
+# macOS only:
+codegen-units = 1 # better line info (slower build, clearer profiles)

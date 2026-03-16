@@ -1,0 +1,20 @@
+context:
+  # Keep up to date
+  version: "3.15"
+  variant: "default"
+  freethreading_tag: ${{ "t" if "free-threading" in variant else "" }}
+  abi_tag: cp${{ version | split(".") | join("") }}${{ freethreading_tag }}
+
+recipe:
+  name: python
+
+outputs:
+  - package:
+      name: python
+      version: ${{ version }}
+    build:
+      string: "0_${{ abi_tag }}"
+
+about:
+  homepage: https://www.python.org/
+  license: Python-2.0

@@ -1,0 +1,7 @@
+---
+source: crates/pixi_manifest/src/discovery.rs
+expression: snapshot
+snapshot_kind: text
+---
+  × cannot canonicalize path '<CARGO_ROOT>/tests/data/workspace-discovery/non-existing' while searching for a manifest.
+  ╰─▶ No such file or directory (os error 2)

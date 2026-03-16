@@ -1,0 +1,5 @@
+---
+source: crates/pixi_manifest/src/discovery.rs
+expression: snapshot
+---
+  × Missing field `tool.pixi`

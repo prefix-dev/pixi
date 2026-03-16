@@ -1,0 +1,32 @@
+[workspace]
+build-variants = { package3 = ["0.3.0", "0.2.0"] }
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "variant-manifest-python"
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+preview = ["pixi-build"]
+
+[dependencies]
+variant-manifest-python = { path = "." }
+
+[package]
+name = "variant-manifest-python"
+version = "1.0.0"
+
+[package.build.backend]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-python"
+version = "*"
+
+[package.host-dependencies]
+hatchling = "*"
+package3 = "*"
+python = "*"
+
+[package.build.config]
+noarch = false

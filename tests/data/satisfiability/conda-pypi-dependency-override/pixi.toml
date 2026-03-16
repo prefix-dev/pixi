@@ -1,0 +1,27 @@
+# Test case for https://github.com/prefix-dev/pixi/issues/4961
+# This tests that dependency-overrides are respected when checking if a
+# conda package (via purls) satisfies a PyPI requirement.
+#
+# Scenario:
+# - conda package `attrs` provides PyPI package `attrs` (version 23.2.0) via purls
+# - editable package `consumer` depends on `attrs==23.1.0` (strict version)
+# - dependency-override loosens the constraint to `attrs>=23.2.0`
+# - The lock file should be considered satisfiable
+
+[project]
+channels = ["conda-forge"]
+name = "conda-pypi-dependency-override"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[dependencies]
+attrs = "23.2.0"
+python = "3.12.*"
+
+[pypi-dependencies]
+consumer = { path = "./projects/consumer", editable = true }
+
+[pypi-options.dependency-overrides]
+# Override the strict attrs==23.1.0 requirement from consumer
+# to accept the version provided by the conda package
+attrs = ">=23.2.0"

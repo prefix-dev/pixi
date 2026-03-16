@@ -1,0 +1,30 @@
+# This lint does not follow raw pointers (*const T or *mut T) as Hash and Ord apply only to the address of the contained value.
+# This can cause false negatives for custom collections that use raw pointers internally.
+# See https://rust-lang.github.io/rust-clippy/master/index.html#/mutable_key_type
+ignore-interior-mutability = [
+  "pixi_core::workspace::environment::Environment",
+  "pixi_core::workspace::solve_group::SolveGroup",
+]
+
+disallowed-methods = [
+  "std::fs::canonicalize",
+  "std::fs::copy",
+  "std::fs::create_dir",
+  "std::fs::create_dir_all",
+  "std::fs::hard_link",
+  "std::fs::metadata",
+  "std::fs::read",
+  "std::fs::read_dir",
+  "std::fs::read_link",
+  "std::fs::read_to_string",
+  "std::fs::remove_dir",
+  "std::fs::remove_dir_all",
+  "std::fs::remove_file",
+  "std::fs::rename",
+  "std::fs::set_permissions",
+  "std::fs::soft_link",
+  "std::fs::symlink_metadata",
+  "std::fs::write",
+]
+
+allow-unwrap-in-tests = true

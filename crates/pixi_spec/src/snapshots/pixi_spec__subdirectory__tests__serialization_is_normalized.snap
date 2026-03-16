@@ -1,0 +1,22 @@
+---
+source: crates/pixi_spec/src/subdirectory.rs
+expression: snapshot
+---
+- - empty
+  - "\"\""
+- - dot
+  - "\"\""
+- - dot_slash
+  - "\"\""
+- - simple
+  - "\"foobar\""
+- - simple_with_dot
+  - "\"foobar\""
+- - simple_with_trailing
+  - "\"foobar\""
+- - nested
+  - "\"foo/bar\""
+- - nested_with_dots
+  - "\"foo/bar\""
+- - nested_with_slashes
+  - "\"foo/bar\""

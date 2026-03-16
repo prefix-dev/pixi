@@ -1,0 +1,7 @@
+[project]
+channels = ["conda-forge"]
+name = "simple"
+platforms = ["win-64"]
+
+[dependencies]
+pixi = "<0.15.2"

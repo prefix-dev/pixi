@@ -1,0 +1,5 @@
+---
+source: src/global/project/parsed_manifest.rs
+expression: manifest.unwrap_err()
+---
+Duplicated exposed names found: python, python3

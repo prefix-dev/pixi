@@ -1,0 +1,12 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foo\"\n        channels = []\n        platforms = []\n\n        [feature.foo.pypi-options]\n        index-url = \"https://google.com\"\n\n        [feature.bar.pypi-options]\n        index-url = \"https://prefix.dev\"\n\n        [environments]\n        foobar = [\"foo\", \"bar\"]\n        \"#,)"
+---
+  × multiple primary pypi indexes are not supported, found both https://google.com/ and https://prefix.dev/ across multiple pypi options
+    ╭─[pixi.toml:14:18]
+ 13 │         [environments]
+ 14 │         foobar = ["foo", "bar"]
+    ·                  ───────┬──────
+    ·                         ╰── while resolving pypi options of features defined here
+ 15 │
+    ╰────

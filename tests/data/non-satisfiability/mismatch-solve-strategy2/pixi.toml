@@ -1,0 +1,9 @@
+[workspace]
+channels = ["conda-forge"]
+name = "source-dependency"
+platforms = ["win-64"]
+solve-strategy = "lowest"
+version = "0.1.0"
+
+[dependencies]
+foo = { version = "0.1.0" }

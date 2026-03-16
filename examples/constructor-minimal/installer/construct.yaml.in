@@ -1,0 +1,16 @@
+# see https://github.com/conda/constructor/blob/main/CONSTRUCT.md
+name: MySimpleInstaller
+version: 0.1.0
+company: My Company
+license_file: ../LICENSE
+
+channels:
+  - conda-forge
+
+write_condarc: True
+initialize_conda: True
+initialize_by_default: False
+
+virtual_specs:
+  - __glibc >=2.17  # [linux]
+  - __osx >=10.13   # [osx]

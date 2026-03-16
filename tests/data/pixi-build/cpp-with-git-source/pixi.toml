@@ -1,0 +1,39 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+preview = ["pixi-build"]
+
+[dependencies]
+# Define a dependency on ourselves. This will invoke the build backend to build
+# the C++ code and install the executable in an environment ready to be used.
+sdl_example = { path = "." }
+
+[tasks.start]
+cmd = "sdl_example"
+description = "A tasks to run the executable that is build by the package section."
+
+[tasks]
+test = "sdl_example -h"
+
+[package]
+authors = ["Bas Zalmstra <bas@prefix.dev>"]
+description = "Showcases how to create a simple C++ executable with Pixi"
+name = "sdl_example"
+version = "0.1.0"
+
+[package.build.source]
+branch = "main"
+git = "https://github.com/prefix-dev/pixi-build-testsuite.git"
+subdirectory = "tests/data/pixi_build/cpp-with-path-to-source/project"
+
+[package.build.backend]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-cmake"
+version = "*"
+
+[package.host-dependencies]
+# This ensures that SDL2 is available at build time.
+sdl2 = ">=2.26.5,<3.0"

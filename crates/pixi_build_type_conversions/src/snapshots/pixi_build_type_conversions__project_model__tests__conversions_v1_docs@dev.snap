@@ -1,0 +1,71 @@
+---
+source: crates/pixi_build_type_conversions/src/project_model.rs
+expression: project_model
+---
+{
+  "name": null,
+  "buildString": null,
+  "buildNumber": null,
+  "version": null,
+  "description": null,
+  "authors": null,
+  "license": null,
+  "licenseFile": null,
+  "readme": null,
+  "homepage": null,
+  "repository": null,
+  "documentation": null,
+  "targets": {
+    "defaultTarget": {
+      "hostDependencies": {
+        "python": {
+          "binary": {
+            "version": "*",
+            "build": null,
+            "buildNumber": null,
+            "fileName": null,
+            "channel": null,
+            "subdir": null,
+            "md5": null,
+            "sha256": null,
+            "url": null,
+            "license": null
+          }
+        }
+      },
+      "buildDependencies": {
+        "cmake": {
+          "binary": {
+            "version": "*",
+            "build": null,
+            "buildNumber": null,
+            "fileName": null,
+            "channel": null,
+            "subdir": null,
+            "md5": null,
+            "sha256": null,
+            "url": null,
+            "license": null
+          }
+        }
+      },
+      "runDependencies": {
+        "bat": {
+          "binary": {
+            "version": "*",
+            "build": null,
+            "buildNumber": null,
+            "fileName": null,
+            "channel": null,
+            "subdir": null,
+            "md5": null,
+            "sha256": null,
+            "url": null,
+            "license": null
+          }
+        }
+      }
+    },
+    "targets": {}
+  }
+}

@@ -1,0 +1,9 @@
+"$schema" = "./../../schema.json"
+
+
+[project]
+name = "badplatform"
+platforms = ["linux-64"]
+
+[feature.foo]
+platforms = ["not-a-platform"]

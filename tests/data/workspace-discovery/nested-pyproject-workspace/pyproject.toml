@@ -1,0 +1,9 @@
+[project]
+name = "nested-pyproject-workspace"
+
+[tool.pixi.workspace]
+# This is derived from the project if not specified
+# name = "foobar"
+channels = []
+platforms = []
+preview = ["pixi-build"]

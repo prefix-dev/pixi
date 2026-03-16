@@ -1,0 +1,14 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_progress"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+
+[dependencies]
+indicatif = { workspace = true }
+parking_lot = { workspace = true }

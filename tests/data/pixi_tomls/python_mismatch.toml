@@ -1,0 +1,12 @@
+[project]
+channels = ["conda-forge"]
+name = "test"
+platforms = ["osx-arm64", "linux-64"]
+
+[target.linux-64.dependencies]
+python = "3.12"
+[target.osx-arm64.dependencies]
+python = "3.13"
+
+[pypi-dependencies]
+finch-mlir = "==0.0.2"

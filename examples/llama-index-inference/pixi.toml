@@ -1,0 +1,24 @@
+[workspace]
+channels = ["conda-forge"]
+description = "Llama-index and llama.cpp running a local model, tested with MacOS ARM and Linux AMD 64"
+name = "alpaca"
+platforms = ["osx-arm64", "linux-64"]
+version = "0.1.0"
+
+# setting this avoids building scikit_learn from source (on arm)
+[system-requirements]
+macos = "12.0"
+
+[dependencies]
+numpy = "<2.0"
+python = "<3.12"
+scipy = ">=1.14.0,<1.15"
+
+[pypi-dependencies]
+llama-cpp-python = "*"
+llama-index-core = "*"
+llama-index-embeddings-huggingface = "*"
+llama-index-llms-llama-cpp = "*"
+
+[tasks]
+start = "python inference.py"

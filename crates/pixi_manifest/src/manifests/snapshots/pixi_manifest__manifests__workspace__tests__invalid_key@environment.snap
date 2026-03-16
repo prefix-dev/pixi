@@ -1,0 +1,10 @@
+---
+source: crates/pixi_manifest/src/manifests/workspace.rs
+expression: "expect_parse_failure(&format!(\"{PROJECT_BOILERPLATE}\\n[environments.INVALID]\"))"
+---
+  × Failed to parse environment name 'INVALID', please use only lowercase letters, numbers and dashes
+   ╭─[pixi.toml:8:15]
+ 7 │
+ 8 │ [environments.INVALID]
+   ·               ───────
+   ╰────

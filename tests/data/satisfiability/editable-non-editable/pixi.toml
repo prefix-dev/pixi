@@ -1,0 +1,11 @@
+[project]
+channels = ["conda-forge"]
+name = "editable-non-editable"
+platforms = ["win-64"]
+
+[dependencies]
+python = "3.12.*"
+
+[pypi-dependencies]
+bar = { path = "./bar", editable = true }
+foo = { path = "./foo", editable = true }

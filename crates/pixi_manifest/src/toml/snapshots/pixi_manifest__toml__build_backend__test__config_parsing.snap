@@ -1,0 +1,71 @@
+---
+source: crates/pixi_manifest/src/toml/build_backend.rs
+expression: parsed.value
+snapshot_kind: text
+---
+PackageBuild {
+    backend: BuildBackend {
+        name: PackageName {
+            normalized: None,
+            source: "foobar",
+        },
+        spec: DetailedVersion(
+            DetailedSpec {
+                version: Some(
+                    Any,
+                ),
+                build: None,
+                build_number: None,
+                file_name: None,
+                channel: None,
+                subdir: None,
+                license: None,
+                md5: None,
+                sha256: None,
+            },
+        ),
+    },
+    additional_dependencies: {},
+    channels: None,
+    source: None,
+    config: Some(
+        Map(
+            {
+                String(
+                    "integer",
+                ): I64(
+                    1234,
+                ),
+                String(
+                    "key",
+                ): String(
+                    "value",
+                ),
+                String(
+                    "nested",
+                ): Map(
+                    {
+                        String(
+                            "abc",
+                        ): String(
+                            "def",
+                        ),
+                    },
+                ),
+                String(
+                    "other",
+                ): Seq(
+                    [
+                        String(
+                            "foo",
+                        ),
+                        String(
+                            "bar",
+                        ),
+                    ],
+                ),
+            },
+        ),
+    ),
+    target_config: None,
+}

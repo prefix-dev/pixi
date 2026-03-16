@@ -1,0 +1,22 @@
+[package]
+authors.workspace = true
+description = "Conversions from pixi manifest types into build build protocol types"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_build_type_conversions"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+itertools = { workspace = true }
+ordermap = { workspace = true, features = ["serde"] }
+pixi_build_types = { workspace = true }
+pixi_manifest = { workspace = true }
+pixi_spec = { workspace = true }
+rattler_conda_types = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true, features = ["json"] }
+rstest = { workspace = true }

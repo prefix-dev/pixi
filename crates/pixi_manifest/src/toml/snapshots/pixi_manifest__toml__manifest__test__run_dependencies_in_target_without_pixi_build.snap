@@ -1,0 +1,12 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = []\n\n        [target.win.run-dependencies]\n        \"#,)"
+---
+  × [run-dependencies] are only available when using the `pixi-build` feature.
+   ╭─[pixi.toml:6:9]
+ 5 │
+ 6 │         [target.win.run-dependencies]
+   ·         ──────────────────────────────
+ 7 │
+   ╰────
+  help: Add `preview = ["pixi-build"]` under [workspace] to enable the preview feature

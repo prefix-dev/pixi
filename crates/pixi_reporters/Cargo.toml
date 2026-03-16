@@ -1,0 +1,51 @@
+[package]
+authors.workspace = true
+description = "Progress reporting infrastructure for pixi"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_reporters"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+# Standard library
+futures = { workspace = true }
+indexmap = { workspace = true }
+itertools = { workspace = true }
+parking_lot = { workspace = true }
+tokio = { workspace = true }
+url = { workspace = true }
+
+# Progress and UI
+console = { workspace = true }
+indicatif = { workspace = true }
+
+# Utilities
+human_bytes = { workspace = true }
+regex = { workspace = true }
+tracing = { workspace = true }
+
+# Pixi ecosystem
+pixi_command_dispatcher = { workspace = true }
+pixi_git = { workspace = true }
+pixi_progress = { workspace = true }
+pixi_spec = { workspace = true }
+
+# Rattler ecosystem
+rattler = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_repodata_gateway = { workspace = true }
+
+# UV ecosystem
+uv-configuration = { workspace = true }
+uv-distribution = { workspace = true }
+uv-distribution-types = { workspace = true }
+uv-installer = { workspace = true }
+uv-normalize = { workspace = true }
+uv-redacted = { workspace = true }
+uv-resolver = { workspace = true }
+
+[dev-dependencies]
+# Add test dependencies if needed
