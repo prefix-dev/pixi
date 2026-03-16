@@ -46,6 +46,11 @@ BACKEND_DEFS: list[dict[str, Any]] = [
         "in_cargo_workspace": True,
     },
     {
+        "binary": "pixi-build-r",
+        "version_file": "crates/pixi_build_r/Cargo.toml",
+        "in_cargo_workspace": True,
+    },
+    {
         "binary": "pixi-build-rattler-build",
         "version_file": "crates/pixi_build_rattler_build/Cargo.toml",
         "in_cargo_workspace": True,
