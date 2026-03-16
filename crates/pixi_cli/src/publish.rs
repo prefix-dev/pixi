@@ -399,7 +399,9 @@ async fn upload_to_prefix(
         false,
     );
 
-    upload_package_to_prefix(auth_storage, &package_paths.to_vec(), prefix_data).await
+    upload_package_to_prefix(auth_storage, &package_paths.to_vec(), prefix_data)
+        .await
+        .into_diagnostic()
 }
 
 /// Upload packages to Anaconda.org.
@@ -420,27 +422,29 @@ async fn upload_to_anaconda(
         .collect();
 
     let (owner, channel) = match path_segments.len() {
-        1 => (path_segments[0].to_string(), None),
+        1 => (path_segments[0].to_string(), "main".to_string()),
         2 => (
             path_segments[0].to_string(),
-            Some(path_segments[1].to_string()),
+            path_segments[1].to_string(),
         ),
         _ => {
             return Err(miette::miette!(
-                "Invalid Anaconda.org URL format. Expected: https://anaconda.org/owner or https://anaconda.org/owner/channel"
+                "Invalid Anaconda.org URL format. Expected: https://anaconda.org/owner or https://anaconda.org/owner/label"
             ));
         }
     };
 
     let anaconda_data = AnacondaData::new(
         owner,
-        channel.map(|c| vec![c]),
+        Some(vec![channel]),
         None,
-        Some(url.clone()),
+        None,
         ForceOverwrite(force),
     );
 
-    upload_package_to_anaconda(auth_storage, &package_paths.to_vec(), anaconda_data).await
+    upload_package_to_anaconda(auth_storage, &package_paths.to_vec(), anaconda_data)
+        .await
+        .into_diagnostic()
 }
 
 /// Upload packages to a Quetz server.

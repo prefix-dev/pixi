@@ -381,7 +381,7 @@ fn convert_pixi_spec_to_match_spec(
     };
     Ok(MatchSpec::from_nameless(
         nameless_spec,
-        Some(package_name.into()),
+        package_name.into(),
     ))
 }
 
@@ -393,7 +393,7 @@ fn convert_binary_spec_to_match_spec(
     let nameless_spec = spec.try_into_nameless_match_spec(channel_config)?;
     Ok(MatchSpec::from_nameless(
         nameless_spec,
-        Some(package_name.into()),
+        package_name.into(),
     ))
 }
 

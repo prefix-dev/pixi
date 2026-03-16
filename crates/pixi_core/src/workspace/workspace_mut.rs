@@ -483,12 +483,7 @@ impl WorkspaceMut {
     ) -> Result<(), miette::Error> {
         for spec in conda_deps {
             // Determine the name of the package to add
-            let (Some(name_matcher), spec) = spec.clone().into_nameless() else {
-                miette::bail!(
-                    "{} does not support wildcard dependencies",
-                    pixi_utils::executable_name()
-                );
-            };
+            let (name_matcher, spec) = spec.clone().into_nameless();
             let Some(name) = name_matcher.as_exact() else {
                 miette::bail!(
                     "{} does not support wildcard dependencies",

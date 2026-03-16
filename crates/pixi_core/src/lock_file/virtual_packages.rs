@@ -36,25 +36,13 @@ impl VirtualPackageNotFoundError {
         let cuda = PackageName::from_str("__cuda").expect("__cuda is a valid package name");
         let osx = PackageName::from_str("__osx").expect("__osx is a valid package name");
 
-        let override_var = if required_package
-            .name
-            .as_ref()
-            .is_some_and(|name| name.matches(&glibc))
-        {
+        let override_var = if required_package.name.matches(&glibc) {
             // TODO: would be awesome to set the version based on the required version.
             // 2.17 is used as it's a good default
             Some("`CONDA_OVERRIDE_GLIBC=2.17`")
-        } else if required_package
-            .name
-            .as_ref()
-            .is_some_and(|name| name.matches(&cuda))
-        {
+        } else if required_package.name.matches(&cuda) {
             Some("`CONDA_OVERRIDE_CUDA=12.0`")
-        } else if required_package
-            .name
-            .as_ref()
-            .is_some_and(|name| name.matches(&osx))
-        {
+        } else if required_package.name.matches(&osx) {
             Some("`CONDA_OVERRIDE_OSX=10.15`")
         } else {
             None
@@ -227,11 +215,11 @@ pub(crate) fn validate_system_meets_environment_requirements(
     // Check if all the required virtual conda packages match the system virtual packages
     for required in required_virtual_packages {
         // Check if the package name is in our accepted list
-        let is_accepted = required.name.as_ref().iter().any(|name| {
-            name.as_exact()
-                .map(|n| ACCEPTED_VIRTUAL_PACKAGES.contains(&n.as_normalized()))
-                .unwrap_or(false)
-        });
+        let is_accepted = required
+            .name
+            .as_exact()
+            .map(|n| ACCEPTED_VIRTUAL_PACKAGES.contains(&n.as_normalized()))
+            .unwrap_or(false);
 
         // Skip if not in accepted packages
         if !is_accepted {
@@ -242,10 +230,8 @@ pub(crate) fn validate_system_meets_environment_requirements(
             continue;
         }
 
-        let name = if let Some(name_matcher) = required.name.as_ref() {
-            name_matcher
-                .as_exact()
-                .expect("virtual package names must be exact")
+        let name = if let Some(name) = required.name.as_exact() {
+            name
         } else {
             continue;
         };

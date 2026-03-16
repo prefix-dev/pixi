@@ -167,7 +167,7 @@ pub fn build_reqwest_middleware_stack(
         result.push(Arc::new(oci_middleware()));
     }
 
-    result.push(Arc::new(GCSMiddleware));
+    result.push(Arc::new(GCSMiddleware::default()));
 
     let s3_config_global = config.compute_s3_config();
     let s3_config_project = s3_config_project.unwrap_or_default();

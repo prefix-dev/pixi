@@ -1628,8 +1628,6 @@ dependencies = [
 [[package]]
 name = "coalesced_map"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cf5a7a58a9d5b914bddb0a3a2bd920af2be897114dc8128af022af81fc43b8b"
 dependencies = [
  "dashmap",
  "tokio",
@@ -2684,8 +2682,6 @@ checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 [[package]]
 name = "file_url"
 version = "0.2.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81d37aab514a05a249a5b15408dc74d716f5745a2c5daf22e40a245ffd38fa84"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -3615,7 +3611,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.2",
+ "socket2 0.5.10",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -3635,7 +3631,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.59.0",
 ]
 
 [[package]]
@@ -5544,7 +5540,7 @@ dependencies = [
  "pixi_test_utils",
  "pixi_utils",
  "pypi_mapping",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_lock",
  "rattler_virtual_packages",
  "reqwest 0.12.28",
@@ -5597,7 +5593,7 @@ dependencies = [
  "pixi_utils",
  "pixi_uv_conversions",
  "pypi_modifiers",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_lock",
  "rattler_repodata_gateway",
  "regex",
@@ -5618,7 +5614,7 @@ name = "pixi_auth"
 version = "0.1.0"
 dependencies = [
  "pixi_config",
- "rattler_networking",
+ "rattler_networking 0.26.3",
  "tracing",
 ]
 
@@ -5647,7 +5643,7 @@ dependencies = [
  "rattler_build_recipe",
  "rattler_build_types",
  "rattler_build_variant_config",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
  "rattler_virtual_packages",
  "recipe_stage0",
@@ -5672,9 +5668,9 @@ dependencies = [
  "ordermap",
  "pixi_build_frontend",
  "pixi_build_types",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
- "rattler_package_streaming",
+ "rattler_package_streaming 0.24.3",
  "serde",
  "serde_json",
  "tempfile",
@@ -5695,7 +5691,7 @@ dependencies = [
  "rattler_build_core",
  "rattler_build_jinja",
  "rattler_build_types",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "recipe_stage0",
  "rstest",
  "serde",
@@ -5723,7 +5719,7 @@ dependencies = [
  "pixi_spec",
  "pixi_spec_containers",
  "pixi_test_utils",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -5741,7 +5737,7 @@ dependencies = [
  "ordermap",
  "pixi_build_discovery",
  "pixi_build_types",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -5765,7 +5761,7 @@ dependencies = [
  "rattler_build_core",
  "rattler_build_jinja",
  "rattler_build_types",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "recipe_stage0",
  "rstest",
  "serde",
@@ -5790,7 +5786,7 @@ dependencies = [
  "pixi_build_backend",
  "pixi_build_types",
  "pyproject-toml",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "recipe_stage0",
  "reqwest 0.12.28",
  "serde",
@@ -5817,7 +5813,7 @@ dependencies = [
  "once_cell",
  "pixi_build_backend",
  "pixi_build_types",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "recipe_stage0",
  "rstest",
  "serde",
@@ -5844,7 +5840,7 @@ dependencies = [
  "rattler_build_core",
  "rattler_build_recipe",
  "rattler_build_variant_config",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "serde",
  "serde_json",
  "tempfile",
@@ -5867,7 +5863,7 @@ dependencies = [
  "pathdiff",
  "pixi_build_backend",
  "pixi_build_types",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "recipe_stage0",
  "rstest",
  "serde",
@@ -5887,7 +5883,7 @@ dependencies = [
  "pixi_build_types",
  "pixi_manifest",
  "pixi_spec",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rstest",
 ]
 
@@ -5897,7 +5893,7 @@ version = "0.1.0"
 dependencies = [
  "ordermap",
  "pixi_stable_hash",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
  "schemars 1.2.1",
  "serde",
@@ -5958,12 +5954,12 @@ dependencies = [
  "pixi_utils",
  "pixi_uv_conversions",
  "rattler",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_index",
  "rattler_lock",
- "rattler_networking",
- "rattler_package_streaming",
- "rattler_s3",
+ "rattler_networking 0.26.3",
+ "rattler_package_streaming 0.24.3",
+ "rattler_s3 0.1.26",
  "rattler_shell",
  "rattler_solve",
  "rattler_upload",
@@ -6036,10 +6032,10 @@ dependencies = [
  "pixi_variant",
  "rand 0.10.0",
  "rattler",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
- "rattler_networking",
- "rattler_package_streaming",
+ "rattler_networking 0.26.3",
+ "rattler_package_streaming 0.24.3",
  "rattler_repodata_gateway",
  "rattler_shell",
  "rattler_solve",
@@ -6075,8 +6071,8 @@ dependencies = [
  "miette 7.6.0",
  "pixi_consts",
  "rattler",
- "rattler_conda_types",
- "rattler_networking",
+ "rattler_conda_types 0.43.5",
+ "rattler_networking 0.26.3",
  "rattler_repodata_gateway",
  "reqwest 0.12.28",
  "rstest",
@@ -6095,7 +6091,7 @@ version = "0.1.0"
 dependencies = [
  "console 0.16.2",
  "rattler_cache",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "url",
 ]
 
@@ -6152,10 +6148,10 @@ dependencies = [
  "pypi_mapping",
  "pypi_modifiers",
  "rattler",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
  "rattler_lock",
- "rattler_networking",
+ "rattler_networking 0.26.3",
  "rattler_repodata_gateway",
  "rattler_shell",
  "rattler_solve",
@@ -6203,7 +6199,7 @@ dependencies = [
 name = "pixi_default_versions"
 version = "0.1.0"
 dependencies = [
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
 ]
 
 [[package]]
@@ -6216,7 +6212,7 @@ dependencies = [
  "itertools 0.14.0",
  "pixi_consts",
  "pixi_manifest",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_lock",
  "serde",
  "serde_json",
@@ -6231,7 +6227,7 @@ dependencies = [
  "fs-err",
  "itertools 0.14.0",
  "pixi_cli",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
 ]
 
 [[package]]
@@ -6242,7 +6238,7 @@ dependencies = [
  "dunce",
  "fs-err",
  "pixi_utils",
- "rattler_networking",
+ "rattler_networking 0.26.3",
  "reqwest 0.12.28",
  "reqwest-middleware",
  "serde",
@@ -6308,10 +6304,10 @@ dependencies = [
  "pixi_toml",
  "pixi_utils",
  "rattler",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_lock",
  "rattler_menuinst",
- "rattler_networking",
+ "rattler_networking 0.26.3",
  "rattler_repodata_gateway",
  "rattler_shell",
  "rattler_virtual_packages",
@@ -6358,7 +6354,7 @@ dependencies = [
  "pixi_uv_conversions",
  "pypi_modifiers",
  "rattler",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_lock",
  "rayon",
  "serde",
@@ -6418,7 +6414,7 @@ dependencies = [
  "pixi_test_utils",
  "pixi_toml",
  "pyproject-toml",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_lock",
  "rattler_solve",
  "rattler_virtual_packages",
@@ -6508,7 +6504,7 @@ dependencies = [
  "pixi_spec",
  "pixi_spec_containers",
  "pixi_variant",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
  "rattler_lock",
  "serde",
@@ -6534,7 +6530,7 @@ dependencies = [
  "pixi_progress",
  "pixi_spec",
  "rattler",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_repodata_gateway",
  "regex",
  "tokio",
@@ -6561,7 +6557,7 @@ dependencies = [
  "pixi_git",
  "pixi_path",
  "pixi_toml",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
  "rattler_lock",
  "serde",
@@ -6583,7 +6579,7 @@ dependencies = [
  "indexmap 2.13.0",
  "itertools 0.14.0",
  "pixi_spec",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "serde",
 ]
 
@@ -6592,7 +6588,7 @@ name = "pixi_stable_hash"
 version = "0.1.0"
 dependencies = [
  "ordermap",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
  "serde_json",
  "url",
@@ -6616,7 +6612,7 @@ dependencies = [
  "pixi_glob",
  "pixi_manifest",
  "pixi_progress",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_lock",
  "rayon",
  "serde",
@@ -6638,9 +6634,9 @@ dependencies = [
  "fs-err",
  "itertools 0.14.0",
  "miette 7.6.0",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
- "rattler_package_streaming",
+ "rattler_package_streaming 0.24.3",
  "serde_json",
  "tempfile",
  "tokio",
@@ -6677,7 +6673,7 @@ dependencies = [
  "pixi_spec",
  "pixi_utils",
  "rattler_digest",
- "rattler_networking",
+ "rattler_networking 0.26.3",
  "reqwest 0.12.28",
  "reqwest-middleware",
  "sevenz-rust2",
@@ -6708,8 +6704,8 @@ dependencies = [
  "pixi_config",
  "pixi_consts",
  "pixi_variant",
- "rattler_conda_types",
- "rattler_networking",
+ "rattler_conda_types 0.43.5",
+ "rattler_networking 0.26.3",
  "rattler_shell",
  "reqwest 0.12.28",
  "reqwest-middleware",
@@ -7093,9 +7089,9 @@ dependencies = [
  "pep508_rs",
  "pixi_config",
  "pixi_consts",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
- "rattler_networking",
+ "rattler_networking 0.26.3",
  "reqwest 0.12.28",
  "reqwest-middleware",
  "reqwest-retry 0.7.0",
@@ -7114,7 +7110,7 @@ dependencies = [
  "miette 7.6.0",
  "pixi_default_versions",
  "pixi_manifest",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_virtual_packages",
  "regex",
  "thiserror 2.0.18",
@@ -7176,7 +7172,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.6.2",
+ "socket2 0.5.10",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -7214,7 +7210,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.2",
+ "socket2 0.5.10",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -7366,11 +7362,11 @@ dependencies = [
  "parking_lot 0.12.5",
  "path_resolver",
  "rattler_cache",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
  "rattler_menuinst",
- "rattler_networking",
- "rattler_package_streaming",
+ "rattler_networking 0.26.2",
+ "rattler_package_streaming 0.24.2",
  "rattler_shell",
  "rayon",
  "reflink-copy",
@@ -7430,17 +7426,17 @@ dependencies = [
  "rattler_build_source_cache",
  "rattler_build_types",
  "rattler_cache",
- "rattler_conda_types",
- "rattler_config",
+ "rattler_conda_types 0.43.5",
+ "rattler_config 0.3.2",
  "rattler_digest",
  "rattler_git",
  "rattler_index",
  "rattler_menuinst",
- "rattler_networking",
- "rattler_package_streaming",
- "rattler_redaction",
+ "rattler_networking 0.26.3",
+ "rattler_package_streaming 0.24.3",
+ "rattler_redaction 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "rattler_repodata_gateway",
- "rattler_s3",
+ "rattler_s3 0.1.26",
  "rattler_shell",
  "rattler_solve",
  "rattler_upload",
@@ -7485,7 +7481,7 @@ dependencies = [
  "lazy_static",
  "minijinja",
  "rattler_build_types",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "serde",
  "serde_json",
  "serde_with",
@@ -7501,7 +7497,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5bd36d42bdc0c8a2bb7ac8df83e679de98ff0cab127dd0d43a83ac071347fd0b"
 dependencies = [
- "rattler_networking",
+ "rattler_networking 0.26.3",
  "reqwest 0.12.28",
  "reqwest-middleware",
  "reqwest-retry 0.8.0",
@@ -7528,7 +7524,7 @@ dependencies = [
  "rattler_build_types",
  "rattler_build_variant_config",
  "rattler_build_yaml_parser",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
  "regex",
  "serde",
@@ -7555,7 +7551,7 @@ dependencies = [
  "indexmap 2.13.0",
  "itertools 0.14.0",
  "minijinja",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_shell",
  "serde",
  "thiserror 2.0.18",
@@ -7612,7 +7608,7 @@ checksum = "197dc86a4b706f2a8fa906144f7616b701eeb093b4b702572d891d0d9783060b"
 dependencies = [
  "globset",
  "itertools 0.14.0",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "serde",
  "serde_json",
  "serde_with",
@@ -7633,7 +7629,7 @@ dependencies = [
  "rattler_build_jinja",
  "rattler_build_types",
  "rattler_build_yaml_parser",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "regex",
  "serde",
  "serde_yaml",
@@ -7670,11 +7666,11 @@ dependencies = [
  "futures",
  "itertools 0.14.0",
  "parking_lot 0.12.5",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
- "rattler_networking",
- "rattler_package_streaming",
- "rattler_redaction",
+ "rattler_networking 0.26.2",
+ "rattler_package_streaming 0.24.2",
+ "rattler_redaction 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "rayon",
  "reqwest 0.12.28",
  "reqwest-middleware",
@@ -7710,9 +7706,49 @@ dependencies = [
  "nom-language",
  "purl",
  "rattler_digest",
- "rattler_macros",
- "rattler_redaction",
+ "rattler_macros 1.0.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rattler_redaction 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "rayon",
+ "regex",
+ "serde",
+ "serde-untagged",
+ "serde_json",
+ "serde_repr",
+ "serde_with",
+ "serde_yaml",
+ "simd-json",
+ "smallvec",
+ "strum 0.27.2",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tracing",
+ "typed-path",
+ "url",
+]
+
+[[package]]
+name = "rattler_conda_types"
+version = "0.44.0"
+dependencies = [
+ "ahash",
+ "chrono",
+ "core-foundation 0.10.1",
+ "dirs",
+ "fancy-regex",
+ "file_url",
+ "fs-err",
+ "glob",
+ "hex",
+ "indexmap 2.13.0",
+ "itertools 0.14.0",
+ "lazy-regex",
+ "memmap2 0.9.10",
+ "nom 8.0.0",
+ "nom-language",
+ "purl",
+ "rattler_digest",
+ "rattler_macros 1.0.12",
+ "rattler_redaction 0.1.13",
  "regex",
  "serde",
  "serde-untagged",
@@ -7739,7 +7775,23 @@ dependencies = [
  "console 0.16.2",
  "fs-err",
  "indexmap 2.13.0",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "toml",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "rattler_config"
+version = "0.3.3"
+dependencies = [
+ "console 0.16.2",
+ "fs-err",
+ "indexmap 2.13.0",
+ "rattler_conda_types 0.44.0",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -7751,8 +7803,6 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4109fd4ea54f1e34812f9db9166013325418ba92ff5693136afe681a56039fe"
 dependencies = [
  "blake2",
  "digest",
@@ -7790,9 +7840,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_index"
-version = "0.27.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c24c68e13c64564ad431be2e07766b95a5449cd79f8f859770104c00fecb95df"
+version = "0.27.17"
 dependencies = [
  "ahash",
  "anyhow",
@@ -7806,11 +7854,11 @@ dependencies = [
  "indexmap 2.13.0",
  "indicatif",
  "opendal",
- "rattler_conda_types",
+ "rattler_conda_types 0.44.0",
  "rattler_digest",
- "rattler_networking",
- "rattler_package_streaming",
- "rattler_s3",
+ "rattler_networking 0.26.3",
+ "rattler_package_streaming 0.24.3",
+ "rattler_s3 0.1.26",
  "reqwest 0.12.28",
  "retry-policies 0.5.1",
  "rmp-serde",
@@ -7839,7 +7887,7 @@ dependencies = [
  "itertools 0.14.0",
  "pep440_rs",
  "pep508_rs",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
  "rattler_solve",
  "serde",
@@ -7850,6 +7898,14 @@ dependencies = [
  "thiserror 2.0.18",
  "typed-path",
  "url",
+]
+
+[[package]]
+name = "rattler_macros"
+version = "1.0.12"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -7877,7 +7933,7 @@ dependencies = [
  "once_cell",
  "plist",
  "quick-xml 0.37.5",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_shell",
  "regex",
  "serde",
@@ -7906,6 +7962,33 @@ dependencies = [
  "aws-sdk-s3",
  "aws-smithy-http-client",
  "base64 0.22.1",
+ "fs-err",
+ "getrandom 0.3.4",
+ "http 1.4.0",
+ "itertools 0.14.0",
+ "rattler_config 0.3.2",
+ "reqwest 0.12.28",
+ "reqwest-middleware",
+ "retry-policies 0.5.1",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "rattler_networking"
+version = "0.26.3"
+dependencies = [
+ "anyhow",
+ "async-once-cell",
+ "async-trait",
+ "aws-config",
+ "aws-sdk-s3",
+ "aws-smithy-http-client",
+ "base64 0.22.1",
  "dirs",
  "fs-err",
  "getrandom 0.3.4",
@@ -7914,7 +7997,7 @@ dependencies = [
  "itertools 0.14.0",
  "keyring",
  "netrc-rs",
- "rattler_config",
+ "rattler_config 0.3.3",
  "reqwest 0.12.28",
  "reqwest-middleware",
  "retry-policies 0.5.1",
@@ -7922,6 +8005,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "url",
 ]
@@ -7944,12 +8028,44 @@ dependencies = [
  "getrandom 0.2.17",
  "getrandom 0.3.4",
  "num_cpus",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
- "rattler_networking",
- "rattler_redaction",
+ "rattler_networking 0.26.2",
+ "rattler_redaction 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "reqwest 0.12.28",
  "reqwest-middleware",
+ "serde_json",
+ "simple_spawn_blocking",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util 0.7.18",
+ "tracing",
+ "url",
+ "zip 6.0.0",
+ "zstd",
+]
+
+[[package]]
+name = "rattler_package_streaming"
+version = "0.24.3"
+dependencies = [
+ "astral-tokio-tar",
+ "astral_async_zip",
+ "async-compression",
+ "async-spooled-tempfile",
+ "bzip2 0.6.1",
+ "chrono",
+ "futures",
+ "futures-util",
+ "getrandom 0.2.17",
+ "getrandom 0.3.4",
+ "num_cpus",
+ "rattler_conda_types 0.44.0",
+ "rattler_digest",
+ "rattler_networking 0.26.3",
+ "rattler_redaction 0.1.13",
  "serde_json",
  "simple_spawn_blocking",
  "tar",
@@ -7987,6 +8103,15 @@ dependencies = [
  "nix 0.30.1",
  "signal-hook",
  "tokio",
+]
+
+[[package]]
+name = "rattler_redaction"
+version = "0.1.13"
+dependencies = [
+ "reqwest 0.12.28",
+ "reqwest-middleware",
+ "url",
 ]
 
 [[package]]
@@ -8036,11 +8161,11 @@ dependencies = [
  "parking_lot 0.12.5",
  "pin-project-lite",
  "rattler_cache",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
- "rattler_networking",
- "rattler_package_streaming",
- "rattler_redaction",
+ "rattler_networking 0.26.2",
+ "rattler_package_streaming 0.24.2",
+ "rattler_redaction 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "reqwest 0.12.28",
  "reqwest-middleware",
  "retry-policies 0.5.1",
@@ -8074,7 +8199,22 @@ dependencies = [
  "aws-sdk-s3",
  "aws-smithy-http-client",
  "clap",
- "rattler_networking",
+ "rattler_networking 0.26.2",
+ "thiserror 2.0.18",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "rattler_s3"
+version = "0.1.26"
+dependencies = [
+ "aws-config",
+ "aws-credential-types",
+ "aws-sdk-s3",
+ "aws-smithy-http-client",
+ "clap",
+ "rattler_networking 0.26.3",
  "thiserror 2.0.18",
  "tracing",
  "url",
@@ -8091,7 +8231,7 @@ dependencies = [
  "fs-err",
  "indexmap 2.13.0",
  "itertools 0.14.0",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_pty",
  "serde_json",
  "shlex",
@@ -8111,7 +8251,7 @@ dependencies = [
  "futures",
  "humantime",
  "itertools 0.14.0",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "rattler_digest",
  "resolvo",
  "serde",
@@ -8133,13 +8273,13 @@ dependencies = [
  "indicatif",
  "miette 7.6.0",
  "opendal",
- "rattler_conda_types",
- "rattler_config",
+ "rattler_conda_types 0.43.5",
+ "rattler_config 0.3.2",
  "rattler_digest",
- "rattler_networking",
- "rattler_package_streaming",
- "rattler_redaction",
- "rattler_s3",
+ "rattler_networking 0.26.2",
+ "rattler_package_streaming 0.24.2",
+ "rattler_redaction 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rattler_s3 0.1.25",
  "rattler_solve",
  "reqwest 0.12.28",
  "reqwest-middleware",
@@ -8159,16 +8299,14 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "2.3.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8294d7861d70e7992eb1194437cfe228478b8a8ff40ebc5ab19be93571d93a1f"
+version = "2.3.12"
 dependencies = [
  "archspec",
  "libloading",
  "nom 8.0.0",
  "once_cell",
  "plist",
- "rattler_conda_types",
+ "rattler_conda_types 0.44.0",
  "regex",
  "serde",
  "thiserror 2.0.18",
@@ -8206,7 +8344,7 @@ dependencies = [
  "itertools 0.14.0",
  "marked-yaml",
  "rattler_build_types",
- "rattler_conda_types",
+ "rattler_conda_types 0.43.5",
  "serde",
  "serde_yaml",
  "url",
@@ -9828,8 +9966,6 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55c0b0b683828aa9d4f5c0e59b0c856a12c30a65b5f1ca4292664734d76fa9c2"
 dependencies = [
  "tokio",
 ]
@@ -10148,7 +10284,7 @@ dependencies = [
  "ntapi",
  "objc2-core-foundation",
  "objc2-io-kit",
- "windows 0.61.3",
+ "windows 0.59.0",
 ]
 
 [[package]]
@@ -13700,3 +13836,35 @@ dependencies = [
  "syn",
  "winnow",
 ]
+
+[[patch.unused]]
+name = "rattler"
+version = "0.40.0"
+
+[[patch.unused]]
+name = "rattler_cache"
+version = "0.6.15"
+
+[[patch.unused]]
+name = "rattler_lock"
+version = "0.27.0"
+
+[[patch.unused]]
+name = "rattler_menuinst"
+version = "0.2.50"
+
+[[patch.unused]]
+name = "rattler_repodata_gateway"
+version = "0.27.0"
+
+[[patch.unused]]
+name = "rattler_shell"
+version = "0.26.3"
+
+[[patch.unused]]
+name = "rattler_solve"
+version = "5.0.0"
+
+[[patch.unused]]
+name = "rattler_upload"
+version = "0.5.0"

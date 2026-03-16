@@ -64,8 +64,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         for spec in specs {
             let package_name = spec
                 .name
-                .as_ref()
-                .expect("package name should be present")
                 .as_exact()
                 .expect("package name must be exact");
             project
@@ -78,8 +76,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let prefix = project.environment_prefix(env_name).await?;
 
         for spec in specs {
-            if let Some(name_matcher) = spec.clone().name {
-                let name = name_matcher.as_exact().expect("package name must be exact");
+            {
+                let name = spec.name.as_exact().expect("package name must be exact");
                 // If the package is not existent, don't try to remove executables
                 if let Ok(record) = prefix.find_designated_package(name).await {
                     prefix
