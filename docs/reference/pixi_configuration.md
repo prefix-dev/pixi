@@ -332,6 +332,51 @@ architecture for which there is fewer support for certain build backends.
 The virtual packages for the tool platform are detected from the current system. If the tool platform is for a different
 operating system than the current system, no virtual packages will be used.
 
+## Build
+
+Configuration options that control how packages are built.
+
+### `build.compiler-cache`
+
+The compiler cache to use for all builds. When set, every build backend that supports compiler caching
+(currently `pixi-build-cmake` and `pixi-build-rust`) will automatically use it.
+Setting this globally avoids having to configure it per package.
+
+| Value | Description |
+|---|---|
+| `"sccache"` | Use [sccache](https://github.com/mozilla/sccache) as the compiler cache |
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:build"
+```
+
+The `compiler-cache` can also be set per-package in `pixi.toml` under `[package.build.config]`,
+which takes precedence over the global and project-local config:
+
+```toml title="pixi.toml"
+[package.build.config]
+compiler-cache = "sccache"
+```
+
+!!! tip "sccache credentials"
+    SCCACHE_* environment variables (e.g. `SCCACHE_BUCKET`, `SCCACHE_S3_KEY_ID`) are still
+    read from the environment for remote cache configuration. They are automatically treated
+    as secrets and not embedded in the build recipe.
+
+### `build.package-format`
+
+The package format and compression level to use when building conda packages.
+The format is `<format>` or `<format>:<level>`.
+
+| Format | Compression levels |
+|---|---|
+| `conda` (default) | `default`, `fast`, `max`, or a numeric zstd level (-7 to 22) |
+| `tar-bz2` | `default`, `fast`, `max`, or a numeric bzip2 level (1-9) |
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:build"
+```
+
 ## Experimental
 
 This allows the user to set specific experimental features that are not yet stable.

@@ -179,8 +179,31 @@ The CMake backend follows this build process:
    - `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`: Export compile commands for tooling
    - `-DBUILD_SHARED_LIBS=ON`: Build shared libraries by default
    - `-DPython_EXECUTABLE=$PYTHON`: Use the conda Python executable if it's part of the host dependencies.
+   - `-DCMAKE_C_COMPILER_LAUNCHER=sccache` / `-DCMAKE_CXX_COMPILER_LAUNCHER=sccache`: Set when `compiler-cache = "sccache"` is configured (see below).
 3. **Build**: Executes `cmake --build` to compile the project
 4. **Install**: Installs the built artifacts to the conda package
+5. **Cache Statistics**: Displays `sccache --show-stats` if sccache is enabled
+
+## Compiler Cache
+
+You can speed up builds significantly by enabling a compiler cache. Configure it globally in
+`~/.config/pixi/config.toml` or per-project in `.pixi/config.toml`:
+
+```toml title="config.toml"
+[build]
+compiler-cache = "sccache"
+```
+
+Or per-package in `pixi.toml`:
+
+```toml title="pixi.toml"
+[package.build.config]
+compiler-cache = "sccache"
+```
+
+When enabled, `sccache` is added to the build dependencies automatically and the C/C++ compiler
+launchers are set to `sccache`. Any `SCCACHE_*` environment variables (e.g. for remote S3 cache
+configuration) are picked up from the environment and treated as secrets.
 
 ## CMake Flag Precedence
 
