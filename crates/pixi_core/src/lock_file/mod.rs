@@ -12,7 +12,7 @@ pub mod virtual_packages;
 pub use crate::environment::CondaPrefixUpdater;
 pub use install_subset::{FilteredPackages, InstallSubset};
 pub use package_identifier::PypiPackageIdentifier;
-use pixi_install_pypi::UnresolvedPypiRecord;
+use pixi_install_pypi::LockedPypiRecord;
 use pixi_record::PixiRecord;
 pub use pixi_uv_context::UvResolutionContext;
 pub use rattler_lock::Verbatim;
@@ -36,7 +36,7 @@ pub use utils::IoConcurrencyLimit;
 pub type LockedCondaPackages = Vec<PixiRecord>;
 
 /// A list of Pypi packages that are locked for a specific platform.
-pub type LockedPypiPackages = Vec<UnresolvedPypiRecord>;
+pub type LockedPypiRecords = Vec<LockedPypiRecord>;
 
 #[cfg(test)]
 mod tests {

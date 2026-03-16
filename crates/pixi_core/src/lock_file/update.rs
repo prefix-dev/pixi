@@ -10,7 +10,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::lock_file::records_by_name::HasNameVersion;
+use crate::lock_file::{
+    LockedPypiRecord,
+    records_by_name::{HasNameVersion, LockedPypiRecordsByName},
+};
 use barrier_cell::BarrierCell;
 use dashmap::DashMap;
 use fancy_display::FancyDisplay;
@@ -29,7 +32,7 @@ use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
 use pixi_install_pypi::{
     LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
-    PyPIUpdateConfig, UnresolvedPypiRecord,
+    PyPIUpdateConfig,
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
@@ -1276,10 +1279,10 @@ pub struct UpdateContext<'p> {
     /// mapping contains a [`BarrierCell`] that will eventually contain the
     /// solved records computed by another task. This allows tasks to wait
     /// for the records to be solved before proceeding.
-    solved_pypi_records: PerEnvironmentAndPlatform<'p, Arc<BarrierCell<PypiRecordsByName>>>,
+    solved_pypi_records: PerEnvironmentAndPlatform<'p, Arc<BarrierCell<LockedPypiRecordsByName>>>,
 
     /// Keeps track of all pending grouped pypi targets that are being solved.
-    grouped_solved_pypi_records: PerGroupAndPlatform<'p, Arc<BarrierCell<PypiRecordsByName>>>,
+    grouped_solved_pypi_records: PerGroupAndPlatform<'p, Arc<BarrierCell<LockedPypiRecordsByName>>>,
 
     /// The package cache to use when instantiating prefixes.
     package_cache: PackageCache,
@@ -1351,7 +1354,7 @@ impl<'p> UpdateContext<'p> {
         &self,
         group: &GroupedEnvironment<'p>,
         platform: Platform,
-    ) -> Option<impl Future<Output = Arc<PypiRecordsByName>> + use<>> {
+    ) -> Option<impl Future<Output = Arc<LockedPypiRecordsByName>> + use<>> {
         // Check if there is a pending operation for this group and platform
         if let Some(pending_records) = self
             .grouped_solved_pypi_records
@@ -1410,7 +1413,7 @@ impl<'p> UpdateContext<'p> {
         &mut self,
         environment: &Environment<'p>,
         platform: Platform,
-    ) -> Option<PypiRecordsByName> {
+    ) -> Option<LockedPypiRecordsByName> {
         self.solved_pypi_records
             .get_mut(environment)
             .and_then(|records| records.remove(&platform))
@@ -1424,6 +1427,20 @@ impl<'p> UpdateContext<'p> {
                 self.locked_pypi_records
                     .get_mut(environment)
                     .and_then(|records| records.remove(&platform))
+                    .map(|unresolved| {
+                        Arc::new(LockedPypiRecordsByName::from_iter(
+                            unresolved.records.iter().map(|ur| {
+                                ur.lock(
+                                    ur.as_package_data()
+                                        .version
+                                        .as_ref()
+                                        .unwrap_or(&pep440_rs::MIN_VERSION)
+                                        .clone(),
+                                    ur.as_package_data().version.is_some(),
+                                )
+                            }),
+                        ))
+                    })
             })
             .map(|records| Arc::try_unwrap(records).unwrap_or_else(|arc| (*arc).clone()))
     }
@@ -2376,13 +2393,9 @@ impl<'p> UpdateContext<'p> {
                     }
                 }
                 if let Some(records) = self.take_latest_pypi_records(&environment, platform) {
-                    for pkg_data in records.into_inner() {
+                    for r in records.into_inner() {
                         builder
-                            .add_pypi_package(
-                                &environment_name,
-                                &platform_str,
-                                pkg_data.as_package_data().clone(),
-                            )
+                            .add_pypi_package(&environment_name, &platform_str, r.data.clone())
                             .expect("platform was registered");
                         has_pypi_records = true;
                     }
@@ -2478,7 +2491,7 @@ pub enum TaskResult {
     PypiGroupSolved(
         GroupedEnvironmentName,
         Platform,
-        PypiRecordsByName,
+        LockedPypiRecordsByName,
         Duration,
         Option<CondaPrefixUpdated>,
     ),
@@ -2489,7 +2502,7 @@ pub enum TaskResult {
         EnvironmentName,
         Platform,
         Arc<PixiRecordsByName>,
-        Arc<PypiRecordsByName>,
+        Arc<LockedPypiRecordsByName>,
     ),
 }
 
@@ -2667,7 +2680,7 @@ async fn spawn_extract_environment_task(
     environment: Environment<'_>,
     platform: Platform,
     grouped_repodata_records: impl Future<Output = Arc<PixiRecordsByName>>,
-    grouped_pypi_records: impl Future<Output = Arc<PypiRecordsByName>>,
+    grouped_pypi_records: impl Future<Output = Arc<LockedPypiRecordsByName>>,
     command_dispatcher: CommandDispatcher,
 ) -> miette::Result<TaskResult> {
     let group = GroupedEnvironment::from(environment.clone());
@@ -2698,7 +2711,7 @@ async fn spawn_extract_environment_task(
 
     enum PackageRecord<'a> {
         Conda(&'a PixiRecord),
-        Pypi((&'a UnresolvedPypiRecord, Option<ExtraName>)),
+        Pypi((&'a LockedPypiRecord, Option<ExtraName>)),
     }
 
     // Determine the conda packages we need.
@@ -2846,7 +2859,7 @@ async fn spawn_extract_environment_task(
                     .into_diagnostic()?
                     .unwrap_or_default();
 
-                for req in record.as_package_data().requires_dist.iter() {
+                for req in record.data.requires_dist.iter() {
                     // Evaluate the marker environment with the given extras
                     if let Some(marker_env) = &marker_environment {
                         // let marker_str = marker_env.to_string();
@@ -2890,7 +2903,7 @@ async fn spawn_extract_environment_task(
         Arc::new(PixiRecordsByName::from_iter(
             pixi_records.into_iter().cloned(),
         )),
-        Arc::new(PypiRecordsByName::from_iter(
+        Arc::new(LockedPypiRecordsByName::from_iter(
             pypi_records.into_values().cloned(),
         )),
     ))
@@ -2918,7 +2931,7 @@ async fn spawn_solve_pypi_task<'p>(
         return Ok(TaskResult::PypiGroupSolved(
             grouped_environment.name().clone(),
             platform,
-            PypiRecordsByName::default(),
+            LockedPypiRecordsByName::default(),
             Duration::from_millis(0),
             None,
         ));
@@ -3002,7 +3015,7 @@ async fn spawn_solve_pypi_task<'p>(
         pb.finish();
 
         Ok::<(_, _, _), miette::Report>((
-            PypiRecordsByName::from_iter(records),
+            LockedPypiRecordsByName::from_iter(records),
             end - start,
             prefix_task_result,
         ))
