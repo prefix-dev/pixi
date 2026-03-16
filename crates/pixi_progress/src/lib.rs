@@ -22,24 +22,10 @@ pub use placement::ProgressBarPlacement;
 /// instead.
 #[macro_export]
 macro_rules! println {
-    () => {
+    ($($arg:tt)*) => {{
         let mp = $crate::global_multi_progress();
-        if mp.is_hidden() {
-            eprintln!();
-        } else {
-            // Ignore any error
-            let _err = mp.println("");
-        }
-    };
-    ($($arg:tt)*) => {
-        let mp = $crate::global_multi_progress();
-        if mp.is_hidden() {
-            eprintln!($($arg)*);
-        } else {
-            // Ignore any error
-            let _err = mp.println(format!($($arg)*));
-        }
-    }
+        mp.suspend(|| eprintln!($($arg)*))
+    }};
 }
 
 /// Returns a global instance of [`indicatif::MultiProgress`].
