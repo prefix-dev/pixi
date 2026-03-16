@@ -168,7 +168,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )
             .await?;
             eprintln!(
-                "When issues persist, you can remove all build related global cache with: {}",
+                "{}When issues persist, you can remove all build related global cache with: {}",
+                console::style("Hint: ").blue(),
                 console::style("pixi clean cache --build").bold()
             );
         }
@@ -267,8 +268,9 @@ async fn remove_folder_with_progress(
     if !folder.exists() {
         if warning_non_existent {
             eprintln!(
-                "{}",
-                console::style(format!("Folder {:?} was already clean.", &folder)).yellow()
+                "{} Folder {:?} was already clean.",
+                console::style("INFO:").yellow(),
+                &folder
             );
         }
         return Ok(());
