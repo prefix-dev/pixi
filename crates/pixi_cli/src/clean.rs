@@ -1,3 +1,4 @@
+use pixi_command_dispatcher::CacheDirs;
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::WorkspaceRegistry;
@@ -195,19 +196,30 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
         dirs.push(cache_dir.join(consts::CACHED_ENVS_DIR));
     }
     if args.build_backends {
+        let cache_dirs = CacheDirs::new(
+            pixi_path::AbsPathBuf::new(&cache_dir)
+                .expect("cache dir is not absolute")
+                .into_assume_dir(),
+        );
+        dirs.push(cache_dirs.build_backends().into());
         dirs.push(cache_dir.join(consts::CACHED_BUILD_TOOL_ENVS_DIR));
         // TODO: Let's clean deprecated cache directory.
         // This will be removed in a future release.
         dirs.push(cache_dir.join(consts::_CACHED_BUILD_ENVS_DIR));
     }
     if args.build {
-        dirs.push(cache_dir.join(consts::CACHED_GIT_DIR));
-        dirs.push(cache_dir.join(consts::CACHED_BUILD_TOOL_ENVS_DIR));
-        dirs.push(cache_dir.join(consts::CACHED_BUILD_WORK_DIR));
-        dirs.push(cache_dir.join(consts::CACHED_BUILD_BACKENDS));
-        dirs.push(cache_dir.join(consts::CACHED_SOURCE_BUILDS));
-        dirs.push(cache_dir.join(consts::CACHED_BUILD_BACKEND_METADATA));
-        dirs.push(cache_dir.join(consts::CACHED_PACKAGES));
+        let cache_dirs = CacheDirs::new(
+            pixi_path::AbsPathBuf::new(&cache_dir)
+                .expect("cache dir is not absolute")
+                .into_assume_dir(),
+        );
+        dirs.push(cache_dirs.git().into());
+        dirs.push(cache_dirs.working_dirs().into());
+        dirs.push(cache_dirs.build_backends().into());
+        dirs.push(cache_dirs.url().into());
+        dirs.push(cache_dirs.source_builds().into());
+        dirs.push(cache_dirs.build_backend_metadata().into());
+        dirs.push(cache_dirs.source_metadata().into());
     }
     if dirs.is_empty() && (args.assume_yes || dialoguer::Confirm::new()
                 .with_prompt("No cache types specified using the flags.\nDo you really want to remove all cache directories from your machine?")
