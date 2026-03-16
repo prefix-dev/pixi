@@ -167,6 +167,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 true,
             )
             .await?;
+            eprintln!(
+                "When issues persist, you can remove all build related global cache with: {}",
+                console::style("pixi clean cache --build").bold()
+            );
         }
         if args.workspaces_registry {
             prune_workspace_registry().await?;
