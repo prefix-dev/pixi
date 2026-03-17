@@ -72,6 +72,14 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
 
 `pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly. By default, all features are upgraded.
+ 
+Example usage:
+ 
+ - `pixi upgrade`: Upgrading all packages in the workspace to their latest compatible versions.
+ 
+ - `pixi upgrade python`: Upgrading a specific dependency.
+ 
+ - `pixi upgrade --feature cuda`: Upgrading dependencies within a specific feature.
 
 
 --8<-- "docs/reference/cli/pixi/upgrade_extender:example"

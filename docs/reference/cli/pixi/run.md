@@ -85,6 +85,17 @@ Runs task in the pixi environment.
 This command is used to run tasks in the pixi environment. It will activate the environment and run the task in the environment. It is using the deno_task_shell to run the task.
 
 `pixi run` will also update the lockfile and install the environment if it is required.
+ 
+Example usage:
+ 
+ - `pixi run test`: This will run the `test` task defined in the `pixi.toml` file.
+ 
+ - `pixi run -e dev test`: This will run the `test` task in the `dev` environment.
+ 
+ - `pixi run python --version`: This will run the `python` executable in the pixi environment and pass the `--version` argument to it.
+ 
+ - `pixi run --clean-env start`: This will run the `start` task in a clean environment, ignoring the current shell's environment variables.
++
 
 
 --8<-- "docs/reference/cli/pixi/run_extender:example"

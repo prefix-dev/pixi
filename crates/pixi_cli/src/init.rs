@@ -19,8 +19,11 @@ use crate::cli_interface::CliInterface;
 /// Example usage:
 ///
 /// - `pixi init`: Initializing a new project in the current directory.
+///
 /// - `pixi init --platform linux-64 --platform osx-arm64`: Initializing with specific platforms.
+///
 /// - `pixi init --format pyproject`: Initializing in pyproject.toml format.
+///
 /// - `pixi init --import environment.yml`: Importing from a conda environment file.
 #[derive(Parser, Debug)]
 pub struct Args {

@@ -28,7 +28,9 @@ use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 /// Example usage:
 ///
 /// - `pixi upgrade`: Upgrading all packages in the workspace to their latest compatible versions.
+///
 /// - `pixi upgrade python`: Upgrading a specific dependency.
+///
 /// - `pixi upgrade --feature cuda`: Upgrading dependencies within a specific feature.
 #[derive(Parser, Debug, Default)]
 pub struct Args {

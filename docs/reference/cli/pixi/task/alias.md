@@ -28,4 +28,15 @@ pixi task alias [OPTIONS] <ALIAS> <DEPENDS_ON>...
 - <a id="arg---description" href="#arg---description">`--description <DESCRIPTION>`</a>
 :  The description of the alias task
 
---8<-- "docs/reference/cli/pixi/task/alias_extender:example"
+## Description
+Alias another specific command
+ 
+ Example usage:
+ 
+ - `pixi task alias test dev-test`
+ 
+ - `pixi task alias --feature dev test dev-test`
+ 
+ - `pixi task alias --platform linux-64 build make-build`
+ 
+ --8<-- "docs/reference/cli/pixi/task/alias_extender:example"

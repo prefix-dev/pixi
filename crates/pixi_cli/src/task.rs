@@ -64,7 +64,9 @@ pub struct RemoveArgs {
 /// Example usage:
 ///
 /// - `pixi task add test "pytest"`
+///
 /// - `pixi task add --feature dev test "pytest"`
+///
 /// - `pixi task add --platform linux-64 build "make"`
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true)]

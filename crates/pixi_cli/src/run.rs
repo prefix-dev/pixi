@@ -47,9 +47,12 @@ use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 /// Example usage:
 ///
 /// - `pixi run test`: This will run the `test` task defined in the `pixi.toml` file.
+///
 /// - `pixi run -e dev test`: This will run the `test` task in the `dev` environment.
+///
 /// - `pixi run python --version`: This will run the `python` executable in the pixi environment
 ///   and pass the `--version` argument to it.
+///
 /// - `pixi run --clean-env start`: This will run the `start` task in a clean environment,
 ///   ignoring the current shell's environment variables.
 #[derive(Parser, Debug, Default)]
