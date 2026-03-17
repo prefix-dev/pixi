@@ -195,6 +195,17 @@ pub trait LazyEnvironmentVariables {
 type LazyEnvVarsFuture<'t> =
     Pin<Box<dyn Future<Output = miette::Result<HashMap<String, String>>> + 't>>;
 
+/// Minimal config needed for installation planning.
+/// Avoids expensive HTTP client and flat index network I/O
+/// when nothing needs to be installed (no-op case).
+struct UvInstallerPlannerConfig {
+    tags: Tags,
+    index_locations: IndexLocations,
+    build_options: BuildOptions,
+    config_settings: ConfigSettings,
+    venv: PythonEnvironment,
+}
+
 /// Internal setup data for the uv installer
 struct UvInstallerConfig {
     tags: Tags,
@@ -298,26 +309,44 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         pypi_records: &[PyPIRecords],
         python_info: &rattler::install::PythonInfo,
     ) -> miette::Result<()> {
-        // Setup UV environment and configuration
-        let setup = self
-            .setup_uv_installer_config(pixi_records, &python_info.path)
+        // Cheap planning setup (no network I/O)
+        let planner_config = self
+            .setup_planner_config(pixi_records, &python_info.path)
             .await?;
 
+        // Lock before any operations that read or modify site-packages
+        let _lock = planner_config
+            .venv
+            .lock()
+            .await
+            .into_diagnostic()
+            .with_context(|| "error locking installation directory")?;
+
         // Create installation plan
-        let installation_plan = self.create_installation_plan(pypi_records, &setup).await?;
+        let installation_plan = self
+            .create_installation_plan(pypi_records, &planner_config)
+            .await?;
+
+        // Early exit if nothing to do — skip expensive network setup
+        if installation_plan.is_noop() {
+            tracing::info!("Nothing to do");
+            return Ok(());
+        }
+
+        // Expensive setup only when there is real work
+        let setup = self.upgrade_to_full_config(planner_config).await?;
 
         // Execute the installation plan
         self.execute_installation_plan(&installation_plan, &setup)
             .await
     }
 
-    /// Setup UV environment with all necessary configuration
-    async fn setup_uv_installer_config(
+    /// Cheap planning setup — no network I/O.
+    async fn setup_planner_config(
         &self,
         pixi_records: &[PixiRecord],
         python_interpreter_path: &Path,
-    ) -> miette::Result<UvInstallerConfig> {
-        // Determine the current environment markers.
+    ) -> miette::Result<UvInstallerPlannerConfig> {
         let python_record = pixi_records
             .iter()
             .find(|r| is_python_record(r))
@@ -341,45 +370,6 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             pypi_options_to_build_options(self.build_config.no_build, self.build_config.no_binary)
                 .into_diagnostic()?;
 
-        let index_strategy = to_index_strategy(self.build_config.index_strategy);
-
-        let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
-            self.context_config.uv_context.allow_insecure_host.clone(),
-            self.context_config.uv_context.tls_no_verify,
-            &index_locations,
-        );
-
-        let registry_client = self.context_config.uv_context.build_registry_client(
-            allow_insecure_hosts,
-            &index_locations,
-            index_strategy,
-            None,
-        );
-
-        // Resolve the flat indexes from `--find-links`.
-        let flat_index_client = FlatIndexClient::new(
-            registry_client.cached_client(),
-            Connectivity::Online,
-            &self.context_config.uv_context.cache,
-        );
-
-        let flat_index_urls: Vec<&IndexUrl> = index_locations
-            .flat_indexes()
-            .map(|index| index.url())
-            .collect();
-
-        let flat_index_entries = flat_index_client
-            .fetch_all(flat_index_urls.into_iter())
-            .await
-            .into_diagnostic()?;
-
-        let flat_index = FlatIndex::from_entries(
-            flat_index_entries,
-            Some(&tags),
-            &self.context_config.uv_context.hash_strategy,
-            &build_options,
-        );
-
         let config_settings = ConfigSettings::default();
 
         // Setup the interpreter from the conda prefix
@@ -394,11 +384,63 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             interpreter.sys_prefix().display()
         );
 
-        // Create a Python environment
         let venv = PythonEnvironment::from_interpreter(interpreter);
-        let constraints = Constraints::default();
 
-        // Determine isolated packages based on input, converting names.
+        Ok(UvInstallerPlannerConfig {
+            tags,
+            index_locations,
+            build_options,
+            config_settings,
+            venv,
+        })
+    }
+
+    /// Expensive setup — builds HTTP client, fetches flat indexes.
+    /// Only called when the installation plan has real work to do.
+    async fn upgrade_to_full_config(
+        &self,
+        planner_config: UvInstallerPlannerConfig,
+    ) -> miette::Result<UvInstallerConfig> {
+        let index_strategy = to_index_strategy(self.build_config.index_strategy);
+
+        let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
+            self.context_config.uv_context.allow_insecure_host.clone(),
+            self.context_config.uv_context.tls_no_verify,
+            &planner_config.index_locations,
+        );
+
+        let registry_client = self.context_config.uv_context.build_registry_client(
+            allow_insecure_hosts,
+            &planner_config.index_locations,
+            index_strategy,
+            None,
+        );
+
+        // Resolve the flat indexes from `--find-links`.
+        let flat_index_client = FlatIndexClient::new(
+            registry_client.cached_client(),
+            Connectivity::Online,
+            &self.context_config.uv_context.cache,
+        );
+
+        let flat_index_urls: Vec<&IndexUrl> = planner_config
+            .index_locations
+            .flat_indexes()
+            .map(|index| index.url())
+            .collect();
+
+        let flat_index_entries = flat_index_client
+            .fetch_all(flat_index_urls.into_iter())
+            .await
+            .into_diagnostic()?;
+
+        let flat_index = FlatIndex::from_entries(
+            flat_index_entries,
+            Some(&planner_config.tags),
+            &self.context_config.uv_context.hash_strategy,
+            &planner_config.build_options,
+        );
+
         let build_isolation = self
             .build_config
             .no_build_isolation
@@ -413,15 +455,15 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .unwrap_or_default();
 
         Ok(UvInstallerConfig {
-            tags,
-            index_locations,
-            build_options,
+            tags: planner_config.tags,
+            index_locations: planner_config.index_locations,
+            build_options: planner_config.build_options,
             registry_client,
             flat_index,
-            config_settings,
-            venv,
+            config_settings: planner_config.config_settings,
+            venv: planner_config.venv,
             build_isolation,
-            constraints,
+            constraints: Constraints::default(),
             index_strategy,
             dependency_metadata: DependencyMetadata::default(),
             exclude_newer,
@@ -432,7 +474,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     async fn create_installation_plan(
         &self,
         pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
-        setup: &UvInstallerConfig,
+        planner_config: &UvInstallerPlannerConfig,
     ) -> miette::Result<PyPIInstallationPlan> {
         // Create required distributions with pre-created Dist objects
         let required_packages: Vec<_> = pypi_records.iter().map(|(pkg, _)| pkg.clone()).collect();
@@ -442,8 +484,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
                 .context("Failed to create required distributions")?;
 
         // Find out what packages are already installed
-        let site_packages =
-            SitePackages::from_environment(&setup.venv).expect("could not create site-packages");
+        let site_packages = SitePackages::from_environment(&planner_config.venv)
+            .expect("could not create site-packages");
 
         tracing::debug!(
             "Constructed site-packages with {} packages",
@@ -458,10 +500,10 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         // This is used to find wheels that are available from the registry
         let registry_index = RegistryWheelIndex::new(
             &self.context_config.uv_context.cache,
-            &setup.tags,
-            &setup.index_locations,
+            &planner_config.tags,
+            &planner_config.index_locations,
             &self.context_config.uv_context.hash_strategy,
-            &setup.config_settings,
+            &planner_config.config_settings,
             &package_settings,
             &extra_build_requires,
             &extra_build_variables,
@@ -470,9 +512,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         // if people ask for them
         let built_wheel_index = BuiltWheelIndex::new(
             &self.context_config.uv_context.cache,
-            &setup.tags,
+            &planner_config.tags,
             &self.context_config.uv_context.hash_strategy,
-            &setup.config_settings,
+            &planner_config.config_settings,
             &package_settings,
             &extra_build_requires,
             &extra_build_variables,
@@ -489,7 +531,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &site_packages,
             CachedWheels::new(registry_index, built_wheel_index),
             &required_dists,
-            &setup.build_options,
+            &planner_config.build_options,
         )
         .into_diagnostic()
         .context("error while determining PyPI installation plan")?;
@@ -546,14 +588,6 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         installation_plan: &PyPIInstallationPlan,
         setup: &UvInstallerConfig,
     ) -> miette::Result<()> {
-        // Lock before performing operations
-        let _lock = setup
-            .venv
-            .lock()
-            .await
-            .into_diagnostic()
-            .with_context(|| "error locking installation directory")?;
-
         let start = std::time::Instant::now();
         let PyPIInstallationPlan {
             cached,
@@ -563,13 +597,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             duplicates,
         } = installation_plan;
 
-        // Nothing to do.
-        if remote.is_empty()
-            && cached.is_empty()
-            && reinstalls.is_empty()
-            && extraneous.is_empty()
-            && duplicates.is_empty()
-        {
+        // Defensive guard — caller should have checked is_noop() already.
+        if installation_plan.is_noop() {
             tracing::info!(
                 "{}",
                 format!("Nothing to do - finished in {}", elapsed(start.elapsed()))

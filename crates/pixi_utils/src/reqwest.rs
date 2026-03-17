@@ -56,9 +56,7 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
 }
 
 pub fn oci_middleware(client: LazyReqwestClient) -> OciMiddleware {
-    let middleware = LazyClient::new(|| {
-        ClientWithMiddleware::new(client.into_client(), vec![])
-    });
+    let middleware = LazyClient::new(|| ClientWithMiddleware::new(client.into_client(), vec![]));
     OciMiddleware::new(middleware)
 }
 
@@ -307,7 +305,7 @@ mod tests {
         );
 
         let client = LazyReqwestClient::new(&config).unwrap();
-        let middlewares = uv_middlewares(&config, &client);
+        let middlewares = uv_middlewares(&config, client);
 
         // Should have: mirror + OCI + auth middleware
         assert!(
@@ -323,7 +321,7 @@ mod tests {
         // This ensures existing non-mirror auth scenarios continue to work
         let config = Config::default();
         let client = LazyReqwestClient::new(&config).unwrap();
-        let middlewares = uv_middlewares(&config, &client);
+        let middlewares = uv_middlewares(&config, client);
 
         // Should have: auth middleware only
         assert_eq!(

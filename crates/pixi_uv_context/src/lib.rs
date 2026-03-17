@@ -4,7 +4,9 @@ use fs_err::create_dir_all;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, Config, get_cache_dir};
 use pixi_consts::consts;
-use pixi_utils::reqwest::{should_use_builtin_certs_uv, should_use_native_tls_for_uv, uv_middlewares, LazyReqwestClient};
+use pixi_utils::reqwest::{
+    LazyReqwestClient, should_use_builtin_certs_uv, should_use_native_tls_for_uv, uv_middlewares,
+};
 use pixi_uv_conversions::{ConversionError, to_uv_trusted_host};
 use tracing::debug;
 use uv_cache::Cache;
