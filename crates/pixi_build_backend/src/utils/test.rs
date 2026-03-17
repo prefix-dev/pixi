@@ -7,7 +7,7 @@ use pixi_build_types::{
         initialize::InitializeParams,
     },
 };
-use rattler_build::console_utils::LoggingOutputHandler;
+use rattler_build_core::console_utils::LoggingOutputHandler;
 use rattler_conda_types::Platform;
 use serde_json::Value;
 

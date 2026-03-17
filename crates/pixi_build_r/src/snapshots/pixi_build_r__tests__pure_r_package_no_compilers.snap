@@ -1,0 +1,24 @@
+---
+source: crates/pixi_build_r/src/main.rs
+expression: generated_recipe.recipe
+---
+context: {}
+package:
+  name: r-purepkg
+  version: 1.0.0
+source: []
+build:
+  script:
+    content: "[build_script]"
+    env: {}
+    secrets: []
+requirements:
+  build: []
+  host:
+    - r-base
+  run:
+    - r-base
+  run_constraints: []
+tests: []
+about:
+  summary: Pure R Package

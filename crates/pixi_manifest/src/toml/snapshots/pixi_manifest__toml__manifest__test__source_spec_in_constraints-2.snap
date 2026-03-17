@@ -1,0 +1,13 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = []\n\n        [feature.gpu.constraints]\n        my-lib = { git = \"https://github.com/example/my-lib\" }\n        \"#,)"
+---
+  × source specifications are not supported in `[constraints]`, but 'my-lib' is a source specification
+   ╭─[pixi.toml:7:18]
+ 6 │         [feature.gpu.constraints]
+ 7 │         my-lib = { git = "https://github.com/example/my-lib" }
+   ·                  ──────────────────────┬──────────────────────
+   ·                                        ╰── source specification specified here
+ 8 │
+   ╰────
+  help: constraints only apply to packages resolved from channels, not source packages

@@ -9,7 +9,7 @@ use pixi_build_types::{
         CondaBuildV1RunExports,
     },
 };
-use rattler_build::render::resolved_dependencies::{
+use rattler_build_core::render::resolved_dependencies::{
     DependencyInfo, FinalizedDependencies, FinalizedRunDependencies, ResolvedDependencies,
     RunExportDependency, SourceDependency,
 };

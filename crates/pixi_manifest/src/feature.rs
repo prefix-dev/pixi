@@ -1,6 +1,6 @@
 use crate::{
-    SpecType, SystemRequirements, WorkspaceTarget, channel::PrioritizedChannel, consts,
-    pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
+    CondaConstraints, SpecType, SystemRequirements, WorkspaceTarget, channel::PrioritizedChannel,
+    consts, pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
     workspace::SolveStrategy,
 };
 use indexmap::{IndexMap, IndexSet};
@@ -375,6 +375,18 @@ impl Feature {
         self.pypi_options.as_ref()
     }
 
+    /// Returns true if the feature supports the given platform.
+    ///
+    /// A feature supports a platform if it has no platform restriction or if
+    /// its `platforms` set contains the given platform. If `platform` is
+    /// `None`, the feature is always considered supported.
+    pub fn supports_platform(&self, platform: Option<Platform>) -> bool {
+        match (&self.platforms, platform) {
+            (Some(platforms), Some(p)) => platforms.contains(&p),
+            _ => true,
+        }
+    }
+
     /// Returns the dev dependencies of the feature for a given `platform`.
     ///
     /// Dev dependencies are source packages whose build/host/run dependencies
@@ -406,6 +418,38 @@ impl Feature {
                     // Overwrite the accumulator with specs from this target
                     // More specific targets (processed later) overwrite less specific ones
                     Some(Cow::Owned(acc.as_ref().overwrite(deps)))
+                }
+            })
+    }
+
+    /// Returns the version constraints of the feature for a given `platform`.
+    ///
+    /// Constraints limit the versions of packages that can be installed
+    /// without explicitly requiring them to be installed.
+    ///
+    /// This function returns a [`Cow`]. If the constraints are not combined or
+    /// overwritten by multiple targets than this function returns a
+    /// reference to the internal constraints.
+    ///
+    /// Returns `None` if this feature does not define any target that has any
+    /// constraints.
+    ///
+    /// If the `platform` is `None` no platform specific constraints are taken
+    /// into consideration.
+    pub fn constraints(&self, platform: Option<Platform>) -> Option<Cow<'_, CondaConstraints>> {
+        self.targets
+            .resolve(platform)
+            // Get the targets in reverse order, from least specific to most specific.
+            // This is required because we want more specific targets to overwrite their specs.
+            .rev()
+            .filter_map(|t| t.constraints.as_ref())
+            .filter(|constraints| !constraints.is_empty())
+            .fold(None, |acc, constraints| match acc {
+                None => Some(Cow::Borrowed(constraints)),
+                Some(acc) => {
+                    // Overwrite the accumulator with specs from this target
+                    // More specific targets (processed later) overwrite less specific ones
+                    Some(Cow::Owned(acc.as_ref().overwrite(constraints)))
                 }
             })
     }

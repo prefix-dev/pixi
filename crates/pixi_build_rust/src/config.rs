@@ -41,6 +41,11 @@ pub struct RustBackendConfig {
     /// compiler cache. Can also be set globally in `~/.config/pixi/config.toml`
     /// or per-project in `.pixi/config.toml`.
     pub compiler_cache: Option<CompilerCache>,
+
+    /// List of binaries to install. If empty, all binaries are installed.
+    /// Example: `binaries = ["rattler-build"]`
+    #[serde(default)]
+    pub binaries: Vec<String>,
 }
 
 impl Default for RustBackendConfig {
@@ -73,6 +78,7 @@ impl RustBackendConfig {
             ignore_cargo_manifest: Default::default(),
             compilers: Default::default(),
             compiler_cache: Default::default(),
+            binaries: Default::default(),
         }
     }
 
@@ -109,6 +115,11 @@ impl BackendConfig for RustBackendConfig {
             } else {
                 target_config.extra_args.clone()
             },
+            binaries: if target_config.binaries.is_empty() {
+                self.binaries.clone()
+            } else {
+                target_config.binaries.clone()
+            },
             system_env: collect_system_env(),
             env: {
                 let mut merged_env = self.env.clone();
@@ -142,6 +153,25 @@ mod tests {
     use pixi_build_backend::generated_recipe::BackendConfig;
     use serde_json::json;
     use std::path::PathBuf;
+
+    #[test]
+    fn test_binaries_deserialization() {
+        let json_data = json!({
+            "binaries": ["rattler-build", "other-tool"]
+        });
+        let config = serde_json::from_value::<RustBackendConfig>(json_data).unwrap();
+        assert_eq!(
+            config.binaries,
+            vec!["rattler-build".to_string(), "other-tool".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_binaries_empty_by_default() {
+        let json_data = json!({});
+        let config = serde_json::from_value::<RustBackendConfig>(json_data).unwrap();
+        assert!(config.binaries.is_empty());
+    }
 
     #[test]
     fn test_ensure_deserialize_from_empty() {
@@ -181,6 +211,7 @@ mod tests {
             ignore_cargo_manifest: None,
             compilers: Some(vec!["rust".to_string()]),
             compiler_cache: None,
+            binaries: vec![],
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -196,6 +227,7 @@ mod tests {
             ignore_cargo_manifest: Some(true),
             compilers: Some(vec!["c".to_string(), "rust".to_string()]),
             compiler_cache: None,
+            binaries: vec![],
         };
 
         let merged = base_config
@@ -243,6 +275,7 @@ mod tests {
             ignore_cargo_manifest: None,
             compilers: Some(vec!["rust".to_string()]),
             compiler_cache: None,
+            binaries: vec![],
         };
 
         let empty_target_config = RustBackendConfig::default();
@@ -257,6 +290,7 @@ mod tests {
         assert_eq!(merged.debug_dir, Some(PathBuf::from("/base/debug")));
         assert_eq!(merged.extra_input_globs, vec!["*.base".to_string()]);
         assert_eq!(merged.compilers, Some(vec!["rust".to_string()]));
+        assert!(merged.binaries.is_empty());
     }
 
     #[test]

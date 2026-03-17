@@ -15,6 +15,9 @@ pub struct RattlerBuildBackendConfig {
     /// Enable experimental features in rattler-build (e.g., cache support for multi-output recipes)
     #[serde(default)]
     pub experimental: Option<bool>,
+    /// Custom path for the recipe.yaml file
+    #[serde(default)]
+    pub recipe: Option<PathBuf>,
 }
 
 impl BackendConfig for RattlerBuildBackendConfig {
@@ -36,6 +39,10 @@ impl BackendConfig for RattlerBuildBackendConfig {
             miette::bail!("`experimental` cannot have a target specific value");
         }
 
+        if target_config.recipe.is_some() {
+            miette::bail!("`recipe` cannot have a target specific value");
+        }
+
         Ok(Self {
             debug_dir: self.debug_dir.clone(),
             extra_input_globs: if target_config.extra_input_globs.is_empty() {
@@ -44,6 +51,7 @@ impl BackendConfig for RattlerBuildBackendConfig {
                 target_config.extra_input_globs.clone()
             },
             experimental: self.experimental,
+            recipe: self.recipe.clone(),
         })
     }
 }
@@ -67,12 +75,14 @@ mod tests {
             debug_dir: Some(PathBuf::from("/base/debug")),
             extra_input_globs: vec!["*.base".to_string()],
             experimental: Some(false),
+            recipe: None,
         };
 
         let target_config = RattlerBuildBackendConfig {
             debug_dir: None,
             extra_input_globs: vec!["*.target".to_string()],
             experimental: None, // Not specified in target
+            recipe: None,
         };
 
         let merged = base_config
@@ -95,6 +105,7 @@ mod tests {
             debug_dir: Some(PathBuf::from("/base/debug")),
             extra_input_globs: vec!["*.base".to_string()],
             experimental: Some(true),
+            recipe: None,
         };
 
         let empty_target_config = RattlerBuildBackendConfig::default();

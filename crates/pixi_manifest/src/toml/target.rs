@@ -24,6 +24,10 @@ pub struct TomlTarget {
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
     pub dev_dependencies: Option<IndexMap<PackageName, TomlLocationSpec>>,
 
+    /// Version constraints - limit versions of packages that can be installed
+    /// without explicitly requiring them.
+    pub constraints: Option<PixiSpanned<UniquePackageMap>>,
+
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
 
@@ -90,6 +94,30 @@ impl TomlTarget {
                 )))
             })?;
 
+        // Convert constraints from UniquePackageMap to DependencyMap.
+        // Source specs are never valid in [constraints], regardless of pixi-build mode.
+        let constraints = self
+            .constraints
+            .map(|c| {
+                if let Some((name, _)) = c.value.specs.iter().find(|(_, spec)| spec.is_source()) {
+                    return Err(TomlError::Generic(
+                        GenericError::new(format!(
+                            "source specifications are not supported in `[constraints]`, but '{}' is a source specification",
+                            name.as_source()
+                        ))
+                        .with_opt_span(c.value.value_spans.get(name).cloned())
+                        .with_span_label("source specification specified here")
+                        .with_help(
+                            "constraints only apply to packages resolved from channels, not source packages",
+                        ),
+                    ));
+                }
+                c.value
+                    .into_inner(pixi_build_enabled)
+                    .map(|index_map| index_map.into_iter().collect())
+            })
+            .transpose()?;
+
         Ok(WithWarnings {
             value: WorkspaceTarget {
                 dependencies: combine_target_dependencies(
@@ -108,6 +136,7 @@ impl TomlTarget {
                     // Convert IndexMap to DependencyMap
                     index_map.into_iter().collect()
                 }),
+                constraints,
                 activation: self.activation,
                 tasks: self.tasks,
             },
@@ -145,6 +174,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTarget {
         let dependencies = th.optional("dependencies");
         let host_dependencies = th.optional("host-dependencies");
         let build_dependencies = th.optional("build-dependencies");
+        let constraints = th.optional("constraints");
         let pypi_dependencies = th
             .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
             .map(TomlIndexMap::into_inner);
@@ -173,6 +203,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTarget {
             dependencies,
             host_dependencies,
             build_dependencies,
+            constraints,
             pypi_dependencies,
             dev_dependencies: dev,
             activation,

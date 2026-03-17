@@ -30,6 +30,10 @@ impl CommandDispatcherProcessor {
     /// Called when a [`crate::command_dispatcher::BuildBackendMetadataTask`]
     /// task was received.
     pub(crate) fn on_build_backend_metadata(&mut self, task: BuildBackendMetadataTask) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         // Lookup the id of the source metadata to avoid duplication.
         let source_metadata_id = {
             match self.build_backend_metadata_ids.get(&task.spec) {
@@ -43,10 +47,6 @@ impl CommandDispatcherProcessor {
                 PendingDeduplicatingTask::Pending(pending, _) => pending.push(task.tx),
                 PendingDeduplicatingTask::Completed(result, _) => {
                     let _ = task.tx.send(result.clone());
-                }
-                PendingDeduplicatingTask::Cancelled => {
-                    // Drop the sender, this will cause a cancellation on the other side.
-                    drop(task.tx);
                 }
             },
             Entry::Vacant(entry) => {
@@ -155,9 +155,13 @@ impl CommandDispatcherProcessor {
             reporter.on_finished(reporter_id, failed);
         }
 
-        self.build_backend_metadata
+        if !self
+            .build_backend_metadata
             .get_mut(&id)
             .expect("cannot find pending build backend metadata task")
             .on_pending_result(result)
+        {
+            self.build_backend_metadata.remove(&id);
+        }
     }
 }

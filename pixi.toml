@@ -200,7 +200,7 @@ tbump = ">=6.9.0,<7"
 
 [feature.release.tasks]
 bump = { cmd = "tbump --only-patch $RELEASE_VERSION", description = "Bump the version using tbump" }
-bump-changelog = { cmd = "git-cliff --unreleased --prepend CHANGELOG.md --token $(gh auth token) --tag $RELEASE_VERSION", description = "Update changelog with unreleased changes" }
+bump-changelog = { cmd = "git-cliff --unreleased --prepend CHANGELOG.md --github-token $(gh auth token) --tag $RELEASE_VERSION", description = "Update changelog with unreleased changes" }
 release = { cmd = "python scripts/release.py", description = "Run the release script" }
 
 #
@@ -319,13 +319,13 @@ test-slow = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspa
 # Feature for JSON schema generation and testing
 #
 [feature.schema.dependencies]
-jsonschema = ">=3.2.0,<4"
+jsonschema-rs = ">=0.45,<1"
 pydantic = ">=2.11.10,<3"
 pytest = ">=9.0.2,<10"
 pyyaml = ">=6.0.3,<7"
 
 [feature.schema.tasks]
-generate-schema = { cmd = "python model.py > schema.json", cwd = "schema", description = "Generate JSON schema from model" }
+generate-schema = { cmd = "python model.py", cwd = "schema", description = "Generate JSON schema from model" }
 test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema", description = "Test the manifest JSON schema" }
 
 #

@@ -1128,7 +1128,7 @@ packages:
   timestamp: 1767991015178
 - conda: .
   name: pixi-build-ros
-  version: 0.3.5
+  version: 0.3.6
   build: pyh4616a5c_0
   subdir: noarch
   variants:

@@ -1,0 +1,33 @@
+---
+source: crates/pixi_build_r/src/main.rs
+expression: generated_recipe.recipe
+---
+context: {}
+package:
+  name: r-webmockr
+  version: 2.2.1.92
+source: []
+build:
+  script:
+    content: "[build_script]"
+    env: {}
+    secrets: []
+requirements:
+  build: []
+  host:
+    - r-base
+    - r-curl
+    - r-jsonlite
+    - r-magrittr >=1.5
+    - r-r6 >=2.1.3
+    - r-urltools >=1.6.0
+  run:
+    - r-base
+    - r-curl
+    - r-jsonlite
+    - r-magrittr >=1.5
+    - r-r6 >=2.1.3
+    - r-urltools >=1.6.0
+  run_constraints: []
+tests: []
+about: {}

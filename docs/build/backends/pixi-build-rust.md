@@ -235,6 +235,31 @@ compilers = ["rust", "c", "cxx"]
 !!! info "Comprehensive Compiler Documentation"
     For detailed information about available compilers, platform-specific behavior, and how conda-forge compilers work, see the [Compilers Documentation](../key_concepts/compilers.md).
 
+### `binaries`
+
+- **Type**: `Array<String>`
+- **Default**: `[]`
+- **Target Merge Behavior**: `Overwrite` - Platform-specific binaries completely replace base binaries when set
+
+List of specific cargo binaries to install. Each entry is passed to `cargo install` as `--bin <name>`.
+If the list is empty, Cargo's default behavior is used (all binaries defined by the crate are installed).
+
+```toml
+[package.build.config]
+binaries = ["rattler-build"]
+```
+
+For target-specific configuration, platform-specific binaries override the base configuration:
+
+```toml
+[package.build.config]
+binaries = ["my-cli", "my-helper"]
+
+[package.build.target.linux-64.config]
+binaries = ["my-cli"]
+# Result for linux-64: only ["my-cli"]
+```
+
 
 ## Build Process
 
@@ -248,6 +273,7 @@ The Rust backend follows this build process:
    - `--path .`: Install from the current source directory
    - `--no-track`: Don't track installation metadata
    - `--force`: Force installation even if already installed
+   - `--bin <name>` (optional, repeated): Added for each entry in [`[package.build.config.binaries]`](#binaries)
 4. **Cache Statistics**: Displays `sccache` statistics if sccache is enabled
 
 ## Compiler Cache

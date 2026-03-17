@@ -1,7 +1,7 @@
 github_url = "https://github.com/prefix-dev/pixi"
 
 [version]
-current = "0.65.0"
+current = "0.66.0"
 
 # Example of a semver regexp.
 # Make sure this matches current_version before
@@ -40,6 +40,14 @@ src = "docs/integration/editor/vscode.md"
 [[file]]
 search = "/pixi.sh/v{current_version}/"
 src = "schema/schema.json"
+
+[[file]]
+search = "/pixi.sh/v{current_version}/"
+src = "schema/pyproject/schema.json"
+
+[[file]]
+search = "Generated from `pixi` v{current_version}"
+src = "schema/pyproject/partial-pixi.json"
 
 [[file]]
 search = "Version: v{current_version}"
