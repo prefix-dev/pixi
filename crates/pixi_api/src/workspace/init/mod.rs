@@ -11,9 +11,9 @@ use minijinja::{Environment, context};
 use pixi_config::{Config, get_default_author, pixi_home};
 use pixi_consts::consts;
 use pixi_core::{Workspace, workspace::WorkspaceMut};
-use pixi_manifest::{FeatureName, pyproject::PyProjectManifest};
+use pixi_manifest::{FeatureName, Task, pyproject::PyProjectManifest};
 use pixi_utils::conda_environment_file::CondaEnvFile;
-use rattler_conda_types::{NamedChannelOrUrl, Platform};
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 use same_file::is_same_file;
 use tokio::fs::OpenOptions;
 use url::Url;
@@ -24,7 +24,7 @@ use crate::interface::Interface;
 mod options;
 mod template;
 
-pub use options::{GitAttributes, InitOptions, ManifestFormat};
+pub use options::{GitAttributes, InitOptions, ManifestFormat, ProjectTemplate};
 
 pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::Result<Workspace> {
     let env = Environment::new();
@@ -320,7 +320,89 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
         );
     }
 
+    let mut workspace = workspace;
+    if let Some(template) = options.template {
+        let mut workspace_mut = workspace.modify().into_diagnostic()?;
+        apply_template(&mut workspace_mut, template).await?;
+        workspace = workspace_mut.save().await.into_diagnostic()?;
+    }
+
     Ok(workspace)
+}
+
+/// Applies a project template to the workspace.
+///
+/// This will add the default dependencies and tasks associated with the
+/// chosen template to the newly created project.
+async fn apply_template(
+    workspace: &mut WorkspaceMut,
+    template: ProjectTemplate,
+) -> miette::Result<()> {
+    match template {
+        ProjectTemplate::Minimal => Ok(()),
+        ProjectTemplate::Python => {
+            let python_spec = MatchSpec::from_str("python").into_diagnostic()?;
+            workspace.add_specs(
+                vec![python_spec],
+                vec![],
+                &[] as &[Platform],
+                &FeatureName::default(),
+            )?;
+            workspace.manifest().add_task(
+                "start".into(),
+                Task::Plain("python main.py".into()),
+                None,
+                &FeatureName::default(),
+            )?;
+            Ok(())
+        }
+        ProjectTemplate::Rust => {
+            let rust_spec = MatchSpec::from_str("rust").into_diagnostic()?;
+            workspace.add_specs(
+                vec![rust_spec],
+                vec![],
+                &[] as &[Platform],
+                &FeatureName::default(),
+            )?;
+            workspace.manifest().add_task(
+                "build".into(),
+                Task::Plain("cargo build".into()),
+                None,
+                &FeatureName::default(),
+            )?;
+            workspace.manifest().add_task(
+                "run".into(),
+                Task::Plain("cargo run".into()),
+                None,
+                &FeatureName::default(),
+            )?;
+            Ok(())
+        }
+        ProjectTemplate::Cpp => {
+            let gcc_spec = MatchSpec::from_str("gcc").into_diagnostic()?;
+            let cmake_spec = MatchSpec::from_str("cmake").into_diagnostic()?;
+            let ninja_spec = MatchSpec::from_str("ninja").into_diagnostic()?;
+            workspace.add_specs(
+                vec![gcc_spec, cmake_spec, ninja_spec],
+                vec![],
+                &[] as &[Platform],
+                &FeatureName::default(),
+            )?;
+            workspace.manifest().add_task(
+                "configure".into(),
+                Task::Plain("cmake -B build".into()),
+                None,
+                &FeatureName::default(),
+            )?;
+            workspace.manifest().add_task(
+                "build".into(),
+                Task::Plain("cmake --build build".into()),
+                None,
+                &FeatureName::default(),
+            )?;
+            Ok(())
+        }
+    }
 }
 
 fn is_init_dir_equal_to_pixi_home_parent(init_dir: &Path) -> bool {

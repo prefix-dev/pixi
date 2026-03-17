@@ -25,6 +25,17 @@ pub struct InitOptions {
 
     /// The conda-pypi-mapping
     pub conda_pypi_mapping: Option<HashMap<NamedChannelOrUrl, String>>,
+
+    /// The project template to use.
+    pub template: Option<ProjectTemplate>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ProjectTemplate {
+    Minimal,
+    Python,
+    Rust,
+    Cpp,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -6,7 +6,7 @@ pub use add::{DependencyOptions, GitOptions};
 pub(crate) mod remove;
 
 pub(crate) mod init;
-pub use init::{GitAttributes, InitOptions, ManifestFormat};
+pub use init::{GitAttributes, InitOptions, ManifestFormat, ProjectTemplate};
 
 pub(crate) mod list;
 pub use list::{Package, PackageKind};

@@ -54,6 +54,10 @@ pub struct Args {
     /// Set a mapping between conda channels and pypi channels.
     #[arg(long = "conda-pypi-map", value_parser = parse_conda_pypi_mapping, value_delimiter = ',')]
     pub conda_pypi_map: Option<Vec<(NamedChannelOrUrl, String)>>,
+
+    /// The project template to use.
+    #[arg(long, short, ignore_case = true)]
+    pub template: Option<ProjectTemplate>,
 }
 
 fn parse_conda_pypi_mapping(s: &str) -> Result<(NamedChannelOrUrl, String), String> {
@@ -81,6 +85,14 @@ pub enum GitAttributes {
     Codeberg,
 }
 
+#[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
+pub enum ProjectTemplate {
+    Minimal,
+    Python,
+    Rust,
+    Cpp,
+}
+
 impl From<Args> for InitOptions {
     fn from(args: Args) -> Self {
         let format = args.format.map(|f| match f {
@@ -95,6 +107,13 @@ impl From<Args> for InitOptions {
             GitAttributes::Codeberg => pixi_api::workspace::GitAttributes::Codeberg,
         });
 
+        let template = args.template.map(|t| match t {
+            ProjectTemplate::Minimal => pixi_api::workspace::ProjectTemplate::Minimal,
+            ProjectTemplate::Python => pixi_api::workspace::ProjectTemplate::Python,
+            ProjectTemplate::Rust => pixi_api::workspace::ProjectTemplate::Rust,
+            ProjectTemplate::Cpp => pixi_api::workspace::ProjectTemplate::Cpp,
+        });
+
         InitOptions {
             path: args.path,
             channels: args.channels,
@@ -103,6 +122,7 @@ impl From<Args> for InitOptions {
             format,
             scm,
             conda_pypi_mapping: args.conda_pypi_map.map(|map| map.into_iter().collect()),
+            template,
         }
     }
 }
