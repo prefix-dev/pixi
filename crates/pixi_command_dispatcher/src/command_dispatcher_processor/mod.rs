@@ -291,23 +291,29 @@ enum PendingDeduplicatingTask<T, E> {
 
     /// Task has completed (either successfully or with an error), result is cached
     Completed(Result<T, E>, Option<CommandDispatcherContext>),
-
-    /// Task has been cancelled.
-    Cancelled,
 }
 
 impl<T: Clone, E: Clone> PendingDeduplicatingTask<T, E> {
     /// The result was received and all pending tasks can be notified.
     ///
-    /// Both success and error results are cloned and sent to all waiting channels.
-    pub fn on_pending_result(&mut self, result: Result<T, CommandDispatcherError<E>>) {
+    /// Both success and error results are cloned and sent to all waiting
+    /// channels. Returns `true` if the result was a real outcome (success or
+    /// failure) and `false` if the task was cancelled. When cancelled, the
+    /// entry is left in the `Pending` state with an empty waiter list — the
+    /// caller should remove the entry so that future requests can re-trigger
+    /// the task.
+    pub fn on_pending_result(&mut self, result: Result<T, CommandDispatcherError<E>>) -> bool {
         let Self::Pending(pending, context) = self else {
             unreachable!("cannot get a result for a task that is not pending");
         };
 
         let Some(result) = result.into_ok_or_failed() else {
-            *self = Self::Cancelled;
-            return;
+            // The task was cancelled. Drop all pending senders (they will
+            // observe a `Cancelled` error) but do NOT cache the cancellation
+            // — it is not a real outcome and future requests should be able
+            // to re-trigger the task.
+            pending.clear();
+            return false;
         };
 
         // Clone and send the result to all waiting channels
@@ -316,6 +322,7 @@ impl<T: Clone, E: Clone> PendingDeduplicatingTask<T, E> {
         }
 
         *self = Self::Completed(result, *context);
+        true
     }
 }
 
@@ -514,10 +521,9 @@ impl CommandDispatcherProcessor {
 
                     self.build_backend_metadata
                         .get(&id)
-                        .and_then(|pending| match pending {
+                        .map(|pending| match pending {
                             PendingDeduplicatingTask::Pending(_, context)
-                            | PendingDeduplicatingTask::Completed(_, context) => Some(*context),
-                            PendingDeduplicatingTask::Cancelled => None,
+                            | PendingDeduplicatingTask::Completed(_, context) => *context,
                         })?
                 }
                 CommandDispatcherContext::SourceMetadata(id) => {
@@ -532,10 +538,9 @@ impl CommandDispatcherProcessor {
 
                     self.source_metadata
                         .get(&id)
-                        .and_then(|pending| match pending {
+                        .map(|pending| match pending {
                             PendingDeduplicatingTask::Pending(_, context)
-                            | PendingDeduplicatingTask::Completed(_, context) => Some(*context),
-                            PendingDeduplicatingTask::Cancelled => None,
+                            | PendingDeduplicatingTask::Completed(_, context) => *context,
                         })?
                 }
                 CommandDispatcherContext::InstallPixiEnvironment(id) => {
@@ -555,10 +560,9 @@ impl CommandDispatcherProcessor {
 
                     self.instantiated_tool_envs
                         .get(&id)
-                        .and_then(|pending| match pending {
+                        .map(|pending| match pending {
                             PendingDeduplicatingTask::Pending(_, context)
-                            | PendingDeduplicatingTask::Completed(_, context) => Some(*context),
-                            PendingDeduplicatingTask::Cancelled => None,
+                            | PendingDeduplicatingTask::Completed(_, context) => *context,
                         })?
                 }
                 CommandDispatcherContext::SourceBuild(id) => {
@@ -573,10 +577,9 @@ impl CommandDispatcherProcessor {
 
                     self.source_build
                         .get(&id)
-                        .and_then(|pending| match pending {
+                        .map(|pending| match pending {
                             PendingDeduplicatingTask::Pending(_, context)
-                            | PendingDeduplicatingTask::Completed(_, context) => Some(*context),
-                            PendingDeduplicatingTask::Cancelled => None,
+                            | PendingDeduplicatingTask::Completed(_, context) => *context,
                         })?
                 }
                 CommandDispatcherContext::BackendSourceBuild(id) => {

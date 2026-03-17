@@ -43,10 +43,6 @@ impl CommandDispatcherProcessor {
                 PendingDeduplicatingTask::Completed(result, _) => {
                     let _ = task.tx.send(result.clone());
                 }
-                PendingDeduplicatingTask::Cancelled => {
-                    // Drop the sender, this will cause a cancellation on the other side.
-                    drop(task.tx);
-                }
             },
             Entry::Vacant(entry) => {
                 entry.insert(PendingDeduplicatingTask::Pending(
@@ -127,9 +123,14 @@ impl CommandDispatcherProcessor {
             reporter.on_finished(reporter_id);
         }
 
-        self.instantiated_tool_envs
+        if !self
+            .instantiated_tool_envs
             .get_mut(&id)
             .expect("cannot find instantiated tool env")
-            .on_pending_result(result);
+            .on_pending_result(result)
+        {
+            self.instantiated_tool_envs.remove(&id);
+            self.instantiated_tool_cache_keys.retain(|_, v| *v != id);
+        }
     }
 }

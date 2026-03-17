@@ -5,6 +5,8 @@ use std::{
 
 use futures::{Stream, stream::FuturesUnordered};
 
+use crate::CommandDispatcherError;
+
 /// Defines the executor to use in the command dispatcher background task.
 ///
 /// By default, the command dispatcher will use [`Self::Concurrent`] which will
@@ -92,6 +94,14 @@ impl<Fut> ExecutorFutures<Fut> {
             ExecutorFutures::Serial { futures } => futures.push(Box::pin(fut)),
         }
     }
+
+    /// Returns the number of futures in the collection.
+    pub fn len(&self) -> usize {
+        match self {
+            ExecutorFutures::Concurrent { futures } => futures.len(),
+            ExecutorFutures::Serial { futures } => futures.len(),
+        }
+    }
 }
 
 impl<Fut> Stream for ExecutorFutures<Fut>
@@ -123,6 +133,89 @@ where
         match self {
             ExecutorFutures::Concurrent { futures } => futures.size_hint(),
             ExecutorFutures::Serial { futures } => (futures.len(), Some(futures.len())),
+        }
+    }
+}
+
+/// A collection of cancellation-aware futures built on top of
+/// [`ExecutorFutures`].
+///
+/// When any future yields `Err(CommandDispatcherError::Cancelled)`, the
+/// collection marks itself as cancelled. New futures pushed after that point
+/// are immediately dropped without being polled.
+///
+/// The [`Stream`] implementation filters out `Cancelled` results, yielding only
+/// real successes and failures. When the underlying stream ends and any
+/// cancellation was observed, a single final `Cancelled` sentinel is emitted.
+pub struct CancellationAwareFutures<Fut> {
+    inner: ExecutorFutures<Fut>,
+    any_cancelled: bool,
+    done: bool,
+}
+
+impl<Fut> CancellationAwareFutures<Fut> {
+    /// Creates a new `CancellationAwareFutures` with the specified execution
+    /// strategy.
+    pub fn new(executor: Executor) -> Self {
+        Self {
+            inner: ExecutorFutures::new(executor),
+            any_cancelled: false,
+            done: false,
+        }
+    }
+
+    /// Adds a future to the collection, or drops it immediately if
+    /// cancellation has already been observed.
+    pub fn push(&mut self, fut: Fut) {
+        if !self.any_cancelled {
+            self.inner.push(fut);
+        }
+    }
+
+    /// Returns whether any cancellation was observed.
+    pub fn is_cancelled(&self) -> bool {
+        self.any_cancelled
+    }
+
+    /// Returns the number of futures in the collection.
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Returns `true` if the collection contains no futures.
+    pub fn is_empty(&self) -> bool {
+        self.inner.len() == 0
+    }
+}
+
+impl<Fut, T, E> Stream for CancellationAwareFutures<Fut>
+where
+    Fut: Future<Output = Result<T, CommandDispatcherError<E>>>,
+{
+    type Item = Result<T, CommandDispatcherError<E>>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        if this.done {
+            return Poll::Ready(None);
+        }
+
+        loop {
+            match Pin::new(&mut this.inner).poll_next(cx) {
+                Poll::Ready(Some(Err(CommandDispatcherError::Cancelled))) => {
+                    this.any_cancelled = true;
+                    continue;
+                }
+                Poll::Ready(Some(item)) => return Poll::Ready(Some(item)),
+                Poll::Ready(None) => {
+                    this.done = true;
+                    if this.any_cancelled {
+                        return Poll::Ready(Some(Err(CommandDispatcherError::Cancelled)));
+                    }
+                    return Poll::Ready(None);
+                }
+                Poll::Pending => return Poll::Pending,
+            }
         }
     }
 }

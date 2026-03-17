@@ -48,10 +48,6 @@ impl CommandDispatcherProcessor {
                 PendingDeduplicatingTask::Completed(result, _) => {
                     let _ = task.tx.send(result.clone());
                 }
-                PendingDeduplicatingTask::Cancelled => {
-                    // Drop the sender, this will cause a cancellation on the other side.
-                    drop(task.tx);
-                }
             },
             Entry::Vacant(entry) => {
                 entry.insert(PendingDeduplicatingTask::Pending(
@@ -159,9 +155,14 @@ impl CommandDispatcherProcessor {
             reporter.on_finished(reporter_id, failed);
         }
 
-        self.build_backend_metadata
+        if !self
+            .build_backend_metadata
             .get_mut(&id)
             .expect("cannot find pending build backend metadata task")
             .on_pending_result(result)
+        {
+            self.build_backend_metadata.remove(&id);
+            self.build_backend_metadata_ids.retain(|_, v| *v != id);
+        }
     }
 }

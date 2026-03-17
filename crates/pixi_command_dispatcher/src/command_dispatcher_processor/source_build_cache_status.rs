@@ -60,10 +60,6 @@ impl CommandDispatcherProcessor {
                 PendingDeduplicatingTask::Completed(result, _) => {
                     let _ = task.tx.send(result.clone());
                 }
-                PendingDeduplicatingTask::Cancelled => {
-                    // Drop the sender, this will cause a cancellation on the other side.
-                    drop(task.tx);
-                }
             },
             Entry::Vacant(entry) => {
                 entry.insert(PendingDeduplicatingTask::Pending(
@@ -133,9 +129,14 @@ impl CommandDispatcherProcessor {
         self.parent_contexts.remove(&context);
         self.remove_cancellation_token(context);
 
-        self.source_build_cache_status
+        if !self
+            .source_build_cache_status
             .get_mut(&id)
             .expect("cannot find pending task")
-            .on_pending_result(result);
+            .on_pending_result(result)
+        {
+            self.source_build_cache_status.remove(&id);
+            self.source_build_cache_status_ids.retain(|_, v| *v != id);
+        }
     }
 }
