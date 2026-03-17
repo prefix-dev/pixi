@@ -315,7 +315,7 @@ impl<T: Clone, E: Clone> PendingDeduplicatingTask<T, E> {
             let _ = tx.send(result.clone());
         }
 
-        *self = Self::Completed(result, *context);
+        *self = Self::Completed(result, None);
     }
 }
 
@@ -493,17 +493,13 @@ impl CommandDispatcherProcessor {
         while let Some(context) = parent_context.take() {
             parent_context = match context {
                 CommandDispatcherContext::SolveCondaEnvironment(id) => {
-                    return self
-                        .conda_solves
-                        .get(id)
-                        .and_then(|env| env.reporter_id)
+                    return self.conda_solves[id]
+                        .reporter_id
                         .map(reporter::ReporterContext::SolveConda);
                 }
                 CommandDispatcherContext::SolvePixiEnvironment(id) => {
-                    return self
-                        .solve_pixi_environments
-                        .get(id)
-                        .and_then(|env| env.reporter_id)
+                    return self.solve_pixi_environments[id]
+                        .reporter_id
                         .map(reporter::ReporterContext::SolvePixi);
                 }
                 CommandDispatcherContext::BuildBackendMetadata(id) => {
@@ -543,10 +539,8 @@ impl CommandDispatcherProcessor {
                         })?
                 }
                 CommandDispatcherContext::InstallPixiEnvironment(id) => {
-                    return self
-                        .install_pixi_environment
-                        .get(id)
-                        .and_then(|env| env.reporter_id)
+                    return self.install_pixi_environment[id]
+                        .reporter_id
                         .map(reporter::ReporterContext::InstallPixi);
                 }
                 CommandDispatcherContext::InstantiateToolEnv(id) => {
@@ -586,10 +580,8 @@ impl CommandDispatcherProcessor {
                         })?
                 }
                 CommandDispatcherContext::BackendSourceBuild(id) => {
-                    return self
-                        .backend_source_builds
-                        .get(id)
-                        .and_then(|env| env.reporter_id)
+                    return self.backend_source_builds[id]
+                        .reporter_id
                         .map(reporter::ReporterContext::BackendSourceBuild);
                 }
                 CommandDispatcherContext::QuerySourceBuildCache(_id) => {
