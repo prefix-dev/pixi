@@ -1906,7 +1906,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
     );
 
     // Use `join!` instead of `try_join!` so that both futures always run to
-    // completion — their results populate the dedup cache and must not be
+    // completion. Their results populate the dedup cache and must not be
     // dropped early.
     let (dev_deps_result, source_metadata_result) =
         futures::join!(dev_deps_future, source_metadata_future);

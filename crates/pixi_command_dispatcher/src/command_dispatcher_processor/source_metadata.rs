@@ -163,7 +163,7 @@ impl CommandDispatcherProcessor {
             .expect("cannot find pending task")
             .on_pending_result(result)
         {
-            // Task was cancelled — remove the entry so future requests
+            // Task was cancelled. Remove the entry so future requests
             // re-trigger it instead of getting a stale cancellation.
             self.source_metadata.remove(&id);
             self.source_metadata_ids.retain(|_, v| *v != id);

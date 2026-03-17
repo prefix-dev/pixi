@@ -299,7 +299,7 @@ impl<T: Clone, E: Clone> PendingDeduplicatingTask<T, E> {
     /// Both success and error results are cloned and sent to all waiting
     /// channels. Returns `true` if the result was a real outcome (success or
     /// failure) and `false` if the task was cancelled. When cancelled, the
-    /// entry is left in the `Pending` state with an empty waiter list — the
+    /// entry is left in the `Pending` state with an empty waiter list; the
     /// caller should remove the entry so that future requests can re-trigger
     /// the task.
     pub fn on_pending_result(&mut self, result: Result<T, CommandDispatcherError<E>>) -> bool {
@@ -310,7 +310,7 @@ impl<T: Clone, E: Clone> PendingDeduplicatingTask<T, E> {
         let Some(result) = result.into_ok_or_failed() else {
             // The task was cancelled. Drop all pending senders (they will
             // observe a `Cancelled` error) but do NOT cache the cancellation
-            // — it is not a real outcome and future requests should be able
+            // It is not a real outcome and future requests should be able
             // to re-trigger the task.
             pending.clear();
             return false;

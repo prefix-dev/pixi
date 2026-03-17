@@ -115,7 +115,7 @@ impl SourceMetadataCollector {
 
             // Wait for the next future to finish. Cancelled results are
             // transparently skipped by the `CancellationAwareFutures` adapter
-            // — only real errors or successes arrive here.
+            // Only real errors or successes arrive here.
             let Some(source_metadata) = source_futures.next().await else {
                 // No more pending futures, we are done.
                 return Ok(result);
