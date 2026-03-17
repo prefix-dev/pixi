@@ -14,7 +14,7 @@ use pep440_rs::VersionSpecifiers;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
-    CommandDispatcherErrorResultExt, DevSourceMetadataError, DevSourceMetadataSpec, Executor,
+    CommandDispatcherErrorResultExt, DevSourceMetadataError, DevSourceMetadataSpec,
     SourceCheckoutError, SourceMetadataError, SourceMetadataSpec,
     executor::CancellationAwareFutures,
 };
@@ -1216,7 +1216,7 @@ async fn verify_source_metadata(
 ) -> Result<(), CommandDispatcherError<Box<PlatformUnsat>>> {
     // Process all source records concurrently using CancellationAwareFutures
     // so that cancelled results are filtered and the dedup cache is populated.
-    let mut results = CancellationAwareFutures::new(Executor::Concurrent);
+    let mut results = CancellationAwareFutures::new(command_dispatcher.executor());
 
     for source_record in source_records {
         let command_dispatcher = command_dispatcher.clone();
@@ -1564,7 +1564,7 @@ pub async fn resolve_dev_dependencies(
         .map(|(name, _)| name.clone())
         .collect();
 
-    let mut futures = CancellationAwareFutures::new(Executor::Concurrent);
+    let mut futures = CancellationAwareFutures::new(command_dispatcher.executor());
 
     for (package_name, source_spec) in dev_dependencies {
         let command_dispatcher = command_dispatcher.clone();

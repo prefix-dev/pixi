@@ -20,7 +20,7 @@ use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_command_dispatcher::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    Executor, PixiEnvironmentSpec, SolvePixiEnvironmentError, executor::CancellationAwareFutures,
+    PixiEnvironmentSpec, SolvePixiEnvironmentError, executor::CancellationAwareFutures,
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
@@ -1578,7 +1578,8 @@ impl<'p> UpdateContext<'p> {
         // This will keep track of all outstanding tasks that we need to wait for. All
         // tasks are added to this list after they are spawned. This function blocks
         // until all pending tasks have either completed or errored.
-        let mut pending_futures = CancellationAwareFutures::new(Executor::Concurrent);
+        let mut pending_futures =
+            CancellationAwareFutures::new(self.command_dispatcher.executor());
 
         // Spawn tasks for all the conda targets that are out of date.
         for (environment, platforms) in self.outdated_envs.conda.iter() {
