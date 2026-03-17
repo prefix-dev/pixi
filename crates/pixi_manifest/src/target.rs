@@ -437,8 +437,12 @@ impl PackageTarget {
     }
 }
 
-/// Represents a target selector. Currently we only support explicit platform
-/// selection.
+/// Represents a target selector.
+///
+/// In addition to explicit platform selection, the `Expression` variant allows
+/// arbitrary selector expressions (e.g. `"host_platform == build_platform"`)
+/// that are passed through directly to rattler-build. Expression selectors are
+/// only valid in the `[package]` section of the manifest.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum TargetSelector {
     // Platform specific configuration
@@ -447,11 +451,16 @@ pub enum TargetSelector {
     Linux,
     Win,
     MacOs,
-    // TODO: Add minijinja coolness here.
+    /// A free-form selector expression that is passed through to rattler-build.
+    /// Only valid in the `[package]` section.
+    Expression(String),
 }
 
 impl TargetSelector {
     /// Returns true if this selector matches the given platform.
+    ///
+    /// Expression selectors never match a specific platform since they are
+    /// evaluated by rattler-build, not by pixi.
     pub fn matches(&self, platform: Platform) -> bool {
         match self {
             TargetSelector::Platform(p) => p == &platform,
@@ -459,7 +468,13 @@ impl TargetSelector {
             TargetSelector::Unix => platform.is_unix(),
             TargetSelector::Win => platform.is_windows(),
             TargetSelector::MacOs => platform.is_osx(),
+            TargetSelector::Expression(_) => false,
         }
+    }
+
+    /// Returns `true` if this is a free-form expression selector.
+    pub fn is_expression(&self) -> bool {
+        matches!(self, TargetSelector::Expression(_))
     }
 }
 
@@ -471,6 +486,7 @@ impl std::fmt::Display for TargetSelector {
             TargetSelector::Unix => write!(f, "unix"),
             TargetSelector::Win => write!(f, "win"),
             TargetSelector::MacOs => write!(f, "osx"),
+            TargetSelector::Expression(expr) => write!(f, "{expr}"),
         }
     }
 }
@@ -492,6 +508,16 @@ impl FromStr for TargetSelector {
             "osx" => Ok(TargetSelector::MacOs),
             _ => Platform::from_str(s).map(TargetSelector::Platform),
         }
+    }
+}
+
+impl TargetSelector {
+    /// Parse a target selector, falling back to an `Expression` variant for
+    /// strings that are not known platform names. This is used in the
+    /// `[package]` section where arbitrary rattler-build selector expressions
+    /// are allowed.
+    pub fn from_str_or_expression(s: &str) -> Self {
+        s.parse().unwrap_or_else(|_| TargetSelector::Expression(s.to_string()))
     }
 }
 
@@ -974,5 +1000,69 @@ mod tests {
             "==1.0",
             "Expected foo=1.0 on osx-arm64"
         );
+    }
+
+    #[test]
+    fn test_target_selector_parsing() {
+        use crate::TargetSelector;
+
+        // Platform family selectors
+        assert_eq!(
+            TargetSelector::from_str("linux").unwrap(),
+            TargetSelector::Linux
+        );
+        assert_eq!(
+            TargetSelector::from_str("unix").unwrap(),
+            TargetSelector::Unix
+        );
+        assert_eq!(
+            TargetSelector::from_str("win").unwrap(),
+            TargetSelector::Win
+        );
+        assert_eq!(
+            TargetSelector::from_str("osx").unwrap(),
+            TargetSelector::MacOs
+        );
+
+        // Platform-specific selectors
+        assert!(matches!(
+            TargetSelector::from_str("linux-64").unwrap(),
+            TargetSelector::Platform(_)
+        ));
+
+        // Unknown strings should fail with from_str
+        assert!(TargetSelector::from_str("host_platform == build_platform").is_err());
+        assert!(TargetSelector::from_str("foobar").is_err());
+    }
+
+    #[test]
+    fn test_target_selector_from_str_or_expression() {
+        use crate::TargetSelector;
+
+        // Known platforms still parse as platform selectors
+        assert_eq!(
+            TargetSelector::from_str_or_expression("linux"),
+            TargetSelector::Linux
+        );
+        assert!(matches!(
+            TargetSelector::from_str_or_expression("linux-64"),
+            TargetSelector::Platform(_)
+        ));
+
+        // Unknown strings become expression selectors
+        let expr = TargetSelector::from_str_or_expression("host_platform == build_platform");
+        assert!(
+            matches!(expr, TargetSelector::Expression(ref s) if s == "host_platform == build_platform")
+        );
+        assert!(expr.is_expression());
+        assert_eq!(expr.to_string(), "host_platform == build_platform");
+
+        // Expression selectors don't match any platform
+        assert!(!expr.matches(rattler_conda_types::Platform::Linux64));
+        assert!(!expr.matches(rattler_conda_types::Platform::OsxArm64));
+
+        // Another expression
+        let expr2 = TargetSelector::from_str_or_expression("host_platform != 'linux-64'");
+        assert!(expr2.is_expression());
     }
 }

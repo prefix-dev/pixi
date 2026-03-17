@@ -175,6 +175,7 @@ pub fn to_target_selector_v1(selector: &TargetSelector) -> pbt::TargetSelector {
         TargetSelector::Linux => pbt::TargetSelector::Linux,
         TargetSelector::Win => pbt::TargetSelector::Win,
         TargetSelector::MacOs => pbt::TargetSelector::MacOs,
+        TargetSelector::Expression(expr) => pbt::TargetSelector::Expression(expr.clone()),
     }
 }
 

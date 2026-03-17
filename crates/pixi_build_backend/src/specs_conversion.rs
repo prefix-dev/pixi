@@ -76,6 +76,8 @@ pub fn convert_variant_to_pixi_build_types(
 pub fn to_rattler_build_selector(selector: &TargetSelector, platform_kind: PlatformKind) -> String {
     match selector {
         TargetSelector::Platform(p) => format!("{platform_kind}_platform == '{p}'"),
+        // Expression selectors are passed through directly to rattler-build.
+        TargetSelector::Expression(expr) => expr.clone(),
         _ => selector.to_string(),
     }
 }
@@ -418,5 +420,40 @@ mod test {
         };
         let match_spec = binary_package_spec_to_package_dependency(name, spec);
         assert_eq!(match_spec.to_string(), "python");
+    }
+
+    #[test]
+    fn test_to_rattler_build_selector_platform() {
+        let selector = TargetSelector::Platform("linux-64".to_string());
+        assert_eq!(
+            to_rattler_build_selector(&selector, PlatformKind::Host),
+            "host_platform == 'linux-64'"
+        );
+    }
+
+    #[test]
+    fn test_to_rattler_build_selector_expression_passthrough() {
+        let selector =
+            TargetSelector::Expression("host_platform == build_platform".to_string());
+        assert_eq!(
+            to_rattler_build_selector(&selector, PlatformKind::Host),
+            "host_platform == build_platform"
+        );
+
+        let selector2 =
+            TargetSelector::Expression("target_platform != 'linux-64'".to_string());
+        assert_eq!(
+            to_rattler_build_selector(&selector2, PlatformKind::Build),
+            "target_platform != 'linux-64'"
+        );
+    }
+
+    #[test]
+    fn test_to_rattler_build_selector_family() {
+        let selector = TargetSelector::Unix;
+        assert_eq!(
+            to_rattler_build_selector(&selector, PlatformKind::Host),
+            "unix"
+        );
     }
 }

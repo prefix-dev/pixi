@@ -929,6 +929,24 @@ mod test {
     }
 
     #[test]
+    fn test_expression_selector_rejected_in_workspace_target() {
+        // Expression selectors should be rejected in the workspace target section
+        // because TargetSelector::from_str doesn't accept arbitrary expressions.
+        // Only the [package.target] section accepts expression selectors.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['linux-64']
+
+        [target."host_platform == build_platform".dependencies]
+        foo = "*"
+        "#,
+        ));
+    }
+
+    #[test]
     fn test_unknown_feature() {
         assert_snapshot!(expect_parse_failure(
             r#"

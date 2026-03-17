@@ -76,8 +76,11 @@ impl IsDefault for ProjectModel {
     }
 }
 
-/// Represents a target selector. Currently, we only support explicit platform
-/// selection.
+/// Represents a target selector.
+///
+/// In addition to explicit platform selection, the `Expression` variant allows
+/// arbitrary selector expressions (e.g. `"host_platform == build_platform"`)
+/// that are passed through directly to rattler-build.
 #[derive(Debug, Clone, DeserializeFromStr, SerializeDisplay, Eq, PartialEq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum TargetSelector {
@@ -87,7 +90,8 @@ pub enum TargetSelector {
     Win,
     MacOs,
     Platform(String),
-    // TODO: Add minijinja coolness here.
+    /// A free-form selector expression passed through to rattler-build.
+    Expression(String),
 }
 
 impl Display for TargetSelector {
@@ -98,6 +102,7 @@ impl Display for TargetSelector {
             TargetSelector::Win => write!(f, "win"),
             TargetSelector::MacOs => write!(f, "macos"),
             TargetSelector::Platform(p) => write!(f, "{p}"),
+            TargetSelector::Expression(expr) => write!(f, "{expr}"),
         }
     }
 }
@@ -110,6 +115,12 @@ impl FromStr for TargetSelector {
             "linux" => Ok(TargetSelector::Linux),
             "win" => Ok(TargetSelector::Win),
             "macos" => Ok(TargetSelector::MacOs),
+            // Expression selectors contain operators or spaces (e.g.
+            // "host_platform == build_platform"), whereas platform names are
+            // simple identifiers like "linux-64" or "osx-arm64".
+            _ if s.contains(' ') || s.contains("==") || s.contains("!=") => {
+                Ok(TargetSelector::Expression(s.to_string()))
+            }
             _ => Ok(TargetSelector::Platform(s.to_string())),
         }
     }
@@ -574,6 +585,10 @@ impl Hash for TargetSelector {
             TargetSelector::Platform(p) => {
                 4u8.hash(state);
                 p.hash(state);
+            }
+            TargetSelector::Expression(expr) => {
+                5u8.hash(state);
+                expr.hash(state);
             }
         }
     }

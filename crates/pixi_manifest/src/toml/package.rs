@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
 pub use pixi_toml::TomlFromStr;
-use pixi_toml::{DeserializeAs, Same, TomlIndexMap, TomlWith};
+use pixi_toml::{DeserializeAs, FromKey, Same, TomlIndexMap, TomlWith};
 use rattler_conda_types::Version;
 use thiserror::Error;
 use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper};
@@ -17,6 +17,21 @@ use crate::{
     },
     utils::{PixiSpanned, package_map::UniquePackageMap},
 };
+
+/// A wrapper around [`TargetSelector`] for use as a TOML key in the
+/// `[package.target]` section. Unlike `TargetSelector::from_str`, this
+/// accepts arbitrary strings as expression selectors that are passed through
+/// to rattler-build.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct PackageTargetKey(pub(crate) TargetSelector);
+
+impl<'de> FromKey<'de> for PackageTargetKey {
+    type Err = std::convert::Infallible;
+
+    fn from_key(key: toml_span::value::Key<'de>) -> Result<Self, Self::Err> {
+        Ok(PackageTargetKey(TargetSelector::from_str_or_expression(&key.name)))
+    }
+}
 
 /// Represents a field that can either have a direct value or inherit from
 /// workspace
@@ -135,7 +150,7 @@ pub struct TomlPackage {
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageTarget>,
+    pub target: IndexMap<PixiSpanned<PackageTargetKey>, TomlPackageTarget>,
 
     pub span: Span,
 }
@@ -345,6 +360,10 @@ impl TomlPackage {
             .into_iter()
             .map(|(selector, target)| {
                 let target = target.into_package_target(preview)?;
+                let selector = PixiSpanned {
+                    value: selector.value.0,
+                    span: selector.span,
+                };
                 Ok::<_, TomlError>((selector, target))
             })
             .collect::<Result<_, _>>()?;
@@ -1113,5 +1132,50 @@ mod test {
         // Verify the readme path is set correctly
         let manifest = result.unwrap().value;
         assert!(manifest.package.readme.is_some());
+    }
+
+    #[test]
+    fn test_expression_selector_in_package_target() {
+        let input = r#"
+        name = "package-name"
+        version = "1.0.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [target."host_platform == build_platform".build-dependencies]
+        cmake = "*"
+        "#;
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let workspace = WorkspacePackageProperties::default();
+
+        let parsed = package
+            .into_manifest(
+                workspace,
+                PackageDefaults::default(),
+                &Preview::default(),
+                None,
+            )
+            .unwrap();
+
+        // Verify the expression selector target was parsed correctly
+        let targets = &parsed.value.targets;
+        let expr_target = targets
+            .iter()
+            .find_map(|(target, selector)| {
+                selector.and_then(|s| {
+                    if s.is_expression() {
+                        Some((s, target))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .expect("expected an expression selector target");
+        assert_eq!(
+            expr_target.0.to_string(),
+            "host_platform == build_platform"
+        );
+        assert!(expr_target.1.build_dependencies().is_some());
     }
 }

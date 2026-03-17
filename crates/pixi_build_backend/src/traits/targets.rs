@@ -140,6 +140,7 @@ impl TargetSelector for pbt::TargetSelector {
             pbt::TargetSelector::Unix => platform.is_unix(),
             pbt::TargetSelector::Win => platform.is_windows(),
             pbt::TargetSelector::MacOs => platform.is_osx(),
+            pbt::TargetSelector::Expression(_) => false,
         }
     }
 }

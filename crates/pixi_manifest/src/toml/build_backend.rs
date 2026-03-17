@@ -8,10 +8,10 @@ use std::borrow::Cow;
 use toml_span::{DeserError, Error, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 
 use crate::{
-    PackageBuild, TargetSelector, TomlError, WithWarnings,
+    PackageBuild, TomlError, WithWarnings,
     build_system::BuildBackend,
     error::GenericError,
-    toml::build_target::TomlPackageBuildTarget,
+    toml::{build_target::TomlPackageBuildTarget, package::PackageTargetKey},
     utils::{PixiSpanned, package_map::UniquePackageMap},
     warning::Deprecation,
 };
@@ -23,7 +23,7 @@ pub struct TomlPackageBuild {
     pub additional_dependencies: UniquePackageMap,
     pub source: Option<SourceLocationSpec>,
     pub configuration: Option<serde_value::Value>,
-    pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
+    pub target: IndexMap<PixiSpanned<PackageTargetKey>, TomlPackageBuildTarget>,
     pub warnings: Vec<crate::Warning>,
 }
 
@@ -82,7 +82,7 @@ impl TomlPackageBuild {
             .target
             .into_iter()
             .flat_map(|(selector, target)| {
-                target.config.map(|config| (selector.into_inner(), config))
+                target.config.map(|config| (selector.into_inner().0, config))
             })
             .collect::<IndexMap<_, _>>();
 

@@ -1,0 +1,13 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"test\"\n        channels = []\n        platforms = ['linux-64']\n\n        [target.\"host_platform == build_platform\".dependencies]\n        foo = \"*\"\n        \"#,)"
+---
+  × 'host_platform == build_platform' is not a known platform. Valid platforms are 'noarch', 'unknown', 'linux-32', 'linux-64', 'linux-aarch64', 'linux-armv6l', 'linux-armv7l', 'linux-loongarch64',
+  │ 'linux-ppc64le', 'linux-ppc64', 'linux-ppc', 'linux-s390x', 'linux-riscv32', 'linux-riscv64', 'freebsd-64', 'osx-64', 'osx-arm64', 'win-32', 'win-64', 'win-arm64', 'emscripten-wasm32', 'wasi-
+  │ wasm32', 'zos-z'
+   ╭─[pixi.toml:7:18]
+ 6 │
+ 7 │         [target."host_platform == build_platform".dependencies]
+   ·                  ───────────────────────────────
+ 8 │         foo = "*"
+   ╰────
