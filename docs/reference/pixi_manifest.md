@@ -748,36 +748,51 @@ syntax as `[dependencies]`.
     acceptable *if* the package is already being installed. Use `[dependencies]` when you actually
     need the package to be present.
 
-!!! tip "Platform-specific constraints"
-    Like `[dependencies]`, constraints can be made platform-specific using the
-    [`[target]`](#the-target-table) table:
+#### Platform-specific constraints
 
-    ```toml
-    [constraints]
-    openssl = ">=3.0"
+Like `[dependencies]`, constraints can be made platform-specific using the
+[`[target]`](#the-target-table) table:
 
-    [target.linux-64.constraints]
-    # Tighten the constraint further on Linux
-    openssl = ">=3.0.7"
-    ```
+```toml
+[constraints]
+openssl = ">=3.0"
 
-!!! tip "Per-feature constraints"
-    Constraints can also be scoped to a [feature](#the-feature-table):
+[target.linux-64.constraints]
+# Tighten the constraint further on Linux
+openssl = ">=3.0.7"
+```
 
-    ```toml
-    [dependencies]
-    python = ">=3.11"
+#### Per-feature constraints and merging
 
-    [feature.cuda.dependencies]
-    pytorch-gpu = ">=2.0"
+Constraints can also be scoped to a [feature](#the-feature-table).
+When an environment is composed of multiple features, constraints from **all active features are
+concatenated**, exactly like `[dependencies]`.
+This means each feature can independently constrain transitive dependencies, and the resulting
+environment must satisfy all of them simultaneously.
 
-    # When the cuda feature is active, enforce a compatible CUDA toolkit version
-    [feature.cuda.constraints]
-    cuda = ">=12.0"
+```toml
+[dependencies]
+python = ">=3.11"
 
-    [environments]
-    gpu = ["cuda"]
-    ```
+[feature.cuda.dependencies]
+pytorch-gpu = ">=2.0"
+
+# When the cuda feature is active, enforce a compatible CUDA toolkit version
+[feature.cuda.constraints]
+cuda = ">=12.0"
+
+[feature.cuda11.constraints]
+cuda = "<12"
+
+[environments]
+gpu = ["cuda"]
+legacy-gpu = ["cuda11"]
+```
+
+In the `gpu` environment the solver sees `cuda = ">=12.0"` as a constraint;
+in the `legacy-gpu` environment it sees `cuda = "<12"`.
+If both features were active in the same environment the solver would receive both
+constraints and would need to find a version that satisfies all of them.
 
 ### `pypi-dependencies`
 
