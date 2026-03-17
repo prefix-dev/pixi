@@ -301,7 +301,7 @@ impl<T: Clone, E: Clone> PendingDeduplicatingTask<T, E> {
     ///
     /// Both success and error results are cloned and sent to all waiting channels.
     pub fn on_pending_result(&mut self, result: Result<T, CommandDispatcherError<E>>) {
-        let Self::Pending(pending, context) = self else {
+        let Self::Pending(pending, _context) = self else {
             unreachable!("cannot get a result for a task that is not pending");
         };
 
