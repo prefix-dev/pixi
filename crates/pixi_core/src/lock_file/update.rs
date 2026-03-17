@@ -13,14 +13,14 @@ use std::{
 use barrier_cell::BarrierCell;
 use dashmap::DashMap;
 use fancy_display::FancyDisplay;
-use futures::{FutureExt, StreamExt, TryFutureExt, stream::FuturesUnordered};
+use futures::{FutureExt, StreamExt, TryFutureExt};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, PixiEnvironmentSpec,
-    SolvePixiEnvironmentError,
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    PixiEnvironmentSpec, SolvePixiEnvironmentError, executor::CancellationAwareFutures,
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
@@ -407,7 +407,7 @@ pub enum SolveCondaEnvironmentError {
         platform: Platform,
         #[source]
         #[diagnostic_source]
-        source: Box<CommandDispatcherError<SolvePixiEnvironmentError>>,
+        source: Box<SolvePixiEnvironmentError>,
     },
 
     #[error(
@@ -429,15 +429,9 @@ pub enum SolveCondaEnvironmentError {
     SourceConstraintNotSupported(String),
 }
 
-impl SolveCondaEnvironmentError {
-    /// Returns true if this error is due to cancellation (e.g., a sibling
-    /// platform solve failed and this one was cancelled as a result).
-    fn is_cancelled(&self) -> bool {
-        matches!(
-            self,
-            Self::SolveFailed { source, .. }
-                if matches!(source.as_ref(), CommandDispatcherError::Cancelled)
-        )
+impl From<ParseChannelError> for SolveCondaEnvironmentError {
+    fn from(value: ParseChannelError) -> Self {
+        SolveCondaEnvironmentError::ParseChannels(Box::new(value))
     }
 }
 
@@ -1589,7 +1583,7 @@ impl<'p> UpdateContext<'p> {
         // This will keep track of all outstanding tasks that we need to wait for. All
         // tasks are added to this list after they are spawned. This function blocks
         // until all pending tasks have either completed or errored.
-        let mut pending_futures = FuturesUnordered::new();
+        let mut pending_futures = CancellationAwareFutures::new(self.command_dispatcher.executor());
 
         // Spawn tasks for all the conda targets that are out of date.
         for (environment, platforms) in self.outdated_envs.conda.iter() {
@@ -1666,23 +1660,16 @@ impl<'p> UpdateContext<'p> {
                 let mapping_client = self.mapping_client.clone();
                 let command_dispatcher = self.command_dispatcher.clone();
                 let source_clone = source.clone();
-                let group_solve_task = async move {
-                    match spawn_solve_conda_environment_task(
-                        source_clone,
-                        locked_group_records,
-                        mapping_client,
-                        platform,
-                        channel_priority,
-                        command_dispatcher,
-                        pin_overrides,
-                    )
-                    .await
-                    {
-                        Ok(result) => Ok(Some(result)),
-                        Err(err) if err.is_cancelled() => Ok(None),
-                        Err(err) => Err(Report::new(err)),
-                    }
-                }
+                let group_solve_task = spawn_solve_conda_environment_task(
+                    source_clone,
+                    locked_group_records,
+                    mapping_client,
+                    platform,
+                    channel_priority,
+                    command_dispatcher,
+                    pin_overrides,
+                )
+                .map(|result| result.map_err_with(Report::new))
                 .boxed_local();
 
                 // Store the task so we can poll it later.
@@ -1798,7 +1785,11 @@ impl<'p> UpdateContext<'p> {
                 self.no_install,
             );
 
-            pending_futures.push(pypi_solve_future.map_ok(Some).boxed_local());
+            pending_futures.push(
+                pypi_solve_future
+                    .map_err(CommandDispatcherError::Failed)
+                    .boxed_local(),
+            );
 
             let previous_cell = self
                 .grouped_solved_pypi_records
@@ -1844,7 +1835,11 @@ impl<'p> UpdateContext<'p> {
                 grouped_pypi_records,
                 self.command_dispatcher.clone(),
             );
-            pending_futures.push(extract_resolution_task.map_ok(Some).boxed_local());
+            pending_futures.push(
+                extract_resolution_task
+                    .map_err(CommandDispatcherError::Failed)
+                    .boxed_local(),
+            );
 
             // Create a cell that will be used to store the result of the extraction.
             let previous_cell = self
@@ -1895,12 +1890,16 @@ impl<'p> UpdateContext<'p> {
         // 2. The futures stored in `pending_futures` do not necessarily have to be
         //    `'static`. Which makes them easier to work with.
         while let Some(result) = pending_futures.next().await {
-            let Some(task_result) = result? else {
-                // Task was cancelled (a sibling solve failed) — skip.
-                top_level_progress.inc(1);
-                continue;
-            };
             top_level_progress.inc(1);
+            let task_result = match result {
+                Ok(task_result) => task_result,
+                Err(CommandDispatcherError::Cancelled) => {
+                    unreachable!(
+                        "If we get a cancellation error here it means the error that caused the cancellation did not propagate."
+                    );
+                }
+                Err(CommandDispatcherError::Failed(report)) => return Err(report),
+            };
             match task_result {
                 TaskResult::CondaGroupSolved(group_name, platform, records, duration) => {
                     let group = GroupedEnvironment::from_name(project, &group_name)
@@ -2202,7 +2201,7 @@ async fn spawn_solve_conda_environment_task(
     channel_priority: ChannelPriority,
     command_dispatcher: CommandDispatcher,
     pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
-) -> Result<TaskResult, SolveCondaEnvironmentError> {
+) -> Result<TaskResult, CommandDispatcherError<SolveCondaEnvironmentError>> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
 
@@ -2218,8 +2217,10 @@ async fn spawn_solve_conda_environment_task(
                 conda_constraints.into_specs(),
             );
         if let Some((name, _)) = source_constraints.iter_specs().next() {
-            return Err(SolveCondaEnvironmentError::SourceConstraintNotSupported(
-                name.as_source().to_string(),
+            return Err(CommandDispatcherError::Failed(
+                SolveCondaEnvironmentError::SourceConstraintNotSupported(
+                    name.as_source().to_string(),
+                ),
             ));
         }
         binary_constraints
@@ -2252,7 +2253,11 @@ async fn spawn_solve_conda_environment_task(
     let pypi_name_mapping_location = group
         .workspace()
         .pypi_name_mapping_source()
-        .map_err(|err| SolveCondaEnvironmentError::PypiMappingFailed(err.into()))?
+        .map_err(|err| {
+            CommandDispatcherError::Failed(SolveCondaEnvironmentError::PypiMappingFailed(
+                err.into(),
+            ))
+        })?
         .clone();
 
     // The list of channels and platforms we need for this task
@@ -2266,13 +2271,18 @@ async fn spawn_solve_conda_environment_task(
         .iter()
         .map(|c| c.clone().into_base_url(&channel_config))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(Box::new)?;
+        .map_err(SolveCondaEnvironmentError::from)
+        .map_err(CommandDispatcherError::Failed)?;
 
     // Determine the build variants
     let VariantConfig {
         variant_configuration,
         variant_files,
-    } = group.workspace().variants(platform)?;
+    } = group
+        .workspace()
+        .variants(platform)
+        .map_err(SolveCondaEnvironmentError::from)
+        .map_err(CommandDispatcherError::Failed)?;
 
     // Convert dev dependencies to DevSourceSpecs
     let dev_sources: IndexMap<_, _> = dev_dependencies
@@ -2312,7 +2322,7 @@ async fn spawn_solve_conda_environment_task(
             preferred_build_source: pin_overrides,
         })
         .await
-        .map_err(|source| SolveCondaEnvironmentError::SolveFailed {
+        .map_err_with(|source| SolveCondaEnvironmentError::SolveFailed {
             environment_name: group_name.clone(),
             platform,
             source: Box::new(source),
@@ -2329,7 +2339,11 @@ async fn spawn_solve_conda_environment_task(
                 None,
             )
             .await
-            .map_err(|err| SolveCondaEnvironmentError::PypiMappingFailed(err.into()))?;
+            .map_err(|err| {
+                CommandDispatcherError::Failed(SolveCondaEnvironmentError::PypiMappingFailed(
+                    err.into(),
+                ))
+            })?;
     }
 
     // Turn the records into a map by name

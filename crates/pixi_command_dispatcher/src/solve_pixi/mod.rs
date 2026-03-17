@@ -260,7 +260,7 @@ impl PixiEnvironmentSpec {
         use futures::StreamExt;
 
         let mut dev_source_futures =
-            crate::executor::ExecutorFutures::new(command_dispatcher.executor());
+            crate::executor::CancellationAwareFutures::new(command_dispatcher.executor());
 
         // Create a future for each dev source
         for (package_name, dev_source_spec) in &self.dev_sources {

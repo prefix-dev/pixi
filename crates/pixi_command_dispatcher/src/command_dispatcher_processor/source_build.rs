@@ -42,10 +42,6 @@ impl CommandDispatcherProcessor {
                 PendingDeduplicatingTask::Completed(result, _) => {
                     let _ = task.tx.send(result.clone());
                 }
-                PendingDeduplicatingTask::Cancelled => {
-                    // Drop the sender, this will cause a cancellation on the other side.
-                    drop(task.tx);
-                }
             },
             Entry::Vacant(entry) => {
                 entry.insert(PendingDeduplicatingTask::Pending(
@@ -145,9 +141,13 @@ impl CommandDispatcherProcessor {
             reporter.on_finished(reporter_id, failed);
         }
 
-        self.source_build
+        if !self
+            .source_build
             .get_mut(&id)
             .expect("cannot find pending task")
             .on_pending_result(result)
+        {
+            self.source_build.remove(&id);
+        }
     }
 }
