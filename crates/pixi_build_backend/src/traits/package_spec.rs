@@ -89,7 +89,7 @@ impl PackageSpec for pbt::PackageSpec {
                 // Always use to_nameless() to preserve all fields including build constraints
                 let match_spec = MatchSpec::from_nameless(
                     binary_spec.to_nameless(),
-                    Some(PackageNameMatcher::Exact(name)),
+                    PackageNameMatcher::Exact(name),
                 );
                 Ok((match_spec, None))
             }

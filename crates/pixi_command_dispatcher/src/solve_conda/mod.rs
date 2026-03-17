@@ -144,7 +144,7 @@ impl SolveCondaEnvironmentSpec {
                 .source_specs
                 .into_specs()
                 .map(|(name, spec)| {
-                    MatchSpec::from_nameless(spec.to_nameless_match_spec(), Some(name.into()))
+                    MatchSpec::from_nameless(spec.to_nameless_match_spec(), name.into())
                 })
                 .collect::<Vec<_>>();
 
@@ -174,9 +174,7 @@ impl SolveCondaEnvironmentSpec {
                 .map(|name| {
                     let prefixed_name = format!("__pixi_dev_source_{}", name.as_normalized());
                     MatchSpec {
-                        name: Some(
-                            rattler_conda_types::PackageName::new_unchecked(prefixed_name).into(),
-                        ),
+                        name: rattler_conda_types::PackageName::new_unchecked(prefixed_name).into(),
                         ..MatchSpec::default()
                     }
                 })
@@ -235,8 +233,7 @@ impl SolveCondaEnvironmentSpec {
                                     .clone()
                                     .try_into_nameless_match_spec_ref(&self.channel_config)
                                     .unwrap_or_default();
-                                MatchSpec::from_nameless(nameless, Some(name.clone().into()))
-                                    .to_string()
+                                MatchSpec::from_nameless(nameless, name.clone().into()).to_string()
                             })
                             .collect(),
                         constrains: dev_source
@@ -249,7 +246,7 @@ impl SolveCondaEnvironmentSpec {
                                     .try_into_nameless_match_spec(&self.channel_config)
                                     .ok()?;
                                 Some(
-                                    MatchSpec::from_nameless(nameless, Some(name.clone().into()))
+                                    MatchSpec::from_nameless(nameless, name.clone().into())
                                         .to_string(),
                                 )
                             })

@@ -648,12 +648,7 @@ fn resolve_run_export_spec(
     )
     .ok()?;
 
-    let name = match_spec
-        .name
-        .as_ref()?
-        .as_exact()?
-        .as_source()
-        .to_string();
+    let name = match_spec.name.as_exact()?.as_source().to_string();
 
     // Check if there's a variant value for this package
     let version_spec = if match_spec
@@ -700,12 +695,7 @@ fn convert_run_exports_json(
                 )
                 .ok()?;
 
-                let name = match_spec
-                    .name
-                    .as_ref()?
-                    .as_exact()?
-                    .as_source()
-                    .to_string();
+                let name = match_spec.name.as_exact()?.as_source().to_string();
 
                 Some(NamedSpec {
                     name: SourcePackageName::from(name),
@@ -728,12 +718,7 @@ fn convert_run_exports_json(
                 )
                 .ok()?;
 
-                let name = match_spec
-                    .name
-                    .as_ref()?
-                    .as_exact()?
-                    .as_source()
-                    .to_string();
+                let name = match_spec.name.as_exact()?.as_source().to_string();
 
                 Some(NamedSpec {
                     name: SourcePackageName::from(name),

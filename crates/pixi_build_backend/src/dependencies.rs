@@ -80,7 +80,7 @@ impl<'a> MatchspecExtractor<'a> {
                 .context("failed to convert variant to matchspec")?;
                 specs.push(MatchSpec::from_nameless(
                     spec,
-                    Some(PackageNameMatcher::Exact(name)),
+                    PackageNameMatcher::Exact(name),
                 ));
                 continue;
             }
@@ -445,7 +445,7 @@ pub fn apply_variant(
                             .parse()
                             .map_err(|e| ResolveError::VariantSpecParseError(variant.clone(), e))?;
 
-                        let spec = MatchSpec::from_nameless(spec, Some(name_matcher.clone()));
+                        let spec = MatchSpec::from_nameless(spec, name_matcher.clone());
 
                         return Ok(VariantDependency { spec, variant }.into());
                     }
