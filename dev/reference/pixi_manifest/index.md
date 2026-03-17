@@ -683,6 +683,73 @@ rust = "==1.72"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 ```
 
+### `constraints`
+
+The `constraints` table lets you restrict the versions of conda packages that *may* be installed without explicitly requiring them. A constraint is only enforced when the package in question is actually present in the environment (pulled in by another dependency); if the package is not needed, the constraint is silently ignored.
+
+This is useful for two common scenarios:
+
+- **Preventing known-bad versions** – you know that a transitive dependency has a regression in a certain version range and you want to rule it out without adding a hard dependency.
+- **Coordinating optional packages** – your project works with or without an optional library, but if that library is installed it must be a specific generation (e.g. CUDA 12 vs 11).
+
+```toml
+[workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+[dependencies]
+# openssl will be pulled in transitively; this constraint
+# ensures we never end up with a vulnerable 1.x release.
+requests = ">=2.28"
+
+[constraints]
+openssl = ">=3.0"
+```
+
+Constraints use the same [VersionSpec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/version_spec/enum.VersionSpec.html) syntax as `[dependencies]`.
+
+Note
+
+Constraints do **not** cause a package to be installed. They only restrict which version is acceptable *if* the package is already being installed. Use `[dependencies]` when you actually need the package to be present.
+
+#### Platform-specific constraints
+
+Like `[dependencies]`, constraints can be made platform-specific using the [`[target]`](#the-target-table) table:
+
+```toml
+[constraints]
+openssl = ">=3.0"
+
+[target.linux-64.constraints]
+# Tighten the constraint further on Linux
+openssl = ">=3.0.7"
+```
+
+#### Per-feature constraints and merging
+
+Constraints can also be scoped to a [feature](#the-feature-table). When an environment is composed of multiple features, constraints from **all active features are concatenated**, exactly like `[dependencies]`. This means each feature can independently constrain transitive dependencies, and the resulting environment must satisfy all of them simultaneously.
+
+```toml
+[dependencies]
+python = ">=3.11"
+
+[feature.cuda.dependencies]
+pytorch-gpu = ">=2.0"
+
+# When the cuda feature is active, enforce a compatible CUDA toolkit version
+[feature.cuda.constraints]
+cuda = ">=12.0"
+
+[feature.cuda11.constraints]
+cuda = "<12"
+
+[environments]
+gpu = ["cuda"]
+legacy-gpu = ["cuda11"]
+```
+
+In the `gpu` environment the solver sees `cuda = ">=12.0"` as a constraint; in the `legacy-gpu` environment it sees `cuda = "<12"`. If both features were active in the same environment the solver would receive both constraints and would need to find a version that satisfies all of them.
+
 ### `pypi-dependencies`
 
 Details regarding the PyPI integration
@@ -877,6 +944,7 @@ The target table is currently implemented for the following sub-tables:
 
 - [`activation`](#the-activation-table)
 - [`dependencies`](#dependencies)
+- [`constraints`](#constraints)
 - [`tasks`](#the-tasks-table)
 
 The target table is defined using `[target.PLATFORM.SUB-TABLE]`. E.g `[target.linux-64.dependencies]`
@@ -939,6 +1007,7 @@ This will create an environment called `test` that has `pytest` installed.
 The `feature` table allows you to define the following fields per feature.
 
 - `dependencies`: Same as the [dependencies](#dependencies).
+- `constraints`: Same as the [constraints](#constraints).
 - `pypi-dependencies`: Same as the [pypi-dependencies](#pypi-dependencies).
 - `pypi-options`: Same as the [pypi-options](#the-pypi-options-table).
 - `system-requirements`: Same as the [system-requirements](#the-system-requirements-table).
@@ -960,6 +1029,7 @@ activation = {scripts = ["cuda_activation.sh"]}
 # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
 channels = ["nvidia"]
 dependencies = {cuda = "x.y.z", cudnn = "12.0"}
+constraints = {cuda = ">=12.0"}
 pypi-dependencies = {torch = "==1.9.0"}
 platforms = ["linux-64", "osx-arm64"]
 system-requirements = {cuda = "12"}
