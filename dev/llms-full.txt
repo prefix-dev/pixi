@@ -16325,6 +16325,24 @@ pixi shell-hook --environment cuda
 pixi shell-hook --json
 ```
 
+Sourcing the script in bash and similar shells:
+
+```shell
+eval "$(pixi shell-hook)"
+```
+
+or in fish shell:
+
+```shell
+pixi shell-hook | source
+```
+
+or in powershell:
+
+```shell
+(pixi shell-hook) | Out-String | Invoke-Expression
+```
+
 Example use-case, when you want to get rid of the `pixi` executable in a Docker container.
 
 ```shell
@@ -16335,6 +16353,12 @@ rm ~/.pixi/bin/pixi # Now the environment will be activated without the need for
 # [pixi](../) shell
 
 Start a shell in a pixi environment, run `exit` to leave the shell
+
+Note
+
+Never put the `pixi shell` command inside one of your shell's startup files (.profile, .bashrc and the likes): the command starts a new shell without special arguments so the new shell will again execute your startup files, which in turn will again run `pixi shell` and so on, recursively until failure.
+
+Use [shell-hook](../shell-hook/) instead if you want to activate a pixi environment when your shell starts.
 
 ## Usage
 
@@ -19950,8 +19974,16 @@ pixi shell -w workspace-name
 pixi shell-hook -w workspace-name
 ```
 
+You can also specify `constraints` for packages that may be part of your environment without explicitly requiring them (similar to `run_constraints` for Conda packages):
+
+```toml
+[constraints]
+openssl = ">=3"
+```
+
 #### Added
 
+- Add `constraints` to limit dependency versions by @delsner in [#5603](https://github.com/prefix-dev/pixi/pull/5603)
 - `pixi search` improvements: allow arbitrary MatchSpecs, add `--json` by @pavelzw in [#5442](https://github.com/prefix-dev/pixi/pull/5442)
 - Add atomic write utilities for safe file operations by @baszalmstra in [#5500](https://github.com/prefix-dev/pixi/pull/5500)
 - Support `--` separator to pass extra args to typed-arg tasks by @ruben-arts in [#5569](https://github.com/prefix-dev/pixi/pull/5569)

@@ -4077,9 +4077,18 @@
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--environment<span class="w"> </span>cuda
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--json
 </span></code></pre></div>
+<p>Sourcing the script in bash and similar shells:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span>
+</span></code></pre></div>
+<p>or in fish shell:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nb">source</span>
+</span></code></pre></div>
+<p>or in powershell:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="o">(</span>pixi<span class="w"> </span>shell-hook<span class="o">)</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>Out-String<span class="w"> </span><span class="p">|</span><span class="w"> </span>Invoke-Expression
+</span></code></pre></div>
 <p>Example use-case, when you want to get rid of the <code>pixi</code> executable in a Docker container.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--shell<span class="w"> </span>bash<span class="w"> </span>&gt;<span class="w"> </span>/etc/profile.d/pixi.sh
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>rm<span class="w"> </span>~/.pixi/bin/pixi<span class="w"> </span><span class="c1"># Now the environment will be activated without the need for the pixi executable.</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--shell<span class="w"> </span>bash<span class="w"> </span>&gt;<span class="w"> </span>/etc/profile.d/pixi.sh
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>rm<span class="w"> </span>~/.pixi/bin/pixi<span class="w"> </span><span class="c1"># Now the environment will be activated without the need for the pixi executable.</span>
 </span></code></pre></div>
 
 

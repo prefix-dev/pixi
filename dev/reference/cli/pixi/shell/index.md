@@ -2,6 +2,12 @@
 
 Start a shell in a pixi environment, run `exit` to leave the shell
 
+Note
+
+Never put the `pixi shell` command inside one of your shell's startup files (.profile, .bashrc and the likes): the command starts a new shell without special arguments so the new shell will again execute your startup files, which in turn will again run `pixi shell` and so on, recursively until failure.
+
+Use [shell-hook](../shell-hook/) instead if you want to activate a pixi environment when your shell starts.
+
 ## Usage
 
 ```text
