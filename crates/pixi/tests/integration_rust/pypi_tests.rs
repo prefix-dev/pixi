@@ -474,6 +474,70 @@ version = "1.0.0"
         }
         _ => panic!("expected a pypi package"),
     }
+
+    // Trigger a re-resolve so that update_lock_file writes a new lock file
+    // that includes another-dep. Then verify the lock file can be loaded
+    // again — this catches URL mismatches between the environment reference
+    // (e.g. "./another-dep") and the packages section (e.g.
+    // "file:///tmp/.../another-dep").
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamic-dep"
+version = "50.0.0"
+"#,
+    )
+    .unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    // The lock file written by the re-resolve must be loadable.
+    let lock_reloaded = pixi
+        .lock_file()
+        .await
+        .expect("lock file written by update_lock_file should be loadable");
+
+    // Both packages should be present after the round-trip through disk.
+    assert!(
+        lock_reloaded.contains_pypi_package("default", platform, "dynamic-dep"),
+        "dynamic-dep should be present after reload"
+    );
+    assert!(
+        lock_reloaded.contains_pypi_package("default", platform, "another-dep"),
+        "another-dep should be present after reload"
+    );
+
+    // Verify the in-memory lock also has both packages with correct properties.
+    match lock
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should be in the re-resolved lock")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version.is_none(),
+                "dynamic-dep version should be None, got {:?}",
+                data.version
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+    match lock
+        .get_pypi_package("default", platform, "another-dep")
+        .expect("another-dep should be in the re-resolved lock")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version.is_none(),
+                "another-dep version should be None for local source dep, got {:?}",
+                data.version
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
 }
 
 #[tokio::test]
