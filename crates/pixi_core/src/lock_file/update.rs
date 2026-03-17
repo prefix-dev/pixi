@@ -747,14 +747,20 @@ impl<'p> LockFileDerivedData<'p> {
                     .into_iter()
                     .filter_map(LockedPackageRef::as_pypi)
                     .map(move |data| {
-                        (
-                            Into::<UnresolvedPypiRecord>::into(data.clone()),
+                        // Use the version requested in the lock file or be happy with *any* version
+                        let version = data
+                            .version
+                            .clone()
+                            .unwrap_or_else(|| pep440_rs::MIN_VERSION.clone());
+                        pixi_install_pypi::InstallablePypiRecord::new(
+                            data,
                             pixi_install_pypi::ManifestData {
                                 editable: is_editable_from_manifest(
                                     &manifest_pypi_deps,
                                     &data.name,
                                 ),
                             },
+                            version,
                         )
                     })
                     .collect::<Vec<_>>();
@@ -784,7 +790,7 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let pypi_lock_file_names = pypi_records
                     .iter()
-                    .filter_map(|(data, _)| to_uv_normalize(data.name()).ok())
+                    .filter_map(|r| to_uv_normalize(&r.name).ok())
                     .collect::<HashSet<_>>();
 
                 // Figure out uv reinstall

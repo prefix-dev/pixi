@@ -120,7 +120,7 @@ impl InstallPlanner {
                 // Empty string if no installer or any other error
                 .map_or(String::new(), |f| f.unwrap_or_default());
 
-            if let Some((required_pkg, required_dist)) = pkg_and_dist {
+            if let Some(required) = pkg_and_dist {
                 // Add to the list of previously installed packages
                 prev_installed_packages.insert(dist.name());
                 // Check if we need this package installed but it is not currently installed by us
@@ -135,7 +135,12 @@ impl InstallPlanner {
                     ));
                 } else {
                     // Check if we need to reinstall
-                    match need_reinstall(dist, required_pkg, required_dist, &self.lock_file_dir)? {
+                    match need_reinstall(
+                        dist,
+                        &required.record,
+                        &required.dist,
+                        &self.lock_file_dir,
+                    )? {
                         ValidateCurrentInstall::Keep => {
                             if self.uv_cache.must_revalidate_package(dist.name()) {
                                 reinstalls
@@ -155,7 +160,7 @@ impl InstallPlanner {
                 // let's see if we need the remote or local version
                 let installation_sources = installation_source::decide_installation_source(
                     &self.uv_cache,
-                    required_dist,
+                    &required.dist,
                     &mut dist_cache,
                     Operation::Reinstall,
                     build_options,
@@ -168,7 +173,7 @@ impl InstallPlanner {
         }
 
         // Now we need to check if we have any packages left in the required_map
-        for (_name, (_pkg, dist)) in required_dists_map
+        for (_name, required) in required_dists_map
             .iter()
             // Only check the packages that have not been previously installed
             .filter(|(name, _)| !prev_installed_packages.contains(name))
@@ -178,7 +183,7 @@ impl InstallPlanner {
             // let's see if we need the remote or local version
             let installation_sources = installation_source::decide_installation_source(
                 &self.uv_cache,
-                dist,
+                &required.dist,
                 &mut dist_cache,
                 Operation::Install,
                 build_options,
@@ -198,8 +203,8 @@ impl InstallPlanner {
         // Walk over all installed packages and check if they are required
         let mut extraneous = HashMap::new();
         for dist in site_packages.iter() {
-            let pkg_and_dist = required_dists_map.get(dist.name());
-            let pkg = pkg_and_dist.map(|(pkg, _dist)| *pkg);
+            let dist_data = required_dists_map.get(dist.name());
+            let pkg = dist_data.map(|r| &r.record);
             let installer = dist
                 .read_installer()
                 .map_or(String::new(), |f| f.unwrap_or_default());
