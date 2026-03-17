@@ -21,13 +21,4 @@ pixi task list [OPTIONS]
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  List as json instead of a tree If not specified, the default environment is used
 
-## Description
-List all tasks in the workspace
- 
- Example usage:
- 
- - `pixi task list`: Listing all tasks in the workspace.
- 
- - `pixi task list --feature dev`: Listing all tasks in the dev feature.
- 
- --8<-- "docs/reference/cli/pixi/task/list_extender:example"
+--8<-- "docs/reference/cli/pixi/task/list_extender:example"

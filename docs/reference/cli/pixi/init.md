@@ -45,16 +45,16 @@ This command is used to create a new workspace. It prepares a manifest and some 
 As pixi can both work with `pixi.toml` and `pyproject.toml` files, the user can choose which one to use with `--format`.
 
 You can import an existing conda environment file with the `--import` flag.
- 
+
 Example usage:
- 
- - `pixi init`: Initializing a new project in the current directory.
- 
- - `pixi init --platform linux-64 --platform osx-arm64`: Initializing with specific platforms.
- 
- - `pixi init --format pyproject`: Initializing in pyproject.toml format.
- 
- - `pixi init --import environment.yml`: Importing from a conda environment file.
+
+- `pixi init`: Initializing a new project in the current directory.
+
+- `pixi init --platform linux-64 --platform osx-arm64`: Initializing with specific platforms.
+
+- `pixi init --format pyproject`: Initializing in pyproject.toml format.
+
+- `pixi init --import environment.yml`: Importing from a conda environment file.
 
 
 --8<-- "docs/reference/cli/pixi/init_extender:example"

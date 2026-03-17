@@ -45,15 +45,4 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
 :  The arguments to pass to the task
 <br>May be provided more than once.
 
-## Description
-Add a command to the workspace
- 
- Example usage:
- 
- - `pixi task add test "pytest"`
- 
- - `pixi task add --feature dev test "pytest"`
- 
- - `pixi task add --platform linux-64 build "make"`
- 
- --8<-- "docs/reference/cli/pixi/task/add_extender:example"
+--8<-- "docs/reference/cli/pixi/task/add_extender:example"
