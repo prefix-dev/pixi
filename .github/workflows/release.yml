@@ -254,7 +254,7 @@ jobs:
           }
           # Recompute .sha256 files for all modified archives (zip and msi)
           # The signing step changes the file content, so checksums computed before signing are stale
-          foreach ($artifact in (Get-ChildItem target/distrib -Filter "*.zip") + (Get-ChildItem target/distrib -Filter "*.msi")) {
+          foreach ($artifact in @(Get-ChildItem target/distrib -Filter "*.zip") + @(Get-ChildItem target/distrib -Filter "*.msi")) {
             $hash = (Get-FileHash $artifact.FullName -Algorithm SHA256).Hash.ToLower()
             "$hash *$($artifact.Name)" | Set-Content "$($artifact.FullName).sha256" -NoNewline
           }
