@@ -1,0 +1,28 @@
+[workspace]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "r-terrademo"
+platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+preview = ["pixi-build"]
+
+[dependencies]
+# Build and install our local R package which depends on terra.
+# pixi-build-r reads DESCRIPTION, maps "terra" -> "r-terra" from conda-forge,
+# and conda-forge's r-terra already pins the correct GDAL, GEOS, and PROJ versions.
+r-terrademo = { path = "." }
+
+[tasks]
+demo = "Rscript demo.R"
+
+[package]
+name = "r-terrademo"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-r", version = "0.1.*" }
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]

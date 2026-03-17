@@ -1,0 +1,12 @@
+Package: terrademo
+Title: Demo of Using the Terra Package with Pixi Build
+Version: 0.1.0
+Authors@R: person("Pixi", "Dev", email = "hi@prefix.dev", role = c("aut", "cre"))
+Description: A minimal example showing how to use the terra geospatial package
+    with pixi-build-r. This demonstrates that pixi can resolve all system
+    dependencies (GDAL, GEOS, PROJ) automatically via conda-forge.
+License: MIT
+Imports:
+    terra
+Depends:
+    R (>= 4.1.0)

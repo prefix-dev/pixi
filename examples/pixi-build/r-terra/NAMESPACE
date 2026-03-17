@@ -1,0 +1,2 @@
+import(terra)
+export(create_demo_raster, analyze_raster, create_demo_vector)
