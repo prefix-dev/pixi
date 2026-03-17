@@ -233,6 +233,15 @@ def test_config_unset_unknown_key(pixi: Path, tmp_path: Path) -> None:
     )
     assert "disable-jlap" not in config.read_text()
 
+    # Unsetting a deeply-nested key (3+ levels) should also work.
+    config.write_text("[a.b]\nc = true\n")
+    verify_cli_command(
+        [pixi, "config", "unset", "--global", "a.b.c"],
+        env=env,
+        stderr_contains="Updated config",
+    )
+    assert "c = true" not in config.read_text()
+
     # Unsetting a key that is not present at all should also succeed.
     config.write_text("")
     verify_cli_command(

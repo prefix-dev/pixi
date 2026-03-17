@@ -13,6 +13,7 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
+use itertools::Itertools;
 
 #[derive(Parser, Debug)]
 enum Subcommand {
@@ -331,9 +332,30 @@ fn alter_config(
     Ok(())
 }
 
+/// Recursively walks `table` following `segments[0..n-1]` as nested table
+/// keys and removes `segments[n-1]` (the leaf) from the innermost table.
+/// Returns `true` if the key was found and removed.
+fn remove_key_from_table(table: &mut dyn toml_edit::TableLike, segments: &[&str]) -> bool {
+    match segments {
+        [] => false,
+        [leaf] => table.remove(leaf).is_some(),
+        [head, rest @ ..] => {
+            if let Some(child) = table.get_mut(head).and_then(|v| v.as_table_like_mut()) {
+                remove_key_from_table(child, rest)
+            } else {
+                false
+            }
+        }
+    }
+}
+
 /// Remove a key from the config TOML file directly, without going through the
 /// [`Config`] struct. This allows unsetting keys that are no longer present in
 /// the struct (e.g., config fields that have been removed in a newer version).
+///
+/// `key` may be a dotted path of arbitrary depth (e.g. `a.b.c`).  Every
+/// segment except the last must resolve to an existing TOML table; the last
+/// segment is the leaf that gets removed.
 fn unset_toml_key(path: &Path, key: &str) -> miette::Result<()> {
     let content = if path.exists() {
         fs::read_to_string(path)
@@ -353,34 +375,40 @@ fn unset_toml_key(path: &Path, key: &str) -> miette::Result<()> {
         .into_diagnostic()
         .wrap_err("failed to parse config file as TOML")?;
 
-    let removed = match key.split_once('.') {
-        None => doc.remove(key).is_some(),
-        Some((table_key, sub_key)) => {
-            if let Some(table) = doc.get_mut(table_key).and_then(|v| v.as_table_like_mut()) {
-                table.remove(sub_key).is_some()
-            } else {
-                false
-            }
-        }
-    };
+    let segments: Vec<&str> = key.split('.').collect();
+
+    // Recursively walk the nested tables and remove the leaf.
+    let removed = remove_key_from_table(&mut *doc, &segments);
 
     if !removed {
+        // Suggest similar keys from the known Config schema.
+        let dummy = Config::default();
+        let known_keys = dummy.get_keys();
+        let mut suggestions: Vec<(f64, &&str)> = known_keys
+            .iter()
+            .filter_map(|k| {
+                let score = strsim::jaro(key, k);
+                if score > 0.8 { Some((score, k)) } else { None }
+            })
+            .collect();
+        suggestions.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        let hint = if suggestions.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n  Similar known keys: {}",
+                suggestions.iter().map(|(_, k)| format!("'{}'", k)).join(", ")
+            )
+        };
         eprintln!(
-            "⚠️  Key '{}' is not set in config '{}'",
+            "⚠️  Key '{}' is not set in config '{}'.{}",
             key,
-            path.display()
+            path.display(),
+            hint
         );
         return Ok(());
     }
 
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .into_diagnostic()
-            .wrap_err(format!(
-                "failed to create directories in '{}'",
-                parent.display()
-            ))?;
-    }
     fs::write(path, doc.to_string())
         .into_diagnostic()
         .wrap_err(format!("failed to write config to '{}'", path.display()))?;
