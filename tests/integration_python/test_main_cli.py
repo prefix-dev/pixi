@@ -210,6 +210,38 @@ def test_broken_config(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command([pixi, "info"], env=env, stderr_contains="Ignoring 'invalid-key'")
 
 
+def test_config_unset_unknown_key(pixi: Path, tmp_path: Path) -> None:
+    """Unsetting a key absent from the config schema must not error."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    config = tmp_path / "config.toml"
+
+    # Write a config file with a top-level key no longer in the schema.
+    config.write_text('old-removed-setting = "some-value"\n')
+    verify_cli_command(
+        [pixi, "config", "unset", "--global", "old-removed-setting"],
+        env=env,
+        stderr_contains="Updated config",
+    )
+    assert "old-removed-setting" not in config.read_text()
+
+    # Unsetting a dotted key (e.g., a subfield removed from a nested table).
+    config.write_text("[repodata-config]\ndisable-jlap = false\n")
+    verify_cli_command(
+        [pixi, "config", "unset", "--global", "repodata-config.disable-jlap"],
+        env=env,
+        stderr_contains="Updated config",
+    )
+    assert "disable-jlap" not in config.read_text()
+
+    # Unsetting a key that is not present at all should also succeed.
+    config.write_text("")
+    verify_cli_command(
+        [pixi, "config", "unset", "--global", "non-existent-key"],
+        env=env,
+        stderr_contains="not set",
+    )
+
+
 @pytest.mark.slow
 def test_search(pixi: Path) -> None:
     verify_cli_command(

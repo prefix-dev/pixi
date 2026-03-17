@@ -1,5 +1,6 @@
 use crate::cli_config::WorkspaceConfig;
 use clap::Parser;
+use fs_err as fs;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_config;
 use pixi_config::Config;
@@ -7,7 +8,11 @@ use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::WorkspaceLocatorError;
 use rattler_conda_types::NamedChannelOrUrl;
-use std::{io::Write, path::PathBuf, str::FromStr};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 #[derive(Parser, Debug)]
 enum Subcommand {
@@ -317,11 +322,70 @@ fn alter_config(
                 }
             }
         }
-        AlterMode::Set | AlterMode::Unset => config.set(key, value)?,
+        AlterMode::Set => config.set(key, value)?,
+        AlterMode::Unset => return unset_toml_key(&to, key),
     }
 
     config.save(&to)?;
     eprintln!("✅ Updated config at {}", to.display());
+    Ok(())
+}
+
+/// Remove a key from the config TOML file directly, without going through the
+/// [`Config`] struct. This allows unsetting keys that are no longer present in
+/// the struct (e.g., config fields that have been removed in a newer version).
+fn unset_toml_key(path: &Path, key: &str) -> miette::Result<()> {
+    let content = if path.exists() {
+        fs::read_to_string(path)
+            .into_diagnostic()
+            .wrap_err(format!("failed to read config from '{}'", path.display()))?
+    } else {
+        eprintln!(
+            "⚠️  Key '{}' is not set in config '{}'",
+            key,
+            path.display()
+        );
+        return Ok(());
+    };
+
+    let mut doc = content
+        .parse::<toml_edit::DocumentMut>()
+        .into_diagnostic()
+        .wrap_err("failed to parse config file as TOML")?;
+
+    let removed = match key.split_once('.') {
+        None => doc.remove(key).is_some(),
+        Some((table_key, sub_key)) => {
+            if let Some(table) = doc.get_mut(table_key).and_then(|v| v.as_table_like_mut()) {
+                table.remove(sub_key).is_some()
+            } else {
+                false
+            }
+        }
+    };
+
+    if !removed {
+        eprintln!(
+            "⚠️  Key '{}' is not set in config '{}'",
+            key,
+            path.display()
+        );
+        return Ok(());
+    }
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .into_diagnostic()
+            .wrap_err(format!(
+                "failed to create directories in '{}'",
+                parent.display()
+            ))?;
+    }
+    fs::write(path, doc.to_string())
+        .into_diagnostic()
+        .wrap_err(format!("failed to write config to '{}'", path.display()))?;
+
+    eprintln!("✅ Updated config at {}", path.display());
     Ok(())
 }
 
