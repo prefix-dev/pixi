@@ -174,9 +174,7 @@ mod tests {
         // Verify the build constraint is preserved
         assert_eq!(
             match_spec.name,
-            Some(PackageNameMatcher::Exact(
-                PackageName::try_from("tk").unwrap()
-            ))
+            PackageNameMatcher::Exact(PackageName::try_from("tk").unwrap())
         );
         assert_eq!(match_spec.version, Some(VersionSpec::Any));
         assert_eq!(match_spec.build, Some(build_matcher));
@@ -209,9 +207,7 @@ mod tests {
         // Verify both version and build constraint are preserved
         assert_eq!(
             match_spec.name,
-            Some(PackageNameMatcher::Exact(
-                PackageName::try_from("tk").unwrap()
-            ))
+            PackageNameMatcher::Exact(PackageName::try_from("tk").unwrap())
         );
         assert_eq!(match_spec.version, Some(version));
         assert_eq!(match_spec.build, Some(build_matcher));
@@ -242,9 +238,7 @@ mod tests {
         // Verify the match spec is correct
         assert_eq!(
             match_spec.name,
-            Some(PackageNameMatcher::Exact(
-                PackageName::try_from("python").unwrap()
-            ))
+            PackageNameMatcher::Exact(PackageName::try_from("python").unwrap())
         );
         assert_eq!(match_spec.version, Some(VersionSpec::Any));
         assert_eq!(match_spec.build, None);

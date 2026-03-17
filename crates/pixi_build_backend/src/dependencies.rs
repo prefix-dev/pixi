@@ -437,7 +437,7 @@ pub fn apply_variant(
                             .parse()
                             .map_err(|e| ResolveError::VariantSpecParseError(variant.clone(), e))?;
 
-                        let spec = MatchSpec::from_nameless(spec, name_matcher.clone());
+                        let spec = MatchSpec::from_nameless(spec, exact_name.clone().into());
 
                         return Ok(VariantDependency { spec, variant }.into());
                     }
