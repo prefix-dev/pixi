@@ -20,6 +20,7 @@ from rich.prompt import Confirm
 from rich.table import Table
 
 UPSTREAM_REPO = "prefix-dev/pixi"
+USE_JJ = Path(".jj").is_dir()
 
 # Each entry needs "binary" and "version_file".  Optional overrides:
 #   version_table      – defaults to "package"
@@ -43,6 +44,11 @@ BACKEND_DEFS: list[dict[str, Any]] = [
     {
         "binary": "pixi-build-mojo",
         "version_file": "crates/pixi_build_mojo/Cargo.toml",
+        "in_cargo_workspace": True,
+    },
+    {
+        "binary": "pixi-build-r",
+        "version_file": "crates/pixi_build_r/Cargo.toml",
         "in_cargo_workspace": True,
     },
     {
@@ -184,23 +190,38 @@ def find_remote() -> str:
 
 def commit_and_push(remote: str, branch: str, message: str) -> None:
     """Create a branch, commit changes, and push to the remote."""
-    # Delete the branch if it already exists locally
-    result = subprocess.run(
-        ["git", "branch", "--list", branch],
-        capture_output=True,
-        text=True,
-    )
-    if result.stdout.strip():
-        run(["git", "branch", "--delete", branch])
-    run(["git", "switch", "--create", branch])
-    run(["git", "commit", "--all", "--message", message])
-    run(["git", "push", "--set-upstream", remote, branch])
+    if USE_JJ:
+        run(["jj", "describe", "--message", message])
+        # Track the remote bookmark if it exists, so set + push can update it
+        subprocess.run(
+            ["jj", "bookmark", "track", branch, f"--remote={remote}"],
+            capture_output=True,
+        )
+        run(["jj", "bookmark", "set", "--allow-backwards", branch])
+        run(["jj", "git", "push", "--remote", remote, "--bookmark", branch])
+        run(["jj", "new"])
+    else:
+        # Delete the branch if it already exists locally
+        result = subprocess.run(
+            ["git", "branch", "--list", branch],
+            capture_output=True,
+            text=True,
+        )
+        if result.stdout.strip():
+            run(["git", "branch", "--delete", branch])
+        run(["git", "switch", "--create", branch])
+        run(["git", "commit", "--all", "--message", message])
+        run(["git", "push", "--set-upstream", remote, branch])
 
 
 def sync_to_main(remote: str) -> None:
     """Fetch latest changes and switch to the up-to-date main branch."""
-    run(["git", "checkout", "main"])
-    run(["git", "pull", remote, "main"])
+    if USE_JJ:
+        run(["jj", "git", "fetch", "--remote", remote])
+        run(["jj", "new", "main"])
+    else:
+        run(["git", "checkout", "main"])
+        run(["git", "pull", remote, "main"])
 
 
 def _ask(question: Any) -> Any:
@@ -311,7 +332,7 @@ def main() -> None:
                         "cargo",
                         "update",
                         "--package",
-                        py_backend.cargo_name,
+                        py_backend.binary,
                         "--manifest-path",
                         str(py_backend.version_path),
                     ]
