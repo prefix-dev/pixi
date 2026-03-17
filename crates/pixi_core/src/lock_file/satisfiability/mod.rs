@@ -3198,7 +3198,8 @@ mod tests {
             index_url: Some(Url::parse("https://custom.example.com/simple").unwrap()),
             requires_dist: vec![],
             requires_python: None,
-        };
+        }
+        .into();
 
         // Requirement: no index specified (user removed the `index` field).
         let spec = pep508_requirement_to_uv_requirement(
@@ -3257,7 +3258,8 @@ mod tests {
             index_url: Some(Url::parse("https://old-index.example.com/simple").unwrap()),
             requires_dist: vec![],
             requires_python: None,
-        };
+        }
+        .into();
 
         let spec = registry_requirement_with_index(
             "my-dep",
@@ -3287,7 +3289,8 @@ mod tests {
             index_url: Some(Url::parse(index_url).unwrap()),
             requires_dist: vec![],
             requires_python: None,
-        };
+        }
+        .into();
 
         let spec = registry_requirement_with_index("my-dep", ">=1.0", index_url);
 
@@ -3314,7 +3317,8 @@ mod tests {
             index_url: None,
             requires_dist: vec![],
             requires_python: None,
-        };
+        }
+        .into();
 
         let spec =
             registry_requirement_with_index("my-dep", ">=1.0", "https://custom.example.com/simple");

@@ -10,14 +10,18 @@ use std::{collections::HashMap, ops::Deref};
 use uv_distribution_types::Dist;
 use uv_normalize::PackageName;
 
+use crate::InstallablePypiRecord;
 use crate::conversions::{ConvertToUvDistError, convert_to_dist};
-use crate::{ManifestData, UnresolvedPypiRecord};
+pub struct RequiredDistData {
+    pub record: InstallablePypiRecord,
+    pub dist: Dist,
+}
 
 /// A collection of required distributions with their associated package data.
 /// This struct owns the Dist objects to ensure proper lifetimes for the install planner.
 pub struct RequiredDists(
     /// Map from normalized package name to (UnresolvedPypiRecord, Dist)
-    HashMap<PackageName, (UnresolvedPypiRecord, Dist)>,
+    HashMap<PackageName, RequiredDistData>,
 );
 
 impl RequiredDists {
@@ -29,19 +33,23 @@ impl RequiredDists {
     ///
     /// # Returns
     /// A RequiredDists instance or an error if conversion fails
-    pub fn from_packages(
-        packages: &[(&UnresolvedPypiRecord, &ManifestData)],
+    pub fn from_packages<'a>(
+        packages: impl Iterator<Item = &'a InstallablePypiRecord>,
         lock_file_dir: impl AsRef<Path>,
     ) -> Result<Self, ConvertToUvDistError> {
         let mut dists = HashMap::new();
 
-        for (pkg, manifest_data) in packages {
-            let pkg_data = pkg.as_package_data();
-            let uv_name = PackageName::from_str(pkg_data.name.as_ref()).map_err(|_| {
-                ConvertToUvDistError::InvalidPackageName(pkg_data.name.as_ref().to_string())
-            })?;
-            let dist = convert_to_dist(pkg, manifest_data, lock_file_dir.as_ref())?;
-            dists.insert(uv_name, ((*pkg).clone(), dist));
+        for p in packages {
+            let uv_name = PackageName::from_str(p.name.as_ref())
+                .map_err(|_| ConvertToUvDistError::InvalidPackageName(p.name.to_string()))?;
+            let dist = convert_to_dist(p, lock_file_dir.as_ref())?;
+            dists.insert(
+                uv_name,
+                RequiredDistData {
+                    record: p.clone(),
+                    dist,
+                },
+            );
         }
 
         Ok(Self(dists))
@@ -49,10 +57,10 @@ impl RequiredDists {
 
     /// Get a reference map suitable for passing to InstallPlanner::plan().
     /// Returns a map where the values are references to the owned data.
-    pub fn as_ref_map(&self) -> HashMap<PackageName, (&UnresolvedPypiRecord, &Dist)> {
+    pub fn as_ref_map(&self) -> HashMap<PackageName, &RequiredDistData> {
         self.0
             .iter()
-            .map(|(name, (pkg, dist))| (name.clone(), (pkg, dist)))
+            .map(|(name, data)| (name.clone(), data))
             .collect()
     }
 
@@ -63,7 +71,7 @@ impl RequiredDists {
 }
 
 impl Deref for RequiredDists {
-    type Target = HashMap<PackageName, (UnresolvedPypiRecord, Dist)>;
+    type Target = HashMap<PackageName, RequiredDistData>;
 
     fn deref(&self) -> &Self::Target {
         &self.0

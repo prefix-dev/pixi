@@ -16,6 +16,8 @@ use uv_distribution_types::{
 };
 use uv_pypi_types::{HashAlgorithm, HashDigest, ParsedUrl, ParsedUrlError, VerbatimParsedUrl};
 
+use crate::InstallablePypiRecord;
+
 use super::utils::{is_direct_url, strip_direct_scheme};
 
 /// Build an [`IndexUrl`] from the lock-file's optional `index_url`.
@@ -102,16 +104,14 @@ pub enum ConvertToUvDistError {
 
 /// Convert from an [`UnresolvedPypiRecord`] to a uv [`distribution_types::Dist`]
 pub fn convert_to_dist(
-    record: &crate::UnresolvedPypiRecord,
-    manifest_data: &crate::ManifestData,
+    record: &InstallablePypiRecord,
     lock_file_dir: &Path,
 ) -> Result<Dist, ConvertToUvDistError> {
-    let pkg = record.as_package_data();
     // Figure out if it is a url from the registry or a direct url
-    let dist = match &*pkg.location {
+    let dist = match &record.location {
         UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
             let url_without_direct = strip_direct_scheme(url);
-            let pkg_name = to_uv_normalize(&pkg.name)?;
+            let pkg_name = to_uv_normalize(&record.name)?;
 
             if LockedGitUrl::is_locked_git_url(&url_without_direct) {
                 let locked_git_url = LockedGitUrl::new(url_without_direct.clone().into_owned());
@@ -160,9 +160,9 @@ pub fn convert_to_dist(
             // which is essentially the file information for a wheel or sdist
             let file = locked_data_to_file(
                 url,
-                pkg.hash.as_ref(),
+                record.hash.as_ref(),
                 filename_decoded.as_ref(),
-                pkg.requires_python.clone(),
+                record.requires_python.clone(),
             )?;
             // Recreate the filename from the extracted last component
             // If this errors this is not a valid wheel filename
@@ -173,23 +173,19 @@ pub fn convert_to_dist(
                     wheels: vec![RegistryBuiltWheel {
                         filename,
                         file: Box::new(file),
-                        index: index_url_from_lock(pkg.index_url.as_ref()),
+                        index: index_url_from_lock(record.index_url.as_ref()),
                     }],
                     best_wheel_index: 0,
                     sdist: None,
                 }))
             } else {
-                let pkg_name = to_uv_normalize(&pkg.name)?;
-                let pkg_version = to_uv_version(
-                    pkg.version
-                        .as_ref()
-                        .expect("registry source dists always have a version"),
-                )?;
+                let pkg_name = to_uv_normalize(&record.name)?;
+                let pkg_version = to_uv_version(&record.version)?;
                 Dist::Source(SourceDist::Registry(RegistrySourceDist {
                     name: pkg_name,
                     version: pkg_version,
                     file: Box::new(file),
-                    index: index_url_from_lock(pkg.index_url.as_ref()),
+                    index: index_url_from_lock(record.index_url.as_ref()),
                     // I don't think this really matters for the install
                     wheels: vec![],
                     ext: SourceDistExtension::from_path(Path::new(filename_raw)).map_err(|e| {
@@ -207,14 +203,14 @@ pub fn convert_to_dist(
             };
 
             let absolute_url = uv_pep508::VerbatimUrl::from_absolute_path(&abs_path)?;
-            let pkg_name =
-                uv_normalize::PackageName::from_str(pkg.name.as_ref()).expect("should be correct");
+            let pkg_name = uv_normalize::PackageName::from_str(record.name.as_ref())
+                .expect("should be correct");
             if abs_path.is_dir() {
                 Dist::from_directory_url(
                     pkg_name,
                     absolute_url,
                     &abs_path,
-                    Some(manifest_data.editable),
+                    Some(record.manifest_data.editable),
                     Some(false),
                 )?
             } else {
@@ -249,26 +245,26 @@ mod tests {
         // Create url with special characters
         let wheel = "torch-2.3.0%2Bcu121-cp312-cp312-win_amd64.whl";
         let url = format!("https://example.com/{wheel}").parse().unwrap();
+        let version = Version::from_str("2.3.0+cu121").unwrap();
         // Pass into locked data
-        let locked: crate::UnresolvedPypiRecord = PypiPackageData {
-            name: "torch".parse().unwrap(),
-            version: Some(Version::from_str("2.3.0+cu121").unwrap()),
-            location: UrlOrPath::Url(url).into(),
-            hash: None,
-            index_url: None,
-            requires_dist: vec![],
-            requires_python: None,
-        }
-        .into();
+        let locked = crate::InstallablePypiRecord::new(
+            &PypiPackageData {
+                name: "torch".parse().unwrap(),
+                version: Some(version.clone()),
+                location: UrlOrPath::Url(url).into(),
+                hash: None,
+                index_url: None,
+                requires_dist: vec![],
+                requires_python: None,
+            },
+            crate::ManifestData { editable: false },
+            version,
+        );
 
         // Convert the locked data to a uv dist
         // check if it does not panic
-        let dist = convert_to_dist(
-            &locked,
-            &crate::ManifestData { editable: false },
-            &PathBuf::new(),
-        )
-        .expect("could not convert wheel with special chars to dist");
+        let dist = convert_to_dist(&locked, &PathBuf::new())
+            .expect("could not convert wheel with special chars to dist");
 
         // Check if the dist is a built dist
         assert!(!dist.filename().unwrap().contains("%2B"));

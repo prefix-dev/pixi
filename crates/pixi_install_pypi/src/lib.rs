@@ -10,6 +10,7 @@ use conda_pypi_clobber::PypiCondaClobberRegistry;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
+use pep440_rs::VersionSpecifiers;
 use pixi_consts::consts;
 use pixi_manifest::{
     EnvironmentName, SystemRequirements,
@@ -31,7 +32,7 @@ use pypi_modifiers::{
     pypi_tags::{get_pypi_tags, is_python_record},
 };
 use rattler_conda_types::Platform;
-use rattler_lock::{PypiIndexes, PypiPackageData};
+use rattler_lock::{PypiIndexes, PypiPackageData, UrlOrPath};
 use rayon::prelude::*;
 use utils::elapsed;
 use uv_auth::store_credentials_from_url;
@@ -52,6 +53,7 @@ use uv_resolver::{ExcludeNewer, FlatIndex};
 use crate::plan::{CachedWheels, RequiredDists};
 
 /// Extra data available from the manifest, not the lockfile
+#[derive(Clone)]
 pub struct ManifestData {
     pub editable: bool,
 }
@@ -71,7 +73,34 @@ impl UnresolvedPypiRecord {
     }
 }
 
-pub type PypiRecords = (UnresolvedPypiRecord, ManifestData);
+#[derive(Clone)]
+pub struct InstallablePypiRecord {
+    pub manifest_data: ManifestData,
+    pub name: pep508_rs::PackageName,
+    pub index_url: Option<url::Url>,
+    pub hash: Option<rattler_lock::PackageHashes>,
+    pub location: UrlOrPath,
+    pub version: pep440_rs::Version,
+    pub requires_python: Option<VersionSpecifiers>,
+}
+
+impl InstallablePypiRecord {
+    pub fn new(
+        data: &PypiPackageData,
+        manifest_data: ManifestData,
+        version_override: pep440_rs::Version,
+    ) -> Self {
+        Self {
+            manifest_data,
+            name: data.name.clone(),
+            location: data.location.inner().clone(),
+            hash: data.hash.clone(),
+            index_url: data.index_url.clone(),
+            requires_python: data.requires_python.clone(),
+            version: version_override,
+        }
+    }
+}
 
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
@@ -146,7 +175,7 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
 pub async fn on_python_interpreter_change<'a>(
     status: &'a PythonStatus,
     prefix: &Prefix,
-    pypi_records: &[PypiRecords],
+    pypi_records: &[InstallablePypiRecord],
 ) -> miette::Result<ContinuePyPIPrefixUpdate<'a>> {
     match status {
         PythonStatus::Removed { old } => {
@@ -281,7 +310,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         &self,
         python_status: &PythonStatus,
         pixi_records: &[PixiRecord],
-        pypi_records: &[PypiRecords],
+        pypi_records: &[InstallablePypiRecord],
     ) -> miette::Result<()> {
         // Initialize UV flags from environment variables and pypi-options before any operations
         initialize_uv_flags(self.build_config.skip_wheel_filename_check);
@@ -315,7 +344,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     async fn execute_update(
         &self,
         pixi_records: &[PixiRecord],
-        pypi_records: &[PypiRecords],
+        pypi_records: &[InstallablePypiRecord],
         python_info: &rattler::install::PythonInfo,
     ) -> miette::Result<()> {
         // Setup UV environment and configuration
@@ -452,14 +481,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     /// Create the installation plan by analyzing current state vs requirements
     async fn create_installation_plan(
         &self,
-        pypi_records: &[crate::PypiRecords],
+        pypi_records: &[crate::InstallablePypiRecord],
         setup: &UvInstallerConfig,
     ) -> miette::Result<PyPIInstallationPlan> {
         // Create required distributions with pre-created Dist objects
-        let required_packages: Vec<_> =
-            pypi_records.iter().map(|(pkg, spec)| (pkg, spec)).collect();
         let required_dists =
-            RequiredDists::from_packages(&required_packages, self.config.lock_file_dir)
+            RequiredDists::from_packages(pypi_records.iter(), self.config.lock_file_dir)
                 .into_diagnostic()
                 .context("Failed to create required distributions")?;
 
