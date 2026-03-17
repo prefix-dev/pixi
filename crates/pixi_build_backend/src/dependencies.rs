@@ -184,7 +184,7 @@ fn convert_nameless_matchspec(spec: NamelessMatchSpec) -> pbt::BinaryPackageSpec
 fn can_apply_variant(spec: &MatchSpec) -> Option<&PackageName> {
     match &spec {
         MatchSpec {
-            name: Some(name),
+            name,
             version: None,
             build: None,
             build_number: None,
@@ -249,10 +249,7 @@ fn convert_dependency(
             if let Some(source_package) =
                 spec.url.clone().and_then(from_source_url_to_source_package)
             {
-                let Some(name_matcher) = spec.name else {
-                    return Err(ConvertDependencyError::MissingName);
-                };
-                let Some(name) = name_matcher.as_exact() else {
+                let Some(name) = spec.name.as_exact() else {
                     return Err(ConvertDependencyError::MissingName);
                 };
                 return Ok(pbt::NamedSpec {
@@ -295,9 +292,7 @@ fn convert_dependency(
         }
     };
 
-    let (Some(name_matcher), spec) = match_spec.into_nameless() else {
-        return Err(ConvertDependencyError::MissingName);
-    };
+    let (name_matcher, spec) = match_spec.into_nameless();
     let Some(name) = name_matcher.as_exact() else {
         return Err(ConvertDependencyError::MissingName);
     };
@@ -372,9 +367,7 @@ fn convert_constraint_dependency(
         });
     }
 
-    let (Some(name_matcher), spec) = match_spec.into_nameless() else {
-        return Err(ConvertDependencyError::MissingName);
-    };
+    let (name_matcher, spec) = match_spec.into_nameless();
     let Some(name) = name_matcher.as_exact() else {
         return Err(ConvertDependencyError::MissingName);
     };
@@ -426,8 +419,7 @@ pub fn apply_variant(
                     if build_time
                         && m.version.is_none()
                         && m.build.is_none()
-                        && let Some(name_matcher) = &m.name
-                        && let Some(exact_name) = name_matcher.as_exact()
+                        && let Some(exact_name) = m.name.as_exact()
                         && let Some(version) = variant.get(&exact_name.into())
                     {
                         // if the variant starts with an alphanumeric character,

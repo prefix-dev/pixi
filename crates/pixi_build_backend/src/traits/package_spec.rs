@@ -95,7 +95,7 @@ impl PackageSpec for pbt::PackageSpec {
             }
             pbt::PackageSpec::Source(source_spec) => Ok((
                 MatchSpec {
-                    name: Some(PackageNameMatcher::Exact(name)),
+                    name: PackageNameMatcher::Exact(name),
                     ..MatchSpec::default()
                 },
                 Some(source_spec.clone()),

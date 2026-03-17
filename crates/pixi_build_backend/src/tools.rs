@@ -7,7 +7,7 @@ use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 use rattler_build_core::{
     DiscoveredOutput,
-    metadata::{BuildConfiguration, Debug, Output, PlatformWithVirtualPackages},
+    metadata::{BuildConfiguration, Output, PlatformWithVirtualPackages},
     system_tools::SystemTools,
     types::{Directories, PackageIdentifier, PackagingSettings},
 };
@@ -353,7 +353,6 @@ impl RattlerBuild {
                     store_recipe: false,
                     force_colors: true,
                     sandbox_config: None,
-                    debug: Debug::new(false),
                     exclude_newer: None,
                 },
                 finalized_dependencies: None,
