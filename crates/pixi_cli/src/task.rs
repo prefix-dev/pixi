@@ -59,6 +59,13 @@ pub struct RemoveArgs {
     pub feature: Option<String>,
 }
 
+/// Adds a new task to the workspace.
+///
+/// Example usage:
+///
+/// - `pixi task add test "pytest"`
+/// - `pixi task add --feature dev test "pytest"`
+/// - `pixi task add --platform linux-64 build "make"`
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true)]
 pub struct AddArgs {
@@ -119,6 +126,12 @@ fn parse_key_val(s: &str) -> Result<(String, String), Box<dyn Error + Send + Syn
     Ok((key, value))
 }
 
+/// Aliases another specific command.
+///
+/// Example usage:
+///
+/// - `pixi task alias start web`
+/// - `pixi task alias test dev-test`
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true)]
 pub struct AliasArgs {
@@ -138,6 +151,13 @@ pub struct AliasArgs {
     pub description: Option<String>,
 }
 
+/// List all tasks in the workspace.
+///
+/// Example usage:
+///
+/// - `pixi task list`
+/// - `pixi task list --summary`
+/// - `pixi task list --environment dev`
 #[derive(Parser, Debug, Clone)]
 pub struct ListArgs {
     /// Tasks available for this machine per environment

@@ -21,6 +21,13 @@ use crate::cli_config::WorkspaceConfig;
 /// The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly.
 ///
 /// It will only update the lock file if the dependencies in the manifest file are still compatible with the new versions.
+///
+/// Example usage:
+///
+/// - `pixi update`: Updating all dependencies in the workspace.
+/// - `pixi update python numpy`: Updating specific packages.
+/// - `pixi update -e production`: Updating a specific environment.
+/// - `pixi update --dry-run`: Performing a dry-run update to see what would change.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]

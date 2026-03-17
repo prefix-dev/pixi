@@ -24,6 +24,12 @@ use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 ///
 /// `pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
 /// By default, all features are upgraded.
+///
+/// Example usage:
+///
+/// - `pixi upgrade`: Upgrading all packages in the workspace to their latest compatible versions.
+/// - `pixi upgrade python`: Upgrading a specific dependency.
+/// - `pixi upgrade --feature cuda`: Upgrading dependencies within a specific feature.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]

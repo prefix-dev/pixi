@@ -15,6 +15,13 @@ use crate::cli_interface::CliInterface;
 /// can choose which one to use with `--format`.
 ///
 /// You can import an existing conda environment file with the `--import` flag.
+///
+/// Example usage:
+///
+/// - `pixi init`: Initializing a new project in the current directory.
+/// - `pixi init --platform linux-64 --platform osx-arm64`: Initializing with specific platforms.
+/// - `pixi init --format pyproject`: Initializing in pyproject.toml format.
+/// - `pixi init --import environment.yml`: Importing from a conda environment file.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Where to place the workspace (defaults to current path)
