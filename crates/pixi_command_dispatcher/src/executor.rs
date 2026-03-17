@@ -137,8 +137,7 @@ where
     }
 }
 
-/// A collection of cancellation-aware futures built on top of
-/// [`ExecutorFutures`].
+/// A collection of cancellation-aware futures.
 ///
 /// When any future yields `Err(CommandDispatcherError::Cancelled)`, the
 /// collection marks itself as cancelled. New futures pushed after that point

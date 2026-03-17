@@ -1578,8 +1578,7 @@ impl<'p> UpdateContext<'p> {
         // This will keep track of all outstanding tasks that we need to wait for. All
         // tasks are added to this list after they are spawned. This function blocks
         // until all pending tasks have either completed or errored.
-        let mut pending_futures =
-            CancellationAwareFutures::new(self.command_dispatcher.executor());
+        let mut pending_futures = CancellationAwareFutures::new(self.command_dispatcher.executor());
 
         // Spawn tasks for all the conda targets that are out of date.
         for (environment, platforms) in self.outdated_envs.conda.iter() {
@@ -2211,8 +2210,10 @@ async fn spawn_solve_conda_environment_task(
                 conda_constraints.into_specs(),
             );
         if let Some((name, _)) = source_constraints.iter_specs().next() {
-            return Err(SolveCondaEnvironmentError::SourceConstraintNotSupported(
-                name.as_source().to_string(),
+            return Err(CommandDispatcherError::Failed(
+                SolveCondaEnvironmentError::SourceConstraintNotSupported(
+                    name.as_source().to_string(),
+                ),
             ));
         }
         binary_constraints

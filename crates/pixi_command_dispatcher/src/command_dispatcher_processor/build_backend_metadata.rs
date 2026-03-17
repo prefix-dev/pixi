@@ -162,7 +162,6 @@ impl CommandDispatcherProcessor {
             .on_pending_result(result)
         {
             self.build_backend_metadata.remove(&id);
-            self.build_backend_metadata_ids.retain(|_, v| *v != id);
         }
     }
 }

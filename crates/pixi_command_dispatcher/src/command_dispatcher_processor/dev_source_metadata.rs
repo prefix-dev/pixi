@@ -118,7 +118,6 @@ impl CommandDispatcherProcessor {
             .on_pending_result(result)
         {
             self.dev_source_metadata.remove(&id);
-            self.dev_source_metadata_ids.retain(|_, v| *v != id);
         }
     }
 }

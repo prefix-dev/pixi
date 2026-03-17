@@ -536,12 +536,10 @@ impl CommandDispatcherProcessor {
                         return Some(context);
                     }
 
-                    self.source_metadata
-                        .get(&id)
-                        .map(|pending| match pending {
-                            PendingDeduplicatingTask::Pending(_, context)
-                            | PendingDeduplicatingTask::Completed(_, context) => *context,
-                        })?
+                    self.source_metadata.get(&id).map(|pending| match pending {
+                        PendingDeduplicatingTask::Pending(_, context)
+                        | PendingDeduplicatingTask::Completed(_, context) => *context,
+                    })?
                 }
                 CommandDispatcherContext::InstallPixiEnvironment(id) => {
                     return self.install_pixi_environment[id]
@@ -575,12 +573,10 @@ impl CommandDispatcherProcessor {
                         return Some(context);
                     }
 
-                    self.source_build
-                        .get(&id)
-                        .map(|pending| match pending {
-                            PendingDeduplicatingTask::Pending(_, context)
-                            | PendingDeduplicatingTask::Completed(_, context) => *context,
-                        })?
+                    self.source_build.get(&id).map(|pending| match pending {
+                        PendingDeduplicatingTask::Pending(_, context)
+                        | PendingDeduplicatingTask::Completed(_, context) => *context,
+                    })?
                 }
                 CommandDispatcherContext::BackendSourceBuild(id) => {
                     return self.backend_source_builds[id]

@@ -130,7 +130,6 @@ impl CommandDispatcherProcessor {
             .on_pending_result(result)
         {
             self.instantiated_tool_envs.remove(&id);
-            self.instantiated_tool_cache_keys.retain(|_, v| *v != id);
         }
     }
 }

@@ -136,7 +136,6 @@ impl CommandDispatcherProcessor {
             .on_pending_result(result)
         {
             self.source_build_cache_status.remove(&id);
-            self.source_build_cache_status_ids.retain(|_, v| *v != id);
         }
     }
 }
