@@ -5,7 +5,7 @@ use pixi_build_types::{
     BackendCapabilities, FrontendCapabilities,
     procedures::negotiate_capabilities::NegotiateCapabilitiesParams,
 };
-use rattler_build::console_utils::{LoggingOutputHandler, get_default_env_filter};
+use rattler_build_core::console_utils::{LoggingOutputHandler, get_default_env_filter};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{protocol::ProtocolInstantiator, server::Server};

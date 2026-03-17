@@ -10,6 +10,7 @@ This also allows for decoupling of the build backend from Pixi and it's manifest
 | [**`pixi-build-python`**](./backends/pixi-build-python.md) | Building Python packages |
 | [**`pixi-build-rattler-build`**](./backends/pixi-build-rattler-build.md) | Direct `recipe.yaml` builds with full control |
 | [**`pixi-build-ros`**](./backends/pixi-build-ros.md) | ROS (Robot Operating System) packages |
+| [**`pixi-build-r`**](./backends/pixi-build-r.md) | R packages using `R CMD INSTALL` |
 | [**`pixi-build-rust`**](./backends/pixi-build-rust.md) |  Cargo-based Rust applications and libraries |
 | [**`pixi-build-mojo`**](./backends/pixi-build-mojo.md) |  Mojo applications and packages |
 

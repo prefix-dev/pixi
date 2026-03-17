@@ -20,7 +20,7 @@ use pixi_build_types::{
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
     },
 };
-use rattler_build::{
+use rattler_build_core::{
     DiscoveredOutput,
     build::{WorkingDirectoryBehavior, run_build},
     console_utils::LoggingOutputHandler,

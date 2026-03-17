@@ -2,7 +2,7 @@
 edition.workspace = true
 license.workspace = true
 name = "pixi_build_mojo"
-version = "0.1.9"
+version = "0.1.10"
 
 [[bin]]
 name = "pixi-build-mojo"
@@ -13,8 +13,8 @@ dist = false
 
 [features]
 default = ["rustls-tls"]
-native-tls = ["pixi_build_backend/native-tls", "rattler-build/native-tls"]
-rustls-tls = ["pixi_build_backend/rustls-tls", "rattler-build/rustls-tls"]
+native-tls = ["pixi_build_backend/native-tls", "rattler_build_core/native-tls"]
+rustls-tls = ["pixi_build_backend/rustls-tls", "rattler_build_core/rustls-tls"]
 
 [dependencies]
 async-trait = { workspace = true }
@@ -22,7 +22,7 @@ fs-err = { workspace = true }
 indexmap = { workspace = true }
 miette = { workspace = true }
 minijinja = { workspace = true }
-rattler-build = { workspace = true }
+rattler_build_core = { workspace = true }
 rattler_build_jinja = { workspace = true }
 rattler_build_types = { workspace = true }
 rattler_conda_types = { workspace = true }

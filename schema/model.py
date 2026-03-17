@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import sys
 import json
 from copy import deepcopy
 from pathlib import Path
 import tomllib
-from typing import Annotated, Any, Literal, ClassVar, override
+from typing import Annotated, Any, Literal, ClassVar, override, TYPE_CHECKING
 from enum import Enum
 
 from pydantic import (
@@ -18,12 +19,25 @@ from pydantic import (
     StringConstraints,
 )
 
+if TYPE_CHECKING:
+    from pydantic.config import JsonDict
+
+HERE = Path(__file__).parent
+PIXI_SCHEMA = HERE / "schema.json"
+PYPROJECT_SCHEMA = HERE / "pyproject/schema.json"
+PYPROJECT_PARTIAL_SCHEMA = HERE / "pyproject/partial-pixi.json"
+
 #: latest version currently supported by the `taplo` TOML linter and language server
 SCHEMA_DRAFT = "http://json-schema.org/draft-07/schema#"
 CARGO_TOML = Path(__file__).parent.parent / "crates" / "pixi" / "Cargo.toml"
 CARGO_TOML_DATA = tomllib.loads(CARGO_TOML.read_text(encoding="utf-8"))
 VERSION = CARGO_TOML_DATA["package"]["version"]
-SCHEMA_URI = f"https://pixi.sh/v{VERSION}/schema/manifest/schema.json"
+
+URI_TEMPLATE = "https://pixi.sh/v{}/schema/manifest/{}schema.json"
+
+SCHEMA_URI = URI_TEMPLATE.format(VERSION, "")
+PYPROJECT_SCHEMA_URI = URI_TEMPLATE.format(VERSION, "pyproject/")
+PARTIAL_PYPROJECT_SCHEMA_URI = "https://json.schemastore.org/partial-pixi.json"
 
 NonEmptyStr = Annotated[str, StringConstraints(min_length=1)]
 Md5Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{32}$")]
@@ -464,6 +478,7 @@ class TaskInlineTable(StrictBaseModel):
         examples=[
             ["arg1", "arg2"],
             ["arg", {"arg": "arg2", "default": "2"}],
+            ["arg", {"arg": "arg2", "default": "2", "choices": ["1", "2", "4"]}],
         ],
     )
 
@@ -879,30 +894,7 @@ class PackageTarget(StrictBaseModel):
 #######################
 
 
-class BaseManifest(StrictBaseModel):
-    """The configuration for a [`pixi`](https://pixi.sh) project."""
-
-    model_config: ClassVar[ConfigDict] = ConfigDict(
-        json_schema_extra={
-            "$id": SCHEMA_URI,
-            "$schema": SCHEMA_DRAFT,
-            "title": "`pixi.toml` manifest file",
-            "anyOf": [
-                {"required": ["project"]},
-                {"required": ["workspace"]},
-                {"required": ["package"]},
-            ],
-        }
-    )
-
-    schema_: str | None = Field(  # pyright: ignore[reportCallIssue, reportUnknownVariableType]
-        SCHEMA_URI,
-        alias="$schema",
-        title="Schema",
-        description="The schema identifier for the project's configuration",
-        format="uri-reference",
-    )
-
+class BaseManifest(BaseModel):
     workspace: Workspace | None = Field(None, description="The workspace's metadata information")
     project: Workspace | None = Field(None, description="The project's metadata information")
     package: Package | None = Field(None, description="The package's metadata information")
@@ -944,6 +936,91 @@ class BaseManifest(StrictBaseModel):
     pypi_options: PyPIOptions | None = Field(
         None,
         description="Options related to PyPI indexes, on the default feature",
+    )
+
+
+ANY_OF_TOP_LEVEL: JsonDict = {
+    "anyOf": [
+        {"required": ["package"]},
+        {"required": ["project"]},
+        {"required": ["workspace"]},
+    ]
+}
+
+
+class PixiTomlManifest(StrictBaseModel, BaseManifest):
+    """The configuration for a [`pixi`](https://pixi.sh) project."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        alias_generator=hyphenize,
+        json_schema_extra={
+            "$id": SCHEMA_URI,
+            "$schema": SCHEMA_DRAFT,
+            "title": "`pixi.toml` manifest file",
+            **ANY_OF_TOP_LEVEL,
+        },
+    )
+
+    schema_: str | None = Field(
+        SCHEMA_URI,
+        alias="$schema",
+        title="Schema",
+        description="The schema identifier for the project's configuration",
+        json_schema_extra={"format": "uri-reference"},
+    )
+
+
+##################################
+# The Manifest in pyproject.toml #
+##################################
+
+
+class PyProjectPixiTool(BaseManifest):
+    """Fields from `pixi.toml` supported in `[tool.pixi]`."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(json_schema_extra=ANY_OF_TOP_LEVEL)
+
+
+class PyProjectToolTable(BaseModel):
+    """A `[tool]` table which includes `pixi`."""
+
+    pixi: PyProjectPixiTool | None = Field(None, description="`pixi` configuration")
+
+
+class PyProjectManifest(BaseModel):
+    """A `pyproject.toml` with `[tool.pixi]`."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        alias_generator=hyphenize,
+        json_schema_extra={
+            "$id": PYPROJECT_SCHEMA_URI,
+            "$schema": SCHEMA_DRAFT,
+            "title": "`pyproject.toml` manifest file for `pixi`",
+        },
+    )
+
+    tool: PyProjectToolTable | None = Field(
+        None,
+        description=(
+            "Every tool that is used by the project can have users specify"
+            " configuration data as long as they use a sub-table within `[tool]`."
+            " Generally a project can use the subtable `tool.$NAME` if, and only"
+            " if, they own the entry for `$NAME` in the Cheeseshop/PyPI."
+        ),
+    )
+
+
+class PyProjectPartial(PyProjectPixiTool):
+    """The `[tool.pixi]` section of a `pyproject.toml`."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        alias_generator=hyphenize,
+        json_schema_extra={
+            "$id": PARTIAL_PYPROJECT_SCHEMA_URI,
+            "$comment": f"Generated from `pixi` v{VERSION}",
+            "$schema": SCHEMA_DRAFT,
+            "title": "`[tool.pixi]` for `pyproject.toml`",
+        },
     )
 
 
@@ -1085,9 +1162,25 @@ class SchemaJsonEncoder(json.JSONEncoder):
         return obj
 
 
+def dump_schema(path: Path, raw: dict[str, Any]) -> None:
+    """Write out a raw Pydantic JSON object to disk."""
+    raw_json = json.dumps(raw, indent=2, cls=SchemaJsonEncoder) + "\n"
+    path.write_text(raw_json, encoding="utf-8", newline="\n")
+    kb = round(len(raw_json) / 1024, 2)
+    print(f"... wrote {kb}kb to {path}", file=sys.stderr)
+
+
+def update_schema_files() -> int:
+    """Generate JSON schema files."""
+    dump_schema(PIXI_SCHEMA, PixiTomlManifest.model_json_schema())
+    dump_schema(PYPROJECT_SCHEMA, PyProjectManifest.model_json_schema())
+    dump_schema(PYPROJECT_PARTIAL_SCHEMA, PyProjectPartial.model_json_schema())
+    return 0
+
+
 ##########################
 # Command Line Interface #
 ##########################
 
 if __name__ == "__main__":
-    print(json.dumps(BaseManifest.model_json_schema(), indent=2, cls=SchemaJsonEncoder))
+    sys.exit(update_schema_files())
