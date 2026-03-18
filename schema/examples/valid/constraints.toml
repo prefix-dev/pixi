@@ -1,0 +1,25 @@
+#:schema ./../../schema.json
+[workspace]
+channels = ["conda-forge"]
+name = "constraints-example"
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.9"
+
+# Constraints limit package versions without installing them
+[constraints]
+openssl = "<3"
+zlib = ">=1.2"
+
+[feature.extra.dependencies]
+requests = "*"
+
+[feature.extra.constraints]
+urllib3 = "<2"
+
+[environments]
+full = ["extra"]
+
+[target.linux-64.constraints]
+libgcc = ">=12"

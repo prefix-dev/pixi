@@ -32,7 +32,7 @@ use crate::{
         common::MetadataCache,
         source_metadata::{self, CachedSourceMetadata, SourceMetadataCacheShard},
     },
-    executor::ExecutorFutures,
+    executor::CancellationAwareFutures,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
@@ -122,7 +122,7 @@ impl SourceMetadataSpec {
             });
         }
 
-        let mut futures = ExecutorFutures::new(command_dispatcher.executor());
+        let mut futures = CancellationAwareFutures::new(command_dispatcher.executor());
         let source_location = build_backend_metadata.source.clone();
         for output in &build_backend_metadata.metadata.outputs {
             if output.metadata.name != self.package {
@@ -174,7 +174,7 @@ impl SourceMetadataSpec {
                 tracing::trace!("Cache updated successfully");
             }
             source_metadata::WriteResult::Conflict(_) => {
-                tracing::debug!(
+                tracing::warn!(
                     "Cache was updated by another process during computation (version conflict), using our computed result"
                 );
             }

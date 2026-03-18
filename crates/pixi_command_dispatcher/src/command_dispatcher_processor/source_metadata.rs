@@ -49,13 +49,11 @@ impl CommandDispatcherProcessor {
 
         match self.source_metadata.entry(source_metadata_id) {
             Entry::Occupied(mut entry) => match entry.get_mut() {
-                PendingDeduplicatingTask::Pending(pending, _) => pending.push(task.tx),
+                PendingDeduplicatingTask::Pending(pending, _) => {
+                    pending.push(task.tx);
+                }
                 PendingDeduplicatingTask::Completed(result, _) => {
                     let _ = task.tx.send(result.clone());
-                }
-                PendingDeduplicatingTask::Cancelled => {
-                    // Drop the sender, this will cause a cancellation on the other side.
-                    drop(task.tx);
                 }
             },
             Entry::Vacant(entry) => {
@@ -159,9 +157,16 @@ impl CommandDispatcherProcessor {
             reporter.on_finished(reporter_id);
         }
 
-        self.source_metadata
+        if !self
+            .source_metadata
             .get_mut(&id)
             .expect("cannot find pending task")
             .on_pending_result(result)
+        {
+            // Task was cancelled. Remove the task entry so future requests
+            // re-trigger it instead of hitting a stale cancellation.
+            // Keep the spec-to-ID mapping so that ID generation remains stable.
+            self.source_metadata.remove(&id);
+        }
     }
 }

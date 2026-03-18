@@ -22,8 +22,16 @@ pixi shell -w workspace-name
 pixi shell-hook -w workspace-name
 ```
 
+You can also specify `constraints` for packages that may be part of your environment without explicitly requiring them (similar to `run_constraints` for Conda packages):
+
+```toml
+[constraints]
+openssl = ">=3"
+```
+
 #### Added
 
+- Add `constraints` to limit dependency versions by @delsner in [#5603](https://github.com/prefix-dev/pixi/pull/5603)
 - `pixi search` improvements: allow arbitrary MatchSpecs, add `--json` by @pavelzw in [#5442](https://github.com/prefix-dev/pixi/pull/5442)
 - Add atomic write utilities for safe file operations by @baszalmstra in [#5500](https://github.com/prefix-dev/pixi/pull/5500)
 - Support `--` separator to pass extra args to typed-arg tasks by @ruben-arts in [#5569](https://github.com/prefix-dev/pixi/pull/5569)
