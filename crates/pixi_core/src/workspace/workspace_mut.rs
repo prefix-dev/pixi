@@ -11,9 +11,7 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource};
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
-use pixi_command_dispatcher::{
-    CommandDispatcherError, MissingChannelError, SolvePixiEnvironmentError::MissingChannel,
-};
+use pixi_command_dispatcher::{MissingChannelError, SolvePixiEnvironmentError::MissingChannel};
 use pixi_config::PinningStrategy;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
@@ -389,11 +387,11 @@ impl WorkspaceMut {
             .map_err(|mut e| {
                 if let Some(SolveCondaEnvironmentError::SolveFailed { source, .. }) =
                     e.downcast_mut::<SolveCondaEnvironmentError>()
-                    && let CommandDispatcherError::Failed(MissingChannel(MissingChannelError {
+                    && let MissingChannel(MissingChannelError {
                         package: _,
                         channel,
                         advice,
-                    })) = source.as_mut()
+                    }) = source.as_mut()
                 {
                     *advice = Some(format!(
                         "To add the missing channel to a workspace, use:\n\n  {}",

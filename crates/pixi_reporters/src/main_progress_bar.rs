@@ -29,6 +29,9 @@ struct State<T> {
     /// The items that are being tracked by this progress bar.
     tracker: Arc<RwLock<HashMap<usize, TrackedItem<T>>>>,
     next_tracker_id: usize,
+
+    /// Whether to emit OSC 9;4 terminal progress reporting.
+    osc_report: bool,
 }
 
 /// A trait for something that can be tracked by the [`MainProgressBar`].
@@ -72,8 +75,15 @@ impl<T: Tracker> MainProgressBar<T> {
                 title: Some(title),
                 tracker: Arc::new(RwLock::new(HashMap::new())),
                 next_tracker_id: 0,
+                osc_report: false,
             })),
         }
+    }
+
+    /// Enable OSC 9;4 terminal progress reporting on this bar.
+    pub fn with_osc_report(self) -> Self {
+        self.inner.write().osc_report = true;
+        self
     }
 
     /// Called when an item is queued for processing.
@@ -120,6 +130,9 @@ impl<T: Tracker> State<T> {
 
         // Clear or update the progress bar.
         if is_empty {
+            if self.osc_report {
+                pixi_progress::osc::clear_progress();
+            }
             // We cannot clear the progress bar and restart it later, so replacing it with a
             // new hidden one is currently the only option.
             self.title = Some(self.pb.prefix());
@@ -225,6 +238,10 @@ impl<T: Tracker> State<T> {
             state.set_pos(position);
         });
         self.pb.set_message(wide_msg);
+
+        if self.osc_report {
+            pixi_progress::osc::set_progress(position, length);
+        }
     }
 }
 
