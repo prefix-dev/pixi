@@ -12,11 +12,13 @@ pub mod virtual_packages;
 pub use crate::environment::CondaPrefixUpdater;
 pub use install_subset::{FilteredPackages, InstallSubset};
 pub use package_identifier::PypiPackageIdentifier;
+use pixi_install_pypi::LockedPypiRecord;
 use pixi_record::PixiRecord;
 pub use pixi_uv_context::UvResolutionContext;
-use rattler_lock::PypiPackageData;
 pub use rattler_lock::Verbatim;
-pub use records_by_name::{PixiRecordsByName, PypiRecordsByName, UnresolvedPixiRecordsByName};
+pub use records_by_name::{
+    HasNameVersion, PixiRecordsByName, PypiRecordsByName, UnresolvedPixiRecordsByName,
+};
 pub use resolve::pypi::resolve_pypi;
 pub use satisfiability::{
     Dependency, EnvironmentUnsat, PlatformUnsat, resolve_dev_dependencies,
@@ -34,7 +36,7 @@ pub use utils::IoConcurrencyLimit;
 pub type LockedCondaPackages = Vec<PixiRecord>;
 
 /// A list of Pypi packages that are locked for a specific platform.
-pub type LockedPypiPackages = Vec<PypiPackageData>;
+pub type LockedPypiRecords = Vec<LockedPypiRecord>;
 
 #[cfg(test)]
 mod tests {

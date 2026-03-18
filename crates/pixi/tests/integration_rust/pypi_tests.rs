@@ -335,6 +335,75 @@ setup(version="42.23.12")
         _ => panic!("expected a pypi package"),
     }
 
+    // Make the version static: remove `dynamic = ["version"]` and set an
+    // explicit version. The lock file should still store version as None
+    // because the package is a local source dependency.
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamic-dep"
+version = "42.23.12"
+"#,
+    )
+    .unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    match lock
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should be in the lock file after making version static")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version.is_none(),
+                "version should remain None for local source dependency even after making version static, got {:?}",
+                data.version
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
+    // Switch back to a dynamic version and re-resolve.
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamic-dep"
+dynamic = ["version"]
+"#,
+    )
+    .unwrap();
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/setup.py"),
+        r#"from setuptools import setup
+setup(version="99.0.0")
+"#,
+    )
+    .unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    match lock
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should be in the lock file after switching back to dynamic version")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version.is_none(),
+                "version should be None after switching back to dynamic version, got {:?}",
+                data.version
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
     // Round-trip: serialize and parse the lock file, then verify the version is still None
     let lock_str = lock.render_to_string().unwrap();
     let lock2 = rattler_lock::LockFile::from_str_with_base_directory(&lock_str, None).unwrap();
@@ -401,6 +470,70 @@ version = "1.0.0"
                 data.index_url.is_none(),
                 "index_url should be None after re-resolve, got: {:?}",
                 data.index_url
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
+    // Trigger a re-resolve so that update_lock_file writes a new lock file
+    // that includes another-dep. Then verify the lock file can be loaded
+    // again — this catches URL mismatches between the environment reference
+    // (e.g. "./another-dep") and the packages section (e.g.
+    // "file:///tmp/.../another-dep").
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamic-dep"
+version = "50.0.0"
+"#,
+    )
+    .unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    // The lock file written by the re-resolve must be loadable.
+    let lock_reloaded = pixi
+        .lock_file()
+        .await
+        .expect("lock file written by update_lock_file should be loadable");
+
+    // Both packages should be present after the round-trip through disk.
+    assert!(
+        lock_reloaded.contains_pypi_package("default", platform, "dynamic-dep"),
+        "dynamic-dep should be present after reload"
+    );
+    assert!(
+        lock_reloaded.contains_pypi_package("default", platform, "another-dep"),
+        "another-dep should be present after reload"
+    );
+
+    // Verify the in-memory lock also has both packages with correct properties.
+    match lock
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should be in the re-resolved lock")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version.is_none(),
+                "dynamic-dep version should be None, got {:?}",
+                data.version
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+    match lock
+        .get_pypi_package("default", platform, "another-dep")
+        .expect("another-dep should be in the re-resolved lock")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version.is_none(),
+                "another-dep version should be None for local source dep, got {:?}",
+                data.version
             );
         }
         _ => panic!("expected a pypi package"),

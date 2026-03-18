@@ -7,6 +7,7 @@ use std::{
     str::FromStr,
 };
 
+use crate::lock_file::records_by_name::HasNameVersion;
 use futures::stream::{FuturesUnordered, StreamExt};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
@@ -18,6 +19,7 @@ use pixi_command_dispatcher::{
     SourceMetadataSpec,
 };
 use pixi_git::url::RepositoryUrl;
+use pixi_install_pypi::UnresolvedPypiRecord;
 use pixi_manifest::{
     FeaturesExt,
     pypi::pypi_options::{NoBuild, PrereleaseMode},
@@ -41,8 +43,7 @@ use rattler_conda_types::{
     PackageRecord, ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
 };
 use rattler_lock::{
-    LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable,
-    UrlOrPath,
+    LockedPackageRef, PackageHashes, PypiIndexes, PypiSourceTreeHashable, UrlOrPath,
 };
 use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
@@ -576,12 +577,13 @@ pub fn verify_environment_satisfiability(
         for (lock_platform, package_it) in locked_environment.pypi_packages_by_platform() {
             let platform = lock_platform.subdir();
             for package_data in package_it {
+                let record = UnresolvedPypiRecord::from(package_data.clone());
                 let pypi_source = pypi_dependencies
-                    .get(&package_data.name)
+                    .get(record.name())
                     .and_then(|specs| specs.last())
                     .map(|spec| &spec.source);
-                no_build_check.check(package_data, pypi_source)?;
-                pypi_wheel_tags_check.check(platform, package_data)?;
+                no_build_check.check(&record, pypi_source)?;
+                pypi_wheel_tags_check.check(platform, &record)?;
             }
         }
     }
@@ -682,8 +684,9 @@ impl PypiWheelTagsCheck {
     pub fn check(
         &self,
         platform: Platform,
-        package_data: &PypiPackageData,
+        package_data: &UnresolvedPypiRecord,
     ) -> Result<(), EnvironmentUnsat> {
+        let package_data = package_data.as_package_data();
         let Some(package_file_name) = package_data.location.file_name() else {
             return Ok(());
         };
@@ -736,9 +739,10 @@ impl PypiNoBuildCheck {
 
     pub fn check(
         &self,
-        package_data: &PypiPackageData,
+        package_data: &UnresolvedPypiRecord,
         source: Option<&PixiPypiSource>,
     ) -> Result<(), EnvironmentUnsat> {
+        let package_data = package_data.as_package_data();
         let Some(check) = &self.check else {
             return Ok(());
         };
@@ -871,7 +875,7 @@ pub async fn verify_platform_satisfiability(
     // Convert the lock file into a list of conda and pypi packages.
     // Read as UnresolvedPixiRecord first, then resolve any partial source records.
     let mut unresolved_records: Vec<UnresolvedPixiRecord> = Vec::new();
-    let mut pypi_packages: Vec<PypiPackageData> = Vec::new();
+    let mut pypi_packages: Vec<UnresolvedPypiRecord> = Vec::new();
     let lock_platform = locked_environment
         .lock_file()
         .platform(&platform.to_string());
@@ -889,7 +893,7 @@ pub async fn verify_platform_satisfiability(
                 );
             }
             LockedPackageRef::Pypi(pypi) => {
-                pypi_packages.push(pypi.clone());
+                pypi_packages.push(pypi.clone().into());
             }
         }
     }
@@ -1022,7 +1026,7 @@ pub async fn verify_platform_satisfiability(
         Ok(pypi_packages) => pypi_packages,
         Err(duplicate) => {
             return Err(Box::new(PlatformUnsat::DuplicateEntry(
-                duplicate.name.to_string(),
+                duplicate.name().to_string(),
             )));
         }
     };
@@ -1065,9 +1069,10 @@ impl Dependency {
 /// references
 pub(crate) fn pypi_satisfies_editable(
     spec: &uv_distribution_types::Requirement,
-    locked_data: &PypiPackageData,
+    locked_data: &UnresolvedPypiRecord,
     project_root: &Path,
 ) -> Result<(), Box<PlatformUnsat>> {
+    let locked_data = locked_data.as_package_data();
     // We dont match on spec.is_editable() != locked_data.editable
     // as it will happen later in verify_package_platform_satisfiability
     // TODO: could be a potential refactoring opportunity
@@ -1121,9 +1126,10 @@ pub(crate) fn pypi_satisfies_editable(
 /// references
 pub(crate) fn pypi_satisfies_requirement(
     spec: &uv_distribution_types::Requirement,
-    locked_data: &PypiPackageData,
+    locked_data: &UnresolvedPypiRecord,
     project_root: &Path,
 ) -> Result<(), Box<PlatformUnsat>> {
+    let locked_data = locked_data.as_package_data();
     if spec.name.to_string() != locked_data.name.to_string() {
         return Err(PlatformUnsat::LockedPyPINamesMismatch {
             expected: spec.name.to_string(),
@@ -2269,6 +2275,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
             }
             FoundPackage::PyPi(idx, extras) => {
                 let record = &locked_pypi_environment.records[idx.0];
+                let pkg = record.as_package_data();
 
                 // If there is no marker environment there is no python version
                 let Some(marker_environment) = marker_environment.as_ref() else {
@@ -2278,7 +2285,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 if pypi_packages_visited.insert(idx) {
                     // If this is path based package we need to check if the source tree hash still
                     // matches. and if it is a directory
-                    if let UrlOrPath::Path(path) = &*record.location {
+                    if let UrlOrPath::Path(path) = &*pkg.location {
                         let absolute_path = if path.is_absolute() {
                             Cow::Borrowed(Path::new(path.as_str()))
                         } else {
@@ -2289,13 +2296,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             match PypiSourceTreeHashable::from_directory(&absolute_path)
                                 .map(|hashable| hashable.hash())
                             {
-                                Ok(hashable) if Some(&hashable) != record.hash.as_ref() => {
+                                Ok(hashable) if Some(&hashable) != pkg.hash.as_ref() => {
                                     delayed_pypi_error.get_or_insert_with(|| {
                                         Box::new(PlatformUnsat::SourceTreeHashMismatch(
-                                            record.name.clone(),
+                                            pkg.name.clone(),
                                             SourceTreeHashMismatch {
                                                 computed: hashable,
-                                                locked: record.hash.clone(),
+                                                locked: pkg.hash.clone(),
                                             },
                                         ))
                                     });
@@ -2304,7 +2311,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                 Err(err) => {
                                     delayed_pypi_error.get_or_insert_with(|| {
                                         Box::new(PlatformUnsat::FailedToDetermineSourceTreeHash(
-                                            record.name.clone(),
+                                            pkg.name.clone(),
                                             err,
                                         ))
                                     });
@@ -2314,7 +2321,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     }
 
                     // Ensure that the record matches the currently selected interpreter.
-                    if let Some(requires_python) = &record.requires_python {
+                    if let Some(requires_python) = &pkg.requires_python {
                         let uv_specifier_requires_python = to_uv_specifiers(requires_python)
                             .expect("pep440 conversion should never fail");
 
@@ -2332,7 +2339,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         if !marker_requires_python.is_contained_by(&uv_specifier_requires_python) {
                             delayed_pypi_error.get_or_insert_with(|| {
                                 Box::new(PlatformUnsat::PythonVersionMismatch(
-                                    record.name.clone(),
+                                    pkg.name.clone(),
                                     requires_python.clone(),
                                     marker_version.into(),
                                 ))
@@ -2342,7 +2349,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 }
 
                 // Add all the requirements of the package to the queue.
-                for requirement in &record.requires_dist {
+                for requirement in &pkg.requires_dist {
                     let requirement =
                         match pep508_requirement_to_uv_requirement(requirement.clone()) {
                             Ok(requirement) => requirement,
@@ -2366,7 +2373,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
                     pypi_queue.push(Dependency::PyPi(
                         requirement.clone(),
-                        record.name.as_ref().to_string().into(),
+                        pkg.name.as_ref().to_string().into(),
                     ));
                 }
             }
@@ -2710,7 +2717,7 @@ mod tests {
     use pixi_build_backend_passthrough::PassthroughBackend;
     use pixi_build_frontend::BackendOverride;
     use pixi_command_dispatcher::CacheDirs;
-    use rattler_lock::{LockFile, Verbatim};
+    use rattler_lock::{LockFile, PypiPackageData, Verbatim};
     use rstest::rstest;
     use tracing_test::traced_test;
 
@@ -2932,7 +2939,7 @@ mod tests {
             index_url: None,
             requires_dist: vec![],
             requires_python: None,
-        };
+        }.into();
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@2993").unwrap(),
         )
@@ -2952,7 +2959,7 @@ mod tests {
             index_url: None,
             requires_dist: vec![],
             requires_python: None,
-        };
+        }.into();
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str(
                 "mypkg @ git+https://github.com/mypkg.git@29932f3915935d773dc8d52c292cadd81c81071d",
@@ -2991,7 +2998,8 @@ mod tests {
             index_url: None,
             requires_dist: vec![],
             requires_python: None,
-        };
+        }
+        .into();
         pypi_satisfies_requirement(
             &spec_without_rev,
             &locked_data_default_branch,
@@ -3014,7 +3022,8 @@ mod tests {
             index_url: None,
             requires_dist: vec![],
             requires_python: None,
-        };
+        }
+        .into();
 
         let spec =
             pep508_rs::Requirement::from_str("mypkg @ file:///home/username/mypkg.tar.gz").unwrap();
@@ -3034,7 +3043,8 @@ mod tests {
             index_url: None,
             requires_dist: vec![],
             requires_python: None,
-        };
+        }
+        .into();
 
         let spec =
             pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg.tar.gz")
@@ -3075,7 +3085,8 @@ mod tests {
                     hash: None,
                     requires_dist: vec![],
                     requires_python: None,
-                },
+                }
+                .into(),
                 Some(&PixiPypiSource::Path {
                     path: PathBuf::from("").into(),
                     editable: Some(true),
@@ -3098,7 +3109,8 @@ mod tests {
             index_url: None,
             requires_dist: vec![],
             requires_python: None,
-        };
+        }
+        .into();
 
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("dynamic-dep @ file:///home/user/project/dynamic-dep")
@@ -3125,7 +3137,8 @@ mod tests {
             index_url: None,
             requires_dist: vec![],
             requires_python: None,
-        };
+        }
+        .into();
 
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str(
@@ -3154,7 +3167,8 @@ mod tests {
             index_url: None,
             requires_dist: vec![],
             requires_python: None,
-        };
+        }
+        .into();
 
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap(),
@@ -3184,7 +3198,8 @@ mod tests {
             index_url: Some(Url::parse("https://custom.example.com/simple").unwrap()),
             requires_dist: vec![],
             requires_python: None,
-        };
+        }
+        .into();
 
         // Requirement: no index specified (user removed the `index` field).
         let spec = pep508_requirement_to_uv_requirement(
@@ -3243,7 +3258,8 @@ mod tests {
             index_url: Some(Url::parse("https://old-index.example.com/simple").unwrap()),
             requires_dist: vec![],
             requires_python: None,
-        };
+        }
+        .into();
 
         let spec = registry_requirement_with_index(
             "my-dep",
@@ -3273,7 +3289,8 @@ mod tests {
             index_url: Some(Url::parse(index_url).unwrap()),
             requires_dist: vec![],
             requires_python: None,
-        };
+        }
+        .into();
 
         let spec = registry_requirement_with_index("my-dep", ">=1.0", index_url);
 
@@ -3300,7 +3317,8 @@ mod tests {
             index_url: None,
             requires_dist: vec![],
             requires_python: None,
-        };
+        }
+        .into();
 
         let spec =
             registry_requirement_with_index("my-dep", ">=1.0", "https://custom.example.com/simple");
