@@ -22,8 +22,14 @@ c_compiler_version = ["19"]
 #
 # Shared feature for C/C++ compilers and build tools
 #
+# Use cmake to build aws-lc-sys, because conda's CFLAGS inject -O2 which
+# overrides the -O0 required by jitterentropy-base.c, causing a build failure.
+[feature.compilers.activation.env]
+AWS_LC_SYS_CMAKE_BUILDER = "1"
+
 [feature.compilers.dependencies]
 c-compiler = ">=1.11.0,<2"
+cmake = ">=3,<4"
 cxx-compiler = ">=1.11.0,<2"
 openssl = ">=3.5.4,<4"
 pkg-config = ">=0.29.2,<0.30"
@@ -416,5 +422,14 @@ name = "pixi"
 backend = { name = "pixi-build-rust", version = "*" }
 source = { path = "crates/pixi" }
 
+# Use cmake to build aws-lc-sys, because conda's CFLAGS inject -O2 which
+# overrides the -O0 required by jitterentropy-base.c, causing a build failure.
+[package.build.config]
+env = { AWS_LC_SYS_CMAKE_BUILDER = "1" }
+
 [package.target.unix.build-dependencies]
 clang = "*"
+cmake = ">=3,<4"
+
+[package.target.linux.build-dependencies]
+make = ">=4,<5"

@@ -5774,7 +5774,7 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
- "strum 0.28.0",
+ "strum",
  "tempfile",
  "tokio",
 ]
@@ -5896,7 +5896,7 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
- "strum 0.28.0",
+ "strum",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -6503,7 +6503,7 @@ dependencies = [
  "serde_json",
  "spdx 0.10.9",
  "strsim",
- "strum 0.28.0",
+ "strum",
  "tempfile",
  "thiserror 2.0.18",
  "toml-span",
@@ -6732,7 +6732,7 @@ dependencies = [
  "itertools 0.14.0",
  "miette 7.6.0",
  "strsim",
- "strum 0.28.0",
+ "strum",
  "toml-span",
 ]
 
@@ -7471,9 +7471,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_core"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f495c0b309f7f06d8c88d67d79e0f7ec9a6706d9cb4bf6f81e79af62369f0752"
+checksum = "cc3e7bfebacdbccd5c210b62769ecb07f13b7b2e4d555231392ddd00cc2758d1"
 dependencies = [
  "anyhow",
  "arwen-codesign",
@@ -7556,9 +7556,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_jinja"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0ac8fe0090c0696897e59cf7f5ecd31a21fd52e5981c0050b16ac912e461cad"
+checksum = "b88e4abdaeb9384b670ef6afcb22ed5b7e90043891fc9ffb718914e029d99c20"
 dependencies = [
  "fs-err",
  "indexmap 2.13.0",
@@ -7571,16 +7571,16 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serde_yaml",
- "strum 0.27.2",
+ "strum",
  "thiserror 2.0.18",
  "toml 1.0.7+spec-1.1.0",
 ]
 
 [[package]]
 name = "rattler_build_networking"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e8fab11dbd2f6524b7a047bc3fcdf5775cd32ad03b1dbe965b1c2d395e1cc2c"
+checksum = "fa722d10163150aa73dc04574d71159d2440ff0ed64a6cd4604b25085f342c69"
 dependencies = [
  "rattler_networking",
  "reqwest 0.12.28",
@@ -7591,9 +7591,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_recipe"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "164164b9ce66d4b9e552f1a267562f8d8e5509411265d5bc37795aca9dccc8a1"
+checksum = "d36d9eb41dace6d63d578f2b23986b57072870f4d97dc03a11a7f78bba2af48c"
 dependencies = [
  "fs-err",
  "globset",
@@ -7625,9 +7625,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_script"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19b58b6f27c3a676265902a56f89f65600c1779b3bd763c9db800fac1de49e1c"
+checksum = "8ff6f453887c21baccfb59b0fd4c11636bc80ca8db11cf70db2ed4f10d32ffd1"
 dependencies = [
  "clap",
  "console 0.16.3",
@@ -7648,9 +7648,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_source_cache"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f626b7b303411077cbd8d3fd9da49be14376e48f0abc0c420ed2832e94c81a51"
+checksum = "16c3bedbfb49fb98117fd58c4f139bfe4951b3a7f3a16bbe83c34d7c963a2b2b"
 dependencies = [
  "async-trait",
  "bzip2 0.6.1",
@@ -7687,9 +7687,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_types"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38a4b69db66dad5982e7a306541501139c5964f6393075bc534ec6cc1591b2e0"
+checksum = "bb3d5184c548b4c020460a0005b7047d566e476d321f15d246b0f2440d902ae5"
 dependencies = [
  "globset",
  "itertools 0.14.0",
@@ -7703,9 +7703,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_variant_config"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d61c3d249a9fe0d518416d0a27ce9ebebcbab829cffd5eb58e42972c93685a0a"
+checksum = "80be0299e4ed697a71dd3e6c31a4ba7dcce8c774ec9563c35595156f7c15d6ca"
 dependencies = [
  "fs-err",
  "marked-yaml",
@@ -7724,9 +7724,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_yaml_parser"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4baa4a74fc1f86977d83b43ce6dab41e6cb50c1f2c65be7069eac07f62620fb8"
+checksum = "a9ab2064c0f29b0eb03137bb3b312fe828224c4e75381887a92824f7ac3277d6"
 dependencies = [
  "marked-yaml",
  "miette 7.6.0",
@@ -7803,7 +7803,7 @@ dependencies = [
  "serde_yaml",
  "simd-json",
  "smallvec",
- "strum 0.28.0",
+ "strum",
  "tempfile",
  "thiserror 2.0.18",
  "tracing",
@@ -8134,7 +8134,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "simple_spawn_blocking",
- "strum 0.28.0",
+ "strum",
  "superslice",
  "tempfile",
  "thiserror 2.0.18",
@@ -10068,12 +10068,6 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
-
-[[package]]
-name = "strum"
-version = "0.27.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
 
 [[package]]
 name = "strum"
